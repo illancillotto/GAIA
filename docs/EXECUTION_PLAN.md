@@ -51,6 +51,10 @@ Stato:
 - parser iniziali con test su fixture statiche
 - endpoint o job placeholder per sync
 
+Stato:
+
+- completato
+
 ## Milestone 4. Permission Engine MVP
 
 - tabelle per permission entry ed effective permission
@@ -73,7 +77,7 @@ Stato:
 
 ## Ordine di Esecuzione Corrente
 
-1. entrare in Milestone 3 sullo skeleton integrazione NAS
+1. entrare in Milestone 4 sul permission engine MVP
 2. aggiornare `docs/PROGRESS.md` a ogni tranche
 3. rieseguire test backend e frontend a ogni milestone
 4. mantenere CI allineata ai test reali

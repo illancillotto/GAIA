@@ -19,6 +19,12 @@ class Settings(BaseSettings):
     jwt_secret_key: str = Field(default="change_this_secret", alias="JWT_SECRET_KEY")
     jwt_expire_minutes: int = Field(default=60, alias="JWT_EXPIRE_MINUTES")
     jwt_algorithm: str = "HS256"
+    nas_host: str = Field(default="nas.internal.local", alias="NAS_HOST")
+    nas_port: int = Field(default=22, alias="NAS_PORT")
+    nas_username: str = Field(default="svc_naap", alias="NAS_USERNAME")
+    nas_password: str = Field(default="change_me", alias="NAS_PASSWORD")
+    nas_private_key_path: str | None = Field(default=None, alias="NAS_PRIVATE_KEY_PATH")
+    nas_timeout: int = Field(default=10, alias="NAS_TIMEOUT")
 
     model_config = SettingsConfigDict(
         env_file=".env",

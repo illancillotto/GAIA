@@ -6,7 +6,7 @@
 
 ## Stato Generale
 
-Il repository e in una fase di bootstrap avanzato: la base documentale, il backend, il frontend, il setup Docker e la CI minima sono presenti e coerenti. Il progetto ha ora due capability backend reali: autenticazione applicativa con JWT e dominio audit minimo in sola lettura per dashboard, utenti NAS, gruppi, share e review.
+Il repository e in una fase di bootstrap avanzato: la base documentale, il backend, il frontend, il setup Docker e la CI minima sono presenti e coerenti. Il progetto ha ora tre capability backend reali: autenticazione applicativa con JWT, dominio audit minimo in sola lettura e skeleton di integrazione NAS con parser iniziali e preview di sync.
 
 ## Completato
 
@@ -23,10 +23,13 @@ Il repository e in una fase di bootstrap avanzato: la base documentale, il backe
 - endpoint `GET /health` disponibile
 - endpoint `POST /auth/login` e `GET /auth/me`
 - endpoint protetti `GET /dashboard/summary`, `GET /nas-users`, `GET /nas-groups`, `GET /shares`, `GET /reviews`
+- endpoint protetti `GET /sync/capabilities` e `POST /sync/preview`
 - configurazione centralizzata con `pydantic-settings`
 - utility di sicurezza per password hash e token JWT
 - modello `ApplicationUser`
 - modelli `NasUser`, `NasGroup`, `Share`, `Review`
+- config NAS centralizzata e client skeleton
+- parser iniziali per passwd, group, share listing e ACL
 - struttura Alembic presente con migration iniziale `snapshots`
 - seconda migration per `application_users`
 - terza migration per il dominio audit minimo
@@ -57,18 +60,20 @@ Il repository e in una fase di bootstrap avanzato: la base documentale, il backe
 ### Backend
 
 - suite `backend/tests`
-- stato corrente: `26 passed`
+- stato corrente: `34 passed`
 
 Copertura attuale:
 
 - health endpoint
 - login e current user
 - dashboard summary e liste dominio audit
+- sync capabilities e preview NAS
 - metadata applicazione FastAPI
 - settings e override ambiente
 - wiring Alembic e migration iniziale
 - wiring security e migration utenti applicativi
 - migration dominio audit minimo
+- parser NAS e connector skeleton
 - scaffold repository e file chiave
 
 ### Frontend
@@ -86,8 +91,8 @@ Copertura attuale:
 ## Gap Attuali
 
 - auth applicativa presente ma senza bootstrap admin
-- dominio audit minimo presente ma senza sync reale dal NAS
-- nessuna integrazione SSH verso NAS
+- dominio audit minimo presente ma senza sync reale persistente
+- integrazione NAS solo a livello skeleton, senza SSH live
 - nessuna dashboard con dati reali
 - nessun test di build frontend completo
 - nessun test di esecuzione compose/nginx
@@ -101,23 +106,24 @@ Copertura attuale:
 - documentazione coerente con il perimetro reale
 - primo flusso backend reale gia implementato e testato
 - dominio audit minimo esposto con API protette e testato end-to-end
+- skeleton NAS gia testabile senza dipendere da un host reale
 - test iniziali gia utili per evitare regressioni di scaffold
 
 ### Punti da Rafforzare Subito
 
-- introdurre sync e parsing reali dal NAS
+- introdurre sync reale persistente dal NAS
 - aggiungere test su API future e servizi
 - verificare build frontend in ambiente CI reale
 - aggiungere test e smoke check su compose e health integrati
 
 ## Prossimi Passi Raccomandati
 
-1. aggiungere client NAS placeholder e test di parsing
-2. introdurre endpoint o job di sync controllati
+1. iniziare il permission engine MVP
+2. introdurre sync reale persistente dal NAS
 3. esporre dati mock o reali nella dashboard frontend
 4. aggiungere bootstrap admin o seed iniziale gestito
 5. ampliare CI con test build/run piu vicini al runtime reale
-6. iniziare il permission engine MVP
+6. aggiungere smoke check compose e runtime integrati
 
 ## Regola di Aggiornamento
 
