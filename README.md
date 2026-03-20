@@ -37,6 +37,8 @@ L'applicazione centralizza la visibilita sugli accessi a utenti, gruppi e cartel
 |-- nginx/
 |   `-- nginx.conf
 |-- scripts/
+|   |-- bootstrap-admin.sh
+|   |-- bootstrap-domain.sh
 |   |-- backend-shell.sh
 |   |-- frontend-shell.sh
 |   |-- migrate.sh
@@ -62,7 +64,10 @@ L'applicazione centralizza la visibilita sugli accessi a utenti, gruppi e cartel
    `make up`
 3. Eseguire la migrazione iniziale:
    `make migrate`
-4. Verificare i servizi:
+4. Bootstrap utente admin e dominio seed:
+   `make bootstrap-admin`
+   `make bootstrap-domain`
+5. Verificare i servizi:
    - frontend: `http://localhost:3000`
    - backend health: `http://localhost:8000/health`
    - nginx entrypoint: `http://localhost:8080`
@@ -85,6 +90,7 @@ Bootstrap iniziale completato per sviluppo incrementale:
 - autenticazione applicativa base con `POST /auth/login` e `GET /auth/me`
 - skeleton integrazione NAS con parser iniziali e endpoint `GET /sync/capabilities`, `POST /sync/preview`
 - permission engine MVP con preview `POST /permissions/calculate-preview` e lista `GET /effective-permissions`
+- seed iniziale del dominio audit con utenti, gruppi, share, review e permessi effettivi
 - frontend Next.js con layout base e route `/login`
 - stack Docker Compose per backend, frontend, postgres e nginx
 - documentazione iniziale coerente per prodotto, architettura e deployment
@@ -99,3 +105,4 @@ Bootstrap iniziale completato per sviluppo incrementale:
 - `make frontend-shell`: shell nel container frontend
 - `make migrate`: esecuzione migrazioni Alembic
 - `make bootstrap-admin`: crea o verifica l'admin iniziale applicativo
+- `make bootstrap-domain`: popola dati seed iniziali per il dominio audit

@@ -1,6 +1,6 @@
 COMPOSE = docker compose
 
-.PHONY: up down logs rebuild backend-shell frontend-shell migrate bootstrap-admin
+.PHONY: up down logs rebuild backend-shell frontend-shell migrate bootstrap-admin bootstrap-domain
 
 up:
 	$(COMPOSE) up -d
@@ -25,3 +25,6 @@ migrate:
 
 bootstrap-admin:
 	$(COMPOSE) exec backend python scripts/bootstrap_admin.py
+
+bootstrap-domain:
+	$(COMPOSE) exec backend python scripts/bootstrap_domain.py

@@ -6,7 +6,7 @@
 
 ## Stato Generale
 
-Il repository e in una fase di bootstrap avanzato: la base documentale, il backend, il frontend, il setup Docker e la CI minima sono presenti e coerenti. Il progetto ha ora cinque capability backend reali: autenticazione applicativa con JWT, bootstrap admin idempotente, dominio audit minimo in sola lettura, skeleton di integrazione NAS con parser iniziali e permission engine MVP con preview di calcolo. Sul frontend la milestone applicativa e in avanzamento concreto: login reale, stato sessione, dashboard collegata, viste utenti e gruppi NAS e prime viste backend-driven principali.
+Il repository e in una fase di bootstrap avanzato: la base documentale, il backend, il frontend, il setup Docker e la CI minima sono presenti e coerenti. Il progetto ha ora sei capability backend reali: autenticazione applicativa con JWT, bootstrap admin idempotente, bootstrap dominio audit idempotente, dominio audit minimo in sola lettura, skeleton di integrazione NAS con parser iniziali e permission engine MVP con preview di calcolo. Sul frontend la milestone applicativa e in avanzamento concreto: login reale, stato sessione, dashboard collegata, viste utenti e gruppi NAS e prime viste backend-driven principali.
 
 ## Completato
 
@@ -34,6 +34,7 @@ Il repository e in una fase di bootstrap avanzato: la base documentale, il backe
 - config NAS centralizzata e client skeleton
 - parser iniziali per passwd, group, share listing e ACL
 - servizio di calcolo permessi con regole `deny` e `write implies read`
+- bootstrap dominio audit idempotente via script backend e target Makefile
 - struttura Alembic presente con migration iniziale `snapshots`
 - seconda migration per `application_users`
 - terza migration per il dominio audit minimo
@@ -55,6 +56,8 @@ Il repository e in una fase di bootstrap avanzato: la base documentale, il backe
 - `Dockerfile` per backend e frontend
 - `nginx/nginx.conf` con proxy frontend e backend
 - script base in `scripts/`
+- stack locale verificato in runtime con Docker
+- fix runtime su `docker-compose.override.yml` per frontend `next dev` con `NODE_ENV=development`
 
 ### CI e Test
 
@@ -67,7 +70,16 @@ Il repository e in una fase di bootstrap avanzato: la base documentale, il backe
 ### Backend
 
 - suite `backend/tests`
-- stato corrente: `41 passed`
+- stato corrente: `42 passed`
+
+Verifica runtime:
+
+- `docker compose up -d --build`
+- `docker compose exec backend alembic upgrade head`
+- `docker compose exec backend python scripts/bootstrap_admin.py`
+- `docker compose exec backend python scripts/bootstrap_domain.py`
+- login reale verificato su `POST /auth/login`
+- query reali verificate su `/dashboard/summary`, `/nas-users`, `/nas-groups`, `/shares`, `/reviews`, `/effective-permissions`
 
 Copertura attuale:
 
@@ -85,12 +97,19 @@ Copertura attuale:
 - parser NAS e connector skeleton
 - servizio calcolo permessi
 - bootstrap admin service e script
+- bootstrap dominio service e script
 - scaffold repository e file chiave
 
 ### Frontend
 
 - smoke suite `frontend/tests/smoke.test.mjs`
-- stato corrente: `6 passed`
+- stato corrente: `7 passed`
+
+Verifica runtime:
+
+- frontend raggiungibile su `http://localhost:3000`
+- nginx raggiungibile su `http://localhost:8080`
+- tutti i container compose verificati `healthy`
 
 Copertura attuale:
 
@@ -109,6 +128,7 @@ Copertura attuale:
 - frontend collegato a molte API di lettura ma non ancora completo sul dominio
 - nessun test di build frontend completo
 - nessun test di esecuzione compose/nginx
+- sync reale verso NAS ancora assente
 
 ## Valutazione del Codice
 
@@ -122,7 +142,9 @@ Copertura attuale:
 - skeleton NAS gia testabile senza dipendere da un host reale
 - permission engine MVP gia calcolabile e testato
 - bootstrap admin disponibile per sbloccare subito l'uso del frontend reale
+- seed dominio disponibile per mostrare dati utili out-of-the-box
 - frontend non e piu solo statico: login, sessione, utenti NAS e prime viste reali sono attivi
+- stack Docker del progetto verificato end-to-end in ambiente locale
 - test iniziali gia utili per evitare regressioni di scaffold
 
 ### Punti da Rafforzare Subito
