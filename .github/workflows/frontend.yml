@@ -29,6 +29,10 @@ jobs:
         working-directory: frontend
         run: npm run lint
 
+      - name: Smoke tests
+        working-directory: .
+        run: npm --prefix frontend run test
+
       - name: Build application
         working-directory: frontend
         run: npm run build
