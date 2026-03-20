@@ -1,4 +1,12 @@
-import type { CurrentUser, DashboardSummary, LoginResponse } from "@/types/api";
+import type {
+  CurrentUser,
+  DashboardSummary,
+  EffectivePermission,
+  LoginResponse,
+  Review,
+  Share,
+  SyncCapabilities,
+} from "@/types/api";
 
 const DEFAULT_API_BASE_URL = "http://localhost:8080/api";
 
@@ -50,6 +58,38 @@ export async function getCurrentUser(token: string): Promise<CurrentUser> {
 
 export async function getDashboardSummary(token: string): Promise<DashboardSummary> {
   return request<DashboardSummary>("/dashboard/summary", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getShares(token: string): Promise<Share[]> {
+  return request<Share[]>("/shares", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getReviews(token: string): Promise<Review[]> {
+  return request<Review[]>("/reviews", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getSyncCapabilities(token: string): Promise<SyncCapabilities> {
+  return request<SyncCapabilities>("/sync/capabilities", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getEffectivePermissions(token: string): Promise<EffectivePermission[]> {
+  return request<EffectivePermission[]>("/effective-permissions", {
     headers: {
       Authorization: `Bearer ${token}`,
     },

@@ -28,8 +28,10 @@ export function AppShell({ children, currentUser, onLogout }: AppShellProps) {
         <nav>
           <Link href="/">Dashboard</Link>
           <Link href="/login">Login</Link>
-          <Link href="/">Snapshot</Link>
-          <Link href="/">Review</Link>
+          <Link href="/shares">Share</Link>
+          <Link href="/reviews">Review</Link>
+          <Link href="/sync">Sync</Link>
+          <Link href="/effective-permissions">Permessi</Link>
         </nav>
         <div className="sidebar-footer">
           {currentUser ? (

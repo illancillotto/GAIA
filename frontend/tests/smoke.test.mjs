@@ -53,6 +53,20 @@ test("app shell exposes main navigation labels", () => {
 
   assert.match(shell, /Dashboard/);
   assert.match(shell, /Login/);
-  assert.match(shell, /Snapshot/);
+  assert.match(shell, /Share/);
   assert.match(shell, /Review/);
+  assert.match(shell, /Sync/);
+  assert.match(shell, /Permessi/);
+});
+
+test("frontend contains real backend-driven pages", () => {
+  const sharesPage = read("src/app/shares/page.tsx");
+  const reviewsPage = read("src/app/reviews/page.tsx");
+  const syncPage = read("src/app/sync/page.tsx");
+  const permissionsPage = read("src/app/effective-permissions/page.tsx");
+
+  assert.match(sharesPage, /getShares/);
+  assert.match(reviewsPage, /getReviews/);
+  assert.match(syncPage, /getSyncCapabilities/);
+  assert.match(permissionsPage, /getEffectivePermissions/);
 });

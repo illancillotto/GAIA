@@ -6,7 +6,7 @@
 
 ## Stato Generale
 
-Il repository e in una fase di bootstrap avanzato: la base documentale, il backend, il frontend, il setup Docker e la CI minima sono presenti e coerenti. Il progetto ha ora quattro capability backend reali: autenticazione applicativa con JWT, dominio audit minimo in sola lettura, skeleton di integrazione NAS con parser iniziali e permission engine MVP con preview di calcolo.
+Il repository e in una fase di bootstrap avanzato: la base documentale, il backend, il frontend, il setup Docker e la CI minima sono presenti e coerenti. Il progetto ha ora quattro capability backend reali: autenticazione applicativa con JWT, dominio audit minimo in sola lettura, skeleton di integrazione NAS con parser iniziali e permission engine MVP con preview di calcolo. Sul frontend e partita la milestone applicativa con login reale, stato sessione e prime viste collegate al backend.
 
 ## Completato
 
@@ -42,8 +42,9 @@ Il repository e in una fase di bootstrap avanzato: la base documentale, il backe
 
 - scaffold Next.js con App Router
 - layout base in `src/app/layout.tsx`
-- pagina home bootstrap
-- pagina `/login` placeholder
+- pagina home collegata a `GET /auth/me` e `GET /dashboard/summary`
+- pagina `/login` collegata a `POST /auth/login`
+- viste backend-driven per share, review, sync ed effective permissions
 - struttura `src/` predisposta per crescita modulare
 
 ### DevOps
@@ -86,14 +87,14 @@ Copertura attuale:
 ### Frontend
 
 - smoke suite `frontend/tests/smoke.test.mjs`
-- stato corrente: `4 passed`
+- stato corrente: `6 passed`
 
 Copertura attuale:
 
 - script principali `package.json`
-- contenuto base home page
-- contenuto base login page
-- label della navigazione principale
+- integrazione login e dashboard
+- navigazione principale applicativa
+- presenza di viste backend-driven
 
 ## Gap Attuali
 
@@ -101,7 +102,7 @@ Copertura attuale:
 - dominio audit minimo presente ma senza sync reale persistente
 - integrazione NAS solo a livello skeleton, senza SSH live
 - permission engine presente ma non ancora alimentato da sync persistente
-- nessuna dashboard con dati reali
+- frontend collegato solo a una parte delle API backend
 - nessun test di build frontend completo
 - nessun test di esecuzione compose/nginx
 
@@ -116,18 +117,19 @@ Copertura attuale:
 - dominio audit minimo esposto con API protette e testato end-to-end
 - skeleton NAS gia testabile senza dipendere da un host reale
 - permission engine MVP gia calcolabile e testato
+- frontend non e piu solo statico: login, sessione e prime viste reali sono attivi
 - test iniziali gia utili per evitare regressioni di scaffold
 
 ### Punti da Rafforzare Subito
 
-- collegare il permission engine al futuro sync persistente
+- completare la copertura frontend sulle API backend principali
 - aggiungere test su API future e servizi
 - verificare build frontend in ambiente CI reale
 - aggiungere test e smoke check su compose e health integrati
 
 ## Prossimi Passi Raccomandati
 
-1. esporre dati backend reali nel frontend applicativo
+1. completare il frontend applicativo con viste utenti e preview permission engine
 2. introdurre sync reale persistente dal NAS
 3. collegare il permission engine ai dati persistiti
 4. aggiungere bootstrap admin o seed iniziale gestito

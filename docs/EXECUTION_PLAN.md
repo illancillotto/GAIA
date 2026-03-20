@@ -72,6 +72,10 @@ Stato:
 - dashboard con dati backend
 - viste placeholder sostituite con dati reali per snapshot e utenti
 
+Stato:
+
+- in progress
+
 ## Milestone 6. Hardening e Runtime
 
 - smoke test compose e health integrati
