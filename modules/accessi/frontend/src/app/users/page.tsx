@@ -14,6 +14,7 @@ import { PermissionBadge, type PermissionLevel } from "@/components/ui/permissio
 import { Badge } from "@/components/ui/badge";
 import { getEffectivePermissions, getNasGroups, getNasUsers } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
+import { getAnomalousPermissions } from "@/lib/permissions";
 import { getPermissionLevel } from "@/lib/presentation";
 import type { EffectivePermission, NasGroup, NasUser } from "@/types/api";
 
@@ -29,6 +30,8 @@ type UserRow = {
   groupSummary: string;
   accessibleShares: number;
   maxPermission: PermissionLevel;
+  hasMultiSourceAnomaly: boolean;
+  anomalyCount: number;
   lastSeenSnapshotId: number | null;
 };
 
@@ -95,6 +98,9 @@ export default function UsersPage() {
 
     return users.map((user) => {
       const userPermissions = permissionByUser.get(user.id) ?? [];
+      const anomalousPermissions = getAnomalousPermissions(userPermissions);
+      const anomalyCount = anomalousPermissions.length;
+      const hasMultiSourceAnomaly = anomalyCount > 0;
       const groupNames = groups
         .filter((group) =>
           userPermissions.some((permission) =>
@@ -121,6 +127,8 @@ export default function UsersPage() {
           userPermissions.filter((permission) => permission.can_read || permission.can_write).map((item) => item.share_id),
         ).size,
         maxPermission,
+        hasMultiSourceAnomaly,
+        anomalyCount,
         lastSeenSnapshotId: user.last_seen_snapshot_id,
       };
     });
@@ -177,7 +185,19 @@ export default function UsersPage() {
       {
         header: "Permesso massimo",
         accessorKey: "maxPermission",
-        cell: ({ row }) => <PermissionBadge level={row.original.maxPermission} />,
+        cell: ({ row }) => (
+          <div className="flex items-center gap-1.5">
+            <PermissionBadge level={row.original.maxPermission} />
+            {row.original.hasMultiSourceAnomaly ? (
+              <span
+                title={`Permessi da ${row.original.anomalyCount} ${row.original.anomalyCount === 1 ? "cartella derivano" : "cartelle derivano"} da gruppi multipli. Aprire il dettaglio per analizzare le origini.`}
+                className="inline-flex h-4 w-4 cursor-help items-center justify-center rounded-full bg-amber-100 text-xs font-medium text-amber-700 hover:bg-amber-200"
+              >
+                !
+              </span>
+            ) : null}
+          </div>
+        ),
       },
       {
         header: "Stato",
