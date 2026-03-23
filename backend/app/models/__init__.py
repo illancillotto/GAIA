@@ -6,6 +6,7 @@ from app.models.permission_entry import PermissionEntry
 from app.models.review import Review
 from app.models.share import Share
 from app.models.snapshot import Snapshot
+from app.models.sync_run import SyncRun
 
 __all__ = [
     "ApplicationUser",
@@ -17,4 +18,5 @@ __all__ = [
     "Review",
     "Share",
     "Snapshot",
+    "SyncRun",
 ]

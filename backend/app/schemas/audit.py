@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict
 
 
@@ -7,6 +9,7 @@ class DashboardSummaryResponse(BaseModel):
     shares: int
     reviews: int
     snapshots: int
+    sync_runs: int
 
 
 class NasUserResponse(BaseModel):
@@ -51,3 +54,20 @@ class ReviewResponse(BaseModel):
     reviewer_user_id: int
     decision: str
     note: str | None
+
+
+class SyncRunResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    snapshot_id: int | None
+    mode: str
+    trigger_type: str
+    status: str
+    attempts_used: int
+    duration_ms: int | None
+    initiated_by: str | None
+    source_label: str | None
+    error_detail: str | None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None

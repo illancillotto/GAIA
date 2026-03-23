@@ -6,7 +6,7 @@
 
 ## Stato Generale
 
-Il repository e in una fase di bootstrap avanzato: la base documentale, il backend, il frontend, il setup Docker e la CI minima sono presenti e coerenti. Il progetto ha ora sei capability backend reali: autenticazione applicativa con JWT, bootstrap admin idempotente, bootstrap dominio audit idempotente, dominio audit minimo in sola lettura, skeleton di integrazione NAS con parser iniziali e permission engine MVP con preview di calcolo. Sul frontend la milestone applicativa e in avanzamento concreto: login reale, stato sessione, dashboard collegata, viste utenti e gruppi NAS e prime viste backend-driven principali.
+Il repository e in una fase di bootstrap avanzato: la base documentale, il backend, il frontend, il setup Docker e la CI minima sono presenti e coerenti. Il progetto ha ora undici capability backend reali: autenticazione applicativa con JWT, bootstrap admin idempotente, bootstrap dominio audit idempotente, dominio audit minimo in sola lettura, sync persistente minimale da payload testuale, live apply singolo via SSH, job/script di live sync con retry controllato, audit trail persistente delle sync, metadata operativi sui sync run, scheduling operativo minimale, skeleton di integrazione NAS con parser iniziali e permission engine MVP con preview di calcolo. Sul frontend la milestone applicativa e in avanzamento concreto: login reale, stato sessione, dashboard collegata, viste utenti e gruppi NAS e prime viste backend-driven principali, inclusa la pagina `Sync` operativa con storico run esteso.
 
 ## Completato
 
@@ -24,6 +24,9 @@ Il repository e in una fase di bootstrap avanzato: la base documentale, il backe
 - endpoint `POST /auth/login` e `GET /auth/me`
 - endpoint protetti `GET /dashboard/summary`, `GET /nas-users`, `GET /nas-groups`, `GET /shares`, `GET /reviews`
 - endpoint protetti `GET /sync/capabilities` e `POST /sync/preview`
+- endpoint protetto `POST /sync/apply` con persistenza di snapshot, dominio e permission engine derivato
+- endpoint protetto `POST /sync/live-apply` con acquisizione SSH e fallback di errore controllato
+- endpoint protetto `GET /sync-runs` per audit trail sync
 - endpoint protetti `POST /permissions/calculate-preview` e `GET /effective-permissions`
 - configurazione centralizzata con `pydantic-settings`
 - utility di sicurezza per password hash e token JWT
@@ -33,8 +36,15 @@ Il repository e in una fase di bootstrap avanzato: la base documentale, il backe
 - bootstrap admin idempotente via script backend e target Makefile
 - config NAS centralizzata e client skeleton
 - parser iniziali per passwd, group, share listing e ACL
+- parser ACL corretti per soggetti `user:<name>` e `group:<name>`
 - servizio di calcolo permessi con regole `deny` e `write implies read`
 - bootstrap dominio audit idempotente via script backend e target Makefile
+- servizio di sync persistente minimale da input testuale
+- connector SSH live con `paramiko` e comandi configurabili
+- job backend di live sync con retry configurabile e script dedicato
+- modello persistente `sync_runs` con migration dedicata
+- metadata `duration_ms`, `initiated_by`, `source_label` sui sync run
+- runner schedulato configurabile via env e script dedicato
 - struttura Alembic presente con migration iniziale `snapshots`
 - seconda migration per `application_users`
 - terza migration per il dominio audit minimo
@@ -47,6 +57,10 @@ Il repository e in una fase di bootstrap avanzato: la base documentale, il backe
 - pagina home collegata a `GET /auth/me` e `GET /dashboard/summary`
 - pagina `/login` collegata a `POST /auth/login`
 - viste backend-driven per utenti NAS, gruppi NAS, share, review, sync ed effective permissions
+- pagina `Sync` con form testuale per preview e apply persistente
+- pagina `Sync` predisposta anche per live apply via backend
+- pagina `Sync` con storico run backend-driven
+- pagina `Sync` con metadata operativi dei run
 - preview frontend del permission engine collegata a `POST /permissions/calculate-preview`
 - struttura `src/` predisposta per crescita modulare
 
@@ -70,7 +84,7 @@ Il repository e in una fase di bootstrap avanzato: la base documentale, il backe
 ### Backend
 
 - suite `backend/tests`
-- stato corrente: `42 passed`
+- stato corrente: `56 passed`
 
 Verifica runtime:
 
@@ -78,6 +92,13 @@ Verifica runtime:
 - `docker compose exec backend alembic upgrade head`
 - `docker compose exec backend python scripts/bootstrap_admin.py`
 - `docker compose exec backend python scripts/bootstrap_domain.py`
+- `POST /sync/preview` e `POST /sync/apply` verificati contro stack locale
+- `GET /sync/capabilities` verificato con supporto live attivo
+- `POST /sync/live-apply` verificato contro stack locale con `503` esplicito per NAS non raggiungibile
+- script `python scripts/live_sync.py` verificato contro stack locale con fallimento controllato
+- `POST /sync/apply` verificato con creazione record audit in `sync_runs`
+- `GET /sync-runs` verificato contro stack locale
+- `python scripts/scheduled_live_sync.py` verificato con ciclo singolo e record audit completo
 - login reale verificato su `POST /auth/login`
 - query reali verificate su `/dashboard/summary`, `/nas-users`, `/nas-groups`, `/shares`, `/reviews`, `/effective-permissions`
 
@@ -86,7 +107,11 @@ Copertura attuale:
 - health endpoint
 - login e current user
 - dashboard summary e liste dominio audit
-- sync capabilities e preview NAS
+- sync capabilities, preview NAS e apply persistente
+- live apply via SSH con gestione errore controllata
+- job di live sync con retry testato
+- audit trail sync persistente esposto via API
+- metadata e scheduling operativo minimale verificati
 - permission preview e lista effective permissions
 - metadata applicazione FastAPI
 - settings e override ambiente
@@ -98,6 +123,7 @@ Copertura attuale:
 - servizio calcolo permessi
 - bootstrap admin service e script
 - bootstrap dominio service e script
+- servizio sync persistente e frontend collegato
 - scaffold repository e file chiave
 
 ### Frontend
@@ -123,9 +149,9 @@ Copertura attuale:
 ## Gap Attuali
 
 - dominio audit minimo presente ma senza sync reale persistente
-- integrazione NAS solo a livello skeleton, senza SSH live
-- permission engine presente ma non ancora alimentato da sync persistente
-- frontend collegato a molte API di lettura ma non ancora completo sul dominio
+- integrazione NAS live disponibile ma non ancora verificata contro host reale raggiungibile
+- permission engine alimentato da sync persistente e live apply, ma senza scheduling o sync incrementale
+- frontend collegato a molte API di lettura e alla sync, ma non ancora completo sul dominio
 - nessun test di build frontend completo
 - nessun test di esecuzione compose/nginx
 - sync reale verso NAS ancora assente
@@ -144,6 +170,11 @@ Copertura attuale:
 - bootstrap admin disponibile per sbloccare subito l'uso del frontend reale
 - seed dominio disponibile per mostrare dati utili out-of-the-box
 - frontend non e piu solo statico: login, sessione, utenti NAS e prime viste reali sono attivi
+- la sync persistente puo gia popolare snapshot e permessi effettivi senza dipendere da seed manuali
+- la live sync fallisce in modo esplicito e gestito quando il NAS non e raggiungibile
+- il progetto espone gia un entrypoint operativo `make live-sync` per esecuzione manuale o schedulata
+- le sync applicate sono ora tracciate in modo persistente con esito e tentativi
+- il progetto espone anche un runner schedulato configurabile per la live sync
 - stack Docker del progetto verificato end-to-end in ambiente locale
 - test iniziali gia utili per evitare regressioni di scaffold
 
@@ -156,12 +187,11 @@ Copertura attuale:
 
 ## Prossimi Passi Raccomandati
 
-1. completare il frontend applicativo con UX piu vicina al dominio e dati seed piu utili
-2. introdurre sync reale persistente dal NAS
-3. collegare il permission engine ai dati persistiti
-4. aggiungere seed iniziale gestito per dominio audit minimo
-5. ampliare CI con test build/run piu vicini al runtime reale
-6. aggiungere smoke check compose e runtime integrati
+1. verificare la live sync contro un host NAS reale o staging
+2. introdurre persistenza dello scheduler e policy piu evolute di retry/backoff
+3. completare il frontend applicativo con UX piu vicina al dominio operativo
+4. ampliare CI con test build/run piu vicini al runtime reale
+5. verificare la live sync contro un NAS reale o staging
 
 ## Regola di Aggiornamento
 

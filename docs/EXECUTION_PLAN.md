@@ -84,6 +84,11 @@ Avanzamento attuale:
 - preview frontend del permission engine disponibile
 - bootstrap admin disponibile per sbloccare il login reale senza seed manuale
 - seed iniziale dominio audit disponibile per popolare subito dashboard e liste
+- pagina `Sync` collegata a preview e apply persistente su backend
+- live apply via SSH disponibile con degradazione controllata in assenza di NAS raggiungibile
+- job/script di live sync con retry controllato disponibile
+- audit trail persistente delle sync disponibile e visibile in UI/API
+- runner schedulato della live sync disponibile con loop configurabile
 
 ## Milestone 6. Hardening e Runtime
 
@@ -91,6 +96,11 @@ Avanzamento attuale:
 - CI piu vicina al runtime reale
 - script bootstrap admin
 - script bootstrap dominio audit
+- sync persistente minimale via payload testuale
+- live sync singola via SSH
+- retry operativo per live sync
+- tracciamento persistente degli esiti di sync
+- scheduling operativo minimale via script
 - affinamento deployment e note operative
 
 ## Ordine di Esecuzione Corrente

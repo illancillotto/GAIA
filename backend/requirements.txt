@@ -1,6 +1,7 @@
 alembic==1.16.5
 fastapi==0.118.0
 httpx==0.28.1
+paramiko==3.5.1
 PyJWT==2.10.1
 psycopg[binary]==3.2.10
 pydantic-settings==2.11.0

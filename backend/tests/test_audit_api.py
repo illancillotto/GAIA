@@ -16,6 +16,7 @@ from app.models.nas_user import NasUser
 from app.models.review import Review
 from app.models.share import Share
 from app.models.snapshot import Snapshot
+from app.models.sync_run import SyncRun
 
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
@@ -90,6 +91,19 @@ def seed_audit_domain() -> str:
         note="Accesso coerente con il ruolo",
     )
     db.add(review)
+    db.add(
+        SyncRun(
+            snapshot_id=snapshot.id,
+            mode="payload",
+            trigger_type="api",
+            status="succeeded",
+            attempts_used=1,
+            duration_ms=25,
+            initiated_by="reviewer",
+            source_label="api:payload",
+            error_detail=None,
+        )
+    )
     db.commit()
     db.close()
 
@@ -116,6 +130,7 @@ def test_dashboard_summary_returns_domain_counts() -> None:
         "shares": 1,
         "reviews": 1,
         "snapshots": 1,
+        "sync_runs": 1,
     }
 
 
@@ -157,3 +172,15 @@ def test_reviews_endpoint_returns_review_records() -> None:
     assert response.status_code == 200
     assert response.json()[0]["decision"] == "approved"
     assert response.json()[0]["reviewer_user_id"] == 1
+
+
+def test_sync_runs_endpoint_returns_audit_records() -> None:
+    token = seed_audit_domain()
+    response = client.get("/sync-runs", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    assert response.json()[0]["mode"] == "payload"
+    assert response.json()[0]["status"] == "succeeded"
+    assert response.json()[0]["duration_ms"] == 25
+    assert response.json()[0]["initiated_by"] == "reviewer"
+    assert response.json()[0]["source_label"] == "api:payload"

@@ -78,7 +78,7 @@ def parse_acl_output(raw_text: str) -> list[ParsedAclEntry]:
         if ":" not in payload:
             continue
 
-        subject, permissions = payload.split(":", maxsplit=1)
+        subject, permissions = payload.rsplit(":", maxsplit=1)
         acl_entries.append(
             ParsedAclEntry(
                 subject=subject.strip(),

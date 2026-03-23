@@ -1,4 +1,4 @@
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class SyncCapabilitiesResponse(BaseModel):
@@ -8,13 +8,14 @@ class SyncCapabilitiesResponse(BaseModel):
     username: str
     timeout_seconds: int
     supports_live_sync: bool
+    auth_mode: str
 
 
 class SyncPreviewRequest(BaseModel):
     passwd_text: str | None = None
     group_text: str | None = None
     shares_text: str | None = None
-    acl_texts: list[str] = []
+    acl_texts: list[str] = Field(default_factory=list)
 
 
 class ParsedNasUser(BaseModel):
@@ -47,3 +48,14 @@ class SyncPreviewResponse(BaseModel):
     groups: list[ParsedNasGroup]
     shares: list[ParsedShare]
     acl_entries: list[ParsedAclEntry]
+
+
+class SyncApplyResponse(BaseModel):
+    snapshot_id: int
+    snapshot_checksum: str
+    persisted_users: int
+    persisted_groups: int
+    persisted_shares: int
+    persisted_permission_entries: int
+    persisted_effective_permissions: int
+    share_acl_pairs_used: int

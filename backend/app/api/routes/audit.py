@@ -12,6 +12,7 @@ from app.schemas.audit import (
     NasUserResponse,
     ReviewResponse,
     ShareResponse,
+    SyncRunResponse,
 )
 from app.services.audit import (
     get_audit_dashboard_summary,
@@ -19,6 +20,7 @@ from app.services.audit import (
     get_nas_users,
     get_reviews,
     get_shares,
+    get_sync_runs,
 )
 
 router = APIRouter(tags=["audit"])
@@ -62,3 +64,11 @@ def reviews(
     db: Annotated[Session, Depends(get_db)],
 ) -> list[ReviewResponse]:
     return [ReviewResponse.model_validate(item) for item in get_reviews(db)]
+
+
+@router.get("/sync-runs", response_model=list[SyncRunResponse])
+def sync_runs(
+    _: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[SyncRunResponse]:
+    return [SyncRunResponse.model_validate(item) for item in get_sync_runs(db)]

@@ -1,6 +1,6 @@
 COMPOSE = docker compose
 
-.PHONY: up down logs rebuild backend-shell frontend-shell migrate bootstrap-admin bootstrap-domain
+.PHONY: up down logs rebuild backend-shell frontend-shell migrate bootstrap-admin bootstrap-domain live-sync scheduled-live-sync
 
 up:
 	$(COMPOSE) up -d
@@ -28,3 +28,9 @@ bootstrap-admin:
 
 bootstrap-domain:
 	$(COMPOSE) exec backend python scripts/bootstrap_domain.py
+
+live-sync:
+	$(COMPOSE) exec backend python scripts/live_sync.py
+
+scheduled-live-sync:
+	$(COMPOSE) exec backend python scripts/scheduled_live_sync.py

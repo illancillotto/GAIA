@@ -45,7 +45,9 @@ L'architettura adotta una separazione netta tra frontend, backend API, database 
 1. il frontend richiama Nginx
 2. Nginx instrada il traffico UI al frontend e le API al backend
 3. il backend usa PostgreSQL per snapshot, review e metadati NAS
-4. i futuri job di sync interrogano il NAS via SSH
+4. il backend puo interrogare il NAS via SSH per costruire payload di sync persistenti
+5. i job backend possono riusare la live sync con retry controllato e target scriptabile
+6. ogni sync puo essere tracciata in audit trail persistente con esito, tentativi e snapshot associato
 
 ## 5. Decisioni Architetturali Iniziali
 
@@ -60,3 +62,4 @@ L'architettura adotta una separazione netta tra frontend, backend API, database 
 - permission engine con snapshot versionati
 - export strutturati
 - osservabilita applicativa e metriche
+- scheduling e retry della live sync via SSH

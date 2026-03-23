@@ -17,6 +17,7 @@ export type DashboardSummary = {
   shares: number;
   reviews: number;
   snapshots: number;
+  sync_runs: number;
 };
 
 export type NasUser = {
@@ -62,6 +63,72 @@ export type SyncCapabilities = {
   username: string;
   timeout_seconds: number;
   supports_live_sync: boolean;
+  auth_mode: string;
+};
+
+export type SyncPreviewRequest = {
+  passwd_text: string;
+  group_text: string;
+  shares_text: string;
+  acl_texts: string[];
+};
+
+export type ParsedNasSyncUser = {
+  username: string;
+  source_uid: string;
+  full_name: string | null;
+  home_directory: string | null;
+};
+
+export type ParsedNasSyncGroup = {
+  name: string;
+  gid: string;
+  members: string[];
+};
+
+export type ParsedNasSyncShare = {
+  name: string;
+};
+
+export type ParsedAclEntry = {
+  subject: string;
+  permissions: string;
+  effect: string;
+};
+
+export type SyncPreview = {
+  users: ParsedNasSyncUser[];
+  groups: ParsedNasSyncGroup[];
+  shares: ParsedNasSyncShare[];
+  acl_entries: ParsedAclEntry[];
+};
+
+export type SyncApplyResult = {
+  snapshot_id: number;
+  snapshot_checksum: string;
+  persisted_users: number;
+  persisted_groups: number;
+  persisted_shares: number;
+  persisted_permission_entries: number;
+  persisted_effective_permissions: number;
+  share_acl_pairs_used: number;
+};
+
+export type SyncLiveApplyResult = SyncApplyResult;
+
+export type SyncRun = {
+  id: number;
+  snapshot_id: number | null;
+  mode: string;
+  trigger_type: string;
+  status: string;
+  attempts_used: number;
+  duration_ms: number | null;
+  initiated_by: string | null;
+  source_label: string | null;
+  error_detail: string | null;
+  started_at: string | null;
+  completed_at: string | null;
 };
 
 export type EffectivePermission = {

@@ -61,6 +61,35 @@ Le credenziali vanno cambiate tramite variabili ambiente in ambienti non locali.
   - review di esempio
 - lo script e idempotente e aggiorna lo snapshot seed esistente
 
+## 6.3 Sync Live NAS
+
+- configurazione minima:
+  - `NAS_HOST`
+  - `NAS_PORT`
+  - `NAS_USERNAME`
+  - `NAS_PASSWORD` oppure `NAS_PRIVATE_KEY_PATH`
+- comandi configurabili:
+  - `NAS_PASSWD_COMMAND`
+  - `NAS_GROUP_COMMAND`
+  - `NAS_SHARES_COMMAND`
+  - `NAS_ACL_COMMAND_TEMPLATE`
+- endpoint runtime:
+  - `GET /sync/capabilities`
+  - `POST /sync/live-apply`
+  - `GET /sync-runs`
+- script operativo:
+  - `make live-sync`
+  - `make scheduled-live-sync`
+- retry configurabile:
+  - `SYNC_LIVE_MAX_ATTEMPTS`
+  - `SYNC_LIVE_RETRY_DELAY_SECONDS`
+- scheduling configurabile:
+  - `SYNC_SCHEDULE_ENABLED`
+  - `SYNC_SCHEDULE_INTERVAL_SECONDS`
+  - `SYNC_SCHEDULE_MAX_CYCLES`
+- se il NAS non e raggiungibile o i comandi falliscono, il backend restituisce `503`
+- ogni esecuzione sync applicata viene registrata in `sync_runs`
+
 ## 7. Log e Troubleshooting
 
 - log stack completo: `make logs`

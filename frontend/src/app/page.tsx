@@ -14,6 +14,7 @@ const emptySummary: DashboardSummary = {
   shares: 0,
   reviews: 0,
   snapshots: 0,
+  sync_runs: 0,
 };
 
 export default function HomePage() {
@@ -62,6 +63,7 @@ export default function HomePage() {
     { title: "Share", value: String(summary.shares), note: "Cartelle condivise presenti nel dominio audit" },
     { title: "Review", value: String(summary.reviews), note: "Review registrate nella piattaforma" },
     { title: "Snapshot", value: String(summary.snapshots), note: "Fotografie disponibili per audit e sync" },
+    { title: "Sync Run", value: String(summary.sync_runs), note: "Esecuzioni sync registrate con audit trail" },
   ];
 
   function handleLogout(): void {

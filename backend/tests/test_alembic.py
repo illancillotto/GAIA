@@ -39,3 +39,25 @@ def test_permission_engine_migration_creates_permission_tables() -> None:
 
     for table_name in ['"permission_entries"', '"effective_permissions"']:
         assert table_name in migration
+
+
+def test_sync_runs_migration_creates_audit_table() -> None:
+    migration = (
+        ROOT / "backend" / "alembic" / "versions" / "20260323_0005_sync_runs_audit.py"
+    ).read_text(encoding="utf-8")
+
+    assert '"sync_runs"' in migration
+    assert '"mode"' in migration
+    assert '"status"' in migration
+    assert '"attempts_used"' in migration
+
+
+def test_sync_runs_metadata_migration_extends_audit_table() -> None:
+    migration = (
+        ROOT / "backend" / "alembic" / "versions" / "20260323_0006_sync_runs_metadata.py"
+    ).read_text(encoding="utf-8")
+
+    assert 'op.add_column("sync_runs"' in migration
+    assert '"duration_ms"' in migration
+    assert '"initiated_by"' in migration
+    assert '"source_label"' in migration

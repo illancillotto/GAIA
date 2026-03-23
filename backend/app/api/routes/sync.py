@@ -1,11 +1,22 @@
 from typing import Annotated
+from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user
+from app.core.database import get_db
 from app.models.application_user import ApplicationUser
-from app.schemas.sync import SyncCapabilitiesResponse, SyncPreviewRequest, SyncPreviewResponse
-from app.services.nas_connector import build_sync_preview, get_sync_capabilities
+from app.jobs.sync import run_live_sync_job
+from app.schemas.sync import (
+    SyncApplyResponse,
+    SyncCapabilitiesResponse,
+    SyncPreviewRequest,
+    SyncPreviewResponse,
+)
+from app.services.nas_connector import NasConnectorError, get_sync_capabilities
+from app.services.sync import apply_sync_payload, build_sync_preview
+from app.services.sync_runs import create_sync_run
 
 router = APIRouter(prefix="/sync", tags=["sync"])
 
@@ -23,3 +34,42 @@ def sync_preview(
     _: Annotated[ApplicationUser, Depends(require_active_user)],
 ) -> SyncPreviewResponse:
     return build_sync_preview(payload)
+
+
+@router.post("/apply", response_model=SyncApplyResponse)
+def sync_apply(
+    payload: SyncPreviewRequest,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> SyncApplyResponse:
+    started_at = datetime.now(timezone.utc)
+    result = apply_sync_payload(db, payload)
+    create_sync_run(
+        db,
+        mode="payload",
+        trigger_type="api",
+        status="succeeded",
+        attempts_used=1,
+        snapshot_id=result.snapshot_id,
+        initiated_by=current_user.username,
+        source_label="api:payload",
+        started_at=started_at,
+        completed_at=datetime.now(timezone.utc),
+    )
+    return result
+
+
+@router.post("/live-apply", response_model=SyncApplyResponse)
+def sync_live_apply(
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> SyncApplyResponse:
+    try:
+        return run_live_sync_job(
+            db,
+            trigger_type="api",
+            initiated_by=current_user.username,
+            source_label="api:ssh",
+        ).sync_result
+    except NasConnectorError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc

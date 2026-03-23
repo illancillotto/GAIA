@@ -6,6 +6,7 @@ from app.models.nas_user import NasUser
 from app.models.review import Review
 from app.models.share import Share
 from app.models.snapshot import Snapshot
+from app.models.sync_run import SyncRun
 
 
 def get_dashboard_summary(db: Session) -> dict[str, int]:
@@ -15,6 +16,7 @@ def get_dashboard_summary(db: Session) -> dict[str, int]:
         "shares": db.scalar(select(func.count(Share.id))) or 0,
         "reviews": db.scalar(select(func.count(Review.id))) or 0,
         "snapshots": db.scalar(select(func.count(Snapshot.id))) or 0,
+        "sync_runs": db.scalar(select(func.count(SyncRun.id))) or 0,
     }
 
 
@@ -35,4 +37,9 @@ def list_shares(db: Session) -> list[Share]:
 
 def list_reviews(db: Session) -> list[Review]:
     statement = select(Review).order_by(Review.reviewed_at.desc(), Review.id.desc())
+    return list(db.execute(statement).scalars().all())
+
+
+def list_sync_runs(db: Session) -> list[SyncRun]:
+    statement = select(SyncRun).order_by(SyncRun.completed_at.desc(), SyncRun.id.desc())
     return list(db.execute(statement).scalars().all())

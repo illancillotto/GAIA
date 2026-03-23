@@ -37,7 +37,8 @@ def test_parse_acl_output_extracts_allow_and_deny_entries() -> None:
 
     assert len(acl_entries) == 2
     assert acl_entries[0].effect == "allow"
-    assert acl_entries[0].subject == "group"
-    assert acl_entries[0].permissions == "amministrazione:read,write"
+    assert acl_entries[0].subject == "group:amministrazione"
+    assert acl_entries[0].permissions == "read,write"
     assert acl_entries[1].effect == "deny"
-    assert acl_entries[1].subject == "user"
+    assert acl_entries[1].subject == "user:ospite"
+    assert acl_entries[1].permissions == "read"

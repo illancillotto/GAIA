@@ -6,6 +6,7 @@ from app.repositories.audit import (
     list_nas_users,
     list_reviews,
     list_shares,
+    list_sync_runs,
 )
 
 
@@ -27,3 +28,7 @@ def get_shares(db: Session):
 
 def get_reviews(db: Session):
     return list_reviews(db)
+
+
+def get_sync_runs(db: Session):
+    return list_sync_runs(db)

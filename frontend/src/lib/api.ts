@@ -10,7 +10,12 @@ import type {
   PermissionUserInput,
   Review,
   Share,
+  SyncApplyResult,
   SyncCapabilities,
+  SyncLiveApplyResult,
+  SyncPreview,
+  SyncPreviewRequest,
+  SyncRun,
 } from "@/types/api";
 
 const DEFAULT_API_BASE_URL = "http://localhost:8080/api";
@@ -103,6 +108,49 @@ export async function getReviews(token: string): Promise<Review[]> {
 
 export async function getSyncCapabilities(token: string): Promise<SyncCapabilities> {
   return request<SyncCapabilities>("/sync/capabilities", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function previewSync(
+  token: string,
+  payload: SyncPreviewRequest,
+): Promise<SyncPreview> {
+  return request<SyncPreview>("/sync/preview", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function applySync(
+  token: string,
+  payload: SyncPreviewRequest,
+): Promise<SyncApplyResult> {
+  return request<SyncApplyResult>("/sync/apply", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function applyLiveSync(token: string): Promise<SyncLiveApplyResult> {
+  return request<SyncLiveApplyResult>("/sync/live-apply", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getSyncRuns(token: string): Promise<SyncRun[]> {
+  return request<SyncRun[]>("/sync-runs", {
     headers: {
       Authorization: `Bearer ${token}`,
     },

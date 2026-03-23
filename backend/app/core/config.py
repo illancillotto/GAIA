@@ -25,6 +25,18 @@ class Settings(BaseSettings):
     nas_password: str = Field(default="change_me", alias="NAS_PASSWORD")
     nas_private_key_path: str | None = Field(default=None, alias="NAS_PRIVATE_KEY_PATH")
     nas_timeout: int = Field(default=10, alias="NAS_TIMEOUT")
+    nas_passwd_command: str = Field(default="getent passwd", alias="NAS_PASSWD_COMMAND")
+    nas_group_command: str = Field(default="getent group", alias="NAS_GROUP_COMMAND")
+    nas_shares_command: str = Field(default="ls /volume1", alias="NAS_SHARES_COMMAND")
+    nas_acl_command_template: str = Field(
+        default="synoacltool -get /volume1/{share}",
+        alias="NAS_ACL_COMMAND_TEMPLATE",
+    )
+    sync_live_max_attempts: int = Field(default=3, alias="SYNC_LIVE_MAX_ATTEMPTS")
+    sync_live_retry_delay_seconds: int = Field(default=2, alias="SYNC_LIVE_RETRY_DELAY_SECONDS")
+    sync_schedule_enabled: bool = Field(default=False, alias="SYNC_SCHEDULE_ENABLED")
+    sync_schedule_interval_seconds: int = Field(default=900, alias="SYNC_SCHEDULE_INTERVAL_SECONDS")
+    sync_schedule_max_cycles: int = Field(default=0, alias="SYNC_SCHEDULE_MAX_CYCLES")
     bootstrap_admin_username: str = Field(default="admin", alias="BOOTSTRAP_ADMIN_USERNAME")
     bootstrap_admin_email: str = Field(default="admin@example.local", alias="BOOTSTRAP_ADMIN_EMAIL")
     bootstrap_admin_password: str = Field(default="change_me_admin", alias="BOOTSTRAP_ADMIN_PASSWORD")
