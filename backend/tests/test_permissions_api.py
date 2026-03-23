@@ -14,6 +14,7 @@ from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.models.effective_permission import EffectivePermission
 from app.models.nas_user import NasUser
 from app.models.share import Share
+from app.models.snapshot import Snapshot
 
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
@@ -145,3 +146,51 @@ def test_effective_permissions_lists_persisted_records() -> None:
             "source_summary": "seeded",
         }
     ]
+
+
+def test_effective_permissions_returns_only_latest_snapshot_records() -> None:
+    db = TestingSessionLocal()
+    snapshot_1 = Snapshot(status="completed", checksum="snap-1")
+    snapshot_2 = Snapshot(status="completed", checksum="snap-2")
+    nas_user = NasUser(username="mrossi", is_active=True)
+    share = Share(name="contabilita", path="/volume1/contabilita")
+    db.add_all([snapshot_1, snapshot_2, nas_user, share])
+    db.commit()
+    db.refresh(snapshot_1)
+    db.refresh(snapshot_2)
+    db.refresh(nas_user)
+    db.refresh(share)
+    snapshot_2_id = snapshot_2.id
+    db.add_all(
+        [
+            EffectivePermission(
+                snapshot_id=snapshot_1.id,
+                nas_user_id=nas_user.id,
+                share_id=share.id,
+                can_read=True,
+                can_write=False,
+                is_denied=False,
+                source_summary="old-snapshot",
+                details_json=None,
+            ),
+            EffectivePermission(
+                snapshot_id=snapshot_2.id,
+                nas_user_id=nas_user.id,
+                share_id=share.id,
+                can_read=True,
+                can_write=True,
+                is_denied=False,
+                source_summary="latest-snapshot",
+                details_json=None,
+            ),
+        ]
+    )
+    db.commit()
+    db.close()
+
+    response = client.get("/effective-permissions", headers=auth_headers())
+
+    assert response.status_code == 200
+    assert len(response.json()) == 1
+    assert response.json()[0]["snapshot_id"] == snapshot_2_id
+    assert response.json()[0]["source_summary"] == "latest-snapshot"
