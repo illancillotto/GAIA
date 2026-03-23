@@ -78,5 +78,5 @@ def test_compose_declares_expected_services() -> None:
 def test_readme_mentions_quick_start_and_docs() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
 
-    for section in ["## Quick Start", "## Documentazione Disponibile", "## Stato Progetto"]:
+    for section in ["## Quick Start", "## Documentazione", "## I tre moduli"]:
         assert section in readme

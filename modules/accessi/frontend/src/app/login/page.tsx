@@ -17,7 +17,7 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (getStoredAccessToken()) {
-      router.replace("/");
+      router.replace("/accessi");
     }
   }, [router]);
 
@@ -29,7 +29,7 @@ export default function LoginPage() {
     try {
       const response = await login(username, password);
       setStoredAccessToken(response.access_token);
-      router.push("/");
+      router.push("/accessi");
       router.refresh();
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Accesso non riuscito");

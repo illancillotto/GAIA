@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import type { CurrentUser } from "@/types/api";
 import { Avatar } from "@/components/ui/avatar";
 import { CheckIcon, DocumentIcon, FolderIcon, GridIcon, LockIcon, RefreshIcon, ServerIcon, UserIcon, UsersIcon } from "@/components/ui/icons";
@@ -25,8 +27,17 @@ export function Sidebar({ currentUser, onLogout, reviewBadge = 0, userBadge = 0 
       </div>
 
       <nav className="flex-1 space-y-0.5 overflow-y-auto px-2 py-3">
+        <div className="mx-2 mb-3 border-b border-gray-100 pb-3">
+          <Link
+            href="/"
+            className="block rounded-lg px-2.5 py-2 text-xs font-medium tracking-wide text-gray-500 transition hover:bg-gray-50 hover:text-gray-800"
+          >
+            ← GAIA Home
+          </Link>
+        </div>
+
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Panoramica</p>
-        <NavItem href="/" icon={GridIcon} label="Dashboard" />
+        <NavItem href="/accessi" icon={GridIcon} label="Dashboard" />
         <NavItem href="/sync" icon={RefreshIcon} label="Sincronizzazione" />
 
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Accessi</p>

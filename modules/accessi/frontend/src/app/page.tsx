@@ -1,27 +1,62 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { AppShell } from "@/components/layout/app-shell";
-import { Topbar } from "@/components/layout/topbar";
-import { AlertBanner } from "@/components/ui/alert-banner";
-import { MetricCard } from "@/components/ui/metric-card";
-import { PermissionBadge } from "@/components/ui/permission-badge";
-import { SourceTag } from "@/components/ui/source-tag";
-import { SyncButton } from "@/components/ui/sync-button";
-import { AlertTriangleIcon, ChevronRightIcon, FolderIcon, SearchIcon, UserIcon } from "@/components/ui/icons";
-import {
-  getCurrentUser,
-  getDashboardSummary,
-  getEffectivePermissions,
-  getNasUsers,
-  getShares,
-} from "@/lib/api";
+import { getCurrentUser, getDashboardSummary } from "@/lib/api";
 import { clearStoredAccessToken, getStoredAccessToken } from "@/lib/auth";
-import { getPermissionLevel } from "@/lib/presentation";
-import type { CurrentUser, DashboardSummary, EffectivePermission, NasUser, Share } from "@/types/api";
+import { cn } from "@/lib/cn";
+import type { CurrentUser, DashboardSummary } from "@/types/api";
+
+type ModuleStatus = "active" | "coming";
+
+type HomeModule = {
+  id: string;
+  title: string;
+  subtitle: string;
+  description: string;
+  href: string;
+  status: ModuleStatus;
+  statusLabel: string;
+  accentClassName: string;
+};
+
+const modules: HomeModule[] = [
+  {
+    id: "accessi",
+    title: "GAIA Accessi",
+    subtitle: "NAS Audit",
+    description:
+      "Audit degli accessi al NAS Synology. Utenti, gruppi, cartelle condivise, permessi effettivi e workflow di review per i responsabili di settore.",
+    href: "/accessi",
+    status: "active",
+    statusLabel: "Operativo",
+    accentClassName: "border-[#1D4E35]/20 bg-[#1D4E35] text-white shadow-[0_24px_64px_rgba(29,78,53,0.22)]",
+  },
+  {
+    id: "rete",
+    title: "GAIA Rete",
+    subtitle: "Network Monitor",
+    description:
+      "Monitoraggio della rete LAN. Scansione dispositivi, mappa interattiva per piano e alert per dispositivi nuovi o non raggiungibili.",
+    href: "/network",
+    status: "coming",
+    statusLabel: "In sviluppo",
+    accentClassName: "border-[#0F766E]/20 bg-white/65 text-gray-900",
+  },
+  {
+    id: "inventario",
+    title: "GAIA Inventario",
+    subtitle: "IT Inventory",
+    description:
+      "Registro centralizzato dei dispositivi IT. Anagrafica, garanzie, assegnazioni utenti e import da CSV.",
+    href: "/inventory",
+    status: "coming",
+    statusLabel: "In sviluppo",
+    accentClassName: "border-[#E07A5F]/20 bg-white/65 text-gray-900",
+  },
+];
 
 const emptySummary: DashboardSummary = {
   nas_users: 0,
@@ -34,16 +69,13 @@ const emptySummary: DashboardSummary = {
 
 export default function HomePage() {
   const router = useRouter();
-  const [summary, setSummary] = useState<DashboardSummary>(emptySummary);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
-  const [users, setUsers] = useState<NasUser[]>([]);
-  const [shares, setShares] = useState<Share[]>([]);
-  const [permissions, setPermissions] = useState<EffectivePermission[]>([]);
+  const [summary, setSummary] = useState<DashboardSummary>(emptySummary);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
 
   useEffect(() => {
-    async function loadDashboard() {
+    async function loadHome() {
       const token = getStoredAccessToken();
 
       if (!token) {
@@ -52,25 +84,13 @@ export default function HomePage() {
       }
 
       try {
-        const [
-          user,
-          dashboardSummary,
-          nasUsers,
-          shareItems,
-          permissionItems,
-        ] = await Promise.all([
+        const [user, dashboardSummary] = await Promise.all([
           getCurrentUser(token),
           getDashboardSummary(token),
-          getNasUsers(token),
-          getShares(token),
-          getEffectivePermissions(token),
         ]);
 
         setCurrentUser(user);
         setSummary(dashboardSummary);
-        setUsers(nasUsers);
-        setShares(shareItems);
-        setPermissions(permissionItems);
         setLoadError(null);
       } catch (error) {
         clearStoredAccessToken();
@@ -83,40 +103,14 @@ export default function HomePage() {
       }
     }
 
-    void loadDashboard();
+    void loadHome();
   }, [router]);
 
   function handleLogout(): void {
+    clearStoredAccessToken();
     setCurrentUser(null);
     setSummary(emptySummary);
     router.replace("/login");
-  }
-
-  const recentUsers = useMemo(
-    () =>
-      [...users]
-        .sort((left, right) => right.id - left.id)
-        .slice(0, 5),
-    [users],
-  );
-
-  const recentShares = useMemo(
-    () =>
-      [...shares]
-        .sort((left, right) => left.name.localeCompare(right.name, "it"))
-        .slice(0, 5),
-    [shares],
-  );
-
-  const latestPermissions = useMemo(() => permissions.slice(0, 8), [permissions]);
-  const deniedCount = permissions.filter((item) => item.is_denied).length;
-
-  function getUserLabel(userId: number): string {
-    return users.find((user) => user.id === userId)?.username ?? String(userId);
-  }
-
-  function getShareLabel(shareId: number): string {
-    return shares.find((share) => share.id === shareId)?.name ?? String(shareId);
   }
 
   if (isCheckingSession || !currentUser) {
@@ -142,160 +136,142 @@ export default function HomePage() {
   }
 
   return (
-    <AppShell
-      currentUser={currentUser}
-      onLogout={handleLogout}
-      reviewBadge={summary.reviews}
-      userBadge={summary.nas_users}
-    >
-      <Topbar
-        pageTitle="Dashboard"
-        actions={<SyncButton label="Apri Sync" onClick={() => router.push("/sync")} />}
-      />
-
-      <section className="page-body">
-        <div className="page-stack">
-          {summary.reviews > 0 ? (
-            <AlertBanner
-              icon={<AlertTriangleIcon className="h-4 w-4" />}
-              title={`${summary.reviews} review in attesa`}
-              action={
-                <Link
-                  href="/reviews"
-                  className="rounded-md bg-amber-100 px-3 py-1.5 text-xs font-medium text-amber-700 transition hover:bg-amber-200"
-                >
-                  Vai alle review
-                </Link>
-              }
-            >
-              Permessi da validare dai responsabili di settore. Lo stato corrente e pronto per il triage operativo.
-            </AlertBanner>
-          ) : null}
-
+    <main className="min-h-screen bg-[#0E1712] text-white">
+      <div className="mx-auto flex min-h-screen max-w-7xl flex-col px-6 py-6 sm:px-8 lg:px-10">
+        <header className="flex flex-col gap-6 border-b border-white/10 pb-8 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <h2 className="page-heading">Controllo centralizzato degli accessi NAS</h2>
-            <p className="mt-1 text-sm text-gray-500">
-              Vista sintetica di utenti, cartelle condivise, permessi effettivi e review aperte.
+            <div className="inline-flex items-center rounded-full border border-[#1D4E35]/50 bg-[#1D4E35]/15 px-4 py-1.5 text-xs font-semibold uppercase tracking-[0.24em] text-[#9BD3A7]">
+              GAIA
+            </div>
+            <h1 className="mt-5 text-4xl font-semibold tracking-tight sm:text-5xl">
+              Gestione Accessi Inventario e Apparati
+            </h1>
+            <p className="mt-3 max-w-3xl text-sm leading-6 text-white/70 sm:text-base">
+              Piattaforma IT governance del Consorzio di Bonifica dell&apos;Oristanese. Un unico punto di ingresso
+              per audit accessi, monitoraggio rete e inventario dispositivi.
             </p>
           </div>
 
-          <div className="surface-grid">
-            <MetricCard label="Utenti NAS" value={summary.nas_users} sub="Utenti sincronizzati dal dominio audit" />
-            <MetricCard label="Cartelle" value={summary.shares} sub="Share presenti nell’ultimo snapshot" />
-            <MetricCard label="Permessi calcolati" value={permissions.length} sub="Permessi effettivi persistiti" variant="success" />
-            <MetricCard label="Accessi negati" value={deniedCount} sub="Regole con deny attivo" variant={deniedCount > 0 ? "danger" : "default"} />
-          </div>
-
-          <div className="grid gap-6 xl:grid-cols-2">
-            <article className="panel-card">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
-                  <p className="section-title">Utenti recenti con accesso</p>
-                  <p className="section-copy">Ultimi utenti presenti nel dominio sincronizzato.</p>
-                </div>
-                <Link href="/users" className="text-sm font-medium text-[#1D4E35]">
-                  Tutti gli utenti
-                </Link>
-              </div>
-              <div className="space-y-3">
-                {recentUsers.map((user) => (
-                  <Link
-                    key={user.id}
-                    href={`/users/${user.id}`}
-                    className="flex items-center gap-3 rounded-lg border border-gray-100 px-3 py-3 transition hover:border-gray-200 hover:bg-gray-50"
-                  >
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#D3EAD4] text-[#1D4E35]">
-                      <UserIcon className="h-5 w-5" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-gray-900">{user.username}</p>
-                      <p className="truncate text-xs text-gray-400">{user.full_name ?? "Nome non disponibile"}</p>
-                    </div>
-                    <ChevronRightIcon className="h-4 w-4 text-gray-300" />
-                  </Link>
-                ))}
-              </div>
-            </article>
-
-            <article className="panel-card">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
-                  <p className="section-title">Cartelle condivise</p>
-                  <p className="section-copy">Share pronte per verifica permessi e review.</p>
-                </div>
-                <Link href="/shares" className="text-sm font-medium text-[#1D4E35]">
-                  Tutte le cartelle
-                </Link>
-              </div>
-              <div className="space-y-3">
-                {recentShares.map((share) => (
-                  <Link
-                    key={share.id}
-                    href={`/shares/${share.id}`}
-                    className="flex items-center gap-3 rounded-lg border border-gray-100 px-3 py-3 transition hover:border-gray-200 hover:bg-gray-50"
-                  >
-                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#D3EAD4] text-[#1D4E35]">
-                      <FolderIcon className="h-5 w-5" />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-gray-900">{share.name}</p>
-                      <p className="truncate text-xs text-gray-400">{share.path}</p>
-                    </div>
-                    <ChevronRightIcon className="h-4 w-4 text-gray-300" />
-                  </Link>
-                ))}
-              </div>
-            </article>
-          </div>
-
-          <article className="panel-card">
-            <div className="mb-4 flex items-center justify-between gap-3">
+          <div className="w-full max-w-sm rounded-3xl border border-white/10 bg-white/5 p-5 backdrop-blur sm:w-auto">
+            <div className="flex items-start justify-between gap-4">
               <div>
-                <p className="section-title">Permessi effettivi recenti</p>
-                <p className="section-copy">Estratto dell’ultimo snapshot persistito.</p>
+                <p className="text-xs uppercase tracking-[0.2em] text-white/45">Sessione</p>
+                <p className="mt-2 text-lg font-medium text-white">{currentUser.username}</p>
+                <p className="text-sm text-white/55">{currentUser.email}</p>
               </div>
-              <Link href="/effective-permissions" className="text-sm font-medium text-[#1D4E35]">
-                Apri vista completa
-              </Link>
+              <button
+                className="rounded-full border border-white/15 px-3 py-1.5 text-xs font-medium text-white/80 transition hover:border-white/25 hover:bg-white/5 hover:text-white"
+                onClick={handleLogout}
+                type="button"
+              >
+                Logout
+              </button>
+            </div>
+            <p className="mt-4 text-xs text-white/45">Consorzio di Bonifica dell&apos;Oristanese</p>
+          </div>
+        </header>
+
+        <section className="flex flex-1 items-center py-12 sm:py-16">
+          <div className="w-full">
+            <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-xs uppercase tracking-[0.22em] text-white/45">Moduli disponibili</p>
+                <h2 className="mt-2 text-2xl font-semibold text-white sm:text-3xl">Seleziona il dominio operativo</h2>
+              </div>
+              <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70">
+                Accessi sincronizzati: <span className="font-semibold text-white">{summary.nas_users}</span>
+                {" · "}
+                Review aperte: <span className="font-semibold text-white">{summary.reviews}</span>
+              </div>
             </div>
 
-            {latestPermissions.length === 0 ? (
-              <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-8 text-center">
-                <SearchIcon className="mx-auto h-5 w-5 text-gray-300" />
-                <p className="mt-3 text-sm font-medium text-gray-900">Nessun permesso disponibile</p>
-                <p className="mt-1 text-sm text-gray-500">Esegui una sincronizzazione per popolare l’ultimo snapshot.</p>
-              </div>
-            ) : (
-              <div className="overflow-hidden rounded-xl border border-gray-100">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Utente</th>
-                      <th>Cartella</th>
-                      <th>Permesso</th>
-                      <th>Origine</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {latestPermissions.map((permission) => (
-                      <tr key={permission.id}>
-                        <td>{getUserLabel(permission.nas_user_id)}</td>
-                        <td>{getShareLabel(permission.share_id)}</td>
-                        <td>
-                          <PermissionBadge level={getPermissionLevel(permission)} />
-                        </td>
-                        <td>
-                          <SourceTag source={permission.source_summary} />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </article>
-        </div>
-      </section>
-    </AppShell>
+            <div className="grid gap-5 lg:grid-cols-3">
+              {modules.map((moduleItem) => {
+                const isActive = moduleItem.status === "active";
+                const cardContent = (
+                  <article
+                    className={cn(
+                      "flex h-full min-h-[320px] flex-col rounded-[28px] border p-7 transition duration-200",
+                      moduleItem.accentClassName,
+                      isActive ? "cursor-pointer hover:-translate-y-1" : "cursor-not-allowed opacity-70",
+                    )}
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p
+                          className={cn(
+                            "inline-flex rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em]",
+                            isActive ? "bg-white/15 text-white/85" : "bg-black/5 text-gray-500",
+                          )}
+                        >
+                          {moduleItem.subtitle}
+                        </p>
+                        <h3 className="mt-5 text-3xl font-semibold tracking-tight">{moduleItem.title}</h3>
+                      </div>
+                      <span
+                        className={cn(
+                          "rounded-full px-3 py-1 text-xs font-medium",
+                          isActive ? "bg-[#9BD3A7] text-[#0E1712]" : "bg-gray-200 text-gray-600",
+                        )}
+                      >
+                        {moduleItem.statusLabel}
+                      </span>
+                    </div>
+
+                    <p className={cn("mt-6 text-sm leading-6", isActive ? "text-white/78" : "text-gray-600")}>
+                      {moduleItem.description}
+                    </p>
+
+                    {moduleItem.id === "accessi" ? (
+                      <div className="mt-8 grid grid-cols-2 gap-3">
+                        <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
+                          <p className="text-xs uppercase tracking-[0.16em] text-white/55">Share</p>
+                          <p className="mt-2 text-2xl font-semibold text-white">{summary.shares}</p>
+                        </div>
+                        <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
+                          <p className="text-xs uppercase tracking-[0.16em] text-white/55">Sync run</p>
+                          <p className="mt-2 text-2xl font-semibold text-white">{summary.sync_runs}</p>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="mt-8 rounded-2xl border border-dashed border-black/10 bg-black/5 p-4 text-sm text-gray-500">
+                        Modulo predisposto nello scaffold GAIA, non ancora attivato in produzione.
+                      </div>
+                    )}
+
+                    <div className="mt-auto pt-8">
+                      <span
+                        className={cn(
+                          "inline-flex items-center gap-2 text-sm font-medium",
+                          isActive ? "text-white" : "text-gray-500",
+                        )}
+                      >
+                        {isActive ? "Apri modulo" : "Disponibile prossimamente"}
+                        <span aria-hidden="true">{isActive ? "→" : "·"}</span>
+                      </span>
+                    </div>
+                  </article>
+                );
+
+                if (!isActive) {
+                  return <div key={moduleItem.id}>{cardContent}</div>;
+                }
+
+                return (
+                  <Link key={moduleItem.id} href={moduleItem.href} className="block h-full">
+                    {cardContent}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        </section>
+
+        <footer className="flex flex-col gap-2 border-t border-white/10 pt-6 text-xs text-white/45 sm:flex-row sm:items-center sm:justify-between">
+          <p>GAIA platform · Consorzio di Bonifica dell&apos;Oristanese</p>
+          <p>Versione Accessi v0.1.0</p>
+        </footer>
+      </div>
+    </main>
   );
 }

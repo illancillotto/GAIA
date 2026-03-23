@@ -1,125 +1,92 @@
-# NAS Access Audit Platform
+# GAIA
+## Gestione Accessi Inventario e Apparati
+### Piattaforma IT governance — Consorzio di Bonifica dell'Oristanese
 
-Piattaforma interna per audit, consultazione e validazione degli accessi al NAS Synology del Consorzio di Bonifica dell'Oristanese.
+## Cos'è GAIA
 
-## Obiettivo
+GAIA centralizza la governance IT del Consorzio in tre moduli integrati,
+accessibili da un'unica interfaccia dopo il login.
 
-L'applicazione centralizza la visibilita sugli accessi a utenti, gruppi e cartelle condivise, calcola i permessi effettivi e supporta il workflow di review dei responsabili di settore. Il MVP e orientato ad audit e reporting, senza modifiche automatiche ai permessi del NAS.
+## I tre moduli
 
-## Stack
+### GAIA Accessi — NAS Audit
+Audit completo degli accessi al NAS Synology: utenti, gruppi, cartelle condivise,
+permessi effettivi e workflow di review per i responsabili di settore.
+Stato: completato e funzionante.
+
+### GAIA Rete — Network Monitor
+Monitoraggio della rete LAN: scansione dispositivi, mappa interattiva per piano,
+alert per dispositivi nuovi o non raggiungibili.
+Stato: in sviluppo.
+
+### GAIA Inventario — IT Inventory
+Registro centralizzato dei dispositivi IT: anagrafica, garanzie, assegnazioni,
+import CSV e collegamento con i dati di rete.
+Stato: in sviluppo.
+
+## Stack tecnologico
 
 - Backend: FastAPI, SQLAlchemy, Alembic, PostgreSQL
-- Frontend: Next.js, React, TypeScript
-- DevOps: Docker, Docker Compose, Nginx
+- Frontend: Next.js, React, TypeScript, TailwindCSS, TanStack Table
+- Infrastructure: Docker, Docker Compose, Nginx
 - CI: GitHub Actions
 
-## Struttura Repository
-
+## Struttura repository
 ```text
-.
-|-- modules/
-|   |-- accessi/
-|   |   |-- backend/
-|   |   |   |-- alembic/
-|   |   |   |-- app/
-|   |   |   |-- tests/
-|   |   |   |-- Dockerfile
-|   |   |   |-- alembic.ini
-|   |   |   `-- requirements.txt
-|   |   |-- docs/
-|   |   |   |-- ARCHITECTURE.md
-|   |   |   |-- CODEX_PROMPT.md
-|   |   |   |-- DEPLOYMENT.md
-|   |   |   |-- IMPLEMENTATION_PLAN.md
-|   |   |   `-- PRD.md
-|   |   |-- frontend/
-|   |   |   |-- src/
-|   |   |   |-- Dockerfile
-|   |   |   `-- package.json
-|   |-- inventory/
-|   `-- network/
-|-- nginx/
-|   `-- nginx.conf
-|-- scripts/
-|   |-- bootstrap-admin.sh
-|   |-- bootstrap-domain.sh
-|   |-- backend-shell.sh
-|   |-- frontend-shell.sh
-|   |-- migrate.sh
-|   |-- start-backend.sh
-|   |-- start-frontend.sh
-|   |-- start-nginx.sh
-|   |-- start-postgres.sh
-|   `-- wait-for-db.sh
-|-- .github/workflows/
-|-- .editorconfig
-|-- .env.example
-|-- .gitignore
-|-- Makefile
-|-- docker-compose.override.yml
-`-- docker-compose.yml
+GAIA/
+├── modules/
+│   ├── accessi/
+│   │   ├── backend/
+│   │   ├── frontend/
+│   │   └── docs/
+│   ├── network/
+│   │   └── docs/
+│   │       ├── PRD_network.md
+│   │       └── PROMPT_CODEX_network.md
+│   └── inventory/
+│       └── docs/
+│           ├── PRD_inventory.md
+│           └── PROMPT_CODEX_inventory.md
+├── docker-compose.yml
+├── docker-compose.override.yml
+├── nginx/
+├── scripts/
+├── Makefile
+└── .env.example
 ```
 
 ## Quick Start
 
-1. Copiare il file ambiente:
+1. Copia il file ambiente:
    `cp .env.example .env`
-2. Avviare lo stack:
+2. Avvia lo stack:
    `make up`
-3. Eseguire la migrazione iniziale:
+3. Esegui le migrazioni:
    `make migrate`
-4. Bootstrap utente admin e dominio seed:
+4. Crea l'admin iniziale:
    `make bootstrap-admin`
+5. Carica i dati seed:
    `make bootstrap-domain`
-5. Verificare i servizi:
-   - frontend: `http://localhost:3000`
-   - backend health: `http://localhost:8000/health`
-   - nginx entrypoint: `http://localhost:8080`
+6. Accedi all'applicazione:
+   `http://localhost:8080`
 
-## Documentazione Disponibile
+## Documentazione
 
-- [PRD](modules/accessi/docs/PRD.md)
-- [Piano implementazione](modules/accessi/docs/IMPLEMENTATION_PLAN.md)
-- [Execution Plan](modules/accessi/docs/EXECUTION_PLAN.md)
-- [Architettura](modules/accessi/docs/ARCHITECTURE.md)
-- [Deployment](modules/accessi/docs/DEPLOYMENT.md)
-- [Prompt Codex](modules/accessi/docs/CODEX_PROMPT.md)
-- [Progress](modules/accessi/docs/PROGRESS.md)
+- GAIA Accessi: `modules/accessi/docs/`
+- GAIA Rete PRD: `modules/network/docs/PRD_network.md`
+- GAIA Rete Prompt: `modules/network/docs/PROMPT_CODEX_network.md`
+- GAIA Inventario PRD: `modules/inventory/docs/PRD_inventory.md`
+- GAIA Inventario Prompt: `modules/inventory/docs/PROMPT_CODEX_inventory.md`
 
-## Stato Progetto
+## Comandi utili
 
-Bootstrap iniziale completato per sviluppo incrementale:
-
-- backend FastAPI avviabile con endpoint `/health`
-- autenticazione applicativa base con `POST /auth/login` e `GET /auth/me`
-- sync NAS con preview/apply da payload testuale e live apply via SSH con endpoint `GET /sync/capabilities`, `POST /sync/preview`, `POST /sync/apply`, `POST /sync/live-apply`
-- audit trail persistente delle sync disponibile via `GET /sync-runs`
-- permission engine MVP con preview `POST /permissions/calculate-preview` e lista `GET /effective-permissions`
-- seed iniziale del dominio audit con utenti, gruppi, share, review e permessi effettivi
-- frontend Next.js con login reale e pagina `Sync` collegata al backend
-- stack Docker Compose per backend, frontend, postgres e nginx
-- documentazione iniziale coerente per prodotto, architettura e deployment
-
-## Comandi Utili
-
-- `make up`: avvio stack locale
-- `make down`: stop e cleanup container
-- `make logs`: tail dei log
-- `make rebuild`: rebuild immagini e restart
-- `make backend-shell`: shell nel container backend
-- `make frontend-shell`: shell nel container frontend
-- `make migrate`: esecuzione migrazioni Alembic
-- `make bootstrap-admin`: crea o verifica l'admin iniziale applicativo
-- `make bootstrap-domain`: popola dati seed iniziali per il dominio audit
-- `make live-sync`: esegue una live sync via SSH con retry controllato
-- `make scheduled-live-sync`: avvia il runner schedulato della live sync
-
-Parametri operativi principali per retry/backoff:
-
-- `SYNC_LIVE_MAX_ATTEMPTS`
-- `SYNC_LIVE_RETRY_DELAY_SECONDS`
-- `SYNC_LIVE_BACKOFF_MODE`
-- `SYNC_LIVE_BACKOFF_MULTIPLIER`
-- `SYNC_LIVE_BACKOFF_MAX_DELAY_SECONDS`
-- `SYNC_LIVE_BACKOFF_JITTER_ENABLED`
-- `SYNC_LIVE_BACKOFF_JITTER_RATIO`
+| Comando | Descrizione |
+|---------|-------------|
+| `make up` | Avvia lo stack |
+| `make down` | Ferma i container |
+| `make logs` | Tail dei log |
+| `make rebuild` | Rebuild e restart |
+| `make migrate` | Esegue migrazioni Alembic |
+| `make bootstrap-admin` | Crea utente admin |
+| `make bootstrap-domain` | Carica dati seed |
+| `make live-sync` | Sync live dal NAS via SSH |
