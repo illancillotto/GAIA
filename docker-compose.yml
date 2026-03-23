@@ -17,7 +17,7 @@ services:
 
   backend:
     build:
-      context: ./backend
+      context: ./modules/accessi/backend
     container_name: naap-backend
     restart: unless-stopped
     env_file:
@@ -39,7 +39,7 @@ services:
 
   frontend:
     build:
-      context: ./frontend
+      context: ./modules/accessi/frontend
     container_name: naap-frontend
     restart: unless-stopped
     env_file:

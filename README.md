@@ -17,23 +17,27 @@ L'applicazione centralizza la visibilita sugli accessi a utenti, gruppi e cartel
 
 ```text
 .
-|-- backend/
-|   |-- alembic/
-|   |-- app/
-|   |-- tests/
-|   |-- Dockerfile
-|   |-- alembic.ini
-|   `-- requirements.txt
-|-- docs/
-|   |-- ARCHITECTURE.md
-|   |-- CODEX_PROMPT.md
-|   |-- DEPLOYMENT.md
-|   |-- IMPLEMENTATION_PLAN.md
-|   `-- PRD.md
-|-- frontend/
-|   |-- src/
-|   |-- Dockerfile
-|   `-- package.json
+|-- modules/
+|   |-- accessi/
+|   |   |-- backend/
+|   |   |   |-- alembic/
+|   |   |   |-- app/
+|   |   |   |-- tests/
+|   |   |   |-- Dockerfile
+|   |   |   |-- alembic.ini
+|   |   |   `-- requirements.txt
+|   |   |-- docs/
+|   |   |   |-- ARCHITECTURE.md
+|   |   |   |-- CODEX_PROMPT.md
+|   |   |   |-- DEPLOYMENT.md
+|   |   |   |-- IMPLEMENTATION_PLAN.md
+|   |   |   `-- PRD.md
+|   |   |-- frontend/
+|   |   |   |-- src/
+|   |   |   |-- Dockerfile
+|   |   |   `-- package.json
+|   |-- inventory/
+|   `-- network/
 |-- nginx/
 |   `-- nginx.conf
 |-- scripts/
@@ -74,13 +78,13 @@ L'applicazione centralizza la visibilita sugli accessi a utenti, gruppi e cartel
 
 ## Documentazione Disponibile
 
-- [PRD](docs/PRD.md)
-- [Piano implementazione](docs/IMPLEMENTATION_PLAN.md)
-- [Execution Plan](docs/EXECUTION_PLAN.md)
-- [Architettura](docs/ARCHITECTURE.md)
-- [Deployment](docs/DEPLOYMENT.md)
-- [Prompt Codex](docs/CODEX_PROMPT.md)
-- [Progress](docs/PROGRESS.md)
+- [PRD](modules/accessi/docs/PRD.md)
+- [Piano implementazione](modules/accessi/docs/IMPLEMENTATION_PLAN.md)
+- [Execution Plan](modules/accessi/docs/EXECUTION_PLAN.md)
+- [Architettura](modules/accessi/docs/ARCHITECTURE.md)
+- [Deployment](modules/accessi/docs/DEPLOYMENT.md)
+- [Prompt Codex](modules/accessi/docs/CODEX_PROMPT.md)
+- [Progress](modules/accessi/docs/PROGRESS.md)
 
 ## Stato Progetto
 

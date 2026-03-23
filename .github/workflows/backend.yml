@@ -3,11 +3,11 @@ name: backend-ci
 on:
   push:
     paths:
-      - "backend/**"
+      - "modules/accessi/backend/**"
       - ".github/workflows/backend.yml"
   pull_request:
     paths:
-      - "backend/**"
+      - "modules/accessi/backend/**"
       - ".github/workflows/backend.yml"
 
 jobs:
@@ -22,13 +22,13 @@ jobs:
           python-version: "3.11"
 
       - name: Install dependencies
-        working-directory: backend
+        working-directory: modules/accessi/backend
         run: pip install -r requirements.txt
 
       - name: Syntax check
-        working-directory: backend
+        working-directory: modules/accessi/backend
         run: python -m compileall app tests
 
       - name: Test suite
-        working-directory: backend
+        working-directory: modules/accessi/backend
         run: pytest -q

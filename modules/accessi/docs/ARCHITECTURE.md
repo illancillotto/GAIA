@@ -52,7 +52,7 @@ L'architettura adotta una separazione netta tra frontend, backend API, database 
 ## 5. Decisioni Architetturali Iniziali
 
 - bootstrap leggero per ridurre boilerplate non necessario
-- documentazione in `docs/` come fonte primaria
+- documentazione in `modules/accessi/docs/` come fonte primaria
 - composizione container-first per facilitare ambienti coerenti
 - health endpoint dedicato per monitoraggio base
 

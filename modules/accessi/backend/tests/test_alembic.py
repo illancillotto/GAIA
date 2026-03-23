@@ -1,11 +1,13 @@
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[2]
+ROOT = Path(__file__).resolve().parents[4]
 
 
 def test_alembic_env_references_application_metadata() -> None:
-    env_py = (ROOT / "backend" / "alembic" / "env.py").read_text(encoding="utf-8")
+    env_py = (
+        ROOT / "modules" / "accessi" / "backend" / "alembic" / "env.py"
+    ).read_text(encoding="utf-8")
 
     assert "settings.database_url" in env_py
     assert "target_metadata = Base.metadata" in env_py
@@ -14,7 +16,13 @@ def test_alembic_env_references_application_metadata() -> None:
 
 def test_initial_migration_creates_snapshots_table() -> None:
     migration = (
-        ROOT / "backend" / "alembic" / "versions" / "20260319_0001_initial_schema.py"
+        ROOT
+        / "modules"
+        / "accessi"
+        / "backend"
+        / "alembic"
+        / "versions"
+        / "20260319_0001_initial_schema.py"
     ).read_text(encoding="utf-8")
 
     assert 'op.create_table(' in migration
@@ -25,7 +33,13 @@ def test_initial_migration_creates_snapshots_table() -> None:
 
 def test_audit_domain_migration_creates_core_tables() -> None:
     migration = (
-        ROOT / "backend" / "alembic" / "versions" / "20260320_0003_audit_domain_minimum.py"
+        ROOT
+        / "modules"
+        / "accessi"
+        / "backend"
+        / "alembic"
+        / "versions"
+        / "20260320_0003_audit_domain_minimum.py"
     ).read_text(encoding="utf-8")
 
     for table_name in ['"nas_users"', '"nas_groups"', '"shares"', '"reviews"']:
@@ -34,7 +48,13 @@ def test_audit_domain_migration_creates_core_tables() -> None:
 
 def test_permission_engine_migration_creates_permission_tables() -> None:
     migration = (
-        ROOT / "backend" / "alembic" / "versions" / "20260320_0004_permission_engine_mvp.py"
+        ROOT
+        / "modules"
+        / "accessi"
+        / "backend"
+        / "alembic"
+        / "versions"
+        / "20260320_0004_permission_engine_mvp.py"
     ).read_text(encoding="utf-8")
 
     for table_name in ['"permission_entries"', '"effective_permissions"']:
@@ -43,7 +63,13 @@ def test_permission_engine_migration_creates_permission_tables() -> None:
 
 def test_sync_runs_migration_creates_audit_table() -> None:
     migration = (
-        ROOT / "backend" / "alembic" / "versions" / "20260323_0005_sync_runs_audit.py"
+        ROOT
+        / "modules"
+        / "accessi"
+        / "backend"
+        / "alembic"
+        / "versions"
+        / "20260323_0005_sync_runs_audit.py"
     ).read_text(encoding="utf-8")
 
     assert '"sync_runs"' in migration
@@ -54,7 +80,13 @@ def test_sync_runs_migration_creates_audit_table() -> None:
 
 def test_sync_runs_metadata_migration_extends_audit_table() -> None:
     migration = (
-        ROOT / "backend" / "alembic" / "versions" / "20260323_0006_sync_runs_metadata.py"
+        ROOT
+        / "modules"
+        / "accessi"
+        / "backend"
+        / "alembic"
+        / "versions"
+        / "20260323_0006_sync_runs_metadata.py"
     ).read_text(encoding="utf-8")
 
     assert 'op.add_column("sync_runs"' in migration

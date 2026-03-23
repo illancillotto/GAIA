@@ -108,7 +108,7 @@ Avanzamento attuale:
 ## Ordine di Esecuzione Corrente
 
 1. completare Milestone 5 sul frontend applicativo
-2. aggiornare `docs/PROGRESS.md` a ogni tranche
+2. aggiornare `modules/accessi/docs/PROGRESS.md` a ogni tranche
 3. rieseguire test backend e frontend a ogni milestone
 4. mantenere CI allineata ai test reali
 5. consolidare Milestone 6 con smoke check runtime ripetibili e policy retry/backoff robuste

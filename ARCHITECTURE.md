@@ -367,19 +367,17 @@ Possibili estensioni:
                                     [ Synology NAS ]
 
 13. Repository structure
-    cbo-nas-access-audit/
+    GAIA/
     ├── README.md
     ├── docker-compose.yml
-    ├── docs/
-    │   ├── PRD.md
-    │   ├── IMPLEMENTATION_PLAN.md
-    │   ├── PROMPT_BACKEND.md
-    │   ├── PROMPT_FRONTEND.md
-    │   ├── PROMPT_DEVOPS.md
-    │   ├── README_DEPLOYMENT.md
-    │   └── ARCHITECTURE.md
-    ├── backend/
-    ├── frontend/
+    ├── docker-compose.override.yml
+    ├── modules/
+    │   ├── accessi/
+    │   │   ├── backend/
+    │   │   ├── frontend/
+    │   │   └── docs/
+    │   ├── network/
+    │   └── inventory/
     ├── nginx/
     ├── scripts/
     └── .github/

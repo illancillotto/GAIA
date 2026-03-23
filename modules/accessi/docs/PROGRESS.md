@@ -13,13 +13,13 @@ Il repository e in una fase di bootstrap avanzato: la base documentale, il backe
 ### Repository e Convenzioni
 
 - file root inizializzati: `README.md`, `.gitignore`, `.editorconfig`, `.env.example`, `Makefile`
-- naming coerente tra `backend/`, `frontend/`, `docs/`, `scripts/`, `nginx/`
-- documentazione iniziale centralizzata in `docs/`
+- naming coerente tra `modules/accessi/backend/`, `modules/accessi/frontend/`, `modules/accessi/docs/`, `scripts/`, `nginx/`
+- documentazione iniziale centralizzata in `modules/accessi/docs/`
 
 ### Backend
 
 - scaffold FastAPI avviabile
-- routing modulare base in `backend/app/api`
+- routing modulare base in `modules/accessi/backend/app/api`
 - endpoint `GET /health` disponibile
 - endpoint `POST /auth/login` e `GET /auth/me`
 - endpoint protetti `GET /dashboard/summary`, `GET /nas-users`, `GET /nas-groups`, `GET /shares`, `GET /reviews`
@@ -84,7 +84,7 @@ Il repository e in una fase di bootstrap avanzato: la base documentale, il backe
 
 ### Backend
 
-- suite `backend/tests`
+- suite `modules/accessi/backend/tests`
 - stato corrente: `59 passed`
 
 Verifica runtime:
@@ -131,7 +131,7 @@ Copertura attuale:
 
 ### Frontend
 
-- smoke suite `frontend/tests/smoke.test.mjs`
+- smoke suite `modules/accessi/frontend/tests/smoke.test.mjs`
 - stato corrente: `7 passed`
 
 Verifica runtime:

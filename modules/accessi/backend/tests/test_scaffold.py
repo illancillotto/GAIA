@@ -1,10 +1,10 @@
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[2]
-BACKEND = ROOT / "backend"
-FRONTEND = ROOT / "frontend"
-DOCS = ROOT / "docs"
+ROOT = Path(__file__).resolve().parents[4]
+BACKEND = ROOT / "modules" / "accessi" / "backend"
+FRONTEND = ROOT / "modules" / "accessi" / "frontend"
+DOCS = ROOT / "modules" / "accessi" / "docs"
 
 
 def test_required_root_files_exist() -> None:
