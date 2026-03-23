@@ -16,6 +16,10 @@ class Settings(BaseSettings):
 
     backend_host: str = Field(default="0.0.0.0", alias="BACKEND_HOST")
     backend_port: int = Field(default=8000, alias="BACKEND_PORT")
+    backend_cors_origins: str = Field(
+        default="http://localhost:3000,http://localhost:8080",
+        alias="BACKEND_CORS_ORIGINS",
+    )
     jwt_secret_key: str = Field(default="change_this_secret", alias="JWT_SECRET_KEY")
     jwt_expire_minutes: int = Field(default=60, alias="JWT_EXPIRE_MINUTES")
     jwt_algorithm: str = "HS256"

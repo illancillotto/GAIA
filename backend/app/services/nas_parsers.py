@@ -1,4 +1,15 @@
+import re
+
 from app.schemas.sync import ParsedAclEntry, ParsedNasGroup, ParsedNasUser, ParsedShare
+
+
+ACL_ENTRY_PATTERN = re.compile(
+    r"^\[\d+\]\s+"
+    r"(?P<subject_type>user|group):"
+    r"(?P<subject_name>[^:]+):"
+    r"(?P<effect>allow|deny):"
+    r"(?P<permissions>[^:]+)"
+)
 
 
 def parse_passwd_output(raw_text: str) -> list[ParsedNasUser]:
@@ -14,6 +25,8 @@ def parse_passwd_output(raw_text: str) -> list[ParsedNasUser]:
             continue
 
         username, _, uid, _, gecos, home_directory, _ = parts[:7]
+        if not _is_human_user(uid, home_directory):
+            continue
         users.append(
             ParsedNasUser(
                 username=username,
@@ -39,6 +52,8 @@ def parse_group_output(raw_text: str) -> list[ParsedNasGroup]:
             continue
 
         name, _, gid, members = parts[:4]
+        if not gid.isdigit():
+            continue
         member_list = [member for member in members.split(",") if member]
         groups.append(ParsedNasGroup(name=name, gid=gid, members=member_list))
 
@@ -52,7 +67,10 @@ def parse_share_listing(raw_text: str) -> list[ParsedShare]:
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
             continue
-        shares.append(ParsedShare(name=stripped))
+        share_name = _normalize_share_name(stripped)
+        if share_name is None:
+            continue
+        shares.append(ParsedShare(name=share_name))
 
     return shares
 
@@ -63,6 +81,23 @@ def parse_acl_output(raw_text: str) -> list[ParsedAclEntry]:
     for line in raw_text.splitlines():
         stripped = line.strip()
         if not stripped or stripped.startswith("#"):
+            continue
+
+        synology_match = ACL_ENTRY_PATTERN.match(stripped)
+        if synology_match:
+            acl_entries.append(
+                ParsedAclEntry(
+                    subject=(
+                        f"{synology_match.group('subject_type')}:"
+                        f"{synology_match.group('subject_name').strip()}"
+                    ),
+                    permissions=synology_match.group("permissions").strip(),
+                    effect=synology_match.group("effect").strip(),
+                )
+            )
+            continue
+
+        if not stripped.lower().startswith(("allow:", "deny:", "user:", "group:")):
             continue
 
         effect = "allow"
@@ -88,3 +123,19 @@ def parse_acl_output(raw_text: str) -> list[ParsedAclEntry]:
         )
 
     return acl_entries
+
+
+def _is_human_user(uid: str, home_directory: str) -> bool:
+    if not uid.isdigit():
+        return False
+    if int(uid) < 1000:
+        return False
+    return home_directory.startswith("/var/services/homes/") or home_directory.startswith("/home/")
+
+
+def _normalize_share_name(raw_name: str) -> str | None:
+    if raw_name.startswith("@"):
+        return None
+    if raw_name.startswith("'") and raw_name.endswith("'") and len(raw_name) >= 2:
+        return raw_name[1:-1]
+    return raw_name

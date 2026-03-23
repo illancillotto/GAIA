@@ -9,6 +9,13 @@ from app.repositories.application_user import get_application_user_by_username
 def ensure_bootstrap_admin(db: Session) -> tuple[ApplicationUser, bool]:
     existing_user = get_application_user_by_username(db, settings.bootstrap_admin_username)
     if existing_user is not None:
+        existing_user.email = settings.bootstrap_admin_email
+        existing_user.password_hash = hash_password(settings.bootstrap_admin_password)
+        existing_user.role = ApplicationUserRole.ADMIN.value
+        existing_user.is_active = True
+        db.add(existing_user)
+        db.commit()
+        db.refresh(existing_user)
         return existing_user, False
 
     user = ApplicationUser(

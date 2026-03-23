@@ -89,6 +89,11 @@ def _normalize_permission_level(raw_permissions: str) -> str | None:
         return "write"
     if "read" in values:
         return "read"
+    lowered = raw_permissions.strip().lower()
+    if "w" in lowered:
+        return "write"
+    if "r" in lowered:
+        return "read"
     return None
 
 

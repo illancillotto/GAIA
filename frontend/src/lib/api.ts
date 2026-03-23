@@ -18,7 +18,7 @@ import type {
   SyncRun,
 } from "@/types/api";
 
-const DEFAULT_API_BASE_URL = "http://localhost:8080/api";
+const DEFAULT_API_BASE_URL = "/api";
 
 function getApiBaseUrl(): string {
   const value = process.env.NEXT_PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL;

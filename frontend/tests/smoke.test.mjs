@@ -23,11 +23,18 @@ test("frontend package exposes core scripts", () => {
   assert.ok(pkg.scripts.lint);
 });
 
-test("home page contains dashboard bootstrap copy", () => {
+test("frontend api client defaults to same-origin api base", () => {
+  const apiClient = read("src/lib/api.ts");
+
+  assert.match(apiClient, /const DEFAULT_API_BASE_URL = "\/api"/);
+});
+
+test("home page gates anonymous users behind login flow", () => {
   const homePage = read("src/app/page.tsx");
 
-  assert.match(homePage, /Controllo centralizzato degli accessi NAS/);
-  assert.match(homePage, /API target: \/api/);
+  assert.match(homePage, /router\.replace\("\/login"\)/);
+  assert.match(homePage, /Verifica sessione/);
+  assert.match(homePage, /Vai al login/);
   assert.match(homePage, /Utenti NAS/);
   assert.match(homePage, /Sync Run/);
   assert.match(homePage, /Apri Sync/);
@@ -48,13 +55,14 @@ test("home page uses backend session helpers", () => {
   assert.match(homePage, /getCurrentUser/);
   assert.match(homePage, /getDashboardSummary/);
   assert.match(homePage, /Accedi per caricare i dati reali dal backend/);
+  assert.match(homePage, /isCheckingSession/);
 });
 
-test("app shell exposes main navigation labels", () => {
+test("app shell exposes only authenticated navigation labels", () => {
   const shell = read("src/components/layout/app-shell.tsx");
 
+  assert.match(shell, /if \(!currentUser\)/);
   assert.match(shell, /Dashboard/);
-  assert.match(shell, /Login/);
   assert.match(shell, /Utenti/);
   assert.match(shell, /Gruppi/);
   assert.match(shell, /Share/);
@@ -89,6 +97,7 @@ test("frontend contains real backend-driven pages", () => {
   assert.match(syncPage, /jitter/);
   assert.match(permissionsPage, /getEffectivePermissions/);
   assert.match(permissionsPage, /calculatePermissionPreview/);
+  assert.match(read("src/components/app/protected-page.tsx"), /router\.replace\("\/login"\)/);
 });
 
 test("frontend maps domain ids to readable labels", () => {

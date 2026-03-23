@@ -1,14 +1,17 @@
 from app.core.config import Settings
 
 
-def test_settings_use_expected_defaults() -> None:
-    settings = Settings()
+def test_settings_use_expected_defaults(monkeypatch) -> None:
+    monkeypatch.delenv("BACKEND_CORS_ORIGINS", raising=False)
+    monkeypatch.delenv("BOOTSTRAP_ADMIN_EMAIL", raising=False)
+    settings = Settings(_env_file=None)
 
     assert settings.project_name == "NAS Access Audit Platform"
     assert settings.app_version == "0.1.0"
     assert settings.app_env == "development"
     assert settings.backend_host == "0.0.0.0"
     assert settings.backend_port == 8000
+    assert settings.backend_cors_origins == "http://localhost:3000,http://localhost:8080"
     assert settings.jwt_secret_key == "change_this_secret"
     assert settings.jwt_expire_minutes == 60
     assert settings.jwt_algorithm == "HS256"
@@ -38,6 +41,7 @@ def test_settings_use_expected_defaults() -> None:
 def test_settings_allow_environment_override(monkeypatch) -> None:
     monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("BACKEND_PORT", "9010")
+    monkeypatch.setenv("BACKEND_CORS_ORIGINS", "http://localhost:8080,https://naap.internal")
     monkeypatch.setenv("DATABASE_URL", "sqlite:///./test.db")
     monkeypatch.setenv("NAS_HOST", "10.10.10.10")
     monkeypatch.setenv("NAS_TIMEOUT", "25")
@@ -55,6 +59,7 @@ def test_settings_allow_environment_override(monkeypatch) -> None:
 
     assert settings.app_env == "test"
     assert settings.backend_port == 9010
+    assert settings.backend_cors_origins == "http://localhost:8080,https://naap.internal"
     assert settings.database_url == "sqlite:///./test.db"
     assert settings.nas_host == "10.10.10.10"
     assert settings.nas_timeout == 25

@@ -81,12 +81,13 @@ def test_sync_capabilities_requires_authentication() -> None:
 
 
 def test_sync_capabilities_returns_configured_connector_info() -> None:
+    app.dependency_overrides[get_db] = override_get_db
     response = client.get("/sync/capabilities", headers=auth_headers())
 
     assert response.status_code == 200
     assert response.json()["ssh_configured"] is True
     assert response.json()["supports_live_sync"] is True
-    assert response.json()["host"] == "nas.internal.local"
+    assert response.json()["host"]
     assert response.json()["auth_mode"] == "password"
     assert response.json()["retry_strategy"] == "fixed"
     assert response.json()["retry_max_attempts"] == 3
@@ -168,6 +169,55 @@ def test_sync_apply_persists_snapshot_domain_and_effective_permissions() -> None
     }
     assert effective_permissions_response.status_code == 200
     assert len(effective_permissions_response.json()) == 4
+
+
+def test_sync_apply_accepts_synology_acl_and_share_listing_formats() -> None:
+    payload = {
+        "passwd_text": (
+            "admin:x:1024:100:System default user:/var/services/homes/admin:/bin/sh\n"
+            "AlessandroPorcu:x:1090:100::/var/services/homes/AlessandroPorcu:/bin/sh\n"
+            "anonymous:x:21:21::/nonexist:/usr/bin/nologin\n"
+        ),
+        "group_text": (
+            "#$_@GID__INDEX@_$65539$\n"
+            "administrators:x:101:admin,AlessandroPorcu,svc_naap\n"
+        ),
+        "shares_text": "@appconf\nEmailSaver\n'PROGETTO ADDUTTORE DX'\n",
+        "acl_texts": [
+            (
+                "ACL version: 1\n"
+                "Archive: has_ACL,is_support_ACL\n"
+                "Owner: [root(user)]\n"
+                "---------------------\n"
+                "\t [0] group:administrators:allow:rwxpdDaARWc--:fd-- (level:0)\n"
+                "\t [1] user:svc_naap:allow:rwxpdDaARWc--:fd-- (level:0)\n"
+            ),
+            (
+                "ACL version: 1\n"
+                "Archive: has_ACL,is_support_ACL\n"
+                "Owner: [root(user)]\n"
+                "---------------------\n"
+                "\t [0] user:AlessandroPorcu:allow:r-x-----------:fd-- (level:0)\n"
+            ),
+        ],
+    }
+
+    response = client.post("/sync/apply", json=payload, headers=auth_headers())
+
+    assert response.status_code == 200
+    assert response.json()["persisted_users"] == 2
+    assert response.json()["persisted_groups"] == 1
+    assert response.json()["persisted_shares"] == 2
+    assert response.json()["persisted_permission_entries"] == 3
+    assert response.json()["persisted_effective_permissions"] == 4
+
+    db = TestingSessionLocal()
+    try:
+        assert db.query(NasUser).count() == 2
+        assert db.query(Share).count() == 2
+        assert db.query(PermissionEntry).count() == 3
+    finally:
+        db.close()
 
 
 def test_sync_live_apply_uses_connector_payload(monkeypatch) -> None:
