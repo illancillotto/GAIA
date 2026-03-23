@@ -7,23 +7,6 @@ import { applyLiveSync, applySync, getSyncCapabilities, getSyncRuns, previewSync
 import { getStoredAccessToken } from "@/lib/auth";
 import type { SyncApplyResult, SyncCapabilities, SyncPreview, SyncRun } from "@/types/api";
 
-const samplePasswdText = [
-  "mrossi:x:1001:100:Mario Rossi:/var/services/homes/mrossi:/sbin/nologin",
-  "lbianchi:x:1002:100:Laura Bianchi:/var/services/homes/lbianchi:/sbin/nologin",
-].join("\n");
-
-const sampleGroupText = [
-  "amministrazione:x:2001:mrossi",
-  "direzione:x:2002:lbianchi",
-].join("\n");
-
-const sampleSharesText = ["contabilita", "direzione"].join("\n");
-
-const sampleAclTexts = [
-  "allow: group:amministrazione:read,write\ndeny: user:ospite:read",
-  "allow: group:direzione:write",
-];
-
 export default function SyncPage() {
   const [capabilities, setCapabilities] = useState<SyncCapabilities | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -31,10 +14,10 @@ export default function SyncPage() {
   const [applyResult, setApplyResult] = useState<SyncApplyResult | null>(null);
   const [syncRuns, setSyncRuns] = useState<SyncRun[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [passwdText, setPasswdText] = useState(samplePasswdText);
-  const [groupText, setGroupText] = useState(sampleGroupText);
-  const [sharesText, setSharesText] = useState(sampleSharesText);
-  const [aclTexts, setAclTexts] = useState(sampleAclTexts.join("\n---\n"));
+  const [passwdText, setPasswdText] = useState("");
+  const [groupText, setGroupText] = useState("");
+  const [sharesText, setSharesText] = useState("");
+  const [aclTexts, setAclTexts] = useState("");
 
   useEffect(() => {
     void loadSyncContext();

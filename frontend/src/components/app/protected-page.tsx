@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { PropsWithChildren, useEffect, useState } from "react";
 
 import { AppShell } from "@/components/layout/app-shell";
@@ -14,18 +15,18 @@ type ProtectedPageProps = PropsWithChildren<{
 }>;
 
 export function ProtectedPage({ title, description, children }: ProtectedPageProps) {
+  const router = useRouter();
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [statusMessage, setStatusMessage] = useState("Accedi per caricare dati dal backend.");
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
 
   useEffect(() => {
     async function loadSession() {
       const token = getStoredAccessToken();
 
       if (!token) {
-        setCurrentUser(null);
-        setLoadError(null);
-        setStatusMessage("Accedi per caricare dati dal backend.");
+        router.replace("/login");
         return;
       }
 
@@ -39,16 +40,36 @@ export function ProtectedPage({ title, description, children }: ProtectedPagePro
         setCurrentUser(null);
         setLoadError(error instanceof Error ? error.message : "Errore imprevisto");
         setStatusMessage("Sessione non valida o backend non raggiungibile.");
+        router.replace("/login");
+      } finally {
+        setIsCheckingSession(false);
       }
     }
 
     void loadSession();
-  }, []);
+  }, [router]);
 
   function handleLogout(): void {
     setCurrentUser(null);
     setLoadError(null);
     setStatusMessage("Sessione chiusa. Effettua di nuovo il login.");
+    router.replace("/login");
+  }
+
+  if (isCheckingSession || !currentUser) {
+    return (
+      <main className="login-wrap">
+        <section className="login-card">
+          <p className="badge">Accesso richiesto</p>
+          <h1>{title}</h1>
+          <p>{description}</p>
+          <p className={`status-note${loadError ? " error-text" : ""}`}>{loadError ?? statusMessage}</p>
+          <Link className="button" href="/login">
+            Vai al login
+          </Link>
+        </section>
+      </main>
+    );
   }
 
   return (

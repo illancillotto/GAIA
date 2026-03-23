@@ -17,6 +17,10 @@ export function AppShell({ children, currentUser, onLogout }: AppShellProps) {
     onLogout?.();
   }
 
+  if (!currentUser) {
+    return <main className="content content-public">{children}</main>;
+  }
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -27,7 +31,6 @@ export function AppShell({ children, currentUser, onLogout }: AppShellProps) {
         </p>
         <nav>
           <Link href="/">Dashboard</Link>
-          <Link href="/login">Login</Link>
           <Link href="/users">Utenti</Link>
           <Link href="/groups">Gruppi</Link>
           <Link href="/shares">Share</Link>
@@ -36,22 +39,12 @@ export function AppShell({ children, currentUser, onLogout }: AppShellProps) {
           <Link href="/effective-permissions">Permessi</Link>
         </nav>
         <div className="sidebar-footer">
-          {currentUser ? (
-            <>
-              <small>Sessione attiva</small>
-              <strong>{currentUser.username}</strong>
-              <span>{currentUser.role}</span>
-              <button className="button button-secondary" onClick={handleLogout} type="button">
-                Logout
-              </button>
-            </>
-          ) : (
-            <>
-              <small>Sessione</small>
-              <strong>Nessun login</strong>
-              <span>Accedi per vedere dati backend reali</span>
-            </>
-          )}
+          <small>Sessione attiva</small>
+          <strong>{currentUser.username}</strong>
+          <span>{currentUser.role}</span>
+          <button className="button button-secondary" onClick={handleLogout} type="button">
+            Logout
+          </button>
         </div>
       </aside>
       <main className="content">{children}</main>

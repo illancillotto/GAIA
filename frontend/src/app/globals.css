@@ -89,6 +89,10 @@ a {
   padding: 28px;
 }
 
+.content-public {
+  min-height: 100vh;
+}
+
 .topbar {
   display: flex;
   justify-content: space-between;

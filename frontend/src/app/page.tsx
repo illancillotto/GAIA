@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import { AppShell } from "@/components/layout/app-shell";
 import { getCurrentUser, getDashboardSummary } from "@/lib/api";
@@ -18,20 +19,19 @@ const emptySummary: DashboardSummary = {
 };
 
 export default function HomePage() {
+  const router = useRouter();
   const [summary, setSummary] = useState<DashboardSummary>(emptySummary);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [statusMessage, setStatusMessage] = useState("Accedi per caricare i dati reali dal backend.");
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [isCheckingSession, setIsCheckingSession] = useState(true);
 
   useEffect(() => {
     async function loadDashboard() {
       const token = getStoredAccessToken();
 
       if (!token) {
-        setSummary(emptySummary);
-        setCurrentUser(null);
-        setLoadError(null);
-        setStatusMessage("Accedi per caricare i dati reali dal backend.");
+        router.replace("/login");
         return;
       }
 
@@ -51,11 +51,14 @@ export default function HomePage() {
         setSummary(emptySummary);
         setLoadError(error instanceof Error ? error.message : "Errore imprevisto");
         setStatusMessage("Sessione non valida o backend non raggiungibile.");
+        router.replace("/login");
+      } finally {
+        setIsCheckingSession(false);
       }
     }
 
     void loadDashboard();
-  }, []);
+  }, [router]);
 
   const dashboardCards = [
     { title: "Utenti NAS", value: String(summary.nas_users), note: "Utenti sincronizzati o seedati nel backend" },
@@ -71,6 +74,23 @@ export default function HomePage() {
     setSummary(emptySummary);
     setLoadError(null);
     setStatusMessage("Sessione chiusa. Accedi di nuovo per ricaricare i dati.");
+    router.replace("/login");
+  }
+
+  if (isCheckingSession || !currentUser) {
+    return (
+      <main className="login-wrap">
+        <section className="login-card">
+          <p className="badge">Reindirizzamento</p>
+          <h1>Verifica sessione</h1>
+          <p>Controllo credenziali locali e accesso alla piattaforma.</p>
+          <p className={`status-note${loadError ? " error-text" : ""}`}>{loadError ?? statusMessage}</p>
+          <Link className="button" href="/login">
+            Vai al login
+          </Link>
+        </section>
+      </main>
+    );
   }
 
   return (

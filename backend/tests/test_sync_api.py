@@ -246,6 +246,38 @@ def test_sync_live_apply_uses_connector_payload(monkeypatch) -> None:
     assert response.json()["snapshot_checksum"] == "live-checksum"
 
 
+def test_build_live_sync_payload_quotes_share_names(monkeypatch) -> None:
+    from app.services.sync import build_live_sync_payload
+
+    class FakeClient:
+        def __init__(self) -> None:
+            self.commands: list[str] = []
+
+        def run_command(self, command: str) -> str:
+            self.commands.append(command)
+            mapping = {
+                "getent passwd": "mrossi:x:1001:100:Mario Rossi:/var/services/homes/mrossi:/sbin/nologin\n",
+                "getent group": "amministrazione:x:2001:mrossi\n",
+                "ls /volume1": "'PROGETTO ADDUTTORE DX'\n",
+                "synoacltool -get /volume1/'PROGETTO ADDUTTORE DX'": "allow: group:amministrazione:read\n",
+            }
+            return mapping[command]
+
+    monkeypatch.setattr("app.services.sync.settings.nas_passwd_command", "getent passwd")
+    monkeypatch.setattr("app.services.sync.settings.nas_group_command", "getent group")
+    monkeypatch.setattr("app.services.sync.settings.nas_shares_command", "ls /volume1")
+    monkeypatch.setattr(
+        "app.services.sync.settings.nas_acl_command_template",
+        "synoacltool -get /volume1/{share}",
+    )
+
+    client = FakeClient()
+    payload = build_live_sync_payload(client)
+
+    assert payload.shares_text == "'PROGETTO ADDUTTORE DX'\n"
+    assert client.commands[-1] == "synoacltool -get /volume1/'PROGETTO ADDUTTORE DX'"
+
+
 def test_sync_live_apply_returns_503_when_connector_fails(monkeypatch) -> None:
     def fake_run_live_sync_job(db, trigger_type="api", initiated_by=None, source_label=None):
         raise NasConnectorError("SSH command failed: getent passwd")

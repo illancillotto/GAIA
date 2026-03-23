@@ -1,3 +1,4 @@
+import shlex
 from hashlib import sha256
 
 from sqlalchemy.orm import Session
@@ -49,7 +50,9 @@ def build_live_sync_payload(client: NasSSHClient | None = None) -> SyncPreviewRe
     shares_text = active_client.run_command(settings.nas_shares_command)
     parsed_shares = parse_share_listing(shares_text)
     acl_texts = [
-        active_client.run_command(settings.nas_acl_command_template.format(share=share.name))
+        active_client.run_command(
+            settings.nas_acl_command_template.format(share=shlex.quote(share.name))
+        )
         for share in parsed_shares
     ]
     return SyncPreviewRequest(
