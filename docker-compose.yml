@@ -95,7 +95,9 @@ services:
       BETWEEN_VISURE_DELAY_SEC: ${BETWEEN_VISURE_DELAY_SEC:-5}
       CATASTO_DOCUMENT_STORAGE_PATH: ${CATASTO_DOCUMENT_STORAGE_PATH:-/data/catasto/documents}
       CATASTO_CAPTCHA_STORAGE_PATH: ${CATASTO_CAPTCHA_STORAGE_PATH:-/data/catasto/captcha}
+      CATASTO_DEBUG_ARTIFACTS_PATH: ${CATASTO_DEBUG_ARTIFACTS_PATH:-/data/catasto/debug}
       CATASTO_SISTER_SELECTORS_PATH: ${CATASTO_SISTER_SELECTORS_PATH:-/app/worker/sister_selectors.json}
+      CATASTO_LOG_LEVEL: ${CATASTO_LOG_LEVEL:-INFO}
     depends_on:
       postgres:
         condition: service_healthy

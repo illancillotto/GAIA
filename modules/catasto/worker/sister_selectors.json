@@ -1,9 +1,9 @@
 {
   "login_url": "https://iampe.agenziaentrate.gov.it/sam/UI/Login?realm=/agenziaentrate",
   "login_tab_selector": "a.nav-link[href='#tab-5']",
-  "username_selector": "#username-sister",
-  "password_selector": "#password-sister",
-  "login_button_selector": "#tab-5 form button[type='submit']",
+  "username_selector": "#tab-5 input[name='IDToken1']",
+  "password_selector": "#tab-5 input[name='IDToken2']",
+  "login_button_selector": "#tab-5 button.btn.btn-primary, #tab-5 form button[type='submit']",
   "confirm_button_xpath": "//input[@value='Conferma']",
   "territorio_selector": "select[name='listacom']",
   "territorio_apply_button_name": "Applica",

@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
+import logging
 import os
 from pathlib import Path
 import re
@@ -37,8 +38,15 @@ BETWEEN_VISURE_DELAY_SEC = int(os.getenv("BETWEEN_VISURE_DELAY_SEC", "5"))
 SESSION_TIMEOUT_SEC = int(os.getenv("SESSION_TIMEOUT_SEC", "1680"))
 DOCUMENT_STORAGE_PATH = Path(os.getenv("CATASTO_DOCUMENT_STORAGE_PATH", "/data/catasto/documents"))
 CAPTCHA_STORAGE_PATH = Path(os.getenv("CATASTO_CAPTCHA_STORAGE_PATH", "/data/catasto/captcha"))
+DEBUG_ARTIFACTS_PATH = Path(os.getenv("CATASTO_DEBUG_ARTIFACTS_PATH", "/data/catasto/debug"))
 HEADLESS = os.getenv("CATASTO_HEADLESS", "true").lower() != "false"
 DEBUG_BROWSER = os.getenv("CATASTO_DEBUG_BROWSER", "false").lower() == "true"
+
+logging.basicConfig(
+    level=os.getenv("CATASTO_LOG_LEVEL", "INFO").upper(),
+    format="%(asctime)s %(levelname)s %(name)s %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
@@ -54,14 +62,17 @@ class CatastoWorker:
         self.state = WorkerState()
         self.vault = WorkerCredentialVault(CREDENTIAL_MASTER_KEY)
         self.captcha_solver = CaptchaSolver()
+        DEBUG_ARTIFACTS_PATH.mkdir(parents=True, exist_ok=True)
 
     async def run(self) -> None:
         self._install_signal_handlers()
         self._recover_stuck_requests()
+        logger.info("Catasto worker started")
 
         while not self.state.stop_requested:
             connection_test_id = self._next_connection_test_id()
             if connection_test_id is not None:
+                logger.info("Processing SISTER connection test %s", connection_test_id)
                 await self._process_connection_test(connection_test_id)
                 continue
 
@@ -115,6 +126,7 @@ class CatastoWorker:
                 headless=HEADLESS,
                 session_timeout_sec=SESSION_TIMEOUT_SEC,
                 debug_pause=DEBUG_BROWSER,
+                debug_artifacts_path=DEBUG_ARTIFACTS_PATH,
             )
         )
 
@@ -137,6 +149,13 @@ class CatastoWorker:
                 sister_username = connection_test.sister_username
 
             result = await browser.test_connection(sister_username, password)
+            logger.info(
+                "SISTER connection test %s completed: reachable=%s authenticated=%s message=%s",
+                connection_test_id,
+                result.reachable,
+                result.authenticated,
+                result.message,
+            )
 
             with SessionLocal() as db:
                 connection_test = db.get(CatastoConnectionTest, connection_test_id)
@@ -161,6 +180,7 @@ class CatastoWorker:
 
                 db.commit()
         except Exception as exc:
+            logger.exception("Worker connection test %s failed", connection_test_id)
             with SessionLocal() as db:
                 connection_test = db.get(CatastoConnectionTest, connection_test_id)
                 if connection_test is not None:
@@ -201,6 +221,7 @@ class CatastoWorker:
                 headless=HEADLESS,
                 session_timeout_sec=SESSION_TIMEOUT_SEC,
                 debug_pause=DEBUG_BROWSER,
+                debug_artifacts_path=DEBUG_ARTIFACTS_PATH,
             )
         )
         await browser.start()

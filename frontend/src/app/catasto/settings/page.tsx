@@ -21,6 +21,13 @@ import type {
 
 const DEFAULT_UFFICIO = "ORISTANO Territorio";
 
+function normalizeIssueText(value: string | null | undefined): string {
+  return (value ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
 export default function CatastoSettingsPage() {
   const [credentialStatus, setCredentialStatus] = useState<CatastoCredentialStatus | null>(null);
   const [formState, setFormState] = useState({
@@ -36,6 +43,8 @@ export default function CatastoSettingsPage() {
   const [testBusy, setTestBusy] = useState(false);
   const [testResult, setTestResult] = useState<CatastoCredentialTestResult | null>(null);
   const testSocketRef = useRef<WebSocket | null>(null);
+  const activeTestId = testResult?.id ?? null;
+  const activeTestStatus = testResult?.status ?? null;
 
   useEffect(() => {
     void loadCredentials();
@@ -172,7 +181,7 @@ export default function CatastoSettingsPage() {
 
   useEffect(() => {
     const token = getStoredAccessToken();
-    if (!token || !testResult || !["pending", "processing"].includes(testResult.status)) {
+    if (!token || !activeTestId || !activeTestStatus || !["pending", "processing"].includes(activeTestStatus)) {
       if (testSocketRef.current) {
         testSocketRef.current.close();
         testSocketRef.current = null;
@@ -180,7 +189,7 @@ export default function CatastoSettingsPage() {
       return;
     }
 
-    const socket = createCatastoCredentialTestWebSocket(testResult.id, token);
+    const socket = createCatastoCredentialTestWebSocket(activeTestId, token);
     if (!socket) return;
     testSocketRef.current = socket;
 
@@ -217,7 +226,7 @@ export default function CatastoSettingsPage() {
     };
 
     socket.onerror = () => {
-      void refreshConnectionTest(token, testResult.id);
+      void refreshConnectionTest(token, activeTestId);
     };
 
     return () => {
@@ -226,16 +235,25 @@ export default function CatastoSettingsPage() {
         testSocketRef.current = null;
       }
     };
-  }, [refreshConnectionTest, testResult]);
+  }, [activeTestId, activeTestStatus, refreshConnectionTest]);
 
   const canTestConnection = Boolean(
     (!busy && credentialStatus?.configured) || (formState.sister_username.trim() && formState.sister_password.trim()),
   );
+  const normalizedTestMessage = normalizeIssueText(testResult?.message);
+  const hasExistingSessionIssue =
+    normalizedTestMessage.includes("gia' in sessione") ||
+    normalizedTestMessage.includes("gia in sessione") ||
+    normalizedTestMessage.includes("altra postazione") ||
+    normalizedTestMessage.includes("un'altra postazione") ||
+    normalizedTestMessage.includes("altro browser");
   const testResultToneClassName =
     testResult == null
       ? null
       : ["pending", "processing"].includes(testResult.status)
         ? "border-sky-200 bg-sky-50 text-sky-800"
+      : hasExistingSessionIssue
+        ? "border-amber-200 bg-amber-50 text-amber-900"
       : testResult.authenticated
         ? "border-emerald-200 bg-emerald-50 text-emerald-800"
         : testResult.success
@@ -335,6 +353,8 @@ export default function CatastoSettingsPage() {
             <p className="text-sm font-medium">
               {["pending", "processing"].includes(testResult.status)
                 ? "Test in lavorazione"
+                : hasExistingSessionIssue
+                ? "Sessione SISTER gia' attiva"
                 : testResult.authenticated
                 ? "Autenticazione confermata"
                 : testResult.success
@@ -345,6 +365,15 @@ export default function CatastoSettingsPage() {
             <p className="mt-2 text-xs uppercase tracking-[0.18em]">
               Stato: {testResult.status} · Modalita&apos;: {testResult.mode ?? "worker"} · Reachable: {testResult.reachable == null ? "n/d" : testResult.reachable ? "si" : "no"} · Auth: {testResult.authenticated == null ? "n/d" : testResult.authenticated ? "si" : "no"}
             </p>
+            {hasExistingSessionIssue ? (
+              <div className="mt-3 rounded-lg border border-amber-200/80 bg-white/65 px-3 py-3 text-sm leading-6 text-amber-950">
+                <p className="font-medium">SISTER segnala che l&apos;utenza risulta gia&apos; aperta altrove.</p>
+                <p className="mt-1">
+                  Chiudi eventuali sessioni SISTER lasciate aperte in altri browser o postazioni, usa il pulsante
+                  <span className="font-medium"> Esci</span> se disponibile, attendi qualche minuto e poi ripeti il test.
+                </p>
+              </div>
+            ) : null}
           </div>
         ) : null}
       </article>

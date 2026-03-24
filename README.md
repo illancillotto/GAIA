@@ -100,6 +100,7 @@ GAIA/
 - Test connessione SISTER asincrono eseguito dal worker con feedback realtime
 - Variabili operative in `.env.example` per storage documenti/CAPTCHA e chiave Fernet condivisa
 - Selettori SISTER esterni in `modules/catasto/worker/sister_selectors.json`, sovrascrivibili via `CATASTO_SISTER_SELECTORS_PATH`
+- Diagnostica probe SISTER del worker con log stdout e snapshot HTML/PNG in `CATASTO_DEBUG_ARTIFACTS_PATH`
 
 ## Comandi utili
 
