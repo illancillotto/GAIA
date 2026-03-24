@@ -1,5 +1,7 @@
 # Prompt Codex
 
+> Documento storico del modulo Accessi. Il frontend condiviso della piattaforma ora vive in `frontend/`.
+
 ## 1. Scopo
 
 Questa base documenta le convenzioni da mantenere durante lo sviluppo assistito per il progetto NAS Access Audit Platform.
@@ -14,7 +16,7 @@ Questa base documenta le convenzioni da mantenere durante lo sviluppo assistito 
 ## 3. Regole di Implementazione
 
 - backend: nuove feature dentro moduli dedicati in `modules/accessi/backend/app`
-- frontend: route e componenti in `modules/accessi/frontend/src`
+- frontend: route e componenti in `frontend/src`
 - devops: compose e Dockerfile come fonte principale di esecuzione
 - docs: aggiornare sempre i file in `modules/accessi/docs/` quando cambia il perimetro
 

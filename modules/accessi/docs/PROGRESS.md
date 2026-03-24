@@ -13,7 +13,7 @@ Il repository e in una fase di bootstrap avanzato: la base documentale, il backe
 ### Repository e Convenzioni
 
 - file root inizializzati: `README.md`, `.gitignore`, `.editorconfig`, `.env.example`, `Makefile`
-- naming coerente tra `modules/accessi/backend/`, `modules/accessi/frontend/`, `modules/accessi/docs/`, `scripts/`, `nginx/`
+- naming coerente tra `modules/accessi/backend/`, `frontend/`, `modules/accessi/docs/`, `scripts/`, `nginx/`
 - documentazione iniziale centralizzata in `modules/accessi/docs/`
 
 ### Backend
@@ -131,7 +131,7 @@ Copertura attuale:
 
 ### Frontend
 
-- smoke suite `modules/accessi/frontend/tests/smoke.test.mjs`
+- smoke suite `frontend/tests/smoke.test.mjs`
 - stato corrente: `7 passed`
 
 Verifica runtime:

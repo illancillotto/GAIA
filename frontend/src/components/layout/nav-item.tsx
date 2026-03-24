@@ -12,6 +12,7 @@ type NavItemProps = {
   label: string;
   badge?: number;
   badgeVariant?: "danger" | "warning";
+  match?: "exact" | "prefix";
 };
 
 export function NavItem({
@@ -20,9 +21,13 @@ export function NavItem({
   label,
   badge,
   badgeVariant = "warning",
+  match = "exact",
 }: NavItemProps) {
   const pathname = usePathname();
-  const isActive = pathname === href;
+  const isActive =
+    match === "prefix"
+      ? pathname === href || pathname.startsWith(`${href}/`)
+      : pathname === href;
 
   return (
     <Link

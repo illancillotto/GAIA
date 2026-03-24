@@ -20,7 +20,7 @@ Leggi attentamente questi file prima di iniziare:
 
 Studia anche la struttura dei moduli già esistenti come riferimento per naming e pattern:
 3. `modules/accessi/backend/` — backend FastAPI esistente (router, models, schemas, services)
-4. `modules/accessi/frontend/` — frontend Next.js esistente
+4. `frontend/` — frontend Next.js esistente
 5. `docker-compose.yml` — configurazione Docker esistente
 6. `modules/accessi/docs/CODEX_PROMPT.md` — convenzioni generali del progetto
 
@@ -28,7 +28,7 @@ Studia anche la struttura dei moduli già esistenti come riferimento per naming 
 
 - Il modulo si **aggiunge** al backend e frontend esistenti — NON creare progetti separati
 - Backend: aggiungi `app/routers/catasto.py`, `app/models/catasto.py`, `app/schemas/catasto.py`, `app/services/catasto/` al FastAPI esistente
-- Frontend: aggiungi `src/app/catasto/` al Next.js esistente
+- Frontend: aggiungi `frontend/src/app/catasto/` al Next.js esistente
 - Auth JWT: riutilizza il middleware esistente senza modifiche
 - Alembic: crea nuove migration in `alembic/versions/` senza toccare quelle esistenti
 - Il **browser worker** è l'unico componente che vive in un container Docker separato: `modules/catasto/worker/`

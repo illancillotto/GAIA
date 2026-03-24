@@ -15,7 +15,7 @@ function read(relativePath) {
 test("frontend package exposes core scripts and redesign dependencies", () => {
   const pkg = JSON.parse(read("package.json"));
 
-  assert.equal(pkg.name, "nas-access-audit-frontend");
+  assert.equal(pkg.name, "gaia-frontend");
   assert.equal(pkg.private, true);
   assert.ok(pkg.scripts.dev);
   assert.ok(pkg.scripts.build);
@@ -43,17 +43,21 @@ test("dashboard keeps login gate and GAIA module selector copy", () => {
 test("layout includes app shell, sidebar and topbar", () => {
   const shell = read("src/components/layout/app-shell.tsx");
   const sidebar = read("src/components/layout/sidebar.tsx");
+  const platformSidebar = read("src/components/layout/platform-sidebar.tsx");
+  const moduleSidebar = read("src/components/layout/module-sidebar.tsx");
   const topbar = read("src/components/layout/topbar.tsx");
   const statusPill = read("src/components/ui/status-pill.tsx");
 
   assert.match(shell, /Sidebar/);
-  assert.match(sidebar, /Consorzio di Bonifica/);
-  assert.match(sidebar, /Oristanese — Synology NAS/);
-  assert.match(sidebar, /Review accessi/);
-  assert.match(sidebar, /Dashboard Catasto/);
-  assert.match(sidebar, /Visura singola/);
-  assert.match(sidebar, /Archivio documenti/);
-  assert.match(sidebar, /Credenziali SISTER/);
+  assert.match(sidebar, /PlatformSidebar/);
+  assert.match(sidebar, /ModuleSidebar/);
+  assert.match(platformSidebar, /Consorzio di Bonifica/);
+  assert.match(platformSidebar, /dell&apos;Oristanese/);
+  assert.match(platformSidebar, /Home GAIA/);
+  assert.match(platformSidebar, /Modulo:/);
+  assert.match(platformSidebar, /Catasto/);
+  assert.match(moduleSidebar, /Sincronizzazione/);
+  assert.match(moduleSidebar, /Review accessi/);
   assert.match(topbar, /StatusPill/);
   assert.match(statusPill, /Backend connesso/);
 });
@@ -102,32 +106,32 @@ test("shared ui components exist for redesign system", () => {
 });
 
 test("users page uses data table and detail links", () => {
-  const usersPage = read("src/app/users/page.tsx");
-  const userDetailPage = read("src/app/users/[id]/page.tsx");
+  const usersPage = read("src/app/accessi/users/page.tsx");
+  const userDetailPage = read("src/app/accessi/users/[id]/page.tsx");
 
   assert.match(usersPage, /DataTable/);
   assert.match(usersPage, /Cartelle accessibili/);
   assert.match(usersPage, /Permesso massimo/);
   assert.match(usersPage, /Apri pagina completa/);
-  assert.match(usersPage, /href=\{`\/users\/\$\{selectedUserId\}`\}/);
+  assert.match(usersPage, /href=\{`\/accessi\/users\/\$\{selectedUserId\}`\}/);
   assert.match(userDetailPage, /Dettaglio utente/);
   assert.match(userDetailPage, /UserDetailPanel/);
 });
 
 test("shares page uses cards and share detail route", () => {
-  const sharesPage = read("src/app/shares/page.tsx");
-  const shareDetailPage = read("src/app/shares/[id]/page.tsx");
+  const sharesPage = read("src/app/accessi/shares/page.tsx");
+  const shareDetailPage = read("src/app/accessi/shares/[id]/page.tsx");
 
   assert.match(sharesPage, /Cartelle condivise/);
   assert.match(sharesPage, /deny/);
-  assert.match(sharesPage, /\/shares\/\$\{share\.id\}/);
+  assert.match(sharesPage, /\/accessi\/shares\/\$\{share\.id\}/);
   assert.match(shareDetailPage, /Accessi effettivi/);
   assert.match(shareDetailPage, /PermissionBadge/);
 });
 
 test("reviews and sync pages expose redesigned administrative views", () => {
-  const reviewsPage = read("src/app/reviews/page.tsx");
-  const syncPage = read("src/app/sync/page.tsx");
+  const reviewsPage = read("src/app/accessi/reviews/page.tsx");
+  const syncPage = read("src/app/accessi/sync/page.tsx");
 
   assert.match(reviewsPage, /Review accessi/);
   assert.match(reviewsPage, /In attesa/);
@@ -139,7 +143,7 @@ test("reviews and sync pages expose redesigned administrative views", () => {
 });
 
 test("effective permissions page keeps preview and persistent table", () => {
-  const permissionsPage = read("src/app/effective-permissions/page.tsx");
+  const permissionsPage = read("src/app/accessi/effective-permissions/page.tsx");
 
   assert.match(permissionsPage, /Permessi persistiti/);
   assert.match(permissionsPage, /Preview guidata/);

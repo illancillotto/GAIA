@@ -132,7 +132,7 @@ export default function SharesPage() {
           {filteredShares.map((share) => (
             <Link
               key={share.id}
-              href={`/shares/${share.id}`}
+              href={`/accessi/shares/${share.id}`}
               className="block rounded-xl border border-gray-100 bg-white p-4 shadow-panel transition hover:border-gray-200 hover:shadow-sm"
             >
               <div className="flex items-start gap-3">

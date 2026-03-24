@@ -322,7 +322,7 @@ export default function UsersPage() {
                 <h3 className="mt-1 text-xl font-medium text-gray-900">Vista rapida operativa</h3>
               </div>
               <div className="flex items-center gap-3">
-                <Link className="text-sm font-medium text-[#1D4E35]" href={`/users/${selectedUserId}`}>
+                <Link className="text-sm font-medium text-[#1D4E35]" href={`/accessi/users/${selectedUserId}`}>
                   Apri pagina completa
                 </Link>
                 <button className="btn-secondary" onClick={() => setSelectedUserId(null)} type="button">

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
 from pathlib import Path
 import re
@@ -123,7 +123,7 @@ class CatastoWorker:
             if connection_test is None:
                 return
             connection_test.status = CatastoConnectionTestStatus.PROCESSING.value
-            connection_test.started_at = datetime.now(UTC)
+            connection_test.started_at = datetime.now(timezone.utc)
             connection_test.message = "Testing SISTER credentials"
             db.commit()
 
@@ -152,7 +152,7 @@ class CatastoWorker:
                 connection_test.reachable = result.reachable
                 connection_test.authenticated = result.authenticated
                 connection_test.message = result.message
-                connection_test.completed_at = datetime.now(UTC)
+                connection_test.completed_at = datetime.now(timezone.utc)
 
                 if connection_test.persist_verification and connection_test.credential_id and result.authenticated:
                     credential = db.get(CatastoCredential, connection_test.credential_id)
@@ -169,7 +169,7 @@ class CatastoWorker:
                     connection_test.reachable = False
                     connection_test.authenticated = False
                     connection_test.message = f"Worker connection test failed: {exc}"
-                    connection_test.completed_at = datetime.now(UTC)
+                    connection_test.completed_at = datetime.now(timezone.utc)
                     db.commit()
         finally:
             await browser.stop()
@@ -247,7 +247,7 @@ class CatastoWorker:
                 if request.status == CatastoVisuraRequestStatus.AWAITING_CAPTCHA.value:
                     if request.captcha_skip_requested or request.captcha_manual_solution:
                         return request.id
-                    if request.captcha_expires_at and request.captcha_expires_at <= datetime.now(UTC):
+                    if request.captcha_expires_at and request.captcha_expires_at <= datetime.now(timezone.utc):
                         return request.id
 
             if any(request.status == CatastoVisuraRequestStatus.AWAITING_CAPTCHA.value for request in requests):
@@ -267,12 +267,12 @@ class CatastoWorker:
             elif (
                 request.status == CatastoVisuraRequestStatus.AWAITING_CAPTCHA.value
                 and request.captcha_expires_at
-                and request.captcha_expires_at <= datetime.now(UTC)
+                and request.captcha_expires_at <= datetime.now(timezone.utc)
             ):
                 request.status = CatastoVisuraRequestStatus.FAILED.value
                 request.current_operation = "Manual CAPTCHA timed out"
                 request.error_message = "Manual CAPTCHA timeout exceeded"
-                request.processed_at = datetime.now(UTC)
+                request.processed_at = datetime.now(timezone.utc)
                 batch.current_operation = f"Manual CAPTCHA timeout on row {request.row_index}"
                 self._refresh_batch_counts(db, batch)
                 db.commit()
@@ -281,7 +281,7 @@ class CatastoWorker:
                 request.status = CatastoVisuraRequestStatus.SKIPPED.value
                 request.current_operation = "Skipped by user"
                 request.error_message = "Skipped by user after CAPTCHA request"
-                request.processed_at = datetime.now(UTC)
+                request.processed_at = datetime.now(timezone.utc)
                 batch.current_operation = f"Skipped row {request.row_index}"
                 self._refresh_batch_counts(db, batch)
                 db.commit()
@@ -318,7 +318,7 @@ class CatastoWorker:
         self._persist_flow_result(batch_id, request_id, credential.sister_username, result)
 
     async def _wait_for_manual_captcha(self, batch_id, request_id, image_path: Path) -> ManualCaptchaDecision:
-        deadline = datetime.now(UTC) + timedelta(seconds=CAPTCHA_MANUAL_TIMEOUT_SEC)
+        deadline = datetime.now(timezone.utc) + timedelta(seconds=CAPTCHA_MANUAL_TIMEOUT_SEC)
 
         with SessionLocal() as db:
             request = db.get(CatastoVisuraRequest, request_id)
@@ -327,14 +327,14 @@ class CatastoWorker:
                 request.status = CatastoVisuraRequestStatus.AWAITING_CAPTCHA.value
                 request.current_operation = "Waiting for manual CAPTCHA"
                 request.captcha_image_path = str(image_path)
-                request.captcha_requested_at = datetime.now(UTC)
+                request.captcha_requested_at = datetime.now(timezone.utc)
                 request.captcha_expires_at = deadline
                 request.captcha_manual_solution = None
                 request.captcha_skip_requested = False
                 batch.current_operation = f"CAPTCHA requested for row {request.row_index}"
                 db.commit()
 
-        while datetime.now(UTC) < deadline and not self.state.stop_requested:
+        while datetime.now(timezone.utc) < deadline and not self.state.stop_requested:
             with SessionLocal() as db:
                 request = db.get(CatastoVisuraRequest, request_id)
                 if request is None:
@@ -377,19 +377,19 @@ class CatastoWorker:
                 request.document_id = document.id
                 request.status = CatastoVisuraRequestStatus.COMPLETED.value
                 request.current_operation = "PDF downloaded"
-                request.processed_at = datetime.now(UTC)
+                request.processed_at = datetime.now(timezone.utc)
                 batch.current_operation = f"Completed row {request.row_index}"
             elif result.status == "skipped":
                 request.status = CatastoVisuraRequestStatus.SKIPPED.value
                 request.current_operation = "Skipped"
                 request.error_message = result.error_message
-                request.processed_at = datetime.now(UTC)
+                request.processed_at = datetime.now(timezone.utc)
                 batch.current_operation = f"Skipped row {request.row_index}"
             else:
                 request.status = CatastoVisuraRequestStatus.FAILED.value
                 request.current_operation = "Failed"
                 request.error_message = result.error_message or "Visura flow failed"
-                request.processed_at = datetime.now(UTC)
+                request.processed_at = datetime.now(timezone.utc)
                 batch.current_operation = f"Failed row {request.row_index}"
 
             request.captcha_manual_solution = None
@@ -413,7 +413,7 @@ class CatastoWorker:
                 batch.status = CatastoBatchStatus.PROCESSING.value
             else:
                 batch.status = CatastoBatchStatus.FAILED.value if batch.failed_items else CatastoBatchStatus.COMPLETED.value
-            batch.completed_at = datetime.now(UTC)
+            batch.completed_at = datetime.now(timezone.utc)
             batch.current_operation = "Batch finished"
             db.commit()
 
@@ -443,7 +443,7 @@ class CatastoWorker:
 
     def _build_document_path(self, codice_fiscale: str, request: CatastoVisuraRequest) -> Path:
         comune_component = self._slugify(request.comune)
-        year_component = datetime.now(UTC).strftime("%Y")
+        year_component = datetime.now(timezone.utc).strftime("%Y")
         filename = f"{codice_fiscale}_{request.foglio}_{request.particella}"
         if request.subalterno:
             filename += f"_{request.subalterno}"

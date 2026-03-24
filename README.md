@@ -36,13 +36,15 @@ Stato: MVP in integrazione.
 - Infrastructure: Docker, Docker Compose, Nginx
 - CI: GitHub Actions
 
+Il frontend condiviso della piattaforma vive in `frontend/`.
+
 ## Struttura repository
 ```text
 GAIA/
+├── frontend/
 ├── modules/
 │   ├── accessi/
 │   │   ├── backend/
-│   │   ├── frontend/
 │   │   └── docs/
 │   ├── network/
 │   │   └── docs/

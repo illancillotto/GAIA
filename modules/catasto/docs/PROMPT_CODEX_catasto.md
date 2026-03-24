@@ -46,7 +46,7 @@ Il repository si trova su `github.com/illancillotto/GAIA`.
 
 - Il modulo si aggiunge al backend e frontend **esistenti** come router/sezione aggiuntiva
 - **NON** creare un backend separato: aggiungere `app/routers/catasto.py` al FastAPI esistente
-- **NON** creare un frontend separato: aggiungere `src/app/catasto/` al Next.js esistente
+- **NON** creare un frontend separato: aggiungere `frontend/src/app/catasto/` al Next.js esistente
 - Il browser worker gira come **container Docker separato** con Chromium
 - Auth JWT condivisa: riutilizzare il middleware esistente senza modifiche
 - Alembic: creare nuove migration in `alembic/versions/` senza toccare quelle esistenti

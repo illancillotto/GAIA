@@ -172,7 +172,7 @@ export default function AccessiPage() {
     >
       <Topbar
         pageTitle="Dashboard"
-        actions={<SyncButton label="Apri Sync" onClick={() => router.push("/sync")} />}
+        actions={<SyncButton label="Apri Sync" onClick={() => router.push("/accessi/sync")} />}
       />
 
       <section className="page-body">
@@ -183,7 +183,7 @@ export default function AccessiPage() {
               title={`${summary.reviews} review in attesa`}
               action={
                 <Link
-                  href="/reviews"
+                  href="/accessi/reviews"
                   className="rounded-md bg-amber-100 px-3 py-1.5 text-xs font-medium text-amber-700 transition hover:bg-amber-200"
                 >
                   Vai alle review
@@ -219,7 +219,7 @@ export default function AccessiPage() {
                   <p className="section-title">Utenti recenti con accesso</p>
                   <p className="section-copy">Ultimi utenti presenti nel dominio sincronizzato.</p>
                 </div>
-                <Link href="/users" className="text-sm font-medium text-[#1D4E35]">
+                <Link href="/accessi/users" className="text-sm font-medium text-[#1D4E35]">
                   Tutti gli utenti
                 </Link>
               </div>
@@ -227,7 +227,7 @@ export default function AccessiPage() {
                 {recentUsers.map((user) => (
                   <Link
                     key={user.id}
-                    href={`/users/${user.id}`}
+                    href={`/accessi/users/${user.id}`}
                     className="flex items-center gap-3 rounded-lg border border-gray-100 px-3 py-3 transition hover:border-gray-200 hover:bg-gray-50"
                   >
                     <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#D3EAD4] text-[#1D4E35]">
@@ -249,7 +249,7 @@ export default function AccessiPage() {
                   <p className="section-title">Cartelle condivise</p>
                   <p className="section-copy">Share pronte per verifica permessi e review.</p>
                 </div>
-                <Link href="/shares" className="text-sm font-medium text-[#1D4E35]">
+                <Link href="/accessi/shares" className="text-sm font-medium text-[#1D4E35]">
                   Tutte le cartelle
                 </Link>
               </div>
@@ -257,7 +257,7 @@ export default function AccessiPage() {
                 {recentShares.map((share) => (
                   <Link
                     key={share.id}
-                    href={`/shares/${share.id}`}
+                    href={`/accessi/shares/${share.id}`}
                     className="flex items-center gap-3 rounded-lg border border-gray-100 px-3 py-3 transition hover:border-gray-200 hover:bg-gray-50"
                   >
                     <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#D3EAD4] text-[#1D4E35]">
@@ -280,7 +280,7 @@ export default function AccessiPage() {
                 <p className="section-title">Cartelle principali e utenti con accesso</p>
                 <p className="section-copy">Share root dell’ultimo snapshot con utenti che possono accedere al ramo.</p>
               </div>
-              <Link href="/effective-permissions" className="text-sm font-medium text-[#1D4E35]">
+              <Link href="/accessi/effective-permissions" className="text-sm font-medium text-[#1D4E35]">
                 Apri vista completa
               </Link>
             </div>
@@ -300,7 +300,7 @@ export default function AccessiPage() {
                         <p className="text-sm font-medium text-gray-900">{share.name}</p>
                         <p className="truncate text-xs text-gray-400">{share.path}</p>
                       </div>
-                      <Link href={`/shares/${share.id}`} className="text-sm font-medium text-[#1D4E35]">
+                      <Link href={`/accessi/shares/${share.id}`} className="text-sm font-medium text-[#1D4E35]">
                         Apri
                       </Link>
                     </div>

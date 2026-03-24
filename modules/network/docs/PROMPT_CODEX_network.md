@@ -38,7 +38,7 @@ Il repository si trova su `github.com/illancillotto/GAIA`.
 
 - Il modulo si aggiunge al backend e frontend **esistenti** come router/sezione aggiuntiva
 - **NON** creare un backend separato: aggiungere `app/routers/network.py` al FastAPI esistente
-- **NON** creare un frontend separato: aggiungere `src/app/network/` al Next.js esistente
+- **NON** creare un frontend separato: aggiungere `frontend/src/app/network/` al Next.js esistente
 - Lo scanner LAN gira come **container Docker separato** con `cap_add: [NET_RAW, NET_ADMIN]`
 - Auth JWT condivisa: riutilizzare il middleware esistente senza modifiche
 - Alembic: creare nuove migration in `alembic/versions/` senza toccare quelle esistenti

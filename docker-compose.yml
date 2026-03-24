@@ -41,7 +41,7 @@ services:
 
   frontend:
     build:
-      context: ./modules/accessi/frontend
+      context: ./frontend
     container_name: naap-frontend
     restart: unless-stopped
     env_file:

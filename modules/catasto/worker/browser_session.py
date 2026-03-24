@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from playwright.async_api import Browser, BrowserContext, Download, Page, Playwright, TimeoutError, async_playwright
@@ -58,7 +58,7 @@ class BrowserSession:
         if (
             self._username == username
             and self._authenticated_until is not None
-            and datetime.now(UTC) < self._authenticated_until
+            and datetime.now(timezone.utc) < self._authenticated_until
         ):
             return
 
@@ -104,7 +104,7 @@ class BrowserSession:
         await self._maybe_click_xpath(self.selectors.confirm_button_xpath)
         await self._goto_visura_menu()
         self._username = username
-        self._authenticated_until = datetime.now(UTC) + timedelta(seconds=self.config.session_timeout_sec)
+        self._authenticated_until = datetime.now(timezone.utc) + timedelta(seconds=self.config.session_timeout_sec)
 
         if self.config.debug_pause:
             await page.pause()
