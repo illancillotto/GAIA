@@ -7,7 +7,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends tesseract-ocr \
+    && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-ita \
     && rm -rf /var/lib/apt/lists/*
 
 COPY modules/catasto/worker/requirements.txt /app/worker/requirements.txt

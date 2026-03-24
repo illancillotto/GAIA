@@ -9,6 +9,7 @@ if str(BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(BACKEND_ROOT))
 
 from app.core.database import SessionLocal
+from app.models.catasto import CatastoComune
 from app.models.effective_permission import EffectivePermission
 from app.models.nas_group import NasGroup
 from app.models.nas_user import NasUser
@@ -17,6 +18,7 @@ from app.models.review import Review
 from app.models.share import Share
 from app.models.snapshot import Snapshot
 from app.services.bootstrap_domain import SEED_SNAPSHOT_CHECKSUM
+from app.services.catasto_comuni import SEED_COMUNI
 
 
 def main() -> None:
@@ -45,6 +47,17 @@ def main() -> None:
         deleted_shares = (
             db.execute(delete(Share).where(Share.last_seen_snapshot_id == snapshot_id)).rowcount or 0
         )
+        deleted_catasto_comuni = 0
+        for item in SEED_COMUNI:
+            deleted_catasto_comuni += (
+                db.execute(
+                    delete(CatastoComune).where(
+                        CatastoComune.nome == item["nome"],
+                        CatastoComune.ufficio == item["ufficio"],
+                    )
+                ).rowcount
+                or 0
+            )
         deleted_snapshots = db.execute(delete(Snapshot).where(Snapshot.id == snapshot_id)).rowcount or 0
 
         db.commit()
@@ -55,7 +68,8 @@ def main() -> None:
         "purge_seed_data=completed "
         f"snapshot_id={snapshot_id} snapshots={deleted_snapshots} users={deleted_users} "
         f"groups={deleted_groups} shares={deleted_shares} permission_entries={deleted_permission_entries} "
-        f"effective_permissions={deleted_effective_permissions} reviews={deleted_reviews}"
+        f"effective_permissions={deleted_effective_permissions} reviews={deleted_reviews} "
+        f"catasto_comuni={deleted_catasto_comuni}"
     )
 
 

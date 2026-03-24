@@ -6,29 +6,7 @@ from pathlib import Path
 
 from playwright.async_api import Browser, BrowserContext, Download, Page, Playwright, TimeoutError, async_playwright
 
-
-SISTER_LOGIN_URL = "https://iampe.agenziaentrate.gov.it/sam/UI/Login?realm=/agenziaentrate"
-SISTER_TAB_SELECTOR = "a.nav-link[href='#tab-5']"
-SISTER_USERNAME_SELECTOR = "#username-sister"
-SISTER_PASSWORD_SELECTOR = "#password-sister"
-SISTER_LOGIN_BUTTON = "#tab-5 form button[type='submit']"
-SISTER_CONFIRM_BUTTON = "//input[@value='Conferma']"
-SISTER_TERRITORIO_SELECTOR = "select[name='listacom']"
-SISTER_CATASTO_SELECTOR = "select[name='tipoCatasto']"
-SISTER_COMUNE_SELECTOR = "select[name='denomComune']"
-SISTER_SEZIONE_SELECTOR = "input[name='sezione'], select[name='sezione']"
-SISTER_FOGLIO_SELECTOR = "input[name='foglio']"
-SISTER_PARTICELLA_SELECTOR = "input[name='particella1']"
-SISTER_SUBALTERNO_SELECTOR = "input[name='subalterno1']"
-SISTER_MOTIVO_SELECTOR = "select[name='motivoLista']"
-SISTER_VISURA_BUTTON = "input[name='scelta'][value='Visura']"
-SISTER_TIPO_VISURA_SELECTOR = "input[name='tipoVisura']"
-SISTER_CAPTCHA_FIELD = "input[name='codSicurezza']"
-SISTER_CAPTCHA_IMAGE = "img[src*='captcha' i]"
-SISTER_INOLTRA_BUTTON = "input[name='inoltra'][value='Inoltra']"
-SISTER_SAVE_BUTTON = "input[name='metodo'][value='Salva']"
-SISTER_UFFICIO_VALUE = "ORISTANO Territorio-OR"
-SISTER_MOTIVO_VALUE = "Altri fini istituzionali "
+from sister_selectors import SisterSelectorsConfig
 
 
 @dataclass(slots=True)
@@ -46,8 +24,9 @@ class BrowserConnectionProbeResult:
 
 
 class BrowserSession:
-    def __init__(self, config: BrowserSessionConfig) -> None:
+    def __init__(self, config: BrowserSessionConfig, selectors: SisterSelectorsConfig | None = None) -> None:
         self.config = config
+        self.selectors = selectors or SisterSelectorsConfig.load()
         self._playwright: Playwright | None = None
         self._browser: Browser | None = None
         self._context: BrowserContext | None = None
@@ -89,14 +68,14 @@ class BrowserSession:
         page = self.page
         reachable = False
         try:
-            await page.goto(SISTER_LOGIN_URL, wait_until="domcontentloaded")
+            await page.goto(self.selectors.login_url, wait_until="domcontentloaded")
             reachable = True
-            await page.click(SISTER_TAB_SELECTOR)
-            await page.fill(SISTER_USERNAME_SELECTOR, username)
-            await page.fill(SISTER_PASSWORD_SELECTOR, password)
-            await page.click(SISTER_LOGIN_BUTTON)
-            await self._maybe_click_xpath(SISTER_CONFIRM_BUTTON)
-            await page.get_by_role("link", name="Consultazioni e Certificazioni").wait_for(timeout=12000)
+            await page.click(self.selectors.login_tab_selector)
+            await page.fill(self.selectors.username_selector, username)
+            await page.fill(self.selectors.password_selector, password)
+            await page.click(self.selectors.login_button_selector)
+            await self._maybe_click_xpath(self.selectors.confirm_button_xpath)
+            await page.get_by_role("link", name=self.selectors.consultazioni_link_name).wait_for(timeout=12000)
             return BrowserConnectionProbeResult(
                 reachable=True,
                 authenticated=True,
@@ -117,12 +96,12 @@ class BrowserSession:
 
     async def login(self, username: str, password: str) -> None:
         page = self.page
-        await page.goto(SISTER_LOGIN_URL, wait_until="domcontentloaded")
-        await page.click(SISTER_TAB_SELECTOR)
-        await page.fill(SISTER_USERNAME_SELECTOR, username)
-        await page.fill(SISTER_PASSWORD_SELECTOR, password)
-        await page.click(SISTER_LOGIN_BUTTON)
-        await self._maybe_click_xpath(SISTER_CONFIRM_BUTTON)
+        await page.goto(self.selectors.login_url, wait_until="domcontentloaded")
+        await page.click(self.selectors.login_tab_selector)
+        await page.fill(self.selectors.username_selector, username)
+        await page.fill(self.selectors.password_selector, password)
+        await page.click(self.selectors.login_button_selector)
+        await self._maybe_click_xpath(self.selectors.confirm_button_xpath)
         await self._goto_visura_menu()
         self._username = username
         self._authenticated_until = datetime.now(UTC) + timedelta(seconds=self.config.session_timeout_sec)
@@ -133,61 +112,61 @@ class BrowserSession:
     async def open_visura_form(self) -> None:
         page = self.page
         await self._goto_visura_menu()
-        if await page.locator(SISTER_TERRITORIO_SELECTOR).count() > 0:
-            await page.select_option(SISTER_TERRITORIO_SELECTOR, value=SISTER_UFFICIO_VALUE)
-            await page.get_by_role("button", name="Applica").click()
-        await page.get_by_role("link", name="Immobile").click()
-        await page.wait_for_selector(SISTER_CATASTO_SELECTOR)
+        if await page.locator(self.selectors.territorio_selector).count() > 0:
+            await page.select_option(self.selectors.territorio_selector, value=self.selectors.territorio_value)
+            await page.get_by_role("button", name=self.selectors.territorio_apply_button_name).click()
+        await page.get_by_role("link", name=self.selectors.immobile_link_name).click()
+        await page.wait_for_selector(self.selectors.catasto_selector)
 
     async def fill_visura_form(self, request) -> None:
         page = self.page
-        await page.select_option(SISTER_CATASTO_SELECTOR, label=request.catasto)
-        await page.select_option(SISTER_COMUNE_SELECTOR, value=request.comune_codice)
+        await page.select_option(self.selectors.catasto_selector, label=request.catasto)
+        await page.select_option(self.selectors.comune_selector, value=request.comune_codice)
 
         if request.sezione:
-            if await page.locator("select[name='sezione']").count() > 0:
-                await page.select_option("select[name='sezione']", label=request.sezione)
-            elif await page.locator("input[name='sezione']").count() > 0:
-                await page.fill("input[name='sezione']", request.sezione)
+            if await page.locator(self.selectors.sezione_select_selector).count() > 0:
+                await page.select_option(self.selectors.sezione_select_selector, label=request.sezione)
+            elif await page.locator(self.selectors.sezione_input_selector).count() > 0:
+                await page.fill(self.selectors.sezione_input_selector, request.sezione)
 
-        await page.fill(SISTER_FOGLIO_SELECTOR, request.foglio)
-        await page.fill(SISTER_PARTICELLA_SELECTOR, request.particella)
+        await page.fill(self.selectors.foglio_selector, request.foglio)
+        await page.fill(self.selectors.particella_selector, request.particella)
         if request.subalterno:
-            await page.fill(SISTER_SUBALTERNO_SELECTOR, request.subalterno)
-        await page.select_option(SISTER_MOTIVO_SELECTOR, value=SISTER_MOTIVO_VALUE)
-        await page.click(SISTER_VISURA_BUTTON)
-        await page.wait_for_selector(SISTER_TIPO_VISURA_SELECTOR)
-        await page.check(f"{SISTER_TIPO_VISURA_SELECTOR}[value='{self.tipo_visura_value(request.tipo_visura)}']")
+            await page.fill(self.selectors.subalterno_selector, request.subalterno)
+        await page.select_option(self.selectors.motivo_selector, value=self.selectors.motivo_value)
+        await page.click(self.selectors.visura_button_selector)
+        await page.wait_for_selector(self.selectors.tipo_visura_selector)
+        await page.check(f"{self.selectors.tipo_visura_selector}[value='{self.tipo_visura_value(request.tipo_visura)}']")
 
     async def capture_captcha_image(self) -> bytes:
-        await self.page.wait_for_selector(SISTER_CAPTCHA_IMAGE)
-        return await self.page.locator(SISTER_CAPTCHA_IMAGE).screenshot(type="png")
+        await self.page.wait_for_selector(self.selectors.captcha_image_selector)
+        return await self.page.locator(self.selectors.captcha_image_selector).screenshot(type="png")
 
     async def submit_captcha(self, text: str) -> bool:
         page = self.page
-        await page.fill(SISTER_CAPTCHA_FIELD, text)
-        await page.click(SISTER_INOLTRA_BUTTON)
+        await page.fill(self.selectors.captcha_field_selector, text)
+        await page.click(self.selectors.inoltra_button_selector)
 
         try:
-            await page.wait_for_selector(SISTER_SAVE_BUTTON, timeout=12000)
+            await page.wait_for_selector(self.selectors.save_button_selector, timeout=12000)
             return True
         except TimeoutError:
-            return await page.locator(SISTER_SAVE_BUTTON).count() > 0
+            return await page.locator(self.selectors.save_button_selector).count() > 0
 
     async def download_pdf(self, destination: Path) -> int:
         page = self.page
         destination.parent.mkdir(parents=True, exist_ok=True)
         async with page.expect_download(timeout=20000) as download_info:
-            await page.click(SISTER_SAVE_BUTTON)
+            await page.click(self.selectors.save_button_selector)
         download: Download = await download_info.value
         await download.save_as(str(destination))
         return destination.stat().st_size
 
     async def _goto_visura_menu(self) -> None:
         page = self.page
-        await page.get_by_role("link", name="Consultazioni e Certificazioni").click()
-        await page.get_by_role("link", name="Visure catastali").click()
-        await self._maybe_click_text("Conferma Lettura")
+        await page.get_by_role("link", name=self.selectors.consultazioni_link_name).click()
+        await page.get_by_role("link", name=self.selectors.visure_link_name).click()
+        await self._maybe_click_text(self.selectors.conferma_lettura_button_name)
 
     async def _maybe_click_xpath(self, xpath: str) -> None:
         locator = self.page.locator(f"xpath={xpath}")

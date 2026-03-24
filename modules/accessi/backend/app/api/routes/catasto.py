@@ -4,12 +4,15 @@ import asyncio
 from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import datetime
+from io import BytesIO
 from pathlib import Path
 from typing import Annotated
 from uuid import UUID
+import zipfile
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect, WebSocketException, status
 from fastapi.responses import FileResponse
+from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -29,6 +32,7 @@ from app.schemas.catasto import (
     CatastoCredentialStatusResponse,
     CatastoCredentialTestResponse,
     CatastoCredentialUpsertRequest,
+    CatastoDocumentBulkDownloadRequest,
     CatastoDocumentResponse,
     CatastoOperationResponse,
     CatastoSingleVisuraCreateRequest,
@@ -61,6 +65,8 @@ from app.services.catasto_captcha import (
 from app.services.catasto_documents import (
     CatastoDocumentNotFoundError,
     get_document_for_user,
+    list_documents_for_batch,
+    list_documents_by_ids_for_user,
     list_documents_for_user,
 )
 from app.services.catasto_comuni import (
@@ -130,6 +136,20 @@ def build_connection_test_response(db: Session, connection_test: object) -> Cata
         started_at=connection_test.started_at,
         completed_at=connection_test.completed_at,
     )
+
+
+def build_zip_response(filename: str, documents: list[object]) -> StreamingResponse:
+    archive_buffer = BytesIO()
+    with zipfile.ZipFile(archive_buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for document in documents:
+            filepath = Path(document.filepath)
+            if not filepath.exists():
+                continue
+            archive.write(filepath, arcname=document.filename)
+
+    archive_buffer.seek(0)
+    headers = {"Content-Disposition": f'attachment; filename="{filename}"'}
+    return StreamingResponse(archive_buffer, media_type="application/zip", headers=headers)
 
 
 @contextmanager
@@ -375,6 +395,25 @@ def get_batch(
     return build_batch_detail_response(batch, get_batch_requests(db, batch.id))
 
 
+@router.get("/batches/{batch_id}/download")
+def download_batch_documents(
+    batch_id: UUID,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> StreamingResponse:
+    try:
+        batch = get_batch_for_user(db, current_user.id, batch_id)
+    except BatchNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    documents = list_documents_for_batch(db, current_user.id, batch_id)
+    if not documents:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No PDF documents available for this batch")
+
+    batch_label = (batch.name or str(batch.id)).replace("/", "-").replace("\\", "-").strip()
+    return build_zip_response(f"{batch_label or batch.id}.zip", documents)
+
+
 @router.post("/batches/{batch_id}/start", response_model=CatastoBatchResponse)
 def start_batch_route(
     batch_id: UUID,
@@ -452,6 +491,7 @@ def get_single_visura(
 def list_documents(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     db: Annotated[Session, Depends(get_db)],
+    search: Annotated[str | None, Query(alias="q")] = None,
     comune: Annotated[str | None, Query()] = None,
     foglio: Annotated[str | None, Query()] = None,
     particella: Annotated[str | None, Query()] = None,
@@ -461,6 +501,7 @@ def list_documents(
     documents = list_documents_for_user(
         db,
         current_user.id,
+        search=search,
         comune=comune,
         foglio=foglio,
         particella=particella,
@@ -468,6 +509,42 @@ def list_documents(
         created_to=created_to,
     )
     return [build_document_response(db, item) for item in documents]
+
+
+@router.get("/documents/search", response_model=list[CatastoDocumentResponse])
+def search_documents(
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+    q: Annotated[str | None, Query()] = None,
+    comune: Annotated[str | None, Query()] = None,
+    foglio: Annotated[str | None, Query()] = None,
+    particella: Annotated[str | None, Query()] = None,
+    created_from: Annotated[datetime | None, Query()] = None,
+    created_to: Annotated[datetime | None, Query()] = None,
+) -> list[CatastoDocumentResponse]:
+    documents = list_documents_for_user(
+        db,
+        current_user.id,
+        search=q,
+        comune=comune,
+        foglio=foglio,
+        particella=particella,
+        created_from=created_from,
+        created_to=created_to,
+    )
+    return [build_document_response(db, item) for item in documents]
+
+
+@router.post("/documents/download")
+def download_selected_documents(
+    payload: CatastoDocumentBulkDownloadRequest,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> StreamingResponse:
+    documents = list_documents_by_ids_for_user(db, current_user.id, payload.document_ids)
+    if not documents:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No matching PDF documents found")
+    return build_zip_response("catasto-documents-selection.zip", documents)
 
 
 @router.get("/documents/{document_id}", response_model=CatastoDocumentResponse)

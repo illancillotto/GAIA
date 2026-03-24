@@ -1,18 +1,24 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 
 import { ProtectedPage } from "@/components/app/protected-page";
 import { DataTable } from "@/components/table/data-table";
 import { TableFilters } from "@/components/table/table-filters";
-import { downloadCatastoDocumentBlob, getCatastoDocuments } from "@/lib/api";
+import {
+  downloadCatastoDocumentBlob,
+  downloadSelectedCatastoDocumentsZipBlob,
+  getCatastoComuni,
+  searchCatastoDocuments,
+} from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import { formatDateTime } from "@/lib/presentation";
-import type { CatastoDocument } from "@/types/api";
+import type { CatastoComune, CatastoDocument } from "@/types/api";
 
 type FilterState = {
+  q: string;
   comune: string;
   foglio: string;
   particella: string;
@@ -21,6 +27,7 @@ type FilterState = {
 };
 
 const EMPTY_FILTERS: FilterState = {
+  q: "",
   comune: "",
   foglio: "",
   particella: "",
@@ -47,13 +54,32 @@ function triggerDownload(blob: Blob, filename: string): void {
 
 export default function CatastoDocumentsPage() {
   const [documents, setDocuments] = useState<CatastoDocument[]>([]);
+  const [comuni, setComuni] = useState<CatastoComune[]>([]);
   const [filters, setFilters] = useState<FilterState>(EMPTY_FILTERS);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
+  const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
+  const [zipBusy, setZipBusy] = useState(false);
 
   useEffect(() => {
     void loadDocuments(EMPTY_FILTERS);
+  }, []);
+
+  useEffect(() => {
+    async function loadComuni(): Promise<void> {
+      const token = getStoredAccessToken();
+      if (!token) return;
+
+      try {
+        const result = await getCatastoComuni(token);
+        setComuni(result);
+      } catch {
+        setComuni([]);
+      }
+    }
+
+    void loadComuni();
   }, []);
 
   async function loadDocuments(nextFilters: FilterState): Promise<void> {
@@ -62,7 +88,8 @@ export default function CatastoDocumentsPage() {
 
     setBusy(true);
     try {
-      const result = await getCatastoDocuments(token, {
+      const result = await searchCatastoDocuments(token, {
+        q: nextFilters.q,
         comune: nextFilters.comune,
         foglio: nextFilters.foglio,
         particella: nextFilters.particella,
@@ -70,6 +97,7 @@ export default function CatastoDocumentsPage() {
         created_to: toEndOfDay(nextFilters.createdTo),
       });
       setDocuments(result);
+      setSelectedDocumentIds([]);
       setError(null);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Errore caricamento archivio documenti");
@@ -94,8 +122,55 @@ export default function CatastoDocumentsPage() {
     }
   }
 
+  async function handleDownloadSelected(): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token || selectedDocumentIds.length === 0) return;
+
+    setZipBusy(true);
+    try {
+      const blob = await downloadSelectedCatastoDocumentsZipBlob(token, selectedDocumentIds);
+      triggerDownload(blob, "catasto-documents-selection.zip");
+      setError(null);
+    } catch (downloadError) {
+      setError(downloadError instanceof Error ? downloadError.message : "Errore download ZIP selezione");
+    } finally {
+      setZipBusy(false);
+    }
+  }
+
+  const toggleDocumentSelection = useCallback((documentId: string): void => {
+    setSelectedDocumentIds((current) =>
+      current.includes(documentId) ? current.filter((item) => item !== documentId) : [...current, documentId],
+    );
+  }, []);
+
+  const toggleAllDocumentsSelection = useCallback((): void => {
+    setSelectedDocumentIds((current) =>
+      current.length === documents.length ? [] : documents.map((documentItem) => documentItem.id),
+    );
+  }, [documents]);
+
   const columns = useMemo<ColumnDef<CatastoDocument>[]>(
     () => [
+      {
+        id: "select",
+        header: () => (
+          <input
+            aria-label="Seleziona tutti i documenti"
+            checked={documents.length > 0 && selectedDocumentIds.length === documents.length}
+            onChange={() => toggleAllDocumentsSelection()}
+            type="checkbox"
+          />
+        ),
+        cell: ({ row }) => (
+          <input
+            aria-label={`Seleziona documento ${row.original.filename}`}
+            checked={selectedDocumentIds.includes(row.original.id)}
+            onChange={() => toggleDocumentSelection(row.original.id)}
+            type="checkbox"
+          />
+        ),
+      },
       {
         header: "Comune",
         accessorKey: "comune",
@@ -146,7 +221,7 @@ export default function CatastoDocumentsPage() {
         ),
       },
     ],
-    [downloadingId],
+    [documents, downloadingId, selectedDocumentIds, toggleAllDocumentsSelection, toggleDocumentSelection],
   );
 
   return (
@@ -164,13 +239,28 @@ export default function CatastoDocumentsPage() {
         </div>
         <TableFilters>
           <label className="text-sm font-medium text-gray-700">
-            Comune
+            Ricerca libera
             <input
               className="form-control mt-1"
-              onChange={(event) => setFilters((current) => ({ ...current, comune: event.target.value }))}
-              placeholder="Es. Oristano"
-              value={filters.comune}
+              onChange={(event) => setFilters((current) => ({ ...current, q: event.target.value }))}
+              placeholder="Comune, file, foglio o particella"
+              value={filters.q}
             />
+          </label>
+          <label className="text-sm font-medium text-gray-700">
+            Comune
+            <select
+              className="form-control mt-1"
+              onChange={(event) => setFilters((current) => ({ ...current, comune: event.target.value }))}
+              value={filters.comune}
+            >
+              <option value="">Tutti i comuni</option>
+              {comuni.map((comune) => (
+                <option key={comune.id} value={comune.nome}>
+                  {comune.nome}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="text-sm font-medium text-gray-700">
             Foglio
@@ -225,6 +315,14 @@ export default function CatastoDocumentsPage() {
             type="button"
           >
             Reset
+          </button>
+          <button
+            className="btn-secondary"
+            disabled={zipBusy || selectedDocumentIds.length === 0}
+            onClick={() => void handleDownloadSelected()}
+            type="button"
+          >
+            {zipBusy ? "Preparazione ZIP..." : `Scarica selezione (${selectedDocumentIds.length})`}
           </button>
         </div>
       </article>

@@ -1,5 +1,7 @@
 from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
+from io import BytesIO
+import zipfile
 
 from cryptography.fernet import Fernet
 import pytest
@@ -471,9 +473,9 @@ def test_documents_archive_lists_filters_details_and_downloads(tmp_path) -> None
     assert payload[0]["batch_id"] == batch_id
 
     filtered_response = client.get(
-        "/catasto/documents",
+        "/catasto/documents/search",
         headers=auth_headers(),
-        params={"comune": "Orist", "foglio": "5", "particella": "120"},
+        params={"q": "visura-oristano", "comune": "Orist", "foglio": "5", "particella": "120"},
     )
     assert filtered_response.status_code == 200
     assert len(filtered_response.json()) == 1
@@ -486,6 +488,25 @@ def test_documents_archive_lists_filters_details_and_downloads(tmp_path) -> None
     assert download_response.status_code == 200
     assert download_response.headers["content-type"] == "application/pdf"
     assert download_response.content == b"%PDF-1.4 fake pdf"
+
+    batch_download_response = client.get(f"/catasto/batches/{batch_id}/download", headers=auth_headers())
+    assert batch_download_response.status_code == 200
+    assert batch_download_response.headers["content-type"] == "application/zip"
+
+    archive = zipfile.ZipFile(BytesIO(batch_download_response.content))
+    assert archive.namelist() == ["visura-oristano.pdf"]
+    assert archive.read("visura-oristano.pdf") == b"%PDF-1.4 fake pdf"
+
+    selection_download_response = client.post(
+        "/catasto/documents/download",
+        headers=auth_headers(),
+        json={"document_ids": [document_id]},
+    )
+    assert selection_download_response.status_code == 200
+    assert selection_download_response.headers["content-type"] == "application/zip"
+
+    selected_archive = zipfile.ZipFile(BytesIO(selection_download_response.content))
+    assert selected_archive.namelist() == ["visura-oristano.pdf"]
 
 
 def test_batch_websocket_emits_progress_and_captcha_notification(tmp_path) -> None:

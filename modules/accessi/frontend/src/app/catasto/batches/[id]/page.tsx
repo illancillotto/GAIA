@@ -8,9 +8,12 @@ import { BatchProgress } from "@/components/catasto/batch-progress";
 import { CaptchaDialog } from "@/components/catasto/captcha-dialog";
 import { CatastoStatusBadge } from "@/components/catasto/status-badge";
 import {
+  cancelCatastoBatch,
   createCatastoBatchWebSocket,
+  downloadCatastoBatchZipBlob,
   fetchCatastoCaptchaImageBlob,
   getCatastoBatch,
+  retryFailedCatastoBatch,
   solveCatastoCaptcha,
   skipCatastoCaptcha,
 } from "@/lib/api";
@@ -25,6 +28,9 @@ export default function CatastoBatchDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [captchaBusy, setCaptchaBusy] = useState(false);
   const [captchaImageUrl, setCaptchaImageUrl] = useState<string | null>(null);
+  const [downloadBusy, setDownloadBusy] = useState(false);
+  const [cancelBusy, setCancelBusy] = useState(false);
+  const [retryBusy, setRetryBusy] = useState(false);
 
   const loadBatch = useCallback(async (): Promise<void> => {
     const token = getStoredAccessToken();
@@ -154,6 +160,62 @@ export default function CatastoBatchDetailPage() {
     }
   }
 
+  async function handleDownloadBatch(): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token || !batch) return;
+
+    setDownloadBusy(true);
+    try {
+      const blob = await downloadCatastoBatchZipBlob(token, batch.id);
+      const url = URL.createObjectURL(blob);
+      const anchor = window.document.createElement("a");
+      anchor.href = url;
+      anchor.download = `${(batch.name ?? batch.id).replaceAll("/", "-")}.zip`;
+      anchor.click();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setError(null);
+    } catch (downloadError) {
+      setError(downloadError instanceof Error ? downloadError.message : "Errore download ZIP batch");
+    } finally {
+      setDownloadBusy(false);
+    }
+  }
+
+  async function handleCancelBatch(): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token || !batch) return;
+
+    setCancelBusy(true);
+    try {
+      await cancelCatastoBatch(token, batch.id);
+      await loadBatch();
+      setError(null);
+    } catch (cancelError) {
+      setError(cancelError instanceof Error ? cancelError.message : "Errore annullamento batch");
+    } finally {
+      setCancelBusy(false);
+    }
+  }
+
+  async function handleRetryFailedBatch(): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token || !batch) return;
+
+    setRetryBusy(true);
+    try {
+      await retryFailedCatastoBatch(token, batch.id);
+      await loadBatch();
+      setError(null);
+    } catch (retryError) {
+      setError(retryError instanceof Error ? retryError.message : "Errore retry batch");
+    } finally {
+      setRetryBusy(false);
+    }
+  }
+
+  const canCancelBatch = batch != null && !["completed", "cancelled"].includes(batch.status);
+  const canRetryFailedBatch = batch != null && batch.failed_items > 0 && batch.status !== "processing";
+
   return (
     <ProtectedPage
       title="Dettaglio batch Catasto"
@@ -168,10 +230,38 @@ export default function CatastoBatchDetailPage() {
 
           <article className="panel-card overflow-hidden p-0">
             <div className="border-b border-gray-100 px-5 py-4">
-              <p className="section-title">{batch.name ?? batch.id}</p>
-              <p className="section-copy">
-                Creato {formatDateTime(batch.created_at)} · Avvio {formatDateTime(batch.started_at)} · Chiusura {formatDateTime(batch.completed_at)}
-              </p>
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <p className="section-title">{batch.name ?? batch.id}</p>
+                  <p className="section-copy">
+                    Creato {formatDateTime(batch.created_at)} · Avvio {formatDateTime(batch.started_at)} · Chiusura {formatDateTime(batch.completed_at)}
+                  </p>
+                </div>
+                <button
+                  className="btn-secondary"
+                  disabled={downloadBusy || batch.completed_items === 0}
+                  onClick={() => void handleDownloadBatch()}
+                  type="button"
+                >
+                  {downloadBusy ? "Preparazione ZIP..." : "Scarica tutti i PDF (ZIP)"}
+                </button>
+                <button
+                  className="btn-secondary"
+                  disabled={retryBusy || !canRetryFailedBatch}
+                  onClick={() => void handleRetryFailedBatch()}
+                  type="button"
+                >
+                  {retryBusy ? "Retry..." : "Riprova richieste fallite"}
+                </button>
+                <button
+                  className="btn-secondary"
+                  disabled={cancelBusy || !canCancelBatch}
+                  onClick={() => void handleCancelBatch()}
+                  type="button"
+                >
+                  {cancelBusy ? "Annullamento..." : "Annulla batch"}
+                </button>
+              </div>
             </div>
             <div className="overflow-x-auto">
               <table className="data-table">

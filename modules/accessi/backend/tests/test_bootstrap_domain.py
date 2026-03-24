@@ -5,6 +5,7 @@ from sqlalchemy.pool import StaticPool
 from app.core.security import hash_password
 from app.db.base import Base
 from app.models.application_user import ApplicationUser, ApplicationUserRole
+from app.models.catasto import CatastoComune
 from app.models.effective_permission import EffectivePermission
 from app.models.nas_group import NasGroup
 from app.models.nas_user import NasUser
@@ -13,6 +14,7 @@ from app.models.review import Review
 from app.models.share import Share
 from app.models.snapshot import Snapshot
 from app.services.bootstrap_domain import SEED_SNAPSHOT_CHECKSUM, ensure_bootstrap_domain
+from app.services.catasto_comuni import SEED_COMUNI
 
 
 def test_ensure_bootstrap_domain_creates_seed_once() -> None:
@@ -47,12 +49,19 @@ def test_ensure_bootstrap_domain_creates_seed_once() -> None:
         permission_entry_count = db.scalar(select(func.count(PermissionEntry.id)))
         effective_permission_count = db.scalar(select(func.count(EffectivePermission.id)))
         review_count = db.scalar(select(func.count(Review.id)))
+        catasto_comuni_count = db.scalar(select(func.count(CatastoComune.id)))
     finally:
         db.close()
 
     assert first_result["snapshot_created"] is True
     assert second_result["snapshot_created"] is False
     assert first_result["snapshot_id"] == second_result["snapshot_id"]
+    assert first_result["catasto_comuni"] == len(SEED_COMUNI)
+    assert first_result["catasto_comuni_created"] == len(SEED_COMUNI)
+    assert first_result["catasto_comuni_updated"] == 0
+    assert second_result["catasto_comuni"] == len(SEED_COMUNI)
+    assert second_result["catasto_comuni_created"] == 0
+    assert second_result["catasto_comuni_updated"] == 0
     assert snapshot is not None
     assert nas_user_count == 3
     assert nas_group_count == 3
@@ -60,3 +69,4 @@ def test_ensure_bootstrap_domain_creates_seed_once() -> None:
     assert permission_entry_count == 5
     assert effective_permission_count == 4
     assert review_count == 2
+    assert catasto_comuni_count == len(SEED_COMUNI)

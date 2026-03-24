@@ -123,6 +123,10 @@ class CatastoDocumentResponse(BaseModel):
     created_at: datetime
 
 
+class CatastoDocumentBulkDownloadRequest(BaseModel):
+    document_ids: list[UUID] = Field(min_length=1)
+
+
 class CatastoBatchResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

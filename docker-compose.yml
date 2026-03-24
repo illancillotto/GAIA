@@ -88,6 +88,14 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      CREDENTIAL_MASTER_KEY: ${CREDENTIAL_MASTER_KEY}
+      CAPTCHA_MAX_OCR_ATTEMPTS: ${CAPTCHA_MAX_OCR_ATTEMPTS:-3}
+      BETWEEN_VISURE_DELAY_SEC: ${BETWEEN_VISURE_DELAY_SEC:-5}
+      CATASTO_DOCUMENT_STORAGE_PATH: ${CATASTO_DOCUMENT_STORAGE_PATH:-/data/catasto/documents}
+      CATASTO_CAPTCHA_STORAGE_PATH: ${CATASTO_CAPTCHA_STORAGE_PATH:-/data/catasto/captcha}
+      CATASTO_SISTER_SELECTORS_PATH: ${CATASTO_SISTER_SELECTORS_PATH:-/app/worker/sister_selectors.json}
     depends_on:
       postgres:
         condition: service_healthy

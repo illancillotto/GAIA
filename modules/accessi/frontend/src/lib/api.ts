@@ -410,6 +410,24 @@ export async function startCatastoBatch(token: string, batchId: string): Promise
   });
 }
 
+export async function cancelCatastoBatch(token: string, batchId: string): Promise<CatastoBatch> {
+  return request<CatastoBatch>(`/catasto/batches/${batchId}/cancel`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function retryFailedCatastoBatch(token: string, batchId: string): Promise<CatastoBatch> {
+  return request<CatastoBatch>(`/catasto/batches/${batchId}/retry-failed`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
 export async function createCatastoSingleVisura(
   token: string,
   payload: CatastoSingleVisuraPayload,
@@ -457,6 +475,7 @@ export async function skipCatastoCaptcha(token: string, requestId: string): Prom
 export async function getCatastoDocuments(
   token: string,
   filters?: {
+    q?: string;
     comune?: string;
     foglio?: string;
     particella?: string;
@@ -466,6 +485,25 @@ export async function getCatastoDocuments(
 ): Promise<CatastoDocument[]> {
   const query = createQueryString(filters ?? {});
   return request<CatastoDocument[]>(`/catasto/documents${query}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function searchCatastoDocuments(
+  token: string,
+  filters?: {
+    q?: string;
+    comune?: string;
+    foglio?: string;
+    particella?: string;
+    created_from?: string;
+    created_to?: string;
+  },
+): Promise<CatastoDocument[]> {
+  const query = createQueryString(filters ?? {});
+  return request<CatastoDocument[]>(`/catasto/documents/search${query}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -493,6 +531,28 @@ export async function downloadCatastoDocumentBlob(token: string, documentId: str
     headers: {
       Authorization: `Bearer ${token}`,
     },
+  });
+}
+
+export async function downloadCatastoBatchZipBlob(token: string, batchId: string): Promise<Blob> {
+  return requestBlob(`/catasto/batches/${batchId}/download`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function downloadSelectedCatastoDocumentsZipBlob(
+  token: string,
+  documentIds: string[],
+): Promise<Blob> {
+  return requestBlob("/catasto/documents/download", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ document_ids: documentIds }),
   });
 }
 

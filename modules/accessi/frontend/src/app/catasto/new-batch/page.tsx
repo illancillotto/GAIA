@@ -14,6 +14,12 @@ type ValidationRowError = {
   errors: string[];
 };
 
+const TEMPLATE_CSV = [
+  "citta,catasto,sezione,foglio,particella,subalterno,tipo_visura",
+  "MARRUBIU,Terreni,,12,603,,Sintetica",
+  "ORISTANO,Terreni e Fabbricati,,5,120,3,Completa",
+].join("\n");
+
 export default function CatastoNewBatchPage() {
   const router = useRouter();
   const [batchName, setBatchName] = useState("");
@@ -61,6 +67,16 @@ export default function CatastoNewBatchPage() {
     }
   }
 
+  function handleDownloadTemplate(): void {
+    const blob = new Blob([TEMPLATE_CSV], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = window.document.createElement("a");
+    anchor.href = url;
+    anchor.download = "catasto-template.csv";
+    anchor.click();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
   return (
     <ProtectedPage
       title="Nuovo batch Catasto"
@@ -93,6 +109,9 @@ export default function CatastoNewBatchPage() {
         <div className="mt-5 flex items-center gap-3">
           <button className="btn-primary" disabled={busy || !file} onClick={() => void handleUpload()} type="button">
             {busy ? "Validazione..." : "Carica e valida"}
+          </button>
+          <button className="btn-secondary" onClick={handleDownloadTemplate} type="button">
+            Scarica template CSV
           </button>
           <span className="text-xs text-gray-400">Il batch resta `pending` finché non confermi l’avvio.</span>
         </div>

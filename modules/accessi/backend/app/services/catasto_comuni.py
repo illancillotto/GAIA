@@ -56,17 +56,37 @@ def normalize_lookup_value(value: str) -> str:
     return re.sub(r"[^a-z0-9]+", " ", normalized.lower()).strip()
 
 
-def ensure_seeded_comuni(db: Session) -> None:
-    existing = {(item.nome, item.ufficio) for item in db.scalars(select(CatastoComune)).all()}
-    created = False
+def seed_catasto_comuni(db: Session) -> dict[str, int]:
+    existing = {
+        (item.nome, item.ufficio): item
+        for item in db.scalars(select(CatastoComune)).all()
+    }
+    created = 0
+    updated = 0
     for item in SEED_COMUNI:
         key = (item["nome"], item["ufficio"])
-        if key in existing:
+        current = existing.get(key)
+        if current is None:
+            db.add(CatastoComune(**item))
+            created += 1
             continue
-        db.add(CatastoComune(**item))
-        created = True
-    if created:
+
+        if current.codice_sister != item["codice_sister"]:
+            current.codice_sister = item["codice_sister"]
+            updated += 1
+
+    if created or updated:
         db.commit()
+
+    return {
+        "total": len(SEED_COMUNI),
+        "created": created,
+        "updated": updated,
+    }
+
+
+def ensure_seeded_comuni(db: Session) -> None:
+    seed_catasto_comuni(db)
 
 
 def list_catasto_comuni(db: Session, search: str | None = None) -> list[CatastoComune]:
