@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import logging
@@ -48,15 +49,15 @@ class BrowserSession:
         return self._page
 
     async def start(self) -> None:
-        logger.info("Starting Playwright browser session")
+        logger.info("Avvio sessione browser Playwright")
         self._playwright = await async_playwright().start()
         self._browser = await self._playwright.chromium.launch(headless=self.config.headless)
         self._context = await self._browser.new_context(accept_downloads=True)
         self._page = await self._context.new_page()
-        logger.info("Playwright browser session ready")
+        logger.info("Sessione browser Playwright pronta")
 
     async def stop(self) -> None:
-        logger.info("Stopping Playwright browser session")
+        logger.info("Chiusura sessione browser Playwright")
         if self._context is not None:
             await self._context.close()
         if self._browser is not None:
@@ -70,7 +71,7 @@ class BrowserSession:
             and self._authenticated_until is not None
             and datetime.now(timezone.utc) < self._authenticated_until
         ):
-            logger.info("Reusing existing SISTER session for %s", username)
+            logger.info("Riutilizzo sessione SISTER esistente per %s", username)
             return
 
         await self.login(username, password)
@@ -79,17 +80,17 @@ class BrowserSession:
         page = self.page
         reachable = False
         try:
-            logger.info("Starting SISTER connection probe")
+            logger.info("Avvio probe connessione SISTER")
             await page.goto(self.selectors.login_url, wait_until="domcontentloaded")
             reachable = True
-            logger.info("SISTER login page reached")
+            logger.info("Pagina login SISTER raggiunta")
             await page.click(self.selectors.login_tab_selector)
             await page.fill(self.selectors.username_selector, username)
             await page.fill(self.selectors.password_selector, password)
             await page.click(self.selectors.login_button_selector)
             await self._maybe_click_xpath(self.selectors.confirm_button_xpath)
             await page.get_by_role("link", name=self.selectors.consultazioni_link_name).wait_for(timeout=12000)
-            logger.info("SISTER connection probe authenticated successfully")
+            logger.info("Probe connessione SISTER autenticato con successo")
             return BrowserConnectionProbeResult(
                 reachable=True,
                 authenticated=True,
@@ -99,7 +100,7 @@ class BrowserSession:
             url, title, body_excerpt = await self._read_page_state()
             issue_message = self._classify_login_issue(url, title, body_excerpt)
             debug_context = await self._collect_debug_context("connection-probe-timeout", url, title, body_excerpt)
-            logger.warning("SISTER connection probe timed out: %s", debug_context)
+            logger.warning("Timeout probe connessione SISTER: %s", debug_context)
             return BrowserConnectionProbeResult(
                 reachable=reachable,
                 authenticated=False,
@@ -109,7 +110,7 @@ class BrowserSession:
             url, title, body_excerpt = await self._read_page_state()
             issue_message = self._classify_login_issue(url, title, body_excerpt)
             debug_context = await self._collect_debug_context("connection-probe-error", url, title, body_excerpt)
-            logger.exception("SISTER connection probe failed: %s", debug_context)
+            logger.exception("Probe connessione SISTER fallito: %s", debug_context)
             return BrowserConnectionProbeResult(
                 reachable=reachable,
                 authenticated=False,
@@ -119,7 +120,7 @@ class BrowserSession:
     async def login(self, username: str, password: str) -> None:
         page = self.page
         try:
-            logger.info("Starting SISTER login for %s", username)
+            logger.info("Avvio login SISTER per %s", username)
             await page.goto(self.selectors.login_url, wait_until="domcontentloaded")
             await page.click(self.selectors.login_tab_selector)
             await page.fill(self.selectors.username_selector, username)
@@ -141,26 +142,26 @@ class BrowserSession:
 
         self._username = username
         self._authenticated_until = datetime.now(timezone.utc) + timedelta(seconds=self.config.session_timeout_sec)
-        logger.info("SISTER login completed for %s", username)
+        logger.info("Login SISTER completato per %s", username)
 
         if self.config.debug_pause:
             await page.pause()
 
     async def open_visura_form(self) -> None:
         page = self.page
-        logger.info("Opening SISTER visura form")
+        logger.info("Apertura form visura SISTER")
         await self._goto_visura_menu_with_retry()
         if await page.locator(self.selectors.territorio_selector).count() > 0:
             await page.select_option(self.selectors.territorio_selector, value=self.selectors.territorio_value)
             await page.get_by_role("button", name=self.selectors.territorio_apply_button_name).click()
         await page.get_by_role("link", name=self.selectors.immobile_link_name).click()
         await page.wait_for_selector(self.selectors.catasto_selector)
-        logger.info("SISTER visura form ready")
+        logger.info("Form visura SISTER pronto")
 
     async def fill_visura_form(self, request) -> None:
         page = self.page
         logger.info(
-            "Filling visura form for request %s comune=%s foglio=%s particella=%s subalterno=%s tipo=%s",
+            "Compilazione form visura per richiesta %s comune=%s foglio=%s particella=%s subalterno=%s tipo=%s",
             request.id,
             request.comune,
             request.foglio,
@@ -185,7 +186,7 @@ class BrowserSession:
         await page.click(self.selectors.visura_button_selector)
         await page.wait_for_selector(self.selectors.tipo_visura_selector)
         await page.check(f"{self.selectors.tipo_visura_selector}[value='{self.tipo_visura_value(request.tipo_visura)}']")
-        logger.info("Visura form submitted for request %s", request.id)
+        logger.info("Form visura inviato per richiesta %s", request.id)
 
     async def capture_captcha_image(self) -> bytes:
         await self.page.wait_for_selector(self.selectors.captcha_image_selector)
@@ -193,47 +194,52 @@ class BrowserSession:
 
     async def submit_captcha(self, text: str) -> bool:
         page = self.page
-        logger.info("Submitting CAPTCHA candidate with %s chars", len(text))
+        logger.info("Invio candidato CAPTCHA con %s caratteri", len(text))
         await page.fill(self.selectors.captcha_field_selector, text)
         await page.click(self.selectors.inoltra_button_selector)
 
         try:
             await page.wait_for_selector(self.selectors.save_button_selector, timeout=12000)
-            logger.info("CAPTCHA accepted by SISTER")
+            logger.info("CAPTCHA accettato da SISTER")
             return True
         except TimeoutError:
             accepted = await page.locator(self.selectors.save_button_selector).count() > 0
-            logger.info("CAPTCHA accepted after timeout fallback=%s", accepted)
+            logger.info("CAPTCHA accettato dopo fallback timeout=%s", accepted)
             return accepted
 
     async def download_pdf(self, destination: Path) -> int:
         page = self.page
         destination.parent.mkdir(parents=True, exist_ok=True)
-        logger.info("Starting PDF download to %s", destination)
+        logger.info("Avvio download PDF su %s", destination)
         async with page.expect_download(timeout=20000) as download_info:
             await page.click(self.selectors.save_button_selector)
         download: Download = await download_info.value
         await download.save_as(str(destination))
-        logger.info("PDF download completed: %s", destination)
+        logger.info("Download PDF completato: %s", destination)
         return destination.stat().st_size
 
     async def _goto_visura_menu(self) -> None:
         page = self.page
-        logger.info("Navigating to SISTER visura menu")
+        logger.info("Navigazione verso menu visure SISTER")
+        logger.info("Click link '%s'", self.selectors.consultazioni_link_name)
         await page.get_by_role("link", name=self.selectors.consultazioni_link_name).click()
+        logger.info("Link '%s' aperto", self.selectors.consultazioni_link_name)
+        logger.info("Click link '%s'", self.selectors.visure_link_name)
         await page.get_by_role("link", name=self.selectors.visure_link_name).click()
+        logger.info("Link '%s' aperto", self.selectors.visure_link_name)
         await self._maybe_click_text(self.selectors.conferma_lettura_button_name)
 
     async def _goto_visura_menu_with_retry(self) -> None:
         last_error: TimeoutError | None = None
         for attempt in range(1, MENU_NAVIGATION_RETRIES + 1):
             try:
-                logger.info("Opening visura menu attempt %s/%s", attempt, MENU_NAVIGATION_RETRIES)
+                logger.info("Tentativo apertura menu visure %s/%s", attempt, MENU_NAVIGATION_RETRIES)
                 await self._goto_visura_menu()
                 return
             except TimeoutError as exc:
                 last_error = exc
                 url, title, body_excerpt = await self._read_page_state()
+                issue_message = self._classify_login_issue(url, title, body_excerpt)
                 debug_context = await self._collect_debug_context(
                     f"visura-menu-timeout-attempt-{attempt}",
                     url,
@@ -241,11 +247,13 @@ class BrowserSession:
                     body_excerpt,
                 )
                 logger.warning(
-                    "Timeout while opening visura menu attempt %s/%s: %s",
+                    "Timeout apertura menu visure tentativo %s/%s: %s",
                     attempt,
                     MENU_NAVIGATION_RETRIES,
                     debug_context,
                 )
+                if issue_message:
+                    raise RuntimeError(f"{issue_message} {debug_context}") from exc
                 if attempt >= MENU_NAVIGATION_RETRIES:
                     raise
                 await asyncio.sleep(MENU_NAVIGATION_RETRY_DELAY_SEC)
@@ -337,13 +345,13 @@ class BrowserSession:
             await self.page.screenshot(path=str(screenshot_path), full_page=True)
             artifacts.append(str(screenshot_path))
         except Exception:
-            logger.exception("Unable to save SISTER debug screenshot")
+            logger.exception("Impossibile salvare screenshot debug SISTER")
 
         try:
             html_path.write_text(await self.page.content(), encoding="utf-8")
             artifacts.append(str(html_path))
         except Exception:
-            logger.exception("Unable to save SISTER debug HTML")
+            logger.exception("Impossibile salvare HTML debug SISTER")
 
         return artifacts
 

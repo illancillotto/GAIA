@@ -7,37 +7,37 @@ type StatusValue = CatastoRequestStatus | CatastoBatch["status"];
 
 const STATUS_CONFIG: Record<StatusValue, { label: string; className: string; dotClassName: string }> = {
   pending: {
-    label: "Pending",
+    label: "In coda",
     className: "bg-gray-100 text-gray-600",
     dotClassName: "bg-gray-400",
   },
   processing: {
-    label: "Processing",
+    label: "In lavorazione",
     className: "bg-sky-100 text-sky-700",
     dotClassName: "bg-sky-500",
   },
   awaiting_captcha: {
-    label: "CAPTCHA",
+    label: "Attende CAPTCHA",
     className: "bg-amber-100 text-amber-700",
     dotClassName: "bg-amber-500",
   },
   completed: {
-    label: "Completed",
+    label: "Completato",
     className: "bg-emerald-100 text-emerald-700",
     dotClassName: "bg-emerald-500",
   },
   failed: {
-    label: "Failed",
+    label: "Fallito",
     className: "bg-red-100 text-red-700",
     dotClassName: "bg-red-500",
   },
   skipped: {
-    label: "Skipped",
+    label: "Saltato",
     className: "bg-slate-100 text-slate-700",
     dotClassName: "bg-slate-500",
   },
   cancelled: {
-    label: "Cancelled",
+    label: "Annullato",
     className: "bg-slate-100 text-slate-700",
     dotClassName: "bg-slate-500",
   },
