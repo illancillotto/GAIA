@@ -319,6 +319,7 @@ class CatastoWorker:
             return None
 
     async def _process_request(self, browser: BrowserSession, credential: CatastoCredential, batch_id, request_id) -> None:
+        request_snapshot: CatastoVisuraRequest | None = None
         with SessionLocal() as db:
             request = db.get(CatastoVisuraRequest, request_id)
             batch = db.get(CatastoBatch, batch_id)
@@ -366,6 +367,9 @@ class CatastoWorker:
 
             batch.current_operation = f"Lavorazione {request.comune} Fg.{request.foglio} Part.{request.particella}"
             db.commit()
+            db.refresh(request)
+            db.expunge(request)
+            request_snapshot = request
 
         self._set_request_operation(request_id, "Autenticazione sessione SISTER")
         await browser.ensure_authenticated(
@@ -381,10 +385,13 @@ class CatastoWorker:
             request.current_operation = "Esecuzione flusso visura"
             db.commit()
 
+        if request_snapshot is None:
+            return
+
         result = await execute_visura_flow(
             browser=browser,
-            request=request,
-            document_path=self._build_document_path(credential.sister_username, request),
+            request=request_snapshot,
+            document_path=self._build_document_path(credential.sister_username, request_snapshot),
             captcha_dir=CAPTCHA_STORAGE_PATH / str(batch_id),
             captcha_solver=self.captcha_solver,
             max_ocr_attempts=CAPTCHA_MAX_OCR_ATTEMPTS,
@@ -565,6 +572,12 @@ class CatastoWorker:
 
     @staticmethod
     def _to_user_message(message: str) -> str:
+        if "SISTER_SESSION_LOCKED" in message:
+            return (
+                "Utente SISTER bloccato sul portale Agenzia delle Entrate. "
+                "Verificare se esiste gia' una sessione attiva su un'altra postazione o browser. "
+                "indirizzo link: https://sister3.agenziaentrate.gov.it/Servizi/error_locked.jsp"
+            )
         if "Utente SISTER bloccato sul portale Agenzia delle Entrate" in message:
             return (
                 "Utente SISTER bloccato sul portale Agenzia delle Entrate. "

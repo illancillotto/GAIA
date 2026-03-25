@@ -14,6 +14,7 @@ from sister_selectors import SisterSelectorsConfig
 logger = logging.getLogger(__name__)
 MENU_NAVIGATION_RETRIES = 3
 MENU_NAVIGATION_RETRY_DELAY_SEC = 2
+SESSION_RECOVERY_WAIT_SEC = 45
 
 
 @dataclass(slots=True)
@@ -55,6 +56,7 @@ class BrowserSession:
         self._context = await self._browser.new_context(accept_downloads=True)
         self._page = await self._context.new_page()
         logger.info("Sessione browser Playwright pronta")
+        await self._trace_state("browser-started")
 
     async def stop(self) -> None:
         logger.info("Chiusura sessione browser Playwright")
@@ -84,13 +86,16 @@ class BrowserSession:
             await page.goto(self.selectors.login_url, wait_until="domcontentloaded")
             reachable = True
             logger.info("Pagina login SISTER raggiunta")
+            await self._trace_state("connection-probe-login-page")
             await page.click(self.selectors.login_tab_selector)
             await page.fill(self.selectors.username_selector, username)
             await page.fill(self.selectors.password_selector, password)
             await page.click(self.selectors.login_button_selector)
             await self._maybe_click_xpath(self.selectors.confirm_button_xpath)
+            await self._trace_state("connection-probe-after-submit")
             await page.get_by_role("link", name=self.selectors.consultazioni_link_name).wait_for(timeout=12000)
             logger.info("Probe connessione SISTER autenticato con successo")
+            await self._trace_state("connection-probe-authenticated")
             return BrowserConnectionProbeResult(
                 reachable=True,
                 authenticated=True,
@@ -117,32 +122,58 @@ class BrowserSession:
                 message=f"{issue_message or f'Errore probe SISTER: {exc}.'} {debug_context}",
             )
 
-    async def login(self, username: str, password: str) -> None:
+    async def login(self, username: str, password: str, allow_session_recovery: bool = True) -> None:
         page = self.page
         try:
             logger.info("Avvio login SISTER per %s", username)
             await page.goto(self.selectors.login_url, wait_until="domcontentloaded")
+            await self._trace_state("login-page")
             await page.click(self.selectors.login_tab_selector)
             await page.fill(self.selectors.username_selector, username)
             await page.fill(self.selectors.password_selector, password)
             await page.click(self.selectors.login_button_selector)
             await self._maybe_click_xpath(self.selectors.confirm_button_xpath)
+            post_login_state = await self._wait_for_post_login_state()
+            await self._trace_state("login-after-submit")
+            if post_login_state == "locked":
+                if allow_session_recovery:
+                    logger.warning("Sessione SISTER bloccata rilevata subito dopo il login, avvio unico recovery")
+                    await self._recover_locked_session()
+                    return await self.login(username, password, allow_session_recovery=False)
+                await self._raise_locked_session_error("login-locked-after-recovery")
+            await self._maybe_accept_privacy_notice()
             await self._goto_visura_menu_with_retry()
         except TimeoutError as exc:
             url, title, body_excerpt = await self._read_page_state()
             issue_message = self._classify_login_issue(url, title, body_excerpt)
+            if allow_session_recovery and self._is_session_locked_issue(issue_message):
+                logger.warning("Sessione SISTER bloccata rilevata durante il login, avvio unico recovery")
+                await self._recover_locked_session()
+                return await self.login(username, password, allow_session_recovery=False)
+            if self._is_session_locked_issue(issue_message):
+                await self._raise_locked_session_error("login-timeout-locked", exc)
             debug_context = await self._collect_debug_context("login-timeout", url, title, body_excerpt)
             if issue_message:
                 raise RuntimeError(f"{issue_message} {debug_context}") from exc
             raise RuntimeError(f"Login timeout. {debug_context}") from exc
         except Exception as exc:
+            if isinstance(exc, RuntimeError) and str(exc) == "SISTER_SESSION_LOCKED":
+                raise
             url, title, body_excerpt = await self._read_page_state()
+            issue_message = self._classify_login_issue(url, title, body_excerpt)
+            if allow_session_recovery and self._is_session_locked_issue(issue_message):
+                logger.warning("Sessione SISTER bloccata rilevata dopo eccezione login, avvio unico recovery")
+                await self._recover_locked_session()
+                return await self.login(username, password, allow_session_recovery=False)
+            if self._is_session_locked_issue(issue_message):
+                await self._raise_locked_session_error("login-error-locked", exc)
             debug_context = await self._collect_debug_context("login-error", url, title, body_excerpt)
             raise RuntimeError(f"SISTER login failed: {exc}. {debug_context}") from exc
 
         self._username = username
         self._authenticated_until = datetime.now(timezone.utc) + timedelta(seconds=self.config.session_timeout_sec)
         logger.info("Login SISTER completato per %s", username)
+        await self._trace_state("login-completed")
 
         if self.config.debug_pause:
             await page.pause()
@@ -150,13 +181,16 @@ class BrowserSession:
     async def open_visura_form(self) -> None:
         page = self.page
         logger.info("Apertura form visura SISTER")
+        await self._maybe_accept_privacy_notice()
         await self._goto_visura_menu_with_retry()
         if await page.locator(self.selectors.territorio_selector).count() > 0:
             await page.select_option(self.selectors.territorio_selector, value=self.selectors.territorio_value)
             await page.get_by_role("button", name=self.selectors.territorio_apply_button_name).click()
+            await self._trace_state("visura-after-territorio")
         await page.get_by_role("link", name=self.selectors.immobile_link_name).click()
         await page.wait_for_selector(self.selectors.catasto_selector)
         logger.info("Form visura SISTER pronto")
+        await self._trace_state("visura-form-ready")
 
     async def fill_visura_form(self, request) -> None:
         page = self.page
@@ -187,6 +221,7 @@ class BrowserSession:
         await page.wait_for_selector(self.selectors.tipo_visura_selector)
         await page.check(f"{self.selectors.tipo_visura_selector}[value='{self.tipo_visura_value(request.tipo_visura)}']")
         logger.info("Form visura inviato per richiesta %s", request.id)
+        await self._trace_state(f"visura-form-submitted-{request.id}")
 
     async def capture_captcha_image(self) -> bytes:
         await self.page.wait_for_selector(self.selectors.captcha_image_selector)
@@ -224,9 +259,11 @@ class BrowserSession:
         logger.info("Click link '%s'", self.selectors.consultazioni_link_name)
         await page.get_by_role("link", name=self.selectors.consultazioni_link_name).click()
         logger.info("Link '%s' aperto", self.selectors.consultazioni_link_name)
+        await self._trace_state("menu-after-consultazioni-click")
         logger.info("Click link '%s'", self.selectors.visure_link_name)
         await page.get_by_role("link", name=self.selectors.visure_link_name).click()
         logger.info("Link '%s' aperto", self.selectors.visure_link_name)
+        await self._trace_state("menu-after-visure-click")
         await self._maybe_click_text(self.selectors.conferma_lettura_button_name)
 
     async def _goto_visura_menu_with_retry(self) -> None:
@@ -270,6 +307,84 @@ class BrowserSession:
         locator = self.page.get_by_role("button", name=text)
         if await locator.count() > 0:
             await locator.first.click()
+
+    async def _maybe_accept_privacy_notice(self) -> None:
+        page = self.page
+        body_text = ""
+        try:
+            body_text = await page.locator("body").inner_text(timeout=2000)
+        except Exception:
+            body_text = ""
+
+        if "Informativa trattamento dei dati personali" not in body_text:
+            return
+
+        logger.info("Informativa privacy rilevata, click su 'Conferma'")
+        await self._trace_state("privacy-notice-detected")
+        confirm_button = page.get_by_role("button", name="Conferma")
+        if await confirm_button.count() == 0:
+            confirm_button = page.locator("input[type='submit'][value='Conferma'], button:has-text('Conferma')")
+        await confirm_button.first.click()
+        await page.wait_for_load_state("domcontentloaded")
+        logger.info("Informativa privacy confermata")
+        await self._trace_state("privacy-notice-confirmed")
+
+    async def _recover_locked_session(self) -> None:
+        page = self.page
+        logger.info("Tentativo chiusura sessione SISTER gia' attiva")
+        close_link = page.get_by_role("link", name="Chiudi")
+        if await close_link.count() > 0:
+            await close_link.first.click()
+        else:
+            await page.goto("https://sister3.agenziaentrate.gov.it/Servizi/CloseSessionsSis", wait_until="domcontentloaded")
+        await page.wait_for_load_state("domcontentloaded")
+        await self._trace_state("session-recovery-close")
+        logger.info("Richiesta chiusura sessione SISTER inviata")
+        logger.info("Attendo %s secondi per il rilascio della sessione SISTER", SESSION_RECOVERY_WAIT_SEC)
+        await asyncio.sleep(SESSION_RECOVERY_WAIT_SEC)
+        logger.info("Riavvio sessione browser dopo chiusura sessione SISTER")
+        await self.stop()
+        await self.start()
+        await self.page.goto(self.selectors.login_url, wait_until="domcontentloaded")
+        await self._trace_state("session-recovery-wait-complete")
+
+    async def _wait_for_post_login_state(self) -> str:
+        page = self.page
+        for attempt in range(1, 16):
+            url, title, body_excerpt = await self._read_page_state()
+            if "Consultazioni e Certificazioni" in body_excerpt or "Home dei Servizi" in title:
+                logger.info("Stato post-login SISTER pronto al tentativo %s", attempt)
+                return "ready"
+            if "Informativa trattamento dei dati personali" in body_excerpt:
+                logger.info("Stato post-login con informativa privacy al tentativo %s", attempt)
+                return "privacy"
+            if "Utente gia' in sessione" in body_excerpt or "Utente bloccato" in title or "error_locked.jsp" in url:
+                logger.info("Stato post-login con sessione bloccata al tentativo %s", attempt)
+                return "locked"
+            await asyncio.sleep(1)
+        logger.warning("Stato post-login SISTER non stabilizzato entro il timeout di attesa")
+        return "unknown"
+
+    async def _trace_state(self, label: str) -> None:
+        url, title, body_excerpt = await self._read_page_state()
+        logger.info("Traccia browser %s: url=%s title=%s body=%s", label, url, title, body_excerpt)
+        if self.config.debug_artifacts_path is not None:
+            await self._write_debug_artifacts(f"trace-{label}")
+
+    async def _raise_locked_session_error(self, reason: str, cause: Exception | None = None) -> None:
+        url, title, body_excerpt = await self._read_page_state()
+        issue_message = self._classify_login_issue(url, title, body_excerpt) or "Sessione SISTER bloccata."
+        debug_context = await self._collect_debug_context(reason, url, title, body_excerpt)
+        logger.error("Sessione SISTER non recuperabile automaticamente: %s %s", issue_message, debug_context)
+        if cause is None:
+            raise RuntimeError("SISTER_SESSION_LOCKED")
+        raise RuntimeError("SISTER_SESSION_LOCKED") from cause
+
+    @staticmethod
+    def _is_session_locked_issue(issue_message: str | None) -> bool:
+        if not issue_message:
+            return False
+        return "gia' in sessione" in issue_message.lower() or "già in sessione" in issue_message.lower() or "utente sister bloccato" in issue_message.lower()
 
     async def _collect_debug_context(
         self,
