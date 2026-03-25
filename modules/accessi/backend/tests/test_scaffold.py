@@ -1,9 +1,17 @@
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[4]
+def find_repo_root() -> Path:
+    current = Path(__file__).resolve()
+    for candidate in current.parents:
+        if (candidate / "docker-compose.yml").exists() and (candidate / "README.md").exists():
+            return candidate
+    raise RuntimeError("Repository root not found")
+
+
+ROOT = find_repo_root()
 BACKEND = ROOT / "modules" / "accessi" / "backend"
-FRONTEND = ROOT / "modules" / "accessi" / "frontend"
+FRONTEND = ROOT / "frontend"
 DOCS = ROOT / "modules" / "accessi" / "docs"
 
 
@@ -78,5 +86,5 @@ def test_compose_declares_expected_services() -> None:
 def test_readme_mentions_quick_start_and_docs() -> None:
     readme = (ROOT / "README.md").read_text(encoding="utf-8")
 
-    for section in ["## Quick Start", "## Documentazione", "## I tre moduli"]:
+    for section in ["## Quick Start", "## Documentazione", "## I quattro moduli"]:
         assert section in readme

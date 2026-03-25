@@ -34,7 +34,10 @@ def main() -> None:
         f"{action} snapshot_id={result['snapshot_id']} nas_users={result['nas_users']} "
         f"nas_groups={result['nas_groups']} shares={result['shares']} "
         f"permission_entries={result['permission_entries']} "
-        f"effective_permissions={result['effective_permissions']} reviews={result['reviews']}"
+        f"effective_permissions={result['effective_permissions']} reviews={result['reviews']} "
+        f"catasto_comuni={result['catasto_comuni']} "
+        f"catasto_comuni_created={result['catasto_comuni_created']} "
+        f"catasto_comuni_updated={result['catasto_comuni_updated']}"
     )
 
 

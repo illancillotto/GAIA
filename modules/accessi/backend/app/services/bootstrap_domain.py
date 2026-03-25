@@ -8,6 +8,7 @@ from app.models.permission_entry import PermissionEntry
 from app.models.review import Review
 from app.models.share import Share
 from app.models.snapshot import Snapshot
+from app.services.catasto_comuni import seed_catasto_comuni
 
 
 SEED_SNAPSHOT_CHECKSUM = "seed-domain-20260320"
@@ -336,6 +337,7 @@ def ensure_bootstrap_domain(db: Session, reviewer_user_id: int) -> dict[str, int
     _ensure_effective_permissions(db, snapshot.id, users, shares)
     _ensure_reviews(db, snapshot.id, reviewer_user_id, users, shares)
     db.commit()
+    catasto_seed = seed_catasto_comuni(db)
 
     return {
         "snapshot_created": snapshot_created,
@@ -346,4 +348,7 @@ def ensure_bootstrap_domain(db: Session, reviewer_user_id: int) -> dict[str, int
         "permission_entries": len(SEED_PERMISSION_ENTRIES),
         "effective_permissions": len(SEED_EFFECTIVE_PERMISSIONS),
         "reviews": len(SEED_REVIEWS),
+        "catasto_comuni": catasto_seed["total"],
+        "catasto_comuni_created": catasto_seed["created"],
+        "catasto_comuni_updated": catasto_seed["updated"],
     }

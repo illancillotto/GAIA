@@ -22,6 +22,8 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    volumes:
+      - catasto-data:/data/catasto
     depends_on:
       postgres:
         condition: service_healthy
@@ -39,7 +41,7 @@ services:
 
   frontend:
     build:
-      context: ./modules/accessi/frontend
+      context: ./frontend
     container_name: naap-frontend
     restart: unless-stopped
     env_file:
@@ -78,5 +80,30 @@ services:
       timeout: 5s
       retries: 3
 
+  catasto-worker:
+    build:
+      context: .
+      dockerfile: ./modules/catasto/worker/Dockerfile
+    container_name: gaia-catasto-worker
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      CREDENTIAL_MASTER_KEY: ${CREDENTIAL_MASTER_KEY}
+      CAPTCHA_MAX_OCR_ATTEMPTS: ${CAPTCHA_MAX_OCR_ATTEMPTS:-3}
+      BETWEEN_VISURE_DELAY_SEC: ${BETWEEN_VISURE_DELAY_SEC:-5}
+      CATASTO_DOCUMENT_STORAGE_PATH: ${CATASTO_DOCUMENT_STORAGE_PATH:-/data/catasto/documents}
+      CATASTO_CAPTCHA_STORAGE_PATH: ${CATASTO_CAPTCHA_STORAGE_PATH:-/data/catasto/captcha}
+      CATASTO_DEBUG_ARTIFACTS_PATH: ${CATASTO_DEBUG_ARTIFACTS_PATH:-/data/catasto/debug}
+      CATASTO_SISTER_SELECTORS_PATH: ${CATASTO_SISTER_SELECTORS_PATH:-/app/worker/sister_selectors.json}
+      CATASTO_LOG_LEVEL: ${CATASTO_LOG_LEVEL:-INFO}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - catasto-data:/data/catasto
+
 volumes:
   postgres_data:
+  catasto-data:

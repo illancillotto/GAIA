@@ -1,0 +1,576 @@
+import type {
+  CatastoBatch,
+  CatastoBatchDetail,
+  CatastoDocument,
+  CatastoBatchWebSocketEvent,
+  CatastoComune,
+  CatastoCredential,
+  CatastoCredentialTestResult,
+  CatastoCredentialTestWebSocketEvent,
+  CatastoCredentialStatus,
+  CatastoOperationResponse,
+  CatastoSingleVisuraPayload,
+  CatastoVisuraRequest,
+  CurrentUser,
+  DashboardSummary,
+  EffectivePermission,
+  EffectivePermissionPreview,
+  LoginResponse,
+  NasGroup,
+  NasUser,
+  PermissionEntryInput,
+  PermissionUserInput,
+  Review,
+  Share,
+  SyncApplyResult,
+  SyncCapabilities,
+  SyncLiveApplyResult,
+  SyncPreview,
+  SyncPreviewRequest,
+  SyncRun,
+} from "@/types/api";
+
+const DEFAULT_API_BASE_URL = "/api";
+
+export class ApiError extends Error {
+  status?: number;
+  detailData: unknown;
+
+  constructor(message: string, detailData?: unknown, status?: number) {
+    super(message);
+    this.name = "ApiError";
+    this.status = status;
+    this.detailData = detailData;
+  }
+}
+
+export function isAuthError(error: unknown): error is ApiError {
+  return error instanceof ApiError && (error.status === 401 || error.status === 403);
+}
+
+export function getApiBaseUrl(): string {
+  const value = process.env.NEXT_PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL;
+  return value.replace(/\/+$/, "");
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const isFormData = typeof FormData !== "undefined" && init?.body instanceof FormData;
+
+  const response = await fetch(`${getApiBaseUrl()}${path}`, {
+    ...init,
+    headers: {
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
+      ...(init?.headers ?? {}),
+    },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    let detail = "Request failed";
+    let detailData: unknown;
+
+    try {
+      const payload = (await response.json()) as { detail?: unknown };
+      detailData = payload.detail;
+
+      if (typeof payload.detail === "string") {
+        detail = payload.detail;
+      } else if (
+        payload.detail &&
+        typeof payload.detail === "object" &&
+        "message" in payload.detail &&
+        typeof payload.detail.message === "string"
+      ) {
+        detail = payload.detail.message;
+      } else if (payload.detail != null) {
+        detail = JSON.stringify(payload.detail);
+      }
+    } catch {
+      detail = response.statusText || detail;
+    }
+
+    throw new ApiError(detail, detailData, response.status);
+  }
+
+  return (await response.json()) as T;
+}
+
+async function requestBlob(path: string, init?: RequestInit): Promise<Blob> {
+  const response = await fetch(`${getApiBaseUrl()}${path}`, {
+    ...init,
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    let detail = "Request failed";
+
+    try {
+      const payload = (await response.json()) as { detail?: unknown };
+      if (typeof payload.detail === "string") {
+        detail = payload.detail;
+      }
+    } catch {
+      detail = response.statusText || detail;
+    }
+
+    throw new ApiError(detail, undefined, response.status);
+  }
+
+  return response.blob();
+}
+
+function createQueryString(params: Record<string, string | undefined>): string {
+  const searchParams = new URLSearchParams();
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value && value.trim().length > 0) {
+      searchParams.set(key, value.trim());
+    }
+  });
+
+  const query = searchParams.toString();
+  return query ? `?${query}` : "";
+}
+
+export function getWebSocketBaseUrl(): string {
+  const apiBaseUrl = getApiBaseUrl();
+
+  if (apiBaseUrl.startsWith("https://")) {
+    return apiBaseUrl.replace("https://", "wss://");
+  }
+
+  if (apiBaseUrl.startsWith("http://")) {
+    return apiBaseUrl.replace("http://", "ws://");
+  }
+
+  if (typeof window === "undefined") {
+    return apiBaseUrl;
+  }
+
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  return `${protocol}//${window.location.host}${apiBaseUrl}`;
+}
+
+export async function login(username: string, password: string): Promise<LoginResponse> {
+  return request<LoginResponse>("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ username, password }),
+  });
+}
+
+export async function getCurrentUser(token: string): Promise<CurrentUser> {
+  return request<CurrentUser>("/auth/me", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getDashboardSummary(token: string): Promise<DashboardSummary> {
+  return request<DashboardSummary>("/dashboard/summary", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getShares(token: string): Promise<Share[]> {
+  return request<Share[]>("/shares", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getNasUsers(token: string): Promise<NasUser[]> {
+  return request<NasUser[]>("/nas-users", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getNasGroups(token: string): Promise<NasGroup[]> {
+  return request<NasGroup[]>("/nas-groups", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getReviews(token: string): Promise<Review[]> {
+  return request<Review[]>("/reviews", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getSyncCapabilities(token: string): Promise<SyncCapabilities> {
+  return request<SyncCapabilities>("/sync/capabilities", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function previewSync(
+  token: string,
+  payload: SyncPreviewRequest,
+): Promise<SyncPreview> {
+  return request<SyncPreview>("/sync/preview", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function applySync(
+  token: string,
+  payload: SyncPreviewRequest,
+): Promise<SyncApplyResult> {
+  return request<SyncApplyResult>("/sync/apply", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function applyLiveSync(
+  token: string,
+  profile: "quick" | "full" = "quick",
+): Promise<SyncLiveApplyResult> {
+  return request<SyncLiveApplyResult>(`/sync/live-apply?profile=${profile}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getSyncRuns(token: string): Promise<SyncRun[]> {
+  return request<SyncRun[]>("/sync-runs", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getEffectivePermissions(token: string): Promise<EffectivePermission[]> {
+  return request<EffectivePermission[]>("/effective-permissions", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function calculatePermissionPreview(
+  token: string,
+  users: PermissionUserInput[],
+  permissionEntries: PermissionEntryInput[],
+): Promise<EffectivePermissionPreview[]> {
+  return request<EffectivePermissionPreview[]>("/permissions/calculate-preview", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({
+      users,
+      permission_entries: permissionEntries,
+    }),
+  });
+}
+
+export async function getCatastoCredentials(token: string): Promise<CatastoCredentialStatus> {
+  return request<CatastoCredentialStatus>("/catasto/credentials", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function saveCatastoCredentials(
+  token: string,
+  payload: {
+    sister_username: string;
+    sister_password: string;
+    convenzione?: string;
+    codice_richiesta?: string;
+    ufficio_provinciale?: string;
+  },
+): Promise<CatastoCredential> {
+  return request<CatastoCredential>("/catasto/credentials", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteCatastoCredentials(token: string): Promise<CatastoOperationResponse> {
+  return request<CatastoOperationResponse>("/catasto/credentials", {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function testCatastoCredentials(
+  token: string,
+  payload?: {
+    sister_username: string;
+    sister_password: string;
+    convenzione?: string;
+    codice_richiesta?: string;
+    ufficio_provinciale?: string;
+  },
+): Promise<CatastoCredentialTestResult> {
+  return request<CatastoCredentialTestResult>("/catasto/credentials/test", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: payload ? JSON.stringify(payload) : undefined,
+  });
+}
+
+export async function getCatastoCredentialTest(
+  token: string,
+  testId: string,
+): Promise<CatastoCredentialTestResult> {
+  return request<CatastoCredentialTestResult>(`/catasto/credentials/test/${testId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export function createCatastoCredentialTestWebSocket(testId: string, token: string): WebSocket | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const url = new URL(`${getWebSocketBaseUrl()}/catasto/ws/credentials-test/${testId}`);
+  url.searchParams.set("token", token);
+  return new WebSocket(url.toString());
+}
+
+export async function getCatastoComuni(token: string, search?: string): Promise<CatastoComune[]> {
+  const query = createQueryString({ search });
+  return request<CatastoComune[]>(`/catasto/comuni${query}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function createCatastoBatch(
+  token: string,
+  file: File,
+  name?: string,
+): Promise<CatastoBatchDetail> {
+  const formData = new FormData();
+  formData.append("file", file);
+  if (name) {
+    formData.append("name", name);
+  }
+
+  return request<CatastoBatchDetail>("/catasto/batches", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+}
+
+export async function getCatastoBatches(token: string, status?: string): Promise<CatastoBatch[]> {
+  const query = createQueryString({ status });
+  return request<CatastoBatch[]>(`/catasto/batches${query}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getCatastoBatch(token: string, batchId: string): Promise<CatastoBatchDetail> {
+  return request<CatastoBatchDetail>(`/catasto/batches/${batchId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function startCatastoBatch(token: string, batchId: string): Promise<CatastoBatch> {
+  return request<CatastoBatch>(`/catasto/batches/${batchId}/start`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function cancelCatastoBatch(token: string, batchId: string): Promise<CatastoBatch> {
+  return request<CatastoBatch>(`/catasto/batches/${batchId}/cancel`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function retryFailedCatastoBatch(token: string, batchId: string): Promise<CatastoBatch> {
+  return request<CatastoBatch>(`/catasto/batches/${batchId}/retry-failed`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function createCatastoSingleVisura(
+  token: string,
+  payload: CatastoSingleVisuraPayload,
+): Promise<CatastoBatchDetail> {
+  return request<CatastoBatchDetail>("/catasto/visure", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getPendingCatastoCaptcha(token: string): Promise<CatastoVisuraRequest[]> {
+  return request<CatastoVisuraRequest[]>("/catasto/captcha/pending", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function solveCatastoCaptcha(
+  token: string,
+  requestId: string,
+  text: string,
+): Promise<CatastoVisuraRequest> {
+  return request<CatastoVisuraRequest>(`/catasto/captcha/${requestId}/solve`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ text }),
+  });
+}
+
+export async function skipCatastoCaptcha(token: string, requestId: string): Promise<CatastoVisuraRequest> {
+  return request<CatastoVisuraRequest>(`/catasto/captcha/${requestId}/skip`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getCatastoDocuments(
+  token: string,
+  filters?: {
+    q?: string;
+    comune?: string;
+    foglio?: string;
+    particella?: string;
+    created_from?: string;
+    created_to?: string;
+  },
+): Promise<CatastoDocument[]> {
+  const query = createQueryString(filters ?? {});
+  return request<CatastoDocument[]>(`/catasto/documents${query}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function searchCatastoDocuments(
+  token: string,
+  filters?: {
+    q?: string;
+    comune?: string;
+    foglio?: string;
+    particella?: string;
+    created_from?: string;
+    created_to?: string;
+  },
+): Promise<CatastoDocument[]> {
+  const query = createQueryString(filters ?? {});
+  return request<CatastoDocument[]>(`/catasto/documents/search${query}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getCatastoDocument(token: string, documentId: string): Promise<CatastoDocument> {
+  return request<CatastoDocument>(`/catasto/documents/${documentId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function fetchCatastoCaptchaImageBlob(token: string, requestId: string): Promise<Blob> {
+  return requestBlob(`/catasto/captcha/${requestId}/image`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function downloadCatastoDocumentBlob(token: string, documentId: string): Promise<Blob> {
+  return requestBlob(`/catasto/documents/${documentId}/download`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function downloadCatastoBatchZipBlob(token: string, batchId: string): Promise<Blob> {
+  return requestBlob(`/catasto/batches/${batchId}/download`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function downloadSelectedCatastoDocumentsZipBlob(
+  token: string,
+  documentIds: string[],
+): Promise<Blob> {
+  return requestBlob("/catasto/documents/download", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ document_ids: documentIds }),
+  });
+}
+
+export function createCatastoBatchWebSocket(batchId: string, token: string): WebSocket | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const url = new URL(`${getWebSocketBaseUrl()}/catasto/ws/${batchId}`);
+  url.searchParams.set("token", token);
+  return new WebSocket(url.toString());
+}
+
+export type { CatastoBatchWebSocketEvent };
+export type { CatastoCredentialTestWebSocketEvent };

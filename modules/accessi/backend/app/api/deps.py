@@ -5,7 +5,7 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.models.application_user import ApplicationUser
+from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.services.auth import get_current_user_from_token
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
@@ -25,5 +25,16 @@ def require_active_user(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Inactive user",
+        )
+    return current_user
+
+
+def require_admin_user(
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+) -> ApplicationUser:
+    if current_user.role != ApplicationUserRole.ADMIN.value:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required",
         )
     return current_user

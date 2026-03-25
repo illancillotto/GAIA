@@ -2,7 +2,15 @@ import unittest
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parents[4]
+def find_repo_root() -> Path:
+    current = Path(__file__).resolve()
+    for candidate in current.parents:
+        if (candidate / "docker-compose.yml").exists() and (candidate / "README.md").exists():
+            return candidate
+    raise RuntimeError("Repository root not found")
+
+
+ROOT = find_repo_root()
 
 
 class BootstrapSmokeTests(unittest.TestCase):
@@ -27,7 +35,7 @@ class BootstrapSmokeTests(unittest.TestCase):
 
     def test_frontend_login_page_exists(self) -> None:
         self.assertTrue(
-            (ROOT / "modules" / "accessi" / "frontend" / "src" / "app" / "login" / "page.tsx").exists()
+            (ROOT / "frontend" / "src" / "app" / "login" / "page.tsx").exists()
         )
 
 

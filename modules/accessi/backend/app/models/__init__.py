@@ -1,4 +1,16 @@
 from app.models.application_user import ApplicationUser, ApplicationUserRole
+from app.models.catasto import (
+    CatastoBatch,
+    CatastoBatchStatus,
+    CatastoCaptchaLog,
+    CatastoComune,
+    CatastoConnectionTest,
+    CatastoConnectionTestStatus,
+    CatastoCredential,
+    CatastoDocument,
+    CatastoVisuraRequest,
+    CatastoVisuraRequestStatus,
+)
 from app.models.nas_group import NasGroup
 from app.models.nas_user import NasUser
 from app.models.effective_permission import EffectivePermission
@@ -11,6 +23,16 @@ from app.models.sync_run import SyncRun
 __all__ = [
     "ApplicationUser",
     "ApplicationUserRole",
+    "CatastoBatch",
+    "CatastoBatchStatus",
+    "CatastoCaptchaLog",
+    "CatastoComune",
+    "CatastoConnectionTest",
+    "CatastoConnectionTestStatus",
+    "CatastoCredential",
+    "CatastoDocument",
+    "CatastoVisuraRequest",
+    "CatastoVisuraRequestStatus",
     "EffectivePermission",
     "NasGroup",
     "NasUser",

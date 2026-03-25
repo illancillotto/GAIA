@@ -20,6 +20,23 @@ class Settings(BaseSettings):
         default="http://localhost:3000,http://localhost:8080",
         alias="BACKEND_CORS_ORIGINS",
     )
+    credential_master_key: str | None = Field(default=None, alias="CREDENTIAL_MASTER_KEY")
+    catasto_document_storage_path: str = Field(
+        default="/data/catasto/documents",
+        alias="CATASTO_DOCUMENT_STORAGE_PATH",
+    )
+    catasto_captcha_storage_path: str = Field(
+        default="/data/catasto/captcha",
+        alias="CATASTO_CAPTCHA_STORAGE_PATH",
+    )
+    catasto_websocket_poll_seconds: int = Field(
+        default=2,
+        alias="CATASTO_WEBSOCKET_POLL_SECONDS",
+    )
+    catasto_sister_probe_timeout_seconds: int = Field(
+        default=15,
+        alias="CATASTO_SISTER_PROBE_TIMEOUT_SECONDS",
+    )
     jwt_secret_key: str = Field(default="change_this_secret", alias="JWT_SECRET_KEY")
     jwt_expire_minutes: int = Field(default=60, alias="JWT_EXPIRE_MINUTES")
     jwt_algorithm: str = "HS256"

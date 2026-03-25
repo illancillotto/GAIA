@@ -3,11 +3,11 @@ name: frontend-ci
 on:
   push:
     paths:
-      - "modules/accessi/frontend/**"
+      - "frontend/**"
       - ".github/workflows/frontend.yml"
   pull_request:
     paths:
-      - "modules/accessi/frontend/**"
+      - "frontend/**"
       - ".github/workflows/frontend.yml"
 
 jobs:
@@ -22,17 +22,17 @@ jobs:
           node-version: "20"
 
       - name: Install dependencies
-        working-directory: modules/accessi/frontend
+        working-directory: frontend
         run: npm install
 
       - name: Placeholder lint
-        working-directory: modules/accessi/frontend
+        working-directory: frontend
         run: npm run lint
 
       - name: Smoke tests
         working-directory: .
-        run: npm --prefix modules/accessi/frontend run test
+        run: npm --prefix frontend run test
 
       - name: Build application
-        working-directory: modules/accessi/frontend
+        working-directory: frontend
         run: npm run build

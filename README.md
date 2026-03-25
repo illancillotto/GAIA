@@ -4,10 +4,10 @@
 
 ## Cos'è GAIA
 
-GAIA centralizza la governance IT del Consorzio in tre moduli integrati,
+GAIA centralizza la governance IT del Consorzio in quattro moduli integrati,
 accessibili da un'unica interfaccia dopo il login.
 
-## I tre moduli
+## I quattro moduli
 
 ### GAIA Accessi — NAS Audit
 Audit completo degli accessi al NAS Synology: utenti, gruppi, cartelle condivise,
@@ -24,6 +24,11 @@ Registro centralizzato dei dispositivi IT: anagrafica, garanzie, assegnazioni,
 import CSV e collegamento con i dati di rete.
 Stato: in sviluppo.
 
+### GAIA Catasto — Servizi AdE
+Automazione delle visure catastali dal portale SISTER: upload batch CSV/XLSX,
+worker Playwright separato, gestione CAPTCHA, archivio PDF e download ZIP.
+Stato: MVP in integrazione.
+
 ## Stack tecnologico
 
 - Backend: FastAPI, SQLAlchemy, Alembic, PostgreSQL
@@ -31,13 +36,15 @@ Stato: in sviluppo.
 - Infrastructure: Docker, Docker Compose, Nginx
 - CI: GitHub Actions
 
+Il frontend condiviso della piattaforma vive in `frontend/`.
+
 ## Struttura repository
 ```text
 GAIA/
+├── frontend/
 ├── modules/
 │   ├── accessi/
 │   │   ├── backend/
-│   │   ├── frontend/
 │   │   └── docs/
 │   ├── network/
 │   │   └── docs/
@@ -67,7 +74,11 @@ GAIA/
    `make bootstrap-admin`
 5. Carica i dati seed:
    `make bootstrap-domain`
-6. Accedi all'applicazione:
+   Il comando inizializza il seed del dominio audit e il dizionario `catasto_comuni`.
+6. Genera e configura la chiave vault Catasto in `.env`:
+   `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
+   La stessa chiave deve essere condivisa tra `backend` e `catasto-worker`.
+7. Accedi all'applicazione:
    `http://localhost:8080`
 
 ## Documentazione
@@ -77,6 +88,19 @@ GAIA/
 - GAIA Rete Prompt: `modules/network/docs/PROMPT_CODEX_network.md`
 - GAIA Inventario PRD: `modules/inventory/docs/PRD_inventory.md`
 - GAIA Inventario Prompt: `modules/inventory/docs/PROMPT_CODEX_inventory.md`
+- GAIA Catasto PRD: `modules/catasto/docs/PRD_catasto.md`
+- GAIA Catasto Prompt: `modules/catasto/docs/PROMPT_CODEX_catasto.md`
+
+## Catasto MVP
+
+- Router backend integrato sotto `/catasto`
+- Worker dedicato `catasto-worker` con Playwright e OCR CAPTCHA
+- Volume Docker `catasto-data` per PDF e immagini CAPTCHA
+- Archivio documenti con download singolo e ZIP per batch
+- Test connessione SISTER asincrono eseguito dal worker con feedback realtime
+- Variabili operative in `.env.example` per storage documenti/CAPTCHA e chiave Fernet condivisa
+- Selettori SISTER esterni in `modules/catasto/worker/sister_selectors.json`, sovrascrivibili via `CATASTO_SISTER_SELECTORS_PATH`
+- Diagnostica probe SISTER del worker con log stdout e snapshot HTML/PNG in `CATASTO_DEBUG_ARTIFACTS_PATH`
 
 ## Comandi utili
 

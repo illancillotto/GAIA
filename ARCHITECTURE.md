@@ -42,6 +42,9 @@ Tecnologie:
 - TailwindCSS
 - TanStack Table
 
+Path repository:
+- `frontend/`
+
 ---
 
 ### 2.2 Backend API
@@ -104,6 +107,7 @@ L’applicazione gira tramite Docker Compose con questi servizi:
 - `backend`
 - `postgres`
 - `nginx`
+- `catasto-worker`
 
 ---
 

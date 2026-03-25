@@ -1,5 +1,11 @@
 from datetime import datetime
-from enum import StrEnum
+from enum import Enum
+
+try:
+    from enum import StrEnum
+except ImportError:
+    class StrEnum(str, Enum):
+        pass
 
 from sqlalchemy import Boolean, DateTime, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
