@@ -1,212 +1,200 @@
-# Prompt Codex — GAIA Catasto (Servizi Agenzia delle Entrate)
+# Prompt Codex — GAIA Catasto
 
-> Regola strutturale
-> Il modulo Catasto va implementato nel monolite modulare GAIA: backend in `app/modules/catasto/`, frontend in `frontend/src/app/catasto/`.
+> Regola strutturale vincolante
+> GAIA usa un backend monolitico modulare. Il codice backend del dominio Catasto va creato in `backend/app/modules/catasto/`. Il frontend del modulo vive in `frontend/src/app/catasto/`. Il worker browser-based e un servizio tecnico separato, ma non un backend applicativo autonomo.
 
-> Da usare come system prompt o primo messaggio in una sessione di sviluppo dedicata.
+> Da usare come system prompt o primo messaggio in una sessione di sviluppo dedicata al modulo Catasto.
 
 ---
 
 ## Contesto del progetto
 
-Stai sviluppando **GAIA Catasto**, il modulo di integrazione con i servizi dell'Agenzia delle Entrate della piattaforma **GAIA** per il Consorzio di Bonifica dell'Oristanese.
+Stai sviluppando **GAIA Catasto**, il modulo di integrazione con i servizi dell'Agenzia delle Entrate della piattaforma **GAIA**.
 
-GAIA è una piattaforma IT governance con quattro moduli:
-- **GAIA Accessi** — NAS Audit (completato)
-- **GAIA Rete** — Network Monitor (in sviluppo)
-- **GAIA Inventario** — IT Inventory (in sviluppo)
-- **GAIA Catasto** — Servizi AdE (questo modulo)
+GAIA e una piattaforma multi-modulo con backend e frontend condivisi. I moduli applicativi convivono nello stesso monolite:
 
-Il repository si trova su `github.com/illancillotto/GAIA`.
+- **Accessi**
+- **Network**
+- **Inventory**
+- **Catasto**
+
+Il repository adotta una struttura canonica in cui il backend applicativo vive sotto `backend/` e i moduli di dominio sotto `backend/app/modules/`.
 
 ---
 
 ## Stack obbligatorio
 
 **Backend**
-- FastAPI, SQLAlchemy, Alembic, PostgreSQL
-- cryptography (Fernet per credential vault)
-- pandas (validazione CSV import)
+- FastAPI
+- SQLAlchemy
+- Alembic
+- PostgreSQL
+- Pydantic
+- cryptography per credential vault
+- pandas per validazione import CSV
 
-**Worker (container separato)**
-- Playwright (async) + Chromium
-- Pillow + pytesseract (OCR CAPTCHA)
-- asyncio + polling loop su PostgreSQL
+**Worker**
+- Playwright async + Chromium
+- Pillow + pytesseract per OCR CAPTCHA
+- asyncio + polling loop su PostgreSQL o coda equivalente basata sull'infrastruttura GAIA
 
 **Frontend**
-- Next.js, React, TypeScript, TailwindCSS
+- Next.js
+- React
+- TypeScript
+- TailwindCSS
 - TanStack Table
-- react-hook-form (form visura singola)
-- WebSocket nativo per aggiornamenti real-time
+- react-hook-form
+- WebSocket o stream realtime coerente con lo stack gia adottato dal progetto
 
 **Infrastructure**
-- Docker Compose — aggiunta servizio `catasto-worker` con Playwright preinstallato
-- Volume Docker `catasto-data` per PDF e immagini CAPTCHA
+- Docker Compose esistente
+- backend e database condivisi con gli altri moduli
+- servizio tecnico `catasto-worker` separato per automazione browser
+- volume dati dedicato per PDF e asset transitori del worker
 
 ---
 
 ## Principi architetturali
 
-- Il modulo si aggiunge al backend e frontend **esistenti** come router/sezione aggiuntiva
-- **NON** creare un backend separato: aggiungere `app/routers/catasto.py` al FastAPI esistente
-- **NON** creare un frontend separato: aggiungere `frontend/src/app/catasto/` al Next.js esistente
-- Il browser worker gira come **container Docker separato** con Chromium
-- Auth JWT condivisa: riutilizzare il middleware esistente senza modifiche
-- Alembic: creare nuove migration in `alembic/versions/` senza toccare quelle esistenti
-- Le credenziali SISTER sono crittografate con Fernet; la master key è SOLO in env var
-- La password decriptata vive SOLO in memoria nel worker, mai in log/response/DB
-- Job queue basata su PostgreSQL (polling sulla tabella `catasto_visure_requests`)
-- Comunicazione worker → frontend via WebSocket per progress e CAPTCHA
+- Il backend resta un **monolite modulare**: nuove feature del dominio Catasto vanno sviluppate nel modulo canonico `backend/app/modules/catasto/`
+- Il punto di integrazione backend e il router di modulo `backend/app/modules/catasto/router.py`, incluso in `backend/app/api/router.py`
+- Il modulo puo usare un file `routes.py` o una struttura a package di route, ma `router.py` resta l'entrypoint del modulo
+- I path legacy fuori da `backend/app/modules/` vanno trattati come area di compatibilita, non come destinazione primaria per nuove feature
+- Il frontend del modulo vive in `frontend/src/app/catasto/` nel frontend condiviso
+- Non creare un frontend separato o un backend applicativo separato per Catasto
+- Il browser worker gira come container/processo tecnico separato e comunica con il backend tramite database condiviso, coda applicativa e canali realtime gia previsti
+- Auth, sessione DB, logging, config e dipendenze FastAPI vanno riutilizzati dall'app esistente
+- Alembic resta unico: nuove migration in `backend/alembic/versions/`
+- Le credenziali SISTER vanno cifrate; la master key deve vivere solo in configurazione sicura, non nel codice
+- Le credenziali decriptate devono restare in memoria solo per il tempo strettamente necessario e non devono finire in log, response o persistenza non cifrata
 
 ---
 
 ## Modello dati da implementare
 
-```
-catasto_credentials       — credenziali SISTER crittografate (1 per utente)
-catasto_batches           — batch di richieste visure
-catasto_visure_requests   — singole richieste (righe del CSV)
-catasto_documents         — PDF scaricati con metadati
-catasto_captcha_log       — log immagini CAPTCHA per training futuro
-catasto_comuni            — dizionario comuni con codici SISTER
+Entita principali del modulo:
+
+```text
+catasto_credentials
+catasto_batches
+catasto_visure_requests
+catasto_documents
+catasto_captcha_log
+catasto_comuni
 ```
 
-Schema completo in `modules/catasto/docs/PRD_catasto.md` sezione 3.
+Riferimento funzionale e campi iniziali: `modules/catasto/docs/PRD_catasto.md`, sezione modello dati.
+
+Linee guida:
+
+- una credenziale SISTER per utente applicativo, cifrata a riposo
+- batch e richieste separate per tracciare avanzamento, errori e retry
+- documenti persistiti con metadata chiari e path relativi
+- log CAPTCHA ammesso solo se giustificato e compatibile con i vincoli di sicurezza e privacy del progetto
 
 ---
 
 ## API da implementare
 
-Tutti gli endpoint sotto il prefisso `/catasto`.  
-Lista completa in `modules/catasto/docs/PRD_catasto.md` sezione 4.
+Tutti gli endpoint del modulo devono essere esposti dal backend condiviso sotto prefisso `/catasto`.
 
-Endpoint WebSocket: `ws://.../catasto/ws/{batch_id}` per aggiornamenti real-time.
+Pattern architetturale:
+
+- route del modulo nel package `backend/app/modules/catasto/`
+- business logic in `services.py`
+- schemi request/response in `schemas.py`
+- modelli SQLAlchemy in `models.py`
+- eventuale realtime tramite WebSocket o meccanismo equivalente integrato nel backend condiviso
+
+Riferimento endpoint: `modules/catasto/docs/PRD_catasto.md`, sezione API.
+
+Se previsti canali realtime, devono essere pubblicati dal backend condiviso e non da un servizio applicativo parallelo.
 
 ---
 
 ## Pagine frontend da implementare
 
+```text
+/catasto
+/catasto/new-batch
+/catasto/new-single
+/catasto/batches
+/catasto/batches/[id]
+/catasto/documents
+/catasto/documents/[id]
+/catasto/settings
 ```
-/catasto                    — dashboard
-/catasto/new-batch          — upload CSV + preview + avvia
-/catasto/new-single         — form visura singola
-/catasto/batches            — storico batch
-/catasto/batches/[id]       — dettaglio batch con progress + CAPTCHA dialog
-/catasto/documents          — archivio documenti con ricerca
-/catasto/documents/[id]     — dettaglio documento + PDF viewer
-/catasto/settings           — gestione credenziali SISTER
-```
+
+Linee guida frontend:
+
+- usare App Router nella struttura esistente di `frontend/src/app/`
+- mantenere coerenza con auth flow, layout e componenti condivisi del progetto
+- trattare avanzamento batch, errori e richiesta CAPTCHA come flussi operativi, non come demo tecniche
+- tabelle con sorting, filtri e paginazione lato server quando il dataset lo richiede
 
 ---
 
 ## Requisiti UI/UX
 
-- Stile coerente con GAIA Accessi: professionale, orientato alla lettura amministrativa, no effetti decorativi
-- Badge stato richiesta: verde (completed), arancione (awaiting_captcha), blu (processing), grigio (pending), rosso (failed)
-- CAPTCHA dialog: modal con immagine grande, campo di testo, pulsanti "Invia" e "Salta"
-- Progress bar batch: barra con percentuale + contatore "15/50" + label operazione corrente
-- Upload CSV: wizard a step con preview mapping colonne e validazione prima dell'avvio
-- Archivio documenti: TanStack Table con filtri comuni, foglio, particella, data, download inline
-- PDF viewer: embed nel dettaglio documento, con pulsante download
-- Settings credenziali: form con username/password + pulsante "Testa connessione" con feedback live
-- Responsive desktop-first; mobile non prioritario
+- UI amministrativa sobria, leggibile, coerente con gli altri moduli GAIA
+- stati richiesta ben distinguibili e stabili
+- dialog CAPTCHA chiaro, rapido e focalizzato sul completamento del task
+- progress batch immediatamente leggibile
+- archivio documenti orientato a ricerca e download
+- responsive desktop-first; mobile secondario
 
 ---
 
-## Priorità di sviluppo
+## Priorita di sviluppo
 
-1. **Modello dati** + migration Alembic + seed comuni
-2. **Credential vault** — API CRUD + encrypt/decrypt con Fernet
-3. **Batch service** — upload CSV, validazione, creazione batch/requests
-4. **Worker base** — container Docker, login SISTER, navigazione fino al form
-5. **Worker visura** — compilazione form, gestione tipo visura, download PDF
-6. **CAPTCHA solver** — OCR con preprocessing Pillow + pytesseract
-7. **WebSocket** — progress batch + notifica CAPTCHA
-8. **Frontend: settings** — form credenziali SISTER
-9. **Frontend: new-batch** — upload + preview + avvio
-10. **Frontend: batch detail** — progress + CAPTCHA dialog
-11. **Frontend: archivio** — lista documenti + ricerca + download
-12. **Frontend: dashboard** — overview con quick actions
-13. **Retry logic** — retry automatico errori transitori
-14. **Frontend: visura singola** — form con dropdown comuni
+1. Modello dati, migration Alembic e seed dei comuni
+2. Credential vault cifrato
+3. Batch service con upload CSV e validazione
+4. Router di modulo `backend/app/modules/catasto/router.py`
+5. API `/catasto`
+6. Worker base con login e navigazione
+7. Worker visura e download PDF
+8. Gestione CAPTCHA e realtime
+9. Frontend settings, new-batch e batch detail
+10. Archivio documenti e dashboard
 
 ---
 
-## Vincoli e note tecniche
+## Vincoli tecnici
 
-### Worker
-- Il worker polling deve avere un intervallo di 2-3 secondi (non sovraccaricare il DB)
-- Un solo batch alla volta per utente (vincolo applicativo, non DB)
-- Delay minimo 5 secondi tra una visura e l'altra
-- Re-login proattivo ogni 28 minuti (timeout sessione SISTER)
-- Il worker deve fare graceful shutdown (completare la visura corrente, poi fermarsi)
-- Se Chromium crasha, il worker deve riavviarsi e riprendere dal punto in cui era
-
-### SISTER
-- Il portale è HTML classico, pochi AJAX, DOM potenzialmente instabile tra aggiornamenti
-- I selettori CSS/XPath vanno verificati a runtime — usare `page.pause()` in debug
-- I dropdown sono `<select>` nativi → usare `page.select_option()`
-- Il CAPTCHA è un'immagine con testo distorto su sfondo rumoroso
-- Dopo click "Salva", il PDF viene scaricato direttamente — intercettare con Playwright download event
-
-### Crittografia
-- Master key: generare con `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"` e salvare in `.env`
-- La key deve essere uguale tra backend (per encrypt) e worker (per decrypt)
-- Se la key viene persa, tutte le credenziali salvate diventano irrecuperabili → backup della key
-
-### CSV format atteso
-
-```csv
-citta,catasto,sezione,foglio,particella,subalterno,tipo_visura
-MARRUBIU,Terreni,,12,603,,Sintetica
-ORISTANO,Terreni e Fabbricati,,5,120,3,Completa
-```
-
-Validazione: citta obbligatoria e deve esistere in `catasto_comuni`, foglio e particella obbligatori e numerici, catasto deve essere "Terreni" o "Terreni e Fabbricati", tipo_visura deve essere "Sintetica" o "Completa".
-
-### Docker
-
-```yaml
-# da aggiungere a docker-compose.yml
-catasto-worker:
-  build: ./modules/catasto/worker
-  depends_on:
-    - postgres
-  environment:
-    - DATABASE_URL=${DATABASE_URL}
-    - CREDENTIAL_MASTER_KEY=${CREDENTIAL_MASTER_KEY}
-  volumes:
-    - catasto-data:/data/catasto
-  restart: unless-stopped
-
-volumes:
-  catasto-data:
-```
-
-Dockerfile del worker basato su `mcr.microsoft.com/playwright/python:v1.40.0-jammy` che include Chromium.
+- non creare un backend separato per Catasto
+- non introdurre nuovi path primari fuori da `backend/app/modules/catasto/` per il codice backend di dominio
+- il worker deve usare configurazione condivisa e persistenza coordinata con il backend monolitico
+- la master key per cifratura credenziali deve arrivare da environment/config sicura
+- i path dei documenti devono essere relativi e compatibili con i volumi Docker del progetto
+- il worker deve gestire retry, resume e shutdown in modo robusto
+- i selettori e il DOM di SISTER possono cambiare: i dettagli operativi del portale vanno verificati in fase di sviluppo
 
 ---
 
-## Flusso SISTER — Riferimento selettori
+## Flusso operativo SISTER
 
-Riferimento completo dei selettori in `modules/catasto/docs/PRD_catasto.md` sezione 9.
+Usa `modules/catasto/docs/PRD_catasto.md` come riferimento funzionale per:
 
-Selettori chiave:
-- Tab Sister login: `a.nav-link[href="#tab-5"]`
-- Username: `#username-sister`  
-- Password: `#password-sister`
-- Conferma informativa: `//input[@value='Conferma']`
-- Territorio dropdown: `select[name='listacom']` → value: `ORISTANO Territorio-OR`
-- Catasto: `select[name='tipoCatasto']`
-- Comune: `select[name='denomComune']`
-- Foglio: `input[name='foglio']`
-- Particella: `input[name='particella1']`
-- Subalterno: `input[name='subalterno1']`
-- Motivo: `select[name='motivoLista']` → value: `"Altri fini istituzionali "`
-- Visura: `input[name='scelta'][value='Visura']`
-- Tipo visura: `input[name='tipoVisura']` → value: `3` (Sintetica) o `2` (Completa)
-- CAPTCHA field: `input[name='codSicurezza']`
-- Inoltra: `input[name='inoltra'][value='Inoltra']`
-- Salva PDF: `input[name='metodo'][value='Salva']`
+- formato CSV atteso
+- stati batch e richieste
+- selettori del portale
+- gestione CAPTCHA
+- download documenti
 
-**NOTA**: Questi selettori sono stati rilevati a marzo 2026. Il DOM di SISTER può cambiare. Verificare sempre con `page.pause()` in fase di sviluppo.
+I dettagli del DOM di SISTER sono intrinsecamente instabili: trattali come riferimento operativo da verificare, non come verita permanente.
+
+---
+
+## Istruzioni operative per Codex
+
+Quando implementi o modifichi il modulo Catasto:
+
+- verifica prima la struttura reale del repository e segui i pattern gia presenti in `backend/app/modules/catasto/`
+- usa `backend/app/modules/catasto/` come superficie primaria del backend
+- aggiungi o modifica integrazioni backend passando sempre da `backend/app/api/router.py` e dal router di modulo
+- mantieni separati router HTTP, modelli, schemi, servizi e logica del worker
+- non spostare la logica di automazione browser nel backend HTTP se puo restare nel worker tecnico
+- preserva compatibilita con il monolite condiviso, con Alembic unico e con il database unico
+- usa `modules/catasto/docs/PRD_catasto.md` come riferimento funzionale, ma fai prevalere l'architettura canonica del repository quando trovi indicazioni obsolete nei documenti piu vecchi

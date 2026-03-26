@@ -42,9 +42,9 @@ const modules: HomeModule[] = [
     description:
       "Monitoraggio della rete LAN. Scansione dispositivi, mappa interattiva per piano e alert per dispositivi nuovi o non raggiungibili.",
     href: "/network",
-    status: "coming",
-    statusLabel: "In sviluppo",
-    accentClassName: "border-[#0F766E]/20 bg-white/65 text-gray-900",
+    status: "active",
+    statusLabel: "Operativo",
+    accentClassName: "border-[#0F766E]/20 bg-[#ECFDF5] text-gray-900 shadow-[0_24px_64px_rgba(15,118,110,0.12)]",
   },
   {
     id: "inventario",
