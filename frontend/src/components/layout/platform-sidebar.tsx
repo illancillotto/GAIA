@@ -27,7 +27,9 @@ const platformModules: PlatformModule[] = [
 
 export function PlatformSidebar({ currentModuleLabel, currentUser }: PlatformSidebarProps) {
   const pathname = usePathname();
-  const canManageGaiaUsers = currentUser.role === "admin" || currentUser.role === "super_admin";
+  const canManageGaiaUsers =
+    (currentUser.role === "admin" || currentUser.role === "super_admin")
+    && currentUser.enabled_modules.includes("accessi");
   const visiblePlatformModules = platformModules.filter(({ href }) => {
     const moduleKey =
       href === "/nas-control"

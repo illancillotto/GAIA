@@ -155,7 +155,9 @@ export default function HomePage() {
   }
 
   const canAccessUsersSection = hasSectionAccess(grantedSectionKeys, "accessi.users");
-  const canManageGaiaUsers = currentUser.role === "admin" || currentUser.role === "super_admin";
+  const canManageGaiaUsers =
+    (currentUser.role === "admin" || currentUser.role === "super_admin")
+    && currentUser.enabled_modules.includes("accessi");
   const visibleModules = modules.filter((moduleItem) => {
     if (moduleItem.status !== "active") {
       return true;

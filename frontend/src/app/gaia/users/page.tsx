@@ -93,6 +93,9 @@ export default function GaiaUsersPage() {
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const selectedUser = users.find((user) => user.id === selectedUserId) ?? null;
   const isEditMode = selectedUser !== null;
+  const canManageGaiaUsers = currentUser
+    ? (currentUser.role === "admin" || currentUser.role === "super_admin") && currentUser.enabled_modules.includes("accessi")
+    : false;
 
   useEffect(() => {
     async function loadPage() {
@@ -100,12 +103,14 @@ export default function GaiaUsersPage() {
       if (!token) return;
 
       try {
-        const [sessionUser, response] = await Promise.all([
-          getCurrentUser(token),
-          listApplicationUsers(token),
-        ]);
+        const sessionUser = await getCurrentUser(token);
         setCurrentUser(sessionUser);
-        setUsers(response.items);
+        if ((sessionUser.role === "admin" || sessionUser.role === "super_admin") && sessionUser.enabled_modules.includes("accessi")) {
+          const response = await listApplicationUsers(token);
+          setUsers(response.items);
+        } else {
+          setUsers([]);
+        }
         setError(null);
       } catch (loadError) {
         setError(loadError instanceof Error ? loadError.message : "Errore caricamento utenti GAIA");
@@ -303,6 +308,7 @@ export default function GaiaUsersPage() {
       title="Utenti GAIA"
       description="Gestione degli utenti applicativi di GAIA, con ruoli, stato account e moduli abilitati."
       breadcrumb="Amministrazione"
+      requiredModule="accessi"
       requiredRoles={["admin", "super_admin"]}
     >
       {error ? <p className="text-sm text-red-600">{error}</p> : null}

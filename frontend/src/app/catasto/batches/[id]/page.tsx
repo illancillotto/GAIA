@@ -17,6 +17,7 @@ import {
   retryFailedCatastoBatch,
   solveCatastoCaptcha,
   skipCatastoCaptcha,
+  startCatastoBatch,
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import { formatDateTime } from "@/lib/presentation";
@@ -32,6 +33,7 @@ export default function CatastoBatchDetailPage() {
   const [downloadBusy, setDownloadBusy] = useState(false);
   const [cancelBusy, setCancelBusy] = useState(false);
   const [retryBusy, setRetryBusy] = useState(false);
+  const [startBusy, setStartBusy] = useState(false);
 
   const loadBatch = useCallback(async (): Promise<void> => {
     const token = getStoredAccessToken();
@@ -214,8 +216,25 @@ export default function CatastoBatchDetailPage() {
     }
   }
 
+  async function handleStartBatch(): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token || !batch) return;
+
+    setStartBusy(true);
+    try {
+      await startCatastoBatch(token, batch.id);
+      await loadBatch();
+      setError(null);
+    } catch (startError) {
+      setError(startError instanceof Error ? startError.message : "Errore avvio batch");
+    } finally {
+      setStartBusy(false);
+    }
+  }
+
   const canCancelBatch = batch != null && !["completed", "cancelled"].includes(batch.status);
   const canRetryFailedBatch = batch != null && batch.failed_items > 0 && batch.status !== "processing";
+  const canStartBatch = batch != null && ["pending", "failed", "cancelled"].includes(batch.status);
 
   return (
     <ProtectedPage
@@ -238,6 +257,14 @@ export default function CatastoBatchDetailPage() {
                     Creato {formatDateTime(batch.created_at)} · Avvio {formatDateTime(batch.started_at)} · Chiusura {formatDateTime(batch.completed_at)}
                   </p>
                 </div>
+                <button
+                  className="btn-secondary"
+                  disabled={startBusy || !canStartBatch}
+                  onClick={() => void handleStartBatch()}
+                  type="button"
+                >
+                  {startBusy ? "Avvio..." : "Avvia batch"}
+                </button>
                 <button
                   className="btn-secondary"
                   disabled={downloadBusy || batch.completed_items === 0}

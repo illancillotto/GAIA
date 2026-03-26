@@ -41,6 +41,17 @@ def require_role(*roles: str):
     return _require_role
 
 
+def require_module(module_name: str):
+    def _require_module(
+        current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    ) -> ApplicationUser:
+        if not current_user.is_super_admin and module_name not in current_user.enabled_modules:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Module access denied")
+        return current_user
+
+    return _require_module
+
+
 def require_section(section_key: str):
     def _require_section(
         db: Annotated[Session, Depends(get_db)],

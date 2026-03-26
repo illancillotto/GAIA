@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import RequireAdmin, RequireSuperAdmin, require_active_user
+from app.api.deps import RequireAdmin, RequireSuperAdmin, require_module
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.repositories.application_user import (
@@ -23,9 +23,10 @@ from app.schemas.users import (
 )
 
 router = APIRouter(prefix="/admin/users", tags=["admin — users"])
+RequireAccessiAdmin = Depends(require_module("accessi"))
 
 
-@router.get("", response_model=ApplicationUserListResponse, dependencies=[RequireAdmin])
+@router.get("", response_model=ApplicationUserListResponse, dependencies=[RequireAdmin, RequireAccessiAdmin])
 def list_users(
     db: Annotated[Session, Depends(get_db)],
     skip: int = 0,
@@ -40,7 +41,7 @@ def list_users(
 @router.post("", response_model=ApplicationUserResponse, dependencies=[RequireAdmin], status_code=status.HTTP_201_CREATED)
 def create_user(
     payload: ApplicationUserCreate,
-    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    current_user: Annotated[ApplicationUser, RequireAccessiAdmin],
     db: Annotated[Session, Depends(get_db)],
 ) -> ApplicationUserResponse:
     if payload.role == ApplicationUserRole.SUPER_ADMIN.value and not current_user.is_super_admin:
@@ -53,7 +54,7 @@ def create_user(
     return ApplicationUserResponse.model_validate(user)
 
 
-@router.get("/{user_id}", response_model=ApplicationUserResponse, dependencies=[RequireAdmin])
+@router.get("/{user_id}", response_model=ApplicationUserResponse, dependencies=[RequireAdmin, RequireAccessiAdmin])
 def get_user(user_id: int, db: Annotated[Session, Depends(get_db)]) -> ApplicationUserResponse:
     user = get_application_user_by_id(db, user_id)
     if user is None:
@@ -65,7 +66,7 @@ def get_user(user_id: int, db: Annotated[Session, Depends(get_db)]) -> Applicati
 def update_user(
     user_id: int,
     payload: ApplicationUserUpdate,
-    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    current_user: Annotated[ApplicationUser, RequireAccessiAdmin],
     db: Annotated[Session, Depends(get_db)],
 ) -> ApplicationUserResponse:
     user = get_application_user_by_id(db, user_id)
@@ -76,10 +77,10 @@ def update_user(
     return ApplicationUserResponse.model_validate(update_application_user(db, user, payload))
 
 
-@router.delete("/{user_id}", dependencies=[RequireSuperAdmin], status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{user_id}", dependencies=[RequireSuperAdmin, RequireAccessiAdmin], status_code=status.HTTP_204_NO_CONTENT)
 def delete_user(
     user_id: int,
-    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    current_user: Annotated[ApplicationUser, RequireAccessiAdmin],
     db: Annotated[Session, Depends(get_db)],
 ) -> None:
     if user_id == current_user.id:
@@ -90,7 +91,7 @@ def delete_user(
     delete_application_user(db, user)
 
 
-@router.patch("/{user_id}/modules", response_model=ApplicationUserResponse, dependencies=[RequireAdmin])
+@router.patch("/{user_id}/modules", response_model=ApplicationUserResponse, dependencies=[RequireAdmin, RequireAccessiAdmin])
 def patch_user_modules(
     user_id: int,
     db: Annotated[Session, Depends(get_db)],

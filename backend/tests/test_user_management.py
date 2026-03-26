@@ -98,3 +98,23 @@ def test_viewer_cannot_access_admin_users() -> None:
     token = login("viewer")
     resp = client.get("/admin/users", headers={"Authorization": f"Bearer {token}"})
     assert resp.status_code == 403
+
+
+def test_admin_without_accessi_module_cannot_access_admin_users() -> None:
+    db = TestingSessionLocal()
+    user = ApplicationUser(
+        username="catasto_admin",
+        email="catasto_admin@example.local",
+        password_hash=hash_password("secret123"),
+        role=ApplicationUserRole.ADMIN.value,
+        is_active=True,
+        module_accessi=False,
+        module_catasto=True,
+    )
+    db.add(user)
+    db.commit()
+    db.close()
+
+    token = login("catasto_admin")
+    resp = client.get("/admin/users", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 403

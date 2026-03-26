@@ -17,6 +17,7 @@ type ProtectedPageProps = PropsWithChildren<{
   breadcrumb?: string;
   topbarActions?: ReactNode;
   requiredSection?: string;
+  requiredModule?: string;
   requiredRoles?: string[];
 }>;
 
@@ -35,6 +36,7 @@ export function ProtectedPage({
   breadcrumb,
   topbarActions,
   requiredSection,
+  requiredModule,
   requiredRoles,
   children,
 }: ProtectedPageProps) {
@@ -117,9 +119,10 @@ export function ProtectedPage({
   }
 
   const isSectionAllowed = requiredSection ? hasSectionAccess(grantedSectionKeys, requiredSection) : true;
+  const isModuleAllowed = requiredModule ? currentUser.enabled_modules.includes(requiredModule) : true;
   const isRoleAllowed = requiredRoles ? requiredRoles.includes(currentUser.role) : true;
 
-  if (!isSectionAllowed || !isRoleAllowed) {
+  if (!isSectionAllowed || !isModuleAllowed || !isRoleAllowed) {
     return (
       <AppShell
         currentUser={currentUser}
@@ -137,7 +140,9 @@ export function ProtectedPage({
           <article className="panel-card">
             <p className="text-sm font-medium text-red-700">Accesso non autorizzato</p>
             <p className="mt-2 text-sm text-gray-600">
-              {requiredRoles
+              {!isModuleAllowed
+                ? "Questa sezione e disponibile solo per gli utenti abilitati al modulo richiesto."
+                : requiredRoles
                 ? "Questa sezione e disponibile solo per i ruoli autorizzati."
                 : "Questa sezione e disponibile solo per admin, super admin o utenti esplicitamente abilitati."}
             </p>
