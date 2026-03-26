@@ -1,17 +1,23 @@
 # ARCHITECTURE.md
 
-# CBO NAS Access Audit
+# GAIA
 ## Architettura del sistema
+
+> Regola repository
+> Il backend GAIA e un monolite modulare. Nuovo codice backend di dominio va creato in `backend/app/modules/<modulo>/`.
+> I path legacy fuori da `app/modules/` sono compatibilita temporanea e non sono piu destinazione primaria per nuove feature.
 
 ## 1. Scopo
 
-La piattaforma **CBO NAS Access Audit** è una web application interna progettata per:
+La piattaforma **GAIA** e una web application interna progettata per:
 
 - acquisire dal NAS Synology utenti, gruppi, cartelle condivise e ACL
 - calcolare i permessi effettivi per utente e cartella
 - consentire consultazione e revisione degli accessi
 - supportare i capi servizio nella validazione
 - produrre report per audit e bonifica
+- monitorare la rete LAN
+- integrare automazioni catastali dedicate
 
 Il sistema, nel MVP, è **read-only rispetto al NAS**:
 - legge
@@ -26,7 +32,7 @@ Non modifica automaticamente i permessi del NAS.
 
 ## 2. Architettura logica
 
-Il sistema è composto da 4 macro-componenti:
+Il sistema e composto da questi macro-componenti:
 
 ### 2.1 Frontend
 Interfaccia web per:
@@ -48,13 +54,7 @@ Path repository:
 ---
 
 ### 2.2 Backend API
-Espone API REST per:
-- autenticazione
-- sincronizzazione NAS
-- consultazione entità
-- calcolo e lettura permessi effettivi
-- gestione review
-- export
+Espone API REST per tutti i moduli applicativi.
 
 Tecnologie:
 - FastAPI
@@ -62,6 +62,30 @@ Tecnologie:
 - Alembic
 - Pydantic
 - Paramiko
+- python-nmap
+- APScheduler
+
+Modello architetturale:
+- **monolite modulare**
+- un solo servizio backend
+- un solo database
+- moduli logici separati nel codice
+
+Struttura interna canonica:
+
+```text
+backend/app/
+  modules/
+    core/
+    accessi/
+    network/
+    inventory/   # target futuro
+    catasto/
+```
+
+Nota:
+- la directory fisica del backend e `backend/`
+- il backend non rappresenta piu il solo modulo Accessi
 
 ---
 
@@ -82,7 +106,9 @@ Tecnologia:
 
 ---
 
-### 2.4 NAS Connector
+### 2.4 Worker e servizi specializzati
+
+#### NAS Connector
 Modulo backend dedicato alla connessione SSH verso il NAS Synology.
 
 Responsabilità:
@@ -94,6 +120,18 @@ Responsabilità:
 Canali previsti:
 - SSH
 - comandi di sistema Synology/Linux
+
+#### Network Scanner
+Container separato dedicato alla scansione read-only della LAN.
+
+Responsabilita:
+- ping scan
+- port scan sugli host attivi
+- fallback ARP scan con scapy
+- schedulazione periodica
+
+#### Catasto Worker
+Container separato per le automazioni browser-based del modulo Catasto.
 
 ---
 
@@ -108,6 +146,7 @@ L’applicazione gira tramite Docker Compose con questi servizi:
 - `postgres`
 - `nginx`
 - `catasto-worker`
+- `scanner`
 
 ---
 
@@ -117,7 +156,19 @@ L’applicazione gira tramite Docker Compose con questi servizi:
 Serve la web app e consuma le API del backend.
 
 ### backend
-Espone API, esegue sync, calcola permessi, genera export.
+Espone API, applica auth condivisa, coordina i moduli e usa router separati per dominio.
+
+Moduli logici attuali:
+- `accessi`
+- `network`
+- `catasto`
+- `core`
+
+Stato del refactor:
+- `network` gia in struttura canonica sotto `app/modules/network`
+- `accessi` gia instradato tramite route canoniche sotto `app/modules/accessi/routes`
+- `accessi` con entrypoint canonici di modulo per route, modelli, schemi e servizi
+- `catasto` con route implementation canonica e surface di modulo
 
 ### postgres
 Salva i dati persistenti della piattaforma.
@@ -127,6 +178,9 @@ Fa da reverse proxy:
 - instrada traffico frontend
 - proxy API backend
 - gestisce headers e timeouts
+
+### scanner
+Esegue la scansione LAN del modulo GAIA Rete e persiste snapshot, dispositivi e alert.
 
 ---
 
@@ -219,6 +273,18 @@ Permesso finale calcolato per utente-cartella.
 
 ### Review
 Decisione di validazione registrata da un reviewer/admin.
+
+### NetworkScan
+Snapshot di rete generato dal modulo GAIA Rete.
+
+### NetworkDevice
+Dispositivo rilevato in scansione LAN.
+
+### NetworkAlert
+Evento operativo generato da variazioni o anomalie di rete.
+
+### FloorPlan
+Planimetria associata a sede/piano.
 
 ---
 

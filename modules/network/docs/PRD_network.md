@@ -1,6 +1,9 @@
 # GAIA Rete — Network Monitor
 ## Product Requirements Document v1.0
 
+> Regola repository
+> Il modulo Rete appartiene al backend monolite modulare GAIA. Nuovo codice backend Rete va in `app/modules/network/`.
+
 > Consorzio di Bonifica dell'Oristanese — Marzo 2026  
 > Documento interno — uso riservato
 
@@ -11,7 +14,8 @@
 GAIA Rete è il modulo di monitoraggio della rete locale all'interno della piattaforma GAIA. Fornisce visibilità in tempo reale sui dispositivi presenti sulla LAN del Consorzio, con una mappa interattiva distribuita per piano e un sistema di alert per anomalie di rete.
 
 > **Posizione nel sistema**  
-> GAIA Rete è il secondo modulo della piattaforma. Condivide autenticazione JWT, database PostgreSQL e infrastruttura Docker con GAIA Accessi (già completato) e GAIA Inventario.
+> GAIA Rete è il secondo modulo della piattaforma. Condivide autenticazione JWT, database PostgreSQL e infrastruttura Docker con GAIA Accessi, GAIA Catasto e GAIA Inventario.
+> Il backend GAIA e organizzato come **monolite modulare**: un solo servizio FastAPI con moduli logici distinti.
 
 ### 1.1 Obiettivi
 
@@ -140,15 +144,16 @@ L'interfaccia presenta i dispositivi rilevati su una mappa interattiva organizza
 ```yaml
 # docker-compose.yml — servizio scanner
 scanner:
-  build: ./modules/network/scanner
+  build:
+    context: ./backend
+  command: python -m app.scripts.network_scanner
   cap_add:
     - NET_RAW
     - NET_ADMIN
-  network_mode: host
   depends_on:
     - postgres
   environment:
-    - SCAN_INTERVAL=900   # secondi
+    - NETWORK_SCAN_INTERVAL_SECONDS=900
     - NETWORK_RANGE=192.168.1.0/24
     - DATABASE_URL=${DATABASE_URL}
 ```
@@ -159,7 +164,7 @@ scanner:
 |------------|------------|
 | Scanner backend | Python · python-nmap · scapy (fallback ARP) |
 | Scheduler | APScheduler integrato in FastAPI |
-| API modulo | FastAPI router `/network` — aggiunto al backend esistente |
+| API modulo | FastAPI router `/network` — aggiunto al backend monolite esistente |
 | Frontend | Next.js — nuova sezione `/network` nel frontend esistente |
 | Planimetria UI | React + SVG overlay con drag-and-drop (`react-draggable`) |
 | Database | PostgreSQL — nuove tabelle migrate con Alembic |
@@ -167,28 +172,36 @@ scanner:
 ### 5.3 Struttura cartelle
 
 ```
-modules/network/
-  scanner/
-    Dockerfile
-    scanner.py          # logica nmap + ARP
-    scheduler.py        # APScheduler task
-    requirements.txt
-  backend/
-    routers/network.py  # FastAPI router
-    models/network.py   # SQLAlchemy models
-    schemas/network.py  # Pydantic schemas
-    services/scanner.py # business logic
-    services/alerts.py  # alert engine
-  frontend/
-    pages/network/
-      index.tsx         # lista dispositivi
-      floor-plan.tsx    # mappa planimetria
-      alerts.tsx        # gestione alert
-      scans/[id].tsx    # dettaglio snapshot
-  docs/
-    PRD.md
-    PROMPT_CODEX.md
+backend/app/
+  modules/
+    network/
+      router.py
+      models.py
+      schemas.py
+      services.py
+      scheduler.py
+      scanner_script.py
+frontend/src/app/
+  network/
+    page.tsx
+    devices/
+    floor-plan/
+    alerts/
+    scans/
+modules/network/docs/
+  PRD_network.md
+  PROMPT_CODEX_network.md
 ```
+
+I path legacy `app/api/routes/network.py`, `app/models/network.py`, `app/schemas/network.py`,
+`app/services/network_*.py` restano come wrapper di compatibilita.
+
+### 5.4 Piano di migrazione backend
+
+1. Introdurre `app/modules/` come struttura canonica.
+2. Migrare i nuovi moduli direttamente in `app/modules/<modulo>/`.
+3. Tenere i path storici come wrapper fino al completamento del refactor.
+4. Considerare obsoleti i riferimenti storici al vecchio path backend.
 
 ---
 

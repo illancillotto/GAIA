@@ -1,5 +1,8 @@
 # Prompt Codex — GAIA Inventario (IT Inventory)
 
+> Regola strutturale
+> Backend Inventario in `app/modules/inventory/`, frontend in `frontend/src/app/inventory/`, nessun backend separato.
+
 > Da usare come system prompt o primo messaggio in una sessione di sviluppo dedicata.
 
 ---

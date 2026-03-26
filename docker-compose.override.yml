@@ -2,7 +2,7 @@ services:
   backend:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     volumes:
-      - ./modules/accessi/backend:/app
+      - ./backend:/app
       - catasto-data:/data/catasto
     ports:
       - "${BACKEND_PORT:-8000}:8000"
@@ -22,8 +22,13 @@ services:
     command: python /app/worker/worker.py
     volumes:
       - ./modules/catasto/worker:/app/worker
-      - ./modules/accessi/backend:/app/backend
+      - ./backend:/app/backend
       - catasto-data:/data/catasto
+
+  scanner:
+    command: python -m app.scripts.network_scanner
+    volumes:
+      - ./backend:/app
 
 volumes:
   catasto-data:

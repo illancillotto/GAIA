@@ -1,5 +1,9 @@
 # Architettura
 
+> Nota repository
+> Il modulo Accessi vive dentro il backend monolite modulare GAIA. Nuovo codice backend Accessi va nel namespace `app/modules/accessi/`.
+> Il path fisico del backend condiviso e `backend/`.
+
 ## 1. Panoramica
 
 L'architettura adotta una separazione netta tra frontend, backend API, database relazionale e reverse proxy. Il design e pensato per un contesto enterprise interno con esposizione controllata su rete privata o VPN.

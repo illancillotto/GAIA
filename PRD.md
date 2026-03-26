@@ -1,5 +1,8 @@
 # NAS Access Audit Platform (NAAP)
 
+> Nota repository
+> Questo documento descrive il dominio Accessi. Nel repository attuale il backend e condiviso tra moduli ed e organizzato come monolite modulare.
+
 ## 1. Overview
 
 ### 1.1 Obiettivo

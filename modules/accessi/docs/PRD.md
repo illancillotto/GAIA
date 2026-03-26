@@ -1,5 +1,8 @@
 # Product Requirements Document
 
+> Nota repository
+> Questo documento descrive il dominio Accessi all'interno del backend monolite modulare GAIA.
+
 ## 1. Visione
 
 NAS Access Audit Platform e una piattaforma interna per governare gli accessi al NAS Synology in modo verificabile, leggibile e compatibile con processi di audit amministrativo.

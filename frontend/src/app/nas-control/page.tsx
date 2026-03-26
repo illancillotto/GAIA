@@ -152,7 +152,6 @@ export default function AccessiPage() {
   }, [permissions, shares, users]);
   const deniedCount = permissions.filter((item) => item.is_denied).length;
   const canAccessUsersSection = hasSectionAccess(grantedSectionKeys, "accessi.users");
-  const hasNasModule = currentUser.enabled_modules.includes("accessi");
 
   if (isCheckingSession || !currentUser) {
     return (
@@ -175,6 +174,8 @@ export default function AccessiPage() {
       </main>
     );
   }
+
+  const hasNasModule = currentUser.enabled_modules.includes("accessi");
 
   if (!hasNasModule) {
     return (

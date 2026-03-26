@@ -81,6 +81,102 @@ export type DashboardSummary = {
   sync_runs: number;
 };
 
+export type NetworkDashboardSummary = {
+  total_devices: number;
+  online_devices: number;
+  offline_devices: number;
+  open_alerts: number;
+  scans_last_24h: number;
+  floor_plans: number;
+  latest_scan_at: string | null;
+};
+
+export type NetworkDevice = {
+  id: number;
+  last_scan_id: number | null;
+  ip_address: string;
+  mac_address: string | null;
+  hostname: string | null;
+  vendor: string | null;
+  device_type: string | null;
+  operating_system: string | null;
+  status: string;
+  is_monitored: boolean;
+  open_ports: string | null;
+  first_seen_at: string;
+  last_seen_at: string;
+  created_at: string;
+  updated_at: string;
+};
+
+export type NetworkDeviceListResponse = {
+  items: NetworkDevice[];
+  total: number;
+  page: number;
+  page_size: number;
+};
+
+export type NetworkAlert = {
+  id: number;
+  device_id: number | null;
+  scan_id: number | null;
+  alert_type: string;
+  severity: string;
+  status: string;
+  title: string;
+  message: string | null;
+  created_at: string;
+  acknowledged_at: string | null;
+};
+
+export type NetworkScan = {
+  id: number;
+  network_range: string;
+  scan_type: string;
+  status: string;
+  hosts_scanned: number;
+  active_hosts: number;
+  discovered_devices: number;
+  initiated_by: string | null;
+  notes: string | null;
+  started_at: string;
+  completed_at: string;
+};
+
+export type NetworkScanTriggerResponse = {
+  scan: NetworkScan;
+  devices_upserted: number;
+  alerts_created: number;
+};
+
+export type NetworkFloorPlan = {
+  id: number;
+  name: string;
+  building: string | null;
+  floor_label: string;
+  svg_content: string | null;
+  image_url: string | null;
+  width: number | null;
+  height: number | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type DevicePosition = {
+  id: number;
+  device_id: number;
+  floor_plan_id: number;
+  x: number;
+  y: number;
+  label: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type NetworkFloorPlanDetail = NetworkFloorPlan & {
+  positions: DevicePosition[];
+};
+
 export type NasUser = {
   id: number;
   username: string;

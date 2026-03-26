@@ -1,5 +1,8 @@
 # Prompt operativo — GAIA Catasto MVP
 
+> Regola strutturale
+> Non creare backend separato per Catasto. Usare il backend condiviso GAIA e il namespace `app/modules/catasto/`.
+
 > Copia e incolla questo come primo messaggio in Claude Code.
 > Prima di usarlo, assicurati di aver copiato nella repo:
 >   - modules/catasto/docs/PRD_catasto.md
@@ -19,7 +22,7 @@ Leggi attentamente questi file prima di iniziare:
 2. `modules/catasto/docs/PROMPT_CODEX_catasto.md` — convenzioni architetturali, stack, vincoli tecnici
 
 Studia anche la struttura dei moduli già esistenti come riferimento per naming e pattern:
-3. `modules/accessi/backend/` — backend FastAPI esistente (router, models, schemas, services)
+3. `backend/` — backend FastAPI esistente (router, models, schemas, services)
 4. `frontend/` — frontend Next.js esistente
 5. `docker-compose.yml` — configurazione Docker esistente
 6. `modules/accessi/docs/CODEX_PROMPT.md` — convenzioni generali del progetto

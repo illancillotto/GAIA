@@ -14,6 +14,6 @@ COPY modules/catasto/worker/requirements.txt /app/worker/requirements.txt
 RUN pip install --no-cache-dir -r /app/worker/requirements.txt
 
 COPY modules/catasto/worker /app/worker
-COPY modules/accessi/backend /app/backend
+COPY backend /app/backend
 
 CMD ["python", "/app/worker/worker.py"]

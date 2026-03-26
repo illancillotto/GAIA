@@ -17,7 +17,7 @@ services:
 
   backend:
     build:
-      context: ./modules/accessi/backend
+      context: ./backend
     container_name: naap-backend
     restart: unless-stopped
     env_file:
@@ -103,6 +103,27 @@ services:
         condition: service_healthy
     volumes:
       - catasto-data:/data/catasto
+
+  scanner:
+    build:
+      context: ./backend
+    container_name: gaia-network-scanner
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      NETWORK_RANGE: ${NETWORK_RANGE:-192.168.1.0/24}
+      NETWORK_SCAN_ENABLED: ${NETWORK_SCAN_ENABLED:-true}
+      NETWORK_SCAN_INTERVAL_SECONDS: ${NETWORK_SCAN_INTERVAL_SECONDS:-900}
+      NETWORK_SCAN_PORTS: ${NETWORK_SCAN_PORTS:-22,80,443,445,3389}
+    command: python -m app.scripts.network_scanner
+    depends_on:
+      postgres:
+        condition: service_healthy
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
 
 volumes:
   postgres_data:

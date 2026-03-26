@@ -1,5 +1,8 @@
 # Prompt Codex — GAIA Catasto (Servizi Agenzia delle Entrate)
 
+> Regola strutturale
+> Il modulo Catasto va implementato nel monolite modulare GAIA: backend in `app/modules/catasto/`, frontend in `frontend/src/app/catasto/`.
+
 > Da usare come system prompt o primo messaggio in una sessione di sviluppo dedicata.
 
 ---

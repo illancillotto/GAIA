@@ -2,6 +2,9 @@
 
 # Prompt Codex — Frontend NAS Access Audit
 
+> Regola frontend
+> Il frontend GAIA resta unico. I moduli applicativi vivono sotto `frontend/src/app/<modulo>/` e devono riflettere i moduli del monolite backend.
+
 Sviluppa il frontend di una piattaforma chiamata **NAS Access Audit Platform**.
 
 ## Obiettivo

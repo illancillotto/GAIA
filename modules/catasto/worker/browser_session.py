@@ -183,10 +183,15 @@ class BrowserSession:
         logger.info("Apertura form visura SISTER")
         await self._maybe_accept_privacy_notice()
         await self._goto_visura_menu_with_retry()
+        if "Informativa.do" in page.url:
+            logger.info("Informativa visure rilevata, click su '%s'", self.selectors.conferma_lettura_button_name)
+            await page.get_by_role("button", name=self.selectors.conferma_lettura_button_name).click()
+            await self._trace_state("visura-informativa-confirmed")
         if await page.locator(self.selectors.territorio_selector).count() > 0:
             await page.select_option(self.selectors.territorio_selector, value=self.selectors.territorio_value)
             await page.get_by_role("button", name=self.selectors.territorio_apply_button_name).click()
             await self._trace_state("visura-after-territorio")
+        logger.info("Click link '%s'", self.selectors.immobile_link_name)
         await page.get_by_role("link", name=self.selectors.immobile_link_name).click()
         await page.wait_for_selector(self.selectors.catasto_selector)
         logger.info("Form visura SISTER pronto")

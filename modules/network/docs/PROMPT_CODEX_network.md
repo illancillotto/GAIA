@@ -1,5 +1,8 @@
 # Prompt Codex — GAIA Rete (Network Monitor)
 
+> Regola strutturale
+> Il modulo Rete si implementa nel backend monolite condiviso. Il path canonico backend e `backend/app/modules/network/`.
+
 > Da usare come system prompt o primo messaggio in una sessione di sviluppo dedicata.
 
 ---
@@ -37,7 +40,9 @@ Il repository si trova su `github.com/illancillotto/GAIA`.
 ## Principi architetturali
 
 - Il modulo si aggiunge al backend e frontend **esistenti** come router/sezione aggiuntiva
-- **NON** creare un backend separato: aggiungere `app/routers/network.py` al FastAPI esistente
+- **NON** creare un backend separato: aggiungere il modulo rete al backend monolite esistente
+- Nel backend usare la struttura canonica `backend/app/modules/network/`
+- I path legacy fuori da `app/modules/` possono restare come wrapper compatibili
 - **NON** creare un frontend separato: aggiungere `frontend/src/app/network/` al Next.js esistente
 - Lo scanner LAN gira come **container Docker separato** con `cap_add: [NET_RAW, NET_ADMIN]`
 - Auth JWT condivisa: riutilizzare il middleware esistente senza modifiche
@@ -57,14 +62,14 @@ device_positions      — posizione dispositivo su planimetria
 device_inventory_links — collegamento rete ↔ inventario
 ```
 
-Schema completo in `modules/network/docs/PRD.md` sezione 3.
+Schema completo in `modules/network/docs/PRD_network.md` sezione 3.
 
 ---
 
 ## API da implementare
 
 Tutti gli endpoint sotto il prefisso `/network`.  
-Lista completa in `modules/network/docs/PRD.md` sezione 4.
+Lista completa in `modules/network/docs/PRD_network.md` sezione 4.
 
 ---
 

@@ -1,6 +1,9 @@
 # PROMPT_CODEX — GAIA Permission System
 ## Milestone 8: Gestione utenti, moduli e permessi granulari per sezione
 
+> Regola strutturale obbligatoria
+> Il backend GAIA e un monolite modulare. Route, modelli, schemi, servizi e repository nuovi vanno collocati nel namespace `app/modules/<modulo>/`.
+
 > Prompt operativo per Codex. Da usare come system prompt o primo messaggio in una sessione dedicata.
 > Repository: `github.com/illancillotto/GAIA`
 > Branch di lavoro consigliato: `feature/permission-system`
@@ -18,7 +21,7 @@ Il repository è un monorepo con tre moduli:
 
 Lo stack è: FastAPI + SQLAlchemy + Alembic + PostgreSQL per il backend, Next.js + React + TypeScript + TailwindCSS per il frontend. L'infrastruttura è Docker Compose + Nginx.
 
-Il backend esistente si trova in `modules/accessi/backend/`. Il frontend in `modules/accessi/frontend/`. Tutte le modifiche di questa milestone vanno dentro questi due path, senza creare nuovi container o servizi.
+Il backend esistente si trova in `backend/`. Il frontend in `frontend/`. Tutte le modifiche di questa milestone vanno dentro questi due path, senza creare nuovi container o servizi.
 
 ---
 
@@ -131,7 +134,7 @@ CREATE TABLE user_section_permissions (
 
 ## File da creare — Backend
 
-Tutti i file vanno in `modules/accessi/backend/`.
+Tutti i file backend vanno in `backend/`.
 
 ### `alembic/versions/20260323_0007_user_modules.py`
 Aggiunge `module_accessi`, `module_rete`, `module_inventario` ad `application_users`.
@@ -345,7 +348,7 @@ Test per il sistema permessi. Copertura minima:
 
 ## File da creare — Frontend
 
-Tutti i file vanno in `modules/accessi/frontend/src/`.
+Tutti i file frontend vanno in `frontend/src/`.
 
 ### `types/user.ts` ← NUOVO
 ```typescript

@@ -2,6 +2,9 @@
 ## Gestione Apparati Informativi e Accessi
 ### Piattaforma IT governance — Consorzio di Bonifica dell'Oristanese
 
+> Regola repository
+> Backend unico, frontend unico, database unico. Nuovo codice backend di dominio va nel monolite modulare sotto `backend/app/modules/<modulo>/`.
+
 ## Cos'è GAIA
 
 GAIA centralizza la governance IT del Consorzio in quattro moduli integrati,
@@ -42,9 +45,13 @@ Il frontend condiviso della piattaforma vive in `frontend/`.
 ```text
 GAIA/
 ├── frontend/
+│   └── src/app/
+│       ├── nas-control/
+│       ├── network/
+│       ├── inventory/
+│       └── catasto/
 ├── modules/
 │   ├── accessi/
-│   │   ├── backend/
 │   │   └── docs/
 │   ├── network/
 │   │   └── docs/
@@ -54,6 +61,17 @@ GAIA/
 │       └── docs/
 │           ├── PRD_inventory.md
 │           └── PROMPT_CODEX_inventory.md
+├── backend/
+│   ├── app/
+│   │   ├── modules/
+│   │   │   ├── core/
+│   │   │   ├── accessi/
+│   │   │   ├── network/
+│   │   │   ├── inventory/
+│   │   │   └── catasto/
+│   │   └── ...
+│   ├── alembic/
+│   └── tests/
 ├── docker-compose.yml
 ├── docker-compose.override.yml
 ├── nginx/
@@ -62,23 +80,41 @@ GAIA/
 └── .env.example
 ```
 
+## Architettura backend attuale
+
+Il backend di GAIA e un **monolite modulare**: un solo servizio FastAPI,
+un solo database PostgreSQL e un solo set di migration Alembic.
+
+La directory fisica del backend e:
+- `backend/`
+
+La struttura logica canonica del codice backend e invece:
+- `backend/app/modules/core`
+- `backend/app/modules/accessi`
+- `backend/app/modules/network`
+- `backend/app/modules/catasto`
+
+I package storici fuori da `app/modules/` restano disponibili come layer di compatibilita.
+
 ## Quick Start
 
 1. Copia il file ambiente:
    `cp .env.example .env`
 2. Avvia lo stack:
    `make up`
-3. Esegui le migrazioni:
+3. Rebuild quando cambi dipendenze o entrypoint:
+   `make rebuild`
+4. Esegui le migrazioni:
    `make migrate`
-4. Crea l'admin iniziale:
+5. Crea l'admin iniziale:
    `make bootstrap-admin`
-5. Carica i dati seed:
+6. Carica i dati seed:
    `make bootstrap-domain`
    Il comando inizializza il seed del dominio audit e il dizionario `catasto_comuni`.
-6. Genera e configura la chiave vault Catasto in `.env`:
+7. Genera e configura la chiave vault Catasto in `.env`:
    `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
    La stessa chiave deve essere condivisa tra `backend` e `catasto-worker`.
-7. Accedi all'applicazione:
+8. Accedi all'applicazione:
    `http://localhost:8080`
 
 ## Documentazione
@@ -86,6 +122,7 @@ GAIA/
 - GAIA Accessi: `modules/accessi/docs/`
 - GAIA Rete PRD: `modules/network/docs/PRD_network.md`
 - GAIA Rete Prompt: `modules/network/docs/PROMPT_CODEX_network.md`
+- Backend monolite modulare: `backend/app/MONOLITH_MODULAR.md`
 - GAIA Inventario PRD: `modules/inventory/docs/PRD_inventory.md`
 - GAIA Inventario Prompt: `modules/inventory/docs/PROMPT_CODEX_inventory.md`
 - GAIA Catasto PRD: `modules/catasto/docs/PRD_catasto.md`
@@ -114,3 +151,11 @@ GAIA/
 | `make bootstrap-admin` | Crea utente admin |
 | `make bootstrap-domain` | Carica dati seed |
 | `make live-sync` | Sync live dal NAS via SSH |
+
+## Piano di migrazione backend
+
+1. Consolidare tutto il nuovo codice di dominio in `app/modules/<modulo>/`.
+2. Lasciare i path legacy come wrapper compatibili fino a stabilizzazione.
+3. `network` e `catasto` sono gia su namespace canonico di modulo.
+4. `accessi` usa gia route e entrypoint canonici di modulo, con wrapper legacy mantenuti.
+5. La directory fisica del backend e stata rinominata in `backend/`; i riferimenti storici vanno considerati obsoleti.

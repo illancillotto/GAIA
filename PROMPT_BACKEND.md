@@ -2,6 +2,10 @@
 
 # Prompt Codex — Backend NAS Access Audit
 
+> Regola strutturale obbligatoria
+> GAIA usa un backend monolite modulare. Nuovo codice backend va scritto in `backend/app/modules/<modulo>/`.
+> Non creare backend separati per modulo salvo worker o servizi tecnici dedicati.
+
 Sviluppa il backend di una piattaforma chiamata **NAS Access Audit Platform**.
 
 ## Obiettivo

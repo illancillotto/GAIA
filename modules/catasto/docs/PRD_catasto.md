@@ -1,5 +1,8 @@
 # Prompt Codex — GAIA Catasto (Servizi Agenzia delle Entrate)
 
+> Regola repository
+> GAIA Catasto usa il backend monolite modulare condiviso. Nuovo codice backend Catasto va nel namespace `app/modules/catasto/`.
+
 > Da usare come system prompt o primo messaggio in una sessione di sviluppo dedicata.
 
 ---

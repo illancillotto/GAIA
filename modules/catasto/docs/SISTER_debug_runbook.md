@@ -1,5 +1,8 @@
 # SISTER Debug Runbook
 
+> Nota infrastrutturale
+> Il worker Catasto e un servizio tecnico separato, ma il dominio applicativo Catasto resta parte del backend monolite condiviso.
+
 ## Scopo
 
 Questo documento raccoglie il comportamento reale osservato del portale SISTER durante l'automazione Catasto, le contromisure implementate nel worker e i prossimi punti da verificare.
@@ -15,7 +18,7 @@ Va trattato come riferimento operativo permanente per:
 
 Componenti coinvolti:
 
-- backend API: `modules/accessi/backend`
+- backend API: `backend`
 - worker browser: `modules/catasto/worker`
 - frontend Catasto: `frontend/src/app/catasto`
 

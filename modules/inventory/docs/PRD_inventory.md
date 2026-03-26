@@ -1,6 +1,9 @@
 # GAIA Inventario — IT Inventory
 ## Product Requirements Document v1.0
 
+> Regola repository
+> GAIA Inventario non introduce un backend separato. Usa il backend monolite modulare condiviso.
+
 > Consorzio di Bonifica dell'Oristanese — Marzo 2026  
 > Documento interno — uso riservato
 

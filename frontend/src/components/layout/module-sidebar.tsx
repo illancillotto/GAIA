@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  AlertTriangleIcon,
   CheckIcon,
   DocumentIcon,
   FolderIcon,
@@ -8,6 +9,7 @@ import {
   LockIcon,
   RefreshIcon,
   SearchIcon,
+  ServerIcon,
   UserIcon,
   UsersIcon,
 } from "@/components/ui/icons";
@@ -82,6 +84,10 @@ export function ModuleSidebar({
       <div className="space-y-0.5 px-2 pb-3">
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Panoramica</p>
         <NavItem href="/network" icon={GridIcon} label="Dashboard" />
+        <NavItem href="/network/devices" icon={ServerIcon} label="Dispositivi" match="prefix" />
+        <NavItem href="/network/floor-plan" icon={FolderIcon} label="Planimetria" />
+        <NavItem href="/network/alerts" icon={AlertTriangleIcon} label="Alert" />
+        <NavItem href="/network/scans" icon={RefreshIcon} label="Scansioni" match="prefix" />
       </div>
     );
   }

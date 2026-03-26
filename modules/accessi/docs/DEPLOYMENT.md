@@ -1,5 +1,8 @@
 # Deployment
 
+> Regola deployment
+> Il deployment del backend GAIA e unico. I moduli Accessi, Rete, Inventario e Catasto condividono FastAPI, PostgreSQL e Alembic.
+
 ## 1. Scopo
 
 Questa guida descrive il deployment iniziale della piattaforma in ambiente locale o interno usando Docker Compose.

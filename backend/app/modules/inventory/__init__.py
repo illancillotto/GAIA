@@ -1,0 +1,1 @@
+"""GAIA Inventario module placeholder."""

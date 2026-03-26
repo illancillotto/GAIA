@@ -1,5 +1,8 @@
 # Progress
 
+> Nota stato
+> Il refactor strutturale di GAIA converge su `app/modules/<modulo>/` come layout canonico del backend condiviso.
+
 ## Data Riferimento
 
 - ultima analisi repository: 2026-03-20
@@ -13,13 +16,13 @@ Il repository e in una fase di bootstrap avanzato: la base documentale, il backe
 ### Repository e Convenzioni
 
 - file root inizializzati: `README.md`, `.gitignore`, `.editorconfig`, `.env.example`, `Makefile`
-- naming coerente tra `modules/accessi/backend/`, `frontend/`, `modules/accessi/docs/`, `scripts/`, `nginx/`
+- naming coerente tra `backend/`, `frontend/`, `modules/accessi/docs/`, `scripts/`, `nginx/`
 - documentazione iniziale centralizzata in `modules/accessi/docs/`
 
 ### Backend
 
 - scaffold FastAPI avviabile
-- routing modulare base in `modules/accessi/backend/app/api`
+- routing modulare base in `backend/app/api`
 - endpoint `GET /health` disponibile
 - endpoint `POST /auth/login` e `GET /auth/me`
 - endpoint protetti `GET /dashboard/summary`, `GET /nas-users`, `GET /nas-groups`, `GET /shares`, `GET /reviews`
@@ -84,7 +87,7 @@ Il repository e in una fase di bootstrap avanzato: la base documentale, il backe
 
 ### Backend
 
-- suite `modules/accessi/backend/tests`
+- suite `backend/tests`
 - stato corrente: `59 passed`
 
 Verifica runtime:

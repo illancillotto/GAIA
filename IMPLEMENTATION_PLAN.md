@@ -3,6 +3,9 @@
 # NAS Access Audit Platform
 ## Piano di implementazione
 
+> Regola repository
+> Backend unico, moduli logici separati. Nuove implementazioni backend vanno in `backend/app/modules/<modulo>/`.
+
 ## 1. Obiettivo del progetto
 
 Realizzare una piattaforma web interna per il Consorzio di Bonifica dell'Oristanese che consenta di:

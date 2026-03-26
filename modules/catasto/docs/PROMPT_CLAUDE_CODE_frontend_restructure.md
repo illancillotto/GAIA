@@ -1,5 +1,8 @@
 # Prompt operativo — Ristrutturazione frontend GAIA
 
+> Regola frontend
+> Il frontend Catasto resta dentro il frontend unico GAIA. Non creare app frontend separata.
+
 > Documento storico.
 > Il refactor e' stato completato: il frontend condiviso della piattaforma ora vive in `frontend/`.
 

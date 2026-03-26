@@ -1,5 +1,8 @@
 # Piano Implementazione
 
+> Regola di implementazione
+> Il codice legacy fuori da `app/modules/` va trattato come compatibilita. Nuove feature Accessi vanno nel namespace modulare canonico.
+
 ## 1. Obiettivo Operativo
 
 Creare una base di progetto ordinata e avviabile, pronta per uno sviluppo incrementale dei moduli di audit NAS, review e reporting.

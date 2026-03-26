@@ -1,5 +1,8 @@
 # Execution Plan
 
+> Regola di esecuzione
+> Tutte le nuove implementazioni backend per Accessi devono convergere verso `app/modules/accessi/`.
+
 ## Obiettivo
 
 Guidare l'implementazione del progetto in milestone piccole, verificabili e testabili in autonomia, mantenendo allineati codice, documentazione, CI e progress tracking.
