@@ -152,6 +152,7 @@ export default function AccessiPage() {
   }, [permissions, shares, users]);
   const deniedCount = permissions.filter((item) => item.is_denied).length;
   const canAccessUsersSection = hasSectionAccess(grantedSectionKeys, "accessi.users");
+  const hasNasModule = currentUser.enabled_modules.includes("accessi");
 
   if (isCheckingSession || !currentUser) {
     return (
@@ -175,6 +176,28 @@ export default function AccessiPage() {
     );
   }
 
+  if (!hasNasModule) {
+    return (
+      <AppShell
+        currentUser={currentUser}
+        onLogout={handleLogout}
+        reviewBadge={summary.reviews}
+        userBadge={summary.nas_users}
+        grantedSectionKeys={grantedSectionKeys}
+      >
+        <Topbar pageTitle="Dashboard" />
+        <section className="page-body">
+          <article className="panel-card">
+            <p className="text-sm font-medium text-red-700">Accesso non autorizzato</p>
+            <p className="mt-2 text-sm text-gray-600">
+              Il tuo account non ha il modulo NAS Control abilitato.
+            </p>
+          </article>
+        </section>
+      </AppShell>
+    );
+  }
+
   return (
     <AppShell
       currentUser={currentUser}
@@ -185,7 +208,7 @@ export default function AccessiPage() {
     >
       <Topbar
         pageTitle="Dashboard"
-        actions={<SyncButton label="Apri Sync" onClick={() => router.push("/accessi/sync")} />}
+        actions={<SyncButton label="Apri Sync" onClick={() => router.push("/nas-control/sync")} />}
       />
 
       <section className="page-body">
@@ -196,7 +219,7 @@ export default function AccessiPage() {
               title={`${summary.reviews} review in attesa`}
               action={
                 <Link
-                  href="/accessi/reviews"
+                  href="/nas-control/reviews"
                   className="rounded-md bg-amber-100 px-3 py-1.5 text-xs font-medium text-amber-700 transition hover:bg-amber-200"
                 >
                   Vai alle review
@@ -208,7 +231,7 @@ export default function AccessiPage() {
           ) : null}
 
           <div>
-            <h2 className="page-heading">Controllo centralizzato degli accessi NAS</h2>
+            <h2 className="page-heading">Controllo centralizzato NAS</h2>
             <p className="mt-1 text-sm text-gray-500">
               Vista sintetica di utenti, cartelle condivise, permessi effettivi e review aperte.
             </p>
@@ -218,7 +241,7 @@ export default function AccessiPage() {
             <MetricCard label="Utenti NAS" value={summary.nas_users} sub="Utenti sincronizzati dal dominio audit" />
             <MetricCard label="Cartelle" value={summary.shares} sub="Share presenti nell’ultimo snapshot" />
             <MetricCard label="Permessi calcolati" value={permissions.length} sub="Permessi effettivi persistiti" variant="success" />
-            <MetricCard label="Accessi negati" value={deniedCount} sub="Regole con deny attivo" variant={deniedCount > 0 ? "danger" : "default"} />
+            <MetricCard label="Permessi negati" value={deniedCount} sub="Regole con deny attivo" variant={deniedCount > 0 ? "danger" : "default"} />
           </div>
 
           <p className="text-sm text-gray-500">
@@ -233,7 +256,7 @@ export default function AccessiPage() {
                   <p className="section-copy">Ultimi utenti presenti nel dominio sincronizzato.</p>
                 </div>
                 {canAccessUsersSection ? (
-                  <Link href="/accessi/users" className="text-sm font-medium text-[#1D4E35]">
+                  <Link href="/nas-control/users" className="text-sm font-medium text-[#1D4E35]">
                     Tutti gli utenti
                   </Link>
                 ) : (
@@ -245,7 +268,7 @@ export default function AccessiPage() {
                   recentUsers.map((user) => (
                     <Link
                       key={user.id}
-                      href={`/accessi/users/${user.id}`}
+                      href={`/nas-control/users/${user.id}`}
                       className="flex items-center gap-3 rounded-lg border border-gray-100 px-3 py-3 transition hover:border-gray-200 hover:bg-gray-50"
                     >
                       <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#D3EAD4] text-[#1D4E35]">
@@ -272,7 +295,7 @@ export default function AccessiPage() {
                   <p className="section-title">Cartelle condivise</p>
                   <p className="section-copy">Share pronte per verifica permessi e review.</p>
                 </div>
-                <Link href="/accessi/shares" className="text-sm font-medium text-[#1D4E35]">
+                <Link href="/nas-control/shares" className="text-sm font-medium text-[#1D4E35]">
                   Tutte le cartelle
                 </Link>
               </div>
@@ -280,7 +303,7 @@ export default function AccessiPage() {
                 {recentShares.map((share) => (
                   <Link
                     key={share.id}
-                    href={`/accessi/shares/${share.id}`}
+                    href={`/nas-control/shares/${share.id}`}
                     className="flex items-center gap-3 rounded-lg border border-gray-100 px-3 py-3 transition hover:border-gray-200 hover:bg-gray-50"
                   >
                     <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#D3EAD4] text-[#1D4E35]">
@@ -303,7 +326,7 @@ export default function AccessiPage() {
                 <p className="section-title">Cartelle principali e utenti con accesso</p>
                 <p className="section-copy">Share root dell’ultimo snapshot con utenti che possono accedere al ramo.</p>
               </div>
-              <Link href="/accessi/effective-permissions" className="text-sm font-medium text-[#1D4E35]">
+              <Link href="/nas-control/effective-permissions" className="text-sm font-medium text-[#1D4E35]">
                 Apri vista completa
               </Link>
             </div>
@@ -323,7 +346,7 @@ export default function AccessiPage() {
                         <p className="text-sm font-medium text-gray-900">{share.name}</p>
                         <p className="truncate text-xs text-gray-400">{share.path}</p>
                       </div>
-                      <Link href={`/accessi/shares/${share.id}`} className="text-sm font-medium text-[#1D4E35]">
+                      <Link href={`/nas-control/shares/${share.id}`} className="text-sm font-medium text-[#1D4E35]">
                         Apri
                       </Link>
                     </div>

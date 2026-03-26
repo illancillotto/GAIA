@@ -222,7 +222,7 @@ export default function UsersPage() {
     <ProtectedPage
       title="Utenti NAS"
       description="Vista amministrativa degli utenti sincronizzati con ricerca, stato operativo e accessi calcolati."
-      breadcrumb="Accessi"
+      breadcrumb="NAS Control"
       requiredSection="accessi.users"
     >
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
@@ -323,7 +323,7 @@ export default function UsersPage() {
                 <h3 className="mt-1 text-xl font-medium text-gray-900">Vista rapida operativa</h3>
               </div>
               <div className="flex items-center gap-3">
-                <Link className="text-sm font-medium text-[#1D4E35]" href={`/accessi/users/${selectedUserId}`}>
+                <Link className="text-sm font-medium text-[#1D4E35]" href={`/nas-control/users/${selectedUserId}`}>
                   Apri pagina completa
                 </Link>
                 <button className="btn-secondary" onClick={() => setSelectedUserId(null)} type="button">

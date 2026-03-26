@@ -26,11 +26,11 @@ type HomeModule = {
 const modules: HomeModule[] = [
   {
     id: "accessi",
-    title: "GAIA Accessi",
-    subtitle: "NAS Audit",
+    title: "GAIA NAS Control",
+    subtitle: "NAS Control",
     description:
-      "Audit degli accessi al NAS Synology. Utenti, gruppi, cartelle condivise, permessi effettivi e workflow di review per i responsabili di settore.",
-    href: "/accessi",
+      "Controllo del NAS Synology. Utenti, gruppi, cartelle condivise, permessi effettivi e workflow di review per i responsabili di settore.",
+    href: "/nas-control",
     status: "active",
     statusLabel: "Operativo",
     accentClassName: "border-[#1D4E35]/20 bg-[#1D4E35] text-white shadow-[0_24px_64px_rgba(29,78,53,0.22)]",
@@ -155,6 +155,26 @@ export default function HomePage() {
   }
 
   const canAccessUsersSection = hasSectionAccess(grantedSectionKeys, "accessi.users");
+  const canManageGaiaUsers = currentUser.role === "admin" || currentUser.role === "super_admin";
+  const visibleModules = modules.filter((moduleItem) => {
+    if (moduleItem.status !== "active") {
+      return true;
+    }
+
+    const moduleKey =
+      moduleItem.id === "accessi"
+        ? "accessi"
+        : moduleItem.id === "rete"
+          ? "rete"
+          : moduleItem.id === "inventario"
+            ? "inventario"
+            : moduleItem.id === "catasto"
+              ? "catasto"
+              : moduleItem.id;
+
+    return currentUser.enabled_modules.includes(moduleKey);
+  });
+  const activeVisibleModulesCount = visibleModules.filter((moduleItem) => moduleItem.status === "active").length;
 
   return (
     <main className="min-h-screen bg-[#0E1712] text-white">
@@ -165,11 +185,11 @@ export default function HomePage() {
               GAIA
             </div>
             <h1 className="mt-5 text-4xl font-semibold tracking-tight sm:text-5xl">
-              Gestione Apparati Informativi e Accessi
+              Gestione Apparati Informativi
             </h1>
             <p className="mt-3 max-w-3xl text-sm leading-6 text-white/70 sm:text-base">
               Piattaforma IT governance del Consorzio di Bonifica dell&apos;Oristanese. Un unico punto di ingresso
-              per audit accessi, servizi catastali, monitoraggio rete e inventario dispositivi.
+              per controllo NAS, servizi catastali, monitoraggio rete e inventario dispositivi.
             </p>
           </div>
 
@@ -189,6 +209,14 @@ export default function HomePage() {
               </button>
             </div>
             <p className="mt-4 text-xs text-white/45">Consorzio di Bonifica dell&apos;Oristanese</p>
+            {canManageGaiaUsers ? (
+              <Link
+                href="/gaia/users"
+                className="mt-4 inline-flex w-full items-center justify-center rounded-2xl border border-white/15 bg-white/10 px-4 py-3 text-sm font-medium text-white transition hover:bg-white/15"
+              >
+                Apri Utenti GAIA
+              </Link>
+            ) : null}
           </div>
         </header>
 
@@ -200,14 +228,34 @@ export default function HomePage() {
                 <h2 className="mt-2 text-2xl font-semibold text-white sm:text-3xl">Seleziona il dominio operativo</h2>
               </div>
               <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white/70">
-                Moduli operativi: <span className="font-semibold text-white">2</span>
+                Moduli operativi: <span className="font-semibold text-white">{activeVisibleModulesCount}</span>
                 {" · "}
                 Review aperte: <span className="font-semibold text-white">{summary.reviews}</span>
               </div>
             </div>
 
+            {canManageGaiaUsers ? (
+              <section className="mb-6 rounded-[28px] border border-white/10 bg-white/5 p-6 backdrop-blur">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.18em] text-white/45">Amministrazione GAIA</p>
+                    <h3 className="mt-2 text-2xl font-semibold text-white">Utenti applicativi e permessi piattaforma</h3>
+                    <p className="mt-3 max-w-3xl text-sm leading-6 text-white/70">
+                      Sezione distinta dai moduli NAS. Qui gestisci gli utenti interni di GAIA, i ruoli applicativi e gli accessi alle sezioni della piattaforma.
+                    </p>
+                  </div>
+                  <Link
+                    href="/gaia/users"
+                    className="inline-flex items-center justify-center rounded-2xl border border-white/15 bg-white/10 px-5 py-3 text-sm font-medium text-white transition hover:bg-white/15"
+                  >
+                    Apri utenti GAIA
+                  </Link>
+                </div>
+              </section>
+            ) : null}
+
             <div className="grid gap-5 lg:grid-cols-3">
-              {modules.map((moduleItem) => {
+              {visibleModules.map((moduleItem) => {
                 const isActive = moduleItem.status === "active";
                 const cardContent = (
                   <article
@@ -255,22 +303,12 @@ export default function HomePage() {
                             <p className="mt-2 text-2xl font-semibold text-white">{summary.sync_runs}</p>
                           </div>
                         </div>
-                        {canAccessUsersSection ? (
-                          <Link
-                            href="/accessi/users"
-                            className="inline-flex items-center justify-center rounded-2xl border border-white/15 bg-white/10 px-4 py-3 text-sm font-medium text-white transition hover:bg-white/15"
-                          >
-                            Gestione utenti
-                          </Link>
-                        ) : (
-                          <span
-                            aria-disabled="true"
-                            className="inline-flex items-center justify-center rounded-2xl border border-white/10 bg-black/10 px-4 py-3 text-sm font-medium text-white/45"
-                            title="Accesso non abilitato"
-                          >
-                            Gestione utenti non abilitata
-                          </span>
-                        )}
+                        <div className="rounded-2xl border border-white/10 bg-black/10 p-4">
+                          <p className="text-xs uppercase tracking-[0.16em] text-white/55">Dominio</p>
+                          <p className="mt-2 text-sm font-semibold text-white">
+                            {canAccessUsersSection ? "Utenti, gruppi e share NAS" : "Gruppi, share e review NAS"}
+                          </p>
+                        </div>
                       </div>
                     ) : moduleItem.id === "catasto" ? (
                       <div className="mt-8 grid grid-cols-2 gap-3">
@@ -337,7 +375,7 @@ export default function HomePage() {
 
         <footer className="flex flex-col gap-2 border-t border-white/10 pt-6 text-xs text-white/45 sm:flex-row sm:items-center sm:justify-between">
           <p>GAIA platform · Consorzio di Bonifica dell&apos;Oristanese</p>
-          <p>Versione Accessi v0.1.0</p>
+          <p>Versione NAS Control v0.1.0</p>
         </footer>
       </div>
     </main>

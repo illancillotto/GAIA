@@ -8,7 +8,7 @@ export default function ReportsPage() {
   return (
     <ProtectedPage
       title="Report"
-      description="Area predisposta per export report e pacchetti di bonifica accessi."
+      description="Area predisposta per export report e pacchetti di bonifica del dominio NAS."
       breadcrumb="Validazione"
     >
       <EmptyState

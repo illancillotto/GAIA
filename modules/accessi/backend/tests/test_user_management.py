@@ -75,21 +75,22 @@ def test_admin_users_lifecycle_and_module_flags() -> None:
             "module_accessi": True,
             "module_rete": True,
             "module_inventario": False,
+            "module_catasto": True,
         },
     )
     assert create_resp.status_code == 201
-    assert create_resp.json()["enabled_modules"] == ["accessi", "rete"]
+    assert create_resp.json()["enabled_modules"] == ["accessi", "rete", "catasto"]
 
     list_resp = client.get("/admin/users", headers={"Authorization": f"Bearer {token}"})
     assert list_resp.status_code == 200
     assert list_resp.json()["total"] == 2
 
     patch_resp = client.patch(
-        f"/admin/users/{create_resp.json()['id']}/modules?module_accessi=false&module_rete=false&module_inventario=true",
+        f"/admin/users/{create_resp.json()['id']}/modules?module_accessi=false&module_rete=false&module_inventario=true&module_catasto=true",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert patch_resp.status_code == 200
-    assert patch_resp.json()["enabled_modules"] == ["inventario"]
+    assert patch_resp.json()["enabled_modules"] == ["inventario", "catasto"]
 
 
 def test_viewer_cannot_access_admin_users() -> None:

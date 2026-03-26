@@ -24,27 +24,35 @@ export function Sidebar({
 }: SidebarProps) {
   const pathname = usePathname();
   const currentModuleKey =
-    pathname.startsWith("/catasto")
+    pathname.startsWith("/gaia/users")
+      ? "gaia"
+      : pathname.startsWith("/nas-control")
+      ? "nas_control"
+      : pathname.startsWith("/catasto")
       ? "catasto"
       : pathname.startsWith("/network")
         ? "network"
-        : pathname.startsWith("/inventory")
+      : pathname.startsWith("/inventory")
           ? "inventory"
-          : "accessi";
+          : "nas_control";
 
   const currentModuleLabel =
-    currentModuleKey === "catasto"
+    currentModuleKey === "gaia"
+      ? "Utenti GAIA"
+      : currentModuleKey === "nas_control"
+      ? "NAS Control"
+      : currentModuleKey === "catasto"
       ? "Catasto"
       : currentModuleKey === "network"
         ? "Rete"
-        : currentModuleKey === "inventory"
-          ? "Inventario"
-          : "Accessi";
+      : currentModuleKey === "inventory"
+        ? "Inventario"
+          : "NAS Control";
 
   return (
     <aside className="sticky top-0 flex h-screen w-[220px] shrink-0 flex-col border-r border-gray-100 bg-white">
       <div className="flex-1 overflow-y-auto">
-        <PlatformSidebar currentModuleLabel={currentModuleLabel} />
+        <PlatformSidebar currentModuleLabel={currentModuleLabel} currentUser={currentUser} />
         <ModuleSidebar
           currentModuleKey={currentModuleKey}
           reviewBadge={reviewBadge}

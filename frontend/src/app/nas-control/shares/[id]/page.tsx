@@ -13,11 +13,11 @@ export default function ShareDetailPage() {
   return (
     <ProtectedPage
       title="Dettaglio cartella condivisa"
-      description="Vista analitica della share con accessi effettivi e origini delle regole applicate."
+      description="Vista analitica della share con permessi effettivi e origini delle regole applicate."
       breadcrumb="Cartelle condivise"
     >
       <div className="sr-only">
-        <p>Accessi effettivi</p>
+        <p>Permessi effettivi</p>
         <PermissionBadge level="none" />
       </div>
       <ShareDetailPanel shareId={shareId} />

@@ -17,6 +17,7 @@ type ProtectedPageProps = PropsWithChildren<{
   breadcrumb?: string;
   topbarActions?: ReactNode;
   requiredSection?: string;
+  requiredRoles?: string[];
 }>;
 
 const emptySummary: DashboardSummary = {
@@ -34,6 +35,7 @@ export function ProtectedPage({
   breadcrumb,
   topbarActions,
   requiredSection,
+  requiredRoles,
   children,
 }: ProtectedPageProps) {
   const router = useRouter();
@@ -115,8 +117,9 @@ export function ProtectedPage({
   }
 
   const isSectionAllowed = requiredSection ? hasSectionAccess(grantedSectionKeys, requiredSection) : true;
+  const isRoleAllowed = requiredRoles ? requiredRoles.includes(currentUser.role) : true;
 
-  if (!isSectionAllowed) {
+  if (!isSectionAllowed || !isRoleAllowed) {
     return (
       <AppShell
         currentUser={currentUser}
@@ -134,7 +137,9 @@ export function ProtectedPage({
           <article className="panel-card">
             <p className="text-sm font-medium text-red-700">Accesso non autorizzato</p>
             <p className="mt-2 text-sm text-gray-600">
-              Questa sezione e disponibile solo per admin, super admin o utenti esplicitamente abilitati.
+              {requiredRoles
+                ? "Questa sezione e disponibile solo per i ruoli autorizzati."
+                : "Questa sezione e disponibile solo per admin, super admin o utenti esplicitamente abilitati."}
             </p>
           </article>
         </section>

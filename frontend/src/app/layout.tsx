@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "GAIA | Gestione Apparati Informativi e Accessi",
+  title: "GAIA | Gestione Apparati Informativi",
   description: "Piattaforma IT governance del Consorzio di Bonifica dell'Oristanese",
 };
 

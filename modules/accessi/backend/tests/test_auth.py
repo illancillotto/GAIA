@@ -105,6 +105,7 @@ def test_me_returns_current_user() -> None:
     assert body["module_accessi"] is True
     assert body["module_rete"] is False
     assert body["module_inventario"] is False
+    assert body["module_catasto"] is False
     assert body["enabled_modules"] == ["accessi"]
 
 

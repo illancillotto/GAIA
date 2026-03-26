@@ -12,6 +12,7 @@ export type CurrentUser = {
   module_accessi: boolean;
   module_rete: boolean;
   module_inventario: boolean;
+  module_catasto: boolean;
   enabled_modules: string[];
 };
 
@@ -26,6 +27,49 @@ export type ResolvedSectionPermission = {
 export type MyPermissionsResponse = {
   sections: ResolvedSectionPermission[];
   granted_keys: string[];
+};
+
+export type ApplicationUser = {
+  id: number;
+  username: string;
+  email: string;
+  role: string;
+  is_active: boolean;
+  module_accessi: boolean;
+  module_rete: boolean;
+  module_inventario: boolean;
+  module_catasto: boolean;
+  enabled_modules: string[];
+  created_at: string;
+  updated_at: string;
+};
+
+export type ApplicationUserListResponse = {
+  items: ApplicationUser[];
+  total: number;
+};
+
+export type ApplicationUserCreateInput = {
+  username: string;
+  email: string;
+  password: string;
+  role: string;
+  is_active: boolean;
+  module_accessi: boolean;
+  module_rete: boolean;
+  module_inventario: boolean;
+  module_catasto: boolean;
+};
+
+export type ApplicationUserUpdateInput = {
+  email?: string;
+  password?: string;
+  role?: string;
+  is_active?: boolean;
+  module_accessi?: boolean;
+  module_rete?: boolean;
+  module_inventario?: boolean;
+  module_catasto?: boolean;
 };
 
 export type DashboardSummary = {

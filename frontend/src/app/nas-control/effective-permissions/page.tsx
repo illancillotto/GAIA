@@ -222,7 +222,7 @@ export default function EffectivePermissionsPage() {
     <ProtectedPage
       title="Permessi effettivi"
       description="Ultimo snapshot persistito e simulazione guidata del motore di calcolo permessi."
-      breadcrumb="Accessi"
+      breadcrumb="NAS Control"
     >
       {error || domainError ? <p className="text-sm text-red-600">{error ?? domainError}</p> : null}
 

@@ -14,7 +14,7 @@ import {
 import { NavItem } from "@/components/layout/nav-item";
 
 type ModuleSidebarProps = {
-  currentModuleKey: "accessi" | "network" | "inventory" | "catasto";
+  currentModuleKey: "nas_control" | "network" | "inventory" | "catasto" | "gaia";
   reviewBadge?: number;
   userBadge?: number;
   grantedSectionKeys?: string[];
@@ -28,35 +28,35 @@ export function ModuleSidebar({
 }: ModuleSidebarProps) {
   const canAccessUsersSection = grantedSectionKeys.includes("accessi.users");
 
-  if (currentModuleKey === "accessi") {
+  if (currentModuleKey === "nas_control") {
     return (
       <div className="space-y-0.5 px-2 pb-3">
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Panoramica</p>
-        <NavItem href="/accessi" icon={GridIcon} label="Dashboard" />
-        <NavItem href="/accessi/sync" icon={RefreshIcon} label="Sincronizzazione" />
+        <NavItem href="/nas-control" icon={GridIcon} label="Dashboard" />
+        <NavItem href="/nas-control/sync" icon={RefreshIcon} label="Sincronizzazione" />
 
-        <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Accessi</p>
+        <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Dominio NAS</p>
         <NavItem
-          href="/accessi/users"
+          href="/nas-control/users"
           icon={UserIcon}
           label="Utenti"
           badge={canAccessUsersSection ? userBadge || undefined : undefined}
           match="prefix"
           disabled={!canAccessUsersSection}
         />
-        <NavItem href="/accessi/groups" icon={UsersIcon} label="Gruppi" />
-        <NavItem href="/accessi/shares" icon={FolderIcon} label="Cartelle condivise" match="prefix" />
-        <NavItem href="/accessi/effective-permissions" icon={LockIcon} label="Permessi effettivi" />
+        <NavItem href="/nas-control/groups" icon={UsersIcon} label="Gruppi" />
+        <NavItem href="/nas-control/shares" icon={FolderIcon} label="Cartelle condivise" match="prefix" />
+        <NavItem href="/nas-control/effective-permissions" icon={LockIcon} label="Permessi effettivi" />
 
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Validazione</p>
         <NavItem
-          href="/accessi/reviews"
+          href="/nas-control/reviews"
           icon={CheckIcon}
-          label="Review accessi"
+          label="Review NAS"
           badge={reviewBadge || undefined}
           badgeVariant="danger"
         />
-        <NavItem href="/accessi/reports" icon={DocumentIcon} label="Report" />
+        <NavItem href="/nas-control/reports" icon={DocumentIcon} label="Report" />
       </div>
     );
   }
@@ -82,6 +82,15 @@ export function ModuleSidebar({
       <div className="space-y-0.5 px-2 pb-3">
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Panoramica</p>
         <NavItem href="/network" icon={GridIcon} label="Dashboard" />
+      </div>
+    );
+  }
+
+  if (currentModuleKey === "gaia") {
+    return (
+      <div className="space-y-0.5 px-2 pb-3">
+        <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Amministrazione</p>
+        <NavItem href="/gaia/users" icon={UserIcon} label="Utenti GAIA" match="prefix" />
       </div>
     );
   }

@@ -11,8 +11,8 @@ import { cn } from "@/lib/cn";
 
 const modules = [
   {
-    name: "GAIA Accessi",
-    subtitle: "NAS Audit",
+    name: "GAIA NAS Control",
+    subtitle: "NAS Control",
     status: "Operativo",
     tone: "active" as const,
   },
@@ -90,8 +90,8 @@ export default function LoginPage() {
                 Entra nella piattaforma GAIA
               </h1>
               <p className="mt-5 max-w-xl text-base leading-7 text-white/72">
-                Un unico punto di ingresso per audit accessi, servizi catastali, monitoraggio rete e inventario IT.
-                I moduli GAIA Accessi e GAIA Catasto sono operativi; gli altri moduli sono gia predisposti nello scaffold applicativo.
+                Un unico punto di ingresso per controllo NAS, servizi catastali, monitoraggio rete e inventario IT.
+                I moduli GAIA NAS Control e GAIA Catasto sono operativi; gli altri moduli sono gia predisposti nello scaffold applicativo.
               </p>
             </div>
 
@@ -128,7 +128,7 @@ export default function LoginPage() {
               <div className="rounded-2xl border border-white/8 bg-white/[0.04] p-4">
                 <p className="text-xs uppercase tracking-[0.18em] text-white/45">Identità</p>
                 <p className="mt-2 text-sm leading-6 text-white/76">
-                  Gestione Apparati Informativi e Accessi in un’unica piattaforma IT governance.
+                  Gestione Apparati Informativi in un’unica piattaforma IT governance.
                 </p>
               </div>
               <div className="rounded-2xl border border-white/8 bg-white/[0.04] p-4">
@@ -192,7 +192,7 @@ export default function LoginPage() {
 
           <div className="mt-6 rounded-2xl border border-gray-100 bg-[#F6F7F2] px-4 py-3 text-xs leading-5 text-gray-500">
             Dopo il login verrai indirizzato alla <span className="font-semibold text-[#1D4E35]">home GAIA</span>,
-            da cui potrai aprire i moduli operativi Accessi e Catasto.
+            da cui potrai aprire i moduli operativi NAS Control e Catasto.
           </div>
         </section>
       </section>

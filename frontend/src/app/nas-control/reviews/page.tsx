@@ -102,8 +102,8 @@ export default function ReviewsPage() {
 
   return (
     <ProtectedPage
-      title="Review accessi"
-      description="Coda di validazione per utenti e cartelle con stato decisionale e note operative."
+      title="Review NAS"
+      description="Coda di validazione per utenti e cartelle NAS con stato decisionale e note operative."
       breadcrumb="Validazione"
     >
       {error || domainError ? <p className="text-sm text-red-600">{error ?? domainError}</p> : null}

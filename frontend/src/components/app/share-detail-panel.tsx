@@ -92,7 +92,7 @@ export function ShareDetailPanel({ shareId, compact = false, onClose }: ShareDet
           <article className="panel-card overflow-hidden p-0">
             <div className="flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 px-5 py-4">
               <div>
-                <p className="section-title">Accessi effettivi</p>
+                <p className="section-title">Permessi effettivi</p>
                 <p className="section-copy">Utenti, stato lettura/scrittura, deny e origine regola per questa share.</p>
               </div>
               <label className="flex items-center gap-3 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm font-medium text-gray-700">

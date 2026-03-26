@@ -383,7 +383,7 @@ export function UserDetailPanel({ userId, compact = false, onClose }: UserDetail
                 <p>Permessi persistiti: {userPermissions.length}</p>
                 <p>Review associate: {userReviews.length}</p>
                 {!compact ? (
-                  <Link className="font-medium text-[#1D4E35]" href="/accessi/users">
+                  <Link className="font-medium text-[#1D4E35]" href="/nas-control/users">
                     Torna all’elenco utenti
                   </Link>
                 ) : null}

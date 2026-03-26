@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
-import { GridIcon, LockIcon, SearchIcon, ServerIcon } from "@/components/ui/icons";
+import { GridIcon, LockIcon, SearchIcon, ServerIcon, UserIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
+import type { CurrentUser } from "@/types/api";
 
 type PlatformSidebarProps = {
   currentModuleLabel: string;
+  currentUser: CurrentUser;
 };
 
 type PlatformModule = {
@@ -17,14 +19,29 @@ type PlatformModule = {
 };
 
 const platformModules: PlatformModule[] = [
-  { href: "/accessi", label: "Accessi", icon: LockIcon },
+  { href: "/nas-control", label: "NAS Control", icon: LockIcon },
   { href: "/network", label: "Rete", icon: ServerIcon },
   { href: "/inventory", label: "Inventario", icon: SearchIcon },
   { href: "/catasto", label: "Catasto", icon: GridIcon },
 ];
 
-export function PlatformSidebar({ currentModuleLabel }: PlatformSidebarProps) {
+export function PlatformSidebar({ currentModuleLabel, currentUser }: PlatformSidebarProps) {
   const pathname = usePathname();
+  const canManageGaiaUsers = currentUser.role === "admin" || currentUser.role === "super_admin";
+  const visiblePlatformModules = platformModules.filter(({ href }) => {
+    const moduleKey =
+      href === "/nas-control"
+        ? "accessi"
+        : href === "/network"
+          ? "rete"
+          : href === "/inventory"
+            ? "inventario"
+            : href === "/catasto"
+              ? "catasto"
+              : "";
+
+    return moduleKey ? currentUser.enabled_modules.includes(moduleKey) : true;
+  });
 
   return (
     <>
@@ -52,7 +69,7 @@ export function PlatformSidebar({ currentModuleLabel }: PlatformSidebarProps) {
         </p>
 
         <div className="space-y-0.5">
-          {platformModules.map(({ href, label, icon: Icon }) => {
+          {visiblePlatformModules.map(({ href, label, icon: Icon }) => {
             const isActive = pathname === href || pathname.startsWith(`${href}/`);
             return (
               <Link
@@ -71,6 +88,26 @@ export function PlatformSidebar({ currentModuleLabel }: PlatformSidebarProps) {
             );
           })}
         </div>
+
+        {canManageGaiaUsers ? (
+          <>
+            <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">
+              Amministrazione
+            </p>
+            <Link
+              href="/gaia/users"
+              className={cn(
+                "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
+                pathname === "/gaia/users" || pathname.startsWith("/gaia/users/")
+                  ? "bg-[#EAF3E8] font-medium text-[#1D4E35]"
+                  : "text-gray-500 hover:bg-gray-50 hover:text-gray-800",
+              )}
+            >
+              <UserIcon className="h-4 w-4 shrink-0" />
+              <span className="flex-1">Utenti GAIA</span>
+            </Link>
+          </>
+        ) : null}
       </nav>
     </>
   );

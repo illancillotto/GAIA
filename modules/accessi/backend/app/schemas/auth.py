@@ -22,4 +22,5 @@ class CurrentUserResponse(BaseModel):
     module_accessi: bool
     module_rete: bool
     module_inventario: bool
+    module_catasto: bool
     enabled_modules: list[str]

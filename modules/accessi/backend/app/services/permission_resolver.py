@@ -67,7 +67,7 @@ def _resolve_for_section(db: Session, user: ApplicationUser, section: Section) -
 
 def resolve_user_permissions(db: Session, user: ApplicationUser) -> list[ResolvedPermission]:
     if user.is_super_admin:
-        enabled_modules = ["accessi", "rete", "inventario"]
+        enabled_modules = ["accessi", "rete", "inventario", "catasto"]
     else:
         enabled_modules = user.enabled_modules
 

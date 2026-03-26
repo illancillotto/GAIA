@@ -195,7 +195,7 @@ export default function GroupsPage() {
     <ProtectedPage
       title="Gruppi NAS"
       description="Vista dei gruppi presenti nel dominio sincronizzato con focus operativo sui gruppi utili all’audit."
-      breadcrumb="Accessi"
+      breadcrumb="NAS Control"
     >
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
 

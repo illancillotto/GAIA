@@ -99,7 +99,7 @@ export default function SharesPage() {
     <ProtectedPage
       title="Cartelle condivise"
       description="Catalogo delle share del NAS con indicatori di accesso, deny e classificazione settoriale."
-      breadcrumb="Accessi"
+      breadcrumb="NAS Control"
     >
       {error ? <p className="text-sm text-red-600">{error}</p> : null}
 
@@ -175,7 +175,7 @@ export default function SharesPage() {
                 <div className="mt-2 flex items-center justify-between gap-3">
                   <Link
                     className="text-xs font-medium text-[#1D4E35] underline-offset-2 hover:underline"
-                    href={`/accessi/shares/${share.id}`}
+                    href={`/nas-control/shares/${share.id}`}
                     onClick={(event) => event.stopPropagation()}
                   >
                     Apri pagina completa
@@ -203,7 +203,7 @@ export default function SharesPage() {
                 <h3 className="mt-1 text-xl font-medium text-gray-900">Vista rapida operativa</h3>
               </div>
               <div className="flex items-center gap-3">
-                <Link className="text-sm font-medium text-[#1D4E35]" href={`/accessi/shares/${selectedShareId}`}>
+                <Link className="text-sm font-medium text-[#1D4E35]" href={`/nas-control/shares/${selectedShareId}`}>
                   Apri pagina completa
                 </Link>
                 <button className="btn-secondary" onClick={() => setSelectedShareId(null)} type="button">

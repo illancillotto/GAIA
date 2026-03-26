@@ -1,4 +1,8 @@
 import type {
+  ApplicationUser,
+  ApplicationUserCreateInput,
+  ApplicationUserListResponse,
+  ApplicationUserUpdateInput,
   CatastoBatch,
   CatastoBatchDetail,
   CatastoDocument,
@@ -201,6 +205,47 @@ export async function getNasUsers(token: string): Promise<NasUser[]> {
 
 export async function getNasUsersForUsersSection(token: string): Promise<NasUser[]> {
   return request<NasUser[]>("/nas-users/section", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function listApplicationUsers(token: string): Promise<ApplicationUserListResponse> {
+  return request<ApplicationUserListResponse>("/admin/users", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function createApplicationUser(token: string, payload: ApplicationUserCreateInput): Promise<ApplicationUser> {
+  return request<ApplicationUser>("/admin/users", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateApplicationUser(
+  token: string,
+  userId: number,
+  payload: ApplicationUserUpdateInput,
+): Promise<ApplicationUser> {
+  return request<ApplicationUser>(`/admin/users/${userId}`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteApplicationUser(token: string, userId: number): Promise<void> {
+  await request<null>(`/admin/users/${userId}`, {
+    method: "DELETE",
     headers: {
       Authorization: `Bearer ${token}`,
     },

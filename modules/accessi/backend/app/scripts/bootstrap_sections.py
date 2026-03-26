@@ -4,12 +4,12 @@ from app.repositories.section_permission import create_section
 from app.schemas.permissions import SectionCreate
 
 DEFAULT_SECTIONS = [
-    ("accessi.dashboard", "Dashboard Accessi", "accessi", "viewer"),
+    ("accessi.dashboard", "Dashboard NAS Control", "accessi", "viewer"),
     ("accessi.users", "Utenti NAS", "accessi", "viewer"),
     ("accessi.groups", "Gruppi NAS", "accessi", "viewer"),
     ("accessi.shares", "Cartelle condivise", "accessi", "viewer"),
     ("accessi.permissions", "Permessi effettivi", "accessi", "viewer"),
-    ("accessi.reviews", "Review accessi", "accessi", "reviewer"),
+    ("accessi.reviews", "Review NAS", "accessi", "reviewer"),
     ("accessi.export", "Export", "accessi", "reviewer"),
     ("accessi.sync", "Sincronizzazione NAS", "accessi", "admin"),
     ("accessi.snapshots", "Snapshot", "accessi", "admin"),
@@ -26,6 +26,11 @@ DEFAULT_SECTIONS = [
     ("inventario.import", "Import CSV", "inventario", "admin"),
     ("inventario.export", "Export inventario", "inventario", "reviewer"),
     ("inventario.locations", "Sedi", "inventario", "admin"),
+    ("catasto.dashboard", "Dashboard Catasto", "catasto", "viewer"),
+    ("catasto.single", "Visura singola", "catasto", "viewer"),
+    ("catasto.batch", "Batch Catasto", "catasto", "viewer"),
+    ("catasto.documents", "Archivio documenti Catasto", "catasto", "viewer"),
+    ("catasto.credentials", "Credenziali SISTER", "catasto", "admin"),
 ]
 
 
