@@ -23,6 +23,7 @@ const platformModules: PlatformModule[] = [
   { href: "/network", label: "Rete", icon: ServerIcon },
   { href: "/inventory", label: "Inventario", icon: SearchIcon },
   { href: "/catasto", label: "Catasto", icon: GridIcon },
+  { href: "/anagrafica", label: "Anagrafica", icon: UserIcon },
 ];
 
 export function PlatformSidebar({ currentModuleLabel, currentUser }: PlatformSidebarProps) {
@@ -40,6 +41,8 @@ export function PlatformSidebar({ currentModuleLabel, currentUser }: PlatformSid
             ? "inventario"
             : href === "/catasto"
               ? "catasto"
+              : href === "/anagrafica"
+                ? "anagrafica"
               : "";
 
     return moduleKey ? currentUser.enabled_modules.includes(moduleKey) : true;

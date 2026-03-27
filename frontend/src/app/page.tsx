@@ -68,6 +68,17 @@ const modules: HomeModule[] = [
     statusLabel: "Operativo",
     accentClassName: "border-[#7A3E0B]/20 bg-[#FFF7ED] text-gray-900 shadow-[0_24px_64px_rgba(122,62,11,0.12)]",
   },
+  {
+    id: "anagrafica",
+    title: "GAIA Anagrafica",
+    subtitle: "Registro soggetti",
+    description:
+      "Gestione delle anagrafiche soggetti, archivio documentale collegato al NAS e correlazioni operative con il dominio Catasto.",
+    href: "/anagrafica",
+    status: "active",
+    statusLabel: "In attivazione",
+    accentClassName: "border-[#264653]/20 bg-[#F1FAFB] text-gray-900 shadow-[0_24px_64px_rgba(38,70,83,0.12)]",
+  },
 ];
 
 const emptySummary: DashboardSummary = {
@@ -172,6 +183,8 @@ export default function HomePage() {
             ? "inventario"
             : moduleItem.id === "catasto"
               ? "catasto"
+              : moduleItem.id === "anagrafica"
+                ? "anagrafica"
               : moduleItem.id;
 
     return currentUser.enabled_modules.includes(moduleKey);
@@ -321,6 +334,17 @@ export default function HomePage() {
                         <div className="rounded-2xl border border-[#7A3E0B]/10 bg-white/70 p-4">
                           <p className="text-xs uppercase tracking-[0.16em] text-[#7A3E0B]/70">Output</p>
                           <p className="mt-2 text-sm font-semibold text-[#7A3E0B]">PDF, ZIP e archivio</p>
+                        </div>
+                      </div>
+                    ) : moduleItem.id === "anagrafica" ? (
+                      <div className="mt-8 grid grid-cols-2 gap-3">
+                        <div className="rounded-2xl border border-[#264653]/10 bg-white/70 p-4">
+                          <p className="text-xs uppercase tracking-[0.16em] text-[#264653]/70">Dominio</p>
+                          <p className="mt-2 text-sm font-semibold text-[#264653]">Soggetti e documenti</p>
+                        </div>
+                        <div className="rounded-2xl border border-[#264653]/10 bg-white/70 p-4">
+                          <p className="text-xs uppercase tracking-[0.16em] text-[#264653]/70">Step</p>
+                          <p className="mt-2 text-sm font-semibold text-[#264653]">Modulo integrato, backend MVP in avvio</p>
                         </div>
                       </div>
                     ) : (

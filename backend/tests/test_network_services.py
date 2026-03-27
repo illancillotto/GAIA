@@ -58,6 +58,7 @@ def test_run_nmap_scan_keeps_hosts_without_open_ports(monkeypatch) -> None:
     _FakePortScanner.scan_calls = []
     monkeypatch.setattr(services, "nmap", type("FakeNmapModule", (), {"PortScanner": _FakePortScanner}))
     monkeypatch.setattr(services.shutil, "which", lambda value: "/usr/bin/nmap" if value == "nmap" else None)
+    monkeypatch.setattr(services, "_collect_enrichment", lambda ip_address, open_ports: services.EnrichmentMetadata())
 
     hosts = services._run_nmap_scan("192.168.1.0/24", "22,443")
 
@@ -69,3 +70,37 @@ def test_run_nmap_scan_keeps_hosts_without_open_ports(monkeypatch) -> None:
     assert hosts[1].hostname == "pc-amministrazione"
     assert hosts[1].open_ports == []
     assert hosts[1].vendor == "Dell"
+
+
+def test_parse_netbios_name_returns_active_workstation_name() -> None:
+    output = """
+Looking up status of 192.168.1.50
+        OFFICE-PC      <00> -         B <ACTIVE>
+        WORKGROUP      <00> - <GROUP> B <ACTIVE>
+        OFFICE-PC      <20> -         B <ACTIVE>
+    """
+
+    assert services._parse_netbios_name(output) == "OFFICE-PC"
+
+
+def test_classify_snmp_descr_extracts_vendor_model_and_os() -> None:
+    vendor, model_name, operating_system = services._classify_snmp_descr(
+        "MikroTik RouterOS CRS326-24G-2S+ version 7.18.2"
+    )
+
+    assert vendor == "MikroTik"
+    assert model_name == "MikroTik RouterOS CRS326-24G-2S+ version 7.18.2"
+    assert operating_system == "RouterOS"
+
+
+def test_snmp_profile_communities_match_subnet(monkeypatch) -> None:
+    monkeypatch.setattr(
+        services.settings,
+        "network_snmp_community_profiles",
+        '[{"cidr":"192.168.1.0/24","communities":["private","public-site"]},{"cidr":"10.0.0.0/8","communities":["lab"]}]',
+    )
+    monkeypatch.setattr(services.settings, "network_snmp_communities", "public")
+
+    communities = services._snmp_profile_communities("192.168.1.50")
+
+    assert communities == ["private", "public-site", "public"]

@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -21,14 +22,17 @@ class NetworkDeviceResponse(BaseModel):
     ip_address: str
     mac_address: str | None
     hostname: str | None
-    display_name: str | None
-    asset_label: str | None
-    vendor: str | None
-    device_type: str | None
-    operating_system: str | None
-    dns_name: str | None
-    location_hint: str | None
-    notes: str | None
+    hostname_source: str | None = None
+    display_name: str | None = None
+    asset_label: str | None = None
+    vendor: str | None = None
+    model_name: str | None = None
+    device_type: str | None = None
+    operating_system: str | None = None
+    dns_name: str | None = None
+    location_hint: str | None = None
+    notes: str | None = None
+    metadata_sources: dict[str, Any] | None = None
     status: str
     is_monitored: bool
     open_ports: str | None
@@ -41,6 +45,7 @@ class NetworkDeviceResponse(BaseModel):
 class NetworkDeviceUpdateRequest(BaseModel):
     display_name: str | None = None
     asset_label: str | None = None
+    model_name: str | None = None
     device_type: str | None = None
     operating_system: str | None = None
     location_hint: str | None = None

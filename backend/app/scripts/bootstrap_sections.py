@@ -31,6 +31,11 @@ DEFAULT_SECTIONS = [
     ("catasto.batch", "Batch Catasto", "catasto", "viewer"),
     ("catasto.documents", "Archivio documenti Catasto", "catasto", "viewer"),
     ("catasto.credentials", "Credenziali SISTER", "catasto", "admin"),
+    ("anagrafica.dashboard", "Dashboard Anagrafica", "anagrafica", "viewer"),
+    ("anagrafica.subjects", "Soggetti Anagrafica", "anagrafica", "viewer"),
+    ("anagrafica.import", "Import archivio Anagrafica", "anagrafica", "admin"),
+    ("anagrafica.documents", "Documenti Anagrafica", "anagrafica", "viewer"),
+    ("anagrafica.export", "Export Anagrafica", "anagrafica", "reviewer"),
 ]
 
 

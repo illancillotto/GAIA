@@ -1,3 +1,4 @@
+import json
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -23,6 +24,35 @@ from app.modules.network.schemas import (
 from app.modules.network.services import get_network_dashboard_summary, list_network_devices, run_network_scan
 
 router = APIRouter(prefix="/network", tags=["network"])
+
+
+def _serialize_device(device: NetworkDevice) -> NetworkDeviceResponse:
+    payload = {
+        "id": device.id,
+        "last_scan_id": device.last_scan_id,
+        "ip_address": device.ip_address,
+        "mac_address": device.mac_address,
+        "hostname": device.hostname,
+        "hostname_source": device.hostname_source,
+        "display_name": device.display_name,
+        "asset_label": device.asset_label,
+        "vendor": device.vendor,
+        "model_name": device.model_name,
+        "device_type": device.device_type,
+        "operating_system": device.operating_system,
+        "dns_name": device.dns_name,
+        "location_hint": device.location_hint,
+        "notes": device.notes,
+        "metadata_sources": json.loads(device.metadata_sources) if device.metadata_sources else None,
+        "status": device.status,
+        "is_monitored": device.is_monitored,
+        "open_ports": device.open_ports,
+        "first_seen_at": device.first_seen_at,
+        "last_seen_at": device.last_seen_at,
+        "created_at": device.created_at,
+        "updated_at": device.updated_at,
+    }
+    return NetworkDeviceResponse.model_validate(payload)
 
 
 def _require_network_module(current_user: ApplicationUser) -> None:
@@ -51,7 +81,7 @@ def get_devices(
     _require_network_module(current_user)
     items, total = list_network_devices(db, page=page, page_size=page_size, search=search, status=status_filter)
     return NetworkDeviceListResponse(
-        items=[NetworkDeviceResponse.model_validate(item) for item in items],
+        items=[_serialize_device(item) for item in items],
         total=total,
         page=page,
         page_size=page_size,
@@ -68,7 +98,7 @@ def get_device(
     device = db.get(NetworkDevice, device_id)
     if device is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
-    return NetworkDeviceResponse.model_validate(device)
+    return _serialize_device(device)
 
 
 @router.patch("/devices/{device_id}", response_model=NetworkDeviceResponse)
@@ -90,7 +120,7 @@ def patch_device(
     db.add(device)
     db.commit()
     db.refresh(device)
-    return NetworkDeviceResponse.model_validate(device)
+    return _serialize_device(device)
 
 
 @router.get("/alerts", response_model=list[NetworkAlertResponse])

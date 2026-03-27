@@ -13,6 +13,7 @@ export type CurrentUser = {
   module_rete: boolean;
   module_inventario: boolean;
   module_catasto: boolean;
+  module_anagrafica: boolean;
   enabled_modules: string[];
 };
 
@@ -39,6 +40,7 @@ export type ApplicationUser = {
   module_rete: boolean;
   module_inventario: boolean;
   module_catasto: boolean;
+  module_anagrafica: boolean;
   enabled_modules: string[];
   created_at: string;
   updated_at: string;
@@ -59,6 +61,7 @@ export type ApplicationUserCreateInput = {
   module_rete: boolean;
   module_inventario: boolean;
   module_catasto: boolean;
+  module_anagrafica: boolean;
 };
 
 export type ApplicationUserUpdateInput = {
@@ -70,6 +73,7 @@ export type ApplicationUserUpdateInput = {
   module_rete?: boolean;
   module_inventario?: boolean;
   module_catasto?: boolean;
+  module_anagrafica?: boolean;
 };
 
 export type DashboardSummary = {
@@ -97,14 +101,17 @@ export type NetworkDevice = {
   ip_address: string;
   mac_address: string | null;
   hostname: string | null;
+  hostname_source: string | null;
   display_name: string | null;
   asset_label: string | null;
   vendor: string | null;
+  model_name: string | null;
   device_type: string | null;
   operating_system: string | null;
   dns_name: string | null;
   location_hint: string | null;
   notes: string | null;
+  metadata_sources: Record<string, string> | null;
   status: string;
   is_monitored: boolean;
   open_ports: string | null;
@@ -117,6 +124,7 @@ export type NetworkDevice = {
 export type NetworkDeviceUpdateInput = {
   display_name?: string | null;
   asset_label?: string | null;
+  model_name?: string | null;
   device_type?: string | null;
   operating_system?: string | null;
   location_hint?: string | null;
@@ -190,6 +198,252 @@ export type DevicePosition = {
 
 export type NetworkFloorPlanDetail = NetworkFloorPlan & {
   positions: DevicePosition[];
+};
+
+export type AnagraficaStats = {
+  total_subjects: number;
+  total_persons: number;
+  total_companies: number;
+  total_unknown: number;
+  total_documents: number;
+  requires_review: number;
+  active_subjects: number;
+  inactive_subjects: number;
+  documents_unclassified: number;
+  by_letter: Record<string, number>;
+};
+
+export type AnagraficaDocument = {
+  id: string | null;
+  filename: string;
+  relative_path: string;
+  nas_path: string;
+  extension: string | null;
+  is_pdf: boolean;
+  doc_type: string;
+  classification_source: string;
+  warnings: string[];
+};
+
+export type AnagraficaAuditLog = {
+  id: string;
+  subject_id: string;
+  changed_by_user_id: number | null;
+  action: string;
+  diff_json: Record<string, unknown> | unknown[] | null;
+  changed_at: string;
+};
+
+export type AnagraficaCatastoDocument = {
+  id: string;
+  request_id: string | null;
+  comune: string;
+  foglio: string;
+  particella: string;
+  subalterno: string | null;
+  catasto: string;
+  tipo_visura: string;
+  filename: string;
+  codice_fiscale: string | null;
+  created_at: string;
+};
+
+export type AnagraficaPerson = {
+  subject_id: string;
+  cognome: string;
+  nome: string;
+  codice_fiscale: string;
+  data_nascita: string | null;
+  comune_nascita: string | null;
+  indirizzo: string | null;
+  comune_residenza: string | null;
+  cap: string | null;
+  email: string | null;
+  telefono: string | null;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AnagraficaCompany = {
+  subject_id: string;
+  ragione_sociale: string;
+  partita_iva: string;
+  codice_fiscale: string | null;
+  forma_giuridica: string | null;
+  sede_legale: string | null;
+  comune_sede: string | null;
+  cap: string | null;
+  email_pec: string | null;
+  telefono: string | null;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AnagraficaSubjectListItem = {
+  id: string;
+  subject_type: string;
+  status: string;
+  source_name_raw: string;
+  display_name: string;
+  codice_fiscale: string | null;
+  partita_iva: string | null;
+  nas_folder_path: string | null;
+  nas_folder_letter: string | null;
+  requires_review: boolean;
+  imported_at: string | null;
+  document_count: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AnagraficaSubjectListResponse = {
+  items: AnagraficaSubjectListItem[];
+  total: number;
+  page: number;
+  page_size: number;
+};
+
+export type AnagraficaSubjectDetail = {
+  id: string;
+  subject_type: string;
+  status: string;
+  source_name_raw: string;
+  nas_folder_path: string | null;
+  nas_folder_letter: string | null;
+  requires_review: boolean;
+  imported_at: string | null;
+  created_at: string;
+  updated_at: string;
+  person: AnagraficaPerson | null;
+  company: AnagraficaCompany | null;
+  documents: AnagraficaDocument[];
+  audit_log: AnagraficaAuditLog[];
+  catasto_documents: AnagraficaCatastoDocument[];
+};
+
+export type AnagraficaSubjectCreateInput = {
+  subject_type: "person" | "company" | "unknown";
+  source_name_raw: string;
+  nas_folder_path?: string | null;
+  nas_folder_letter?: string | null;
+  requires_review?: boolean;
+  person?: Omit<AnagraficaPerson, "subject_id" | "created_at" | "updated_at"> | null;
+  company?: Omit<AnagraficaCompany, "subject_id" | "created_at" | "updated_at"> | null;
+};
+
+export type AnagraficaSubjectUpdateInput = {
+  source_name_raw?: string;
+  status?: "active" | "inactive" | "duplicate";
+  nas_folder_path?: string | null;
+  nas_folder_letter?: string | null;
+  requires_review?: boolean;
+  person?: Omit<AnagraficaPerson, "subject_id" | "created_at" | "updated_at"> | null;
+  company?: Omit<AnagraficaCompany, "subject_id" | "created_at" | "updated_at"> | null;
+};
+
+export type AnagraficaImportWarning = {
+  code: string;
+  message: string;
+  path: string | null;
+};
+
+export type AnagraficaPreviewSubject = {
+  folder_name: string;
+  letter: string;
+  nas_folder_path: string;
+  source_name_raw: string;
+  subject_type: string;
+  requires_review: boolean;
+  confidence: number;
+  cognome: string | null;
+  nome: string | null;
+  codice_fiscale: string | null;
+  ragione_sociale: string | null;
+  partita_iva: string | null;
+  warnings: string[];
+  documents: AnagraficaDocument[];
+};
+
+export type AnagraficaImportPreview = {
+  letter: string;
+  archive_root: string;
+  generated_at: string;
+  total_folders: number;
+  parsed_subjects: number;
+  subjects_requiring_review: number;
+  total_documents: number;
+  non_pdf_documents: number;
+  warnings: AnagraficaImportWarning[];
+  errors: AnagraficaImportWarning[];
+  subjects: AnagraficaPreviewSubject[];
+};
+
+export type AnagraficaImportRunResult = {
+  job_id: string;
+  letter: string;
+  status: string;
+  total_folders: number;
+  imported_ok: number;
+  imported_errors: number;
+  warning_count: number;
+  pending_items: number;
+  running_items: number;
+  completed_items: number;
+  failed_items: number;
+  created_subjects: number;
+  updated_subjects: number;
+  created_documents: number;
+  updated_documents: number;
+  generated_at: string;
+  completed_at: string | null;
+  log_json: Record<string, unknown> | unknown[] | null;
+};
+
+export type AnagraficaImportJob = {
+  job_id: string;
+  requested_by_user_id: number | null;
+  letter: string | null;
+  status: string;
+  total_folders: number;
+  imported_ok: number;
+  imported_errors: number;
+  warning_count: number;
+  pending_items: number;
+  running_items: number;
+  completed_items: number;
+  failed_items: number;
+  items: AnagraficaImportJobItem[];
+  log_json: Record<string, unknown> | unknown[] | null;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  updated_at: string;
+};
+
+export type AnagraficaImportJobItem = {
+  id: string;
+  subject_id: string | null;
+  letter: string | null;
+  folder_name: string;
+  nas_folder_path: string;
+  status: string;
+  attempt_count: number;
+  warning_count: number;
+  documents_created: number;
+  documents_updated: number;
+  payload_json: Record<string, unknown> | unknown[] | null;
+  last_error: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type AnagraficaSearchResult = {
+  items: AnagraficaSubjectListItem[];
+  total: number;
 };
 
 export type NasUser = {

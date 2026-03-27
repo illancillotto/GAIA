@@ -33,6 +33,7 @@ class ApplicationUser(Base):
     module_rete: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     module_inventario: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     module_catasto: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    module_anagrafica: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -52,7 +53,7 @@ class ApplicationUser(Base):
     @property
     def enabled_modules(self) -> list[str]:
         if self.is_super_admin:
-            return ["accessi", "rete", "inventario", "catasto"]
+            return ["accessi", "rete", "inventario", "catasto", "anagrafica"]
 
         modules: list[str] = []
         if self.module_accessi:
@@ -63,4 +64,6 @@ class ApplicationUser(Base):
             modules.append("inventario")
         if self.module_catasto:
             modules.append("catasto")
+        if self.module_anagrafica:
+            modules.append("anagrafica")
         return modules

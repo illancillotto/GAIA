@@ -23,4 +23,5 @@ class CurrentUserResponse(BaseModel):
     module_rete: bool
     module_inventario: bool
     module_catasto: bool
+    module_anagrafica: bool
     enabled_modules: list[str]

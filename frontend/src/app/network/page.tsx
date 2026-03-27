@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { NetworkModulePage } from "@/components/network/network-module-page";
 import { NetworkStatusBadge } from "@/components/network/network-status-badge";
@@ -29,7 +29,7 @@ function DashboardContent({ token }: { token: string }) {
   const [isTriggeringScan, setIsTriggeringScan] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  async function loadData() {
+  const loadData = useCallback(async () => {
     try {
       const [dashboard, deviceResponse, alertItems] = await Promise.all([
         getNetworkDashboard(token),
@@ -45,11 +45,11 @@ function DashboardContent({ token }: { token: string }) {
     } finally {
       setIsLoading(false);
     }
-  }
+  }, [token]);
 
   useEffect(() => {
     void loadData();
-  }, [token]);
+  }, [loadData]);
 
   async function handleScanTrigger() {
     setIsTriggeringScan(true);

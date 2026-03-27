@@ -20,6 +20,7 @@ function DeviceDetailContent({ token, deviceId }: { token: string; deviceId: num
   const [notes, setNotes] = useState("");
   const [deviceType, setDeviceType] = useState("");
   const [operatingSystem, setOperatingSystem] = useState("");
+  const [modelName, setModelName] = useState("");
   const [isMonitored, setIsMonitored] = useState(true);
 
   useEffect(() => {
@@ -46,6 +47,7 @@ function DeviceDetailContent({ token, deviceId }: { token: string; deviceId: num
     setNotes(device.notes || "");
     setDeviceType(device.device_type || "");
     setOperatingSystem(device.operating_system || "");
+    setModelName(device.model_name || "");
     setIsMonitored(device.is_monitored);
   }, [device]);
 
@@ -64,6 +66,7 @@ function DeviceDetailContent({ token, deviceId }: { token: string; deviceId: num
         asset_label: assetLabel || null,
         location_hint: locationHint || null,
         notes: notes || null,
+        model_name: modelName || null,
         device_type: deviceType || null,
         operating_system: operatingSystem || null,
         is_monitored: isMonitored,
@@ -123,8 +126,16 @@ function DeviceDetailContent({ token, deviceId }: { token: string; deviceId: num
             <dd className="mt-1 text-sm text-gray-800">{device.dns_name || "n/d"}</dd>
           </div>
           <div>
+            <dt className="label-caption">Sorgente nome</dt>
+            <dd className="mt-1 text-sm text-gray-800">{device.hostname_source || "n/d"}</dd>
+          </div>
+          <div>
             <dt className="label-caption">Vendor</dt>
             <dd className="mt-1 text-sm text-gray-800">{device.vendor || "n/d"}</dd>
+          </div>
+          <div>
+            <dt className="label-caption">Modello</dt>
+            <dd className="mt-1 text-sm text-gray-800">{device.model_name || "n/d"}</dd>
           </div>
           <div>
             <dt className="label-caption">Tipo dispositivo</dt>
@@ -169,6 +180,39 @@ function DeviceDetailContent({ token, deviceId }: { token: string; deviceId: num
 
       <article className="panel-card xl:col-span-2">
         <div className="mb-4">
+          <p className="section-title">Sorgenti rilevazione</p>
+          <p className="section-copy">Origine del nome e dei metadati osservati automaticamente durante le scansioni.</p>
+        </div>
+        <dl className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div>
+            <dt className="label-caption">Hostname attivo</dt>
+            <dd className="mt-1 text-sm text-gray-800">{device.hostname || "n/d"}</dd>
+          </div>
+          <div>
+            <dt className="label-caption">Fonte hostname</dt>
+            <dd className="mt-1 text-sm text-gray-800">{device.hostname_source || "n/d"}</dd>
+          </div>
+          <div>
+            <dt className="label-caption">DNS</dt>
+            <dd className="mt-1 text-sm text-gray-800">{device.metadata_sources?.dns || device.dns_name || "n/d"}</dd>
+          </div>
+          <div>
+            <dt className="label-caption">mDNS</dt>
+            <dd className="mt-1 text-sm text-gray-800">{device.metadata_sources?.mdns || "n/d"}</dd>
+          </div>
+          <div>
+            <dt className="label-caption">NetBIOS</dt>
+            <dd className="mt-1 text-sm text-gray-800">{device.metadata_sources?.netbios || "n/d"}</dd>
+          </div>
+          <div>
+            <dt className="label-caption">SNMP community</dt>
+            <dd className="mt-1 text-sm text-gray-800">{device.metadata_sources?.snmp || "n/d"}</dd>
+          </div>
+        </dl>
+      </article>
+
+      <article className="panel-card xl:col-span-2">
+        <div className="mb-4">
           <p className="section-title">Anagrafica interna</p>
           <p className="section-copy">Nome leggibile, etichetta apparato e note operative assegnate manualmente.</p>
         </div>
@@ -182,6 +226,10 @@ function DeviceDetailContent({ token, deviceId }: { token: string; deviceId: num
           <label className="block text-sm font-medium text-gray-700">
             Asset label
             <input className="form-control mt-1" value={assetLabel} onChange={(event) => setAssetLabel(event.target.value)} placeholder="es. SW-PT-01" />
+          </label>
+          <label className="block text-sm font-medium text-gray-700">
+            Modello
+            <input className="form-control mt-1" value={modelName} onChange={(event) => setModelName(event.target.value)} placeholder="es. CRS326-24G-2S+, DS920+, LaserJet M404" />
           </label>
           <label className="block text-sm font-medium text-gray-700">
             Tipo dispositivo

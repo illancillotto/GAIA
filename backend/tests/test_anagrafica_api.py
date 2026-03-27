@@ -1,0 +1,451 @@
+from collections.abc import Generator
+import time
+import uuid
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from app.core.database import get_db
+from app.core.security import hash_password
+from app.db.base import Base
+from app.main import app
+from app.models.application_user import ApplicationUser, ApplicationUserRole
+from app.models.catasto import CatastoDocument
+from app.modules.anagrafica.router import get_anagrafica_import_service
+from app.modules.anagrafica.models import AnagraficaDocument
+from app.modules.anagrafica.services.import_service import AnagraficaImportPreviewService
+
+
+engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+TestingSessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+
+
+def override_get_db() -> Generator[Session, None, None]:
+    db = TestingSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+client = TestClient(app)
+
+
+class FakeNasConnector:
+    def run_command(self, command: str) -> str:
+        outputs = {
+            "find '/archive' -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort": "/archive/O",
+            "find '/archive/O' -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort": (
+                "/archive/O/Obinu_Santina_BNOSTN34L64I743F"
+            ),
+            (
+                "find '/archive/O/Obinu_Santina_BNOSTN34L64I743F' -type f 2>/dev/null | sort"
+            ): "/archive/O/Obinu_Santina_BNOSTN34L64I743F/INGIUNZIONE-2024.pdf",
+        }
+        return outputs.get(command, "")
+
+
+@pytest.fixture(autouse=True)
+def setup_database() -> Generator[None, None, None]:
+    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_anagrafica_import_service] = lambda: AnagraficaImportPreviewService(
+        FakeNasConnector(),
+        archive_root="/archive",
+    )
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+    yield
+    app.dependency_overrides.clear()
+    Base.metadata.drop_all(bind=engine)
+
+
+def create_user(username: str, *, module_anagrafica: bool) -> None:
+    db = TestingSessionLocal()
+    user = ApplicationUser(
+        username=username,
+        email=f"{username}@example.local",
+        password_hash=hash_password("secret123"),
+        role=ApplicationUserRole.ADMIN.value,
+        is_active=True,
+        module_accessi=True,
+        module_anagrafica=module_anagrafica,
+    )
+    db.add(user)
+    db.commit()
+    db.close()
+
+
+def login(username: str) -> str:
+    response = client.post("/auth/login", json={"username": username, "password": "secret123"})
+    assert response.status_code == 200
+    return response.json()["access_token"]
+
+
+def wait_for_job_completion(token: str, job_id: str, timeout_seconds: float = 3.0) -> dict:
+    deadline = time.time() + timeout_seconds
+    headers = {"Authorization": f"Bearer {token}"}
+    while time.time() < deadline:
+        response = client.get(f"/anagrafica/import/jobs/{job_id}", headers=headers)
+        assert response.status_code == 200
+        payload = response.json()
+        if payload["status"] in {"completed", "failed"}:
+            return payload
+        time.sleep(0.05)
+    raise AssertionError("Import job did not complete in time")
+
+
+def test_import_preview_returns_structured_payload() -> None:
+    create_user("alice", module_anagrafica=True)
+    token = login("alice")
+
+    response = client.post(
+        "/anagrafica/import/preview",
+        json={"letter": "o"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["letter"] == "O"
+    assert body["total_folders"] == 1
+    assert body["parsed_subjects"] == 1
+    assert body["total_documents"] == 1
+    assert body["subjects"][0]["subject_type"] == "person"
+    assert body["subjects"][0]["documents"][0]["doc_type"] == "ingiunzione"
+
+
+def test_import_preview_without_letter_scans_full_archive() -> None:
+    create_user("alice_all", module_anagrafica=True)
+    token = login("alice_all")
+
+    response = client.post(
+        "/anagrafica/import/preview",
+        json={},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["letter"] == "ALL"
+    assert body["total_folders"] == 1
+    assert body["parsed_subjects"] == 1
+
+
+def test_import_preview_requires_module_flag() -> None:
+    create_user("bob", module_anagrafica=False)
+    token = login("bob")
+
+    response = client.post(
+        "/anagrafica/import/preview",
+        json={"letter": "O"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 403
+
+
+def test_import_preview_validates_letter() -> None:
+    create_user("carla", module_anagrafica=True)
+    token = login("carla")
+
+    response = client.post(
+        "/anagrafica/import/preview",
+        json={"letter": "12"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 422
+
+
+def test_import_run_persists_job_and_returns_summary() -> None:
+    create_user("dario", module_anagrafica=True)
+    token = login("dario")
+
+    response = client.post(
+        "/anagrafica/import/run",
+        json={"letter": "O"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 202
+    body = response.json()
+    assert body["status"] in {"pending", "running"}
+    assert body["total_folders"] == 1
+
+    jobs_response = client.get("/anagrafica/import/jobs", headers={"Authorization": f"Bearer {token}"})
+    assert jobs_response.status_code == 200
+    jobs = jobs_response.json()
+    assert len(jobs) == 1
+    assert jobs[0]["job_id"] == body["job_id"]
+
+    detail_response = client.get(
+        f"/anagrafica/import/jobs/{body['job_id']}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert detail_response.status_code == 200
+    assert detail_response.json()["status"] in {"pending", "running", "completed"}
+
+
+def test_import_run_without_letter_imports_full_archive() -> None:
+    create_user("dario_all", module_anagrafica=True)
+    token = login("dario_all")
+
+    response = client.post(
+        "/anagrafica/import/run",
+        json={},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 202
+    body = response.json()
+    assert body["letter"] == "ALL"
+    assert body["total_folders"] == 1
+
+
+def test_import_job_detail_includes_items_and_resume_endpoint() -> None:
+    create_user("franco", module_anagrafica=True)
+    token = login("franco")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    run_response = client.post("/anagrafica/import/run", json={}, headers=headers)
+    assert run_response.status_code == 202
+    job_id = run_response.json()["job_id"]
+
+    completed_job = wait_for_job_completion(token, job_id)
+    assert completed_job["items"]
+    assert completed_job["items"][0]["folder_name"] == "Obinu_Santina_BNOSTN34L64I743F"
+
+    resume_response = client.post(f"/anagrafica/import/jobs/{job_id}/resume", headers=headers)
+    assert resume_response.status_code == 202
+    resume_payload = resume_response.json()
+    assert resume_payload["job_id"] == job_id
+    assert resume_payload["status"] == "running"
+
+    resumed_job = wait_for_job_completion(token, job_id)
+    assert resumed_job["status"] == "completed"
+
+
+def test_subjects_crud_search_and_stats() -> None:
+    create_user("eva", module_anagrafica=True)
+    token = login("eva")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    create_response = client.post(
+        "/anagrafica/subjects",
+        headers=headers,
+        json={
+            "subject_type": "person",
+            "source_name_raw": "Rossi_Mario_RSSMRA80A01H501Z",
+            "nas_folder_letter": "R",
+            "requires_review": False,
+            "person": {
+                "cognome": "Rossi",
+                "nome": "Mario",
+                "codice_fiscale": "RSSMRA80A01H501Z",
+                "email": "mario.rossi@example.local",
+            },
+        },
+    )
+
+    assert create_response.status_code == 201
+    created = create_response.json()
+    subject_id = created["id"]
+    assert created["person"]["cognome"] == "Rossi"
+
+    list_response = client.get("/anagrafica/subjects?search=rossi", headers=headers)
+    assert list_response.status_code == 200
+    list_payload = list_response.json()
+    assert list_payload["total"] >= 1
+    assert list_payload["items"][0]["display_name"] == "Rossi Mario"
+
+    detail_response = client.get(f"/anagrafica/subjects/{subject_id}", headers=headers)
+    assert detail_response.status_code == 200
+    detail_payload = detail_response.json()
+    assert detail_payload["person"]["codice_fiscale"] == "RSSMRA80A01H501Z"
+    assert len(detail_payload["audit_log"]) == 1
+
+    update_response = client.put(
+        f"/anagrafica/subjects/{subject_id}",
+        headers=headers,
+        json={
+            "requires_review": True,
+            "person": {
+                "cognome": "Rossi",
+                "nome": "Mario",
+                "codice_fiscale": "RSSMRA80A01H501Z",
+                "telefono": "0783123456",
+            },
+        },
+    )
+    assert update_response.status_code == 200
+    updated = update_response.json()
+    assert updated["requires_review"] is True
+    assert updated["person"]["telefono"] == "0783123456"
+
+    search_response = client.get("/anagrafica/search?q=mario", headers=headers)
+    assert search_response.status_code == 200
+    assert search_response.json()["total"] >= 1
+
+    stats_response = client.get("/anagrafica/stats", headers=headers)
+    assert stats_response.status_code == 200
+    stats = stats_response.json()
+    assert stats["total_subjects"] >= 1
+    assert stats["total_persons"] >= 1
+    assert stats["by_letter"]["R"] >= 1
+
+    deactivate_response = client.delete(f"/anagrafica/subjects/{subject_id}", headers=headers)
+    assert deactivate_response.status_code == 200
+    assert deactivate_response.json()["status"] == "inactive"
+
+    token_search_response = client.get("/anagrafica/search?q=rossi RSSMRA80A01H501Z", headers=headers)
+    assert token_search_response.status_code == 200
+    assert token_search_response.json()["total"] >= 1
+
+
+def test_document_update_and_delete() -> None:
+    create_user("franco", module_anagrafica=True)
+    token = login("franco")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    create_response = client.post(
+        "/anagrafica/subjects",
+        headers=headers,
+        json={
+            "subject_type": "person",
+            "source_name_raw": "Rossi_Mario_RSSMRA80A01H501Z",
+            "nas_folder_letter": "R",
+            "requires_review": False,
+            "person": {
+                "cognome": "Rossi",
+                "nome": "Mario",
+                "codice_fiscale": "RSSMRA80A01H501Z",
+            },
+        },
+    )
+    assert create_response.status_code == 201
+    subject_id = create_response.json()["id"]
+
+    db = TestingSessionLocal()
+    try:
+        user = db.query(ApplicationUser).filter(ApplicationUser.username == "franco").one()
+        db.add(
+            CatastoDocument(
+                user_id=user.id,
+                request_id=None,
+                comune="Oristano",
+                foglio="1",
+                particella="2",
+                subalterno=None,
+                catasto="fabbricati",
+                tipo_visura="storica",
+                filename="visura.pdf",
+                filepath="/catasto/visura.pdf",
+                codice_fiscale="RSSMRA80A01H501Z",
+            )
+        )
+        db.add(
+            AnagraficaDocument(
+                subject_id=uuid.UUID(subject_id),
+                doc_type="ingiunzione",
+                filename="INGIUNZIONE-2024.pdf",
+                nas_path="/archive/R/Rossi_Mario_RSSMRA80A01H501Z/INGIUNZIONE-2024.pdf",
+                classification_source="auto",
+                storage_type="nas_link",
+                mime_type="application/pdf",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    documents_response = client.get(f"/anagrafica/subjects/{subject_id}/documents", headers=headers)
+    assert documents_response.status_code == 200
+    documents = documents_response.json()
+    assert len(documents) == 1
+    document_id = documents[0]["id"]
+
+    detail_response = client.get(f"/anagrafica/subjects/{subject_id}", headers=headers)
+    assert detail_response.status_code == 200
+    assert len(detail_response.json()["documents"]) == 1
+
+    patch_response = client.patch(
+        f"/anagrafica/documents/{document_id}",
+        headers=headers,
+        json={"doc_type": "visura", "notes": "riclassificato"},
+    )
+    assert patch_response.status_code == 200
+    patched = patch_response.json()
+    assert patched["doc_type"] == "visura"
+    assert "riclassificato" in ",".join(patched["warnings"]) or patched["warnings"] == []
+
+    delete_response = client.delete(f"/anagrafica/documents/{document_id}", headers=headers)
+    assert delete_response.status_code == 204
+
+    documents_after_delete = client.get(f"/anagrafica/subjects/{subject_id}/documents", headers=headers)
+    assert documents_after_delete.status_code == 200
+    assert documents_after_delete.json() == []
+
+
+def test_export_and_catasto_correlation() -> None:
+    create_user("gina", module_anagrafica=True)
+    token = login("gina")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    create_response = client.post(
+        "/anagrafica/subjects",
+        headers=headers,
+        json={
+          "subject_type": "person",
+          "source_name_raw": "Pinna_Giulia_PNNGLI80A01H501Z",
+          "nas_folder_letter": "P",
+          "person": {
+            "cognome": "Pinna",
+            "nome": "Giulia",
+            "codice_fiscale": "PNNGLI80A01H501Z",
+          },
+        },
+    )
+    assert create_response.status_code == 201
+    subject_id = create_response.json()["id"]
+
+    db = TestingSessionLocal()
+    db.add(
+        CatastoDocument(
+            user_id=1,
+            request_id=None,
+            comune="Oristano",
+            foglio="12",
+            particella="345",
+            subalterno="2",
+            catasto="Terreni",
+            tipo_visura="Sintetica",
+            filename="visura-pinna.pdf",
+            filepath="/tmp/visura-pinna.pdf",
+            file_size=1024,
+            codice_fiscale="PNNGLI80A01H501Z",
+        )
+    )
+    db.commit()
+    db.close()
+
+    detail_response = client.get(f"/anagrafica/subjects/{subject_id}", headers=headers)
+    assert detail_response.status_code == 200
+    detail = detail_response.json()
+    assert len(detail["catasto_documents"]) == 1
+    assert detail["catasto_documents"][0]["comune"] == "Oristano"
+    assert detail["catasto_documents"][0]["filename"] == "visura-pinna.pdf"
+
+    csv_response = client.get("/anagrafica/export?format=csv&search=Pinna", headers=headers)
+    assert csv_response.status_code == 200
+    assert csv_response.headers["content-type"].startswith("text/csv")
+    assert "display_name" in csv_response.text
+    assert "Pinna Giulia" in csv_response.text
+
+    xlsx_response = client.get("/anagrafica/export?format=xlsx&search=Pinna", headers=headers)
+    assert xlsx_response.status_code == 200
+    assert xlsx_response.headers["content-type"].startswith(
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )

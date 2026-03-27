@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { NetworkModulePage } from "@/components/network/network-module-page";
 import { NetworkStatusBadge } from "@/components/network/network-status-badge";
@@ -13,7 +13,7 @@ function ScansContent({ token }: { token: string }) {
   const [isTriggeringScan, setIsTriggeringScan] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  async function loadScans() {
+  const loadScans = useCallback(async () => {
     try {
       const response = await getNetworkScans(token);
       setScans(response);
@@ -21,11 +21,11 @@ function ScansContent({ token }: { token: string }) {
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "Errore nel caricamento scansioni");
     }
-  }
+  }, [token]);
 
   useEffect(() => {
     void loadScans();
-  }, [token]);
+  }, [loadScans]);
 
   async function handleTriggerScan() {
     setIsTriggeringScan(true);

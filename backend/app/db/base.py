@@ -1,5 +1,14 @@
 from app.core.database import Base
 from app.models.application_user import ApplicationUser
+from app.modules.anagrafica.models import (
+    AnagraficaAuditLog,
+    AnagraficaCompany,
+    AnagraficaDocument,
+    AnagraficaImportJob,
+    AnagraficaImportJobItem,
+    AnagraficaPerson,
+    AnagraficaSubject,
+)
 from app.models.catasto import (
     CatastoBatch,
     CatastoCaptchaLog,
@@ -22,6 +31,13 @@ from app.modules.network.models import DeviceInventoryLink, DevicePosition, Floo
 
 __all__ = [
     "ApplicationUser",
+    "AnagraficaAuditLog",
+    "AnagraficaCompany",
+    "AnagraficaDocument",
+    "AnagraficaImportJob",
+    "AnagraficaImportJobItem",
+    "AnagraficaPerson",
+    "AnagraficaSubject",
     "Base",
     "CatastoBatch",
     "CatastoCaptchaLog",

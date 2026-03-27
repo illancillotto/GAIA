@@ -16,7 +16,7 @@ import {
 import { NavItem } from "@/components/layout/nav-item";
 
 type ModuleSidebarProps = {
-  currentModuleKey: "nas_control" | "network" | "inventory" | "catasto" | "gaia";
+  currentModuleKey: "nas_control" | "network" | "inventory" | "catasto" | "anagrafica" | "gaia";
   reviewBadge?: number;
   userBadge?: number;
   grantedSectionKeys?: string[];
@@ -97,6 +97,17 @@ export function ModuleSidebar({
       <div className="space-y-0.5 px-2 pb-3">
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Amministrazione</p>
         <NavItem href="/gaia/users" icon={UserIcon} label="Utenti GAIA" match="prefix" />
+      </div>
+    );
+  }
+
+  if (currentModuleKey === "anagrafica") {
+    return (
+      <div className="space-y-0.5 px-2 pb-3">
+        <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Panoramica</p>
+        <NavItem href="/anagrafica" icon={GridIcon} label="Dashboard" />
+        <NavItem href="/anagrafica/subjects" icon={UserIcon} label="Soggetti" match="prefix" />
+        <NavItem href="/anagrafica/import" icon={RefreshIcon} label="Import archivio" match="prefix" />
       </div>
     );
   }

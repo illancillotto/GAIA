@@ -53,6 +53,7 @@ def create_application_user(db: Session, payload: ApplicationUserCreate) -> Appl
         module_rete=payload.module_rete,
         module_inventario=payload.module_inventario,
         module_catasto=payload.module_catasto,
+        module_anagrafica=payload.module_anagrafica,
     )
     db.add(user)
     db.commit()

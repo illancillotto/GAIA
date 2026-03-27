@@ -38,6 +38,7 @@ type UserFormState = {
   moduleRete: boolean;
   moduleInventario: boolean;
   moduleCatasto: boolean;
+  moduleAnagrafica: boolean;
 };
 
 const emptyFormState: UserFormState = {
@@ -50,6 +51,7 @@ const emptyFormState: UserFormState = {
   moduleRete: false,
   moduleInventario: false,
   moduleCatasto: false,
+  moduleAnagrafica: false,
 };
 
 const roleOptions = [
@@ -74,6 +76,9 @@ function formatModules(user: ApplicationUser): string {
   if (user.module_catasto) {
     labels.push("Catasto");
   }
+  if (user.module_anagrafica) {
+    labels.push("Anagrafica");
+  }
 
   return labels.length > 0 ? labels.join(", ") : "Nessun modulo";
 }
@@ -93,10 +98,6 @@ export default function GaiaUsersPage() {
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const selectedUser = users.find((user) => user.id === selectedUserId) ?? null;
   const isEditMode = selectedUser !== null;
-  const canManageGaiaUsers = currentUser
-    ? (currentUser.role === "admin" || currentUser.role === "super_admin") && currentUser.enabled_modules.includes("accessi")
-    : false;
-
   useEffect(() => {
     async function loadPage() {
       const token = getStoredAccessToken();
@@ -136,6 +137,7 @@ export default function GaiaUsersPage() {
       moduleRete: selectedUser.module_rete,
       moduleInventario: selectedUser.module_inventario,
       moduleCatasto: selectedUser.module_catasto,
+      moduleAnagrafica: selectedUser.module_anagrafica,
     });
   }, [selectedUser]);
 
@@ -251,6 +253,7 @@ export default function GaiaUsersPage() {
           module_rete: formState.moduleRete,
           module_inventario: formState.moduleInventario,
           module_catasto: formState.moduleCatasto,
+          module_anagrafica: formState.moduleAnagrafica,
         });
         setSuccessMessage(`Utente ${selectedUser.username} aggiornato.`);
       } else {
@@ -264,6 +267,7 @@ export default function GaiaUsersPage() {
           module_rete: formState.moduleRete,
           module_inventario: formState.moduleInventario,
           module_catasto: formState.moduleCatasto,
+          module_anagrafica: formState.moduleAnagrafica,
         });
         setSuccessMessage(`Utente ${formState.username} creato.`);
       }
@@ -320,6 +324,7 @@ export default function GaiaUsersPage() {
         <MetricCard label="Admin" value={users.filter((user) => user.role === "admin" || user.role === "super_admin").length} sub="Profili amministrativi" />
         <MetricCard label="NAS Control" value={users.filter((user) => user.module_accessi).length} sub="Utenti con modulo NAS abilitato" />
         <MetricCard label="Catasto" value={users.filter((user) => user.module_catasto).length} sub="Utenti con modulo Catasto abilitato" />
+        <MetricCard label="Anagrafica" value={users.filter((user) => user.module_anagrafica).length} sub="Utenti con modulo Anagrafica abilitato" />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
@@ -463,6 +468,10 @@ export default function GaiaUsersPage() {
                 <label className="flex items-center gap-3">
                   <input type="checkbox" checked={formState.moduleCatasto} onChange={(event) => updateFormState("moduleCatasto", event.target.checked)} />
                   Catasto
+                </label>
+                <label className="flex items-center gap-3">
+                  <input type="checkbox" checked={formState.moduleAnagrafica} onChange={(event) => updateFormState("moduleAnagrafica", event.target.checked)} />
+                  Anagrafica
                 </label>
                 <label className="flex items-center gap-3 pt-2">
                   <input type="checkbox" checked={formState.isActive} onChange={(event) => updateFormState("isActive", event.target.checked)} />

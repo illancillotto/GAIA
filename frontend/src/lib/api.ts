@@ -1,4 +1,14 @@
 import type {
+  AnagraficaDocument,
+  AnagraficaImportJob,
+  AnagraficaImportPreview,
+  AnagraficaImportRunResult,
+  AnagraficaSearchResult,
+  AnagraficaStats,
+  AnagraficaSubjectCreateInput,
+  AnagraficaSubjectDetail,
+  AnagraficaSubjectListResponse,
+  AnagraficaSubjectUpdateInput,
   ApplicationUser,
   ApplicationUserCreateInput,
   ApplicationUserListResponse,
@@ -368,6 +378,206 @@ export async function getNetworkFloorPlans(token: string): Promise<NetworkFloorP
 
 export async function getNetworkFloorPlan(token: string, floorPlanId: number): Promise<NetworkFloorPlanDetail> {
   return request<NetworkFloorPlanDetail>(`/network/floor-plans/${floorPlanId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getAnagraficaStats(token: string): Promise<AnagraficaStats> {
+  return request<AnagraficaStats>("/anagrafica/stats", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getAnagraficaSubjects(
+  token: string,
+  params?: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    subjectType?: string;
+    status?: string;
+    letter?: string;
+    requiresReview?: boolean;
+  },
+): Promise<AnagraficaSubjectListResponse> {
+  const query = new URLSearchParams();
+  if (params?.page) query.set("page", String(params.page));
+  if (params?.pageSize) query.set("page_size", String(params.pageSize));
+  if (params?.search) query.set("search", params.search);
+  if (params?.subjectType) query.set("subject_type", params.subjectType);
+  if (params?.status) query.set("status", params.status);
+  if (params?.letter) query.set("letter", params.letter);
+  if (typeof params?.requiresReview === "boolean") query.set("requires_review", String(params.requiresReview));
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<AnagraficaSubjectListResponse>(`/anagrafica/subjects${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getAnagraficaSubject(token: string, subjectId: string): Promise<AnagraficaSubjectDetail> {
+  return request<AnagraficaSubjectDetail>(`/anagrafica/subjects/${subjectId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function createAnagraficaSubject(
+  token: string,
+  payload: AnagraficaSubjectCreateInput,
+): Promise<AnagraficaSubjectDetail> {
+  return request<AnagraficaSubjectDetail>("/anagrafica/subjects", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateAnagraficaSubject(
+  token: string,
+  subjectId: string,
+  payload: AnagraficaSubjectUpdateInput,
+): Promise<AnagraficaSubjectDetail> {
+  return request<AnagraficaSubjectDetail>(`/anagrafica/subjects/${subjectId}`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deactivateAnagraficaSubject(token: string, subjectId: string): Promise<AnagraficaSubjectDetail> {
+  return request<AnagraficaSubjectDetail>(`/anagrafica/subjects/${subjectId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getAnagraficaSubjectDocuments(token: string, subjectId: string): Promise<AnagraficaDocument[]> {
+  return request<AnagraficaDocument[]>(`/anagrafica/subjects/${subjectId}/documents`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function updateAnagraficaDocument(
+  token: string,
+  documentId: string,
+  payload: { doc_type?: string; notes?: string },
+): Promise<AnagraficaDocument> {
+  return request<AnagraficaDocument>(`/anagrafica/documents/${documentId}`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteAnagraficaDocument(token: string, documentId: string): Promise<void> {
+  await fetch(`${getApiBaseUrl()}/anagrafica/documents/${documentId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    cache: "no-store",
+  }).then(async (response) => {
+    if (!response.ok) {
+      let detail = response.statusText || "Request failed";
+      try {
+        const payload = (await response.json()) as { detail?: unknown };
+        if (typeof payload.detail === "string") detail = payload.detail;
+      } catch {}
+      throw new ApiError(detail, undefined, response.status);
+    }
+  });
+}
+
+export async function downloadAnagraficaExportBlob(
+  token: string,
+  params?: {
+    format?: "csv" | "xlsx";
+    search?: string;
+    subjectType?: string;
+    status?: string;
+    letter?: string;
+    requiresReview?: boolean;
+  },
+): Promise<Blob> {
+  const query = new URLSearchParams();
+  query.set("format", params?.format ?? "csv");
+  if (params?.search) query.set("search", params.search);
+  if (params?.subjectType) query.set("subject_type", params.subjectType);
+  if (params?.status) query.set("status", params.status);
+  if (params?.letter) query.set("letter", params.letter);
+  if (typeof params?.requiresReview === "boolean") query.set("requires_review", String(params.requiresReview));
+  return requestBlob(`/anagrafica/export?${query.toString()}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function previewAnagraficaImport(token: string, letter?: string): Promise<AnagraficaImportPreview> {
+  return request<AnagraficaImportPreview>("/anagrafica/import/preview", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(letter ? { letter } : {}),
+  });
+}
+
+export async function runAnagraficaImport(token: string, letter?: string): Promise<AnagraficaImportRunResult> {
+  return request<AnagraficaImportRunResult>("/anagrafica/import/run", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(letter ? { letter } : {}),
+  });
+}
+
+export async function getAnagraficaImportJobs(token: string): Promise<AnagraficaImportJob[]> {
+  return request<AnagraficaImportJob[]>("/anagrafica/import/jobs", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getAnagraficaImportJob(token: string, jobId: string): Promise<AnagraficaImportJob> {
+  return request<AnagraficaImportJob>(`/anagrafica/import/jobs/${jobId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function resumeAnagraficaImportJob(token: string, jobId: string): Promise<AnagraficaImportRunResult> {
+  return request<AnagraficaImportRunResult>(`/anagrafica/import/jobs/${jobId}/resume`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function searchAnagraficaSubjects(token: string, queryText: string, limit = 20): Promise<AnagraficaSearchResult> {
+  const query = new URLSearchParams({ q: queryText, limit: String(limit) });
+  return request<AnagraficaSearchResult>(`/anagrafica/search?${query.toString()}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },

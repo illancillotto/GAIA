@@ -99,6 +99,7 @@ def patch_user_modules(
     module_rete: bool = Query(...),
     module_inventario: bool = Query(...),
     module_catasto: bool = Query(...),
+    module_anagrafica: bool = Query(...),
 ) -> ApplicationUserResponse:
     user = get_application_user_by_id(db, user_id)
     if user is None:
@@ -108,5 +109,6 @@ def patch_user_modules(
         module_rete=module_rete,
         module_inventario=module_inventario,
         module_catasto=module_catasto,
+        module_anagrafica=module_anagrafica,
     )
     return ApplicationUserResponse.model_validate(update_application_user(db, user, payload))

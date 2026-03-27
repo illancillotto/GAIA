@@ -4,6 +4,7 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 import ipaddress
+import json
 import shutil
 import socket
 import subprocess
@@ -18,6 +19,11 @@ try:
     import nmap  # type: ignore
 except ImportError:  # pragma: no cover
     nmap = None
+
+try:
+    from pysnmp.hlapi.v3arch.asyncio import CommunityData, ContextData, ObjectIdentity, ObjectType, SnmpEngine, UdpTransportTarget, get_cmd  # type: ignore
+except ImportError:  # pragma: no cover
+    CommunityData = ContextData = ObjectIdentity = ObjectType = SnmpEngine = UdpTransportTarget = get_cmd = None
 
 
 @dataclass
@@ -36,6 +42,19 @@ class NetworkScanResult:
     scan: NetworkScan
     devices_upserted: int
     alerts_created: int
+
+
+@dataclass
+class EnrichmentMetadata:
+    dns_name: str | None = None
+    mdns_name: str | None = None
+    netbios_name: str | None = None
+    snmp_name: str | None = None
+    vendor: str | None = None
+    model_name: str | None = None
+    operating_system: str | None = None
+    hostname_source: str | None = None
+    metadata_sources: dict[str, str] | None = None
 
 
 def _normalize_mac(value: str | None) -> str | None:
@@ -71,14 +90,263 @@ def _guess_operating_system(open_ports: Iterable[int]) -> str | None:
     return None
 
 
+def _safe_text(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip().rstrip(".")
+    return normalized or None
+
+
 def _resolve_dns_name(ip_address: str) -> str | None:
     try:
         hostname, _, _ = socket.gethostbyaddr(ip_address)
     except OSError:
         return None
 
-    normalized = hostname.strip().rstrip(".")
-    return normalized or None
+    return _safe_text(hostname)
+
+
+def _resolve_mdns_name(ip_address: str) -> str | None:
+    if shutil.which("avahi-resolve-address") is None:
+        return None
+
+    try:
+        result = subprocess.run(
+            ["avahi-resolve-address", ip_address],
+            capture_output=True,
+            text=True,
+            timeout=settings.network_enrichment_timeout_seconds,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+    if result.returncode != 0:
+        return None
+
+    parts = result.stdout.strip().split(maxsplit=1)
+    if len(parts) != 2:
+        return None
+    return _safe_text(parts[1])
+
+
+def _parse_netbios_name(output: str) -> str | None:
+    for raw_line in output.splitlines():
+        line = raw_line.strip()
+        if "<00>" not in line or "GROUP" in line.upper():
+            continue
+        if "<ACTIVE>" not in line.upper():
+            continue
+        candidate = line.split("<", 1)[0].strip()
+        if candidate:
+            return candidate
+    return None
+
+
+def _resolve_netbios_name(ip_address: str) -> str | None:
+    if shutil.which("nmblookup") is None:
+        return None
+
+    try:
+        result = subprocess.run(
+            ["nmblookup", "-A", ip_address],
+            capture_output=True,
+            text=True,
+            timeout=settings.network_enrichment_timeout_seconds,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+
+    if result.returncode != 0:
+        return None
+    return _safe_text(_parse_netbios_name(result.stdout))
+
+
+def _snmp_communities() -> list[str]:
+    return [item.strip() for item in settings.network_snmp_communities.split(",") if item.strip()]
+
+
+def _snmp_profile_communities(ip_address: str) -> list[str]:
+    communities: list[str] = []
+    try:
+        profiles = json.loads(settings.network_snmp_community_profiles)
+    except json.JSONDecodeError:
+        profiles = []
+
+    for profile in profiles if isinstance(profiles, list) else []:
+        if not isinstance(profile, dict):
+            continue
+        cidr = profile.get("cidr")
+        profile_communities = profile.get("communities")
+        if not isinstance(cidr, str) or not isinstance(profile_communities, list):
+            continue
+        try:
+            network = ipaddress.ip_network(cidr, strict=False)
+            address = ipaddress.ip_address(ip_address)
+        except ValueError:
+            continue
+        if address not in network:
+            continue
+        for item in profile_communities:
+            if isinstance(item, str) and item.strip():
+                communities.append(item.strip())
+
+    for item in _snmp_communities():
+        if item not in communities:
+            communities.append(item)
+    return communities
+
+
+def _classify_snmp_descr(sys_descr: str | None) -> tuple[str | None, str | None, str | None]:
+    if not sys_descr:
+        return None, None, None
+
+    value = sys_descr.strip()
+    lowered = value.lower()
+
+    vendor_map = {
+        "cisco": "Cisco",
+        "mikrotik": "MikroTik",
+        "routeros": "MikroTik",
+        "synology": "Synology",
+        "qnap": "QNAP",
+        "ubiquiti": "Ubiquiti",
+        "unifi": "Ubiquiti",
+        "hewlett packard": "HPE",
+        "aruba": "Aruba",
+        "fortinet": "Fortinet",
+        "tp-link": "TP-Link",
+    }
+    operating_system_map = {
+        "windows": "Windows",
+        "linux": "Linux",
+        "routeros": "RouterOS",
+        "ios xe": "Cisco IOS XE",
+        "ios": "Cisco IOS",
+        "dsm": "Synology DSM",
+    }
+
+    vendor = next((mapped for key, mapped in vendor_map.items() if key in lowered), None)
+    operating_system = next((mapped for key, mapped in operating_system_map.items() if key in lowered), None)
+    return vendor, value[:255], operating_system
+
+
+async def _resolve_snmp_metadata_async(ip_address: str) -> EnrichmentMetadata:
+    communities = _snmp_profile_communities(ip_address)
+    if get_cmd is None or UdpTransportTarget is None or not communities:
+        return EnrichmentMetadata()
+
+    oid_map = {
+        "1.3.6.1.2.1.1.5.0": "snmp_name",
+        "1.3.6.1.2.1.1.1.0": "sys_descr",
+    }
+
+    for community in communities:
+        try:
+            transport = await UdpTransportTarget.create(
+                (ip_address, 161),
+                timeout=settings.network_enrichment_timeout_seconds,
+                retries=0,
+            )
+            error_indication, error_status, _, var_binds = await get_cmd(
+                SnmpEngine(),
+                CommunityData(community, mpModel=1),
+                transport,
+                ContextData(),
+                *[ObjectType(ObjectIdentity(oid)) for oid in oid_map],
+            )
+        except Exception:
+            continue
+
+        if error_indication or error_status:
+            continue
+
+        values: dict[str, str] = {}
+        for name, value in var_binds:
+            key = oid_map.get(str(name))
+            if key:
+                values[key] = _safe_text(str(value)) or ""
+
+        vendor, model_name, operating_system = _classify_snmp_descr(values.get("sys_descr"))
+        return EnrichmentMetadata(
+            snmp_name=_safe_text(values.get("snmp_name")),
+            vendor=vendor,
+            model_name=model_name,
+            operating_system=operating_system,
+            metadata_sources={"snmp": community},
+        )
+
+    return EnrichmentMetadata()
+
+
+def _resolve_snmp_metadata(ip_address: str) -> EnrichmentMetadata:
+    if get_cmd is None:
+        return EnrichmentMetadata()
+
+    try:
+        import asyncio
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            return EnrichmentMetadata()
+        return asyncio.run(_resolve_snmp_metadata_async(ip_address))
+    except Exception:
+        return EnrichmentMetadata()
+
+
+def _collect_enrichment(ip_address: str, open_ports: Iterable[int]) -> EnrichmentMetadata:
+    metadata = EnrichmentMetadata(
+        dns_name=_resolve_dns_name(ip_address),
+        mdns_name=_resolve_mdns_name(ip_address),
+        netbios_name=_resolve_netbios_name(ip_address),
+        metadata_sources={},
+    )
+    if metadata.dns_name:
+        metadata.metadata_sources["dns"] = metadata.dns_name
+    if metadata.mdns_name:
+        metadata.metadata_sources["mdns"] = metadata.mdns_name
+    if metadata.netbios_name:
+        metadata.metadata_sources["netbios"] = metadata.netbios_name
+
+    if 161 in set(open_ports):
+        snmp_data = _resolve_snmp_metadata(ip_address)
+        metadata.snmp_name = snmp_data.snmp_name or metadata.snmp_name
+        metadata.vendor = snmp_data.vendor or metadata.vendor
+        metadata.model_name = snmp_data.model_name or metadata.model_name
+        metadata.operating_system = snmp_data.operating_system or metadata.operating_system
+        if snmp_data.metadata_sources:
+            metadata.metadata_sources.update(snmp_data.metadata_sources)
+
+    metadata.hostname_source = (
+        "snmp" if metadata.snmp_name
+        else "netbios" if metadata.netbios_name
+        else "mdns" if metadata.mdns_name
+        else "dns" if metadata.dns_name
+        else None
+    )
+
+    return metadata
+
+
+def _preferred_hostname(observed_hostname: str | None, metadata: EnrichmentMetadata) -> str | None:
+    return (
+        _safe_text(observed_hostname)
+        or metadata.snmp_name
+        or metadata.netbios_name
+        or metadata.mdns_name
+        or metadata.dns_name
+    )
+
+
+def _preferred_hostname_source(observed_hostname: str | None, metadata: EnrichmentMetadata) -> str | None:
+    if _safe_text(observed_hostname):
+        return "nmap"
+    return metadata.hostname_source
 
 
 def _fallback_hosts() -> list[DiscoveredHost]:
@@ -122,15 +390,16 @@ def _run_nmap_scan(network_range: str, ports: str) -> list[DiscoveredHost]:
         vendor_map = port_state.get("vendor") or ping_state.get("vendor", {})
         hostname_entries = port_state.get("hostnames") or ping_state.get("hostnames", []) or []
         tcp_ports = sorted((port_state.get("tcp") or {}).keys())
+        enrichment = _collect_enrichment(host, tcp_ports)
 
         discovered.append(
             DiscoveredHost(
                 ip_address=host,
                 mac_address=_normalize_mac(addresses.get("mac")),
-                hostname=next(iter(hostname_entries), {}).get("name") or _resolve_dns_name(host),
-                vendor=next(iter(vendor_map.values()), None) if isinstance(vendor_map, dict) else None,
+                hostname=_preferred_hostname(next(iter(hostname_entries), {}).get("name"), enrichment),
+                vendor=(next(iter(vendor_map.values()), None) if isinstance(vendor_map, dict) else None) or enrichment.vendor,
                 device_type=_guess_device_type(tcp_ports),
-                operating_system=_guess_operating_system(tcp_ports),
+                operating_system=enrichment.operating_system or _guess_operating_system(tcp_ports),
                 open_ports=tcp_ports,
             )
         )
@@ -205,14 +474,18 @@ def run_network_scan(
         now = datetime.now(UTC)
 
         if device is None:
+            enrichment = _collect_enrichment(host.ip_address, host.open_ports or [])
             device = NetworkDevice(
                 ip_address=host.ip_address,
                 mac_address=_normalize_mac(host.mac_address),
-                hostname=host.hostname,
-                dns_name=_resolve_dns_name(host.ip_address),
-                vendor=host.vendor,
+                hostname=_preferred_hostname(host.hostname, enrichment),
+                hostname_source=_preferred_hostname_source(host.hostname, enrichment),
+                dns_name=enrichment.dns_name or enrichment.mdns_name,
+                vendor=host.vendor or enrichment.vendor,
+                model_name=enrichment.model_name,
+                metadata_sources=json.dumps(enrichment.metadata_sources or {}, ensure_ascii=True) or None,
                 device_type=host.device_type or _guess_device_type(host.open_ports or []),
-                operating_system=host.operating_system or _guess_operating_system(host.open_ports or []),
+                operating_system=host.operating_system or enrichment.operating_system or _guess_operating_system(host.open_ports or []),
                 status="online",
                 is_monitored=True,
                 open_ports=",".join(str(port) for port in (host.open_ports or [])) or None,
@@ -223,12 +496,16 @@ def run_network_scan(
             db.add(device)
             db.flush()
         else:
+            enrichment = _collect_enrichment(host.ip_address, host.open_ports or [])
             device.mac_address = _normalize_mac(host.mac_address) or device.mac_address
-            device.hostname = host.hostname or device.hostname
-            device.dns_name = _resolve_dns_name(host.ip_address) or device.dns_name
-            device.vendor = host.vendor or device.vendor
+            device.hostname = _preferred_hostname(host.hostname, enrichment) or device.hostname
+            device.hostname_source = _preferred_hostname_source(host.hostname, enrichment) or device.hostname_source
+            device.dns_name = enrichment.dns_name or enrichment.mdns_name or device.dns_name
+            device.vendor = host.vendor or enrichment.vendor or device.vendor
+            device.model_name = enrichment.model_name or device.model_name
+            device.metadata_sources = json.dumps(enrichment.metadata_sources or {}, ensure_ascii=True) or device.metadata_sources
             device.device_type = host.device_type or device.device_type or _guess_device_type(host.open_ports or [])
-            device.operating_system = host.operating_system or device.operating_system or _guess_operating_system(host.open_ports or [])
+            device.operating_system = host.operating_system or enrichment.operating_system or device.operating_system or _guess_operating_system(host.open_ports or [])
             device.status = "online"
             device.open_ports = ",".join(str(port) for port in (host.open_ports or [])) or device.open_ports
             device.last_seen_at = now

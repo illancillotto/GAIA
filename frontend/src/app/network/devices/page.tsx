@@ -8,6 +8,7 @@ import { useEffect, useState } from "react";
 import { NetworkModulePage } from "@/components/network/network-module-page";
 import { NetworkStatusBadge } from "@/components/network/network-status-badge";
 import { DataTable } from "@/components/table/data-table";
+import { Badge } from "@/components/ui/badge";
 import { getNetworkDevices } from "@/lib/api";
 import type { NetworkDevice } from "@/types/api";
 
@@ -18,7 +19,10 @@ const columns: ColumnDef<NetworkDevice>[] = [
     cell: ({ row }) => (
       <div>
         <p className="font-medium text-gray-900">{row.original.display_name || row.original.hostname || row.original.ip_address}</p>
-        <p className="text-xs text-gray-500">{row.original.asset_label || row.original.hostname || row.original.dns_name || "Host non risolto"}</p>
+        <div className="mt-1 flex flex-wrap items-center gap-2">
+          {row.original.asset_label ? <Badge variant="info">{row.original.asset_label}</Badge> : null}
+          <span className="text-xs text-gray-500">{row.original.hostname || row.original.dns_name || "Host non risolto"}</span>
+        </div>
         <p className="text-xs text-gray-500">{row.original.ip_address}</p>
       </div>
     ),
@@ -37,6 +41,11 @@ const columns: ColumnDef<NetworkDevice>[] = [
     accessorKey: "device_type",
     header: "Tipo",
     cell: ({ row }) => row.original.device_type || "n/d",
+  },
+  {
+    accessorKey: "model_name",
+    header: "Modello",
+    cell: ({ row }) => row.original.model_name || row.original.vendor || "n/d",
   },
   {
     accessorKey: "open_ports",

@@ -65,8 +65,10 @@ def sync_live_apply(
     db: Annotated[Session, Depends(get_db)],
     profile: Literal["quick", "full"] = "quick",
 ) -> SyncApplyResponse:
+    from app.api.routes import sync as sync_bridge
+
     try:
-        return run_live_sync_job(
+        return sync_bridge.run_live_sync_job(
             db,
             trigger_type="api",
             initiated_by=current_user.username,

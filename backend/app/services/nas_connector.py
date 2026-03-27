@@ -17,8 +17,15 @@ class NasSSHClient:
     timeout: int
     password: str | None = None
     private_key_path: str | None = None
+    _client: Any | None = None
 
-    def run_command(self, command: str) -> str:
+    def _get_client(self) -> Any:
+        if self._client is not None:
+            transport = self._client.get_transport()
+            if transport is not None and transport.is_active():
+                return self._client
+            self.close()
+
         try:
             import paramiko
         except ImportError as exc:
@@ -42,14 +49,21 @@ class NasSSHClient:
 
         try:
             client.connect(**connect_kwargs)
+        except Exception as exc:  # pragma: no cover
+            raise NasConnectorError("SSH connection failed") from exc
+
+        self._client = client
+        return client
+
+    def run_command(self, command: str) -> str:
+        try:
+            client = self._get_client()
             _, stdout, stderr = client.exec_command(command, timeout=self.timeout)
             exit_status = stdout.channel.recv_exit_status()
             output = stdout.read().decode("utf-8")
             error_output = stderr.read().decode("utf-8").strip()
         except Exception as exc:  # pragma: no cover
             raise NasConnectorError(f"SSH command failed: {command}") from exc
-        finally:
-            client.close()
 
         if exit_status != 0:
             raise NasConnectorError(
@@ -57,6 +71,14 @@ class NasSSHClient:
             )
 
         return output
+
+    def close(self) -> None:
+        if self._client is None:
+            return
+        try:
+            self._client.close()
+        finally:
+            self._client = None
 
 
 def get_nas_client() -> NasSSHClient:
