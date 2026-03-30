@@ -23,7 +23,8 @@ const emptySummary: NetworkDashboardSummary = {
 
 function DashboardContent({ token }: { token: string }) {
   const [summary, setSummary] = useState<NetworkDashboardSummary>(emptySummary);
-  const [devices, setDevices] = useState<NetworkDevice[]>([]);
+  const [recentDevices, setRecentDevices] = useState<NetworkDevice[]>([]);
+  const [onlineDevices, setOnlineDevices] = useState<NetworkDevice[]>([]);
   const [alerts, setAlerts] = useState<NetworkAlert[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isTriggeringScan, setIsTriggeringScan] = useState(false);
@@ -38,13 +39,15 @@ function DashboardContent({ token }: { token: string }) {
 
   const loadData = useCallback(async () => {
     try {
-      const [dashboard, deviceResponse, alertItems] = await Promise.all([
+      const [dashboard, recentDeviceResponse, onlineDeviceResponse, alertItems] = await Promise.all([
         getNetworkDashboard(token),
-        getNetworkDevices(token, { pageSize: 6 }),
+        getNetworkDevices(token, { pageSize: 12 }),
+        getNetworkDevices(token, { status: "online", pageSize: 100 }),
         getNetworkAlerts(token),
       ]);
       setSummary(dashboard);
-      setDevices(deviceResponse.items);
+      setRecentDevices(recentDeviceResponse.items);
+      setOnlineDevices(onlineDeviceResponse.items);
       setAlerts(alertItems.slice(0, 5));
       setLoadError(null);
     } catch (error) {
@@ -99,7 +102,6 @@ function DashboardContent({ token }: { token: string }) {
     setDetailError(null);
   }
 
-  const onlineDevices = devices.filter((device) => device.status === "online");
   const filteredOnlineDevices = onlineDevices.filter((device) => {
     const haystack = [
       device.display_name,
@@ -113,7 +115,7 @@ function DashboardContent({ token }: { token: string }) {
       .toLowerCase();
     return haystack.includes(onlineFilter.trim().toLowerCase());
   });
-  const filteredRecentDevices = devices.filter((device) => {
+  const filteredRecentDevices = recentDevices.filter((device) => {
     const haystack = [
       device.display_name,
       device.hostname,
