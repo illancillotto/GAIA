@@ -45,6 +45,7 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [documentPendingDeletion, setDocumentPendingDeletion] = useState<AnagraficaDocument | null>(null);
   const [isDeletingDocument, setIsDeletingDocument] = useState(false);
+  const [isAuditLogExpanded, setIsAuditLogExpanded] = useState(false);
   const [manualFile, setManualFile] = useState<File | null>(null);
   const [manualDocType, setManualDocType] = useState("altro");
   const [manualNotes, setManualNotes] = useState("");
@@ -739,30 +740,6 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
 
       <article className="panel-card">
         <div className="mb-4">
-          <p className="section-title">Audit log</p>
-          <p className="section-copy">Tracce minime delle operazioni effettuate sul soggetto.</p>
-        </div>
-        {subject.audit_log.length === 0 ? (
-          <p className="text-sm text-gray-500">Nessun evento registrato.</p>
-        ) : (
-          <div className="space-y-3">
-            {subject.audit_log.map((item) => (
-              <div key={item.id} className="rounded-lg border border-gray-100 px-4 py-3">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm font-medium text-gray-900">{item.action}</p>
-                  <span className="text-xs text-gray-400">{formatDateTime(item.changed_at)}</span>
-                </div>
-                <pre className="mt-2 overflow-x-auto whitespace-pre-wrap text-xs text-gray-500">
-                  {JSON.stringify(item.diff_json, null, 2)}
-                </pre>
-              </div>
-            ))}
-          </div>
-        )}
-      </article>
-
-      <article className="panel-card">
-        <div className="mb-4">
           <p className="section-title">Correlazioni Catasto</p>
           <p className="section-copy">Visure e documenti Catasto correlati in sola lettura tramite codice fiscale.</p>
         </div>
@@ -783,6 +760,39 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
                 <p className="mt-1 text-xs text-gray-500">
                   {item.catasto} · {item.tipo_visura} · {item.codice_fiscale || "CF non disponibile"}
                 </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </article>
+
+      <article className="panel-card">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="section-title">Audit log</p>
+            <p className="section-copy">Tracce minime delle operazioni effettuate sul soggetto.</p>
+          </div>
+          <button className="btn-secondary" type="button" onClick={() => setIsAuditLogExpanded((current) => !current)}>
+            {isAuditLogExpanded ? "Riduci" : "Espandi"}
+          </button>
+        </div>
+        {!isAuditLogExpanded ? (
+          <p className="mt-4 text-sm text-gray-500">
+            Audit log ridotto di default. {subject.audit_log.length === 0 ? "Nessun evento registrato." : `${subject.audit_log.length} eventi disponibili.`}
+          </p>
+        ) : subject.audit_log.length === 0 ? (
+          <p className="mt-4 text-sm text-gray-500">Nessun evento registrato.</p>
+        ) : (
+          <div className="mt-4 space-y-3">
+            {subject.audit_log.map((item) => (
+              <div key={item.id} className="rounded-lg border border-gray-100 px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-medium text-gray-900">{item.action}</p>
+                  <span className="text-xs text-gray-400">{formatDateTime(item.changed_at)}</span>
+                </div>
+                <pre className="mt-2 overflow-x-auto whitespace-pre-wrap text-xs text-gray-500">
+                  {JSON.stringify(item.diff_json, null, 2)}
+                </pre>
               </div>
             ))}
           </div>
