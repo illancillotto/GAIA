@@ -601,7 +601,7 @@ def get_subject_documents(
         .where(AnagraficaDocument.subject_id == subject_id)
         .order_by(AnagraficaDocument.created_at.desc())
     ).all()
-    return [_build_document_response(item) for item in documents]
+    return [_build_document_response(item) for item in documents if not _should_skip_document(item)]
 
 
 @router.post("/subjects/{subject_id}/documents/upload", response_model=AnagraficaPreviewDocumentResponse)
@@ -1109,6 +1109,10 @@ def _build_document_response(document: AnagraficaDocument) -> AnagraficaPreviewD
     )
 
 
+def _should_skip_document(document: AnagraficaDocument) -> bool:
+    return document.filename.strip().lower() == "thumbs.db"
+
+
 def _export_headers() -> list[str]:
     return [
         "id",
@@ -1180,6 +1184,7 @@ def _build_subject_detail(db: Session, subject_id: uuid.UUID) -> AnagraficaSubje
         .where(AnagraficaDocument.subject_id == subject_id)
         .order_by(AnagraficaDocument.created_at.desc())
     ).all()
+    documents = [item for item in documents if not _should_skip_document(item)]
     audit_entries = db.scalars(
         select(AnagraficaAuditLog)
         .where(AnagraficaAuditLog.subject_id == subject_id)

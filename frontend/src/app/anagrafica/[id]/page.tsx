@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
@@ -24,6 +25,24 @@ import type {
   AnagraficaSubjectUpdateInput,
 } from "@/types/api";
 
+type DocumentPreviewKind = "pdf" | "image" | "docx" | "spreadsheet" | "download";
+
+type SpreadsheetPreviewSheet = {
+  name: string;
+  rows: string[][];
+};
+
+const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg"]);
+const SPREADSHEET_EXTENSIONS = new Set([".xls", ".xlsx"]);
+
+function isPreviewableImage(extension: string | null): boolean {
+  return extension != null && IMAGE_EXTENSIONS.has(extension.toLowerCase());
+}
+
+function isPreviewableSpreadsheet(extension: string | null): boolean {
+  return extension != null && SPREADSHEET_EXTENSIONS.has(extension.toLowerCase());
+}
+
 function DetailContent({ token, subjectId }: { token: string; subjectId: string }) {
   const router = useRouter();
   const [subject, setSubject] = useState<AnagraficaSubjectDetail | null>(null);
@@ -43,6 +62,9 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+  const [previewKind, setPreviewKind] = useState<DocumentPreviewKind>("download");
+  const [previewHtml, setPreviewHtml] = useState<string | null>(null);
+  const [spreadsheetPreview, setSpreadsheetPreview] = useState<SpreadsheetPreviewSheet[]>([]);
   const [documentPendingDeletion, setDocumentPendingDeletion] = useState<AnagraficaDocument | null>(null);
   const [isDeletingDocument, setIsDeletingDocument] = useState(false);
   const [isAuditLogExpanded, setIsAuditLogExpanded] = useState(false);
@@ -278,7 +300,7 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
     }
   }
 
-  function closePreviewModal() {
+  const closePreviewModal = useCallback(() => {
     if (previewUrl) {
       URL.revokeObjectURL(previewUrl);
     }
@@ -286,7 +308,10 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
     setPreviewDocument(null);
     setPreviewError(null);
     setIsLoadingPreview(false);
-  }
+    setPreviewKind("download");
+    setPreviewHtml(null);
+    setSpreadsheetPreview([]);
+  }, [previewUrl]);
 
   async function handlePreviewDocument(document: AnagraficaDocument) {
     if (!document.id) {
@@ -302,11 +327,57 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
     setPreviewUrl(null);
     setPreviewError(null);
     setIsLoadingPreview(true);
+    setPreviewKind("download");
+    setPreviewHtml(null);
+    setSpreadsheetPreview([]);
 
     try {
       const blob = await downloadAnagraficaDocumentBlob(token, document.id);
       const objectUrl = URL.createObjectURL(blob);
+      const extension = document.extension?.toLowerCase() ?? null;
       setPreviewUrl(objectUrl);
+
+      if (document.is_pdf) {
+        setPreviewKind("pdf");
+        return;
+      }
+
+      if (isPreviewableImage(extension)) {
+        setPreviewKind("image");
+        return;
+      }
+
+      if (extension === ".docx") {
+        const mammoth = await import("mammoth");
+        const arrayBuffer = await blob.arrayBuffer();
+        const result = await mammoth.convertToHtml({ arrayBuffer });
+        setPreviewHtml(result.value);
+        setPreviewKind("docx");
+        return;
+      }
+
+      if (isPreviewableSpreadsheet(extension)) {
+        const xlsx = await import("xlsx");
+        const arrayBuffer = await blob.arrayBuffer();
+        const workbook = xlsx.read(arrayBuffer, { type: "array" });
+        const sheets = workbook.SheetNames.slice(0, 3).map((sheetName) => {
+          const worksheet = workbook.Sheets[sheetName];
+          const rows = xlsx.utils.sheet_to_json<(string | number | boolean | null)[]>(worksheet, {
+            header: 1,
+            blankrows: false,
+            defval: "",
+          });
+          return {
+            name: sheetName,
+            rows: rows.slice(0, 25).map((row) => row.map((cell) => String(cell ?? ""))),
+          };
+        });
+        setSpreadsheetPreview(sheets);
+        setPreviewKind("spreadsheet");
+        return;
+      }
+
+      setPreviewKind("download");
     } catch (error) {
       setPreviewError(error instanceof Error ? error.message : "Errore caricamento anteprima documento");
     } finally {
@@ -328,6 +399,35 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
       }
     };
   }, [previewUrl]);
+
+  useEffect(() => {
+    if (!isManualUploadModalOpen && !previewDocument && !documentPendingDeletion) {
+      return;
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") {
+        return;
+      }
+
+      if (documentPendingDeletion) {
+        setDocumentPendingDeletion(null);
+        return;
+      }
+
+      if (previewDocument) {
+        closePreviewModal();
+        return;
+      }
+
+      if (isManualUploadModalOpen) {
+        setIsManualUploadModalOpen(false);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [closePreviewModal, documentPendingDeletion, isManualUploadModalOpen, previewDocument]);
 
   if (loadError) {
     return (
@@ -474,10 +574,66 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
             <div className="flex-1 overflow-hidden px-6 py-4">
               {isLoadingPreview ? <p className="text-sm text-gray-500">Caricamento anteprima...</p> : null}
               {previewError ? <p className="text-sm text-red-600">{previewError}</p> : null}
-              {!isLoadingPreview && !previewError && previewUrl && previewDocument.is_pdf ? (
+              {!isLoadingPreview && !previewError && previewUrl && previewKind === "pdf" ? (
                 <iframe className="h-full min-h-[70vh] w-full rounded-xl border border-gray-200" src={previewUrl} title={previewDocument.filename} />
               ) : null}
-              {!isLoadingPreview && !previewError && previewUrl && !previewDocument.is_pdf ? (
+              {!isLoadingPreview && !previewError && previewUrl && previewKind === "image" ? (
+                <div className="flex h-full min-h-[70vh] items-center justify-center overflow-auto rounded-xl border border-gray-200 bg-gray-50 p-4">
+                  <Image
+                    src={previewUrl}
+                    alt={previewDocument.filename}
+                    width={1600}
+                    height={1200}
+                    unoptimized
+                    className="max-h-full max-w-full rounded-lg object-contain"
+                  />
+                </div>
+              ) : null}
+              {!isLoadingPreview && !previewError && previewKind === "docx" ? (
+                <div className="h-full min-h-[70vh] overflow-auto rounded-xl border border-gray-200 bg-white p-6">
+                  {previewHtml ? (
+                    <div
+                      className="prose prose-sm max-w-none text-gray-700"
+                      dangerouslySetInnerHTML={{ __html: previewHtml }}
+                    />
+                  ) : (
+                    <p className="text-sm text-gray-500">Nessun contenuto leggibile disponibile per questo file DOCX.</p>
+                  )}
+                </div>
+              ) : null}
+              {!isLoadingPreview && !previewError && previewKind === "spreadsheet" ? (
+                <div className="h-full min-h-[70vh] overflow-auto rounded-xl border border-gray-200 bg-white p-4">
+                  <div className="space-y-6">
+                    {spreadsheetPreview.length > 0 ? spreadsheetPreview.map((sheet) => (
+                      <section key={sheet.name}>
+                        <p className="mb-3 text-sm font-medium text-gray-900">{sheet.name}</p>
+                        {sheet.rows.length > 0 ? (
+                          <div className="overflow-x-auto rounded-lg border border-gray-100">
+                            <table className="min-w-full divide-y divide-gray-200 text-sm">
+                              <tbody className="divide-y divide-gray-100 bg-white">
+                                {sheet.rows.map((row, rowIndex) => (
+                                  <tr key={`${sheet.name}-${rowIndex}`}>
+                                    {row.map((cell, cellIndex) => (
+                                      <td key={`${sheet.name}-${rowIndex}-${cellIndex}`} className="px-3 py-2 align-top text-gray-700">
+                                        {cell || "—"}
+                                      </td>
+                                    ))}
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : (
+                          <p className="text-sm text-gray-500">Foglio senza celle valorizzate.</p>
+                        )}
+                      </section>
+                    )) : (
+                      <p className="text-sm text-gray-500">Nessun dato tabellare leggibile disponibile per questo file.</p>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+              {!isLoadingPreview && !previewError && previewUrl && previewKind === "download" ? (
                 <div className="flex h-full min-h-[70vh] items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50 p-6 text-center">
                   <div>
                     <p className="text-sm font-medium text-gray-900">Anteprima inline non disponibile per questo formato.</p>

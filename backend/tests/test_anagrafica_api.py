@@ -477,6 +477,61 @@ def test_document_summary_returns_breakdown_and_recent_unclassified() -> None:
     assert payload["recent_unclassified"][0]["subject_display_name"] == "Rossi Mario"
 
 
+def test_subject_detail_skips_thumbs_db_documents() -> None:
+    create_user("thumbs_filter", module_anagrafica=True)
+    token = login("thumbs_filter")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    create_response = client.post(
+        "/anagrafica/subjects",
+        headers=headers,
+        json={
+            "subject_type": "person",
+            "source_name_raw": "Rossi_Mario_RSSMRA80A01H501Z",
+            "nas_folder_letter": "R",
+            "person": {
+                "cognome": "Rossi",
+                "nome": "Mario",
+                "codice_fiscale": "RSSMRA80A01H501Z",
+            },
+        },
+    )
+    assert create_response.status_code == 201
+    subject_id = create_response.json()["id"]
+
+    db = TestingSessionLocal()
+    try:
+        db.add(
+            AnagraficaDocument(
+                subject_id=uuid.UUID(subject_id),
+                doc_type="altro",
+                filename="Thumbs.db",
+                classification_source="auto",
+                storage_type="nas_link",
+                nas_path="/archive/R/Rossi_Mario_RSSMRA80A01H501Z/Thumbs.db",
+            )
+        )
+        db.add(
+            AnagraficaDocument(
+                subject_id=uuid.UUID(subject_id),
+                doc_type="visura",
+                filename="visura.xlsx",
+                classification_source="manual",
+                storage_type="local_upload",
+                local_path="/tmp/visura.xlsx",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    detail_response = client.get(f"/anagrafica/subjects/{subject_id}", headers=headers)
+    assert detail_response.status_code == 200
+    filenames = [item["filename"] for item in detail_response.json()["documents"]]
+    assert "Thumbs.db" not in filenames
+    assert "visura.xlsx" in filenames
+
+
 def test_document_update_and_delete() -> None:
     create_user("franco", module_anagrafica=True)
     token = login("franco")

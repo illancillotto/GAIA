@@ -175,6 +175,30 @@ function SubjectsContent({ token }: { token: string }) {
     };
   }, [selectedSubjectId, token]);
 
+  useEffect(() => {
+    if (!duplicateCfMessage && !selectedSubjectId) {
+      return;
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key !== "Escape") {
+        return;
+      }
+
+      if (duplicateCfMessage) {
+        setDuplicateCfMessage(null);
+        return;
+      }
+
+      if (selectedSubjectId) {
+        setSelectedSubjectId(null);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [duplicateCfMessage, selectedSubjectId]);
+
   const columns = useMemo<ColumnDef<AnagraficaSubjectListItem>[]>(
     () => [
       {
