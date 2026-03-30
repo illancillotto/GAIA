@@ -5,8 +5,11 @@ import {
   flexRender,
   getCoreRowModel,
   getPaginationRowModel,
+  getSortedRowModel,
+  type SortingState,
   useReactTable,
 } from "@tanstack/react-table";
+import { useState } from "react";
 
 import { EmptyState } from "@/components/ui/empty-state";
 import { SearchIcon } from "@/components/ui/icons";
@@ -19,6 +22,7 @@ type DataTableProps<TData> = {
   emptyDescription?: string;
   initialPageSize?: number;
   onRowClick?: (row: TData) => void;
+  initialSorting?: SortingState;
 };
 
 export function DataTable<TData extends object>({
@@ -28,10 +32,17 @@ export function DataTable<TData extends object>({
   emptyDescription = "Nessun record disponibile per i filtri attivi.",
   initialPageSize = 10,
   onRowClick,
+  initialSorting = [],
 }: DataTableProps<TData>) {
+  const [sorting, setSorting] = useState<SortingState>(initialSorting);
+
   const table = useReactTable({
     data,
     columns,
+    state: {
+      sorting,
+    },
+    onSortingChange: setSorting,
     initialState: {
       pagination: {
         pageIndex: 0,
@@ -39,6 +50,7 @@ export function DataTable<TData extends object>({
       },
     },
     getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
   });
 
@@ -65,7 +77,24 @@ export function DataTable<TData extends object>({
                       <th key={header.id}>
                         {header.isPlaceholder
                           ? null
-                          : flexRender(header.column.columnDef.header, header.getContext())}
+                          : (
+                            <button
+                              type="button"
+                              onClick={header.column.getToggleSortingHandler()}
+                              className={header.column.getCanSort() ? "flex items-center gap-2 text-left" : "text-left"}
+                            >
+                              <span>{flexRender(header.column.columnDef.header, header.getContext())}</span>
+                              {header.column.getCanSort() ? (
+                                <span className="text-xs text-gray-400">
+                                  {header.column.getIsSorted() === "asc"
+                                    ? "↑"
+                                    : header.column.getIsSorted() === "desc"
+                                    ? "↓"
+                                    : "↕"}
+                                </span>
+                              ) : null}
+                            </button>
+                          )}
                       </th>
                     ))}
                   </tr>
