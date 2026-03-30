@@ -30,9 +30,6 @@ const platformModules: PlatformModule[] = [
 export function PlatformSidebar({ currentModuleLabel, currentUser }: PlatformSidebarProps) {
   const pathname = usePathname();
   const [isModuleSwitcherOpen, setIsModuleSwitcherOpen] = useState(false);
-  const canManageGaiaUsers =
-    (currentUser.role === "admin" || currentUser.role === "super_admin")
-    && currentUser.enabled_modules.includes("accessi");
   const visiblePlatformModules = platformModules.filter(({ href }) => {
     const moduleKey =
       href === "/nas-control"
@@ -53,7 +50,6 @@ export function PlatformSidebar({ currentModuleLabel, currentUser }: PlatformSid
     () => visiblePlatformModules.find(({ href }) => pathname === href || pathname.startsWith(`${href}/`)),
     [pathname, visiblePlatformModules],
   );
-  const otherPlatformModules = visiblePlatformModules.filter((moduleItem) => moduleItem.href !== activePlatformModule?.href);
   const ActiveModuleIcon = activePlatformModule?.icon || ServerIcon;
 
   return (
@@ -115,43 +111,6 @@ export function PlatformSidebar({ currentModuleLabel, currentUser }: PlatformSid
             </div>
           ) : null}
         </div>
-
-        {canManageGaiaUsers ? (
-          <>
-            <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">
-              Amministrazione
-            </p>
-            <Link
-              href="/gaia/users"
-              className={cn(
-                "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
-                pathname === "/gaia/users" || pathname.startsWith("/gaia/users/")
-                  ? "bg-[#EAF3E8] font-medium text-[#1D4E35]"
-                  : "text-gray-500 hover:bg-gray-50 hover:text-gray-800",
-              )}
-            >
-              <UserIcon className="h-4 w-4 shrink-0" />
-              <span className="flex-1">Utenti GAIA</span>
-            </Link>
-          </>
-        ) : null}
-
-        {otherPlatformModules.length > 0 ? (
-          <>
-            <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">
-              Altri moduli
-            </p>
-            <div className="mx-2 border-t border-gray-100 pt-3">
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-gray-500">
-                {otherPlatformModules.map(({ href, label }) => (
-                  <Link key={href} href={href} className="transition hover:text-[#1D4E35]">
-                    {label}
-                  </Link>
-                ))}
-              </div>
-            </div>
-          </>
-        ) : null}
       </nav>
     </>
   );

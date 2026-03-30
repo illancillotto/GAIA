@@ -281,8 +281,18 @@ function DashboardContent({ token }: { token: string }) {
 
       <div className="surface-grid">
         <MetricCard label="Soggetti totali" value={stats.total_subjects} sub={`${stats.total_persons} PF · ${stats.total_companies} PG`} />
-        <button type="button" className="text-left" onClick={() => void handleOpenDocumentSummary()}>
-          <MetricCard label="Documenti" value={stats.total_documents} sub={`${stats.documents_unclassified} non classificati`} />
+        <button
+          type="button"
+          className="group rounded-[28px] text-left outline-none transition hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-[#1D4E35]/30"
+          onClick={() => void handleOpenDocumentSummary()}
+          aria-label="Apri riepilogo documenti"
+        >
+          <div className="relative">
+            <MetricCard label="Documenti" value={stats.total_documents} sub={`${stats.documents_unclassified} non classificati`} />
+            <span className="absolute right-5 top-4 rounded-full bg-[#1D4E35]/8 px-2.5 py-1 text-[11px] font-medium text-[#1D4E35] transition group-hover:bg-[#1D4E35] group-hover:text-white">
+              Apri dettaglio
+            </span>
+          </div>
         </button>
         <MetricCard label="Da revisionare" value={stats.requires_review} sub="Soggetti con warning o classificazione incerta" variant={stats.requires_review > 0 ? "warning" : "success"} />
         <MetricCard label="Snapshot recenti" value={jobs.length} sub={`${jobs.filter((job) => job.status === "completed").length} completi`} />

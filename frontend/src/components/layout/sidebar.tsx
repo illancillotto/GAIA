@@ -1,11 +1,14 @@
 "use client";
 
+import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import { cn } from "@/lib/cn";
 import type { CurrentUser } from "@/types/api";
 import { Avatar } from "@/components/ui/avatar";
 import { ModuleSidebar } from "@/components/layout/module-sidebar";
 import { PlatformSidebar } from "@/components/layout/platform-sidebar";
+import { UserIcon } from "@/components/ui/icons";
 
 type SidebarProps = {
   currentUser: CurrentUser;
@@ -52,6 +55,9 @@ export function Sidebar({
       : currentModuleKey === "inventory"
         ? "Inventario"
           : "NAS Control";
+  const canManageGaiaUsers =
+    (currentUser.role === "admin" || currentUser.role === "super_admin")
+    && currentUser.enabled_modules.includes("accessi");
 
   return (
     <aside className="sticky top-0 flex h-screen w-[220px] shrink-0 flex-col border-r border-gray-100 bg-white">
@@ -66,6 +72,26 @@ export function Sidebar({
       </div>
 
       <div className="border-t border-gray-100 px-4 py-3">
+        {canManageGaiaUsers ? (
+          <div className="mb-3 border-b border-gray-100 pb-3">
+            <p className="pb-1 text-[10px] font-medium uppercase tracking-widest text-gray-400">
+              Amministrazione
+            </p>
+            <Link
+              href="/gaia/users"
+              className={cn(
+                "flex items-center gap-2 rounded-lg px-2 py-2 text-sm transition-colors",
+                pathname === "/gaia/users" || pathname.startsWith("/gaia/users/")
+                  ? "bg-[#EAF3E8] font-medium text-[#1D4E35]"
+                  : "text-gray-500 hover:bg-gray-50 hover:text-gray-800",
+              )}
+            >
+              <UserIcon className="h-4 w-4 shrink-0" />
+              <span className="flex-1">Utenti GAIA</span>
+            </Link>
+          </div>
+        ) : null}
+
         <div className="flex items-center gap-2">
           <Avatar label={currentUser.username} />
           <div className="min-w-0">
