@@ -29,11 +29,18 @@ function ImportContent({ token }: { token: string }) {
   const [isRunningBulkImport, setIsRunningBulkImport] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [isBulkImportModalOpen, setIsBulkImportModalOpen] = useState(false);
+  const [activeBulkJob, setActiveBulkJob] = useState<AnagraficaImportJob | null>(null);
 
   const loadJobs = useCallback(async () => {
     try {
       const response = await getAnagraficaImportJobs(token);
       setJobs(response);
+      setActiveBulkJob((current) => {
+        if (current) {
+          return response.find((job) => job.job_id === current.job_id) ?? current;
+        }
+        return null;
+      });
       setSelectedJob((current) => {
         if (!current) {
           return response[0] ?? null;
@@ -48,6 +55,18 @@ function ImportContent({ token }: { token: string }) {
   useEffect(() => {
     void loadJobs();
   }, [loadJobs]);
+
+  useEffect(() => {
+    if (!isRunningBulkImport && activeBulkJob?.status !== "running") {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      void loadJobs();
+    }, 1500);
+
+    return () => window.clearInterval(intervalId);
+  }, [activeBulkJob?.status, isRunningBulkImport, loadJobs]);
 
   async function handlePreview() {
     setIsPreviewing(true);
@@ -84,21 +103,51 @@ function ImportContent({ token }: { token: string }) {
   async function handleRunBulkImport() {
     setIsBulkImportModalOpen(false);
     setIsRunningBulkImport(true);
+    const startedAt = Date.now();
+    setActiveBulkJob(null);
     setError(null);
     setResetResult(null);
+    let pollTimer: number | null = null;
     try {
+      pollTimer = window.setInterval(async () => {
+        try {
+          const response = await getAnagraficaImportJobs(token);
+          setJobs(response);
+          const candidate = response.find((job) => {
+            if (job.letter !== "REGISTRY") {
+              return false;
+            }
+            return new Date(job.created_at).getTime() >= startedAt - 5000;
+          });
+          if (candidate) {
+            setActiveBulkJob(candidate);
+            setSelectedJob(candidate);
+          }
+        } catch {
+          // Keep the main import request running even if polling fails intermittently.
+        }
+      }, 1200);
+
       const response = await runAnagraficaImportFromSubjects(token);
       setBulkRunResult(response);
       setRunResult(null);
       const job = await getAnagraficaImportJob(token, response.job_id);
+      setActiveBulkJob(job);
       setSelectedJob(job);
       await loadJobs();
     } catch (runError) {
       setError(runError instanceof Error ? runError.message : "Errore import massivo da anagrafiche");
     } finally {
+      if (pollTimer !== null) {
+        window.clearInterval(pollTimer);
+      }
       setIsRunningBulkImport(false);
     }
   }
+
+  const bulkJobProgress = activeBulkJob
+    ? Math.round((((activeBulkJob.completed_items + activeBulkJob.failed_items) / Math.max(activeBulkJob.total_folders, 1)) * 100))
+    : 0;
 
   async function handleReset() {
     if (typeof window !== "undefined" && !window.confirm("Confermi la pulizia dei dati importati dal NAS? Le anagrafiche resteranno intatte.")) {
@@ -173,6 +222,52 @@ function ImportContent({ token }: { token: string }) {
             </div>
           </div>
         </div>
+      ) : null}
+
+      {isRunningBulkImport || activeBulkJob?.status === "running" ? (
+        <article className="panel-card border border-sky-100 bg-sky-50/70">
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="section-title">Import massivo in corso</p>
+              <p className="section-copy">
+                {activeBulkJob
+                  ? `Job ${activeBulkJob.job_id} in esecuzione su ${activeBulkJob.total_folders} soggetti.`
+                  : "Preparazione del job REGISTRY e avvio della sincronizzazione dalle anagrafiche."}
+              </p>
+            </div>
+            <span className="rounded-full bg-sky-100 px-3 py-1 text-xs font-medium text-sky-800">
+              {activeBulkJob?.status === "running" ? "running" : "starting"}
+            </span>
+          </div>
+          <div className="overflow-hidden rounded-full bg-white">
+            <div className="h-3 bg-sky-600 transition-all" style={{ width: `${bulkJobProgress}%` }} />
+          </div>
+          <div className="mt-3 grid gap-3 md:grid-cols-5">
+            <div className="rounded-xl border border-sky-100 bg-white p-4">
+              <p className="text-xs uppercase tracking-widest text-gray-400">Avanzamento</p>
+              <p className="mt-2 text-2xl font-semibold text-gray-900">{bulkJobProgress}%</p>
+            </div>
+            <div className="rounded-xl border border-sky-100 bg-white p-4">
+              <p className="text-xs uppercase tracking-widest text-gray-400">Totale</p>
+              <p className="mt-2 text-2xl font-semibold text-gray-900">{activeBulkJob?.total_folders ?? "..."}</p>
+            </div>
+            <div className="rounded-xl border border-sky-100 bg-white p-4">
+              <p className="text-xs uppercase tracking-widest text-gray-400">Completati</p>
+              <p className="mt-2 text-2xl font-semibold text-emerald-700">{activeBulkJob?.completed_items ?? 0}</p>
+            </div>
+            <div className="rounded-xl border border-sky-100 bg-white p-4">
+              <p className="text-xs uppercase tracking-widest text-gray-400">In lavorazione</p>
+              <p className="mt-2 text-2xl font-semibold text-sky-700">{activeBulkJob?.running_items ?? 0}</p>
+            </div>
+            <div className="rounded-xl border border-sky-100 bg-white p-4">
+              <p className="text-xs uppercase tracking-widest text-gray-400">Errori</p>
+              <p className="mt-2 text-2xl font-semibold text-rose-700">{activeBulkJob?.failed_items ?? 0}</p>
+            </div>
+          </div>
+          <p className="mt-4 text-sm text-gray-600">
+            L&apos;import massivo rielabora i soggetti esistenti e aggiorna i documenti trovati sullo stesso `nas_path`; non duplica i soggetti. Se un file cambia path sul NAS, viene trattato come nuovo documento.
+          </p>
+        </article>
       ) : null}
 
       {preview ? (

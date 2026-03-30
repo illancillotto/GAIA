@@ -7,9 +7,9 @@ import { AnagraficaModulePage } from "@/components/anagrafica/anagrafica-module-
 import { EmptyState } from "@/components/ui/empty-state";
 import { MetricCard } from "@/components/ui/metric-card";
 import { FolderIcon, RefreshIcon, SearchIcon, UserIcon } from "@/components/ui/icons";
-import { getAnagraficaImportJobs, getAnagraficaStats, getAnagraficaSubjects, searchAnagraficaSubjects } from "@/lib/api";
+import { getAnagraficaDocumentSummary, getAnagraficaImportJobs, getAnagraficaStats, getAnagraficaSubjects, searchAnagraficaSubjects } from "@/lib/api";
 import { formatDateTime } from "@/lib/presentation";
-import type { AnagraficaImportJob, AnagraficaStats, AnagraficaSubjectListItem } from "@/types/api";
+import type { AnagraficaDocumentSummary, AnagraficaImportJob, AnagraficaStats, AnagraficaSubjectListItem } from "@/types/api";
 
 const emptyStats: AnagraficaStats = {
   total_subjects: 0,
@@ -51,6 +51,11 @@ function DashboardContent({ token }: { token: string }) {
   const [isSearching, setIsSearching] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedSubject, setSelectedSubject] = useState<AnagraficaSubjectListItem | null>(null);
+  const [documentSummary, setDocumentSummary] = useState<AnagraficaDocumentSummary | null>(null);
+  const [isDocumentSummaryOpen, setIsDocumentSummaryOpen] = useState(false);
+  const [isLoadingDocumentSummary, setIsLoadingDocumentSummary] = useState(false);
+  const [documentSummaryError, setDocumentSummaryError] = useState<string | null>(null);
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const normalizedSearchTerm = deferredSearchTerm.trim();
   const canSearch = normalizedSearchTerm.length >= 3;
@@ -105,8 +110,152 @@ function DashboardContent({ token }: { token: string }) {
     void loadSearchResults();
   }, [canSearch, normalizedSearchTerm, token]);
 
+  async function handleOpenDocumentSummary() {
+    setIsDocumentSummaryOpen(true);
+    if (documentSummary || isLoadingDocumentSummary) {
+      return;
+    }
+
+    setIsLoadingDocumentSummary(true);
+    setDocumentSummaryError(null);
+    try {
+      const response = await getAnagraficaDocumentSummary(token);
+      setDocumentSummary(response);
+    } catch (error) {
+      setDocumentSummaryError(error instanceof Error ? error.message : "Errore caricamento riepilogo documenti");
+    } finally {
+      setIsLoadingDocumentSummary(false);
+    }
+  }
+
   return (
     <div className="page-stack">
+      {selectedSubject ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">
+          <div className="flex h-full max-h-[94vh] w-full max-w-6xl flex-col rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between gap-4 border-b border-gray-100 px-6 py-4">
+              <div className="min-w-0">
+                <p className="section-title">Dettaglio soggetto</p>
+                <p className="mt-1 truncate text-sm text-gray-500">{selectedSubject.display_name}</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <Link className="btn-secondary" href={`/anagrafica/${selectedSubject.id}`} target="_blank">
+                  Apri pagina
+                </Link>
+                <button className="btn-secondary" type="button" onClick={() => setSelectedSubject(null)}>
+                  Chiudi
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-hidden p-4">
+              <iframe
+                key={selectedSubject.id}
+                src={`/anagrafica/${selectedSubject.id}`}
+                title={`Dettaglio ${selectedSubject.display_name}`}
+                className="h-full w-full rounded-xl border border-gray-200 bg-white"
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {isDocumentSummaryOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">
+          <div className="flex h-full max-h-[92vh] w-full max-w-4xl flex-col rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between gap-4 border-b border-gray-100 px-6 py-4">
+              <div>
+                <p className="section-title">Riepilogo documenti</p>
+                <p className="mt-1 text-sm text-gray-500">Dettaglio classificazione e ultimi documenti non classificati.</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <Link className="btn-secondary" href="/anagrafica/subjects" target="_blank">
+                  Apri pagina
+                </Link>
+                <button className="btn-secondary" type="button" onClick={() => setIsDocumentSummaryOpen(false)}>
+                  Chiudi
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              {isLoadingDocumentSummary ? <p className="text-sm text-gray-500">Caricamento riepilogo documenti...</p> : null}
+              {documentSummaryError ? <p className="text-sm text-red-600">{documentSummaryError}</p> : null}
+              {!isLoadingDocumentSummary && !documentSummaryError && documentSummary ? (
+                <div className="space-y-6">
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                      <p className="text-xs uppercase tracking-widest text-gray-400">Totale documenti</p>
+                      <p className="mt-2 text-2xl font-semibold text-gray-900">{documentSummary.total_documents}</p>
+                    </div>
+                    <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                      <p className="text-xs uppercase tracking-widest text-gray-400">Classificati</p>
+                      <p className="mt-2 text-2xl font-semibold text-emerald-700">{documentSummary.classified_documents}</p>
+                    </div>
+                    <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                      <p className="text-xs uppercase tracking-widest text-gray-400">Non classificati</p>
+                      <p className="mt-2 text-2xl font-semibold text-amber-600">{documentSummary.documents_unclassified}</p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="section-title">Classificazione per categoria</p>
+                    <div className="mt-4 space-y-3">
+                      {documentSummary.by_doc_type.map((bucket) => (
+                        <div key={bucket.doc_type} className="flex items-center justify-between rounded-lg border border-gray-100 px-4 py-3">
+                          <span className="text-sm font-medium text-gray-900">{bucket.doc_type}</span>
+                          <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">{bucket.count}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <p className="section-title">Ultimi non classificati</p>
+                    {documentSummary.recent_unclassified.length === 0 ? (
+                      <p className="mt-4 text-sm text-gray-500">Nessun documento non classificato.</p>
+                    ) : (
+                      <div className="mt-4 space-y-3">
+                        {documentSummary.recent_unclassified.map((item) => (
+                          <button
+                            key={item.document_id}
+                            type="button"
+                            onClick={() => {
+                              setIsDocumentSummaryOpen(false);
+                              setSelectedSubject({
+                                id: item.subject_id,
+                                subject_type: "unknown",
+                                status: "active",
+                                source_name_raw: item.subject_display_name,
+                                display_name: item.subject_display_name,
+                                codice_fiscale: null,
+                                partita_iva: null,
+                                nas_folder_path: null,
+                                nas_folder_letter: null,
+                                requires_review: true,
+                                imported_at: null,
+                                document_count: 0,
+                                created_at: item.created_at,
+                                updated_at: item.created_at,
+                              });
+                            }}
+                            className="flex w-full items-center justify-between rounded-lg border border-gray-100 px-4 py-3 text-left transition hover:bg-gray-50"
+                          >
+                            <div>
+                              <p className="text-sm font-medium text-gray-900">{item.filename}</p>
+                              <p className="mt-1 text-xs text-gray-500">{item.subject_display_name}</p>
+                            </div>
+                            <span className="text-xs text-gray-400">{formatDateTime(item.created_at)}</span>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-gray-500">
           Registro soggetti del Consorzio, con snapshot archivio NAS, classificazione documentale e ricerca operativa.
@@ -132,7 +281,9 @@ function DashboardContent({ token }: { token: string }) {
 
       <div className="surface-grid">
         <MetricCard label="Soggetti totali" value={stats.total_subjects} sub={`${stats.total_persons} PF · ${stats.total_companies} PG`} />
-        <MetricCard label="Documenti" value={stats.total_documents} sub={`${stats.documents_unclassified} non classificati`} />
+        <button type="button" className="text-left" onClick={() => void handleOpenDocumentSummary()}>
+          <MetricCard label="Documenti" value={stats.total_documents} sub={`${stats.documents_unclassified} non classificati`} />
+        </button>
         <MetricCard label="Da revisionare" value={stats.requires_review} sub="Soggetti con warning o classificazione incerta" variant={stats.requires_review > 0 ? "warning" : "success"} />
         <MetricCard label="Snapshot recenti" value={jobs.length} sub={`${jobs.filter((job) => job.status === "completed").length} completi`} />
       </div>
@@ -185,10 +336,11 @@ function DashboardContent({ token }: { token: string }) {
               </div>
 
               {searchResults.map((subject) => (
-                <Link
+                <button
                   key={subject.id}
-                  href={`/anagrafica/${subject.id}`}
-                  className="flex items-center justify-between rounded-lg border border-gray-100 px-4 py-3 transition hover:bg-gray-50"
+                  type="button"
+                  onClick={() => setSelectedSubject(subject)}
+                  className="flex w-full items-center justify-between rounded-lg border border-gray-100 px-4 py-3 text-left transition hover:bg-gray-50"
                 >
                   <div>
                     <div className="flex items-center gap-2">
@@ -204,7 +356,7 @@ function DashboardContent({ token }: { token: string }) {
                   <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${subject.requires_review ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-600"}`}>
                     {subject.requires_review ? "Review" : "OK"}
                   </span>
-                </Link>
+                </button>
               ))}
             </div>
           )}
@@ -230,10 +382,11 @@ function DashboardContent({ token }: { token: string }) {
           ) : (
             <div className="space-y-3">
               {subjects.map((subject) => (
-                <Link
+                <button
                   key={subject.id}
-                  href={`/anagrafica/${subject.id}`}
-                  className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2.5 transition hover:bg-gray-50"
+                  type="button"
+                  onClick={() => setSelectedSubject(subject)}
+                  className="flex w-full items-center justify-between rounded-lg border border-gray-100 px-3 py-2.5 text-left transition hover:bg-gray-50"
                 >
                   <div>
                     <div className="flex items-center gap-2">
@@ -249,7 +402,7 @@ function DashboardContent({ token }: { token: string }) {
                   <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${subject.requires_review ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-600"}`}>
                     {subject.requires_review ? "Review" : "OK"}
                   </span>
-                </Link>
+                </button>
               ))}
             </div>
           )}

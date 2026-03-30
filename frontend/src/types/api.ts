@@ -111,6 +111,7 @@ export type NetworkDevice = {
   dns_name: string | null;
   location_hint: string | null;
   notes: string | null;
+  is_known_device: boolean;
   metadata_sources: Record<string, string> | null;
   status: string;
   is_monitored: boolean;
@@ -138,6 +139,7 @@ export type NetworkDeviceUpdateInput = {
   operating_system?: string | null;
   location_hint?: string | null;
   notes?: string | null;
+  is_known_device?: boolean;
   is_monitored?: boolean;
 };
 
@@ -293,6 +295,29 @@ export type AnagraficaStats = {
   inactive_subjects: number;
   documents_unclassified: number;
   by_letter: Record<string, number>;
+};
+
+export type AnagraficaDocumentSummaryBucket = {
+  doc_type: string;
+  count: number;
+};
+
+export type AnagraficaDocumentSummaryItem = {
+  document_id: string;
+  subject_id: string;
+  subject_display_name: string;
+  filename: string;
+  doc_type: string;
+  classification_source: string;
+  created_at: string;
+};
+
+export type AnagraficaDocumentSummary = {
+  total_documents: number;
+  documents_unclassified: number;
+  classified_documents: number;
+  by_doc_type: AnagraficaDocumentSummaryBucket[];
+  recent_unclassified: AnagraficaDocumentSummaryItem[];
 };
 
 export type AnagraficaDocument = {

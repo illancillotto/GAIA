@@ -392,6 +392,66 @@ def test_subjects_crud_search_and_stats() -> None:
     assert token_search_response.json()["total"] >= 1
 
 
+def test_document_summary_returns_breakdown_and_recent_unclassified() -> None:
+    create_user("doc_summary", module_anagrafica=True)
+    token = login("doc_summary")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    create_response = client.post(
+        "/anagrafica/subjects",
+        headers=headers,
+        json={
+            "subject_type": "person",
+            "source_name_raw": "Rossi_Mario_RSSMRA80A01H501Z",
+            "nas_folder_letter": "R",
+            "person": {
+                "cognome": "Rossi",
+                "nome": "Mario",
+                "codice_fiscale": "RSSMRA80A01H501Z",
+            },
+        },
+    )
+    assert create_response.status_code == 201
+    subject_id = create_response.json()["id"]
+
+    db = TestingSessionLocal()
+    try:
+        db.add(
+            AnagraficaDocument(
+                subject_id=uuid.UUID(subject_id),
+                doc_type="altro",
+                filename="documento-non-classificato.pdf",
+                classification_source="auto",
+                storage_type="local_upload",
+                local_path="/tmp/documento-non-classificato.pdf",
+            )
+        )
+        db.add(
+            AnagraficaDocument(
+                subject_id=uuid.UUID(subject_id),
+                doc_type="visura",
+                filename="visura.pdf",
+                classification_source="manual",
+                storage_type="local_upload",
+                local_path="/tmp/visura.pdf",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get("/anagrafica/documents/summary", headers=headers)
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total_documents"] == 2
+    assert payload["documents_unclassified"] == 1
+    assert payload["classified_documents"] == 1
+    assert any(bucket["doc_type"] == "altro" and bucket["count"] == 1 for bucket in payload["by_doc_type"])
+    assert any(bucket["doc_type"] == "visura" and bucket["count"] == 1 for bucket in payload["by_doc_type"])
+    assert payload["recent_unclassified"][0]["filename"] == "documento-non-classificato.pdf"
+    assert payload["recent_unclassified"][0]["subject_display_name"] == "Rossi Mario"
+
+
 def test_document_update_and_delete() -> None:
     create_user("franco", module_anagrafica=True)
     token = login("franco")

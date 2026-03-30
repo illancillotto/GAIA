@@ -33,6 +33,9 @@ from app.modules.anagrafica.schemas import (
     AnagraficaCatastoDocumentResponse,
     AnagraficaCompanyResponse,
     AnagraficaCsvImportResponse,
+    AnagraficaDocumentSummaryBucketResponse,
+    AnagraficaDocumentSummaryItemResponse,
+    AnagraficaDocumentSummaryResponse,
     AnagraficaDocumentUpdateRequest,
     AnagraficaImportJobResponse,
     AnagraficaImportJobItemResponse,
@@ -778,6 +781,60 @@ def get_stats(
     )
 
 
+@router.get("/documents/summary", response_model=AnagraficaDocumentSummaryResponse)
+def get_documents_summary(
+    _: Annotated[ApplicationUser, Depends(require_active_user)],
+    __: Annotated[ApplicationUser, RequireAnagraficaModule],
+    db: Annotated[Session, Depends(get_db)],
+) -> AnagraficaDocumentSummaryResponse:
+    total_documents = db.scalar(select(func.count()).select_from(AnagraficaDocument)) or 0
+    documents_unclassified = db.scalar(
+        select(func.count()).select_from(AnagraficaDocument).where(AnagraficaDocument.doc_type == AnagraficaDocType.ALTRO.value)
+    ) or 0
+    classified_documents = max(total_documents - documents_unclassified, 0)
+
+    buckets = db.execute(
+        select(AnagraficaDocument.doc_type, func.count())
+        .group_by(AnagraficaDocument.doc_type)
+        .order_by(func.count().desc(), AnagraficaDocument.doc_type.asc())
+    ).all()
+
+    recent_unclassified_documents = db.scalars(
+        select(AnagraficaDocument)
+        .where(AnagraficaDocument.doc_type == AnagraficaDocType.ALTRO.value)
+        .order_by(AnagraficaDocument.created_at.desc())
+        .limit(12)
+    ).all()
+
+    recent_unclassified = []
+    for document in recent_unclassified_documents:
+        subject = db.get(AnagraficaSubject, document.subject_id)
+        if subject is None:
+            continue
+        recent_unclassified.append(
+            AnagraficaDocumentSummaryItemResponse(
+                document_id=str(document.id),
+                subject_id=str(subject.id),
+                subject_display_name=_subject_display_name(db, subject),
+                filename=document.filename,
+                doc_type=document.doc_type,
+                classification_source=document.classification_source,
+                created_at=document.created_at,
+            )
+        )
+
+    return AnagraficaDocumentSummaryResponse(
+        total_documents=total_documents,
+        documents_unclassified=documents_unclassified,
+        classified_documents=classified_documents,
+        by_doc_type=[
+            AnagraficaDocumentSummaryBucketResponse(doc_type=str(doc_type), count=int(count))
+            for doc_type, count in buckets
+        ],
+        recent_unclassified=recent_unclassified,
+    )
+
+
 @router.get("/search", response_model=AnagraficaSearchResultResponse)
 def search_subjects(
     _: Annotated[ApplicationUser, Depends(require_active_user)],
@@ -953,21 +1010,10 @@ def _create_subject_audit(
 
 
 def _build_subject_list_item(db: Session, subject: AnagraficaSubject) -> AnagraficaSubjectListItemResponse:
-    person = db.get(AnagraficaPerson, subject.id)
-    company = db.get(AnagraficaCompany, subject.id)
+    display_name, codice_fiscale, partita_iva = _subject_identity_summary(db, subject)
     document_count = db.scalar(
         select(func.count()).select_from(AnagraficaDocument).where(AnagraficaDocument.subject_id == subject.id)
     ) or 0
-    display_name = subject.source_name_raw
-    codice_fiscale = None
-    partita_iva = None
-    if person is not None:
-        display_name = f"{person.cognome} {person.nome}".strip()
-        codice_fiscale = person.codice_fiscale
-    elif company is not None:
-        display_name = company.ragione_sociale
-        codice_fiscale = company.codice_fiscale
-        partita_iva = company.partita_iva
     return AnagraficaSubjectListItemResponse(
         id=str(subject.id),
         subject_type=subject.subject_type,
@@ -984,6 +1030,27 @@ def _build_subject_list_item(db: Session, subject: AnagraficaSubject) -> Anagraf
         created_at=subject.created_at,
         updated_at=subject.updated_at,
     )
+
+
+def _subject_identity_summary(db: Session, subject: AnagraficaSubject) -> tuple[str, str | None, str | None]:
+    person = db.get(AnagraficaPerson, subject.id)
+    company = db.get(AnagraficaCompany, subject.id)
+    display_name = subject.source_name_raw
+    codice_fiscale = None
+    partita_iva = None
+    if person is not None:
+        display_name = f"{person.cognome} {person.nome}".strip()
+        codice_fiscale = person.codice_fiscale
+    elif company is not None:
+        display_name = company.ragione_sociale
+        codice_fiscale = company.codice_fiscale
+        partita_iva = company.partita_iva
+    return display_name, codice_fiscale, partita_iva
+
+
+def _subject_display_name(db: Session, subject: AnagraficaSubject) -> str:
+    display_name, _, _ = _subject_identity_summary(db, subject)
+    return display_name
 
 
 def _build_document_response(document: AnagraficaDocument) -> AnagraficaPreviewDocumentResponse:

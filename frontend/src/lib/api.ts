@@ -1,6 +1,7 @@
 import type {
   AnagraficaCsvImportResult,
   AnagraficaDocument,
+  AnagraficaDocumentSummary,
   AnagraficaImportJob,
   AnagraficaImportPreview,
   AnagraficaImportRunResult,
@@ -516,6 +517,14 @@ export async function updateNetworkDevicePosition(
 
 export async function getAnagraficaStats(token: string): Promise<AnagraficaStats> {
   return request<AnagraficaStats>("/anagrafica/stats", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getAnagraficaDocumentSummary(token: string): Promise<AnagraficaDocumentSummary> {
+  return request<AnagraficaDocumentSummary>("/anagrafica/documents/summary", {
     headers: {
       Authorization: `Bearer ${token}`,
     },

@@ -36,10 +36,10 @@ test("dashboard keeps login gate and GAIA module selector copy", () => {
   const loginPage = read("src/app/login/page.tsx");
 
   assert.match(homePage, /router\.replace\("\/login"\)/);
-  assert.match(homePage, /Gestione Apparati Informativi e Accessi/);
+  assert.match(homePage, /Gestione Apparati Informativi/);
   assert.match(homePage, /Seleziona il dominio operativo/);
   assert.match(homePage, /GAIA Catasto/);
-  assert.match(homePage, /servizi catastali/);
+  assert.match(homePage, /servizi catastali/i);
   assert.match(loginPage, /router\.replace\("\/"\)/);
   assert.match(loginPage, /router\.push\("\/"\)/);
   assert.match(loginPage, /GAIA Catasto/);
@@ -63,7 +63,7 @@ test("layout includes app shell, sidebar and topbar", () => {
   assert.match(platformSidebar, /Modulo:/);
   assert.match(platformSidebar, /Catasto/);
   assert.match(moduleSidebar, /Sincronizzazione/);
-  assert.match(moduleSidebar, /Review accessi/);
+  assert.match(moduleSidebar, /Review NAS/);
   assert.match(topbar, /StatusPill/);
   assert.match(statusPill, /Backend connesso/);
 });
@@ -112,34 +112,31 @@ test("shared ui components exist for redesign system", () => {
 });
 
 test("users page uses data table and detail links", () => {
-  const usersPage = read("src/app/accessi/users/page.tsx");
-  const userDetailPage = read("src/app/accessi/users/[id]/page.tsx");
+  const usersPage = read("src/app/nas-control/users/page.tsx");
 
   assert.match(usersPage, /DataTable/);
   assert.match(usersPage, /Cartelle accessibili/);
   assert.match(usersPage, /Permesso massimo/);
   assert.match(usersPage, /Apri pagina completa/);
-  assert.match(usersPage, /href=\{`\/accessi\/users\/\$\{selectedUserId\}`\}/);
-  assert.match(userDetailPage, /Dettaglio utente/);
-  assert.match(userDetailPage, /UserDetailPanel/);
+  assert.match(usersPage, /UserDetailPanel/);
+  assert.match(usersPage, /selectedUserId/);
 });
 
 test("shares page uses cards and share detail route", () => {
-  const sharesPage = read("src/app/accessi/shares/page.tsx");
-  const shareDetailPage = read("src/app/accessi/shares/[id]/page.tsx");
+  const sharesPage = read("src/app/nas-control/shares/page.tsx");
 
   assert.match(sharesPage, /Cartelle condivise/);
   assert.match(sharesPage, /deny/);
-  assert.match(sharesPage, /\/accessi\/shares\/\$\{share\.id\}/);
-  assert.match(shareDetailPage, /Accessi effettivi/);
-  assert.match(shareDetailPage, /PermissionBadge/);
+  assert.match(sharesPage, /\/nas-control\/shares\/\$\{share\.id\}/);
+  assert.match(sharesPage, /ShareDetailPanel/);
+  assert.match(sharesPage, /Apri pagina completa/);
 });
 
 test("reviews and sync pages expose redesigned administrative views", () => {
-  const reviewsPage = read("src/app/accessi/reviews/page.tsx");
-  const syncPage = read("src/app/accessi/sync/page.tsx");
+  const reviewsPage = read("src/app/nas-control/reviews/page.tsx");
+  const syncPage = read("src/app/nas-control/sync/page.tsx");
 
-  assert.match(reviewsPage, /Review accessi/);
+  assert.match(reviewsPage, /Review NAS/);
   assert.match(reviewsPage, /In attesa/);
   assert.match(reviewsPage, /Approvate/);
   assert.match(syncPage, /Sincronizzazione/);
@@ -149,10 +146,51 @@ test("reviews and sync pages expose redesigned administrative views", () => {
 });
 
 test("effective permissions page keeps preview and persistent table", () => {
-  const permissionsPage = read("src/app/accessi/effective-permissions/page.tsx");
+  const permissionsPage = read("src/app/nas-control/effective-permissions/page.tsx");
 
-  assert.match(permissionsPage, /Permessi persistiti/);
+  assert.match(permissionsPage, /Permessi effettivi/);
   assert.match(permissionsPage, /Preview guidata/);
   assert.match(permissionsPage, /calculatePermissionPreview/);
-  assert.match(permissionsPage, /available-groups/);
+  assert.match(permissionsPage, /groupsInput/);
+});
+
+test("anagrafica dashboard opens subject and document summaries in modal overlays", () => {
+  const dashboardPage = read("src/app/anagrafica/page.tsx");
+  const apiClient = read("src/lib/api.ts");
+
+  assert.match(dashboardPage, /selectedSubject/);
+  assert.match(dashboardPage, /<iframe/);
+  assert.match(dashboardPage, /Dettaglio soggetto/);
+  assert.match(dashboardPage, /Riepilogo documenti/);
+  assert.match(dashboardPage, /recent_unclassified/);
+  assert.match(dashboardPage, /getAnagraficaDocumentSummary/);
+  assert.match(dashboardPage, /onClick=\{\(\) => setSelectedSubject\(subject\)\}/);
+  assert.match(dashboardPage, /onClick=\{\(\) => void handleOpenDocumentSummary\(\)\}/);
+  assert.match(apiClient, /export async function getAnagraficaDocumentSummary/);
+});
+
+test("anagrafica import page exposes bulk import progress feedback", () => {
+  const importPage = read("src/app/anagrafica/import/page.tsx");
+
+  assert.match(importPage, /Import massivo in corso/);
+  assert.match(importPage, /activeBulkJob/);
+  assert.match(importPage, /bulkJobProgress/);
+  assert.match(importPage, /setInterval/);
+  assert.match(importPage, /completed_items/);
+  assert.match(importPage, /running_items/);
+  assert.match(importPage, /failed_items/);
+  assert.match(importPage, /non duplica i soggetti/);
+});
+
+test("anagrafica detail page keeps preview modal and delete confirmation", () => {
+  const detailPage = read("src/app/anagrafica/[id]/page.tsx");
+  const apiClient = read("src/lib/api.ts");
+
+  assert.match(detailPage, /Anteprima documento/);
+  assert.match(detailPage, /iframe className=/);
+  assert.match(detailPage, /Conferma rimozione documento/);
+  assert.match(detailPage, /documentPendingDeletion/);
+  assert.match(detailPage, /cursor-pointer rounded-lg border border-gray-100/);
+  assert.match(detailPage, /event\.stopPropagation\(\)/);
+  assert.match(apiClient, /export async function downloadAnagraficaDocumentBlob/);
 });

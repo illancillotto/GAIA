@@ -363,6 +363,29 @@ class AnagraficaStatsResponse(BaseModel):
     by_letter: dict[str, int] = Field(default_factory=dict)
 
 
+class AnagraficaDocumentSummaryBucketResponse(BaseModel):
+    doc_type: str
+    count: int
+
+
+class AnagraficaDocumentSummaryItemResponse(BaseModel):
+    document_id: str
+    subject_id: str
+    subject_display_name: str
+    filename: str
+    doc_type: str
+    classification_source: str
+    created_at: datetime
+
+
+class AnagraficaDocumentSummaryResponse(BaseModel):
+    total_documents: int
+    documents_unclassified: int
+    classified_documents: int
+    by_doc_type: list[AnagraficaDocumentSummaryBucketResponse] = Field(default_factory=list)
+    recent_unclassified: list[AnagraficaDocumentSummaryItemResponse] = Field(default_factory=list)
+
+
 class AnagraficaSearchResultResponse(BaseModel):
     items: list[AnagraficaSubjectListItemResponse]
     total: int
