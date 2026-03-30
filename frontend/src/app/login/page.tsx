@@ -25,8 +25,8 @@ const modules = [
   {
     name: "GAIA Rete",
     subtitle: "Network Monitor",
-    status: "In sviluppo",
-    tone: "coming" as const,
+    status: "Operativo",
+    tone: "active" as const,
   },
   {
     name: "GAIA Inventario",
@@ -91,7 +91,7 @@ export default function LoginPage() {
               </h1>
               <p className="mt-5 max-w-xl text-base leading-7 text-white/72">
                 Un unico punto di ingresso per controllo NAS, servizi catastali, monitoraggio rete e inventario IT.
-                I moduli GAIA NAS Control e GAIA Catasto sono operativi; gli altri moduli sono gia predisposti nello scaffold applicativo.
+                I moduli GAIA NAS Control, GAIA Catasto e GAIA Rete sono operativi; il modulo Inventario resta predisposto nello scaffold applicativo.
               </p>
             </div>
 
@@ -192,7 +192,7 @@ export default function LoginPage() {
 
           <div className="mt-6 rounded-2xl border border-gray-100 bg-[#F6F7F2] px-4 py-3 text-xs leading-5 text-gray-500">
             Dopo il login verrai indirizzato alla <span className="font-semibold text-[#1D4E35]">home GAIA</span>,
-            da cui potrai aprire i moduli operativi NAS Control e Catasto.
+            da cui potrai aprire i moduli operativi NAS Control, Catasto e Rete.
           </div>
         </section>
       </section>
