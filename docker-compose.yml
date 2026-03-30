@@ -24,6 +24,7 @@ services:
       - .env
     volumes:
       - catasto-data:/data/catasto
+      - anagrafica-data:/data/anagrafica
     depends_on:
       postgres:
         condition: service_healthy
@@ -131,3 +132,4 @@ services:
 volumes:
   postgres_data:
   catasto-data:
+  anagrafica-data:

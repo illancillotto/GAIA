@@ -4,9 +4,16 @@ import { useParams, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 
 import { AnagraficaModulePage } from "@/components/anagrafica/anagrafica-module-page";
-import { deleteAnagraficaDocument, getAnagraficaSubject, updateAnagraficaDocument, updateAnagraficaSubject } from "@/lib/api";
+import {
+  deleteAnagraficaDocument,
+  getAnagraficaSubjectNasCandidates,
+  getAnagraficaSubject,
+  importAnagraficaSubjectFromNas,
+  updateAnagraficaDocument,
+  updateAnagraficaSubject,
+} from "@/lib/api";
 import { formatDateTime } from "@/lib/presentation";
-import type { AnagraficaSubjectDetail, AnagraficaSubjectUpdateInput } from "@/types/api";
+import type { AnagraficaNasFolderCandidate, AnagraficaSubjectDetail, AnagraficaSubjectUpdateInput } from "@/types/api";
 
 function DetailContent({ token, subjectId }: { token: string; subjectId: string }) {
   const router = useRouter();
@@ -15,6 +22,11 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isImportingFromNas, setIsImportingFromNas] = useState(false);
+  const [nasCandidates, setNasCandidates] = useState<AnagraficaNasFolderCandidate[]>([]);
+  const [selectedNasPath, setSelectedNasPath] = useState("");
+  const [isLoadingNasCandidates, setIsLoadingNasCandidates] = useState(false);
+  const [isSavingNasPath, setIsSavingNasPath] = useState(false);
 
   const [sourceNameRaw, setSourceNameRaw] = useState("");
   const [requiresReview, setRequiresReview] = useState(false);
@@ -44,6 +56,7 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
     setSourceNameRaw(subject.source_name_raw);
     setRequiresReview(subject.requires_review);
     setStatus(subject.status);
+    setSelectedNasPath(subject.nas_folder_path || "");
     if (subject.person) {
       setDisplayOne(subject.person.cognome);
       setDisplayTwo(subject.person.nome);
@@ -132,6 +145,65 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
     }
   }
 
+  async function handleImportFromNas() {
+    setIsImportingFromNas(true);
+    setSaveError(null);
+    setSaveMessage(null);
+
+    try {
+      const result = await importAnagraficaSubjectFromNas(token, subjectId);
+      await reloadSubject();
+      setSaveMessage(
+        `Import NAS completato da ${result.matched_folder_name}: ${result.created_documents} documenti creati, ${result.updated_documents} aggiornati.`,
+      );
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Errore import documenti da NAS");
+    } finally {
+      setIsImportingFromNas(false);
+    }
+  }
+
+  async function handleLoadNasCandidates() {
+    setIsLoadingNasCandidates(true);
+    setSaveError(null);
+    try {
+      const response = await getAnagraficaSubjectNasCandidates(token, subjectId);
+      setNasCandidates(response);
+      if (!selectedNasPath && response[0]?.nas_folder_path) {
+        setSelectedNasPath(response[0].nas_folder_path);
+      }
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Errore caricamento cartelle NAS candidate");
+    } finally {
+      setIsLoadingNasCandidates(false);
+    }
+  }
+
+  async function handleSaveNasPath() {
+    if (!selectedNasPath) {
+      setSaveError("Seleziona una cartella NAS da salvare.");
+      return;
+    }
+
+    const selectedCandidate = nasCandidates.find((item) => item.nas_folder_path === selectedNasPath);
+
+    setIsSavingNasPath(true);
+    setSaveError(null);
+    setSaveMessage(null);
+    try {
+      const response = await updateAnagraficaSubject(token, subjectId, {
+        nas_folder_path: selectedNasPath,
+        nas_folder_letter: selectedCandidate?.letter ?? subject?.nas_folder_letter ?? null,
+      });
+      setSubject(response);
+      setSaveMessage("Percorso NAS salvato sulla scheda soggetto.");
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Errore salvataggio percorso NAS");
+    } finally {
+      setIsSavingNasPath(false);
+    }
+  }
+
   if (loadError) {
     return (
       <article className="panel-card">
@@ -154,9 +226,14 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
             {subject.person ? `${subject.person.cognome} ${subject.person.nome}` : subject.company?.ragione_sociale || subject.source_name_raw}
           </p>
         </div>
-        <button className="btn-secondary" type="button" onClick={() => router.push("/anagrafica/subjects")}>
-          Torna alla lista
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button className="btn-primary" type="button" onClick={() => void handleImportFromNas()} disabled={isImportingFromNas}>
+            {isImportingFromNas ? "Import in corso..." : "Importa documenti da NAS"}
+          </button>
+          <button className="btn-secondary" type="button" onClick={() => router.push("/anagrafica/subjects")}>
+            Torna alla lista
+          </button>
+        </div>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
@@ -230,6 +307,67 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
           </dl>
         </article>
       </div>
+
+      <article className="panel-card">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="section-title">Override cartella NAS</p>
+            <p className="section-copy">Carica le cartelle candidate trovate per lettera archivio, seleziona quella corretta e salvala sulla scheda.</p>
+          </div>
+          <button className="btn-secondary" type="button" onClick={() => void handleLoadNasCandidates()} disabled={isLoadingNasCandidates}>
+            {isLoadingNasCandidates ? "Ricerca cartelle..." : "Trova cartelle candidate"}
+          </button>
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+          <div className="space-y-3">
+            <label className="block text-sm font-medium text-gray-700">
+              Percorso NAS selezionato
+              <input
+                className="form-control mt-1"
+                value={selectedNasPath}
+                onChange={(event) => setSelectedNasPath(event.target.value)}
+                placeholder="/volume1/.../CartellaSoggetto"
+              />
+            </label>
+            <div className="flex justify-end">
+              <button className="btn-primary" type="button" onClick={() => void handleSaveNasPath()} disabled={isSavingNasPath}>
+                {isSavingNasPath ? "Salvataggio..." : "Salva percorso NAS"}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            {nasCandidates.length === 0 ? (
+              <p className="text-sm text-gray-500">Nessuna cartella candidata caricata. Avvia la ricerca per vedere le opzioni trovate sul NAS.</p>
+            ) : (
+              <div className="space-y-3">
+                {nasCandidates.map((candidate) => (
+                  <label key={candidate.nas_folder_path} className="flex cursor-pointer gap-3 rounded-lg border border-gray-100 px-4 py-3 transition hover:bg-gray-50">
+                    <input
+                      type="radio"
+                      name="nas-candidate"
+                      checked={selectedNasPath === candidate.nas_folder_path}
+                      onChange={() => setSelectedNasPath(candidate.nas_folder_path)}
+                    />
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-medium text-gray-900">{candidate.folder_name}</p>
+                        <span className="rounded-full bg-gray-100 px-2 py-1 text-[11px] font-medium text-gray-700">score {candidate.score}</span>
+                        <span className="rounded-full bg-sky-50 px-2 py-1 text-[11px] font-medium text-sky-700">{candidate.subject_type}</span>
+                      </div>
+                      <p className="mt-1 break-all text-xs text-gray-500">{candidate.nas_folder_path}</p>
+                      <p className="mt-2 text-xs text-gray-500">
+                        confidenza {Math.round(candidate.confidence * 100)}% · {candidate.codice_fiscale || candidate.partita_iva || "identificativo non disponibile"} · review {candidate.requires_review ? "si" : "no"}
+                      </p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </article>
 
       <article className="panel-card">
         <div className="mb-4">

@@ -72,6 +72,18 @@ class NasSSHClient:
 
         return output
 
+    def download_file(self, path: str) -> bytes:
+        try:
+            client = self._get_client()
+            sftp = client.open_sftp()
+            try:
+                with sftp.file(path, "rb") as remote_file:
+                    return remote_file.read()
+            finally:
+                sftp.close()
+        except Exception as exc:  # pragma: no cover
+            raise NasConnectorError(f"SSH file download failed: {path}") from exc
+
     def close(self) -> None:
         if self._client is None:
             return

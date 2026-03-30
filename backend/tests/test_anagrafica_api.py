@@ -1,4 +1,5 @@
 from collections.abc import Generator
+from pathlib import Path
 import uuid
 
 import pytest
@@ -7,6 +8,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import hash_password
 from app.db.base import Base
@@ -45,6 +47,11 @@ class FakeNasConnector:
             ): "/archive/O/Obinu_Santina_BNOSTN34L64I743F/INGIUNZIONE-2024.pdf",
         }
         return outputs.get(command, "")
+
+    def download_file(self, path: str) -> bytes:
+        if path.endswith("INGIUNZIONE-2024.pdf"):
+            return b"%PDF-1.4 fake pdf bytes"
+        raise RuntimeError(f"Unexpected download path: {path}")
 
 
 @pytest.fixture(autouse=True)
@@ -529,3 +536,141 @@ def test_export_and_catasto_correlation() -> None:
     assert xlsx_response.headers["content-type"].startswith(
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
+
+
+def test_import_single_subject_from_existing_registry_persists_local_file(tmp_path) -> None:
+    create_user("henry", module_anagrafica=True)
+    token = login("henry")
+    headers = {"Authorization": f"Bearer {token}"}
+    original_storage_path = settings.anagrafica_document_storage_path
+    settings.anagrafica_document_storage_path = str(tmp_path / "anagrafica-docs")
+
+    try:
+        create_response = client.post(
+            "/anagrafica/subjects",
+            headers=headers,
+            json={
+                "subject_type": "person",
+                "source_name_raw": "Obinu_Santina_BNOSTN34L64I743F",
+                "person": {
+                    "cognome": "Obinu",
+                    "nome": "Santina",
+                    "codice_fiscale": "BNOSTN34L64I743F",
+                },
+            },
+        )
+        assert create_response.status_code == 201
+        subject_id = create_response.json()["id"]
+
+        import_response = client.post(f"/anagrafica/subjects/{subject_id}/import-from-nas", headers=headers)
+        assert import_response.status_code == 200
+        payload = import_response.json()
+        assert payload["created_documents"] == 1
+        assert payload["matched_folder_name"] == "Obinu_Santina_BNOSTN34L64I743F"
+
+        detail_response = client.get(f"/anagrafica/subjects/{subject_id}", headers=headers)
+        assert detail_response.status_code == 200
+        detail = detail_response.json()
+        assert detail["nas_folder_path"] == "/archive/O/Obinu_Santina_BNOSTN34L64I743F"
+        assert len(detail["documents"]) == 1
+
+        db = TestingSessionLocal()
+        try:
+            document = db.query(AnagraficaDocument).filter(AnagraficaDocument.subject_id == uuid.UUID(subject_id)).one()
+            assert document.storage_type == "local_upload"
+            assert document.local_path is not None
+            assert Path(document.local_path).exists()
+            assert Path(document.local_path).read_bytes().startswith(b"%PDF-1.4")
+        finally:
+            db.close()
+    finally:
+        settings.anagrafica_document_storage_path = original_storage_path
+
+
+def test_subject_nas_candidates_returns_scored_matches() -> None:
+    create_user("manual_match", module_anagrafica=True)
+    token = login("manual_match")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    create_response = client.post(
+        "/anagrafica/subjects",
+        headers=headers,
+        json={
+            "subject_type": "person",
+            "source_name_raw": "Obinu_Santina_BNOSTN34L64I743F",
+            "person": {
+                "cognome": "Obinu",
+                "nome": "Santina",
+                "codice_fiscale": "BNOSTN34L64I743F",
+            },
+        },
+    )
+    assert create_response.status_code == 201
+    subject_id = create_response.json()["id"]
+
+    candidates_response = client.get(f"/anagrafica/subjects/{subject_id}/nas-candidates", headers=headers)
+    assert candidates_response.status_code == 200
+    candidates = candidates_response.json()
+    assert len(candidates) >= 1
+    assert candidates[0]["folder_name"] == "Obinu_Santina_BNOSTN34L64I743F"
+    assert candidates[0]["score"] > 0
+    assert candidates[0]["nas_folder_path"] == "/archive/O/Obinu_Santina_BNOSTN34L64I743F"
+
+
+def test_bulk_import_from_existing_registry_and_reset(tmp_path) -> None:
+    create_user("irene", module_anagrafica=True)
+    token = login("irene")
+    headers = {"Authorization": f"Bearer {token}"}
+    original_storage_path = settings.anagrafica_document_storage_path
+    settings.anagrafica_document_storage_path = str(tmp_path / "anagrafica-docs")
+
+    try:
+        create_response = client.post(
+            "/anagrafica/subjects",
+            headers=headers,
+            json={
+                "subject_type": "person",
+                "source_name_raw": "Obinu_Santina_BNOSTN34L64I743F",
+                "person": {
+                    "cognome": "Obinu",
+                    "nome": "Santina",
+                    "codice_fiscale": "BNOSTN34L64I743F",
+                },
+            },
+        )
+        assert create_response.status_code == 201
+
+        bulk_response = client.post("/anagrafica/import/run-from-subjects", headers=headers)
+        assert bulk_response.status_code == 202
+        bulk_payload = bulk_response.json()
+        assert bulk_payload["letter"] == "REGISTRY"
+        assert bulk_payload["imported_ok"] == 1
+        assert bulk_payload["created_documents"] == 1
+
+        jobs_response = client.get("/anagrafica/import/jobs", headers=headers)
+        assert jobs_response.status_code == 200
+        jobs = jobs_response.json()
+        assert jobs[0]["letter"] == "REGISTRY"
+        assert jobs[0]["items"][0]["nas_folder_path"] == "/archive/O/Obinu_Santina_BNOSTN34L64I743F"
+
+        reset_response = client.post("/anagrafica/reset", headers=headers, json={"confirm": "RESET ANAGRAFICA"})
+        assert reset_response.status_code == 200
+        reset_payload = reset_response.json()
+        assert reset_payload["cleared_subject_links"] == 1
+        assert reset_payload["deleted_documents"] == 1
+        assert reset_payload["deleted_import_jobs"] >= 1
+        assert reset_payload["deleted_storage_files"] == 1
+
+        subjects_after_reset = client.get("/anagrafica/subjects", headers=headers)
+        assert subjects_after_reset.status_code == 200
+        assert subjects_after_reset.json()["total"] == 1
+        subject_id = subjects_after_reset.json()["items"][0]["id"]
+        detail_after_reset = client.get(f"/anagrafica/subjects/{subject_id}", headers=headers)
+        assert detail_after_reset.status_code == 200
+        detail_payload = detail_after_reset.json()
+        assert detail_payload["documents"] == []
+        assert detail_payload["nas_folder_path"] is None
+        assert detail_payload["nas_folder_letter"] is None
+        assert detail_payload["imported_at"] is None
+    finally:
+        settings.anagrafica_document_storage_path = original_storage_path

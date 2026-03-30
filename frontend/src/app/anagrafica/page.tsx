@@ -137,86 +137,6 @@ function DashboardContent({ token }: { token: string }) {
         <MetricCard label="Snapshot recenti" value={jobs.length} sub={`${jobs.filter((job) => job.status === "completed").length} completi`} />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[1.3fr_1fr]">
-        <article className="panel-card">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <p className="section-title">Soggetti recenti</p>
-              <p className="section-copy">Ultimi record creati o aggiornati nel dominio Anagrafica.</p>
-            </div>
-            <Link href="/anagrafica/subjects" className="text-sm font-medium text-[#1D4E35]">
-              Lista completa
-            </Link>
-          </div>
-
-          {isLoading ? (
-            <p className="text-sm text-gray-500">Caricamento soggetti in corso.</p>
-          ) : subjects.length === 0 ? (
-            <EmptyState icon={UserIcon} title="Nessun soggetto disponibile" description="Crea uno snapshot dell’archivio NAS o inserisci una scheda manuale per iniziare." />
-          ) : (
-            <div className="space-y-3">
-              {subjects.map((subject) => (
-                <Link
-                  key={subject.id}
-                  href={`/anagrafica/${subject.id}`}
-                  className="flex items-center justify-between rounded-lg border border-gray-100 px-4 py-3 transition hover:bg-gray-50"
-                >
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium text-gray-900">{subject.display_name}</p>
-                      <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${badgeTone(subject.subject_type)}`}>
-                        {subject.subject_type.toUpperCase()}
-                      </span>
-                    </div>
-                    <p className="mt-1 text-xs text-gray-500">
-                      {subject.codice_fiscale || subject.partita_iva || "Identificativo non disponibile"} · {subject.document_count} documenti · {subject.nas_folder_letter || "?"}
-                    </p>
-                  </div>
-                  <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${subject.requires_review ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-600"}`}>
-                    {subject.requires_review ? "Review" : "OK"}
-                  </span>
-                </Link>
-              ))}
-            </div>
-          )}
-        </article>
-
-        <article className="panel-card">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <p className="section-title">Snapshot recenti</p>
-              <p className="section-copy">Storico breve delle acquisizioni di staging archivio.</p>
-            </div>
-            <Link href="/anagrafica/import" className="text-sm font-medium text-[#1D4E35]">
-              Apri wizard
-            </Link>
-          </div>
-
-          {isLoading ? (
-            <p className="text-sm text-gray-500">Caricamento import in corso.</p>
-          ) : jobs.length === 0 ? (
-            <EmptyState icon={FolderIcon} title="Nessuno snapshot disponibile" description="Le acquisizioni di staging compariranno qui dopo il primo salvataggio." />
-          ) : (
-            <div className="space-y-3">
-              {jobs.map((job) => (
-                <div key={job.job_id} className="rounded-lg border border-gray-100 px-4 py-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-medium text-gray-900">{job.letter === "ALL" ? "Archivio completo" : `Lettera ${job.letter || "?"}`}</p>
-                    <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${badgeTone(job.status)}`}>
-                      {job.status}
-                    </span>
-                  </div>
-                  <p className="mt-2 text-xs text-gray-500">
-                    {job.imported_ok} importati · {job.imported_errors} errori · {job.warning_count} warning
-                  </p>
-                  <p className="mt-1 text-xs text-gray-400">{formatDateTime(job.completed_at || job.created_at)}</p>
-                </div>
-              ))}
-            </div>
-          )}
-        </article>
-      </div>
-
       <article className="panel-card">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -290,6 +210,86 @@ function DashboardContent({ token }: { token: string }) {
           )}
         </div>
       </article>
+
+      <div className="grid gap-4 xl:grid-cols-[1.15fr_0.9fr]">
+        <article className="panel-card p-5">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="section-title">Soggetti recenti</p>
+              <p className="section-copy">Ultimi record creati o aggiornati nel dominio Anagrafica.</p>
+            </div>
+            <Link href="/anagrafica/subjects" className="text-sm font-medium text-[#1D4E35]">
+              Lista completa
+            </Link>
+          </div>
+
+          {isLoading ? (
+            <p className="text-sm text-gray-500">Caricamento soggetti in corso.</p>
+          ) : subjects.length === 0 ? (
+            <EmptyState icon={UserIcon} title="Nessun soggetto disponibile" description="Crea uno snapshot dell’archivio NAS o inserisci una scheda manuale per iniziare." />
+          ) : (
+            <div className="space-y-3">
+              {subjects.map((subject) => (
+                <Link
+                  key={subject.id}
+                  href={`/anagrafica/${subject.id}`}
+                  className="flex items-center justify-between rounded-lg border border-gray-100 px-3 py-2.5 transition hover:bg-gray-50"
+                >
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-gray-900">{subject.display_name}</p>
+                      <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${badgeTone(subject.subject_type)}`}>
+                        {subject.subject_type.toUpperCase()}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">
+                      {subject.codice_fiscale || subject.partita_iva || "Identificativo non disponibile"} · {subject.document_count} documenti · {subject.nas_folder_letter || "?"}
+                    </p>
+                  </div>
+                  <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${subject.requires_review ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-600"}`}>
+                    {subject.requires_review ? "Review" : "OK"}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          )}
+        </article>
+
+        <article className="panel-card p-5">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <p className="section-title">Snapshot recenti</p>
+              <p className="section-copy">Storico breve delle acquisizioni di staging archivio.</p>
+            </div>
+            <Link href="/anagrafica/import" className="text-sm font-medium text-[#1D4E35]">
+              Apri wizard
+            </Link>
+          </div>
+
+          {isLoading ? (
+            <p className="text-sm text-gray-500">Caricamento import in corso.</p>
+          ) : jobs.length === 0 ? (
+            <EmptyState icon={FolderIcon} title="Nessuno snapshot disponibile" description="Le acquisizioni di staging compariranno qui dopo il primo salvataggio." />
+          ) : (
+            <div className="space-y-3">
+              {jobs.map((job) => (
+                <div key={job.job_id} className="rounded-lg border border-gray-100 px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-medium text-gray-900">{job.letter === "ALL" ? "Archivio completo" : `Lettera ${job.letter || "?"}`}</p>
+                    <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${badgeTone(job.status)}`}>
+                      {job.status}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs text-gray-500">
+                    {job.imported_ok} importati · {job.imported_errors} errori · {job.warning_count} warning
+                  </p>
+                  <p className="mt-1 text-xs text-gray-400">{formatDateTime(job.completed_at || job.created_at)}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </article>
+      </div>
     </div>
   );
 }

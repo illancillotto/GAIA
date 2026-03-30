@@ -37,13 +37,17 @@ from app.modules.anagrafica.schemas import (
     AnagraficaImportPreviewRequest,
     AnagraficaImportPreviewResponse,
     AnagraficaImportRunResponse,
+    AnagraficaNasFolderCandidateResponse,
     AnagraficaPersonResponse,
     AnagraficaPreviewDocumentResponse,
+    AnagraficaResetRequest,
+    AnagraficaResetResponse,
     AnagraficaSearchResultResponse,
     AnagraficaStatsResponse,
     AnagraficaModuleStatusResponse,
     AnagraficaSubjectCreateRequest,
     AnagraficaSubjectDetailResponse,
+    AnagraficaSubjectImportResponse,
     AnagraficaSubjectListItemResponse,
     AnagraficaSubjectListResponse,
     AnagraficaSubjectUpdateRequest,
@@ -51,7 +55,10 @@ from app.modules.anagrafica.schemas import (
 from app.modules.anagrafica.services.import_service import (
     AnagraficaImportPreviewService,
     create_import_snapshot,
+    import_existing_registry_subjects,
+    import_subject_from_existing_registry,
     preview_import,
+    reset_anagrafica_data,
 )
 from app.modules.anagrafica.services.csv_import_service import import_subjects_from_csv
 from app.services.nas_connector import NasConnectorError, get_nas_client
@@ -62,6 +69,12 @@ RequireAnagraficaModule = Depends(require_module("anagrafica"))
 
 def get_anagrafica_import_service() -> AnagraficaImportPreviewService:
     return AnagraficaImportPreviewService(get_nas_client())
+
+
+def _close_import_service(service: AnagraficaImportPreviewService) -> None:
+    close = getattr(service.connector, "close", None)
+    if callable(close):
+        close()
 
 
 def _job_progress(db: Session, job_id: uuid.UUID) -> dict[str, int]:
@@ -186,6 +199,45 @@ def post_import_run(
             }
         )
     except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    except NasConnectorError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+
+
+@router.post("/import/run-from-subjects", response_model=AnagraficaImportRunResponse, status_code=status.HTTP_202_ACCEPTED)
+def post_import_run_from_subjects(
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    _: Annotated[ApplicationUser, RequireAnagraficaModule],
+    db: Annotated[Session, Depends(get_db)],
+    service: Annotated[AnagraficaImportPreviewService, Depends(get_anagrafica_import_service)],
+) -> AnagraficaImportRunResponse:
+    try:
+        result = import_existing_registry_subjects(db, current_user=current_user, service=service)
+        return AnagraficaImportRunResponse.model_validate(
+            {
+                "job_id": str(result.job_id),
+                "letter": result.letter,
+                "status": result.status,
+                "total_folders": result.total_folders,
+                "imported_ok": result.imported_ok,
+                "imported_errors": result.imported_errors,
+                "warning_count": result.warning_count,
+                "pending_items": 0,
+                "running_items": 0,
+                "completed_items": result.imported_ok,
+                "failed_items": result.imported_errors,
+                "created_subjects": result.created_subjects,
+                "updated_subjects": result.updated_subjects,
+                "created_documents": result.created_documents,
+                "updated_documents": result.updated_documents,
+                "generated_at": result.generated_at,
+                "completed_at": result.completed_at,
+                "log_json": result.log_json,
+            }
+        )
+    except ValueError as exc:
+        db.rollback()
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
     except NasConnectorError as exc:
         db.rollback()
@@ -369,6 +421,76 @@ def get_subject(
     return _build_subject_detail(db, subject_id)
 
 
+@router.post("/subjects/{subject_id}/import-from-nas", response_model=AnagraficaSubjectImportResponse)
+def post_import_subject_from_nas(
+    subject_id: uuid.UUID,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    _: Annotated[ApplicationUser, RequireAnagraficaModule],
+    db: Annotated[Session, Depends(get_db)],
+    service: Annotated[AnagraficaImportPreviewService, Depends(get_anagrafica_import_service)],
+) -> AnagraficaSubjectImportResponse:
+    try:
+        result = import_subject_from_existing_registry(
+            db,
+            current_user=current_user,
+            subject_id=subject_id,
+            service=service,
+        )
+    except ValueError as exc:
+        db.rollback()
+        status_code = status.HTTP_404_NOT_FOUND if "not found" in str(exc).lower() else status.HTTP_422_UNPROCESSABLE_ENTITY
+        raise HTTPException(status_code=status_code, detail=str(exc)) from exc
+    except NasConnectorError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+
+    return AnagraficaSubjectImportResponse(
+        subject_id=str(result.subject_id),
+        matched_folder_path=result.matched_folder_path,
+        matched_folder_name=result.matched_folder_name,
+        warning_count=result.warning_count,
+        created_documents=result.created_documents,
+        updated_documents=result.updated_documents,
+        imported_at=result.imported_at,
+    )
+
+
+@router.get("/subjects/{subject_id}/nas-candidates", response_model=list[AnagraficaNasFolderCandidateResponse])
+def get_subject_nas_candidates(
+    subject_id: uuid.UUID,
+    _: Annotated[ApplicationUser, Depends(require_active_user)],
+    __: Annotated[ApplicationUser, RequireAnagraficaModule],
+    db: Annotated[Session, Depends(get_db)],
+    service: Annotated[AnagraficaImportPreviewService, Depends(get_anagrafica_import_service)],
+    limit: int = Query(default=20, ge=1, le=100),
+) -> list[AnagraficaNasFolderCandidateResponse]:
+    try:
+        subject = _require_subject_exists(db, subject_id)
+        candidates = service.list_existing_subject_folder_candidates(db, subject, limit=limit)
+    except NasConnectorError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    finally:
+        _close_import_service(service)
+
+    return [
+        AnagraficaNasFolderCandidateResponse(
+            folder_name=item.folder_name,
+            letter=item.letter,
+            nas_folder_path=item.nas_folder_path,
+            score=item.score,
+            subject_type=item.subject_type,
+            confidence=item.confidence,
+            requires_review=item.requires_review,
+            codice_fiscale=item.codice_fiscale,
+            partita_iva=item.partita_iva,
+            ragione_sociale=item.ragione_sociale,
+            cognome=item.cognome,
+            nome=item.nome,
+        )
+        for item in candidates
+    ]
+
+
 @router.put("/subjects/{subject_id}", response_model=AnagraficaSubjectDetailResponse)
 def update_subject(
     subject_id: uuid.UUID,
@@ -489,6 +611,30 @@ def delete_document(
         {"document_id": str(document_id)},
     )
     db.commit()
+
+
+@router.post("/reset", response_model=AnagraficaResetResponse)
+def post_reset_anagrafica(
+    payload: AnagraficaResetRequest,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    _: Annotated[ApplicationUser, RequireAnagraficaModule],
+    db: Annotated[Session, Depends(get_db)],
+) -> AnagraficaResetResponse:
+    if payload.confirm.strip().upper() != "RESET ANAGRAFICA":
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Conferma non valida. Usa esattamente 'RESET ANAGRAFICA'.",
+        )
+
+    result = reset_anagrafica_data(db)
+    return AnagraficaResetResponse(
+        cleared_subject_links=result.cleared_subject_links,
+        deleted_documents=result.deleted_documents,
+        deleted_audit_logs=result.deleted_audit_logs,
+        deleted_import_jobs=result.deleted_import_jobs,
+        deleted_import_job_items=result.deleted_import_job_items,
+        deleted_storage_files=result.deleted_storage_files,
+    )
 
 
 @router.get("/stats", response_model=AnagraficaStatsResponse)

@@ -5,18 +5,30 @@ import { useCallback, useEffect, useState } from "react";
 import { AnagraficaModulePage } from "@/components/anagrafica/anagrafica-module-page";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FolderIcon } from "@/components/ui/icons";
-import { getAnagraficaImportJob, getAnagraficaImportJobs, previewAnagraficaImport, runAnagraficaImport } from "@/lib/api";
+import {
+  getAnagraficaImportJob,
+  getAnagraficaImportJobs,
+  previewAnagraficaImport,
+  resetAnagraficaData,
+  runAnagraficaImport,
+  runAnagraficaImportFromSubjects,
+} from "@/lib/api";
 import { formatDateTime } from "@/lib/presentation";
-import type { AnagraficaImportJob, AnagraficaImportPreview, AnagraficaImportRunResult } from "@/types/api";
+import type { AnagraficaImportJob, AnagraficaImportPreview, AnagraficaImportRunResult, AnagraficaResetResult } from "@/types/api";
 
 function ImportContent({ token }: { token: string }) {
   const [preview, setPreview] = useState<AnagraficaImportPreview | null>(null);
   const [jobs, setJobs] = useState<AnagraficaImportJob[]>([]);
   const [runResult, setRunResult] = useState<AnagraficaImportRunResult | null>(null);
   const [selectedJob, setSelectedJob] = useState<AnagraficaImportJob | null>(null);
+  const [bulkRunResult, setBulkRunResult] = useState<AnagraficaImportRunResult | null>(null);
+  const [resetResult, setResetResult] = useState<AnagraficaResetResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isSavingSnapshot, setIsSavingSnapshot] = useState(false);
+  const [isRunningBulkImport, setIsRunningBulkImport] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+  const [isBulkImportModalOpen, setIsBulkImportModalOpen] = useState(false);
 
   const loadJobs = useCallback(async () => {
     try {
@@ -44,6 +56,7 @@ function ImportContent({ token }: { token: string }) {
       const response = await previewAnagraficaImport(token);
       setPreview(response);
       setRunResult(null);
+      setBulkRunResult(null);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Errore preview import");
     } finally {
@@ -57,6 +70,7 @@ function ImportContent({ token }: { token: string }) {
     try {
       const response = await runAnagraficaImport(token);
       setRunResult(response);
+      setBulkRunResult(null);
       const job = await getAnagraficaImportJob(token, response.job_id);
       setSelectedJob(job);
       await loadJobs();
@@ -67,30 +81,99 @@ function ImportContent({ token }: { token: string }) {
     }
   }
 
+  async function handleRunBulkImport() {
+    setIsBulkImportModalOpen(false);
+    setIsRunningBulkImport(true);
+    setError(null);
+    setResetResult(null);
+    try {
+      const response = await runAnagraficaImportFromSubjects(token);
+      setBulkRunResult(response);
+      setRunResult(null);
+      const job = await getAnagraficaImportJob(token, response.job_id);
+      setSelectedJob(job);
+      await loadJobs();
+    } catch (runError) {
+      setError(runError instanceof Error ? runError.message : "Errore import massivo da anagrafiche");
+    } finally {
+      setIsRunningBulkImport(false);
+    }
+  }
+
+  async function handleReset() {
+    if (typeof window !== "undefined" && !window.confirm("Confermi la pulizia dei dati importati dal NAS? Le anagrafiche resteranno intatte.")) {
+      return;
+    }
+
+    setIsResetting(true);
+    setError(null);
+    try {
+      const response = await resetAnagraficaData(token);
+      setResetResult(response);
+      setPreview(null);
+      setRunResult(null);
+      setBulkRunResult(null);
+      setSelectedJob(null);
+      await loadJobs();
+    } catch (resetError) {
+      setError(resetError instanceof Error ? resetError.message : "Errore reset anagrafica");
+    } finally {
+      setIsResetting(false);
+    }
+  }
+
   return (
     <div className="page-stack">
       <article className="panel-card">
         <div className="mb-4">
-          <p className="section-title">Wizard snapshot archivio</p>
-          <p className="section-copy">Preview read-only e salvataggio in staging dell’intero archivio NAS Anagrafica.</p>
+          <p className="section-title">Import archivio NAS</p>
+          <p className="section-copy">Preview/staging archivio completo, import massivo dalle anagrafiche esistenti e reset del modulo.</p>
         </div>
         {error ? <p className="mb-3 text-sm text-red-600">{error}</p> : null}
         <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-          Questa schermata non scrive più direttamente in Anagrafica. Salva uno snapshot persistente del parser NAS da usare come base per una revisione successiva.
+          Il flusso operativo ora parte dalle anagrafiche già presenti: il sistema cerca sul NAS la cartella corretta per lettera, importa i file e li collega al soggetto. Lo snapshot resta disponibile come staging diagnostico dell’archivio completo.
         </div>
         <div className="flex flex-wrap items-end gap-3">
-          <div className="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3">
-            <p className="text-xs uppercase tracking-widest text-gray-400">Ambito import</p>
-            <p className="mt-1 text-sm font-medium text-gray-900">Archivio completo</p>
-          </div>
           <button className="btn-secondary" type="button" onClick={() => void handlePreview()} disabled={isPreviewing}>
-            {isPreviewing ? "Anteprima..." : "Genera preview"}
+            {isPreviewing ? "Anteprima..." : "Genera preview archivio"}
           </button>
           <button className="btn-primary" type="button" onClick={() => void handleSaveSnapshot()} disabled={isSavingSnapshot}>
             {isSavingSnapshot ? "Salvataggio..." : "Salva snapshot"}
           </button>
+          <button className="btn-primary" type="button" onClick={() => setIsBulkImportModalOpen(true)} disabled={isRunningBulkImport}>
+            {isRunningBulkImport ? "Import massivo..." : "Importa da anagrafiche"}
+          </button>
+          <button className="btn-secondary" type="button" onClick={() => void handleReset()} disabled={isResetting}>
+            {isResetting ? "Reset..." : "Pulisci dati importati NAS"}
+          </button>
         </div>
       </article>
+
+      {isBulkImportModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="mb-4">
+              <p className="section-title">Import massivo da anagrafiche</p>
+              <p className="section-copy mt-2">
+                Il sistema proverà a trovare per ogni soggetto la cartella NAS più probabile in base a lettera archivio, nominativo e identificativi, poi importerà i documenti collegandoli alla scheda.
+              </p>
+            </div>
+
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              Usa questo flusso solo quando vuoi lanciare un’importazione su tutto il database Anagrafica. Per casi ambigui o sporchi è meglio partire dalla scheda singola e scegliere manualmente la cartella NAS.
+            </div>
+
+            <div className="mt-6 flex justify-end gap-3">
+              <button className="btn-secondary" type="button" onClick={() => setIsBulkImportModalOpen(false)} disabled={isRunningBulkImport}>
+                Annulla
+              </button>
+              <button className="btn-primary" type="button" onClick={() => void handleRunBulkImport()} disabled={isRunningBulkImport}>
+                {isRunningBulkImport ? "Import in corso..." : "Conferma import massivo"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {preview ? (
         <article className="panel-card">
@@ -178,6 +261,68 @@ function ImportContent({ token }: { token: string }) {
         </article>
       ) : null}
 
+      {bulkRunResult ? (
+        <article className="panel-card">
+          <div className="mb-3">
+            <p className="section-title">Ultimo import massivo da anagrafiche</p>
+            <p className="section-copy">Job {bulkRunResult.job_id} con stato {bulkRunResult.status}.</p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-4">
+            <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+              <p className="text-xs uppercase tracking-widest text-gray-400">Soggetti processati</p>
+              <p className="mt-2 text-2xl font-semibold text-gray-900">{bulkRunResult.imported_ok}</p>
+            </div>
+            <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+              <p className="text-xs uppercase tracking-widest text-gray-400">Errori</p>
+              <p className="mt-2 text-2xl font-semibold text-gray-900">{bulkRunResult.imported_errors}</p>
+            </div>
+            <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+              <p className="text-xs uppercase tracking-widest text-gray-400">Doc creati</p>
+              <p className="mt-2 text-2xl font-semibold text-gray-900">{bulkRunResult.created_documents}</p>
+            </div>
+            <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+              <p className="text-xs uppercase tracking-widest text-gray-400">Doc aggiornati</p>
+              <p className="mt-2 text-2xl font-semibold text-gray-900">{bulkRunResult.updated_documents}</p>
+            </div>
+          </div>
+        </article>
+      ) : null}
+
+      {resetResult ? (
+        <article className="panel-card">
+          <div className="mb-3">
+            <p className="section-title">Reset completato</p>
+            <p className="section-copy">Pulizia dei soli dati importati dal NAS. Le anagrafiche sono state mantenute.</p>
+          </div>
+          <div className="grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+            <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+              <p className="text-xs uppercase tracking-widest text-gray-400">Link NAS puliti</p>
+              <p className="mt-2 text-2xl font-semibold text-gray-900">{resetResult.cleared_subject_links}</p>
+            </div>
+            <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+              <p className="text-xs uppercase tracking-widest text-gray-400">Documenti</p>
+              <p className="mt-2 text-2xl font-semibold text-gray-900">{resetResult.deleted_documents}</p>
+            </div>
+            <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+              <p className="text-xs uppercase tracking-widest text-gray-400">Audit</p>
+              <p className="mt-2 text-2xl font-semibold text-gray-900">{resetResult.deleted_audit_logs}</p>
+            </div>
+            <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+              <p className="text-xs uppercase tracking-widest text-gray-400">Job</p>
+              <p className="mt-2 text-2xl font-semibold text-gray-900">{resetResult.deleted_import_jobs}</p>
+            </div>
+            <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+              <p className="text-xs uppercase tracking-widest text-gray-400">Item job</p>
+              <p className="mt-2 text-2xl font-semibold text-gray-900">{resetResult.deleted_import_job_items}</p>
+            </div>
+            <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+              <p className="text-xs uppercase tracking-widest text-gray-400">File locali</p>
+              <p className="mt-2 text-2xl font-semibold text-gray-900">{resetResult.deleted_storage_files}</p>
+            </div>
+          </div>
+        </article>
+      ) : null}
+
       {selectedJob ? (
         <article className="panel-card">
           <div className="mb-4 flex items-center justify-between gap-3">
@@ -227,11 +372,13 @@ function ImportContent({ token }: { token: string }) {
           <div className="space-y-3">
             {jobs.map((job) => (
               <div key={job.job_id} className="rounded-lg border border-gray-100 px-4 py-3">
-                <div className="flex items-center justify-between gap-3">
-                  <p className="text-sm font-medium text-gray-900">{job.letter === "ALL" ? "Archivio completo" : `Lettera ${job.letter || "?"}`}</p>
-                  <div className="flex items-center gap-2">
-                    <button className="text-xs font-medium text-[#1D4E35]" type="button" onClick={() => setSelectedJob(job)}>
-                      Dettaglio
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-medium text-gray-900">
+                      {job.letter === "ALL" ? "Archivio completo" : job.letter === "REGISTRY" ? "Import da anagrafiche" : `Lettera ${job.letter || "?"}`}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <button className="text-xs font-medium text-[#1D4E35]" type="button" onClick={() => setSelectedJob(job)}>
+                        Dettaglio
                     </button>
                     <span className="rounded-full bg-gray-100 px-2 py-1 text-[11px] font-medium text-gray-700">{job.status}</span>
                   </div>
@@ -252,8 +399,8 @@ function ImportContent({ token }: { token: string }) {
 export default function AnagraficaImportPage() {
   return (
     <AnagraficaModulePage
-      title="Snapshot archivio"
-      description="Preview read-only e salvataggio in staging dell’archivio NAS Anagrafica completo."
+      title="Import archivio"
+      description="Import singolo o massivo dei documenti NAS a partire dalle anagrafiche esistenti, con snapshot e reset operativo."
       breadcrumb="Import"
     >
       {({ token }) => <ImportContent token={token} />}

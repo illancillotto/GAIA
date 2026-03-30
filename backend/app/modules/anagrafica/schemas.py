@@ -121,6 +121,44 @@ class AnagraficaImportRunResponse(BaseModel):
     log_json: dict | list | None = None
 
 
+class AnagraficaSubjectImportResponse(BaseModel):
+    subject_id: str
+    matched_folder_path: str
+    matched_folder_name: str
+    warning_count: int
+    created_documents: int
+    updated_documents: int
+    imported_at: datetime
+
+
+class AnagraficaResetRequest(BaseModel):
+    confirm: str
+
+
+class AnagraficaResetResponse(BaseModel):
+    cleared_subject_links: int
+    deleted_documents: int
+    deleted_audit_logs: int
+    deleted_import_jobs: int
+    deleted_import_job_items: int
+    deleted_storage_files: int
+
+
+class AnagraficaNasFolderCandidateResponse(BaseModel):
+    folder_name: str
+    letter: str | None = None
+    nas_folder_path: str
+    score: int
+    subject_type: str
+    confidence: float
+    requires_review: bool
+    codice_fiscale: str | None = None
+    partita_iva: str | None = None
+    ragione_sociale: str | None = None
+    cognome: str | None = None
+    nome: str | None = None
+
+
 class AnagraficaImportJobItemResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

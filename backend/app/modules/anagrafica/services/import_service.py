@@ -3,11 +3,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 import os
+from pathlib import Path, PurePosixPath
+import re
 import shlex
 from typing import Protocol
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import settings
@@ -32,6 +34,9 @@ from app.services.nas_connector import NasConnectorError, get_nas_client
 
 class NasCommandRunner(Protocol):
     def run_command(self, command: str) -> str:
+        ...
+
+    def download_file(self, path: str) -> bytes:
         ...
 
 
@@ -110,6 +115,43 @@ class ImportRunResult:
     generated_at: datetime
     completed_at: datetime
     log_json: dict[str, object] | list[object] | None = None
+
+
+@dataclass(slots=True)
+class SubjectImportRunResult:
+    subject_id: uuid.UUID
+    matched_folder_path: str
+    matched_folder_name: str
+    warning_count: int
+    created_documents: int
+    updated_documents: int
+    imported_at: datetime
+
+
+@dataclass(slots=True)
+class ResetAnagraficaResult:
+    cleared_subject_links: int
+    deleted_documents: int
+    deleted_audit_logs: int
+    deleted_import_jobs: int
+    deleted_import_job_items: int
+    deleted_storage_files: int
+
+
+@dataclass(slots=True)
+class SubjectFolderCandidate:
+    folder_name: str
+    letter: str | None
+    nas_folder_path: str
+    score: int
+    subject_type: str
+    confidence: float
+    requires_review: bool
+    codice_fiscale: str | None = None
+    partita_iva: str | None = None
+    ragione_sociale: str | None = None
+    cognome: str | None = None
+    nome: str | None = None
 
 
 class AnagraficaImportPreviewService:
@@ -208,6 +250,70 @@ class AnagraficaImportPreviewService:
             warnings=subject_warnings,
             documents=documents,
         )
+
+    def match_existing_subject_folder(self, db: Session, subject: AnagraficaSubject) -> DiscoveredSubjectFolder:
+        if subject.nas_folder_path:
+            return DiscoveredSubjectFolder(
+                folder_name=os.path.basename(subject.nas_folder_path.rstrip("/")),
+                letter=subject.nas_folder_letter or self._derive_subject_letter(subject.source_name_raw),
+                nas_folder_path=subject.nas_folder_path,
+            )
+
+        letter = _derive_existing_subject_letter(db, subject)
+        if not letter:
+            raise ValueError("Impossibile derivare la lettera archivio del soggetto")
+
+        candidates = self.discover_subject_folders(letter)
+        if not candidates:
+            raise ValueError(f"Nessuna cartella NAS trovata per la lettera {letter}")
+
+        scored_candidates = [
+            (candidate, _score_subject_folder_candidate(db, subject, candidate.folder_name))
+            for candidate in candidates
+        ]
+        scored_candidates = [item for item in scored_candidates if item[1] > 0]
+        if not scored_candidates:
+            raise ValueError(f"Nessuna cartella NAS compatibile trovata per il soggetto {subject.id}")
+
+        scored_candidates.sort(key=lambda item: (-item[1], item[0].folder_name.lower(), item[0].nas_folder_path))
+        return scored_candidates[0][0]
+
+    def list_existing_subject_folder_candidates(
+        self,
+        db: Session,
+        subject: AnagraficaSubject,
+        limit: int = 20,
+    ) -> list[SubjectFolderCandidate]:
+        letter = _derive_existing_subject_letter(db, subject)
+        if not letter:
+            return []
+
+        candidates = self.discover_subject_folders(letter)
+        scored_candidates: list[SubjectFolderCandidate] = []
+        for candidate in candidates:
+            score = _score_subject_folder_candidate(db, subject, candidate.folder_name)
+            if score <= 0:
+                continue
+            parsed = parse_folder_name(candidate.folder_name)
+            scored_candidates.append(
+                SubjectFolderCandidate(
+                    folder_name=candidate.folder_name,
+                    letter=candidate.letter,
+                    nas_folder_path=candidate.nas_folder_path,
+                    score=score,
+                    subject_type=parsed.subject_type,
+                    confidence=parsed.confidence,
+                    requires_review=parsed.requires_review,
+                    codice_fiscale=parsed.codice_fiscale,
+                    partita_iva=parsed.partita_iva,
+                    ragione_sociale=parsed.ragione_sociale,
+                    cognome=parsed.cognome,
+                    nome=parsed.nome,
+                )
+            )
+
+        scored_candidates.sort(key=lambda item: (-item.score, item.folder_name.lower(), item.nas_folder_path))
+        return scored_candidates[:limit]
 
     def _preview_folders(self, scope: str, subject_folders: list[DiscoveredSubjectFolder]) -> ImportPreviewResult:
         errors: list[AnagraficaNASWarning] = []
@@ -449,6 +555,257 @@ def run_import(
     return process_import_job(db, current_user=current_user, job_id=job.id, letter=letter, service=service)
 
 
+def import_subject_from_existing_registry(
+    db: Session,
+    current_user: ApplicationUser,
+    subject_id: uuid.UUID,
+    service: AnagraficaImportPreviewService | None = None,
+) -> SubjectImportRunResult:
+    resolved_service = service or AnagraficaImportPreviewService(get_nas_client())
+    imported_at = datetime.now(UTC)
+
+    try:
+        subject = db.get(AnagraficaSubject, subject_id)
+        if subject is None:
+            raise ValueError("Subject not found")
+
+        matched_folder = resolved_service.match_existing_subject_folder(db, subject)
+        subject_preview = resolved_service.preview_subject_folder(matched_folder, strict=True)
+
+        with db.begin_nested():
+            subject.nas_folder_path = matched_folder.nas_folder_path
+            subject.nas_folder_letter = subject_preview.letter
+            subject.requires_review = subject_preview.requires_review
+            subject.imported_at = imported_at
+            db.add(subject)
+            document_stats = _upsert_documents(
+                db=db,
+                connector=resolved_service.connector,
+                subject_id=subject.id,
+                documents=subject_preview.documents,
+                storage_mode=AnagraficaStorageType.LOCAL_UPLOAD.value,
+                imported_at=imported_at,
+            )
+            _create_audit_log(
+                db=db,
+                subject_id=subject.id,
+                changed_by_user_id=current_user.id,
+                action="import_from_registry",
+                diff_json={
+                    "matched_folder_path": matched_folder.nas_folder_path,
+                    "matched_folder_name": matched_folder.folder_name,
+                    "created_documents": document_stats["created"],
+                    "updated_documents": document_stats["updated"],
+                    "warning_count": len(subject_preview.warnings)
+                    + sum(len(document.warnings) for document in subject_preview.documents),
+                },
+            )
+        db.commit()
+
+        return SubjectImportRunResult(
+            subject_id=subject.id,
+            matched_folder_path=matched_folder.nas_folder_path,
+            matched_folder_name=matched_folder.folder_name,
+            warning_count=len(subject_preview.warnings)
+            + sum(len(document.warnings) for document in subject_preview.documents),
+            created_documents=document_stats["created"],
+            updated_documents=document_stats["updated"],
+            imported_at=imported_at,
+        )
+    finally:
+        _close_connector(resolved_service.connector)
+
+
+def import_existing_registry_subjects(
+    db: Session,
+    current_user: ApplicationUser,
+    service: AnagraficaImportPreviewService | None = None,
+) -> ImportRunResult:
+    resolved_service = service or AnagraficaImportPreviewService(get_nas_client())
+    started_at = datetime.now(UTC)
+
+    try:
+        subjects = db.scalars(
+            select(AnagraficaSubject).order_by(AnagraficaSubject.nas_folder_letter.asc(), AnagraficaSubject.created_at.asc())
+        ).all()
+        job = AnagraficaImportJob(
+            requested_by_user_id=current_user.id,
+            letter="REGISTRY",
+            status=AnagraficaImportJobStatus.RUNNING.value,
+            total_folders=len(subjects),
+            imported_ok=0,
+            imported_errors=0,
+            warning_count=0,
+            log_json={"mode": "registry_import", "warnings": [], "errors": [], "items": []},
+            started_at=started_at,
+        )
+        db.add(job)
+        db.flush()
+
+        created_subjects = 0
+        updated_subjects = 0
+        created_documents = 0
+        updated_documents = 0
+        warning_count = 0
+
+        for subject in subjects:
+            folder_name = _subject_display_name(db, subject)
+            job_item = AnagraficaImportJobItem(
+                job_id=job.id,
+                subject_id=subject.id,
+                letter=_derive_existing_subject_letter(db, subject),
+                folder_name=folder_name,
+                nas_folder_path=f"subject:{subject.id}",
+                status=AnagraficaImportJobItemStatus.PROCESSING.value,
+                attempt_count=1,
+                started_at=datetime.now(UTC),
+            )
+            db.add(job_item)
+            db.flush()
+
+            try:
+                matched_folder = resolved_service.match_existing_subject_folder(db, subject)
+                subject_preview = resolved_service.preview_subject_folder(matched_folder, strict=True)
+                with db.begin_nested():
+                    subject.nas_folder_path = matched_folder.nas_folder_path
+                    subject.nas_folder_letter = subject_preview.letter
+                    subject.requires_review = subject_preview.requires_review
+                    subject.imported_at = started_at
+                    db.add(subject)
+                    document_stats = _upsert_documents(
+                        db=db,
+                        connector=resolved_service.connector,
+                        subject_id=subject.id,
+                        documents=subject_preview.documents,
+                        storage_mode=AnagraficaStorageType.LOCAL_UPLOAD.value,
+                        imported_at=started_at,
+                    )
+                    _create_audit_log(
+                        db=db,
+                        subject_id=subject.id,
+                        changed_by_user_id=current_user.id,
+                        action="bulk_import_from_registry",
+                        diff_json={
+                            "job_id": str(job.id),
+                            "matched_folder_path": matched_folder.nas_folder_path,
+                            "created_documents": document_stats["created"],
+                            "updated_documents": document_stats["updated"],
+                        },
+                    )
+
+                updated_subjects += 1
+                created_documents += document_stats["created"]
+                updated_documents += document_stats["updated"]
+                item_warning_count = len(subject_preview.warnings) + sum(len(document.warnings) for document in subject_preview.documents)
+                warning_count += item_warning_count
+
+                job_item.letter = subject_preview.letter
+                job_item.folder_name = matched_folder.folder_name
+                job_item.nas_folder_path = matched_folder.nas_folder_path
+                job_item.status = AnagraficaImportJobItemStatus.COMPLETED.value
+                job_item.warning_count = item_warning_count
+                job_item.documents_created = document_stats["created"]
+                job_item.documents_updated = document_stats["updated"]
+                job_item.payload_json = {
+                    "mode": "registry_import",
+                    "matched_folder_path": matched_folder.nas_folder_path,
+                    "matched_folder_name": matched_folder.folder_name,
+                }
+                job_item.completed_at = datetime.now(UTC)
+                db.add(job_item)
+                db.commit()
+            except Exception as exc:  # pragma: no cover - defensive path
+                job_item.status = AnagraficaImportJobItemStatus.FAILED.value
+                job_item.last_error = str(exc)
+                job_item.completed_at = datetime.now(UTC)
+                db.add(job_item)
+                db.commit()
+
+        _refresh_import_job_status(db, job.id)
+        db.refresh(job)
+        job.warning_count = warning_count
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+
+        return ImportRunResult(
+            job_id=job.id,
+            letter="REGISTRY",
+            status=job.status,
+            total_folders=job.total_folders,
+            imported_ok=job.imported_ok,
+            imported_errors=job.imported_errors,
+            warning_count=job.warning_count,
+            created_subjects=created_subjects,
+            updated_subjects=updated_subjects,
+            created_documents=created_documents,
+            updated_documents=updated_documents,
+            generated_at=started_at,
+            completed_at=job.completed_at or datetime.now(UTC),
+            log_json=job.log_json,
+        )
+    finally:
+        _close_connector(resolved_service.connector)
+
+
+def reset_anagrafica_data(db: Session) -> ResetAnagraficaResult:
+    linked_subjects = db.query(AnagraficaSubject).filter(
+        (AnagraficaSubject.nas_folder_path.is_not(None))
+        | (AnagraficaSubject.nas_folder_letter.is_not(None))
+        | (AnagraficaSubject.imported_at.is_not(None))
+    ).count()
+    deleted_documents = db.query(AnagraficaDocument).count()
+    deleted_audit_logs = db.query(AnagraficaAuditLog).filter(
+        AnagraficaAuditLog.action.in_(
+            [
+                "import_created",
+                "import_updated",
+                "import_from_registry",
+                "bulk_import_from_registry",
+                "document_updated",
+                "document_deleted",
+            ]
+        )
+    ).count()
+    deleted_import_jobs = db.query(AnagraficaImportJob).count()
+    deleted_import_job_items = db.query(AnagraficaImportJobItem).count()
+    deleted_storage_files = _clear_local_storage(Path(settings.anagrafica_document_storage_path))
+
+    db.execute(delete(AnagraficaImportJobItem))
+    db.execute(delete(AnagraficaImportJob))
+    db.execute(
+        delete(AnagraficaAuditLog).where(
+            AnagraficaAuditLog.action.in_(
+                [
+                    "import_created",
+                    "import_updated",
+                    "import_from_registry",
+                    "bulk_import_from_registry",
+                    "document_updated",
+                    "document_deleted",
+                ]
+            )
+        )
+    )
+    db.execute(delete(AnagraficaDocument))
+    subjects = db.scalars(select(AnagraficaSubject)).all()
+    for subject in subjects:
+        subject.nas_folder_path = None
+        subject.nas_folder_letter = None
+        subject.imported_at = None
+        db.add(subject)
+    db.commit()
+
+    return ResetAnagraficaResult(
+        cleared_subject_links=linked_subjects,
+        deleted_documents=deleted_documents,
+        deleted_audit_logs=deleted_audit_logs,
+        deleted_import_jobs=deleted_import_jobs,
+        deleted_import_job_items=deleted_import_job_items,
+        deleted_storage_files=deleted_storage_files,
+    )
+
+
 def enqueue_import(
     db: Session,
     current_user: ApplicationUser,
@@ -566,8 +923,10 @@ def process_import_job(
                     )
                     document_stats = _upsert_documents(
                         db=db,
+                        connector=None,
                         subject_id=persisted_subject.id,
                         documents=subject_preview.documents,
+                        storage_mode=AnagraficaStorageType.NAS_LINK.value,
                     )
                     _create_audit_log(
                         db=db,
@@ -799,12 +1158,20 @@ def _sync_subject_details(db: Session, subject: AnagraficaSubject, subject_previ
 
 def _upsert_documents(
     db: Session,
+    connector: NasCommandRunner | None,
     subject_id: uuid.UUID,
     documents: list[AnagraficaPreviewDocument],
+    storage_mode: str,
+    imported_at: datetime | None = None,
 ) -> dict[str, int]:
     created = 0
     updated = 0
     for document_preview in documents:
+        local_path = None
+        if storage_mode == AnagraficaStorageType.LOCAL_UPLOAD.value:
+            if connector is None:
+                raise ValueError("NAS connector required for local document import")
+            local_path = _store_document_locally(connector, subject_id, document_preview)
         document = db.scalar(
             select(AnagraficaDocument).where(AnagraficaDocument.nas_path == document_preview.nas_path)
         )
@@ -815,8 +1182,10 @@ def _upsert_documents(
                 filename=document_preview.filename,
                 nas_path=document_preview.nas_path,
                 classification_source=document_preview.classification_source,
-                storage_type=AnagraficaStorageType.NAS_LINK.value,
+                storage_type=storage_mode,
+                local_path=local_path,
                 mime_type=_guess_mime_type(document_preview.extension),
+                uploaded_at=imported_at if storage_mode == AnagraficaStorageType.LOCAL_UPLOAD.value else None,
                 notes=_document_notes(document_preview),
             )
             db.add(document)
@@ -826,8 +1195,10 @@ def _upsert_documents(
             document.doc_type = document_preview.doc_type
             document.filename = document_preview.filename
             document.classification_source = document_preview.classification_source
-            document.storage_type = AnagraficaStorageType.NAS_LINK.value
+            document.storage_type = storage_mode
+            document.local_path = local_path
             document.mime_type = _guess_mime_type(document_preview.extension)
+            document.uploaded_at = imported_at if storage_mode == AnagraficaStorageType.LOCAL_UPLOAD.value else document.uploaded_at
             document.notes = _document_notes(document_preview)
             db.add(document)
             updated += 1
@@ -869,6 +1240,114 @@ def _document_notes(document_preview: AnagraficaPreviewDocument) -> str | None:
     if not document_preview.warnings:
         return None
     return ", ".join(document_preview.warnings)
+
+
+def _normalize_match_value(value: str | None) -> str:
+    if not value:
+        return ""
+    return re.sub(r"[^A-Z0-9]+", "", value.upper())
+
+
+def _subject_identifiers(db: Session, subject: AnagraficaSubject) -> list[str]:
+    person = db.get(AnagraficaPerson, subject.id)
+    company = db.get(AnagraficaCompany, subject.id)
+    identifiers = [subject.source_name_raw]
+    if person is not None:
+        identifiers.extend([person.cognome, person.nome, person.codice_fiscale, f"{person.cognome}{person.nome}"])
+    if company is not None:
+        identifiers.extend([company.ragione_sociale, company.partita_iva, company.codice_fiscale])
+    return [value for value in identifiers if value]
+
+
+def _subject_display_name(db: Session, subject: AnagraficaSubject) -> str:
+    person = db.get(AnagraficaPerson, subject.id)
+    company = db.get(AnagraficaCompany, subject.id)
+    if person is not None:
+        return f"{person.cognome} {person.nome}".strip()
+    if company is not None:
+        return company.ragione_sociale
+    return subject.source_name_raw
+
+
+def _derive_existing_subject_letter(db: Session, subject: AnagraficaSubject) -> str | None:
+    if subject.nas_folder_letter:
+        return subject.nas_folder_letter.strip().upper()
+    display_name = _subject_display_name(db, subject)
+    for source_value in (display_name, subject.source_name_raw):
+        for char in source_value.strip():
+            if char.isalpha():
+                return char.upper()
+    return None
+
+
+def _score_subject_folder_candidate(db: Session, subject: AnagraficaSubject, folder_name: str) -> int:
+    normalized_folder = _normalize_match_value(folder_name)
+    if not normalized_folder:
+        return 0
+
+    person = db.get(AnagraficaPerson, subject.id)
+    company = db.get(AnagraficaCompany, subject.id)
+    score = 0
+
+    for identifier in _subject_identifiers(db, subject):
+        normalized_identifier = _normalize_match_value(identifier)
+        if normalized_identifier and normalized_identifier in normalized_folder:
+            score += 30
+
+    if person is not None:
+        surname = _normalize_match_value(person.cognome)
+        name = _normalize_match_value(person.nome)
+        fiscal_code = _normalize_match_value(person.codice_fiscale)
+        if fiscal_code and fiscal_code in normalized_folder:
+            score += 500
+        if surname and surname in normalized_folder:
+            score += 150
+        if name and name in normalized_folder:
+            score += 80
+    elif company is not None:
+        company_name = _normalize_match_value(company.ragione_sociale)
+        vat = _normalize_match_value(company.partita_iva)
+        tax_code = _normalize_match_value(company.codice_fiscale)
+        if vat and vat in normalized_folder:
+            score += 500
+        if tax_code and tax_code in normalized_folder:
+            score += 250
+        if company_name and company_name in normalized_folder:
+            score += 180
+
+    return score
+
+
+def _safe_relative_parts(relative_path: str) -> list[str]:
+    parts = [part for part in PurePosixPath(relative_path).parts if part not in {"", ".", ".."}]
+    return parts or ["document.bin"]
+
+
+def _store_document_locally(
+    connector: NasCommandRunner,
+    subject_id: uuid.UUID,
+    document_preview: AnagraficaPreviewDocument,
+) -> str:
+    storage_root = Path(settings.anagrafica_document_storage_path)
+    target_path = storage_root / str(subject_id) / Path(*_safe_relative_parts(document_preview.relative_path))
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    target_path.write_bytes(connector.download_file(document_preview.nas_path))
+    return str(target_path)
+
+
+def _clear_local_storage(storage_root: Path) -> int:
+    if not storage_root.exists():
+        return 0
+
+    deleted_files = 0
+    for file_path in sorted((path for path in storage_root.rglob("*") if path.is_file()), reverse=True):
+        file_path.unlink(missing_ok=True)
+        deleted_files += 1
+
+    for directory in sorted((path for path in storage_root.rglob("*") if path.is_dir()), reverse=True):
+        directory.rmdir()
+    storage_root.mkdir(parents=True, exist_ok=True)
+    return deleted_files
 
 
 def _warning_to_dict(warning: AnagraficaNASWarning) -> dict[str, str | None]:

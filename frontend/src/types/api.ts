@@ -415,6 +415,40 @@ export type AnagraficaImportRunResult = {
   log_json: Record<string, unknown> | unknown[] | null;
 };
 
+export type AnagraficaSubjectImportResult = {
+  subject_id: string;
+  matched_folder_path: string;
+  matched_folder_name: string;
+  warning_count: number;
+  created_documents: number;
+  updated_documents: number;
+  imported_at: string;
+};
+
+export type AnagraficaResetResult = {
+  cleared_subject_links: number;
+  deleted_documents: number;
+  deleted_audit_logs: number;
+  deleted_import_jobs: number;
+  deleted_import_job_items: number;
+  deleted_storage_files: number;
+};
+
+export type AnagraficaNasFolderCandidate = {
+  folder_name: string;
+  letter: string | null;
+  nas_folder_path: string;
+  score: number;
+  subject_type: string;
+  confidence: number;
+  requires_review: boolean;
+  codice_fiscale: string | null;
+  partita_iva: string | null;
+  ragione_sociale: string | null;
+  cognome: string | null;
+  nome: string | null;
+};
+
 export type AnagraficaImportJob = {
   job_id: string;
   requested_by_user_id: number | null;

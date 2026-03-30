@@ -50,6 +50,10 @@ class Settings(BaseSettings):
         default="/volume1/settore catasto/ARCHIVIO",
         alias="ANAGRAFICA_NAS_ARCHIVE_ROOT",
     )
+    anagrafica_document_storage_path: str = Field(
+        default="/data/anagrafica/documents",
+        alias="ANAGRAFICA_DOCUMENT_STORAGE_PATH",
+    )
     nas_passwd_command: str = Field(default="getent passwd", alias="NAS_PASSWD_COMMAND")
     nas_group_command: str = Field(default="getent group", alias="NAS_GROUP_COMMAND")
     nas_shares_command: str = Field(default="ls /volume1", alias="NAS_SHARES_COMMAND")

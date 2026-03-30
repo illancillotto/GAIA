@@ -14,7 +14,12 @@ from app.modules.anagrafica.services.import_service import (
     AnagraficaPreviewSubject,
     ImportPreviewResult,
     ImportRunResult,
+    ResetAnagraficaResult,
+    SubjectImportRunResult,
+    import_existing_registry_subjects,
+    import_subject_from_existing_registry,
     preview_import,
+    reset_anagrafica_data,
     run_import,
 )
 from app.modules.anagrafica.services.parser_service import ParseResult, parse_folder_name
@@ -29,10 +34,15 @@ __all__ = [
     "ImportPreviewResult",
     "ImportRunResult",
     "ParseResult",
+    "ResetAnagraficaResult",
+    "SubjectImportRunResult",
     "classify_filename",
     "classify_filenames",
+    "import_existing_registry_subjects",
     "import_subjects_from_csv",
+    "import_subject_from_existing_registry",
     "parse_folder_name",
     "preview_import",
+    "reset_anagrafica_data",
     "run_import",
 ]

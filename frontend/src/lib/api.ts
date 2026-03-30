@@ -4,10 +4,13 @@ import type {
   AnagraficaImportJob,
   AnagraficaImportPreview,
   AnagraficaImportRunResult,
+  AnagraficaNasFolderCandidate,
+  AnagraficaResetResult,
   AnagraficaSearchResult,
   AnagraficaStats,
   AnagraficaSubjectCreateInput,
   AnagraficaSubjectDetail,
+  AnagraficaSubjectImportResult,
   AnagraficaSubjectListResponse,
   AnagraficaSubjectUpdateInput,
   ApplicationUser,
@@ -625,6 +628,15 @@ export async function runAnagraficaImport(token: string, letter?: string): Promi
   });
 }
 
+export async function runAnagraficaImportFromSubjects(token: string): Promise<AnagraficaImportRunResult> {
+  return request<AnagraficaImportRunResult>("/anagrafica/import/run-from-subjects", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
 export async function getAnagraficaImportJobs(token: string): Promise<AnagraficaImportJob[]> {
   return request<AnagraficaImportJob[]>("/anagrafica/import/jobs", {
     headers: {
@@ -656,6 +668,38 @@ export async function searchAnagraficaSubjects(token: string, queryText: string,
     headers: {
       Authorization: `Bearer ${token}`,
     },
+  });
+}
+
+export async function importAnagraficaSubjectFromNas(token: string, subjectId: string): Promise<AnagraficaSubjectImportResult> {
+  return request<AnagraficaSubjectImportResult>(`/anagrafica/subjects/${subjectId}/import-from-nas`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getAnagraficaSubjectNasCandidates(
+  token: string,
+  subjectId: string,
+  limit = 20,
+): Promise<AnagraficaNasFolderCandidate[]> {
+  const query = new URLSearchParams({ limit: String(limit) });
+  return request<AnagraficaNasFolderCandidate[]>(`/anagrafica/subjects/${subjectId}/nas-candidates?${query.toString()}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function resetAnagraficaData(token: string, confirm = "RESET ANAGRAFICA"): Promise<AnagraficaResetResult> {
+  return request<AnagraficaResetResult>("/anagrafica/reset", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ confirm }),
   });
 }
 
