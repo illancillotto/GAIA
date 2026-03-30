@@ -1,13 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useDeferredValue, useEffect, useState } from "react";
 
 import { AnagraficaModulePage } from "@/components/anagrafica/anagrafica-module-page";
 import { EmptyState } from "@/components/ui/empty-state";
 import { MetricCard } from "@/components/ui/metric-card";
-import { DocumentIcon, FolderIcon, RefreshIcon, SearchIcon, UserIcon } from "@/components/ui/icons";
-import { getAnagraficaImportJobs, getAnagraficaStats, getAnagraficaSubjects } from "@/lib/api";
+import { FolderIcon, RefreshIcon, SearchIcon, UserIcon } from "@/components/ui/icons";
+import { getAnagraficaImportJobs, getAnagraficaStats, getAnagraficaSubjects, searchAnagraficaSubjects } from "@/lib/api";
 import { formatDateTime } from "@/lib/presentation";
 import type { AnagraficaImportJob, AnagraficaStats, AnagraficaSubjectListItem } from "@/types/api";
 
@@ -44,8 +44,16 @@ function DashboardContent({ token }: { token: string }) {
   const [stats, setStats] = useState<AnagraficaStats>(emptyStats);
   const [subjects, setSubjects] = useState<AnagraficaSubjectListItem[]>([]);
   const [jobs, setJobs] = useState<AnagraficaImportJob[]>([]);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searchResults, setSearchResults] = useState<AnagraficaSubjectListItem[]>([]);
+  const [searchTotal, setSearchTotal] = useState(0);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [isSearching, setIsSearching] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const deferredSearchTerm = useDeferredValue(searchTerm);
+  const normalizedSearchTerm = deferredSearchTerm.trim();
+  const canSearch = normalizedSearchTerm.length >= 3;
 
   useEffect(() => {
     async function loadData() {
@@ -68,6 +76,34 @@ function DashboardContent({ token }: { token: string }) {
 
     void loadData();
   }, [token]);
+
+  useEffect(() => {
+    async function loadSearchResults() {
+      if (!canSearch) {
+        setSearchResults([]);
+        setSearchTotal(0);
+        setSearchError(null);
+        setIsSearching(false);
+        return;
+      }
+
+      setIsSearching(true);
+      try {
+        const response = await searchAnagraficaSubjects(token, normalizedSearchTerm, 12);
+        setSearchResults(response.items);
+        setSearchTotal(response.total);
+        setSearchError(null);
+      } catch (error) {
+        setSearchError(error instanceof Error ? error.message : "Errore durante la ricerca");
+        setSearchResults([]);
+        setSearchTotal(0);
+      } finally {
+        setIsSearching(false);
+      }
+    }
+
+    void loadSearchResults();
+  }, [canSearch, normalizedSearchTerm, token]);
 
   return (
     <div className="page-stack">
@@ -182,24 +218,77 @@ function DashboardContent({ token }: { token: string }) {
       </div>
 
       <article className="panel-card">
-        <div className="mb-4">
-          <p className="section-title">Indicatori archivio</p>
-          <p className="section-copy">Distribuzione sintetica dei soggetti per lettera di archivio.</p>
-        </div>
-        {Object.keys(stats.by_letter).length === 0 ? (
-          <EmptyState icon={DocumentIcon} title="Nessuna distribuzione disponibile" description="La distribuzione per lettera apparirà dopo la creazione o l'import dei primi soggetti." />
-        ) : (
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-            {Object.entries(stats.by_letter)
-              .slice(0, 12)
-              .map(([letter, total]) => (
-                <div key={letter} className="rounded-xl border border-gray-100 bg-gray-50 p-4">
-                  <p className="text-xs font-medium uppercase tracking-widest text-gray-400">{letter}</p>
-                  <p className="mt-2 text-2xl font-semibold text-gray-900">{total}</p>
-                </div>
-              ))}
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="section-title">Ricerca soggetti</p>
+            <p className="section-copy">Inserisci almeno 3 lettere del nome, cognome o ragione sociale per trovare subito i record.</p>
           </div>
-        )}
+          <Link href="/anagrafica/subjects" className="text-sm font-medium text-[#1D4E35]">
+            Ricerca avanzata
+          </Link>
+        </div>
+
+        <label className="block">
+          <span className="sr-only">Cerca soggetto</span>
+          <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+            <SearchIcon className="h-5 w-5 text-gray-400" />
+            <input
+              type="search"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Es. ROS, BIA, IMM..."
+              className="w-full border-0 bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400"
+            />
+          </div>
+        </label>
+
+        <div className="mt-4">
+          {searchError ? (
+            <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{searchError}</div>
+          ) : normalizedSearchTerm.length === 0 ? (
+            <EmptyState icon={SearchIcon} title="Ricerca pronta" description="Digita le prime 3 lettere per vedere i soggetti corrispondenti." />
+          ) : !canSearch ? (
+            <EmptyState icon={SearchIcon} title="Inserisci almeno 3 lettere" description="Appena raggiungi 3 caratteri il sistema lancia la ricerca." />
+          ) : isSearching ? (
+            <p className="text-sm text-gray-500">Ricerca in corso per “{normalizedSearchTerm}”.</p>
+          ) : searchResults.length === 0 ? (
+            <EmptyState icon={SearchIcon} title="Nessun risultato" description={`Nessun soggetto trovato per “${normalizedSearchTerm}”.`} />
+          ) : (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-sm text-gray-500">
+                  {searchTotal} risultati per <span className="font-medium text-gray-800">“{normalizedSearchTerm}”</span>
+                </p>
+                {searchTotal > searchResults.length ? (
+                  <p className="text-xs text-gray-400">Mostrati i primi {searchResults.length}</p>
+                ) : null}
+              </div>
+
+              {searchResults.map((subject) => (
+                <Link
+                  key={subject.id}
+                  href={`/anagrafica/${subject.id}`}
+                  className="flex items-center justify-between rounded-lg border border-gray-100 px-4 py-3 transition hover:bg-gray-50"
+                >
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-medium text-gray-900">{subject.display_name}</p>
+                      <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${badgeTone(subject.subject_type)}`}>
+                        {subject.subject_type.toUpperCase()}
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-gray-500">
+                      {subject.codice_fiscale || subject.partita_iva || "Identificativo non disponibile"} · {subject.document_count} documenti · {subject.nas_folder_letter || "?"}
+                    </p>
+                  </div>
+                  <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${subject.requires_review ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-600"}`}>
+                    {subject.requires_review ? "Review" : "OK"}
+                  </span>
+                </Link>
+              ))}
+            </div>
+          )}
+        </div>
       </article>
     </div>
   );

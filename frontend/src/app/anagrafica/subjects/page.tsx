@@ -1,14 +1,14 @@
 "use client";
 
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 
 import { AnagraficaModulePage } from "@/components/anagrafica/anagrafica-module-page";
 import { DataTable } from "@/components/table/data-table";
 import { TableFilters } from "@/components/table/table-filters";
-import { createAnagraficaSubject, downloadAnagraficaExportBlob, getAnagraficaSubjects } from "@/lib/api";
+import { createAnagraficaSubject, downloadAnagraficaExportBlob, getAnagraficaSubjects, importAnagraficaSubjectsCsv } from "@/lib/api";
 import { formatDateTime } from "@/lib/presentation";
-import type { AnagraficaSubjectCreateInput, AnagraficaSubjectListItem } from "@/types/api";
+import type { AnagraficaCsvImportResult, AnagraficaSubjectCreateInput, AnagraficaSubjectListItem } from "@/types/api";
 
 type FilterState = {
   search: string;
@@ -38,6 +38,8 @@ function SubjectsContent({ token }: { token: string }) {
   const [isSaving, setIsSaving] = useState(false);
   const [isExportingCsv, setIsExportingCsv] = useState(false);
   const [isExportingXlsx, setIsExportingXlsx] = useState(false);
+  const [isImportingCsv, setIsImportingCsv] = useState(false);
+  const [csvUploadProgress, setCsvUploadProgress] = useState(0);
   const [createType, setCreateType] = useState<"person" | "company">("person");
   const [sourceNameRaw, setSourceNameRaw] = useState("");
   const [letter, setLetter] = useState("");
@@ -46,27 +48,33 @@ function SubjectsContent({ token }: { token: string }) {
   const [personCf, setPersonCf] = useState("");
   const [companyName, setCompanyName] = useState("");
   const [companyVat, setCompanyVat] = useState("");
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvImportResult, setCsvImportResult] = useState<AnagraficaCsvImportResult | null>(null);
 
   const deferredSearch = useDeferredValue(filters.search);
   const normalizedSearch = deferredSearch.trim();
   const effectiveSearch = normalizedSearch.length === 0 || normalizedSearch.length >= 3 ? normalizedSearch || undefined : undefined;
 
+  const refreshSubjects = useCallback(async (targetPage: number = page) => {
+    const response = await getAnagraficaSubjects(token, {
+      page: targetPage,
+      pageSize: 20,
+      search: effectiveSearch,
+      subjectType: filters.subjectType || undefined,
+      status: filters.status || undefined,
+      letter: filters.letter || undefined,
+      requiresReview:
+        filters.requiresReview === "" ? undefined : filters.requiresReview === "true",
+    });
+    setItems(response.items);
+    setTotal(response.total);
+  }, [effectiveSearch, filters.letter, filters.requiresReview, filters.status, filters.subjectType, page, token]);
+
   useEffect(() => {
     async function loadSubjects() {
       setIsLoading(true);
       try {
-        const response = await getAnagraficaSubjects(token, {
-          page,
-          pageSize: 20,
-          search: effectiveSearch,
-          subjectType: filters.subjectType || undefined,
-          status: filters.status || undefined,
-          letter: filters.letter || undefined,
-          requiresReview:
-            filters.requiresReview === "" ? undefined : filters.requiresReview === "true",
-        });
-        setItems(response.items);
-        setTotal(response.total);
+        await refreshSubjects(page);
         setLoadError(null);
       } catch (error) {
         setLoadError(error instanceof Error ? error.message : "Errore caricamento soggetti");
@@ -76,7 +84,7 @@ function SubjectsContent({ token }: { token: string }) {
     }
 
     void loadSubjects();
-  }, [effectiveSearch, filters.letter, filters.requiresReview, filters.status, filters.subjectType, page, token]);
+  }, [page, refreshSubjects]);
 
   const columns = useMemo<ColumnDef<AnagraficaSubjectListItem>[]>(
     () => [
@@ -181,9 +189,7 @@ function SubjectsContent({ token }: { token: string }) {
       setCompanyName("");
       setCompanyVat("");
       setPage(1);
-      const refreshed = await getAnagraficaSubjects(token, { page: 1, pageSize: 20 });
-      setItems(refreshed.items);
-      setTotal(refreshed.total);
+      await refreshSubjects(1);
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : "Errore creazione soggetto");
     } finally {
@@ -191,7 +197,52 @@ function SubjectsContent({ token }: { token: string }) {
     }
   }
 
+  async function handleCsvImport() {
+    if (!csvFile) {
+      setSaveError("Seleziona un file CSV da importare.");
+      return;
+    }
+
+    setIsImportingCsv(true);
+    setCsvUploadProgress(0);
+    setSaveError(null);
+    setSaveMessage(null);
+    setCsvImportResult(null);
+    try {
+      const result = await importAnagraficaSubjectsCsv(token, csvFile, setCsvUploadProgress);
+      setCsvImportResult(result);
+      setSaveMessage(
+        `Import CSV completato: ${result.created_subjects} creati, ${result.updated_subjects} aggiornati, ${result.skipped_rows} scartati.`,
+      );
+      setCsvFile(null);
+      setPage(1);
+      await refreshSubjects(1);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Errore import CSV");
+    } finally {
+      setIsImportingCsv(false);
+      setCsvUploadProgress(0);
+    }
+  }
+
   const pageCount = Math.max(1, Math.ceil(total / 20));
+  const csvImportTone = csvImportResult
+    ? csvImportResult.skipped_rows > 0
+      ? {
+          border: "border-amber-200",
+          background: "bg-amber-50",
+          badge: "bg-amber-100 text-amber-800",
+          title: "Import completato con warning",
+          copy: "Alcune righe non sono state applicate. Controlla il dettaglio sotto per correggere i record scartati.",
+        }
+      : {
+          border: "border-emerald-200",
+          background: "bg-emerald-50",
+          badge: "bg-emerald-100 text-emerald-800",
+          title: "Import completato",
+          copy: "Tutte le righe valide del file sono state elaborate correttamente.",
+        }
+    : null;
 
   function triggerDownload(blob: Blob, filename: string): void {
     const url = URL.createObjectURL(blob);
@@ -280,6 +331,130 @@ function SubjectsContent({ token }: { token: string }) {
             {isSaving ? "Salvataggio..." : "Crea soggetto"}
           </button>
         </div>
+      </article>
+
+      <article className="panel-card">
+        <div className="mb-4">
+          <p className="section-title">Import CSV persone fisiche</p>
+          <p className="section-copy">Import con separatore `;` e upsert per Codice Fiscale.</p>
+        </div>
+        <div className="rounded-2xl border border-[#D9E8DF] bg-gradient-to-br from-[#F7FBF8] to-white p-4 md:p-5">
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_220px] lg:items-end">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6B8A78]">Caricamento file</p>
+              <label className="mt-3 block text-sm font-medium text-gray-700">
+                <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-[#CFE1D6] bg-white px-4 py-4 shadow-sm">
+                  <label
+                    htmlFor="anagrafica-csv-upload"
+                    className="inline-flex cursor-pointer items-center rounded-xl bg-[#1D4E35] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[#163b29]"
+                  >
+                    Seleziona file
+                  </label>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-gray-800">{csvFile?.name || "Nessun file selezionato"}</p>
+                    <p className="mt-1 text-xs text-gray-500">Formato supportato: CSV con separatore `;`</p>
+                  </div>
+                  <input
+                    id="anagrafica-csv-upload"
+                    className="sr-only"
+                    type="file"
+                    accept=".csv,text/csv"
+                    onChange={(event) => setCsvFile(event.target.files?.[0] ?? null)}
+                  />
+                </div>
+              </label>
+            </div>
+            <div className="rounded-2xl border border-[#D9E8DF] bg-white p-4 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6B8A78]">Azione</p>
+              <button className="btn-primary mt-3 w-full justify-center" onClick={() => void handleCsvImport()} type="button" disabled={isImportingCsv || !csvFile}>
+                {isImportingCsv ? "Import in corso..." : "Importa CSV"}
+              </button>
+              <p className="mt-2 text-xs text-gray-500">Il file viene validato e importato con upsert su Codice Fiscale.</p>
+            </div>
+          </div>
+        </div>
+        <p className="mt-3 text-xs text-gray-500">
+          Campi attesi: Codice Fiscale;Cognome;Nome;Sesso;Data_Nascita;Com_Nascita;Com_Residenza;CAP;PR;Indirizzo_Residenza;Variaz_Anagr;STATO;Decesso
+        </p>
+        {isImportingCsv ? (
+          <div className="mt-4 rounded-2xl border border-[#CFE1D6] bg-[#F4FAF6] px-4 py-4 shadow-sm">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <p className="text-sm font-medium text-[#1D4E35]">Upload CSV in corso</p>
+              <p className="text-sm font-semibold text-[#1D4E35]">{csvUploadProgress}%</p>
+            </div>
+            <div className="h-2.5 overflow-hidden rounded-full bg-white">
+              <div
+                className="h-full rounded-full bg-[#1D4E35] transition-[width] duration-300"
+                style={{ width: `${csvUploadProgress}%` }}
+              />
+            </div>
+            <p className="mt-2 text-xs text-gray-600">
+              {csvUploadProgress < 100 ? "Trasferimento file verso il backend." : "Upload completato, elaborazione in corso."}
+            </p>
+          </div>
+        ) : null}
+        {csvImportResult ? (
+          <div className="mt-4 space-y-4">
+            {csvImportTone ? (
+              <div className={`rounded-2xl border px-4 py-4 shadow-sm ${csvImportTone.border} ${csvImportTone.background}`}>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">{csvImportTone.title}</p>
+                    <p className="mt-1 text-sm text-gray-600">{csvImportTone.copy}</p>
+                  </div>
+                  <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] ${csvImportTone.badge}`}>
+                    {csvImportResult.skipped_rows > 0 ? "Warning" : "Successo"}
+                  </span>
+                </div>
+              </div>
+            ) : null}
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Righe lette</p>
+                <p className="mt-2 text-2xl font-semibold text-gray-900">{csvImportResult.total_rows}</p>
+              </div>
+              <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Creati</p>
+                <p className="mt-2 text-2xl font-semibold text-emerald-900">{csvImportResult.created_subjects}</p>
+              </div>
+              <div className="rounded-2xl border border-sky-100 bg-sky-50 p-4 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-sky-700">Aggiornati</p>
+                <p className="mt-2 text-2xl font-semibold text-sky-900">{csvImportResult.updated_subjects}</p>
+              </div>
+              <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4 shadow-sm">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-amber-700">Scartati</p>
+                <p className="mt-2 text-2xl font-semibold text-amber-900">{csvImportResult.skipped_rows}</p>
+              </div>
+            </div>
+
+            {csvImportResult.errors.length > 0 ? (
+              <div className="rounded-2xl border border-amber-200 bg-gradient-to-br from-amber-50 to-[#FFFDF5] px-4 py-4 shadow-sm">
+                <div className="mb-3">
+                  <p className="text-sm font-medium text-amber-900">Righe scartate</p>
+                  <p className="text-xs text-amber-800">
+                    Il file è stato importato, ma alcune righe non sono state applicate. Sono mostrati i primi {Math.min(csvImportResult.errors.length, 20)} casi.
+                  </p>
+                </div>
+                <div className="space-y-2">
+                  {csvImportResult.errors.slice(0, 20).map((item) => (
+                    <div key={`${item.row_number}-${item.codice_fiscale || "none"}`} className="rounded-xl border border-amber-100 bg-white px-3 py-3">
+                      <p className="text-sm font-medium text-gray-900">
+                        Riga {item.row_number}
+                        {item.codice_fiscale ? ` · ${item.codice_fiscale}` : ""}
+                      </p>
+                      <p className="mt-1 text-xs text-red-700">{item.message}</p>
+                    </div>
+                  ))}
+                </div>
+                {csvImportResult.errors.length > 20 ? (
+                  <p className="mt-3 text-xs text-amber-800">
+                    Altre {csvImportResult.errors.length - 20} righe scartate non mostrate in questo riepilogo.
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </article>
 
       <article className="panel-card">

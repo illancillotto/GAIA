@@ -1,5 +1,4 @@
 from collections.abc import Generator
-import time
 import uuid
 
 import pytest
@@ -84,19 +83,6 @@ def login(username: str) -> str:
     return response.json()["access_token"]
 
 
-def wait_for_job_completion(token: str, job_id: str, timeout_seconds: float = 3.0) -> dict:
-    deadline = time.time() + timeout_seconds
-    headers = {"Authorization": f"Bearer {token}"}
-    while time.time() < deadline:
-        response = client.get(f"/anagrafica/import/jobs/{job_id}", headers=headers)
-        assert response.status_code == 200
-        payload = response.json()
-        if payload["status"] in {"completed", "failed"}:
-            return payload
-        time.sleep(0.05)
-    raise AssertionError("Import job did not complete in time")
-
-
 def test_import_preview_returns_structured_payload() -> None:
     create_user("alice", module_anagrafica=True)
     token = login("alice")
@@ -172,21 +158,23 @@ def test_import_run_persists_job_and_returns_summary() -> None:
 
     assert response.status_code == 202
     body = response.json()
-    assert body["status"] in {"pending", "running"}
+    assert body["status"] == "completed"
     assert body["total_folders"] == 1
+    assert body["imported_ok"] == 1
 
     jobs_response = client.get("/anagrafica/import/jobs", headers={"Authorization": f"Bearer {token}"})
     assert jobs_response.status_code == 200
     jobs = jobs_response.json()
     assert len(jobs) == 1
     assert jobs[0]["job_id"] == body["job_id"]
+    assert jobs[0]["items"][0]["payload_json"]["source_name_raw"] == "Obinu_Santina_BNOSTN34L64I743F"
 
     detail_response = client.get(
         f"/anagrafica/import/jobs/{body['job_id']}",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert detail_response.status_code == 200
-    assert detail_response.json()["status"] in {"pending", "running", "completed"}
+    assert detail_response.json()["status"] == "completed"
 
 
 def test_import_run_without_letter_imports_full_archive() -> None:
@@ -214,18 +202,110 @@ def test_import_job_detail_includes_items_and_resume_endpoint() -> None:
     assert run_response.status_code == 202
     job_id = run_response.json()["job_id"]
 
-    completed_job = wait_for_job_completion(token, job_id)
+    detail_response = client.get(f"/anagrafica/import/jobs/{job_id}", headers=headers)
+    assert detail_response.status_code == 200
+    completed_job = detail_response.json()
     assert completed_job["items"]
     assert completed_job["items"][0]["folder_name"] == "Obinu_Santina_BNOSTN34L64I743F"
+    assert completed_job["items"][0]["payload_json"]["documents"][0]["filename"] == "INGIUNZIONE-2024.pdf"
 
     resume_response = client.post(f"/anagrafica/import/jobs/{job_id}/resume", headers=headers)
-    assert resume_response.status_code == 202
-    resume_payload = resume_response.json()
-    assert resume_payload["job_id"] == job_id
-    assert resume_payload["status"] == "running"
+    assert resume_response.status_code == 409
 
-    resumed_job = wait_for_job_completion(token, job_id)
-    assert resumed_job["status"] == "completed"
+
+def test_csv_import_creates_and_updates_person_subjects() -> None:
+    create_user("csv_user", module_anagrafica=True)
+    token = login("csv_user")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    csv_payload = (
+        "Codice Fiscale;Cognome;Nome;Sesso;Data_Nascita;Com_Nascita;Com_Residenza;CAP;PR;Indirizzo_Residenza;Variaz_Anagr;STATO;Decesso\n"
+        "RSSMRA80A01H501Z;Rossi;Mario;M;01/01/1980;Oristano;Oristano;09170;OR;Via Roma 1;;ATTIVO;\n"
+    )
+
+    import_response = client.post(
+        "/anagrafica/subjects/import-csv",
+        headers=headers,
+        files={"file": ("anagrafica.csv", csv_payload.encode("utf-8"), "text/csv")},
+    )
+    assert import_response.status_code == 200
+    payload = import_response.json()
+    assert payload["total_rows"] == 1
+    assert payload["created_subjects"] == 1
+    assert payload["updated_subjects"] == 0
+
+    list_response = client.get("/anagrafica/subjects?search=RSSMRA80A01H501Z", headers=headers)
+    assert list_response.status_code == 200
+    assert list_response.json()["total"] == 1
+    subject_id = list_response.json()["items"][0]["id"]
+
+    detail_response = client.get(f"/anagrafica/subjects/{subject_id}", headers=headers)
+    assert detail_response.status_code == 200
+    detail = detail_response.json()
+    assert detail["person"]["cognome"] == "Rossi"
+    assert detail["person"]["data_nascita"] == "1980-01-01"
+    assert detail["person"]["comune_residenza"] == "Oristano (OR)"
+
+    csv_update_payload = (
+        "Codice Fiscale;Cognome;Nome;Sesso;Data_Nascita;Com_Nascita;Com_Residenza;CAP;PR;Indirizzo_Residenza;Variaz_Anagr;STATO;Decesso\n"
+        "RSSMRA80A01H501Z;Rossi;Mario;M;01/01/1980;Oristano;Cabras;09072;OR;Via Diaz 3;Cambio residenza;ATTIVO;\n"
+    )
+    update_response = client.post(
+        "/anagrafica/subjects/import-csv",
+        headers=headers,
+        files={"file": ("anagrafica.csv", csv_update_payload.encode("utf-8"), "text/csv")},
+    )
+    assert update_response.status_code == 200
+    assert update_response.json()["created_subjects"] == 0
+    assert update_response.json()["updated_subjects"] == 1
+
+    updated_detail_response = client.get(f"/anagrafica/subjects/{subject_id}", headers=headers)
+    assert updated_detail_response.status_code == 200
+    updated_detail = updated_detail_response.json()
+    assert updated_detail["person"]["comune_residenza"] == "Cabras (OR)"
+    assert "[CSV IMPORT]" in (updated_detail["person"]["note"] or "")
+
+
+def test_csv_import_handles_duplicate_codice_fiscale_rows_without_500() -> None:
+    create_user("csv_duplicates", module_anagrafica=True)
+    token = login("csv_duplicates")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    csv_payload = (
+        "Codice Fiscale;Cognome;Nome;Sesso;Data_Nascita;Com_Nascita;Com_Residenza;CAP;PR;Indirizzo_Residenza;Variaz_Anagr;STATO;Decesso\n"
+        "SRRPQL38P11I743U;Serra;Pasquale;M;11/09/1938;Simaxis;Ollastra;09088;OR;Via Marconi 33;;ATTIVO;\n"
+        "SRRPQL38P11I743U;Serra;Pasquale;M;11/09/1938;Simaxis;Simaxis;09088;OR;Via Marconi 33;Aggiornamento;ATTIVO;\n"
+    )
+
+    response = client.post(
+        "/anagrafica/subjects/import-csv",
+        headers=headers,
+        files={"file": ("anagrafica.csv", csv_payload.encode("utf-8"), "text/csv")},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total_rows"] == 2
+    assert payload["created_subjects"] == 1
+    assert payload["updated_subjects"] == 1
+    assert payload["skipped_rows"] == 0
+
+    detail_search = client.get("/anagrafica/subjects?search=SRRPQL38P11I743U", headers=headers)
+    assert detail_search.status_code == 200
+    assert detail_search.json()["total"] == 1
+
+
+def test_csv_import_rejects_missing_required_headers() -> None:
+    create_user("csv_invalid", module_anagrafica=True)
+    token = login("csv_invalid")
+
+    csv_payload = "Cognome;Nome\nRossi;Mario\n"
+    response = client.post(
+        "/anagrafica/subjects/import-csv",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("anagrafica.csv", csv_payload.encode("utf-8"), "text/csv")},
+    )
+    assert response.status_code == 422
 
 
 def test_subjects_crud_search_and_stats() -> None:

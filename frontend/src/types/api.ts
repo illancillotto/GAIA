@@ -349,6 +349,20 @@ export type AnagraficaImportWarning = {
   path: string | null;
 };
 
+export type AnagraficaCsvImportError = {
+  row_number: number;
+  message: string;
+  codice_fiscale: string | null;
+};
+
+export type AnagraficaCsvImportResult = {
+  total_rows: number;
+  created_subjects: number;
+  updated_subjects: number;
+  skipped_rows: number;
+  errors: AnagraficaCsvImportError[];
+};
+
 export type AnagraficaPreviewSubject = {
   folder_name: string;
   letter: string;

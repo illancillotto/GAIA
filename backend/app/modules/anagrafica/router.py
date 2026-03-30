@@ -3,7 +3,7 @@ import uuid
 from io import BytesIO, StringIO
 import csv
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
 from sqlalchemy import func, or_, select
@@ -30,6 +30,7 @@ from app.modules.anagrafica.schemas import (
     AnagraficaAuditLogResponse,
     AnagraficaCatastoDocumentResponse,
     AnagraficaCompanyResponse,
+    AnagraficaCsvImportResponse,
     AnagraficaDocumentUpdateRequest,
     AnagraficaImportJobResponse,
     AnagraficaImportJobItemResponse,
@@ -52,6 +53,7 @@ from app.modules.anagrafica.services.import_service import (
     create_import_snapshot,
     preview_import,
 )
+from app.modules.anagrafica.services.csv_import_service import import_subjects_from_csv
 from app.services.nas_connector import NasConnectorError, get_nas_client
 
 router = APIRouter(prefix="/anagrafica", tags=["anagrafica"])
@@ -316,6 +318,45 @@ def create_subject(
     )
     db.commit()
     return _build_subject_detail(db, subject.id)
+
+
+@router.post("/subjects/import-csv", response_model=AnagraficaCsvImportResponse)
+async def import_subjects_csv(
+    file: Annotated[UploadFile, File()],
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    _: Annotated[ApplicationUser, RequireAnagraficaModule],
+    db: Annotated[Session, Depends(get_db)],
+) -> AnagraficaCsvImportResponse:
+    filename = (file.filename or "").lower()
+    if filename and not filename.endswith(".csv"):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Il file deve essere un CSV")
+
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="File CSV vuoto")
+
+    try:
+        result = import_subjects_from_csv(db, current_user=current_user, file_bytes=file_bytes)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+
+    return AnagraficaCsvImportResponse.model_validate(
+        {
+            "total_rows": result.total_rows,
+            "created_subjects": result.created_subjects,
+            "updated_subjects": result.updated_subjects,
+            "skipped_rows": result.skipped_rows,
+            "errors": [
+                {
+                    "row_number": item.row_number,
+                    "message": item.message,
+                    "codice_fiscale": item.codice_fiscale,
+                }
+                for item in result.errors
+            ],
+        }
+    )
 
 
 @router.get("/subjects/{subject_id}", response_model=AnagraficaSubjectDetailResponse)

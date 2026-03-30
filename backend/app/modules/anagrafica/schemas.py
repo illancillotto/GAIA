@@ -35,6 +35,20 @@ class AnagraficaImportWarningResponse(BaseModel):
     path: str | None = None
 
 
+class AnagraficaCsvImportErrorResponse(BaseModel):
+    row_number: int
+    message: str
+    codice_fiscale: str | None = None
+
+
+class AnagraficaCsvImportResponse(BaseModel):
+    total_rows: int
+    created_subjects: int
+    updated_subjects: int
+    skipped_rows: int
+    errors: list[AnagraficaCsvImportErrorResponse] = Field(default_factory=list)
+
+
 class AnagraficaPreviewDocumentResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

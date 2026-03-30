@@ -1,4 +1,5 @@
 import type {
+  AnagraficaCsvImportResult,
   AnagraficaDocument,
   AnagraficaImportJob,
   AnagraficaImportPreview,
@@ -141,6 +142,64 @@ async function requestBlob(path: string, init?: RequestInit): Promise<Blob> {
   }
 
   return response.blob();
+}
+
+async function requestFormDataWithUploadProgress<T>(
+  path: string,
+  formData: FormData,
+  token: string,
+  onProgress?: (percent: number) => void,
+): Promise<T> {
+  return await new Promise<T>((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${getApiBaseUrl()}${path}`);
+    xhr.responseType = "json";
+    xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+
+    xhr.upload.addEventListener("progress", (event) => {
+      if (!event.lengthComputable) {
+        return;
+      }
+      const percent = Math.min(100, Math.max(0, Math.round((event.loaded / event.total) * 100)));
+      onProgress?.(percent);
+    });
+
+    xhr.addEventListener("load", () => {
+      const responseData = xhr.response;
+      if (xhr.status >= 200 && xhr.status < 300) {
+        onProgress?.(100);
+        resolve(responseData as T);
+        return;
+      }
+
+      const payload = typeof responseData === "object" && responseData !== null ? (responseData as { detail?: unknown }) : undefined;
+      let detail = "Request failed";
+      const detailData: unknown = payload?.detail;
+
+      if (typeof payload?.detail === "string") {
+        detail = payload.detail;
+      } else if (
+        payload?.detail &&
+        typeof payload.detail === "object" &&
+        "message" in payload.detail &&
+        typeof payload.detail.message === "string"
+      ) {
+        detail = payload.detail.message;
+      } else if (payload?.detail != null) {
+        detail = JSON.stringify(payload.detail);
+      } else if (xhr.statusText) {
+        detail = xhr.statusText;
+      }
+
+      reject(new ApiError(detail, detailData, xhr.status));
+    });
+
+    xhr.addEventListener("error", () => {
+      reject(new ApiError("Errore di rete durante upload CSV"));
+    });
+
+    xhr.send(formData);
+  });
 }
 
 function createQueryString(params: Record<string, string | undefined>): string {
@@ -439,6 +498,22 @@ export async function createAnagraficaSubject(
     },
     body: JSON.stringify(payload),
   });
+}
+
+export async function importAnagraficaSubjectsCsv(
+  token: string,
+  file: File,
+  onProgress?: (percent: number) => void,
+): Promise<AnagraficaCsvImportResult> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  return requestFormDataWithUploadProgress<AnagraficaCsvImportResult>(
+    "/anagrafica/subjects/import-csv",
+    formData,
+    token,
+    onProgress,
+  );
 }
 
 export async function updateAnagraficaSubject(
