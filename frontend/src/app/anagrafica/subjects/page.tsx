@@ -1,14 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 
 import { AnagraficaModulePage } from "@/components/anagrafica/anagrafica-module-page";
 import { DataTable } from "@/components/table/data-table";
 import { TableFilters } from "@/components/table/table-filters";
-import { createAnagraficaSubject, downloadAnagraficaExportBlob, getAnagraficaSubjects, importAnagraficaSubjectsCsv } from "@/lib/api";
+import { createAnagraficaSubject, downloadAnagraficaExportBlob, getAnagraficaSubject, getAnagraficaSubjects, importAnagraficaSubjectsCsv } from "@/lib/api";
 import { formatDateTime } from "@/lib/presentation";
-import type { AnagraficaCsvImportResult, AnagraficaSubjectCreateInput, AnagraficaSubjectListItem } from "@/types/api";
+import type { AnagraficaCsvImportResult, AnagraficaSubjectCreateInput, AnagraficaSubjectDetail, AnagraficaSubjectListItem } from "@/types/api";
 
 type FilterState = {
   search: string;
@@ -26,6 +27,40 @@ const emptyFilters: FilterState = {
   requiresReview: "",
 };
 
+function normalizeIdentifierPart(value: string): string {
+  return value
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^A-Za-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .replace(/_+/g, "_");
+}
+
+function deriveArchiveLetter(value: string): string {
+  const normalized = value
+    .trim()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toUpperCase();
+  const firstLetter = normalized.match(/[A-Z]/);
+  return firstLetter?.[0] ?? "";
+}
+
+function buildSourceNameRaw(createType: "person" | "company", values: {
+  personSurname: string;
+  personName: string;
+  personCf: string;
+  companyName: string;
+  companyVat: string;
+}): string {
+  const parts = createType === "person"
+    ? [values.personSurname, values.personName, values.personCf]
+    : [values.companyName, values.companyVat];
+
+  return parts.map(normalizeIdentifierPart).filter(Boolean).join("_");
+}
+
 function SubjectsContent({ token }: { token: string }) {
   const [items, setItems] = useState<AnagraficaSubjectListItem[]>([]);
   const [total, setTotal] = useState(0);
@@ -41,8 +76,6 @@ function SubjectsContent({ token }: { token: string }) {
   const [isImportingCsv, setIsImportingCsv] = useState(false);
   const [csvUploadProgress, setCsvUploadProgress] = useState(0);
   const [createType, setCreateType] = useState<"person" | "company">("person");
-  const [sourceNameRaw, setSourceNameRaw] = useState("");
-  const [letter, setLetter] = useState("");
   const [personSurname, setPersonSurname] = useState("");
   const [personName, setPersonName] = useState("");
   const [personCf, setPersonCf] = useState("");
@@ -50,10 +83,30 @@ function SubjectsContent({ token }: { token: string }) {
   const [companyVat, setCompanyVat] = useState("");
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [csvImportResult, setCsvImportResult] = useState<AnagraficaCsvImportResult | null>(null);
+  const [duplicateCfMessage, setDuplicateCfMessage] = useState<string | null>(null);
+  const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
+  const [selectedSubject, setSelectedSubject] = useState<AnagraficaSubjectDetail | null>(null);
+  const [isSubjectModalLoading, setIsSubjectModalLoading] = useState(false);
+  const [subjectModalError, setSubjectModalError] = useState<string | null>(null);
 
   const deferredSearch = useDeferredValue(filters.search);
   const normalizedSearch = deferredSearch.trim();
   const effectiveSearch = normalizedSearch.length === 0 || normalizedSearch.length >= 3 ? normalizedSearch || undefined : undefined;
+  const derivedLetter = useMemo(
+    () => deriveArchiveLetter(createType === "person" ? personSurname : companyName),
+    [companyName, createType, personSurname],
+  );
+  const derivedSourceNameRaw = useMemo(
+    () =>
+      buildSourceNameRaw(createType, {
+        personSurname,
+        personName,
+        personCf,
+        companyName,
+        companyVat,
+      }),
+    [companyName, companyVat, createType, personCf, personName, personSurname],
+  );
 
   const refreshSubjects = useCallback(async (targetPage: number = page) => {
     const response = await getAnagraficaSubjects(token, {
@@ -77,7 +130,7 @@ function SubjectsContent({ token }: { token: string }) {
         await refreshSubjects(page);
         setLoadError(null);
       } catch (error) {
-        setLoadError(error instanceof Error ? error.message : "Errore caricamento soggetti");
+        setLoadError(error instanceof Error ? error.message : "Errore caricamento utenti");
       } finally {
         setIsLoading(false);
       }
@@ -86,10 +139,46 @@ function SubjectsContent({ token }: { token: string }) {
     void loadSubjects();
   }, [page, refreshSubjects]);
 
+  useEffect(() => {
+    if (selectedSubjectId == null) {
+      setSelectedSubject(null);
+      setSubjectModalError(null);
+      return;
+    }
+
+    const subjectId = selectedSubjectId;
+    let cancelled = false;
+
+    async function loadSubjectDetail() {
+      setIsSubjectModalLoading(true);
+      setSubjectModalError(null);
+      try {
+        const detail = await getAnagraficaSubject(token, subjectId);
+        if (!cancelled) {
+          setSelectedSubject(detail);
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setSubjectModalError(error instanceof Error ? error.message : "Errore caricamento utente");
+        }
+      } finally {
+        if (!cancelled) {
+          setIsSubjectModalLoading(false);
+        }
+      }
+    }
+
+    void loadSubjectDetail();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedSubjectId, token]);
+
   const columns = useMemo<ColumnDef<AnagraficaSubjectListItem>[]>(
     () => [
       {
-        header: "Soggetto",
+        header: "Utente",
         accessorKey: "display_name",
         cell: ({ row }) => (
           <div>
@@ -138,14 +227,22 @@ function SubjectsContent({ token }: { token: string }) {
   );
 
   async function handleCreateSubject() {
+    if (!derivedSourceNameRaw || !derivedLetter) {
+      setSaveError("Compila i dati principali dell'utente prima del salvataggio.");
+      setSaveMessage(null);
+      setDuplicateCfMessage(null);
+      return;
+    }
+
     setIsSaving(true);
     setSaveError(null);
     setSaveMessage(null);
+    setDuplicateCfMessage(null);
 
     const payload: AnagraficaSubjectCreateInput = {
       subject_type: createType,
-      source_name_raw: sourceNameRaw || (createType === "person" ? `${personSurname}_${personName}_${personCf}` : `${companyName}_${companyVat}`),
-      nas_folder_letter: letter || null,
+      source_name_raw: derivedSourceNameRaw,
+      nas_folder_letter: derivedLetter || null,
       requires_review: false,
     };
 
@@ -180,9 +277,7 @@ function SubjectsContent({ token }: { token: string }) {
 
     try {
       await createAnagraficaSubject(token, payload);
-      setSaveMessage("Soggetto creato correttamente.");
-      setSourceNameRaw("");
-      setLetter("");
+      setSaveMessage("Utente creato correttamente.");
       setPersonSurname("");
       setPersonName("");
       setPersonCf("");
@@ -191,7 +286,12 @@ function SubjectsContent({ token }: { token: string }) {
       setPage(1);
       await refreshSubjects(1);
     } catch (error) {
-      setSaveError(error instanceof Error ? error.message : "Errore creazione soggetto");
+      const message = error instanceof Error ? error.message : "Errore creazione utente";
+      if (message.toLowerCase().includes("codice fiscale")) {
+        setDuplicateCfMessage(message);
+      } else {
+        setSaveError(message);
+      }
     } finally {
       setIsSaving(false);
     }
@@ -277,8 +377,8 @@ function SubjectsContent({ token }: { token: string }) {
     <div className="page-stack">
       <article className="panel-card">
         <div className="mb-4">
-          <p className="section-title">Nuovo soggetto manuale</p>
-          <p className="section-copy">Inserimento rapido per soggetti del Consorzio non ancora importati dal NAS.</p>
+          <p className="section-title">Nuovo utente manuale</p>
+          <p className="section-copy">Inserimento rapido per utenti del Consorzio non ancora importati dal NAS.</p>
         </div>
         {saveError ? <p className="mb-3 text-sm text-red-600">{saveError}</p> : null}
         {saveMessage ? <p className="mb-3 text-sm text-[#1D4E35]">{saveMessage}</p> : null}
@@ -292,11 +392,11 @@ function SubjectsContent({ token }: { token: string }) {
           </label>
           <label className="block text-sm font-medium text-gray-700">
             Lettera archivio
-            <input className="form-control mt-1" value={letter} onChange={(event) => setLetter(event.target.value.toUpperCase().slice(0, 1))} placeholder="R" />
+            <input className="form-control mt-1 bg-gray-50 text-gray-500" value={derivedLetter} readOnly placeholder="Auto" />
           </label>
           <label className="block text-sm font-medium text-gray-700 xl:col-span-2">
             Source name raw
-            <input className="form-control mt-1" value={sourceNameRaw} onChange={(event) => setSourceNameRaw(event.target.value)} placeholder="Opzionale: nome origine cartella o etichetta sorgente" />
+            <input className="form-control mt-1 bg-gray-50 text-gray-500" value={derivedSourceNameRaw} readOnly placeholder="Generato automaticamente" />
           </label>
           {createType === "person" ? (
             <>
@@ -328,7 +428,7 @@ function SubjectsContent({ token }: { token: string }) {
         </div>
         <div className="mt-4 flex justify-end">
           <button className="btn-primary" onClick={() => void handleCreateSubject()} type="button" disabled={isSaving}>
-            {isSaving ? "Salvataggio..." : "Crea soggetto"}
+            {isSaving ? "Salvataggio..." : "Crea utente"}
           </button>
         </div>
       </article>
@@ -459,7 +559,7 @@ function SubjectsContent({ token }: { token: string }) {
 
       <article className="panel-card">
         <div className="mb-4">
-          <p className="section-title">Registro soggetti</p>
+          <p className="section-title">Registro Utenti</p>
           <p className="section-copy">Ricerca server-side su nome, cognome e codice fiscale con risposta immediata da 3 caratteri.</p>
         </div>
 
@@ -536,17 +636,15 @@ function SubjectsContent({ token }: { token: string }) {
         ) : null}
 
         {loadError ? <p className="mb-3 text-sm text-red-600">{loadError}</p> : null}
-        {isLoading ? <p className="mb-3 text-sm text-gray-500">Caricamento soggetti in corso.</p> : null}
+        {isLoading ? <p className="mb-3 text-sm text-gray-500">Caricamento utenti in corso.</p> : null}
 
         <DataTable
           data={items}
           columns={columns}
           initialPageSize={100}
-          emptyTitle="Nessun soggetto trovato"
+          emptyTitle="Nessun utente trovato"
           emptyDescription="Nessun record disponibile per i filtri correnti."
-          onRowClick={(row) => {
-            window.location.href = `/anagrafica/${row.id}`;
-          }}
+          onRowClick={(row) => setSelectedSubjectId(row.id)}
         />
 
         <div className="mt-4 flex items-center justify-between gap-3">
@@ -563,6 +661,123 @@ function SubjectsContent({ token }: { token: string }) {
           </div>
         </div>
       </article>
+
+      {duplicateCfMessage ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">
+          <button
+            aria-label="Chiudi avviso duplicato"
+            className="absolute inset-0"
+            onClick={() => setDuplicateCfMessage(null)}
+            type="button"
+          />
+          <div className="relative z-10 w-full max-w-lg rounded-[28px] border border-red-100 bg-white p-6 shadow-[0_24px_64px_rgba(15,25,19,0.18)]">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-red-500">Codice fiscale duplicato</p>
+            <h3 className="mt-2 text-xl font-medium text-gray-900">Utente gia presente nel registro</h3>
+            <p className="mt-3 text-sm text-gray-600">{duplicateCfMessage}</p>
+            <div className="mt-5 flex justify-end">
+              <button className="btn-secondary" onClick={() => setDuplicateCfMessage(null)} type="button">
+                Chiudi
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {selectedSubjectId ? (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 px-4 py-6 backdrop-blur-sm md:p-8">
+          <button
+            aria-label="Chiudi dettaglio utente"
+            className="absolute inset-0"
+            onClick={() => setSelectedSubjectId(null)}
+            type="button"
+          />
+          <div className="relative z-10 max-h-[calc(100vh-2rem)] w-full max-w-4xl overflow-y-auto rounded-[28px] border border-gray-200 bg-[#F6F7F2] p-5 shadow-[0_30px_80px_rgba(15,25,19,0.18)] md:max-h-[calc(100vh-4rem)] md:p-6">
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-[0.18em] text-gray-400">Dettaglio utente</p>
+                <h3 className="mt-1 text-xl font-medium text-gray-900">Vista rapida del registro</h3>
+              </div>
+              <div className="flex items-center gap-3">
+                <Link className="text-sm font-medium text-[#1D4E35]" href={`/anagrafica/${selectedSubjectId}`}>
+                  Apri pagina completa
+                </Link>
+                <button className="btn-secondary" onClick={() => setSelectedSubjectId(null)} type="button">
+                  Chiudi
+                </button>
+              </div>
+            </div>
+
+            {isSubjectModalLoading ? <p className="text-sm text-gray-500">Caricamento utente in corso.</p> : null}
+            {subjectModalError ? <p className="text-sm text-red-600">{subjectModalError}</p> : null}
+            {selectedSubject ? (
+              <div className="space-y-6">
+                <section className="grid gap-4 md:grid-cols-2">
+                  <div className="rounded-2xl border border-[#D9E8DF] bg-white p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Identita</p>
+                    <h4 className="mt-2 text-lg font-medium text-[#1D4E35]">
+                      {selectedSubject.person ? `${selectedSubject.person.cognome} ${selectedSubject.person.nome}` : selectedSubject.company?.ragione_sociale || "Utente"}
+                    </h4>
+                    <div className="mt-4 space-y-2 text-sm text-gray-600">
+                      <p><span className="font-medium text-gray-900">Tipo:</span> {selectedSubject.subject_type}</p>
+                      <p><span className="font-medium text-gray-900">Stato:</span> {selectedSubject.status}</p>
+                      <p><span className="font-medium text-gray-900">Source name raw:</span> {selectedSubject.source_name_raw}</p>
+                      <p><span className="font-medium text-gray-900">Lettera archivio:</span> {selectedSubject.nas_folder_letter || "n/d"}</p>
+                    </div>
+                  </div>
+                  <div className="rounded-2xl border border-[#D9E8DF] bg-white p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Riferimenti</p>
+                    <div className="mt-4 space-y-2 text-sm text-gray-600">
+                      <p><span className="font-medium text-gray-900">Codice fiscale:</span> {selectedSubject.person?.codice_fiscale || selectedSubject.company?.codice_fiscale || "n/d"}</p>
+                      <p><span className="font-medium text-gray-900">Partita IVA:</span> {selectedSubject.company?.partita_iva || "n/d"}</p>
+                      <p><span className="font-medium text-gray-900">Percorso NAS:</span> {selectedSubject.nas_folder_path || "n/d"}</p>
+                      <p><span className="font-medium text-gray-900">Aggiornato:</span> {formatDateTime(selectedSubject.updated_at)}</p>
+                    </div>
+                  </div>
+                </section>
+
+                {selectedSubject.person ? (
+                  <section className="rounded-2xl border border-[#D9E8DF] bg-white p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Anagrafica persona</p>
+                    <div className="mt-4 grid gap-3 md:grid-cols-2 text-sm text-gray-600">
+                      <p><span className="font-medium text-gray-900">Email:</span> {selectedSubject.person.email || "n/d"}</p>
+                      <p><span className="font-medium text-gray-900">Telefono:</span> {selectedSubject.person.telefono || "n/d"}</p>
+                      <p><span className="font-medium text-gray-900">Comune nascita:</span> {selectedSubject.person.comune_nascita || "n/d"}</p>
+                      <p><span className="font-medium text-gray-900">Comune residenza:</span> {selectedSubject.person.comune_residenza || "n/d"}</p>
+                    </div>
+                  </section>
+                ) : null}
+
+                {selectedSubject.company ? (
+                  <section className="rounded-2xl border border-[#D9E8DF] bg-white p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Anagrafica societa</p>
+                    <div className="mt-4 grid gap-3 md:grid-cols-2 text-sm text-gray-600">
+                      <p><span className="font-medium text-gray-900">Ragione sociale:</span> {selectedSubject.company.ragione_sociale}</p>
+                      <p><span className="font-medium text-gray-900">Partita IVA:</span> {selectedSubject.company.partita_iva}</p>
+                      <p><span className="font-medium text-gray-900">PEC:</span> {selectedSubject.company.email_pec || "n/d"}</p>
+                      <p><span className="font-medium text-gray-900">Telefono:</span> {selectedSubject.company.telefono || "n/d"}</p>
+                    </div>
+                  </section>
+                ) : null}
+
+                <section className="grid gap-4 md:grid-cols-3">
+                  <div className="rounded-2xl border border-[#D9E8DF] bg-white p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Documenti</p>
+                    <p className="mt-2 text-2xl font-semibold text-gray-900">{selectedSubject.documents.length}</p>
+                  </div>
+                  <div className="rounded-2xl border border-[#D9E8DF] bg-white p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Audit log</p>
+                    <p className="mt-2 text-2xl font-semibold text-gray-900">{selectedSubject.audit_log.length}</p>
+                  </div>
+                  <div className="rounded-2xl border border-[#D9E8DF] bg-white p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Catasto</p>
+                    <p className="mt-2 text-2xl font-semibold text-gray-900">{selectedSubject.catasto_documents.length}</p>
+                  </div>
+                </section>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -570,9 +785,9 @@ function SubjectsContent({ token }: { token: string }) {
 export default function AnagraficaSubjectsPage() {
   return (
     <AnagraficaModulePage
-      title="Soggetti"
-      description="Lista operativa delle anagrafiche del Consorzio con filtri server-side e inserimento manuale."
-      breadcrumb="Soggetti"
+      title="Utenti"
+      description="Lista operativa degli utenti del Consorzio con filtri server-side e inserimento manuale."
+      breadcrumb="Utenti"
     >
       {({ token }) => <SubjectsContent token={token} />}
     </AnagraficaModulePage>

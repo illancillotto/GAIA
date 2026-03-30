@@ -392,6 +392,31 @@ def test_subjects_crud_search_and_stats() -> None:
     assert token_search_response.json()["total"] >= 1
 
 
+def test_create_subject_rejects_duplicate_codice_fiscale() -> None:
+    create_user("eva_duplicate_cf", module_anagrafica=True)
+    token = login("eva_duplicate_cf")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    payload = {
+        "subject_type": "person",
+        "source_name_raw": "Rossi_Mario_RSSMRA80A01H501Z",
+        "nas_folder_letter": "R",
+        "requires_review": False,
+        "person": {
+            "cognome": "Rossi",
+            "nome": "Mario",
+            "codice_fiscale": "RSSMRA80A01H501Z",
+        },
+    }
+
+    first_response = client.post("/anagrafica/subjects", headers=headers, json=payload)
+    assert first_response.status_code == 201
+
+    duplicate_response = client.post("/anagrafica/subjects", headers=headers, json=payload)
+    assert duplicate_response.status_code == 409
+    assert "codice fiscale" in duplicate_response.json()["detail"].lower()
+
+
 def test_document_summary_returns_breakdown_and_recent_unclassified() -> None:
     create_user("doc_summary", module_anagrafica=True)
     token = login("doc_summary")

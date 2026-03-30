@@ -43,6 +43,8 @@ from app.modules.anagrafica.schemas import (
     AnagraficaImportPreviewResponse,
     AnagraficaImportRunResponse,
     AnagraficaNasFolderCandidateResponse,
+    AnagraficaCompanyPayload,
+    AnagraficaPersonPayload,
     AnagraficaPersonResponse,
     AnagraficaPreviewDocumentResponse,
     AnagraficaResetRequest,
@@ -357,6 +359,12 @@ def create_subject(
     db: Annotated[Session, Depends(get_db)],
 ) -> AnagraficaSubjectDetailResponse:
     _validate_subject_payload(payload.subject_type, payload.person, payload.company)
+    duplicate_identifier = _find_duplicate_codice_fiscale(db, payload.person, payload.company)
+    if duplicate_identifier is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Esiste gia un utente registrato con codice fiscale {duplicate_identifier}.",
+        )
     subject = AnagraficaSubject(
         subject_type=payload.subject_type,
         status=AnagraficaSubjectStatus.ACTIVE.value,
@@ -989,6 +997,34 @@ def _build_subjects_query(
             )
         )
     return query
+
+
+def _find_duplicate_codice_fiscale(
+    db: Session,
+    person: AnagraficaPersonPayload | None,
+    company: AnagraficaCompanyPayload | None,
+) -> str | None:
+    if person is not None and person.codice_fiscale:
+        normalized_cf = person.codice_fiscale.replace(" ", "").upper()
+        existing_person = db.scalar(
+            select(AnagraficaPerson).where(
+                func.upper(func.replace(AnagraficaPerson.codice_fiscale, " ", "")) == normalized_cf
+            )
+        )
+        if existing_person is not None:
+            return normalized_cf
+
+    if company is not None and company.codice_fiscale:
+        normalized_cf = company.codice_fiscale.replace(" ", "").upper()
+        existing_company = db.scalar(
+            select(AnagraficaCompany).where(
+                func.upper(func.replace(func.coalesce(AnagraficaCompany.codice_fiscale, ""), " ", "")) == normalized_cf
+            )
+        )
+        if existing_company is not None:
+            return normalized_cf
+
+    return None
 
 
 def _create_subject_audit(
