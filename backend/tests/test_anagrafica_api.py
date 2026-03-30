@@ -646,6 +646,90 @@ def test_subject_nas_import_status_uses_identifier_and_reports_missing_subject_i
     assert payload["pending_files_in_nas"] == 0
 
 
+def test_subject_nas_import_status_ignores_stale_saved_nas_path_with_different_identifier() -> None:
+    create_user("nas_stale_path", module_anagrafica=True)
+    token = login("nas_stale_path")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    create_response = client.post(
+        "/anagrafica/subjects",
+        headers=headers,
+        json={
+            "subject_type": "person",
+            "source_name_raw": "ATZORI_TOMASA_TZRTMS31L61F840T",
+            "nas_folder_path": "/volume1/Settore Catasto/ARCHIVIO/A/Atzori Andrea_Tzrndr62s16g113n",
+            "nas_folder_letter": "A",
+            "person": {
+                "cognome": "ATZORI",
+                "nome": "TOMASA",
+                "codice_fiscale": "TZRTMS31L61F840T",
+            },
+        },
+    )
+    assert create_response.status_code == 201
+    subject_id = create_response.json()["id"]
+
+    status_response = client.get(f"/anagrafica/subjects/{subject_id}/nas-import-status", headers=headers)
+    assert status_response.status_code == 200
+    payload = status_response.json()
+    assert payload["can_import_from_nas"] is False
+    assert payload["missing_in_nas"] is True
+    assert payload["matched_folder_path"] is None
+
+
+def test_subject_nas_import_status_does_not_fallback_to_name_when_primary_identifier_differs() -> None:
+    class WrongSurnameOnlyNasConnector:
+        def run_command(self, command: str) -> str:
+            outputs = {
+                "find '/archive/A' -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort": (
+                    "/archive/A/Atzori Andrea_Tzrndr62s16g113n"
+                ),
+                "find '/archive/A/Atzori Andrea_Tzrndr62s16g113n' -type f 2>/dev/null | sort": (
+                    "/archive/A/Atzori Andrea_Tzrndr62s16g113n/INGIUNZIONE-2024.pdf"
+                ),
+            }
+            return outputs.get(command, "")
+
+        def download_file(self, path: str) -> bytes:
+            if path.endswith("INGIUNZIONE-2024.pdf"):
+                return b"%PDF-1.4 fake pdf bytes"
+            raise RuntimeError(f"Unexpected download path: {path}")
+
+    app.dependency_overrides[get_anagrafica_import_service] = lambda: AnagraficaImportPreviewService(
+        WrongSurnameOnlyNasConnector(),
+        archive_root="/archive",
+    )
+
+    create_user("nas_no_name_fallback", module_anagrafica=True)
+    token = login("nas_no_name_fallback")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    create_response = client.post(
+        "/anagrafica/subjects",
+        headers=headers,
+        json={
+            "subject_type": "person",
+            "source_name_raw": "ATZORI_TOMASA_TZRTMS31L61F840T",
+            "person": {
+                "cognome": "ATZORI",
+                "nome": "TOMASA",
+                "codice_fiscale": "TZRTMS31L61F840T",
+            },
+        },
+    )
+    assert create_response.status_code == 201
+    subject_id = create_response.json()["id"]
+
+    status_response = client.get(f"/anagrafica/subjects/{subject_id}/nas-import-status", headers=headers)
+    assert status_response.status_code == 200
+    payload = status_response.json()
+    assert payload["can_import_from_nas"] is False
+    assert payload["missing_in_nas"] is True
+    assert payload["matched_folder_path"] is None
+    assert payload["total_files_in_nas"] == 0
+    assert payload["pending_files_in_nas"] == 0
+
+
 def test_manual_document_upload_creates_local_document(tmp_path) -> None:
     create_user("manual_upload", module_anagrafica=True)
     token = login("manual_upload")

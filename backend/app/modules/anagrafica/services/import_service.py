@@ -264,7 +264,7 @@ class AnagraficaImportPreviewService:
         )
 
     def match_existing_subject_folder(self, db: Session, subject: AnagraficaSubject) -> DiscoveredSubjectFolder:
-        if subject.nas_folder_path:
+        if subject.nas_folder_path and _path_matches_primary_identifier(db, subject, subject.nas_folder_path):
             return DiscoveredSubjectFolder(
                 folder_name=os.path.basename(subject.nas_folder_path.rstrip("/")),
                 letter=subject.nas_folder_letter or self._derive_subject_letter(subject.source_name_raw),
@@ -282,6 +282,9 @@ class AnagraficaImportPreviewService:
         strict_candidates = _filter_candidates_by_primary_identifier(db, subject, candidates)
         if strict_candidates:
             return sorted(strict_candidates, key=lambda item: (item.folder_name.lower(), item.nas_folder_path))[0]
+
+        if _subject_has_primary_identifiers(db, subject):
+            raise ValueError(f"Nessuna cartella NAS compatibile trovata per il soggetto {subject.id}")
 
         scored_candidates = [
             (candidate, _score_subject_folder_candidate(db, subject, candidate.folder_name))
@@ -305,6 +308,12 @@ class AnagraficaImportPreviewService:
             return []
 
         candidates = self.discover_subject_folders(letter)
+        strict_candidates = _filter_candidates_by_primary_identifier(db, subject, candidates)
+        if strict_candidates:
+            candidates = strict_candidates
+        elif _subject_has_primary_identifiers(db, subject):
+            return []
+
         scored_candidates: list[SubjectFolderCandidate] = []
         for candidate in candidates:
             score = _score_subject_folder_candidate(db, subject, candidate.folder_name)
@@ -1415,6 +1424,19 @@ def _filter_candidates_by_primary_identifier(
         for candidate in candidates
         if any(identifier in _normalize_match_value(candidate.folder_name) for identifier in primary_identifiers)
     ]
+
+
+def _subject_has_primary_identifiers(db: Session, subject: AnagraficaSubject) -> bool:
+    return any(_normalize_match_value(value) for value in _subject_primary_identifiers(db, subject))
+
+
+def _path_matches_primary_identifier(db: Session, subject: AnagraficaSubject, path: str) -> bool:
+    normalized_path = _normalize_match_value(path)
+    primary_identifiers = [_normalize_match_value(value) for value in _subject_primary_identifiers(db, subject)]
+    primary_identifiers = [value for value in primary_identifiers if value]
+    if not primary_identifiers:
+        return True
+    return any(identifier in normalized_path for identifier in primary_identifiers)
 
 
 def _safe_relative_parts(relative_path: str) -> list[str]:
