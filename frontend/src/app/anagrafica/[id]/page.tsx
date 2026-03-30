@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AnagraficaModulePage } from "@/components/anagrafica/anagrafica-module-page";
 import {
   deleteAnagraficaDocument,
+  downloadAnagraficaDocumentBlob,
   getAnagraficaSubjectNasCandidates,
   getAnagraficaSubjectNasImportStatus,
   getAnagraficaSubject,
@@ -16,6 +17,7 @@ import {
 } from "@/lib/api";
 import { formatDateTime } from "@/lib/presentation";
 import type {
+  AnagraficaDocument,
   AnagraficaNasFolderCandidate,
   AnagraficaSubjectDetail,
   AnagraficaSubjectNasImportStatus,
@@ -37,6 +39,12 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
   const [isSavingNasPath, setIsSavingNasPath] = useState(false);
   const [isLoadingNasStatus, setIsLoadingNasStatus] = useState(false);
   const [isManualUploadModalOpen, setIsManualUploadModalOpen] = useState(false);
+  const [previewDocument, setPreviewDocument] = useState<AnagraficaDocument | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
+  const [documentPendingDeletion, setDocumentPendingDeletion] = useState<AnagraficaDocument | null>(null);
+  const [isDeletingDocument, setIsDeletingDocument] = useState(false);
   const [manualFile, setManualFile] = useState<File | null>(null);
   const [manualDocType, setManualDocType] = useState("altro");
   const [manualNotes, setManualNotes] = useState("");
@@ -171,11 +179,15 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
   }
 
   async function handleDeleteDocument(documentId: string) {
+    setIsDeletingDocument(true);
     try {
       await deleteAnagraficaDocument(token, documentId);
       await reloadSubject();
+      setDocumentPendingDeletion(null);
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : "Errore rimozione documento");
+    } finally {
+      setIsDeletingDocument(false);
     }
   }
 
@@ -265,12 +277,56 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
     }
   }
 
+  function closePreviewModal() {
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+    setPreviewUrl(null);
+    setPreviewDocument(null);
+    setPreviewError(null);
+    setIsLoadingPreview(false);
+  }
+
+  async function handlePreviewDocument(document: AnagraficaDocument) {
+    if (!document.id) {
+      setSaveError("Il documento non ha un identificativo valido per la preview.");
+      return;
+    }
+
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+    }
+
+    setPreviewDocument(document);
+    setPreviewUrl(null);
+    setPreviewError(null);
+    setIsLoadingPreview(true);
+
+    try {
+      const blob = await downloadAnagraficaDocumentBlob(token, document.id);
+      const objectUrl = URL.createObjectURL(blob);
+      setPreviewUrl(objectUrl);
+    } catch (error) {
+      setPreviewError(error instanceof Error ? error.message : "Errore caricamento anteprima documento");
+    } finally {
+      setIsLoadingPreview(false);
+    }
+  }
+
   useEffect(() => {
     if (!subject) {
       return;
     }
     void loadNasImportStatus();
   }, [loadNasImportStatus, subject]);
+
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
 
   if (loadError) {
     return (
@@ -396,6 +452,75 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
               </button>
               <button className="btn-primary" type="button" onClick={() => void handleManualUpload()} disabled={isUploadingManualDocument}>
                 {isUploadingManualDocument ? "Caricamento..." : "Carica documento"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {previewDocument ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">
+          <div className="flex h-full max-h-[92vh] w-full max-w-5xl flex-col rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between gap-4 border-b border-gray-100 px-6 py-4">
+              <div className="min-w-0">
+                <p className="section-title">Anteprima documento</p>
+                <p className="mt-1 truncate text-sm text-gray-500">{previewDocument.filename}</p>
+              </div>
+              <button className="btn-secondary" type="button" onClick={closePreviewModal}>
+                Chiudi
+              </button>
+            </div>
+            <div className="flex-1 overflow-hidden px-6 py-4">
+              {isLoadingPreview ? <p className="text-sm text-gray-500">Caricamento anteprima...</p> : null}
+              {previewError ? <p className="text-sm text-red-600">{previewError}</p> : null}
+              {!isLoadingPreview && !previewError && previewUrl && previewDocument.is_pdf ? (
+                <iframe className="h-full min-h-[70vh] w-full rounded-xl border border-gray-200" src={previewUrl} title={previewDocument.filename} />
+              ) : null}
+              {!isLoadingPreview && !previewError && previewUrl && !previewDocument.is_pdf ? (
+                <div className="flex h-full min-h-[70vh] items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50 p-6 text-center">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">Anteprima inline non disponibile per questo formato.</p>
+                    <a className="btn-primary mt-4 inline-flex" href={previewUrl} download={previewDocument.filename}>
+                      Scarica documento
+                    </a>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {documentPendingDeletion ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+            <div>
+              <p className="section-title">Conferma rimozione documento</p>
+              <p className="section-copy mt-2">
+                Stai per rimuovere <span className="font-medium text-gray-900">{documentPendingDeletion.filename}</span> dai documenti associati.
+              </p>
+              <p className="mt-3 text-sm text-gray-500">L&apos;operazione rimuove il documento dal catalogo GAIA del soggetto corrente.</p>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                className="btn-secondary"
+                type="button"
+                onClick={() => setDocumentPendingDeletion(null)}
+                disabled={isDeletingDocument}
+              >
+                Annulla
+              </button>
+              <button
+                className="rounded-full bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
+                type="button"
+                onClick={() => {
+                  if (documentPendingDeletion.id) {
+                    void handleDeleteDocument(documentPendingDeletion.id);
+                  }
+                }}
+                disabled={isDeletingDocument}
+              >
+                {isDeletingDocument ? "Rimozione..." : "Conferma rimozione"}
               </button>
             </div>
           </div>
@@ -545,7 +670,19 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
         ) : (
           <div className="space-y-3">
             {subject.documents.map((document) => (
-              <div key={document.id || document.nas_path} className="rounded-lg border border-gray-100 px-4 py-3">
+              <div
+                key={document.id || document.nas_path}
+                className="cursor-pointer rounded-lg border border-gray-100 px-4 py-3 transition hover:bg-gray-50"
+                onClick={() => void handlePreviewDocument(document)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    void handlePreviewDocument(document);
+                  }
+                }}
+              >
                 <div className="grid gap-3 md:grid-cols-[1.3fr_0.7fr_0.7fr_auto] md:items-center">
                   <div>
                     <p className="text-sm font-medium text-gray-900">{document.filename}</p>
@@ -554,6 +691,7 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
                   <select
                     className="form-control"
                     value={document.doc_type}
+                    onClick={(event) => event.stopPropagation()}
                     onChange={(event) => {
                       if (document.id) {
                         void handleDocumentTypeChange(document.id, event.target.value);
@@ -570,17 +708,28 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
                     <option value="altro">Altro</option>
                   </select>
                   <span className="text-sm text-gray-500">{document.classification_source}</span>
-                  <button
-                    className="text-sm font-medium text-red-600 transition hover:text-red-700"
-                    type="button"
-                    onClick={() => {
-                      if (document.id) {
-                        void handleDeleteDocument(document.id);
-                      }
-                    }}
-                  >
-                    Rimuovi
-                  </button>
+                  <div className="flex items-center justify-end gap-3">
+                    <button
+                      className="text-sm font-medium text-[#1D4E35] transition hover:text-[#163a29]"
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        void handlePreviewDocument(document);
+                      }}
+                    >
+                      Preview
+                    </button>
+                    <button
+                      className="text-sm font-medium text-red-600 transition hover:text-red-700"
+                      type="button"
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        setDocumentPendingDeletion(document);
+                      }}
+                    >
+                      Rimuovi
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}

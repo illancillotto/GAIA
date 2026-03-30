@@ -765,6 +765,11 @@ def test_manual_document_upload_creates_local_document(tmp_path) -> None:
       assert payload["filename"] == "manuale.pdf"
       assert payload["doc_type"] == "visura"
 
+      download_response = client.get(f"/anagrafica/documents/{payload['id']}/download", headers=headers)
+      assert download_response.status_code == 200
+      assert download_response.content == b"%PDF-1.4 manual"
+      assert download_response.headers["content-type"] == "application/pdf"
+
       detail_response = client.get(f"/anagrafica/subjects/{subject_id}", headers=headers)
       assert detail_response.status_code == 200
       assert len(detail_response.json()["documents"]) == 1

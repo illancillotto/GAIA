@@ -584,6 +584,14 @@ export async function deleteAnagraficaDocument(token: string, documentId: string
   });
 }
 
+export async function downloadAnagraficaDocumentBlob(token: string, documentId: string): Promise<Blob> {
+  return requestBlob(`/anagrafica/documents/${documentId}/download`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
 export async function downloadAnagraficaExportBlob(
   token: string,
   params?: {

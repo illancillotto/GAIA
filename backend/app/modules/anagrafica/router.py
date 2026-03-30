@@ -2,9 +2,11 @@ from typing import Annotated
 import uuid
 from io import BytesIO, StringIO
 import csv
+import mimetypes
+from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from openpyxl import Workbook
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
@@ -676,6 +678,31 @@ def delete_document(
         {"document_id": str(document_id)},
     )
     db.commit()
+
+
+@router.get("/documents/{document_id}/download")
+def download_document(
+    document_id: uuid.UUID,
+    _: Annotated[ApplicationUser, Depends(require_active_user)],
+    __: Annotated[ApplicationUser, RequireAnagraficaModule],
+    db: Annotated[Session, Depends(get_db)],
+) -> FileResponse:
+    document = db.get(AnagraficaDocument, document_id)
+    if document is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")
+    if not document.local_path:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File locale non disponibile per questo documento")
+
+    local_path = Path(document.local_path)
+    if not local_path.exists() or not local_path.is_file():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File documento non trovato sul server")
+
+    media_type = document.mime_type or mimetypes.guess_type(document.filename)[0] or "application/octet-stream"
+    return FileResponse(
+        path=local_path,
+        media_type=media_type,
+        filename=document.filename,
+    )
 
 
 @router.post("/reset", response_model=AnagraficaResetResponse)

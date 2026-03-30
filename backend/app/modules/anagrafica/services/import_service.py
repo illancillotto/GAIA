@@ -447,7 +447,11 @@ class AnagraficaImportPreviewService:
     ) -> list[str]:
         command = f"find {self._quote_path(folder_path)} -type f 2>/dev/null | sort"
         try:
-            return self._split_command_output(self.connector.run_command(command))
+            return [
+                path
+                for path in self._split_command_output(self.connector.run_command(command))
+                if _is_supported_nas_document_path(path)
+            ]
         except NasConnectorError as exc:
             if raise_on_error:
                 raise
@@ -1437,6 +1441,16 @@ def _path_matches_primary_identifier(db: Session, subject: AnagraficaSubject, pa
     if not primary_identifiers:
         return True
     return any(identifier in normalized_path for identifier in primary_identifiers)
+
+
+def _is_supported_nas_document_path(path: str) -> bool:
+    normalized_parts = [part.strip() for part in PurePosixPath(path).parts if part.strip()]
+    if any(part.startswith("@eaDir") for part in normalized_parts):
+        return False
+    filename = normalized_parts[-1] if normalized_parts else ""
+    if filename.endswith("@SynoEAStream"):
+        return False
+    return True
 
 
 def _safe_relative_parts(relative_path: str) -> list[str]:

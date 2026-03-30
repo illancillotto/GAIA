@@ -54,3 +54,45 @@ def test_run_command_raises_when_paramiko_missing(monkeypatch) -> None:
         assert "Paramiko is not installed" in str(exc)
     else:
         raise AssertionError("Expected NasConnectorError when paramiko is missing")
+
+
+def test_download_file_falls_back_to_shell_when_sftp_fails() -> None:
+    class FakeChannel:
+        def recv_exit_status(self) -> int:
+            return 0
+
+    class FakeStream:
+        def __init__(self, payload: bytes) -> None:
+            self._payload = payload
+            self.channel = FakeChannel()
+
+        def read(self) -> bytes:
+            return self._payload
+
+    class FailingSFTP:
+        def file(self, path: str, mode: str):
+            raise OSError("sftp disabled")
+
+        def close(self) -> None:
+            return None
+
+    class FakeClient:
+        def open_sftp(self) -> FailingSFTP:
+            return FailingSFTP()
+
+        def exec_command(self, command: str, timeout: int):
+            assert command == "cat '/volume1/test file.pdf'"
+            return (None, FakeStream(b"%PDF-1.4 shell fallback"), FakeStream(b""))
+
+    client = NasSSHClient(
+        host="nas.example.local",
+        port=22,
+        username="svc_sync",
+        timeout=5,
+        password="secret",
+    )
+    client._client = FakeClient()
+
+    payload = client.download_file("/volume1/test file.pdf")
+
+    assert payload == b"%PDF-1.4 shell fallback"

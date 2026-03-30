@@ -111,6 +111,38 @@ def test_preview_letter_builds_subjects_and_documents() -> None:
     assert any(warning.code == "non_pdf_document_detected" for warning in result.warnings)
 
 
+def test_preview_letter_ignores_synology_metadata_streams() -> None:
+    root = "/volume1/Settore Catasto/ARCHIVIO"
+    connector = FakeNasConnector(
+        outputs={
+            f"find '{root}/A' -mindepth 1 -maxdepth 1 -type d 2>/dev/null | sort": (
+                f"{root}/A/Atzori_Antonello_TZRNNL66A05E972H"
+            ),
+            (
+                f"find '{root}/A/Atzori_Antonello_TZRNNL66A05E972H' -type f 2>/dev/null | sort"
+            ): "\n".join(
+                [
+                    (
+                        f"{root}/A/Atzori_Antonello_TZRNNL66A05E972H/"
+                        "Verifica_DUI_2024/@eaDir/P_U_8209_24_Rif31-Verifica_domanda_utenza_irrigua_2024.pdf@SynoEAStream"
+                    ),
+                    (
+                        f"{root}/A/Atzori_Antonello_TZRNNL66A05E972H/"
+                        "Verifica_DUI_2024/P_U_8209_24_Rif31-Verifica_domanda_utenza_irrigua_2024.pdf"
+                    ),
+                ]
+            ),
+        }
+    )
+
+    result = AnagraficaImportPreviewService(connector, archive_root=root).preview_letter("A")
+
+    assert result.total_folders == 1
+    assert result.total_documents == 1
+    assert result.subjects[0].documents[0].filename == "P_U_8209_24_Rif31-Verifica_domanda_utenza_irrigua_2024.pdf"
+    assert "@eaDir" not in result.subjects[0].documents[0].nas_path
+
+
 def test_preview_letter_collects_folder_scan_errors() -> None:
     root = "/archive"
     failing_command = "find '/archive/T/TELERILEVAMENTO' -type f 2>/dev/null | sort"

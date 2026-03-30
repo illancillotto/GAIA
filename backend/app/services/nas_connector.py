@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+import shlex
 from typing import Any
 
 from app.core.config import settings
@@ -21,7 +22,10 @@ class NasSSHClient:
 
     def _get_client(self) -> Any:
         if self._client is not None:
-            transport = self._client.get_transport()
+            get_transport = getattr(self._client, "get_transport", None)
+            if get_transport is None:
+                return self._client
+            transport = get_transport()
             if transport is not None and transport.is_active():
                 return self._client
             self.close()
@@ -62,6 +66,8 @@ class NasSSHClient:
             exit_status = stdout.channel.recv_exit_status()
             output = stdout.read().decode("utf-8")
             error_output = stderr.read().decode("utf-8").strip()
+        except NasConnectorError:
+            raise
         except Exception as exc:  # pragma: no cover
             raise NasConnectorError(f"SSH command failed: {command}") from exc
 
@@ -73,8 +79,8 @@ class NasSSHClient:
         return output
 
     def download_file(self, path: str) -> bytes:
+        client = self._get_client()
         try:
-            client = self._get_client()
             sftp = client.open_sftp()
             try:
                 with sftp.file(path, "rb") as remote_file:
@@ -82,7 +88,22 @@ class NasSSHClient:
             finally:
                 sftp.close()
         except Exception as exc:  # pragma: no cover
-            raise NasConnectorError(f"SSH file download failed: {path}") from exc
+            try:
+                return self._download_file_via_shell(client, path)
+            except Exception as fallback_exc:  # pragma: no cover
+                raise NasConnectorError(f"SSH file download failed: {path}") from fallback_exc
+
+    def _download_file_via_shell(self, client: Any, path: str) -> bytes:
+        quoted_path = shlex.quote(path)
+        _, stdout, stderr = client.exec_command(f"cat {quoted_path}", timeout=self.timeout)
+        exit_status = stdout.channel.recv_exit_status()
+        output = stdout.read()
+        error_output = stderr.read().decode("utf-8", errors="replace").strip()
+        if exit_status != 0:
+            raise NasConnectorError(
+                f"SSH command returned exit status {exit_status} for 'cat {quoted_path}': {error_output}"
+            )
+        return output
 
     def close(self) -> None:
         if self._client is None:
