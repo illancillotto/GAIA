@@ -37,13 +37,20 @@ import type {
   LoginResponse,
   MyPermissionsResponse,
   NetworkAlert,
+  NetworkAlertUpdateInput,
   NetworkDashboardSummary,
   NetworkDevice,
   NetworkDeviceListResponse,
   NetworkDeviceUpdateInput,
+  DevicePositionUpdateInput,
+  DevicePosition,
   NetworkFloorPlan,
+  NetworkFloorPlanCreateInput,
+  NetworkFloorPlanDevice,
   NetworkFloorPlanDetail,
   NetworkScan,
+  NetworkScanDetail,
+  NetworkScanDiff,
   NetworkScanTriggerResponse,
   NasGroup,
   NasUser,
@@ -406,6 +413,20 @@ export async function getNetworkAlerts(token: string): Promise<NetworkAlert[]> {
   });
 }
 
+export async function updateNetworkAlert(
+  token: string,
+  alertId: number,
+  payload: NetworkAlertUpdateInput,
+): Promise<NetworkAlert> {
+  return request<NetworkAlert>(`/network/alerts/${alertId}`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function getNetworkScans(token: string): Promise<NetworkScan[]> {
   return request<NetworkScan[]>("/network/scans", {
     headers: {
@@ -414,8 +435,16 @@ export async function getNetworkScans(token: string): Promise<NetworkScan[]> {
   });
 }
 
-export async function getNetworkScan(token: string, scanId: number): Promise<NetworkScan> {
-  return request<NetworkScan>(`/network/scans/${scanId}`, {
+export async function getNetworkScan(token: string, scanId: number): Promise<NetworkScanDetail> {
+  return request<NetworkScanDetail>(`/network/scans/${scanId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getNetworkScanDiff(token: string, scanId: number, otherScanId: number): Promise<NetworkScanDiff> {
+  return request<NetworkScanDiff>(`/network/scans/${scanId}/diff/${otherScanId}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -439,11 +468,49 @@ export async function getNetworkFloorPlans(token: string): Promise<NetworkFloorP
   });
 }
 
+export async function createNetworkFloorPlan(
+  token: string,
+  payload: NetworkFloorPlanCreateInput,
+): Promise<NetworkFloorPlan> {
+  return request<NetworkFloorPlan>("/network/floor-plans", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function getNetworkFloorPlan(token: string, floorPlanId: number): Promise<NetworkFloorPlanDetail> {
   return request<NetworkFloorPlanDetail>(`/network/floor-plans/${floorPlanId}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
+  });
+}
+
+export async function getNetworkFloorPlanDevices(
+  token: string,
+  floorPlanId: number,
+): Promise<NetworkFloorPlanDevice[]> {
+  return request<NetworkFloorPlanDevice[]>(`/network/floor-plans/${floorPlanId}/devices`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function updateNetworkDevicePosition(
+  token: string,
+  deviceId: number,
+  payload: DevicePositionUpdateInput,
+): Promise<DevicePosition> {
+  return request<DevicePosition>(`/network/devices/${deviceId}/position`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
   });
 }
 

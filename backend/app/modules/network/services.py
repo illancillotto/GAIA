@@ -8,12 +8,20 @@ import json
 import shutil
 import socket
 import subprocess
+from typing import Any
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.modules.network.models import FloorPlan, NetworkAlert, NetworkDevice, NetworkScan
+from app.modules.network.models import (
+    DevicePosition,
+    FloorPlan,
+    NetworkAlert,
+    NetworkDevice,
+    NetworkScan,
+    NetworkScanDevice,
+)
 
 try:
     import nmap  # type: ignore
@@ -21,7 +29,15 @@ except ImportError:  # pragma: no cover
     nmap = None
 
 try:
-    from pysnmp.hlapi.v3arch.asyncio import CommunityData, ContextData, ObjectIdentity, ObjectType, SnmpEngine, UdpTransportTarget, get_cmd  # type: ignore
+    from pysnmp.hlapi.v3arch.asyncio import (  # type: ignore
+        CommunityData,
+        ContextData,
+        ObjectIdentity,
+        ObjectType,
+        SnmpEngine,
+        UdpTransportTarget,
+        get_cmd,
+    )
 except ImportError:  # pragma: no cover
     CommunityData = ContextData = ObjectIdentity = ObjectType = SnmpEngine = UdpTransportTarget = get_cmd = None
 
@@ -42,6 +58,7 @@ class NetworkScanResult:
     scan: NetworkScan
     devices_upserted: int
     alerts_created: int
+    delta: dict[str, int]
 
 
 @dataclass
@@ -97,12 +114,27 @@ def _safe_text(value: str | None) -> str | None:
     return normalized or None
 
 
+def _json_dumps(value: dict[str, Any] | None) -> str | None:
+    if not value:
+        return None
+    return json.dumps(value, ensure_ascii=True)
+
+
+def metadata_sources_to_dict(raw_value: str | None) -> dict[str, Any] | None:
+    if not raw_value:
+        return None
+    try:
+        parsed = json.loads(raw_value)
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
 def _resolve_dns_name(ip_address: str) -> str | None:
     try:
         hostname, _, _ = socket.gethostbyaddr(ip_address)
     except OSError:
         return None
-
     return _safe_text(hostname)
 
 
@@ -323,10 +355,14 @@ def _collect_enrichment(ip_address: str, open_ports: Iterable[int]) -> Enrichmen
             metadata.metadata_sources.update(snmp_data.metadata_sources)
 
     metadata.hostname_source = (
-        "snmp" if metadata.snmp_name
-        else "netbios" if metadata.netbios_name
-        else "mdns" if metadata.mdns_name
-        else "dns" if metadata.dns_name
+        "snmp"
+        if metadata.snmp_name
+        else "netbios"
+        if metadata.netbios_name
+        else "mdns"
+        if metadata.mdns_name
+        else "dns"
+        if metadata.dns_name
         else None
     )
 
@@ -440,6 +476,177 @@ def discover_hosts(network_range: str | None = None, ports: str | None = None) -
     return _fallback_hosts()
 
 
+def _snapshot_key(item: NetworkScanDevice) -> str:
+    return item.mac_address or item.ip_address
+
+
+def _snapshot_payload_changed(previous: NetworkScanDevice, current: NetworkScanDevice) -> bool:
+    compared_fields = [
+        "ip_address",
+        "mac_address",
+        "hostname",
+        "hostname_source",
+        "display_name",
+        "asset_label",
+        "vendor",
+        "model_name",
+        "device_type",
+        "operating_system",
+        "dns_name",
+        "location_hint",
+        "metadata_sources",
+        "status",
+        "open_ports",
+    ]
+    return any(getattr(previous, field_name) != getattr(current, field_name) for field_name in compared_fields)
+
+
+def _build_diff(previous_items: list[NetworkScanDevice], current_items: list[NetworkScanDevice]) -> tuple[dict[str, int], list[dict[str, Any]]]:
+    previous_map = {_snapshot_key(item): item for item in previous_items}
+    current_map = {_snapshot_key(item): item for item in current_items}
+
+    new_items: list[dict[str, Any]] = []
+    missing_items: list[dict[str, Any]] = []
+    changed_items: list[dict[str, Any]] = []
+
+    keys = sorted(set(previous_map) | set(current_map))
+    for key in keys:
+        before = previous_map.get(key)
+        after = current_map.get(key)
+        if before is None and after is not None:
+            new_items.append({"key": key, "before": None, "after": after, "change_type": "new"})
+            continue
+        if before is not None and after is None:
+            missing_items.append({"key": key, "before": before, "after": None, "change_type": "missing"})
+            continue
+        if before is not None and after is not None and _snapshot_payload_changed(before, after):
+            changed_items.append({"key": key, "before": before, "after": after, "change_type": "changed"})
+
+    summary = {
+        "new_devices_count": len(new_items),
+        "missing_devices_count": len(missing_items),
+        "changed_devices_count": len(changed_items),
+    }
+    return summary, [*new_items, *missing_items, *changed_items]
+
+
+def get_scan_delta(db: Session, scan_id: int) -> dict[str, int]:
+    current_items = db.scalars(
+        select(NetworkScanDevice).where(NetworkScanDevice.scan_id == scan_id).order_by(NetworkScanDevice.ip_address.asc())
+    ).all()
+    previous_scan_id = db.scalar(
+        select(NetworkScan.id).where(NetworkScan.id < scan_id).order_by(NetworkScan.id.desc()).limit(1)
+    )
+    if previous_scan_id is None:
+        return {
+            "new_devices_count": len(current_items),
+            "missing_devices_count": 0,
+            "changed_devices_count": 0,
+        }
+    previous_items = db.scalars(
+        select(NetworkScanDevice).where(NetworkScanDevice.scan_id == previous_scan_id).order_by(NetworkScanDevice.ip_address.asc())
+    ).all()
+    summary, _ = _build_diff(previous_items, current_items)
+    return summary
+
+
+def get_scan_diff(db: Session, from_scan_id: int, to_scan_id: int) -> tuple[dict[str, int], list[dict[str, Any]]]:
+    from_items = db.scalars(
+        select(NetworkScanDevice).where(NetworkScanDevice.scan_id == from_scan_id).order_by(NetworkScanDevice.ip_address.asc())
+    ).all()
+    to_items = db.scalars(
+        select(NetworkScanDevice).where(NetworkScanDevice.scan_id == to_scan_id).order_by(NetworkScanDevice.ip_address.asc())
+    ).all()
+    return _build_diff(from_items, to_items)
+
+
+def _create_or_refresh_snapshot_rows(db: Session, scan: NetworkScan) -> list[NetworkScanDevice]:
+    db.query(NetworkScanDevice).filter(NetworkScanDevice.scan_id == scan.id).delete()
+    db.flush()
+
+    current_devices = db.scalars(select(NetworkDevice).order_by(NetworkDevice.ip_address.asc())).all()
+    snapshot_rows: list[NetworkScanDevice] = []
+    for device in current_devices:
+        snapshot = NetworkScanDevice(
+            scan_id=scan.id,
+            device_id=device.id,
+            ip_address=device.ip_address,
+            mac_address=device.mac_address,
+            hostname=device.hostname,
+            hostname_source=device.hostname_source,
+            display_name=device.display_name,
+            asset_label=device.asset_label,
+            vendor=device.vendor,
+            model_name=device.model_name,
+            device_type=device.device_type,
+            operating_system=device.operating_system,
+            dns_name=device.dns_name,
+            location_hint=device.location_hint,
+            metadata_sources=device.metadata_sources,
+            status=device.status,
+            open_ports=device.open_ports,
+            observed_at=scan.completed_at,
+        )
+        db.add(snapshot)
+        snapshot_rows.append(snapshot)
+    db.flush()
+    return snapshot_rows
+
+
+def _latest_scan_before(db: Session, scan_id: int) -> int | None:
+    return db.scalar(select(NetworkScan.id).where(NetworkScan.id < scan_id).order_by(NetworkScan.id.desc()).limit(1))
+
+
+def _create_alert(
+    db: Session,
+    *,
+    device_id: int | None,
+    scan_id: int,
+    alert_type: str,
+    severity: str,
+    title: str,
+    message: str | None,
+) -> bool:
+    existing_open = db.scalar(
+        select(NetworkAlert.id).where(
+            NetworkAlert.device_id == device_id,
+            NetworkAlert.alert_type == alert_type,
+            NetworkAlert.status == "open",
+        )
+    )
+    if existing_open:
+        return False
+
+    db.add(
+        NetworkAlert(
+            device_id=device_id,
+            scan_id=scan_id,
+            alert_type=alert_type,
+            severity=severity,
+            status="open",
+            title=title,
+            message=message,
+        )
+    )
+    return True
+
+
+def _resolve_alerts_for_device(db: Session, *, device_id: int | None, alert_types: Iterable[str]) -> None:
+    if device_id is None:
+        return
+    alerts = db.scalars(
+        select(NetworkAlert).where(
+            NetworkAlert.device_id == device_id,
+            NetworkAlert.alert_type.in_(list(alert_types)),
+            NetworkAlert.status == "open",
+        )
+    ).all()
+    now = datetime.now(UTC)
+    for alert in alerts:
+        alert.status = "resolved"
+        alert.acknowledged_at = now
+
+
 def run_network_scan(
     db: Session,
     initiated_by: str | None = None,
@@ -448,6 +655,7 @@ def run_network_scan(
 ) -> NetworkScanResult:
     resolved_range = network_range or settings.network_range
     started_at = datetime.now(UTC)
+    previous_scan_id = db.scalar(select(NetworkScan.id).order_by(NetworkScan.id.desc()).limit(1))
     discovered = discovered_hosts if discovered_hosts is not None else discover_hosts(resolved_range)
 
     scan = NetworkScan(
@@ -472,9 +680,9 @@ def run_network_scan(
         device = devices_by_ip.get(host.ip_address)
         is_new = device is None
         now = datetime.now(UTC)
+        enrichment = _collect_enrichment(host.ip_address, host.open_ports or [])
 
         if device is None:
-            enrichment = _collect_enrichment(host.ip_address, host.open_ports or [])
             device = NetworkDevice(
                 ip_address=host.ip_address,
                 mac_address=_normalize_mac(host.mac_address),
@@ -483,9 +691,11 @@ def run_network_scan(
                 dns_name=enrichment.dns_name or enrichment.mdns_name,
                 vendor=host.vendor or enrichment.vendor,
                 model_name=enrichment.model_name,
-                metadata_sources=json.dumps(enrichment.metadata_sources or {}, ensure_ascii=True) or None,
+                metadata_sources=_json_dumps(enrichment.metadata_sources),
                 device_type=host.device_type or _guess_device_type(host.open_ports or []),
-                operating_system=host.operating_system or enrichment.operating_system or _guess_operating_system(host.open_ports or []),
+                operating_system=host.operating_system
+                or enrichment.operating_system
+                or _guess_operating_system(host.open_ports or []),
                 status="online",
                 is_monitored=True,
                 open_ports=",".join(str(port) for port in (host.open_ports or [])) or None,
@@ -495,57 +705,69 @@ def run_network_scan(
             )
             db.add(device)
             db.flush()
+            devices_by_ip[device.ip_address] = device
         else:
-            enrichment = _collect_enrichment(host.ip_address, host.open_ports or [])
             device.mac_address = _normalize_mac(host.mac_address) or device.mac_address
             device.hostname = _preferred_hostname(host.hostname, enrichment) or device.hostname
             device.hostname_source = _preferred_hostname_source(host.hostname, enrichment) or device.hostname_source
             device.dns_name = enrichment.dns_name or enrichment.mdns_name or device.dns_name
             device.vendor = host.vendor or enrichment.vendor or device.vendor
             device.model_name = enrichment.model_name or device.model_name
-            device.metadata_sources = json.dumps(enrichment.metadata_sources or {}, ensure_ascii=True) or device.metadata_sources
+            device.metadata_sources = _json_dumps(enrichment.metadata_sources) or device.metadata_sources
             device.device_type = host.device_type or device.device_type or _guess_device_type(host.open_ports or [])
-            device.operating_system = host.operating_system or enrichment.operating_system or device.operating_system or _guess_operating_system(host.open_ports or [])
+            device.operating_system = (
+                host.operating_system
+                or enrichment.operating_system
+                or device.operating_system
+                or _guess_operating_system(host.open_ports or [])
+            )
             device.status = "online"
             device.open_ports = ",".join(str(port) for port in (host.open_ports or [])) or device.open_ports
             device.last_seen_at = now
             device.last_scan_id = scan.id
 
-        if is_new:
-            db.add(
-                NetworkAlert(
-                    device_id=device.id,
-                    scan_id=scan.id,
-                    alert_type="new_device",
-                    severity="warning",
-                    status="open",
-                    title=f"Nuovo dispositivo rilevato: {device.ip_address}",
-                    message=f"Hostname: {device.hostname or 'n/d'} | MAC: {device.mac_address or 'n/d'}",
-                )
-            )
-            alerts_created += 1
+        _resolve_alerts_for_device(db, device_id=device.id, alert_types=["NEW_DEVICE", "MISSING_DEVICE"])
 
-    previously_online = db.scalars(select(NetworkDevice).where(NetworkDevice.status == "online")).all()
-    for device in previously_online:
-        if device.ip_address in seen_ips:
-            continue
-        device.status = "offline"
-        db.add(
-            NetworkAlert(
+        if is_new:
+            if _create_alert(
+                db,
                 device_id=device.id,
                 scan_id=scan.id,
-                alert_type="device_offline",
-                severity="danger",
-                status="open",
-                title=f"Dispositivo non raggiungibile: {device.ip_address}",
-                message=f"Ultimo avvistamento: {device.last_seen_at.isoformat()}",
-            )
-        )
-        alerts_created += 1
+                alert_type="NEW_DEVICE",
+                severity="warning",
+                title=f"Nuovo dispositivo rilevato: {device.ip_address}",
+                message=f"Hostname: {device.hostname or 'n/d'} | MAC: {device.mac_address or 'n/d'}",
+            ):
+                alerts_created += 1
 
+    monitored_devices = db.scalars(select(NetworkDevice).where(NetworkDevice.is_monitored.is_(True))).all()
+    for device in monitored_devices:
+        if device.ip_address in seen_ips:
+            continue
+        if device.status != "offline":
+            device.status = "offline"
+        device.last_scan_id = scan.id
+        if _create_alert(
+            db,
+            device_id=device.id,
+            scan_id=scan.id,
+            alert_type="MISSING_DEVICE",
+            severity="danger",
+            title=f"Dispositivo non raggiungibile: {device.ip_address}",
+            message=f"Ultimo avvistamento: {device.last_seen_at.isoformat()}",
+        ):
+            alerts_created += 1
+
+    db.flush()
+    _create_or_refresh_snapshot_rows(db, scan)
     db.commit()
     db.refresh(scan)
-    return NetworkScanResult(scan=scan, devices_upserted=len(discovered), alerts_created=alerts_created)
+    delta = get_scan_delta(db, scan.id) if previous_scan_id else {
+        "new_devices_count": scan.discovered_devices,
+        "missing_devices_count": 0,
+        "changed_devices_count": 0,
+    }
+    return NetworkScanResult(scan=scan, devices_upserted=len(discovered), alerts_created=alerts_created, delta=delta)
 
 
 def list_network_devices(
@@ -554,6 +776,9 @@ def list_network_devices(
     page_size: int = 25,
     search: str | None = None,
     status: str | None = None,
+    vendor: str | None = None,
+    device_type: str | None = None,
+    floor_plan_id: int | None = None,
 ) -> tuple[list[NetworkDevice], int]:
     query = select(NetworkDevice)
     count_query = select(func.count(NetworkDevice.id))
@@ -575,6 +800,22 @@ def list_network_devices(
         query = query.where(NetworkDevice.status == status)
         count_query = count_query.where(NetworkDevice.status == status)
 
+    if vendor:
+        query = query.where(NetworkDevice.vendor == vendor)
+        count_query = count_query.where(NetworkDevice.vendor == vendor)
+
+    if device_type:
+        query = query.where(NetworkDevice.device_type == device_type)
+        count_query = count_query.where(NetworkDevice.device_type == device_type)
+
+    if floor_plan_id is not None:
+        query = query.join(DevicePosition, DevicePosition.device_id == NetworkDevice.id).where(
+            DevicePosition.floor_plan_id == floor_plan_id
+        )
+        count_query = count_query.join(DevicePosition, DevicePosition.device_id == NetworkDevice.id).where(
+            DevicePosition.floor_plan_id == floor_plan_id
+        )
+
     total = db.scalar(count_query) or 0
     items = db.scalars(
         query.order_by(NetworkDevice.status.asc(), NetworkDevice.ip_address.asc())
@@ -582,6 +823,10 @@ def list_network_devices(
         .limit(page_size)
     ).all()
     return items, total
+
+
+def list_network_scans(db: Session) -> list[NetworkScan]:
+    return db.scalars(select(NetworkScan).order_by(NetworkScan.started_at.desc(), NetworkScan.id.desc())).all()
 
 
 def get_network_dashboard_summary(db: Session) -> dict[str, object]:
@@ -595,10 +840,129 @@ def get_network_dashboard_summary(db: Session) -> dict[str, object]:
         "open_alerts": db.scalar(select(func.count(NetworkAlert.id)).where(NetworkAlert.status == "open")) or 0,
         "scans_last_24h": db.scalar(
             select(func.count(NetworkScan.id)).where(NetworkScan.started_at >= now - timedelta(hours=24))
-        ) or 0,
+        )
+        or 0,
         "floor_plans": db.scalar(select(func.count(FloorPlan.id))) or 0,
         "latest_scan_at": latest_scan_at,
     }
+
+
+def get_device_positions(db: Session, device_id: int) -> list[DevicePosition]:
+    return db.scalars(
+        select(DevicePosition).where(DevicePosition.device_id == device_id).order_by(DevicePosition.updated_at.desc())
+    ).all()
+
+
+def get_device_scan_history(db: Session, device_id: int, limit: int = 10) -> list[NetworkScanDevice]:
+    return db.scalars(
+        select(NetworkScanDevice)
+        .where(NetworkScanDevice.device_id == device_id)
+        .order_by(NetworkScanDevice.observed_at.desc(), NetworkScanDevice.id.desc())
+        .limit(limit)
+    ).all()
+
+
+def list_network_alerts(db: Session, status: str | None = None, severity: str | None = None) -> list[NetworkAlert]:
+    query = select(NetworkAlert).order_by(NetworkAlert.created_at.desc(), NetworkAlert.id.desc())
+    if status:
+        query = query.where(NetworkAlert.status == status)
+    if severity:
+        query = query.where(NetworkAlert.severity == severity)
+    return db.scalars(query).all()
+
+
+def update_network_alert(db: Session, alert_id: int, status: str) -> NetworkAlert | None:
+    alert = db.get(NetworkAlert, alert_id)
+    if alert is None:
+        return None
+    alert.status = status
+    alert.acknowledged_at = datetime.now(UTC) if status in {"resolved", "ignored"} else None
+    db.add(alert)
+    db.commit()
+    db.refresh(alert)
+    return alert
+
+
+def create_floor_plan(
+    db: Session,
+    *,
+    name: str,
+    floor_label: str,
+    building: str | None = None,
+    svg_content: str | None = None,
+    image_url: str | None = None,
+    width: float | None = None,
+    height: float | None = None,
+) -> FloorPlan:
+    floor_plan = FloorPlan(
+        name=name.strip(),
+        floor_label=floor_label.strip(),
+        building=building.strip() if building else None,
+        svg_content=svg_content,
+        image_url=image_url,
+        width=width,
+        height=height,
+    )
+    db.add(floor_plan)
+    db.commit()
+    db.refresh(floor_plan)
+    return floor_plan
+
+
+def upsert_device_position(
+    db: Session,
+    *,
+    device_id: int,
+    floor_plan_id: int,
+    x: float,
+    y: float,
+    label: str | None = None,
+) -> DevicePosition:
+    position = db.scalar(
+        select(DevicePosition).where(
+            DevicePosition.device_id == device_id,
+            DevicePosition.floor_plan_id == floor_plan_id,
+        )
+    )
+    if position is None:
+        position = DevicePosition(
+            device_id=device_id,
+            floor_plan_id=floor_plan_id,
+            x=x,
+            y=y,
+            label=label,
+        )
+    else:
+        position.x = x
+        position.y = y
+        position.label = label
+
+    db.add(position)
+    db.commit()
+    db.refresh(position)
+    return position
+
+
+def get_floor_plan_devices(db: Session, floor_plan_id: int) -> list[tuple[DevicePosition, NetworkDevice]]:
+    rows = db.execute(
+        select(DevicePosition, NetworkDevice)
+        .join(NetworkDevice, NetworkDevice.id == DevicePosition.device_id)
+        .where(DevicePosition.floor_plan_id == floor_plan_id)
+        .order_by(DevicePosition.id.asc())
+    ).all()
+    return [(position, device) for position, device in rows]
+
+
+def get_network_scan_detail(db: Session, scan_id: int) -> tuple[NetworkScan | None, list[NetworkScanDevice], dict[str, int]]:
+    scan = db.get(NetworkScan, scan_id)
+    if scan is None:
+        return None, [], {"new_devices_count": 0, "missing_devices_count": 0, "changed_devices_count": 0}
+    devices = db.scalars(
+        select(NetworkScanDevice)
+        .where(NetworkScanDevice.scan_id == scan_id)
+        .order_by(NetworkScanDevice.status.asc(), NetworkScanDevice.ip_address.asc())
+    ).all()
+    return scan, devices, get_scan_delta(db, scan_id)
 
 
 def run_network_scan_subprocess() -> int:

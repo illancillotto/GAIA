@@ -24,6 +24,35 @@ class NetworkScan(Base):
     completed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
+class NetworkScanDevice(Base):
+    __tablename__ = "network_scan_devices"
+    __table_args__ = (UniqueConstraint("scan_id", "ip_address", name="uq_network_scan_devices_scan_ip"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    scan_id: Mapped[int] = mapped_column(ForeignKey("network_scans.id", ondelete="CASCADE"), nullable=False, index=True)
+    device_id: Mapped[int | None] = mapped_column(
+        ForeignKey("network_devices.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    ip_address: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    mac_address: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    hostname: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    hostname_source: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    display_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    asset_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    vendor: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    model_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    device_type: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    operating_system: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    dns_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    location_hint: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    metadata_sources: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    open_ports: Mapped[str | None] = mapped_column(Text, nullable=True)
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
 class NetworkDevice(Base):
     __tablename__ = "network_devices"
     __table_args__ = (UniqueConstraint("ip_address", name="uq_network_devices_ip_address"),)

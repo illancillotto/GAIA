@@ -5,6 +5,7 @@ from app.modules.network.models import (
     NetworkAlert,
     NetworkDevice,
     NetworkScan,
+    NetworkScanDevice,
 )
 
 __all__ = [
@@ -14,4 +15,5 @@ __all__ = [
     "NetworkAlert",
     "NetworkDevice",
     "NetworkScan",
+    "NetworkScanDevice",
 ]

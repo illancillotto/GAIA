@@ -213,6 +213,44 @@ function DeviceDetailContent({ token, deviceId }: { token: string; deviceId: num
 
       <article className="panel-card xl:col-span-2">
         <div className="mb-4">
+          <p className="section-title">Posizionamento e storico</p>
+          <p className="section-copy">Posizioni registrate sulle planimetrie e ultimi snapshot nei quali il dispositivo è stato osservato.</p>
+        </div>
+        <div className="grid gap-6 xl:grid-cols-2">
+          <div>
+            <p className="label-caption">Posizioni planimetria</p>
+            <div className="mt-3 space-y-3">
+              {device.positions.map((position) => (
+                <div key={position.id} className="rounded-lg border border-gray-100 px-4 py-3 text-sm text-gray-700">
+                  <p className="font-medium text-gray-900">Planimetria #{position.floor_plan_id}</p>
+                  <p className="mt-1">Coordinate: {position.x}, {position.y}</p>
+                  <p className="mt-1">{position.label || "Etichetta non impostata"}</p>
+                </div>
+              ))}
+              {device.positions.length === 0 ? <p className="text-sm text-gray-500">Nessuna posizione registrata.</p> : null}
+            </div>
+          </div>
+          <div>
+            <p className="label-caption">Ultimi snapshot</p>
+            <div className="mt-3 space-y-3">
+              {device.scan_history.map((entry) => (
+                <div key={`${entry.scan_id}-${entry.observed_at}`} className="rounded-lg border border-gray-100 px-4 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-medium text-gray-900">Snapshot #{entry.scan_id}</p>
+                    <NetworkStatusBadge status={entry.status} />
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500">{new Date(entry.observed_at).toLocaleString("it-IT")}</p>
+                  <p className="mt-2 text-xs text-gray-500">{entry.hostname || entry.ip_address} · {entry.open_ports || "porte n/d"}</p>
+                </div>
+              ))}
+              {device.scan_history.length === 0 ? <p className="text-sm text-gray-500">Nessuno snapshot disponibile.</p> : null}
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <article className="panel-card xl:col-span-2">
+        <div className="mb-4">
           <p className="section-title">Anagrafica interna</p>
           <p className="section-copy">Nome leggibile, etichetta apparato e note operative assegnate manualmente.</p>
         </div>

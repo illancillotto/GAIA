@@ -12,7 +12,7 @@ from app.core.security import hash_password
 from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
-from app.models.network import DevicePosition, FloorPlan, NetworkAlert, NetworkDevice, NetworkScan
+from app.models.network import DevicePosition, FloorPlan, NetworkAlert, NetworkDevice, NetworkScan, NetworkScanDevice
 
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
@@ -102,6 +102,43 @@ def setup_database(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, Non
     )
     db.add_all([device_one, device_two])
     db.flush()
+
+    db.add_all(
+        [
+            NetworkScanDevice(
+                scan_id=scan.id,
+                device_id=device_one.id,
+                ip_address=device_one.ip_address,
+                mac_address=device_one.mac_address,
+                hostname=device_one.hostname,
+                hostname_source=device_one.hostname_source,
+                display_name=device_one.display_name,
+                asset_label=device_one.asset_label,
+                vendor=device_one.vendor,
+                model_name=device_one.model_name,
+                device_type=device_one.device_type,
+                operating_system=device_one.operating_system,
+                dns_name=device_one.dns_name,
+                location_hint=device_one.location_hint,
+                metadata_sources=device_one.metadata_sources,
+                status=device_one.status,
+                open_ports=device_one.open_ports,
+                observed_at=datetime.now(UTC),
+            ),
+            NetworkScanDevice(
+                scan_id=scan.id,
+                device_id=device_two.id,
+                ip_address=device_two.ip_address,
+                mac_address=device_two.mac_address,
+                hostname=device_two.hostname,
+                vendor=device_two.vendor,
+                device_type=device_two.device_type,
+                status=device_two.status,
+                open_ports=device_two.open_ports,
+                observed_at=datetime.now(UTC),
+            ),
+        ]
+    )
 
     db.add(
         NetworkAlert(
@@ -232,6 +269,66 @@ def test_network_floor_plan_returns_positions() -> None:
     assert payload["positions"][0]["label"] == "Rack principale"
 
 
+def test_network_scan_detail_includes_snapshot_devices() -> None:
+    response = client.get("/network/scans/1", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["id"] == 1
+    assert len(payload["devices"]) == 2
+    assert payload["delta"]["new_devices_count"] == 2
+
+
+def test_network_alert_can_be_resolved() -> None:
+    response = client.patch("/network/alerts/1", headers=auth_headers(), json={"status": "resolved"})
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "resolved"
+    assert payload["acknowledged_at"] is not None
+
+
+def test_network_floor_plan_can_be_created() -> None:
+    response = client.post(
+        "/network/floor-plans",
+        headers=auth_headers(),
+        json={
+            "name": "Palazzina B - Primo Piano",
+            "floor_label": "P1",
+            "building": "Sede distaccata",
+            "svg_content": "<svg viewBox='0 0 200 200'></svg>",
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["name"] == "Palazzina B - Primo Piano"
+    assert payload["floor_label"] == "P1"
+
+
+def test_network_device_position_can_be_upserted() -> None:
+    response = client.put(
+        "/network/devices/2/position",
+        headers=auth_headers(),
+        json={"floor_plan_id": 1, "x": 60, "y": 75, "label": "Scrivania contabilita"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["floor_plan_id"] == 1
+    assert payload["device_id"] == 2
+    assert payload["label"] == "Scrivania contabilita"
+
+
+def test_network_floor_plan_devices_returns_device_pairs() -> None:
+    response = client.get("/network/floor-plans/1/devices", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 1
+    assert payload[0]["device"]["hostname"] == "switch-core"
+
+
 def test_network_scan_can_be_triggered() -> None:
     response = client.post("/network/scans", headers=auth_headers())
 
@@ -239,3 +336,4 @@ def test_network_scan_can_be_triggered() -> None:
     payload = response.json()
     assert payload["devices_upserted"] == 1
     assert payload["scan"]["initiated_by"] == "network-admin"
+    assert "delta" in payload["scan"]

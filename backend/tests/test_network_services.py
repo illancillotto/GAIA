@@ -104,3 +104,51 @@ def test_snmp_profile_communities_match_subnet(monkeypatch) -> None:
     communities = services._snmp_profile_communities("192.168.1.50")
 
     assert communities == ["private", "public-site", "public"]
+
+
+def test_build_diff_counts_new_missing_and_changed_entries() -> None:
+    previous = [
+        services.NetworkScanDevice(
+            scan_id=1,
+            ip_address="192.168.1.10",
+            mac_address="aa:bb:cc:dd:ee:10",
+            hostname="switch-old",
+            status="online",
+            observed_at=services.datetime.now(services.UTC),
+        ),
+        services.NetworkScanDevice(
+            scan_id=1,
+            ip_address="192.168.1.20",
+            mac_address="aa:bb:cc:dd:ee:20",
+            hostname="printer-1",
+            status="online",
+            observed_at=services.datetime.now(services.UTC),
+        ),
+    ]
+    current = [
+        services.NetworkScanDevice(
+            scan_id=2,
+            ip_address="192.168.1.10",
+            mac_address="aa:bb:cc:dd:ee:10",
+            hostname="switch-new",
+            status="online",
+            observed_at=services.datetime.now(services.UTC),
+        ),
+        services.NetworkScanDevice(
+            scan_id=2,
+            ip_address="192.168.1.30",
+            mac_address="aa:bb:cc:dd:ee:30",
+            hostname="camera-1",
+            status="online",
+            observed_at=services.datetime.now(services.UTC),
+        ),
+    ]
+
+    summary, changes = services._build_diff(previous, current)
+
+    assert summary == {
+        "new_devices_count": 1,
+        "missing_devices_count": 1,
+        "changed_devices_count": 1,
+    }
+    assert len(changes) == 3

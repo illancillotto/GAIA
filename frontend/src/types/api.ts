@@ -119,6 +119,15 @@ export type NetworkDevice = {
   last_seen_at: string;
   created_at: string;
   updated_at: string;
+  positions: DevicePosition[];
+  scan_history: {
+    scan_id: number;
+    observed_at: string;
+    status: string;
+    hostname: string | null;
+    ip_address: string;
+    open_ports: string | null;
+  }[];
 };
 
 export type NetworkDeviceUpdateInput = {
@@ -152,6 +161,16 @@ export type NetworkAlert = {
   acknowledged_at: string | null;
 };
 
+export type NetworkAlertUpdateInput = {
+  status: "open" | "resolved" | "ignored";
+};
+
+export type NetworkScanDeltaSummary = {
+  new_devices_count: number;
+  missing_devices_count: number;
+  changed_devices_count: number;
+};
+
 export type NetworkScan = {
   id: number;
   network_range: string;
@@ -164,12 +183,53 @@ export type NetworkScan = {
   notes: string | null;
   started_at: string;
   completed_at: string;
+  delta: NetworkScanDeltaSummary;
 };
 
 export type NetworkScanTriggerResponse = {
   scan: NetworkScan;
   devices_upserted: number;
   alerts_created: number;
+};
+
+export type NetworkScanDevice = {
+  id: number;
+  scan_id: number;
+  device_id: number | null;
+  ip_address: string;
+  mac_address: string | null;
+  hostname: string | null;
+  hostname_source: string | null;
+  display_name: string | null;
+  asset_label: string | null;
+  vendor: string | null;
+  model_name: string | null;
+  device_type: string | null;
+  operating_system: string | null;
+  dns_name: string | null;
+  location_hint: string | null;
+  metadata_sources: Record<string, string> | null;
+  status: string;
+  open_ports: string | null;
+  observed_at: string;
+};
+
+export type NetworkScanDetail = NetworkScan & {
+  devices: NetworkScanDevice[];
+};
+
+export type NetworkScanDiffEntry = {
+  key: string;
+  before: NetworkScanDevice | null;
+  after: NetworkScanDevice | null;
+  change_type: string;
+};
+
+export type NetworkScanDiff = {
+  from_scan_id: number;
+  to_scan_id: number;
+  summary: NetworkScanDeltaSummary;
+  changes: NetworkScanDiffEntry[];
 };
 
 export type NetworkFloorPlan = {
@@ -198,6 +258,28 @@ export type DevicePosition = {
 
 export type NetworkFloorPlanDetail = NetworkFloorPlan & {
   positions: DevicePosition[];
+};
+
+export type NetworkFloorPlanCreateInput = {
+  name: string;
+  floor_label: string;
+  building?: string | null;
+  svg_content?: string | null;
+  image_url?: string | null;
+  width?: number | null;
+  height?: number | null;
+};
+
+export type DevicePositionUpdateInput = {
+  floor_plan_id: number;
+  x: number;
+  y: number;
+  label?: string | null;
+};
+
+export type NetworkFloorPlanDevice = {
+  position: DevicePosition;
+  device: NetworkDevice;
 };
 
 export type AnagraficaStats = {

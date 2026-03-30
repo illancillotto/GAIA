@@ -9,9 +9,15 @@ const variantMap: Record<string, "success" | "danger" | "warning" | "info" | "ne
   offline: "danger",
   open: "danger",
   acknowledged: "neutral",
+  resolved: "success",
+  ignored: "neutral",
   completed: "success",
   warning: "warning",
   info: "info",
+  danger: "danger",
+  new: "warning",
+  missing: "danger",
+  changed: "info",
 };
 
 export function NetworkStatusBadge({ status }: NetworkStatusBadgeProps) {

@@ -83,6 +83,20 @@ function ScansContent({ token }: { token: string }) {
               <p className="mt-1 text-sm text-gray-800">{scan.initiated_by || "scheduler"}</p>
             </div>
           </div>
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
+            <div>
+              <p className="label-caption">Nuovi</p>
+              <p className="mt-1 text-sm text-gray-800">{scan.delta.new_devices_count}</p>
+            </div>
+            <div>
+              <p className="label-caption">Scomparsi</p>
+              <p className="mt-1 text-sm text-gray-800">{scan.delta.missing_devices_count}</p>
+            </div>
+            <div>
+              <p className="label-caption">Modificati</p>
+              <p className="mt-1 text-sm text-gray-800">{scan.delta.changed_devices_count}</p>
+            </div>
+          </div>
           <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-xs text-gray-400">
             <span>{new Date(scan.started_at).toLocaleString("it-IT")}</span>
             <Link href={`/network/scans/${scan.id}`} className="font-medium text-[#1D4E35]">
