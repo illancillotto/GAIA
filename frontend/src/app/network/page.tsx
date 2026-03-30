@@ -112,7 +112,7 @@ function DashboardContent({ token }: { token: string }) {
     <div className="page-stack">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-gray-500">
-          Monitoraggio read-only della LAN con snapshot incrementali e alert per nuovi host o host offline.
+          Monitoraggio LAN con tracciamento dispositivi conosciuti e alert per host non registrati o assenti oltre soglia.
         </p>
         <button className="btn-primary" onClick={handleScanTrigger} type="button" disabled={isTriggeringScan}>
           <RefreshIcon className="h-4 w-4" />
@@ -131,7 +131,7 @@ function DashboardContent({ token }: { token: string }) {
         <MetricCard label="Dispositivi totali" value={summary.total_devices} sub="Host rilevati nell’ultima base dati" />
         <MetricCard label="Online" value={summary.online_devices} sub="Host raggiungibili all’ultimo scan" variant="success" />
         <MetricCard label="Offline" value={summary.offline_devices} sub="Host non rilevati nell’ultimo scan" variant={summary.offline_devices > 0 ? "danger" : "default"} />
-        <MetricCard label="Alert aperti" value={summary.open_alerts} sub="Nuovi dispositivi o host non raggiungibili" variant={summary.open_alerts > 0 ? "warning" : "default"} />
+        <MetricCard label="Alert aperti" value={summary.open_alerts} sub="Dispositivi sconosciuti o assenti oltre 15 giorni" variant={summary.open_alerts > 0 ? "warning" : "default"} />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-3">

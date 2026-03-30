@@ -235,6 +235,10 @@ def _safe_text(value: str | None) -> str | None:
     return normalized or None
 
 
+def _coerce_utc(value: datetime) -> datetime:
+    return value if value.tzinfo is not None else value.replace(tzinfo=UTC)
+
+
 def _json_dumps(value: dict[str, Any] | None) -> str | None:
     if not value:
         return None
@@ -883,7 +887,7 @@ def _create_alert(
     db: Session,
     *,
     device_id: int | None,
-    scan_id: int,
+    scan_id: int | None,
     alert_type: str,
     severity: str,
     title: str,
@@ -927,6 +931,26 @@ def _resolve_alerts_for_device(db: Session, *, device_id: int | None, alert_type
     for alert in alerts:
         alert.status = "resolved"
         alert.acknowledged_at = now
+
+
+def sync_network_device_alert_state(db: Session, device: NetworkDevice) -> None:
+    if device.is_known_device:
+        _resolve_alerts_for_device(db, device_id=device.id, alert_types=["UNKNOWN_DEVICE", "NEW_DEVICE", "new_device"])
+        return
+
+    _resolve_alerts_for_device(db, device_id=device.id, alert_types=["MISSING_DEVICE", "device_offline"])
+    if device.status != "online":
+        return
+
+    _create_alert(
+        db,
+        device_id=device.id,
+        scan_id=device.last_scan_id,
+        alert_type="UNKNOWN_DEVICE",
+        severity="warning",
+        title=f"Dispositivo non registrato: {device.ip_address}",
+        message=f"Hostname: {device.hostname or 'n/d'} | MAC: {device.mac_address or 'n/d'}",
+    )
 
 
 def run_network_scan(
@@ -979,6 +1003,7 @@ def run_network_scan(
                 or enrichment.operating_system
                 or _guess_operating_system(host.open_ports or []),
                 status="online",
+                is_known_device=False,
                 is_monitored=True,
                 open_ports=",".join(str(port) for port in (host.open_ports or [])) or None,
                 first_seen_at=now,
@@ -1008,20 +1033,25 @@ def run_network_scan(
             device.last_seen_at = now
             device.last_scan_id = scan.id
 
-        _resolve_alerts_for_device(db, device_id=device.id, alert_types=["NEW_DEVICE", "MISSING_DEVICE"])
-
-        if is_new:
-            if _create_alert(
+        _resolve_alerts_for_device(db, device_id=device.id, alert_types=["MISSING_DEVICE", "device_offline"])
+        if not device.is_known_device:
+            _resolve_alerts_for_device(db, device_id=device.id, alert_types=["NEW_DEVICE", "new_device"])
+            created_unknown_alert = _create_alert(
                 db,
                 device_id=device.id,
                 scan_id=scan.id,
-                alert_type="NEW_DEVICE",
+                alert_type="UNKNOWN_DEVICE",
                 severity="warning",
-                title=f"Nuovo dispositivo rilevato: {device.ip_address}",
+                title=f"Dispositivo non registrato: {device.ip_address}",
                 message=f"Hostname: {device.hostname or 'n/d'} | MAC: {device.mac_address or 'n/d'}",
-            ):
+            )
+            if created_unknown_alert:
                 alerts_created += 1
+        else:
+            _resolve_alerts_for_device(db, device_id=device.id, alert_types=["UNKNOWN_DEVICE", "NEW_DEVICE", "new_device"])
 
+    now = datetime.now(UTC)
+    alert_threshold = timedelta(days=max(settings.network_missing_device_alert_days, 1))
     monitored_devices = db.scalars(select(NetworkDevice).where(NetworkDevice.is_monitored.is_(True))).all()
     for device in monitored_devices:
         if device.ip_address in seen_ips:
@@ -1029,13 +1059,19 @@ def run_network_scan(
         if device.status != "offline":
             device.status = "offline"
         device.last_scan_id = scan.id
+        if not device.is_known_device:
+            _resolve_alerts_for_device(db, device_id=device.id, alert_types=["MISSING_DEVICE", "device_offline"])
+            continue
+        if now - _coerce_utc(device.last_seen_at) < alert_threshold:
+            _resolve_alerts_for_device(db, device_id=device.id, alert_types=["MISSING_DEVICE", "device_offline"])
+            continue
         if _create_alert(
             db,
             device_id=device.id,
             scan_id=scan.id,
             alert_type="MISSING_DEVICE",
             severity="danger",
-            title=f"Dispositivo non raggiungibile: {device.ip_address}",
+            title=f"Dispositivo conosciuto assente dalla rete: {device.ip_address}",
             message=f"Ultimo avvistamento: {device.last_seen_at.isoformat()}",
         ):
             alerts_created += 1
@@ -1074,6 +1110,7 @@ def list_network_devices(
             NetworkDevice.asset_label.ilike(like_value),
             NetworkDevice.dns_name.ilike(like_value),
             NetworkDevice.mac_address.ilike(like_value),
+            NetworkDevice.notes.ilike(like_value),
         )
         query = query.where(predicate)
         count_query = count_query.where(predicate)

@@ -23,6 +23,7 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
   const [displayName, setDisplayName] = useState("");
   const [assetLabel, setAssetLabel] = useState("");
   const [notes, setNotes] = useState("");
+  const [isKnownDevice, setIsKnownDevice] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
@@ -45,6 +46,7 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
         setDisplayName(response.display_name || "");
         setAssetLabel(response.asset_label || "");
         setNotes(response.notes || "");
+        setIsKnownDevice(response.is_known_device);
         setDetailError(null);
       } catch (error) {
         setDetailError(error instanceof Error ? error.message : "Errore nel caricamento dettaglio dispositivo");
@@ -70,12 +72,14 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
         display_name: displayName || null,
         asset_label: assetLabel || null,
         notes: notes || null,
+        is_known_device: isKnownDevice,
       });
       setSelectedDevice(updated);
       setDisplayName(updated.display_name || "");
       setAssetLabel(updated.asset_label || "");
       setNotes(updated.notes || "");
-      setSaveMessage("Label e note dispositivo aggiornate.");
+      setIsKnownDevice(updated.is_known_device);
+      setSaveMessage("Scheda dispositivo aggiornata.");
       onUpdated?.(updated);
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : "Errore salvataggio dispositivo");
@@ -173,6 +177,10 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
                       <dd className="mt-1 text-sm text-gray-800">{selectedDevice.open_ports || "n/d"}</dd>
                     </div>
                     <div>
+                      <dt className="label-caption">Dispositivo conosciuto</dt>
+                      <dd className="mt-1 text-sm text-gray-800">{selectedDevice.is_known_device ? "Si" : "No"}</dd>
+                    </div>
+                    <div>
                       <dt className="label-caption">Pagina admin</dt>
                       <dd className="mt-1 text-sm text-gray-800 break-all">
                         {adminUrl ? (
@@ -248,6 +256,10 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
                       onChange={(event) => setNotes(event.target.value)}
                       placeholder="Annotazioni utili per riconoscere o gestire il dispositivo."
                     />
+                  </label>
+                  <label className="flex items-center gap-3 text-sm font-medium text-gray-700 md:col-span-2">
+                    <input checked={isKnownDevice} onChange={(event) => setIsKnownDevice(event.target.checked)} type="checkbox" />
+                    Dispositivo conosciuto
                   </label>
                 </div>
                 <div className="mt-4 flex justify-end">

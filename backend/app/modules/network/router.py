@@ -41,6 +41,7 @@ from app.modules.network.services import (
     list_network_devices,
     list_network_scans,
     run_network_scan,
+    sync_network_device_alert_state,
     update_network_alert,
     upsert_device_position,
     metadata_sources_to_dict,
@@ -71,6 +72,7 @@ def _serialize_device(
         "dns_name": device.dns_name,
         "location_hint": device.location_hint,
         "notes": device.notes,
+        "is_known_device": device.is_known_device,
         "metadata_sources": metadata_sources_to_dict(device.metadata_sources),
         "status": device.status,
         "is_monitored": device.is_monitored,
@@ -204,6 +206,7 @@ def patch_device(
     for field_name, field_value in updates.items():
         setattr(device, field_name, field_value)
 
+    sync_network_device_alert_state(db, device)
     db.add(device)
     db.commit()
     db.refresh(device)

@@ -94,6 +94,7 @@ class Settings(BaseSettings):
     network_scan_ping_timeout_ms: int = Field(default=1000, alias="NETWORK_SCAN_PING_TIMEOUT_MS")
     network_scan_ports: str = Field(default="22,80,161,443,445,3389", alias="NETWORK_SCAN_PORTS")
     network_enrichment_timeout_seconds: float = Field(default=1.0, alias="NETWORK_ENRICHMENT_TIMEOUT_SECONDS")
+    network_missing_device_alert_days: int = Field(default=15, alias="NETWORK_MISSING_DEVICE_ALERT_DAYS")
     network_snmp_communities: str = Field(default="public", alias="NETWORK_SNMP_COMMUNITIES")
     network_snmp_community_profiles: str = Field(default="[]", alias="NETWORK_SNMP_COMMUNITY_PROFILES")
     network_arp_helper_base_url: str | None = Field(default=None, alias="NETWORK_ARP_HELPER_BASE_URL")

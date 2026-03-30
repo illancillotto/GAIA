@@ -73,6 +73,7 @@ class NetworkDevice(Base):
     dns_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     location_hint: Mapped[str | None] = mapped_column(String(255), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    is_known_device: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
     status: Mapped[str] = mapped_column(String(32), default="online", nullable=False, index=True)
     is_monitored: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     open_ports: Mapped[str | None] = mapped_column(Text, nullable=True)

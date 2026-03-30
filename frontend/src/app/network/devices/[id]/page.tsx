@@ -22,6 +22,7 @@ function DeviceDetailContent({ token, deviceId }: { token: string; deviceId: num
   const [deviceType, setDeviceType] = useState("");
   const [operatingSystem, setOperatingSystem] = useState("");
   const [modelName, setModelName] = useState("");
+  const [isKnownDevice, setIsKnownDevice] = useState(false);
   const [isMonitored, setIsMonitored] = useState(true);
   const adminUrl = device ? getNetworkDeviceAdminUrl(device) : null;
 
@@ -50,6 +51,7 @@ function DeviceDetailContent({ token, deviceId }: { token: string; deviceId: num
     setDeviceType(device.device_type || "");
     setOperatingSystem(device.operating_system || "");
     setModelName(device.model_name || "");
+    setIsKnownDevice(device.is_known_device);
     setIsMonitored(device.is_monitored);
   }, [device]);
 
@@ -71,6 +73,7 @@ function DeviceDetailContent({ token, deviceId }: { token: string; deviceId: num
         model_name: modelName || null,
         device_type: deviceType || null,
         operating_system: operatingSystem || null,
+        is_known_device: isKnownDevice,
         is_monitored: isMonitored,
       });
       setDevice(updated);
@@ -155,6 +158,10 @@ function DeviceDetailContent({ token, deviceId }: { token: string; deviceId: num
           <div>
             <dt className="label-caption">Porte aperte</dt>
             <dd className="mt-1 text-sm text-gray-800">{device.open_ports || "n/d"}</dd>
+          </div>
+          <div>
+            <dt className="label-caption">Dispositivo conosciuto</dt>
+            <dd className="mt-1 text-sm text-gray-800">{device.is_known_device ? "Si" : "No"}</dd>
           </div>
           <div>
             <dt className="label-caption">Pagina admin</dt>
@@ -303,6 +310,10 @@ function DeviceDetailContent({ token, deviceId }: { token: string; deviceId: num
           <label className="block text-sm font-medium text-gray-700 md:col-span-2">
             Note
             <textarea className="form-control mt-1 min-h-28" value={notes} onChange={(event) => setNotes(event.target.value)} placeholder="Annotazioni utili per riconoscere o gestire il dispositivo." />
+          </label>
+          <label className="flex items-center gap-3 text-sm font-medium text-gray-700 md:col-span-2">
+            <input checked={isKnownDevice} onChange={(event) => setIsKnownDevice(event.target.checked)} type="checkbox" />
+            Dispositivo conosciuto
           </label>
           <label className="flex items-center gap-3 text-sm font-medium text-gray-700 md:col-span-2">
             <input checked={isMonitored} onChange={(event) => setIsMonitored(event.target.checked)} type="checkbox" />

@@ -56,7 +56,7 @@ function AlertsContent({ token }: { token: string }) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="section-title">Filtro stato</p>
-            <p className="section-copy">Gestisci gli alert aperti e consulta lo storico delle anomalie già trattate.</p>
+            <p className="section-copy">Gestisci gli alert per dispositivi non registrati o per dispositivi conosciuti assenti dalla rete oltre la soglia temporale.</p>
           </div>
           <select className="form-control w-full max-w-52" value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as typeof statusFilter)}>
             <option value="all">Tutti</option>
@@ -112,7 +112,7 @@ function AlertsContent({ token }: { token: string }) {
       ))}
 
       {visibleAlerts.length === 0 && !loadError ? (
-        <article className="panel-card text-sm text-gray-500">Nessun alert attivo nel modulo rete.</article>
+        <article className="panel-card text-sm text-gray-500">Nessun alert aperto per dispositivi sconosciuti o assenti oltre soglia.</article>
       ) : null}
     </div>
   );
@@ -122,7 +122,7 @@ export default function NetworkAlertsPage() {
   return (
     <NetworkModulePage
       title="Alert"
-      description="Elenco degli eventi aperti generati dalle scansioni di rete."
+      description="Elenco degli eventi generati per dispositivi sconosciuti o conosciuti ma assenti a lungo dalla rete."
       breadcrumb="Alert"
     >
       {({ token }) => <AlertsContent token={token} />}

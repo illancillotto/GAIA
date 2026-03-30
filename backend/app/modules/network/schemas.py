@@ -54,6 +54,7 @@ class NetworkDeviceResponse(BaseModel):
     dns_name: str | None = None
     location_hint: str | None = None
     notes: str | None = None
+    is_known_device: bool
     metadata_sources: dict[str, Any] | None = None
     status: str
     is_monitored: bool
@@ -74,6 +75,7 @@ class NetworkDeviceUpdateRequest(BaseModel):
     operating_system: str | None = None
     location_hint: str | None = None
     notes: str | None = None
+    is_known_device: bool | None = None
     is_monitored: bool | None = None
 
 
@@ -219,4 +221,3 @@ class DevicePositionUpdateRequest(BaseModel):
     x: float
     y: float
     label: str | None = Field(default=None, max_length=255)
-

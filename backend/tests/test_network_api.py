@@ -1,5 +1,5 @@
 from collections.abc import Generator
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -83,6 +83,7 @@ def setup_database(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, Non
         dns_name="switch-core.local",
         location_hint="CED piano terra",
         notes="Switch principale edificio A",
+        is_known_device=True,
         status="online",
         open_ports="22,443",
         first_seen_at=datetime.now(UTC),
@@ -95,10 +96,11 @@ def setup_database(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, Non
         hostname="pc-contabilita",
         vendor="Dell",
         device_type="workstation",
+        is_known_device=True,
         status="offline",
         open_ports="3389",
         first_seen_at=datetime.now(UTC),
-        last_seen_at=datetime.now(UTC),
+        last_seen_at=datetime.now(UTC) - timedelta(days=20),
     )
     db.add_all([device_one, device_two])
     db.flush()
@@ -144,11 +146,11 @@ def setup_database(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, Non
         NetworkAlert(
             device_id=device_two.id,
             scan_id=scan.id,
-            alert_type="device_offline",
+            alert_type="MISSING_DEVICE",
             severity="danger",
             status="open",
-            title="Dispositivo non raggiungibile",
-            message="Host offline",
+            title="Dispositivo conosciuto assente dalla rete",
+            message="Host assente oltre soglia",
         )
     )
 
@@ -232,6 +234,7 @@ def test_network_devices_support_filters() -> None:
     assert payload["total"] == 1
     assert payload["items"][0]["hostname"] == "pc-contabilita"
     assert payload["items"][0]["status"] == "offline"
+    assert payload["items"][0]["is_known_device"] is True
 
 
 def test_network_device_metadata_can_be_updated() -> None:
@@ -243,7 +246,7 @@ def test_network_device_metadata_can_be_updated() -> None:
             "asset_label": "PC-ACC-01",
             "location_hint": "Ufficio contabilita",
             "notes": "Postazione fissa piano primo",
-            "is_monitored": False,
+            "is_known_device": False,
         },
     )
 
@@ -253,7 +256,24 @@ def test_network_device_metadata_can_be_updated() -> None:
     assert payload["asset_label"] == "PC-ACC-01"
     assert payload["location_hint"] == "Ufficio contabilita"
     assert payload["notes"] == "Postazione fissa piano primo"
-    assert payload["is_monitored"] is False
+    assert payload["is_known_device"] is False
+
+
+def test_network_device_can_toggle_known_state_and_create_unknown_alert() -> None:
+    response = client.patch(
+        "/network/devices/1",
+        headers=auth_headers(),
+        json={"is_known_device": False},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["is_known_device"] is False
+
+    alerts_response = client.get("/network/alerts", headers=auth_headers())
+    assert alerts_response.status_code == 200
+    alerts = alerts_response.json()
+    assert any(item["alert_type"] == "UNKNOWN_DEVICE" and item["device_id"] == 1 for item in alerts)
 
 
 def test_network_floor_plan_returns_positions() -> None:

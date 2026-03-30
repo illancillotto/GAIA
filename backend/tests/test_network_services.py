@@ -1,4 +1,27 @@
+from datetime import UTC, datetime, timedelta
+
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from app.db.base import Base
 from app.modules.network import services
+from app.modules.network.models import NetworkAlert, NetworkDevice
+
+
+SQLALCHEMY_DATABASE_URL = "sqlite://"
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
+TestingSessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+
+
+def _build_session() -> Session:
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+    return TestingSessionLocal()
 
 
 class _FakeHostState(dict):
@@ -215,3 +238,69 @@ def test_build_diff_counts_new_missing_and_changed_entries() -> None:
         "changed_devices_count": 1,
     }
     assert len(changes) == 3
+
+
+def test_run_network_scan_creates_unknown_device_alert_for_unregistered_host(monkeypatch) -> None:
+    db = _build_session()
+    monkeypatch.setattr(services, "_collect_enrichment", lambda ip_address, open_ports: services.EnrichmentMetadata())
+
+    result = services.run_network_scan(
+        db,
+        initiated_by="tester",
+        discovered_hosts=[
+            services.DiscoveredHost(
+                ip_address="192.168.1.50",
+                mac_address="AA-BB-CC-DD-EE-50",
+                hostname="printer-lab",
+                open_ports=[80],
+            )
+        ],
+    )
+
+    alerts = db.scalars(select(NetworkAlert).order_by(NetworkAlert.id.asc())).all()
+    device = db.scalar(select(NetworkDevice).where(NetworkDevice.ip_address == "192.168.1.50"))
+
+    assert result.alerts_created == 1
+    assert device is not None
+    assert device.is_known_device is False
+    assert len(alerts) == 1
+    assert alerts[0].alert_type == "UNKNOWN_DEVICE"
+
+    db.close()
+    Base.metadata.drop_all(bind=engine)
+
+
+def test_run_network_scan_creates_missing_alert_only_after_threshold(monkeypatch) -> None:
+    db = _build_session()
+    monkeypatch.setattr(services, "_collect_enrichment", lambda ip_address, open_ports: services.EnrichmentMetadata())
+    monkeypatch.setattr(services.settings, "network_missing_device_alert_days", 15)
+
+    known_device = NetworkDevice(
+        ip_address="192.168.1.60",
+        mac_address="aa:bb:cc:dd:ee:60",
+        hostname="switch-remoto",
+        is_known_device=True,
+        status="online",
+        is_monitored=True,
+        first_seen_at=datetime.now(UTC) - timedelta(days=40),
+        last_seen_at=datetime.now(UTC) - timedelta(days=16),
+    )
+    db.add(known_device)
+    db.commit()
+
+    result = services.run_network_scan(
+        db,
+        initiated_by="tester",
+        discovered_hosts=[],
+    )
+
+    db.refresh(known_device)
+    alerts = db.scalars(select(NetworkAlert).order_by(NetworkAlert.id.asc())).all()
+
+    assert result.alerts_created == 1
+    assert known_device.status == "offline"
+    assert len(alerts) == 1
+    assert alerts[0].alert_type == "MISSING_DEVICE"
+
+    db.close()
+    Base.metadata.drop_all(bind=engine)
