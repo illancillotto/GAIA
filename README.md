@@ -19,8 +19,9 @@ Stato: completato e funzionante.
 
 ### GAIA Rete — Network Monitor
 Monitoraggio della rete LAN: scansione dispositivi, mappa interattiva per piano,
-alert per dispositivi nuovi o non raggiungibili.
-Stato: operativo MVP.
+snapshot storici, diff tra scansioni, dettaglio dispositivi e alert per
+dispositivi non registrati o per dispositivi conosciuti assenti dalla rete oltre soglia.
+Stato: operativo avanzato.
 
 ### GAIA Inventario — IT Inventory
 Registro centralizzato dei dispositivi IT: anagrafica, garanzie, assegnazioni,
@@ -152,8 +153,15 @@ I package storici fuori da `app/modules/` restano disponibili come layer di comp
 ## Network MVP
 
 - Scanner LAN dedicato con `nmap`, fallback `scapy`, enrichment DNS, mDNS, NetBIOS e SNMP best-effort
+- Enrichment HTTP per dispositivi con interfaccia web, inclusi title, meta refresh e nome dispositivo
+- Recupero MAC via ARP cache locale, helper host-side e fallback opzionale via gateway
+- Snapshot storici completi per scansione con dettaglio snapshot e diff tra snapshot
 - Gestione anagrafica apparati con campi manuali `display_name`, `asset_label`, `location_hint`, `notes`
+- Flag `is_known_device` per distinguere i dispositivi registrati dai dispositivi solo osservati in rete
 - Dettaglio dispositivo con `hostname_source` e `metadata_sources` per capire da dove arriva il nome rilevato
+- Alert `UNKNOWN_DEVICE` per dispositivi presenti in rete ma non registrati
+- Alert `MISSING_DEVICE` solo per dispositivi conosciuti assenti dalla rete oltre soglia temporale
+- Planimetrie con posizionamento persistito dei device e vista dashboard/modali operative
 - Scheduler e scanner condividono il backend monolitico e il database unico della piattaforma
 
 ### Variabili operative Network
@@ -161,8 +169,16 @@ I package storici fuori da `app/modules/` restano disponibili come layer di comp
 - `NETWORK_RANGE`: subnet da scandire
 - `NETWORK_SCAN_PORTS`: porte da verificare sugli host attivi
 - `NETWORK_ENRICHMENT_TIMEOUT_SECONDS`: timeout per reverse DNS, mDNS, NetBIOS e SNMP
+- `NETWORK_MISSING_DEVICE_ALERT_DAYS`: giorni di assenza oltre i quali un dispositivo conosciuto genera alert
 - `NETWORK_SNMP_COMMUNITIES`: elenco CSV di community SNMP generiche
 - `NETWORK_SNMP_COMMUNITY_PROFILES`: JSON array opzionale con community per subnet specifiche
+- `NETWORK_ARP_HELPER_BASE_URL`: endpoint HTTP usato dai container per interrogare la neighbor table dell'host
+- `NETWORK_GATEWAY_ARP_HOST`: host SSH opzionale del gateway o di una macchina di rete da cui interrogare ARP
+- `NETWORK_GATEWAY_ARP_PORT`: porta SSH del gateway
+- `NETWORK_GATEWAY_ARP_USERNAME`: utente SSH del gateway
+- `NETWORK_GATEWAY_ARP_PASSWORD`: password SSH del gateway
+- `NETWORK_GATEWAY_ARP_PRIVATE_KEY_PATH`: chiave privata opzionale per il gateway
+- `NETWORK_GATEWAY_ARP_COMMAND`: comando remoto da eseguire per il lookup ARP, con placeholder `{ip}`
 
 Esempio `NETWORK_SNMP_COMMUNITY_PROFILES`:
 
@@ -180,6 +196,17 @@ Ordine di risoluzione hostname del modulo Rete:
 3. nome NetBIOS
 4. nome mDNS
 5. reverse DNS
+
+Semantica alert attuale del modulo Rete:
+
+1. `UNKNOWN_DEVICE`: host rilevato in rete ma non marcato come `is_known_device`
+2. `MISSING_DEVICE`: host marcato come `is_known_device` e assente dalla rete per piu di `NETWORK_MISSING_DEVICE_ALERT_DAYS`
+
+Componenti runtime del modulo Rete:
+
+- backend API FastAPI nel monolite modulare
+- servizio `scanner` dedicato per scansioni schedulate
+- servizio `arp-helper` host-side per recupero MAC da neighbor table host quando i container non vedono direttamente la LAN
 
 ## Comandi utili
 
