@@ -74,7 +74,7 @@ export function Sidebar({
           </div>
           <div className="ml-auto h-2 w-2 rounded-full bg-[#1D9E75]" title="Backend connesso" />
         </div>
-        <button className="btn-secondary mt-3 w-full" onClick={onLogout} type="button">
+        <button className="mt-2 text-xs font-medium text-gray-500 transition hover:text-[#1D4E35]" onClick={onLogout} type="button">
           Logout
         </button>
       </div>

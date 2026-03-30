@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useMemo, useState } from "react";
 
-import { GridIcon, LockIcon, SearchIcon, ServerIcon, UserIcon } from "@/components/ui/icons";
+import { ChevronRightIcon, GridIcon, LockIcon, SearchIcon, ServerIcon, UserIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
 import type { CurrentUser } from "@/types/api";
 
@@ -28,6 +29,7 @@ const platformModules: PlatformModule[] = [
 
 export function PlatformSidebar({ currentModuleLabel, currentUser }: PlatformSidebarProps) {
   const pathname = usePathname();
+  const [isModuleSwitcherOpen, setIsModuleSwitcherOpen] = useState(false);
   const canManageGaiaUsers =
     (currentUser.role === "admin" || currentUser.role === "super_admin")
     && currentUser.enabled_modules.includes("accessi");
@@ -47,6 +49,12 @@ export function PlatformSidebar({ currentModuleLabel, currentUser }: PlatformSid
 
     return moduleKey ? currentUser.enabled_modules.includes(moduleKey) : true;
   });
+  const activePlatformModule = useMemo(
+    () => visiblePlatformModules.find(({ href }) => pathname === href || pathname.startsWith(`${href}/`)),
+    [pathname, visiblePlatformModules],
+  );
+  const otherPlatformModules = visiblePlatformModules.filter((moduleItem) => moduleItem.href !== activePlatformModule?.href);
+  const ActiveModuleIcon = activePlatformModule?.icon || ServerIcon;
 
   return (
     <>
@@ -63,35 +71,49 @@ export function PlatformSidebar({ currentModuleLabel, currentUser }: PlatformSid
         <div className="mx-2 mb-3 border-b border-gray-100 pb-3">
           <Link
             href="/"
-            className="block rounded-lg px-2.5 py-2 text-xs font-medium tracking-wide text-gray-500 transition hover:bg-gray-50 hover:text-gray-800"
+            className="inline-flex rounded-lg px-2.5 py-2 text-xs font-medium tracking-wide text-gray-500 transition hover:bg-gray-50 hover:text-gray-800"
           >
             ← Home GAIA
           </Link>
         </div>
 
         <p className="px-2 pb-1 text-[10px] font-medium uppercase tracking-widest text-gray-400">
-          Modulo: {currentModuleLabel}
+          Modulo attivo
         </p>
+        <div className="px-2">
+          <button
+            type="button"
+            onClick={() => setIsModuleSwitcherOpen((currentValue) => !currentValue)}
+            className="flex w-full items-center gap-2 rounded-xl border border-[#8CB39D] bg-[#EAF3E8] px-3 py-2.5 text-left text-sm text-[#1D4E35] shadow-[0_1px_0_rgba(29,78,53,0.04)] transition hover:bg-[#E3EFE1]"
+          >
+            <ActiveModuleIcon className="h-4 w-4 shrink-0" />
+            <span className="flex-1 font-medium">{activePlatformModule?.label || currentModuleLabel}</span>
+            <ChevronRightIcon className={cn("h-4 w-4 shrink-0 transition-transform", isModuleSwitcherOpen ? "rotate-90" : undefined)} />
+          </button>
 
-        <div className="space-y-0.5">
-          {visiblePlatformModules.map(({ href, label, icon: Icon }) => {
-            const isActive = pathname === href || pathname.startsWith(`${href}/`);
-            return (
-              <Link
-                key={href}
-                href={href}
-                className={cn(
-                  "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",
-                  isActive
-                    ? "bg-[#EAF3E8] font-medium text-[#1D4E35]"
-                    : "text-gray-500 hover:bg-gray-50 hover:text-gray-800",
-                )}
-              >
-                <Icon className="h-4 w-4 shrink-0" />
-                <span className="flex-1">{label}</span>
-              </Link>
-            );
-          })}
+          {isModuleSwitcherOpen ? (
+            <div className="mt-2 space-y-1 rounded-xl border border-gray-100 bg-gray-50 p-2">
+              {visiblePlatformModules.map(({ href, label, icon: Icon }) => {
+                const isActive = pathname === href || pathname.startsWith(`${href}/`);
+                return (
+                  <Link
+                    key={href}
+                    href={href}
+                    className={cn(
+                      "flex items-center gap-2 rounded-lg px-2.5 py-2 text-sm transition-colors",
+                      isActive
+                        ? "bg-white font-medium text-[#1D4E35] shadow-sm"
+                        : "text-gray-500 hover:bg-white hover:text-gray-800",
+                    )}
+                    onClick={() => setIsModuleSwitcherOpen(false)}
+                  >
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span className="flex-1">{label}</span>
+                  </Link>
+                );
+              })}
+            </div>
+          ) : null}
         </div>
 
         {canManageGaiaUsers ? (
@@ -111,6 +133,23 @@ export function PlatformSidebar({ currentModuleLabel, currentUser }: PlatformSid
               <UserIcon className="h-4 w-4 shrink-0" />
               <span className="flex-1">Utenti GAIA</span>
             </Link>
+          </>
+        ) : null}
+
+        {otherPlatformModules.length > 0 ? (
+          <>
+            <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">
+              Altri moduli
+            </p>
+            <div className="mx-2 border-t border-gray-100 pt-3">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm text-gray-500">
+                {otherPlatformModules.map(({ href, label }) => (
+                  <Link key={href} href={href} className="transition hover:text-[#1D4E35]">
+                    {label}
+                  </Link>
+                ))}
+              </div>
+            </div>
           </>
         ) : null}
       </nav>
