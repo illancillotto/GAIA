@@ -60,7 +60,7 @@ test("layout includes app shell, sidebar and topbar", () => {
   assert.match(platformSidebar, /Consorzio di Bonifica/);
   assert.match(platformSidebar, /dell&apos;Oristanese/);
   assert.match(platformSidebar, /Home GAIA/);
-  assert.match(platformSidebar, /Modulo:/);
+  assert.match(platformSidebar, /Modulo attivo/);
   assert.match(platformSidebar, /Catasto/);
   assert.match(moduleSidebar, /Sincronizzazione/);
   assert.match(moduleSidebar, /Review NAS/);
