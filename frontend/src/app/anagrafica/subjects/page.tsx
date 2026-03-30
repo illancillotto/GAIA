@@ -211,7 +211,7 @@ function SubjectsContent({ token }: { token: string }) {
     return () => {
       cancelled = true;
     };
-  }, [selectedSubjectId, token]);
+  }, [previewDocument, previewUrl, selectedSubjectId, token]);
 
   useEffect(() => {
     if (!duplicateCfMessage && !selectedSubjectId) {
@@ -946,7 +946,7 @@ function SubjectsContent({ token }: { token: string }) {
                 <section className="rounded-2xl border border-[#D9E8DF] bg-white p-4">
                   <div className="mb-4">
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Documenti associati</p>
-                    <p className="mt-1 text-sm text-gray-600">Clicca un documento per aprirne l'anteprima senza lasciare la modal.</p>
+                    <p className="mt-1 text-sm text-gray-600">Clicca un documento per aprirne l&apos;anteprima senza lasciare la modal.</p>
                   </div>
                   {selectedSubject.documents.length === 0 ? (
                     <p className="text-sm text-gray-500">Nessun documento associato a questo utente.</p>
