@@ -10,6 +10,7 @@ import type {
   AnagraficaStats,
   AnagraficaSubjectCreateInput,
   AnagraficaSubjectDetail,
+  AnagraficaSubjectNasImportStatus,
   AnagraficaSubjectImportResult,
   AnagraficaSubjectListResponse,
   AnagraficaSubjectUpdateInput,
@@ -690,6 +691,36 @@ export async function getAnagraficaSubjectNasCandidates(
     headers: {
       Authorization: `Bearer ${token}`,
     },
+  });
+}
+
+export async function getAnagraficaSubjectNasImportStatus(token: string, subjectId: string): Promise<AnagraficaSubjectNasImportStatus> {
+  return request<AnagraficaSubjectNasImportStatus>(`/anagrafica/subjects/${subjectId}/nas-import-status`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function uploadAnagraficaSubjectDocument(
+  token: string,
+  subjectId: string,
+  file: File,
+  docType: string,
+  notes?: string,
+): Promise<AnagraficaDocument> {
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("doc_type", docType);
+  if (notes) {
+    formData.append("notes", notes);
+  }
+  return request<AnagraficaDocument>(`/anagrafica/subjects/${subjectId}/documents/upload`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
   });
 }
 

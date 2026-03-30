@@ -3,7 +3,7 @@ import uuid
 from io import BytesIO, StringIO
 import csv
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
 from sqlalchemy import func, or_, select
@@ -47,6 +47,7 @@ from app.modules.anagrafica.schemas import (
     AnagraficaModuleStatusResponse,
     AnagraficaSubjectCreateRequest,
     AnagraficaSubjectDetailResponse,
+    AnagraficaSubjectNasImportStatusResponse,
     AnagraficaSubjectImportResponse,
     AnagraficaSubjectListItemResponse,
     AnagraficaSubjectListResponse,
@@ -55,6 +56,7 @@ from app.modules.anagrafica.schemas import (
 from app.modules.anagrafica.services.import_service import (
     AnagraficaImportPreviewService,
     create_import_snapshot,
+    create_manual_document,
     import_existing_registry_subjects,
     import_subject_from_existing_registry,
     preview_import,
@@ -455,6 +457,33 @@ def post_import_subject_from_nas(
     )
 
 
+@router.get("/subjects/{subject_id}/nas-import-status", response_model=AnagraficaSubjectNasImportStatusResponse)
+def get_subject_nas_import_status(
+    subject_id: uuid.UUID,
+    _: Annotated[ApplicationUser, Depends(require_active_user)],
+    __: Annotated[ApplicationUser, RequireAnagraficaModule],
+    db: Annotated[Session, Depends(get_db)],
+    service: Annotated[AnagraficaImportPreviewService, Depends(get_anagrafica_import_service)],
+) -> AnagraficaSubjectNasImportStatusResponse:
+    try:
+        subject = _require_subject_exists(db, subject_id)
+        status_payload = service.get_subject_import_status(db, subject)
+    except NasConnectorError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    finally:
+        _close_import_service(service)
+
+    return AnagraficaSubjectNasImportStatusResponse(
+        can_import_from_nas=status_payload.can_import_from_nas,
+        missing_in_nas=status_payload.missing_in_nas,
+        matched_folder_path=status_payload.matched_folder_path,
+        matched_folder_name=status_payload.matched_folder_name,
+        total_files_in_nas=status_payload.total_files_in_nas,
+        pending_files_in_nas=status_payload.pending_files_in_nas,
+        message=status_payload.message,
+    )
+
+
 @router.get("/subjects/{subject_id}/nas-candidates", response_model=list[AnagraficaNasFolderCandidateResponse])
 def get_subject_nas_candidates(
     subject_id: uuid.UUID,
@@ -560,6 +589,42 @@ def get_subject_documents(
         .order_by(AnagraficaDocument.created_at.desc())
     ).all()
     return [_build_document_response(item) for item in documents]
+
+
+@router.post("/subjects/{subject_id}/documents/upload", response_model=AnagraficaPreviewDocumentResponse)
+async def upload_subject_document(
+    subject_id: uuid.UUID,
+    file: Annotated[UploadFile, File()],
+    doc_type: Annotated[str, Form()],
+    notes: Annotated[str | None, Form()] = None,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)] = None,
+    _: Annotated[ApplicationUser, RequireAnagraficaModule] = None,
+    db: Annotated[Session, Depends(get_db)] = None,
+) -> AnagraficaPreviewDocumentResponse:
+    filename = (file.filename or "").strip()
+    if not filename:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Nome file mancante")
+
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="File vuoto")
+
+    try:
+        document = create_manual_document(
+            db=db,
+            current_user=current_user,
+            subject_id=subject_id,
+            filename=filename,
+            file_bytes=file_bytes,
+            doc_type=doc_type,
+            mime_type=file.content_type,
+            notes=notes,
+        )
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    return _build_document_response(document)
 
 
 @router.patch("/documents/{document_id}", response_model=AnagraficaPreviewDocumentResponse)

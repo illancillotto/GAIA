@@ -159,6 +159,16 @@ class AnagraficaNasFolderCandidateResponse(BaseModel):
     nome: str | None = None
 
 
+class AnagraficaSubjectNasImportStatusResponse(BaseModel):
+    can_import_from_nas: bool
+    missing_in_nas: bool
+    matched_folder_path: str | None = None
+    matched_folder_name: str | None = None
+    total_files_in_nas: int
+    pending_files_in_nas: int
+    message: str
+
+
 class AnagraficaImportJobItemResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

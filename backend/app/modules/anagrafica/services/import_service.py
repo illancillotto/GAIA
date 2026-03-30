@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+import mimetypes
 import os
 from pathlib import Path, PurePosixPath
 import re
@@ -154,6 +155,17 @@ class SubjectFolderCandidate:
     nome: str | None = None
 
 
+@dataclass(slots=True)
+class SubjectNasImportStatus:
+    can_import_from_nas: bool
+    missing_in_nas: bool
+    matched_folder_path: str | None
+    matched_folder_name: str | None
+    total_files_in_nas: int
+    pending_files_in_nas: int
+    message: str
+
+
 class AnagraficaImportPreviewService:
     def __init__(self, connector: NasCommandRunner, archive_root: str | None = None) -> None:
         self.connector = connector
@@ -267,6 +279,10 @@ class AnagraficaImportPreviewService:
         if not candidates:
             raise ValueError(f"Nessuna cartella NAS trovata per la lettera {letter}")
 
+        strict_candidates = _filter_candidates_by_primary_identifier(db, subject, candidates)
+        if strict_candidates:
+            return sorted(strict_candidates, key=lambda item: (item.folder_name.lower(), item.nas_folder_path))[0]
+
         scored_candidates = [
             (candidate, _score_subject_folder_candidate(db, subject, candidate.folder_name))
             for candidate in candidates
@@ -314,6 +330,59 @@ class AnagraficaImportPreviewService:
 
         scored_candidates.sort(key=lambda item: (-item.score, item.folder_name.lower(), item.nas_folder_path))
         return scored_candidates[:limit]
+
+    def get_subject_import_status(self, db: Session, subject: AnagraficaSubject) -> SubjectNasImportStatus:
+        try:
+            matched_folder = self.match_existing_subject_folder(db, subject)
+        except ValueError as exc:
+            return SubjectNasImportStatus(
+                can_import_from_nas=False,
+                missing_in_nas=True,
+                matched_folder_path=None,
+                matched_folder_name=None,
+                total_files_in_nas=0,
+                pending_files_in_nas=0,
+                message=str(exc),
+            )
+
+        preview = self.preview_subject_folder(matched_folder, strict=True)
+        existing_nas_paths = set(
+            db.scalars(select(AnagraficaDocument.nas_path).where(AnagraficaDocument.subject_id == subject.id)).all()
+        )
+        total_files = len(preview.documents)
+        pending_files = sum(1 for document in preview.documents if document.nas_path not in existing_nas_paths)
+
+        if total_files == 0:
+            return SubjectNasImportStatus(
+                can_import_from_nas=False,
+                missing_in_nas=False,
+                matched_folder_path=matched_folder.nas_folder_path,
+                matched_folder_name=matched_folder.folder_name,
+                total_files_in_nas=0,
+                pending_files_in_nas=0,
+                message="Cartella NAS trovata ma senza file importabili.",
+            )
+
+        if pending_files == 0:
+            return SubjectNasImportStatus(
+                can_import_from_nas=False,
+                missing_in_nas=False,
+                matched_folder_path=matched_folder.nas_folder_path,
+                matched_folder_name=matched_folder.folder_name,
+                total_files_in_nas=total_files,
+                pending_files_in_nas=0,
+                message="Tutti i file NAS disponibili risultano gia importati.",
+            )
+
+        return SubjectNasImportStatus(
+            can_import_from_nas=True,
+            missing_in_nas=False,
+            matched_folder_path=matched_folder.nas_folder_path,
+            matched_folder_name=matched_folder.folder_name,
+            total_files_in_nas=total_files,
+            pending_files_in_nas=pending_files,
+            message=f"Trovati {pending_files} file NAS ancora da importare.",
+        )
 
     def _preview_folders(self, scope: str, subject_folders: list[DiscoveredSubjectFolder]) -> ImportPreviewResult:
         errors: list[AnagraficaNASWarning] = []
@@ -1259,6 +1328,20 @@ def _subject_identifiers(db: Session, subject: AnagraficaSubject) -> list[str]:
     return [value for value in identifiers if value]
 
 
+def _subject_primary_identifiers(db: Session, subject: AnagraficaSubject) -> list[str]:
+    person = db.get(AnagraficaPerson, subject.id)
+    company = db.get(AnagraficaCompany, subject.id)
+    identifiers: list[str] = []
+    if person is not None and person.codice_fiscale:
+        identifiers.append(person.codice_fiscale)
+    if company is not None:
+        if company.partita_iva:
+            identifiers.append(company.partita_iva)
+        if company.codice_fiscale:
+            identifiers.append(company.codice_fiscale)
+    return [value for value in identifiers if value]
+
+
 def _subject_display_name(db: Session, subject: AnagraficaSubject) -> str:
     person = db.get(AnagraficaPerson, subject.id)
     company = db.get(AnagraficaCompany, subject.id)
@@ -1318,6 +1401,22 @@ def _score_subject_folder_candidate(db: Session, subject: AnagraficaSubject, fol
     return score
 
 
+def _filter_candidates_by_primary_identifier(
+    db: Session,
+    subject: AnagraficaSubject,
+    candidates: list[DiscoveredSubjectFolder],
+) -> list[DiscoveredSubjectFolder]:
+    primary_identifiers = [_normalize_match_value(value) for value in _subject_primary_identifiers(db, subject)]
+    primary_identifiers = [value for value in primary_identifiers if value]
+    if not primary_identifiers:
+        return []
+    return [
+        candidate
+        for candidate in candidates
+        if any(identifier in _normalize_match_value(candidate.folder_name) for identifier in primary_identifiers)
+    ]
+
+
 def _safe_relative_parts(relative_path: str) -> list[str]:
     parts = [part for part in PurePosixPath(relative_path).parts if part not in {"", ".", ".."}]
     return parts or ["document.bin"]
@@ -1333,6 +1432,58 @@ def _store_document_locally(
     target_path.parent.mkdir(parents=True, exist_ok=True)
     target_path.write_bytes(connector.download_file(document_preview.nas_path))
     return str(target_path)
+
+
+def store_uploaded_document(
+    subject_id: uuid.UUID,
+    filename: str,
+    file_bytes: bytes,
+) -> str:
+    storage_root = Path(settings.anagrafica_document_storage_path)
+    safe_name = Path(filename).name or "document.bin"
+    target_path = storage_root / str(subject_id) / "manual" / f"{uuid.uuid4()}-{safe_name}"
+    target_path.parent.mkdir(parents=True, exist_ok=True)
+    target_path.write_bytes(file_bytes)
+    return str(target_path)
+
+
+def create_manual_document(
+    db: Session,
+    current_user: ApplicationUser,
+    subject_id: uuid.UUID,
+    filename: str,
+    file_bytes: bytes,
+    doc_type: str,
+    mime_type: str | None = None,
+    notes: str | None = None,
+) -> AnagraficaDocument:
+    subject = db.get(AnagraficaSubject, subject_id)
+    if subject is None:
+        raise ValueError("Subject not found")
+    local_path = store_uploaded_document(subject_id, filename, file_bytes)
+    document = AnagraficaDocument(
+        subject_id=subject_id,
+        doc_type=doc_type,
+        filename=Path(filename).name or "document.bin",
+        nas_path=None,
+        classification_source="manual",
+        storage_type=AnagraficaStorageType.LOCAL_UPLOAD.value,
+        local_path=local_path,
+        mime_type=mime_type or mimetypes.guess_type(filename)[0],
+        uploaded_at=datetime.now(UTC),
+        notes=notes,
+    )
+    db.add(document)
+    _create_audit_log(
+        db,
+        subject_id,
+        current_user.id,
+        "document_manual_uploaded",
+        {"document_filename": document.filename, "doc_type": doc_type, "notes": notes},
+    )
+    db.commit()
+    db.refresh(document)
+    return document
 
 
 def _clear_local_storage(storage_root: Path) -> int:

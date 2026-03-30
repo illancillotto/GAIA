@@ -617,6 +617,77 @@ def test_subject_nas_candidates_returns_scored_matches() -> None:
     assert candidates[0]["nas_folder_path"] == "/archive/O/Obinu_Santina_BNOSTN34L64I743F"
 
 
+def test_subject_nas_import_status_uses_identifier_and_reports_missing_subject_in_nas() -> None:
+    create_user("nas_status", module_anagrafica=True)
+    token = login("nas_status")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    create_response = client.post(
+        "/anagrafica/subjects",
+        headers=headers,
+        json={
+            "subject_type": "person",
+            "source_name_raw": "ATZORI_TOMASA_TZRTMS31L61F840T",
+            "person": {
+                "cognome": "ATZORI",
+                "nome": "TOMASA",
+                "codice_fiscale": "TZRTMS31L61F840T",
+            },
+        },
+    )
+    assert create_response.status_code == 201
+    subject_id = create_response.json()["id"]
+
+    status_response = client.get(f"/anagrafica/subjects/{subject_id}/nas-import-status", headers=headers)
+    assert status_response.status_code == 200
+    payload = status_response.json()
+    assert payload["can_import_from_nas"] is False
+    assert payload["missing_in_nas"] is True
+    assert payload["pending_files_in_nas"] == 0
+
+
+def test_manual_document_upload_creates_local_document(tmp_path) -> None:
+    create_user("manual_upload", module_anagrafica=True)
+    token = login("manual_upload")
+    headers = {"Authorization": f"Bearer {token}"}
+    original_storage_path = settings.anagrafica_document_storage_path
+    settings.anagrafica_document_storage_path = str(tmp_path / "anagrafica-docs")
+
+    try:
+      create_response = client.post(
+          "/anagrafica/subjects",
+          headers=headers,
+          json={
+              "subject_type": "person",
+              "source_name_raw": "ATZORI_TOMASA_TZRTMS31L61F840T",
+              "person": {
+                  "cognome": "ATZORI",
+                  "nome": "TOMASA",
+                  "codice_fiscale": "TZRTMS31L61F840T",
+              },
+          },
+      )
+      assert create_response.status_code == 201
+      subject_id = create_response.json()["id"]
+
+      upload_response = client.post(
+          f"/anagrafica/subjects/{subject_id}/documents/upload",
+          headers=headers,
+          files={"file": ("manuale.pdf", b"%PDF-1.4 manual", "application/pdf")},
+          data={"doc_type": "visura", "notes": "upload manuale"},
+      )
+      assert upload_response.status_code == 200
+      payload = upload_response.json()
+      assert payload["filename"] == "manuale.pdf"
+      assert payload["doc_type"] == "visura"
+
+      detail_response = client.get(f"/anagrafica/subjects/{subject_id}", headers=headers)
+      assert detail_response.status_code == 200
+      assert len(detail_response.json()["documents"]) == 1
+    finally:
+      settings.anagrafica_document_storage_path = original_storage_path
+
+
 def test_bulk_import_from_existing_registry_and_reset(tmp_path) -> None:
     create_user("irene", module_anagrafica=True)
     token = login("irene")

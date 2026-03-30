@@ -1,19 +1,26 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { AnagraficaModulePage } from "@/components/anagrafica/anagrafica-module-page";
 import {
   deleteAnagraficaDocument,
   getAnagraficaSubjectNasCandidates,
+  getAnagraficaSubjectNasImportStatus,
   getAnagraficaSubject,
   importAnagraficaSubjectFromNas,
   updateAnagraficaDocument,
   updateAnagraficaSubject,
+  uploadAnagraficaSubjectDocument,
 } from "@/lib/api";
 import { formatDateTime } from "@/lib/presentation";
-import type { AnagraficaNasFolderCandidate, AnagraficaSubjectDetail, AnagraficaSubjectUpdateInput } from "@/types/api";
+import type {
+  AnagraficaNasFolderCandidate,
+  AnagraficaSubjectDetail,
+  AnagraficaSubjectNasImportStatus,
+  AnagraficaSubjectUpdateInput,
+} from "@/types/api";
 
 function DetailContent({ token, subjectId }: { token: string; subjectId: string }) {
   const router = useRouter();
@@ -24,9 +31,16 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
   const [isSaving, setIsSaving] = useState(false);
   const [isImportingFromNas, setIsImportingFromNas] = useState(false);
   const [nasCandidates, setNasCandidates] = useState<AnagraficaNasFolderCandidate[]>([]);
+  const [nasImportStatus, setNasImportStatus] = useState<AnagraficaSubjectNasImportStatus | null>(null);
   const [selectedNasPath, setSelectedNasPath] = useState("");
   const [isLoadingNasCandidates, setIsLoadingNasCandidates] = useState(false);
   const [isSavingNasPath, setIsSavingNasPath] = useState(false);
+  const [isLoadingNasStatus, setIsLoadingNasStatus] = useState(false);
+  const [isManualUploadModalOpen, setIsManualUploadModalOpen] = useState(false);
+  const [manualFile, setManualFile] = useState<File | null>(null);
+  const [manualDocType, setManualDocType] = useState("altro");
+  const [manualNotes, setManualNotes] = useState("");
+  const [isUploadingManualDocument, setIsUploadingManualDocument] = useState(false);
 
   const [sourceNameRaw, setSourceNameRaw] = useState("");
   const [requiresReview, setRequiresReview] = useState(false);
@@ -72,6 +86,26 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
     const response = await getAnagraficaSubject(token, subjectId);
     setSubject(response);
   }
+
+  const loadNasImportStatus = useCallback(async () => {
+    setIsLoadingNasStatus(true);
+    try {
+      const response = await getAnagraficaSubjectNasImportStatus(token, subjectId);
+      setNasImportStatus(response);
+    } catch (error) {
+      setNasImportStatus({
+        can_import_from_nas: false,
+        missing_in_nas: true,
+        matched_folder_path: null,
+        matched_folder_name: null,
+        total_files_in_nas: 0,
+        pending_files_in_nas: 0,
+        message: error instanceof Error ? error.message : "Verifica NAS non disponibile",
+      });
+    } finally {
+      setIsLoadingNasStatus(false);
+    }
+  }, [token, subjectId]);
 
   async function handleSave() {
     if (!subject) {
@@ -153,6 +187,7 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
     try {
       const result = await importAnagraficaSubjectFromNas(token, subjectId);
       await reloadSubject();
+      await loadNasImportStatus();
       setSaveMessage(
         `Import NAS completato da ${result.matched_folder_name}: ${result.created_documents} documenti creati, ${result.updated_documents} aggiornati.`,
       );
@@ -196,6 +231,7 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
         nas_folder_letter: selectedCandidate?.letter ?? subject?.nas_folder_letter ?? null,
       });
       setSubject(response);
+      await loadNasImportStatus();
       setSaveMessage("Percorso NAS salvato sulla scheda soggetto.");
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : "Errore salvataggio percorso NAS");
@@ -203,6 +239,38 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
       setIsSavingNasPath(false);
     }
   }
+
+  async function handleManualUpload() {
+    if (!manualFile) {
+      setSaveError("Seleziona un file da caricare.");
+      return;
+    }
+
+    setIsUploadingManualDocument(true);
+    setSaveError(null);
+    setSaveMessage(null);
+    try {
+      await uploadAnagraficaSubjectDocument(token, subjectId, manualFile, manualDocType, manualNotes || undefined);
+      await reloadSubject();
+      await loadNasImportStatus();
+      setManualFile(null);
+      setManualDocType("altro");
+      setManualNotes("");
+      setIsManualUploadModalOpen(false);
+      setSaveMessage("Documento caricato manualmente e associato al soggetto.");
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Errore caricamento manuale documento");
+    } finally {
+      setIsUploadingManualDocument(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!subject) {
+      return;
+    }
+    void loadNasImportStatus();
+  }, [loadNasImportStatus, subject]);
 
   if (loadError) {
     return (
@@ -227,14 +295,112 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button className="btn-primary" type="button" onClick={() => void handleImportFromNas()} disabled={isImportingFromNas}>
-            {isImportingFromNas ? "Import in corso..." : "Importa documenti da NAS"}
-          </button>
+          {nasImportStatus?.can_import_from_nas ? (
+            <button className="btn-primary" type="button" onClick={() => void handleImportFromNas()} disabled={isImportingFromNas || isLoadingNasStatus}>
+              {isImportingFromNas ? "Import in corso..." : "Importa documenti da NAS"}
+            </button>
+          ) : (
+            <button className="btn-primary" type="button" onClick={() => setIsManualUploadModalOpen(true)}>
+              Nessun dato rilevato nel NAS, importa manualmente
+            </button>
+          )}
           <button className="btn-secondary" type="button" onClick={() => router.push("/anagrafica/subjects")}>
             Torna alla lista
           </button>
         </div>
       </div>
+
+      {nasImportStatus ? (
+        <article className="panel-card">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="section-title">Stato import NAS</p>
+              <p className="section-copy">{nasImportStatus.message}</p>
+            </div>
+            {nasImportStatus.matched_folder_name ? (
+              <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">{nasImportStatus.matched_folder_name}</span>
+            ) : null}
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+              <p className="text-xs uppercase tracking-widest text-gray-400">File NAS</p>
+              <p className="mt-2 text-2xl font-semibold text-gray-900">{nasImportStatus.total_files_in_nas}</p>
+            </div>
+            <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+              <p className="text-xs uppercase tracking-widest text-gray-400">Da importare</p>
+              <p className="mt-2 text-2xl font-semibold text-gray-900">{nasImportStatus.pending_files_in_nas}</p>
+            </div>
+            <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+              <p className="text-xs uppercase tracking-widest text-gray-400">Percorso rilevato</p>
+              <p className="mt-2 break-all text-sm text-gray-900">{nasImportStatus.matched_folder_path || "Non disponibile"}</p>
+            </div>
+          </div>
+        </article>
+      ) : null}
+
+      {isManualUploadModalOpen ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl">
+            <div className="mb-4">
+              <p className="section-title">Import manuale documento</p>
+              <p className="section-copy mt-2">Carica un file locale e categorizzalo subito per associarlo al soggetto.</p>
+            </div>
+            <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
+              <p className="text-sm font-medium text-gray-900">Documenti gia associati</p>
+              {subject.documents.length === 0 ? (
+                <p className="mt-2 text-sm text-gray-500">Nessun documento presente.</p>
+              ) : (
+                <div className="mt-3 space-y-2">
+                  {subject.documents.map((document) => (
+                    <div key={document.id || document.nas_path} className="rounded-lg border border-gray-200 bg-white px-3 py-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="truncate text-sm font-medium text-gray-900">{document.filename}</p>
+                        <span className="rounded-full bg-gray-100 px-2 py-1 text-[11px] font-medium text-gray-700">{document.doc_type}</span>
+                      </div>
+                      <p className="mt-1 truncate text-xs text-gray-500">{document.nas_path}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="space-y-4">
+              <label className="block text-sm font-medium text-gray-700">
+                File
+                <input
+                  className="form-control mt-1"
+                  type="file"
+                  onChange={(event) => setManualFile(event.target.files?.[0] ?? null)}
+                />
+              </label>
+              <label className="block text-sm font-medium text-gray-700">
+                Categoria documento
+                <select className="form-control mt-1" value={manualDocType} onChange={(event) => setManualDocType(event.target.value)}>
+                  <option value="ingiunzione">Ingiunzione</option>
+                  <option value="notifica">Notifica</option>
+                  <option value="estratto_debito">Estratto debito</option>
+                  <option value="pratica_interna">Pratica interna</option>
+                  <option value="visura">Visura</option>
+                  <option value="corrispondenza">Corrispondenza</option>
+                  <option value="contratto">Contratto</option>
+                  <option value="altro">Altro</option>
+                </select>
+              </label>
+              <label className="block text-sm font-medium text-gray-700">
+                Note
+                <textarea className="form-control mt-1 min-h-24" value={manualNotes} onChange={(event) => setManualNotes(event.target.value)} />
+              </label>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button className="btn-secondary" type="button" onClick={() => setIsManualUploadModalOpen(false)} disabled={isUploadingManualDocument}>
+                Annulla
+              </button>
+              <button className="btn-primary" type="button" onClick={() => void handleManualUpload()} disabled={isUploadingManualDocument}>
+                {isUploadingManualDocument ? "Caricamento..." : "Carica documento"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
         <article className="panel-card">

@@ -449,6 +449,16 @@ export type AnagraficaNasFolderCandidate = {
   nome: string | null;
 };
 
+export type AnagraficaSubjectNasImportStatus = {
+  can_import_from_nas: boolean;
+  missing_in_nas: boolean;
+  matched_folder_path: string | null;
+  matched_folder_name: string | null;
+  total_files_in_nas: number;
+  pending_files_in_nas: number;
+  message: string;
+};
+
 export type AnagraficaImportJob = {
   job_id: string;
   requested_by_user_id: number | null;
