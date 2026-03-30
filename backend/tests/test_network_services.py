@@ -106,6 +106,69 @@ def test_snmp_profile_communities_match_subnet(monkeypatch) -> None:
     assert communities == ["private", "public-site", "public"]
 
 
+def test_classify_http_identity_extracts_canon_printer_metadata() -> None:
+    vendor, model_name, operating_system = services._classify_http_identity(
+        "Canon iR-ADV C5840 Remote UI",
+        "Canon HTTP Server",
+        "Canon iR-ADV C5840 - PROTOCOLLO",
+    )
+
+    assert vendor == "Canon"
+    assert "Canon iR-ADV C5840" in (model_name or "")
+    assert operating_system == "Embedded/Web appliance"
+
+
+def test_extract_meta_refresh_target_and_device_name() -> None:
+    html = """
+    <html>
+      <head><meta http-equiv=Refresh content="0; URL=http://192.168.1.113:8000/rps/"></head>
+      <body><span id="deviceName">Canon iR-ADV C3520 - PROTOCOLLO</span></body>
+    </html>
+    """
+
+    assert services._extract_meta_refresh_target(html) == "http://192.168.1.113:8000/rps/"
+    assert services._extract_device_name(html) == "Canon iR-ADV C3520 - PROTOCOLLO"
+
+
+def test_extract_mac_from_text_supports_ip_neigh_output() -> None:
+    output = "192.168.1.113 dev eth0 lladdr 84:ba:3b:13:ae:0d REACHABLE"
+
+    assert services._extract_mac_from_text(output) == "84:ba:3b:13:ae:0d"
+
+
+def test_resolve_mac_via_arp_helper_uses_helper_response(monkeypatch) -> None:
+    captured: dict[str, str] = {}
+
+    class _FakeResponse:
+        status_code = 200
+
+        @staticmethod
+        def json() -> dict[str, str]:
+            return {"mac_address": "84-BA-3B-13-AE-0D"}
+
+    class _FakeClient:
+        def __init__(self, *args, **kwargs) -> None:
+            return
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            return None
+
+        def get(self, url: str, headers: dict[str, str]) -> _FakeResponse:
+            captured["url"] = url
+            return _FakeResponse()
+
+    monkeypatch.setattr(services, "httpx", type("FakeHttpxModule", (), {"Client": _FakeClient}))
+    monkeypatch.setattr(services.settings, "network_arp_helper_base_url", "http://host.docker.internal:9105")
+
+    mac_address = services._resolve_mac_via_arp_helper("192.168.1.113")
+
+    assert captured["url"] == "http://host.docker.internal:9105/lookup?ip=192.168.1.113"
+    assert mac_address == "84:ba:3b:13:ae:0d"
+
+
 def test_build_diff_counts_new_missing_and_changed_entries() -> None:
     previous = [
         services.NetworkScanDevice(

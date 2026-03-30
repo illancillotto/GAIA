@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 import ipaddress
 import json
+from urllib.parse import quote
+import re
 import shutil
 import socket
 import subprocess
@@ -27,6 +29,16 @@ try:
     import nmap  # type: ignore
 except ImportError:  # pragma: no cover
     nmap = None
+
+try:
+    import httpx
+except ImportError:  # pragma: no cover
+    httpx = None
+
+try:
+    import paramiko
+except ImportError:  # pragma: no cover
+    paramiko = None
 
 try:
     from pysnmp.hlapi.v3arch.asyncio import (  # type: ignore
@@ -72,6 +84,8 @@ class EnrichmentMetadata:
     operating_system: str | None = None
     hostname_source: str | None = None
     metadata_sources: dict[str, str] | None = None
+    http_title: str | None = None
+    http_server: str | None = None
 
 
 def _normalize_mac(value: str | None) -> str | None:
@@ -79,6 +93,113 @@ def _normalize_mac(value: str | None) -> str | None:
         return None
     normalized = value.strip().lower().replace("-", ":")
     return normalized or None
+
+
+def _resolve_mac_from_arp_cache(ip_address: str) -> str | None:
+    commands = (
+        ["ip", "neigh", "show", ip_address],
+        ["arp", "-n", ip_address],
+    )
+    patterns = (
+        r"\blladdr\s+([0-9a-fA-F:-]{17})\b",
+        r"\bat\s+([0-9a-fA-F:-]{17})\b",
+    )
+
+    for command in commands:
+        if shutil.which(command[0]) is None:
+            continue
+        try:
+            result = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                timeout=settings.network_enrichment_timeout_seconds,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            continue
+
+        if result.returncode != 0:
+            continue
+
+        for pattern in patterns:
+            match = re.search(pattern, result.stdout)
+            if match:
+                return _normalize_mac(match.group(1))
+    return None
+
+
+def _extract_mac_from_text(raw_value: str) -> str | None:
+    match = re.search(r"\b([0-9a-fA-F]{2}(?::|-)[0-9a-fA-F]{2}(?::|-)[0-9a-fA-F]{2}(?::|-)[0-9a-fA-F]{2}(?::|-)[0-9a-fA-F]{2}(?::|-)[0-9a-fA-F]{2})\b", raw_value)
+    if not match:
+        return None
+    return _normalize_mac(match.group(1))
+
+
+def _resolve_mac_via_arp_helper(ip_address: str) -> str | None:
+    if httpx is None or not settings.network_arp_helper_base_url:
+        return None
+
+    base_url = settings.network_arp_helper_base_url.rstrip("/")
+    lookup_url = f"{base_url}/lookup?ip={quote(ip_address, safe='')}"
+
+    try:
+        with httpx.Client(timeout=settings.network_enrichment_timeout_seconds) as client:
+            response = client.get(lookup_url, headers={"User-Agent": "GAIA-Network-Monitor/1.0"})
+        if response.status_code != 200:
+            return None
+        payload = response.json()
+    except Exception:
+        return None
+
+    if not isinstance(payload, dict):
+        return None
+    mac_address = payload.get("mac_address")
+    return _normalize_mac(mac_address) if isinstance(mac_address, str) else None
+
+
+def _resolve_mac_via_gateway_arp(ip_address: str) -> str | None:
+    if paramiko is None:
+        return None
+    if not settings.network_gateway_arp_host or not settings.network_gateway_arp_username:
+        return None
+
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    connect_kwargs: dict[str, Any] = {
+        "hostname": settings.network_gateway_arp_host,
+        "port": settings.network_gateway_arp_port,
+        "username": settings.network_gateway_arp_username,
+        "timeout": settings.network_enrichment_timeout_seconds,
+        "banner_timeout": settings.network_enrichment_timeout_seconds,
+        "auth_timeout": settings.network_enrichment_timeout_seconds,
+    }
+    if settings.network_gateway_arp_private_key_path:
+        connect_kwargs["key_filename"] = settings.network_gateway_arp_private_key_path
+    elif settings.network_gateway_arp_password:
+        connect_kwargs["password"] = settings.network_gateway_arp_password
+    else:
+        return None
+
+    try:
+        client.connect(**connect_kwargs)
+        command = settings.network_gateway_arp_command.format(ip=ip_address)
+        _, stdout, _ = client.exec_command(command, timeout=settings.network_enrichment_timeout_seconds)
+        output = stdout.read().decode("utf-8", errors="ignore")
+        return _extract_mac_from_text(output)
+    except Exception:
+        return None
+    finally:
+        client.close()
+
+
+def _resolve_mac_address(ip_address: str, discovered_mac: str | None) -> str | None:
+    return (
+        _normalize_mac(discovered_mac)
+        or _resolve_mac_from_arp_cache(ip_address)
+        or _resolve_mac_via_arp_helper(ip_address)
+        or _resolve_mac_via_gateway_arp(ip_address)
+    )
 
 
 def _guess_device_type(open_ports: Iterable[int]) -> str | None:
@@ -264,6 +385,157 @@ def _classify_snmp_descr(sys_descr: str | None) -> tuple[str | None, str | None,
     return vendor, value[:255], operating_system
 
 
+def _extract_html_title(body: str) -> str | None:
+    match = re.search(r"<title[^>]*>(.*?)</title>", body, flags=re.IGNORECASE | re.DOTALL)
+    if not match:
+        return None
+    title = re.sub(r"\s+", " ", match.group(1)).strip()
+    return _safe_text(title)
+
+
+def _extract_meta_refresh_target(body: str) -> str | None:
+    match = re.search(r'<meta[^>]+http-equiv=["\']?refresh["\']?[^>]+content=["\'][^"\']*url=([^"\'>]+)', body, flags=re.IGNORECASE)
+    if not match:
+        return None
+    return _safe_text(match.group(1))
+
+
+def _extract_device_name(body: str) -> str | None:
+    patterns = (
+        r'<span[^>]+id=["\']deviceName["\'][^>]*>(.*?)</span>',
+        r'<meta[^>]+name=["\']device-name["\'][^>]+content=["\'](.*?)["\']',
+    )
+    for pattern in patterns:
+        match = re.search(pattern, body, flags=re.IGNORECASE | re.DOTALL)
+        if not match:
+            continue
+        value = re.sub(r"<[^>]+>", " ", match.group(1))
+        value = re.sub(r"\s+", " ", value).strip()
+        if value:
+            return _safe_text(value)
+    return None
+
+
+def _normalize_http_model_name(title: str | None, device_name: str | None, server: str | None) -> str | None:
+    candidates = [device_name, title, server]
+    for candidate in candidates:
+        if not candidate:
+            continue
+        normalized = candidate.replace("User Authentication :", "").replace("Accesso", "").strip(" -:/")
+        normalized = re.sub(r"\s{2,}", " ", normalized)
+        if normalized:
+            return normalized[:255]
+    return None
+
+
+def _classify_http_identity(title: str | None, server: str | None, device_name: str | None = None) -> tuple[str | None, str | None, str | None]:
+    values = [item for item in [device_name, title, server] if item]
+    if not values:
+        return None, None, None
+
+    combined = " | ".join(values)
+    lowered = combined.lower()
+
+    vendor_map = {
+        "canon": "Canon",
+        "hp ": "HP",
+        "hewlett-packard": "HP",
+        "konica minolta": "Konica Minolta",
+        "ricoh": "Ricoh",
+        "xerox": "Xerox",
+        "brother": "Brother",
+        "epson": "Epson",
+        "kyocera": "Kyocera",
+        "lexmark": "Lexmark",
+        "mikrotik": "MikroTik",
+        "synology": "Synology",
+        "qnap": "QNAP",
+        "tp-link": "TP-Link",
+        "cisco": "Cisco",
+        "ubiquiti": "Ubiquiti",
+        "unifi": "Ubiquiti",
+    }
+    operating_system_map = {
+        "canon": "Embedded/Web appliance",
+        "jetdirect": "Embedded/Web appliance",
+        "airprint": "Embedded/Web appliance",
+        "printer": "Embedded/Web appliance",
+        "apache": "Embedded/Web appliance",
+        "nginx": "Embedded/Web appliance",
+    }
+
+    vendor = next((mapped for key, mapped in vendor_map.items() if key in lowered), None)
+    operating_system = next((mapped for key, mapped in operating_system_map.items() if key in lowered), None)
+    model_name = _normalize_http_model_name(title, device_name, server)
+    return vendor, model_name, operating_system
+
+
+def _resolve_http_metadata(ip_address: str, open_ports: Iterable[int]) -> EnrichmentMetadata:
+    if httpx is None:
+        return EnrichmentMetadata()
+
+    ports = set(open_ports)
+    candidates: list[tuple[str, int]] = []
+    if 80 in ports:
+        candidates.append(("http", 80))
+    if 443 in ports:
+        candidates.append(("https", 443))
+    if not candidates:
+        return EnrichmentMetadata()
+
+    for scheme, port in candidates:
+        base_url = f"{scheme}://{ip_address}:{port}/"
+        try:
+            with httpx.Client(
+                follow_redirects=True,
+                verify=False,
+                timeout=settings.network_enrichment_timeout_seconds,
+            ) as client:
+                response = client.get(base_url, headers={"User-Agent": "GAIA-Network-Monitor/1.0"})
+
+                body = response.text
+                refresh_target = _extract_meta_refresh_target(body)
+                if refresh_target:
+                    follow_url = refresh_target if refresh_target.startswith("http") else f"{scheme}://{ip_address}:{port}{refresh_target}"
+                    try:
+                        refresh_response = client.get(follow_url, headers={"User-Agent": "GAIA-Network-Monitor/1.0"})
+                        if refresh_response.status_code < 500:
+                            response = refresh_response
+                            body = refresh_response.text
+                    except Exception:
+                        pass
+        except Exception:
+            continue
+
+        title = _extract_html_title(body)
+        device_name = _extract_device_name(body)
+        server = _safe_text(response.headers.get("server"))
+        vendor, model_name, operating_system = _classify_http_identity(title, server, device_name)
+
+        metadata_sources: dict[str, str] = {}
+        if title:
+            metadata_sources["http_title"] = title
+        if device_name:
+            metadata_sources["http_device_name"] = device_name
+        if server:
+            metadata_sources["http_server"] = server
+        if refresh_target:
+            metadata_sources["http_refresh_target"] = refresh_target
+        if metadata_sources:
+            metadata_sources["http"] = f"{scheme}:{port}"
+
+        return EnrichmentMetadata(
+            vendor=vendor,
+            model_name=model_name,
+            operating_system=operating_system,
+            metadata_sources=metadata_sources or None,
+            http_title=title,
+            http_server=server,
+        )
+
+    return EnrichmentMetadata()
+
+
 async def _resolve_snmp_metadata_async(ip_address: str) -> EnrichmentMetadata:
     communities = _snmp_profile_communities(ip_address)
     if get_cmd is None or UdpTransportTarget is None or not communities:
@@ -353,6 +625,16 @@ def _collect_enrichment(ip_address: str, open_ports: Iterable[int]) -> Enrichmen
         metadata.operating_system = snmp_data.operating_system or metadata.operating_system
         if snmp_data.metadata_sources:
             metadata.metadata_sources.update(snmp_data.metadata_sources)
+
+    if 80 in set(open_ports) or 443 in set(open_ports):
+        http_data = _resolve_http_metadata(ip_address, open_ports)
+        metadata.http_title = http_data.http_title or metadata.http_title
+        metadata.http_server = http_data.http_server or metadata.http_server
+        metadata.vendor = metadata.vendor or http_data.vendor
+        metadata.model_name = metadata.model_name or http_data.model_name
+        metadata.operating_system = metadata.operating_system or http_data.operating_system
+        if http_data.metadata_sources:
+            metadata.metadata_sources.update(http_data.metadata_sources)
 
     metadata.hostname_source = (
         "snmp"
@@ -685,7 +967,7 @@ def run_network_scan(
         if device is None:
             device = NetworkDevice(
                 ip_address=host.ip_address,
-                mac_address=_normalize_mac(host.mac_address),
+                mac_address=_resolve_mac_address(host.ip_address, host.mac_address),
                 hostname=_preferred_hostname(host.hostname, enrichment),
                 hostname_source=_preferred_hostname_source(host.hostname, enrichment),
                 dns_name=enrichment.dns_name or enrichment.mdns_name,
@@ -707,7 +989,7 @@ def run_network_scan(
             db.flush()
             devices_by_ip[device.ip_address] = device
         else:
-            device.mac_address = _normalize_mac(host.mac_address) or device.mac_address
+            device.mac_address = _resolve_mac_address(host.ip_address, host.mac_address) or device.mac_address
             device.hostname = _preferred_hostname(host.hostname, enrichment) or device.hostname
             device.hostname_source = _preferred_hostname_source(host.hostname, enrichment) or device.hostname_source
             device.dns_name = enrichment.dns_name or enrichment.mdns_name or device.dns_name

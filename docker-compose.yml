@@ -22,6 +22,10 @@ services:
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      NETWORK_ARP_HELPER_BASE_URL: ${NETWORK_ARP_HELPER_BASE_URL:-http://host.docker.internal:9105}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - catasto-data:/data/catasto
       - anagrafica-data:/data/anagrafica
@@ -121,6 +125,9 @@ services:
       NETWORK_ENRICHMENT_TIMEOUT_SECONDS: ${NETWORK_ENRICHMENT_TIMEOUT_SECONDS:-1.0}
       NETWORK_SNMP_COMMUNITIES: ${NETWORK_SNMP_COMMUNITIES:-public}
       NETWORK_SNMP_COMMUNITY_PROFILES: ${NETWORK_SNMP_COMMUNITY_PROFILES:-[]}
+      NETWORK_ARP_HELPER_BASE_URL: ${NETWORK_ARP_HELPER_BASE_URL:-http://host.docker.internal:9105}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     command: python -m app.scripts.network_scanner
     depends_on:
       postgres:
@@ -128,6 +135,14 @@ services:
     cap_add:
       - NET_RAW
       - NET_ADMIN
+
+  arp-helper:
+    build:
+      context: ./backend
+    container_name: gaia-arp-helper
+    restart: unless-stopped
+    network_mode: host
+    entrypoint: ["python", "-m", "app.scripts.arp_helper"]
 
 volumes:
   postgres_data:

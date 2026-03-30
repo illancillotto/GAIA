@@ -30,5 +30,9 @@ services:
     volumes:
       - ./backend:/app
 
+  arp-helper:
+    volumes:
+      - ./backend:/app
+
 volumes:
   catasto-data:
