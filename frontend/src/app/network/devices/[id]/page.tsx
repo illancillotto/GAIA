@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { NetworkModulePage } from "@/components/network/network-module-page";
 import { NetworkStatusBadge } from "@/components/network/network-status-badge";
 import { getNetworkDevice, updateNetworkDevice } from "@/lib/api";
+import { getNetworkDeviceAdminUrl } from "@/lib/network-device-utils";
 import type { NetworkDevice } from "@/types/api";
 
 function DeviceDetailContent({ token, deviceId }: { token: string; deviceId: number }) {
@@ -22,6 +23,7 @@ function DeviceDetailContent({ token, deviceId }: { token: string; deviceId: num
   const [operatingSystem, setOperatingSystem] = useState("");
   const [modelName, setModelName] = useState("");
   const [isMonitored, setIsMonitored] = useState(true);
+  const adminUrl = device ? getNetworkDeviceAdminUrl(device) : null;
 
   useEffect(() => {
     async function loadDevice() {
@@ -100,7 +102,12 @@ function DeviceDetailContent({ token, deviceId }: { token: string; deviceId: num
           <div>
             <p className="section-title">Identità dispositivo</p>
             <p className="mt-1 text-lg font-medium text-gray-900">{device.display_name || device.hostname || device.ip_address}</p>
-            <p className="mt-1 text-sm text-gray-500">{device.asset_label || device.dns_name || "Nessuna etichetta assegnata"}</p>
+            <p className="mt-1 text-sm text-gray-500">{device.asset_label || device.dns_name || "Nessuna label assegnata"}</p>
+            {adminUrl ? (
+              <a href={adminUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-sm font-medium text-[#1D4E35] underline underline-offset-4">
+                Apri pagina admin
+              </a>
+            ) : null}
           </div>
           <NetworkStatusBadge status={device.status} />
         </div>
@@ -114,7 +121,7 @@ function DeviceDetailContent({ token, deviceId }: { token: string; deviceId: num
             <dd className="mt-1 text-sm text-gray-800">{device.display_name || "n/d"}</dd>
           </div>
           <div>
-            <dt className="label-caption">Asset label</dt>
+            <dt className="label-caption">Label dispositivo</dt>
             <dd className="mt-1 text-sm text-gray-800">{device.asset_label || "n/d"}</dd>
           </div>
           <div>
@@ -148,6 +155,18 @@ function DeviceDetailContent({ token, deviceId }: { token: string; deviceId: num
           <div>
             <dt className="label-caption">Porte aperte</dt>
             <dd className="mt-1 text-sm text-gray-800">{device.open_ports || "n/d"}</dd>
+          </div>
+          <div>
+            <dt className="label-caption">Pagina admin</dt>
+            <dd className="mt-1 break-all text-sm text-gray-800">
+              {adminUrl ? (
+                <a href={adminUrl} target="_blank" rel="noreferrer" className="text-[#1D4E35] underline underline-offset-4">
+                  {adminUrl}
+                </a>
+              ) : (
+                "n/d"
+              )}
+            </dd>
           </div>
           <div>
             <dt className="label-caption">Posizione</dt>
@@ -262,7 +281,7 @@ function DeviceDetailContent({ token, deviceId }: { token: string; deviceId: num
             <input className="form-control mt-1" value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="es. Switch Core Piano Terra" />
           </label>
           <label className="block text-sm font-medium text-gray-700">
-            Asset label
+            Label dispositivo
             <input className="form-control mt-1" value={assetLabel} onChange={(event) => setAssetLabel(event.target.value)} placeholder="es. SW-PT-01" />
           </label>
           <label className="block text-sm font-medium text-gray-700">
