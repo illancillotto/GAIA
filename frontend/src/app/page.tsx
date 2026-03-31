@@ -4,15 +4,6 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import {
-  ChevronRightIcon,
-  DocumentIcon,
-  FolderIcon,
-  GridIcon,
-  ServerIcon,
-  UserIcon,
-  UsersIcon,
-} from "@/components/ui/icons";
 import { getCurrentUser, getDashboardSummary, getMyPermissions, isAuthError } from "@/lib/api";
 import { clearStoredAccessToken, getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/cn";
@@ -22,27 +13,15 @@ import type { CurrentUser, DashboardSummary } from "@/types/api";
 type ModuleStatus = "active" | "warming" | "coming";
 type ModuleId = "accessi" | "rete" | "inventario" | "catasto" | "anagrafica";
 
-type HomeModuleMetric = {
-  label: string;
-  value: string | number;
-  tone?: "default" | "accent" | "muted";
-};
-
 type HomeModule = {
   id: ModuleId;
   title: string;
-  subtitle: string;
   description: string;
   href: string;
   status: ModuleStatus;
   statusLabel: string;
-  eyebrow: string;
-  icon: typeof FolderIcon;
-  accent: string;
-  surfaceClassName: string;
-  metricCardsClassName: string;
-  actionLabel: string;
-  metrics: HomeModuleMetric[];
+  icon: string;
+  enabledKey: string;
 };
 
 const emptySummary: DashboardSummary = {
@@ -54,44 +33,83 @@ const emptySummary: DashboardSummary = {
   sync_runs: 0,
 };
 
-function resolveModuleKey(id: ModuleId): string {
-  switch (id) {
-    case "accessi":
-      return "accessi";
-    case "rete":
-      return "rete";
-    case "inventario":
-      return "inventario";
-    case "catasto":
-      return "catasto";
-    case "anagrafica":
-      return "anagrafica";
-    default:
-      return id;
-  }
-}
+const allModules: HomeModule[] = [
+  {
+    id: "accessi",
+    title: "GAIA NAS Control",
+    description:
+      "Monitoraggio avanzato e gestione dei permessi per infrastrutture NAS Synology. Utenti, gruppi, cartelle condivise e workflow di review centralizzato.",
+    href: "/nas-control",
+    status: "active",
+    statusLabel: "Operativo",
+    icon: "storage",
+    enabledKey: "accessi",
+  },
+  {
+    id: "rete",
+    title: "GAIA Rete",
+    description:
+      "Scansione dispositivi, mappa per piano, alert operativi e controllo dello stato rete con visualizzazioni immediate.",
+    href: "/network",
+    status: "active",
+    statusLabel: "Operativo",
+    icon: "hub",
+    enabledKey: "rete",
+  },
+  {
+    id: "catasto",
+    title: "GAIA Catasto",
+    description:
+      "Batch CSV, visure singole, CAPTCHA, ZIP e archivio documentale con una pipeline costruita per l'operatività quotidiana.",
+    href: "/catasto",
+    status: "active",
+    statusLabel: "Operativo",
+    icon: "account_balance",
+    enabledKey: "catasto",
+  },
+  {
+    id: "anagrafica",
+    title: "GAIA Anagrafica",
+    description:
+      "Gestione soggetti, documenti collegati al NAS e correlazioni con Catasto. Modulo operativo per ricerca, import archivio e qualità del dato.",
+    href: "/anagrafica",
+    status: "active",
+    statusLabel: "Operativo",
+    icon: "badge",
+    enabledKey: "anagrafica",
+  },
+  {
+    id: "inventario",
+    title: "GAIA Inventario",
+    description:
+      "Registro centralizzato di device, garanzie, assegnazioni e import da CSV. Struttura pronta, attivazione funzionale in corso.",
+    href: "/inventory",
+    status: "coming",
+    statusLabel: "In sviluppo",
+    icon: "inventory_2",
+    enabledKey: "inventario",
+  },
+];
 
-function formatCompactValue(value: number): string {
+function formatNumber(value: number): string {
   return new Intl.NumberFormat("it-IT").format(value);
 }
 
 function HomePageSkeleton({ loadError }: { loadError: string | null }) {
   return (
-    <main className="auth-shell">
-      <section className="auth-card">
-        <p className="mb-2 inline-flex rounded-full bg-[#EAF3E8] px-3 py-1 text-xs font-medium text-[#1D4E35]">
-          Reindirizzamento
-        </p>
-        <h1 className="page-heading">Verifica sessione</h1>
-        <p className="mt-2 text-sm text-gray-500">Controllo credenziali locali e connessione al backend.</p>
-        <p className={`mt-4 text-sm ${loadError ? "text-red-600" : "text-gray-500"}`}>
-          {loadError ?? "Accedi per caricare i dati reali dal backend."}
-        </p>
-        <Link className="btn-primary mt-6" href="/login">
-          Vai al login
-        </Link>
-      </section>
-    </main>
+    <div className="min-h-screen flex flex-col items-center justify-center bg-surface text-on-surface font-body">
+      <span className="font-headline text-3xl font-bold text-primary mb-6">GAIA</span>
+      <p className="text-outline text-sm mb-2">Verifica sessione in corso…</p>
+      {loadError ? (
+        <p className="text-error text-sm mt-2">{loadError}</p>
+      ) : null}
+      <Link
+        className="mt-6 bg-primary text-on-primary px-6 py-3 rounded font-medium text-sm transition hover:opacity-90"
+        href="/login"
+      >
+        Vai al login
+      </Link>
+    </div>
   );
 }
 
@@ -157,399 +175,230 @@ export default function HomePage() {
     && currentUser.enabled_modules.includes("accessi")
     && hasSectionAccess(grantedSectionKeys, "accessi.users");
 
-  const modules: HomeModule[] = [
-    {
-      id: "accessi",
-      title: "GAIA NAS Control",
-      subtitle: "Controllo accessi e permessi",
-      eyebrow: "Dominio operativo",
-      description:
-        "Utenti, gruppi, cartelle condivise, permessi effettivi e workflow di review del NAS Synology in un’unica cabina di regia.",
-      href: "/nas-control",
-      status: "active",
-      statusLabel: "Operativo",
-      icon: FolderIcon,
-      accent: "#1a3d2e",
-      surfaceClassName:
-        "border-[#24553f]/30 bg-[radial-gradient(circle_at_top_left,rgba(155,211,167,0.2),transparent_30%),linear-gradient(180deg,#1c4633_0%,#163526_100%)] text-white shadow-[0_28px_80px_rgba(18,54,39,0.34)]",
-      metricCardsClassName: "border-white/10 bg-black/10 text-white",
-      actionLabel: "Apri NAS Control",
-      metrics: [
-        { label: "Share monitorate", value: formatCompactValue(summary.shares), tone: "accent" },
-        { label: "Sync run", value: formatCompactValue(summary.sync_runs), tone: "default" },
-        { label: "Review aperte", value: formatCompactValue(summary.reviews), tone: "muted" },
-      ],
-    },
-    {
-      id: "rete",
-      title: "GAIA Rete",
-      subtitle: "Monitoraggio LAN",
-      eyebrow: "Dominio operativo",
-      description:
-        "Scansione dispositivi, mappa per piano, alert operativi e controllo dello stato rete con visualizzazioni immediate.",
-      href: "/network",
-      status: "active",
-      statusLabel: "Operativo",
-      icon: ServerIcon,
-      accent: "#0b6b61",
-      surfaceClassName:
-        "border-[#84d5c7]/40 bg-[radial-gradient(circle_at_top_left,rgba(11,107,97,0.1),transparent_28%),linear-gradient(180deg,#fbfffe_0%,#edf9f5_100%)] text-gray-900 shadow-[0_24px_64px_rgba(12,102,92,0.12)]",
-      metricCardsClassName: "border-[#cdebe3] bg-white/80 text-gray-900",
-      actionLabel: "Apri GAIA Rete",
-      metrics: [
-        { label: "Asset attesi", value: "LAN", tone: "accent" },
-        { label: "Vista", value: "Alert + mappe", tone: "default" },
-        { label: "Modalità", value: "Live monitor", tone: "muted" },
-      ],
-    },
-    {
-      id: "inventario",
-      title: "GAIA Inventario",
-      subtitle: "Registro asset IT",
-      eyebrow: "Roadmap applicativa",
-      description:
-        "Registro centralizzato di device, garanzie, assegnazioni e import da CSV. Struttura pronta, attivazione funzionale in corso.",
-      href: "/inventory",
-      status: "coming",
-      statusLabel: "In sviluppo",
-      icon: GridIcon,
-      accent: "#8d6c2e",
-      surfaceClassName:
-        "border-dashed border-[#d6c28d] bg-[linear-gradient(135deg,rgba(255,248,231,0.95),rgba(255,255,255,0.96))] text-gray-900 shadow-[0_16px_40px_rgba(141,108,46,0.08)]",
-      metricCardsClassName: "border-[#eadcbc] bg-white/85 text-gray-900",
-      actionLabel: "Disponibile prossimamente",
-      metrics: [
-        { label: "Stato", value: "Scaffold pronto", tone: "accent" },
-        { label: "Output", value: "Asset + garanzie", tone: "default" },
-      ],
-    },
-    {
-      id: "catasto",
-      title: "GAIA Catasto",
-      subtitle: "Servizi Agenzia Entrate",
-      eyebrow: "Dominio operativo",
-      description:
-        "Batch CSV, visure singole, CAPTCHA, ZIP e archivio documentale con una pipeline costruita per l’operatività quotidiana.",
-      href: "/catasto",
-      status: "active",
-      statusLabel: "Operativo",
-      icon: DocumentIcon,
-      accent: "#a14f14",
-      surfaceClassName:
-        "border-[#f0c9aa]/40 bg-[radial-gradient(circle_at_top_left,rgba(161,79,20,0.12),transparent_28%),linear-gradient(180deg,#fffaf6_0%,#fff1e6_100%)] text-gray-900 shadow-[0_24px_64px_rgba(161,79,20,0.1)]",
-      metricCardsClassName: "border-[#f1d9c5] bg-white/85 text-gray-900",
-      actionLabel: "Apri GAIA Catasto",
-      metrics: [
-        { label: "Flusso", value: "Batch + singole", tone: "accent" },
-        { label: "Output", value: "PDF e ZIP", tone: "default" },
-        { label: "Ambiente", value: "SISTER", tone: "muted" },
-      ],
-    },
-    {
-      id: "anagrafica",
-      title: "GAIA Anagrafica",
-      subtitle: "Registro soggetti e documenti",
-      eyebrow: "Attivazione controllata",
-      description:
-        "Gestione soggetti, documenti collegati al NAS e correlazioni con Catasto. Modulo pronto all’uso con rollout progressivo.",
-      href: "/anagrafica",
-      status: "warming",
-      statusLabel: "In attivazione",
-      icon: UsersIcon,
-      accent: "#325c72",
-      surfaceClassName:
-        "border-[#c7deea]/50 bg-[radial-gradient(circle_at_top_left,rgba(50,92,114,0.12),transparent_28%),linear-gradient(180deg,#f7fbfd_0%,#eef6fa_100%)] text-gray-900 shadow-[0_24px_64px_rgba(50,92,114,0.1)]",
-      metricCardsClassName: "border-[#d7e8f0] bg-white/85 text-gray-900",
-      actionLabel: "Apri GAIA Anagrafica",
-      metrics: [
-        { label: "Dominio", value: "Soggetti + NAS", tone: "accent" },
-        { label: "Ricerca", value: "Operativa", tone: "default" },
-        { label: "Stato", value: "Rollout", tone: "muted" },
-      ],
-    },
-  ];
-
-  const visibleModules = modules.filter((moduleItem) => {
-    if (moduleItem.status === "coming") {
-      return true;
-    }
-    return currentUser.enabled_modules.includes(resolveModuleKey(moduleItem.id));
+  const visibleModules = allModules.filter((mod) => {
+    if (mod.status === "coming") return true;
+    return currentUser.enabled_modules.includes(mod.enabledKey);
   });
 
-  const liveModules = visibleModules.filter((moduleItem) => moduleItem.status === "active").length;
-  const highlightedStats = [
-    { label: "Share presidiate", value: formatCompactValue(summary.shares), copy: "Domini e cartelle condivise monitorate" },
-    { label: "Sync run", value: formatCompactValue(summary.sync_runs), copy: "Ultime esecuzioni del connettore NAS" },
-    { label: "Review aperte", value: formatCompactValue(summary.reviews), copy: "Richieste che richiedono una decisione" },
+  const stats = [
+    {
+      label: "Shared Managed Units",
+      value: formatNumber(summary.shares),
+      copy: "Unità attive monitorate in tempo reale",
+      icon: "hub",
+    },
+    {
+      label: "Sync Runs",
+      value: formatNumber(summary.sync_runs),
+      copy: "Cicli completati nelle ultime 24 ore",
+      icon: "sync",
+    },
+    {
+      label: "Open Reviews",
+      value: formatNumber(summary.reviews),
+      copy: summary.reviews === 0 ? "Tutti i sistemi sono conformi alle policy" : "Richieste in attesa di decisione",
+      icon: "assignment_late",
+    },
   ];
 
-  const statusClassName: Record<ModuleStatus, string> = {
-    active: "bg-emerald-100 text-emerald-800 ring-1 ring-emerald-200",
-    warming: "bg-amber-100 text-amber-800 ring-1 ring-amber-200",
-    coming: "bg-slate-200 text-slate-700 ring-1 ring-slate-300",
+  const statusBadge: Record<ModuleStatus, string> = {
+    active: "bg-primary-fixed text-on-primary-fixed",
+    warming: "bg-secondary-fixed text-on-secondary-fixed",
+    coming: "bg-tertiary-fixed-dim text-on-tertiary-fixed-variant",
   };
 
   return (
-    <main className="min-h-screen bg-[linear-gradient(180deg,#f6fbf7_0%,#eef4ef_46%,#f7f6f2_100%)] text-[#15211b]">
-      <div className="mx-auto flex min-h-screen max-w-[1440px] flex-col px-5 py-5 sm:px-8 lg:px-10 xl:px-12">
-        <header className="relative overflow-hidden rounded-[36px] border border-[#d8e7dc] bg-[radial-gradient(circle_at_top_left,rgba(92,164,116,0.2),transparent_26%),linear-gradient(135deg,#173627_0%,#204a35_52%,#10271d_100%)] px-6 py-7 text-white shadow-[0_36px_120px_rgba(17,45,31,0.22)] sm:px-8 sm:py-8 lg:px-10">
-          <div className="absolute right-0 top-0 h-48 w-48 rounded-full bg-[radial-gradient(circle,rgba(255,255,255,0.14),transparent_68%)]" />
-          <div className="relative flex flex-col gap-8 xl:flex-row xl:items-start xl:justify-between">
-            <div className="max-w-4xl">
-              <div className="inline-flex items-center gap-3 rounded-full border border-white/15 bg-white/8 px-4 py-2 text-[11px] font-semibold uppercase tracking-[0.28em] text-[#d8f4df]">
-                <span className="h-2 w-2 rounded-full bg-[#9bd3a7]" />
-                GAIA
-              </div>
-              <h1 className="mt-6 max-w-4xl font-serif text-4xl font-semibold leading-[0.96] tracking-[-0.04em] text-white sm:text-5xl lg:text-6xl">
-                Gestione Apparati Informativi
-              </h1>
-              <p className="mt-5 max-w-3xl text-sm leading-7 text-white/76 sm:text-base">
-                Piattaforma IT governance del Consorzio di Bonifica dell&apos;Oristanese. NAS, servizi catastali,
-                monitoraggio rete, inventario e anagrafica convergono in una home unica, leggibile e operativa.
-              </p>
-
-              <div className="mt-8 grid gap-4 sm:grid-cols-3">
-                {highlightedStats.map((item) => (
-                  <div
-                    key={item.label}
-                    className="rounded-[24px] border border-white/10 bg-white/8 px-4 py-4 backdrop-blur-sm"
-                  >
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-white/55">{item.label}</p>
-                    <p className="mt-3 text-4xl font-semibold tracking-[-0.05em] text-white sm:text-[2.7rem]">{item.value}</p>
-                    <p className="mt-2 text-xs leading-5 text-white/65">{item.copy}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            <aside className="w-full max-w-[360px] rounded-[30px] border border-white/12 bg-[linear-gradient(180deg,rgba(255,255,255,0.12),rgba(255,255,255,0.05))] p-5 backdrop-blur xl:p-6">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-white/45">Sessione attiva</p>
-                  <p className="mt-3 text-xl font-semibold text-white">{currentUser.username}</p>
-                  <p className="mt-1 break-all text-sm text-white/64">{currentUser.email}</p>
-                </div>
-                <button
-                  className="rounded-full border border-white/15 bg-white/5 px-3 py-2 text-xs font-medium text-white transition hover:border-white/30 hover:bg-white/12 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/35"
-                  onClick={handleLogout}
-                  type="button"
-                >
-                  Logout
-                </button>
-              </div>
-
-              <div className="mt-6 grid gap-3 sm:grid-cols-2">
-                <div className="rounded-[22px] border border-white/10 bg-black/10 p-4">
-                  <p className="text-[10px] uppercase tracking-[0.22em] text-white/45">Ente</p>
-                  <p className="mt-2 text-sm font-medium text-white">Consorzio di Bonifica</p>
-                  <p className="text-sm text-white/72">dell&apos;Oristanese</p>
-                </div>
-                <div className="rounded-[22px] border border-white/10 bg-black/10 p-4">
-                  <p className="text-[10px] uppercase tracking-[0.22em] text-white/45">Ruolo</p>
-                  <p className="mt-2 text-sm font-medium text-white">{currentUser.role}</p>
-                  <p className="text-sm text-white/72">{liveModules} moduli operativi visibili</p>
-                </div>
-              </div>
-
-              {canManageGaiaUsers ? (
-                <Link
-                  href="/gaia/users"
-                  className="mt-5 inline-flex w-full items-center justify-between rounded-[22px] border border-white/12 bg-white px-4 py-4 text-sm font-medium text-[#173627] transition hover:bg-[#f3fbf5] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/35"
-                >
-                  <span>
-                    Utenti applicativi
-                    <span className="mt-1 block text-xs text-[#4e6858]">Gestione account, ruoli e abilitazioni</span>
-                  </span>
-                  <ChevronRightIcon className="h-4 w-4" />
-                </Link>
-              ) : null}
-            </aside>
-          </div>
-        </header>
-
-        <section className="pt-8">
-          <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[#5f7669]">Pannello moduli</p>
-              <h2 className="mt-2 font-serif text-3xl font-semibold tracking-[-0.04em] text-[#1b2b22] sm:text-[2.45rem]">
-                Seleziona il dominio operativo
-              </h2>
-            </div>
-            <div className="inline-flex items-center gap-2 rounded-full border border-[#d4e3d8] bg-white px-4 py-2 text-sm text-[#446254] shadow-[0_10px_30px_rgba(28,64,43,0.06)]">
-              <span className="h-2 w-2 rounded-full bg-[#1a8f53]" />
-              {liveModules} moduli operativi disponibili · {summary.reviews} review aperte
-            </div>
-          </div>
-
-          {canManageGaiaUsers ? (
-            <section className="mb-6 overflow-hidden rounded-[32px] border border-[#d9e8de] bg-[radial-gradient(circle_at_top_right,rgba(26,61,46,0.08),transparent_30%),linear-gradient(180deg,#ffffff_0%,#f6fbf7_100%)] p-6 shadow-[0_24px_70px_rgba(24,61,46,0.08)] sm:p-7">
-              <div className="flex flex-col gap-5 xl:flex-row xl:items-end xl:justify-between">
-                <div className="max-w-3xl">
-                  <div className="inline-flex items-center gap-2 rounded-full bg-[#eaf3ed] px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#29533d]">
-                    <UserIcon className="h-3.5 w-3.5" />
-                    Amministrazione GAIA
-                  </div>
-                  <h3 className="mt-4 font-serif text-3xl font-semibold tracking-[-0.04em] text-[#183526]">
-                    Utenti applicativi e permessi piattaforma
-                  </h3>
-                  <p className="mt-3 max-w-2xl text-sm leading-7 text-[#577061]">
-                    Area distinta dal dominio NAS. Qui governi accessi interni, ruoli, abilitazioni di sezione e ciclo di vita degli utenti applicativi.
-                  </p>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[360px]">
-                  <div className="rounded-[24px] border border-[#d8e6dd] bg-white p-4">
-                    <p className="text-[10px] uppercase tracking-[0.22em] text-[#78917f]">Governance</p>
-                    <p className="mt-2 text-lg font-semibold text-[#163627]">Ruoli, moduli e visibilità</p>
-                  </div>
+    <div className="min-h-screen bg-surface text-on-surface font-body">
+      {/* TopAppBar */}
+      <header className="bg-surface fixed top-0 w-full z-50">
+        <div className="flex justify-between items-center w-full px-8 py-4 max-w-full">
+          <div className="flex items-center gap-12">
+            <span className="font-headline text-2xl font-bold italic text-primary">GAIA</span>
+            <nav className="hidden md:flex gap-8">
+              {visibleModules
+                .filter((m) => m.status !== "coming")
+                .map((mod) => (
                   <Link
-                    href="/gaia/users"
-                    className="inline-flex items-center justify-between rounded-[24px] border border-[#204a35] bg-[#173627] px-5 py-4 text-sm font-medium text-white transition hover:bg-[#10291d] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#173627]/30"
+                    key={mod.id}
+                    href={mod.href}
+                    className="font-body font-medium text-outline hover:text-primary transition-colors duration-200"
                   >
-                    <span>Apri utenti GAIA</span>
-                    <ChevronRightIcon className="h-4 w-4" />
+                    {mod.title.replace("GAIA ", "")}
                   </Link>
+                ))}
+            </nav>
+          </div>
+
+          <div className="flex items-center gap-4">
+            {/* Search (lg+) */}
+            <div className="relative hidden lg:block">
+              <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-sm pointer-events-none">
+                search
+              </span>
+              <input
+                className="bg-surface-container-high border-none rounded-lg pl-10 pr-4 py-2 text-sm focus:ring-1 focus:ring-primary w-56 transition-all outline-none"
+                placeholder="Ricerca globale…"
+                type="text"
+                readOnly
+              />
+            </div>
+
+            {/* User + logout */}
+            <span className="text-sm font-medium text-on-surface-variant hidden lg:block">
+              {currentUser.username}
+            </span>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="text-on-surface-variant hover:text-primary transition-colors"
+              aria-label="Logout"
+            >
+              <span className="material-symbols-outlined">logout</span>
+            </button>
+          </div>
+        </div>
+        <div className="bg-surface-container h-[1px] w-full" />
+      </header>
+
+      {/* Main content */}
+      <main className="pt-24 pb-12 px-8 max-w-7xl mx-auto min-h-screen">
+        {/* Hero */}
+        <section className="mb-16">
+          <div className="max-w-3xl">
+            <h1 className="text-6xl font-headline font-medium text-primary leading-tight mb-4">
+              Gestione Apparati Informativi
+            </h1>
+            <p className="text-xl font-body text-outline leading-relaxed">
+              GAIA (Governance &amp; Audit for Information Assets) funge da nucleo centrale per il monitoraggio
+              istituzionale, garantendo integrità, sicurezza e controllo granulare su tutte le infrastrutture IT
+              e i flussi documentali dell&apos;ente.
+            </p>
+          </div>
+        </section>
+
+        {/* Stats bento */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
+          {stats.map((stat) => (
+            <div
+              key={stat.label}
+              className="bg-surface-container-low p-8 rounded-xl flex flex-col justify-between min-h-[180px]"
+            >
+              <div className="flex justify-between items-start">
+                <span className="text-xs font-label tracking-[0.05em] uppercase text-outline">{stat.label}</span>
+                <span className="material-symbols-outlined text-primary">{stat.icon}</span>
+              </div>
+              <div className="mt-4">
+                <span className="text-5xl font-headline text-primary">{stat.value}</span>
+                <p className="text-sm text-on-secondary-container mt-2">{stat.copy}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Admin section */}
+        {canManageGaiaUsers ? (
+          <div className="mb-10">
+            <Link
+              href="/gaia/users"
+              className="flex items-center justify-between bg-surface-container-low p-6 rounded-xl hover:shadow-md transition-all duration-300 group"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 bg-primary-container rounded-lg flex items-center justify-center">
+                  <span className="material-symbols-outlined text-primary-fixed text-xl">manage_accounts</span>
+                </div>
+                <div>
+                  <p className="font-medium text-primary text-sm tracking-wide">Amministrazione GAIA</p>
+                  <p className="text-on-surface-variant text-sm">Utenti applicativi, ruoli e abilitazioni</p>
                 </div>
               </div>
-            </section>
-          ) : null}
+              <span className="material-symbols-outlined text-outline group-hover:text-primary transition-colors">
+                arrow_forward
+              </span>
+            </Link>
+          </div>
+        ) : null}
 
-          <div className="grid gap-5 lg:grid-cols-2 xl:grid-cols-3">
-            {visibleModules.map((moduleItem) => {
-              const Icon = moduleItem.icon;
-              const isInteractive = moduleItem.status !== "coming";
-              const isDarkSurface = moduleItem.id === "accessi";
-              const cardContent = (
+        {/* Module domains */}
+        <section>
+          <div className="flex items-end justify-between mb-8">
+            <div>
+              <h2 className="text-3xl font-headline text-primary mb-2">Seleziona il dominio operativo</h2>
+              <p className="text-outline font-body">Sistemi di controllo e gestione asset istituzionali</p>
+            </div>
+            <div className="flex gap-4">
+              <span className="flex items-center gap-2 text-xs font-label tracking-widest uppercase text-outline">
+                <span className="w-2 h-2 rounded-full bg-primary-fixed" /> Operativo
+              </span>
+              <span className="flex items-center gap-2 text-xs font-label tracking-widest uppercase text-outline">
+                <span className="w-2 h-2 rounded-full bg-tertiary-fixed-dim" /> In sviluppo
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {visibleModules.map((mod) => {
+              const isInteractive = mod.status !== "coming";
+              const card = (
                 <article
                   className={cn(
-                    "relative flex h-full min-h-[380px] flex-col overflow-hidden rounded-[30px] border px-6 py-6 transition duration-300",
-                    moduleItem.surfaceClassName,
+                    "group bg-surface-container-lowest p-8 rounded-xl border border-outline-variant/15 transition-all duration-300 flex flex-col justify-between min-h-[300px] relative overflow-hidden",
                     isInteractive
-                      ? "cursor-pointer hover:-translate-y-1.5 hover:shadow-[0_32px_90px_rgba(17,45,31,0.16)] focus-visible:outline-none"
-                      : "cursor-default",
+                      ? "hover:shadow-2xl cursor-pointer"
+                      : "opacity-70 cursor-default",
                   )}
                 >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="min-w-0">
-                      <p
-                        className={cn(
-                          "inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.18em]",
-                          moduleItem.status === "active"
-                            ? "bg-white/10 text-inherit"
-                            : "bg-white/70 text-[#4b5f54]",
-                        )}
-                      >
-                        {moduleItem.eyebrow}
-                      </p>
-                      <div className="mt-5 flex items-start gap-4">
-                        <div
-                          className={cn(
-                            "flex h-14 w-14 shrink-0 items-center justify-center rounded-[18px] ring-1",
-                            moduleItem.status === "active"
-                              ? "bg-white/10 ring-white/10"
-                              : "bg-white/80 ring-black/5",
-                          )}
-                        >
-                          <Icon className="h-7 w-7" />
-                        </div>
-                        <div className="min-w-0">
-                          <p className={cn("text-sm font-medium", moduleItem.status === "active" ? "text-white/68" : "text-[#5c7064]")}>
-                            {moduleItem.subtitle}
-                          </p>
-                          <h3 className="mt-1 font-serif text-[2rem] font-semibold leading-[1] tracking-[-0.045em]">
-                            {moduleItem.title}
-                          </h3>
-                        </div>
-                      </div>
-                    </div>
-
-                    <span className={cn("shrink-0 rounded-full px-3 py-1 text-xs font-semibold", statusClassName[moduleItem.status])}>
-                      {moduleItem.statusLabel}
+                  {/* Status badge */}
+                  <div className="absolute top-0 right-0 p-4">
+                    <span
+                      className={cn(
+                        "inline-flex items-center rounded-full px-3 py-1 text-xs font-label uppercase tracking-wider",
+                        statusBadge[mod.status],
+                      )}
+                    >
+                      {mod.statusLabel}
                     </span>
                   </div>
 
-                  <p className={cn("mt-6 text-sm leading-7", moduleItem.status === "active" ? "text-white/76" : "text-[#596e62]")}>
-                    {moduleItem.description}
-                  </p>
-
-                  <div className="mt-7 grid gap-3 sm:grid-cols-2">
-                    {moduleItem.metrics.map((metric) => (
-                      <div
-                        key={`${moduleItem.id}-${metric.label}`}
-                        className={cn(
-                          "min-h-[112px] rounded-[22px] border p-4",
-                          moduleItem.metricCardsClassName,
-                          metric.tone === "accent"
-                            ? moduleItem.status === "active"
-                              ? "shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]"
-                              : "shadow-[0_10px_30px_rgba(12,35,22,0.04)]"
-                            : "",
-                        )}
-                      >
-                        <p
-                          className={cn(
-                            "text-[10px] font-semibold uppercase tracking-[0.22em]",
-                            isDarkSurface ? "text-white/50" : "text-[#72877a]",
-                          )}
-                        >
-                          {metric.label}
-                        </p>
-                        <p
-                          className={cn(
-                            "mt-3 text-2xl font-semibold tracking-[-0.04em]",
-                            isDarkSurface
-                              ? metric.tone === "accent"
-                                ? "text-white"
-                                : "text-white/88"
-                              : metric.tone === "accent"
-                                ? "text-[#173627]"
-                                : "text-[#345144]",
-                          )}
-                        >
-                          {metric.value}
-                        </p>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="mt-auto pt-8">
-                    <div
-                      className={cn(
-                        "inline-flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium",
-                        isInteractive
-                          ? "bg-[rgb(160,87,38)] text-white"
-                          : "border border-dashed border-[#cdbd90] bg-white/80 text-[#75653a]",
-                      )}
-                    >
-                      <span>{moduleItem.actionLabel}</span>
-                      <span aria-hidden="true">{isInteractive ? "→" : "·"}</span>
+                  <div>
+                    <div className="w-12 h-12 bg-primary-container rounded-lg flex items-center justify-center mb-6">
+                      <span className="material-symbols-outlined text-primary-fixed">{mod.icon}</span>
                     </div>
+                    <h3 className="text-2xl font-headline text-primary mb-3">{mod.title}</h3>
+                    <p className="text-on-surface-variant leading-relaxed text-sm">{mod.description}</p>
                   </div>
+
+                  <button
+                    className={cn(
+                      "mt-8 flex items-center gap-2 font-bold transition-all",
+                      isInteractive
+                        ? "text-primary group-hover:gap-4"
+                        : "text-outline cursor-default",
+                    )}
+                    tabIndex={isInteractive ? 0 : -1}
+                    aria-hidden={!isInteractive}
+                  >
+                    {isInteractive ? "Accedi al modulo" : "Disponibile prossimamente"}
+                    <span className="material-symbols-outlined text-[18px]">arrow_forward</span>
+                  </button>
                 </article>
               );
 
-              if (!isInteractive) {
-                return <div key={moduleItem.id}>{cardContent}</div>;
-              }
+              if (!isInteractive) return <div key={mod.id}>{card}</div>;
 
               return (
-                <Link
-                  key={moduleItem.id}
-                  href={moduleItem.href}
-                  className="block h-full rounded-[30px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#173627]/30"
-                >
-                  {cardContent}
+                <Link key={mod.id} href={mod.href} className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30">
+                  {card}
                 </Link>
               );
             })}
           </div>
         </section>
+      </main>
 
-        <footer className="mt-10 flex flex-col gap-2 border-t border-[#dbe7de] pt-6 text-xs text-[#61786c] sm:flex-row sm:items-center sm:justify-between">
-          <p>© GAIA platform · Consorzio di Bonifica dell&apos;Oristanese</p>
-          <p>Versione NAS Control v0.1.0</p>
-        </footer>
-      </div>
-    </main>
+      <footer className="px-8 py-6 border-t border-outline-variant/20 max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs text-outline">
+        <p>© GAIA platform · Consorzio di Bonifica dell&apos;Oristanese</p>
+        <p>Sessione attiva: {currentUser.username} · {currentUser.role}</p>
+      </footer>
+    </div>
   );
 }
