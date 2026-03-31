@@ -26,7 +26,7 @@ import type {
   AnagraficaSubjectUpdateInput,
 } from "@/types/api";
 
-type DocumentPreviewKind = "pdf" | "image" | "docx" | "spreadsheet" | "download";
+type DocumentPreviewKind = "pdf" | "image" | "docx" | "spreadsheet" | "text" | "download";
 
 type SpreadsheetPreviewSheet = {
   name: string;
@@ -35,6 +35,7 @@ type SpreadsheetPreviewSheet = {
 
 const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg"]);
 const SPREADSHEET_EXTENSIONS = new Set([".xls", ".xlsx"]);
+const TEXT_EXTENSIONS = new Set([".txt", ".csv", ".log", ".md", ".json", ".xml"]);
 
 function isPreviewableImage(extension: string | null): boolean {
   return extension != null && IMAGE_EXTENSIONS.has(extension.toLowerCase());
@@ -42,6 +43,10 @@ function isPreviewableImage(extension: string | null): boolean {
 
 function isPreviewableSpreadsheet(extension: string | null): boolean {
   return extension != null && SPREADSHEET_EXTENSIONS.has(extension.toLowerCase());
+}
+
+function isPreviewableText(extension: string | null): boolean {
+  return extension != null && TEXT_EXTENSIONS.has(extension.toLowerCase());
 }
 
 function DetailContent({ token, subjectId }: { token: string; subjectId: string }) {
@@ -66,6 +71,7 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
   const [previewKind, setPreviewKind] = useState<DocumentPreviewKind>("download");
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [spreadsheetPreview, setSpreadsheetPreview] = useState<SpreadsheetPreviewSheet[]>([]);
+  const [textPreview, setTextPreview] = useState<string | null>(null);
   const [documentPendingDeletion, setDocumentPendingDeletion] = useState<AnagraficaDocument | null>(null);
   const [isDeletingDocument, setIsDeletingDocument] = useState(false);
   const [isAuditLogExpanded, setIsAuditLogExpanded] = useState(false);
@@ -355,6 +361,7 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
     setPreviewKind("download");
     setPreviewHtml(null);
     setSpreadsheetPreview([]);
+    setTextPreview(null);
   }, [previewUrl]);
 
   async function handlePreviewDocument(document: AnagraficaDocument) {
@@ -374,6 +381,7 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
     setPreviewKind("download");
     setPreviewHtml(null);
     setSpreadsheetPreview([]);
+    setTextPreview(null);
 
     try {
       const blob = await downloadAnagraficaDocumentBlob(token, document.id);
@@ -418,6 +426,13 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
         });
         setSpreadsheetPreview(sheets);
         setPreviewKind("spreadsheet");
+        return;
+      }
+
+      if (isPreviewableText(extension)) {
+        const textContent = await blob.text();
+        setTextPreview(textContent);
+        setPreviewKind("text");
         return;
       }
 
@@ -721,6 +736,11 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
                       <p className="text-sm text-gray-500">Nessun dato tabellare leggibile disponibile per questo file.</p>
                     )}
                   </div>
+                </div>
+              ) : null}
+              {!isLoadingPreview && !previewError && previewKind === "text" ? (
+                <div className="h-full min-h-[70vh] overflow-auto rounded-xl border border-gray-200 bg-white p-6">
+                  <pre className="whitespace-pre-wrap break-words text-sm leading-6 text-gray-700">{textPreview || "File di testo vuoto."}</pre>
                 </div>
               ) : null}
               {!isLoadingPreview && !previewError && previewUrl && previewKind === "download" ? (

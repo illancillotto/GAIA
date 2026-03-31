@@ -96,3 +96,91 @@ def test_download_file_falls_back_to_shell_when_sftp_fails() -> None:
     payload = client.download_file("/volume1/test file.pdf")
 
     assert payload == b"%PDF-1.4 shell fallback"
+
+
+def test_upload_file_falls_back_to_shell_when_sftp_fails() -> None:
+    class FakeTransport:
+        def __init__(self) -> None:
+            self.commands: list[str] = []
+            self.payload = b""
+
+        def is_active(self) -> bool:
+            return True
+
+        def open_session(self):
+            transport = self
+
+            class FakeChannel:
+                def exec_command(self, command: str) -> None:
+                    transport.commands.append(command)
+
+                def sendall(self, content: bytes) -> None:
+                    transport.payload += content
+
+                def shutdown_write(self) -> None:
+                    return None
+
+                def recv_exit_status(self) -> int:
+                    return 0
+
+                def makefile_stderr(self, mode: str):
+                    class FakeFile:
+                        def read(self) -> bytes:
+                            return b""
+
+                    return FakeFile()
+
+                def close(self) -> None:
+                    return None
+
+            return FakeChannel()
+
+    class FailingSFTP:
+        def file(self, path: str, mode: str):
+            raise OSError("sftp upload disabled")
+
+        def close(self) -> None:
+            return None
+
+    class FakeClient:
+        def __init__(self) -> None:
+            self.transport = FakeTransport()
+            self.mkdir_commands: list[str] = []
+
+        def open_sftp(self) -> FailingSFTP:
+            return FailingSFTP()
+
+        def exec_command(self, command: str, timeout: int):
+            self.mkdir_commands.append(command)
+
+            class FakeChannel:
+                def recv_exit_status(self) -> int:
+                    return 0
+
+            class FakeStream:
+                def __init__(self) -> None:
+                    self.channel = FakeChannel()
+
+                def read(self):
+                    return b""
+
+            return (None, FakeStream(), FakeStream())
+
+        def get_transport(self) -> FakeTransport:
+            return self.transport
+
+    client = NasSSHClient(
+        host="nas.example.local",
+        port=22,
+        username="svc_sync",
+        timeout=5,
+        password="secret",
+    )
+    fake_client = FakeClient()
+    client._client = fake_client
+
+    client.upload_file("/volume1/test folder/manuale.pdf", b"hello nas")
+
+    assert fake_client.mkdir_commands == ["mkdir -p '/volume1/test folder'"]
+    assert fake_client.transport.commands == ["cat > '/volume1/test folder/manuale.pdf'"]
+    assert fake_client.transport.payload == b"hello nas"

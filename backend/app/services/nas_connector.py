@@ -117,7 +117,10 @@ class NasSSHClient:
             finally:
                 sftp.close()
         except Exception as exc:  # pragma: no cover
-            raise NasConnectorError(f"SSH file upload failed: {path}") from exc
+            try:
+                self._upload_file_via_shell(client, path, content)
+            except Exception as fallback_exc:  # pragma: no cover
+                raise NasConnectorError(f"SSH file upload failed: {path}") from fallback_exc
 
     def _download_file_via_shell(self, client: Any, path: str) -> bytes:
         quoted_path = shlex.quote(path)
@@ -130,6 +133,24 @@ class NasSSHClient:
                 f"SSH command returned exit status {exit_status} for 'cat {quoted_path}': {error_output}"
             )
         return output
+
+    def _upload_file_via_shell(self, client: Any, path: str, content: bytes) -> None:
+        transport = client.get_transport()
+        if transport is None or not transport.is_active():
+            raise NasConnectorError("SSH transport is not active")
+
+        channel = transport.open_session()
+        quoted_path = shlex.quote(path)
+        channel.exec_command(f"cat > {quoted_path}")
+        channel.sendall(content)
+        channel.shutdown_write()
+        exit_status = channel.recv_exit_status()
+        error_output = channel.makefile_stderr("rb").read().decode("utf-8", errors="replace").strip()
+        channel.close()
+        if exit_status != 0:
+            raise NasConnectorError(
+                f"SSH command returned exit status {exit_status} for 'cat > {quoted_path}': {error_output}"
+            )
 
     def close(self) -> None:
         if self._client is None:
