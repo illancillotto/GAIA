@@ -636,6 +636,9 @@ async def upload_subject_document(
     except ValueError as exc:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except NasConnectorError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
 
     return _build_document_response(document)
 
@@ -746,6 +749,8 @@ def get_stats(
     __: Annotated[ApplicationUser, RequireAnagraficaModule],
     db: Annotated[Session, Depends(get_db)],
 ) -> AnagraficaStatsResponse:
+    visible_document_condition = _visible_document_condition()
+
     total_subjects = db.scalar(select(func.count()).select_from(AnagraficaSubject)) or 0
     total_persons = db.scalar(
         select(func.count()).select_from(AnagraficaSubject).where(AnagraficaSubject.subject_type == "person")
@@ -756,7 +761,9 @@ def get_stats(
     total_unknown = db.scalar(
         select(func.count()).select_from(AnagraficaSubject).where(AnagraficaSubject.subject_type == "unknown")
     ) or 0
-    total_documents = db.scalar(select(func.count()).select_from(AnagraficaDocument)) or 0
+    total_documents = db.scalar(
+        select(func.count()).select_from(AnagraficaDocument).where(visible_document_condition)
+    ) or 0
     requires_review = db.scalar(
         select(func.count()).select_from(AnagraficaSubject).where(AnagraficaSubject.requires_review.is_(True))
     ) or 0
@@ -767,7 +774,9 @@ def get_stats(
         select(func.count()).select_from(AnagraficaSubject).where(AnagraficaSubject.status == "inactive")
     ) or 0
     documents_unclassified = db.scalar(
-        select(func.count()).select_from(AnagraficaDocument).where(AnagraficaDocument.doc_type == AnagraficaDocType.ALTRO.value)
+        select(func.count())
+        .select_from(AnagraficaDocument)
+        .where(AnagraficaDocument.doc_type == AnagraficaDocType.ALTRO.value, visible_document_condition)
     ) or 0
     letter_rows = db.execute(
         select(AnagraficaSubject.nas_folder_letter, func.count())
@@ -795,21 +804,28 @@ def get_documents_summary(
     __: Annotated[ApplicationUser, RequireAnagraficaModule],
     db: Annotated[Session, Depends(get_db)],
 ) -> AnagraficaDocumentSummaryResponse:
-    total_documents = db.scalar(select(func.count()).select_from(AnagraficaDocument)) or 0
+    visible_document_condition = _visible_document_condition()
+
+    total_documents = db.scalar(
+        select(func.count()).select_from(AnagraficaDocument).where(visible_document_condition)
+    ) or 0
     documents_unclassified = db.scalar(
-        select(func.count()).select_from(AnagraficaDocument).where(AnagraficaDocument.doc_type == AnagraficaDocType.ALTRO.value)
+        select(func.count())
+        .select_from(AnagraficaDocument)
+        .where(AnagraficaDocument.doc_type == AnagraficaDocType.ALTRO.value, visible_document_condition)
     ) or 0
     classified_documents = max(total_documents - documents_unclassified, 0)
 
     buckets = db.execute(
         select(AnagraficaDocument.doc_type, func.count())
+        .where(visible_document_condition)
         .group_by(AnagraficaDocument.doc_type)
         .order_by(func.count().desc(), AnagraficaDocument.doc_type.asc())
     ).all()
 
     recent_unclassified_documents = db.scalars(
         select(AnagraficaDocument)
-        .where(AnagraficaDocument.doc_type == AnagraficaDocType.ALTRO.value)
+        .where(AnagraficaDocument.doc_type == AnagraficaDocType.ALTRO.value, visible_document_condition)
         .order_by(AnagraficaDocument.created_at.desc())
         .limit(12)
     ).all()
@@ -1048,7 +1064,9 @@ def _create_subject_audit(
 def _build_subject_list_item(db: Session, subject: AnagraficaSubject) -> AnagraficaSubjectListItemResponse:
     display_name, codice_fiscale, partita_iva = _subject_identity_summary(db, subject)
     document_count = db.scalar(
-        select(func.count()).select_from(AnagraficaDocument).where(AnagraficaDocument.subject_id == subject.id)
+        select(func.count())
+        .select_from(AnagraficaDocument)
+        .where(AnagraficaDocument.subject_id == subject.id, _visible_document_condition())
     ) or 0
     return AnagraficaSubjectListItemResponse(
         id=str(subject.id),
@@ -1111,6 +1129,10 @@ def _build_document_response(document: AnagraficaDocument) -> AnagraficaPreviewD
 
 def _should_skip_document(document: AnagraficaDocument) -> bool:
     return document.filename.strip().lower() == "thumbs.db"
+
+
+def _visible_document_condition():
+    return func.lower(func.trim(AnagraficaDocument.filename)) != "thumbs.db"
 
 
 def _export_headers() -> list[str]:

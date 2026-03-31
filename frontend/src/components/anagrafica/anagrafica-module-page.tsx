@@ -31,6 +31,15 @@ export function AnagraficaModulePage({
   const [grantedSectionKeys, setGrantedSectionKeys] = useState<string[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
+  const [isEmbedded, setIsEmbedded] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const params = new URLSearchParams(window.location.search);
+    setIsEmbedded(params.get("embedded") === "1");
+  }, []);
 
   useEffect(() => {
     async function loadSession() {
@@ -94,6 +103,17 @@ export function AnagraficaModulePage({
   }
 
   if (!currentUser.enabled_modules.includes("anagrafica")) {
+    if (isEmbedded) {
+      return (
+        <section className="min-h-full bg-white p-6">
+          <article className="rounded-xl border border-red-100 bg-red-50 p-5">
+            <p className="text-sm font-medium text-red-700">Accesso non autorizzato</p>
+            <p className="mt-2 text-sm text-gray-600">Il tuo account non ha il modulo GAIA Anagrafica abilitato.</p>
+          </article>
+        </section>
+      );
+    }
+
     return (
       <AppShell currentUser={currentUser} onLogout={handleLogout} grantedSectionKeys={grantedSectionKeys}>
         <Topbar pageTitle={title} breadcrumb={breadcrumb} actions={actions} />
@@ -108,6 +128,14 @@ export function AnagraficaModulePage({
           </article>
         </section>
       </AppShell>
+    );
+  }
+
+  if (isEmbedded) {
+    return (
+      <main className="min-h-full bg-white p-4">
+        <div className="page-stack">{children({ token, currentUser, grantedSectionKeys })}</div>
+      </main>
     );
   }
 

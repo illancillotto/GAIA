@@ -17,6 +17,7 @@ import {
   uploadAnagraficaSubjectDocument,
 } from "@/lib/api";
 import { formatDateTime } from "@/lib/presentation";
+import { cn } from "@/lib/cn";
 import type {
   AnagraficaDocument,
   AnagraficaNasFolderCandidate,
@@ -68,6 +69,9 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
   const [documentPendingDeletion, setDocumentPendingDeletion] = useState<AnagraficaDocument | null>(null);
   const [isDeletingDocument, setIsDeletingDocument] = useState(false);
   const [isAuditLogExpanded, setIsAuditLogExpanded] = useState(false);
+  const [isMetadataExpanded, setIsMetadataExpanded] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [isEnableEditConfirmOpen, setIsEnableEditConfirmOpen] = useState(false);
   const [manualFile, setManualFile] = useState<File | null>(null);
   const [manualDocType, setManualDocType] = useState("altro");
   const [manualNotes, setManualNotes] = useState("");
@@ -79,6 +83,25 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
   const [displayOne, setDisplayOne] = useState("");
   const [displayTwo, setDisplayTwo] = useState("");
   const [identifier, setIdentifier] = useState("");
+  const [personDetails, setPersonDetails] = useState({
+    data_nascita: "",
+    comune_nascita: "",
+    indirizzo: "",
+    comune_residenza: "",
+    cap: "",
+    email: "",
+    telefono: "",
+    note: "",
+  });
+  const [companyDetails, setCompanyDetails] = useState({
+    codice_fiscale: "",
+    sede_legale: "",
+    comune_sede: "",
+    cap: "",
+    email_pec: "",
+    telefono: "",
+    note: "",
+  });
 
   useEffect(() => {
     async function loadSubject() {
@@ -98,6 +121,8 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
     if (!subject) {
       return;
     }
+    setIsEditMode(false);
+    setIsEnableEditConfirmOpen(false);
     setSourceNameRaw(subject.source_name_raw);
     setRequiresReview(subject.requires_review);
     setStatus(subject.status);
@@ -106,10 +131,29 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
       setDisplayOne(subject.person.cognome);
       setDisplayTwo(subject.person.nome);
       setIdentifier(subject.person.codice_fiscale);
+      setPersonDetails({
+        data_nascita: subject.person.data_nascita || "",
+        comune_nascita: subject.person.comune_nascita || "",
+        indirizzo: subject.person.indirizzo || "",
+        comune_residenza: subject.person.comune_residenza || "",
+        cap: subject.person.cap || "",
+        email: subject.person.email || "",
+        telefono: subject.person.telefono || "",
+        note: subject.person.note || "",
+      });
     } else if (subject.company) {
       setDisplayOne(subject.company.ragione_sociale);
       setDisplayTwo(subject.company.forma_giuridica || "");
       setIdentifier(subject.company.partita_iva);
+      setCompanyDetails({
+        codice_fiscale: subject.company.codice_fiscale || "",
+        sede_legale: subject.company.sede_legale || "",
+        comune_sede: subject.company.comune_sede || "",
+        cap: subject.company.cap || "",
+        email_pec: subject.company.email_pec || "",
+        telefono: subject.company.telefono || "",
+        note: subject.company.note || "",
+      });
     }
   }, [subject]);
 
@@ -157,27 +201,27 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
         cognome: displayOne,
         nome: displayTwo,
         codice_fiscale: identifier,
-        data_nascita: subject.person.data_nascita,
-        comune_nascita: subject.person.comune_nascita,
-        indirizzo: subject.person.indirizzo,
-        comune_residenza: subject.person.comune_residenza,
-        cap: subject.person.cap,
-        email: subject.person.email,
-        telefono: subject.person.telefono,
-        note: subject.person.note,
+        data_nascita: personDetails.data_nascita || null,
+        comune_nascita: personDetails.comune_nascita || null,
+        indirizzo: personDetails.indirizzo || null,
+        comune_residenza: personDetails.comune_residenza || null,
+        cap: personDetails.cap || null,
+        email: personDetails.email || null,
+        telefono: personDetails.telefono || null,
+        note: personDetails.note || null,
       };
     } else if (subject.company) {
       payload.company = {
         ragione_sociale: displayOne,
         forma_giuridica: displayTwo || null,
         partita_iva: identifier,
-        codice_fiscale: subject.company.codice_fiscale,
-        sede_legale: subject.company.sede_legale,
-        comune_sede: subject.company.comune_sede,
-        cap: subject.company.cap,
-        email_pec: subject.company.email_pec,
-        telefono: subject.company.telefono,
-        note: subject.company.note,
+        codice_fiscale: companyDetails.codice_fiscale || null,
+        sede_legale: companyDetails.sede_legale || null,
+        comune_sede: companyDetails.comune_sede || null,
+        cap: companyDetails.cap || null,
+        email_pec: companyDetails.email_pec || null,
+        telefono: companyDetails.telefono || null,
+        note: companyDetails.note || null,
       };
     }
 
@@ -442,8 +486,38 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
     return <article className="panel-card text-sm text-gray-500">Caricamento scheda soggetto.</article>;
   }
 
+  const readOnlyControlClassName = !isEditMode ? "bg-gray-50 text-gray-500" : "";
+
   return (
     <div className="page-stack">
+      {isEnableEditConfirmOpen ? (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+            <div>
+              <p className="section-title">Abilita modalità modifica</p>
+              <p className="section-copy mt-2">
+                La scheda soggetto è in sola lettura per default. Vuoi abilitare la modifica dei dati, dei documenti e del collegamento NAS?
+              </p>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button className="btn-secondary" type="button" onClick={() => setIsEnableEditConfirmOpen(false)}>
+                Annulla
+              </button>
+              <button
+                className="btn-primary"
+                type="button"
+                onClick={() => {
+                  setIsEditMode(true);
+                  setIsEnableEditConfirmOpen(false);
+                }}
+              >
+                Abilita modifica
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-sm text-gray-500">Scheda soggetto del Consorzio</p>
@@ -452,15 +526,28 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          {nasImportStatus?.can_import_from_nas ? (
+          <span className={cn("inline-flex items-center rounded-full px-3 py-2 text-xs font-medium", isEditMode ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-600")}>
+            {isEditMode ? "Modalità modifica attiva" : "Sola lettura"}
+          </span>
+          {isEditMode ? (
+            <button className="btn-secondary" type="button" onClick={() => setIsEditMode(false)}>
+              Termina modifica
+            </button>
+          ) : (
+            <button className="btn-primary" type="button" onClick={() => setIsEnableEditConfirmOpen(true)}>
+              Modifica
+            </button>
+          )}
+          {isEditMode && nasImportStatus?.can_import_from_nas ? (
             <button className="btn-primary" type="button" onClick={() => void handleImportFromNas()} disabled={isImportingFromNas || isLoadingNasStatus}>
               {isImportingFromNas ? "Import in corso..." : "Importa documenti da NAS"}
             </button>
-          ) : (
+          ) : null}
+          {isEditMode && !nasImportStatus?.can_import_from_nas ? (
             <button className="btn-primary" type="button" onClick={() => setIsManualUploadModalOpen(true)}>
               Nessun dato rilevato nel NAS, importa manualmente
             </button>
-          )}
+          ) : null}
           <button className="btn-secondary" type="button" onClick={() => router.push("/anagrafica/subjects")}>
             Torna alla lista
           </button>
@@ -500,7 +587,10 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
           <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl">
             <div className="mb-4">
               <p className="section-title">Import manuale documento</p>
-              <p className="section-copy mt-2">Carica un file locale e categorizzalo subito per associarlo al soggetto.</p>
+              <p className="section-copy mt-2">
+                Carica un file locale e categorizzalo subito per associarlo al soggetto.
+                {subject.nas_folder_path ? " Il file verra salvato in GAIA e sincronizzato anche sul NAS nella cartella GAIA_UPLOADS." : " Il file verra salvato in GAIA; il soggetto non ha ancora una cartella NAS collegata."}
+              </p>
             </div>
             <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
               <p className="text-sm font-medium text-gray-900">Documenti gia associati</p>
@@ -684,8 +774,7 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
         </div>
       ) : null}
 
-      <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
-        <article className="panel-card">
+      <article className="panel-card">
           <div className="mb-4">
             <p className="section-title">Scheda anagrafica</p>
             <p className="section-copy">Dati principali e stato operativo del soggetto selezionato.</p>
@@ -695,132 +784,199 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
           <div className="grid gap-4 md:grid-cols-2">
             <label className="block text-sm font-medium text-gray-700 md:col-span-2">
               Source name raw
-              <input className="form-control mt-1" value={sourceNameRaw} onChange={(event) => setSourceNameRaw(event.target.value)} />
+              <input className={cn("form-control mt-1", readOnlyControlClassName)} value={sourceNameRaw} onChange={(event) => setSourceNameRaw(event.target.value)} readOnly={!isEditMode} />
             </label>
             <label className="block text-sm font-medium text-gray-700">
               {subject.person ? "Cognome / ragione sociale" : "Ragione sociale"}
-              <input className="form-control mt-1" value={displayOne} onChange={(event) => setDisplayOne(event.target.value)} />
+              <input className={cn("form-control mt-1", readOnlyControlClassName)} value={displayOne} onChange={(event) => setDisplayOne(event.target.value)} readOnly={!isEditMode} />
             </label>
             <label className="block text-sm font-medium text-gray-700">
               {subject.person ? "Nome" : "Forma giuridica"}
-              <input className="form-control mt-1" value={displayTwo} onChange={(event) => setDisplayTwo(event.target.value)} />
+              <input className={cn("form-control mt-1", readOnlyControlClassName)} value={displayTwo} onChange={(event) => setDisplayTwo(event.target.value)} readOnly={!isEditMode} />
             </label>
             <label className="block text-sm font-medium text-gray-700">
               {subject.person ? "Codice fiscale" : "Partita IVA"}
-              <input className="form-control mt-1" value={identifier} onChange={(event) => setIdentifier(event.target.value)} />
+              <input className={cn("form-control mt-1", readOnlyControlClassName)} value={identifier} onChange={(event) => setIdentifier(event.target.value)} readOnly={!isEditMode} />
             </label>
             <label className="block text-sm font-medium text-gray-700">
               Stato
-              <select className="form-control mt-1" value={status} onChange={(event) => setStatus(event.target.value)}>
+              <select className={cn("form-control mt-1", readOnlyControlClassName)} value={status} onChange={(event) => setStatus(event.target.value)} disabled={!isEditMode}>
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
                 <option value="duplicate">Duplicate</option>
               </select>
             </label>
             <label className="flex items-center gap-3 text-sm font-medium text-gray-700 md:col-span-2">
-              <input checked={requiresReview} onChange={(event) => setRequiresReview(event.target.checked)} type="checkbox" />
+              <input checked={requiresReview} onChange={(event) => setRequiresReview(event.target.checked)} type="checkbox" disabled={!isEditMode} />
               Richiede revisione
             </label>
+
+            {subject.person ? (
+              <>
+                <label className="block text-sm font-medium text-gray-700">
+                  Data nascita
+                  <input
+                    className={cn("form-control mt-1", readOnlyControlClassName)}
+                    type="date"
+                    value={personDetails.data_nascita}
+                    onChange={(event) => setPersonDetails((current) => ({ ...current, data_nascita: event.target.value }))}
+                    readOnly={!isEditMode}
+                  />
+                </label>
+                <label className="block text-sm font-medium text-gray-700">
+                  Comune nascita
+                  <input
+                    className={cn("form-control mt-1", readOnlyControlClassName)}
+                    value={personDetails.comune_nascita}
+                    onChange={(event) => setPersonDetails((current) => ({ ...current, comune_nascita: event.target.value }))}
+                    readOnly={!isEditMode}
+                  />
+                </label>
+                <label className="block text-sm font-medium text-gray-700 md:col-span-2">
+                  Indirizzo
+                  <input
+                    className={cn("form-control mt-1", readOnlyControlClassName)}
+                    value={personDetails.indirizzo}
+                    onChange={(event) => setPersonDetails((current) => ({ ...current, indirizzo: event.target.value }))}
+                    readOnly={!isEditMode}
+                  />
+                </label>
+                <label className="block text-sm font-medium text-gray-700">
+                  Comune residenza
+                  <input
+                    className={cn("form-control mt-1", readOnlyControlClassName)}
+                    value={personDetails.comune_residenza}
+                    onChange={(event) => setPersonDetails((current) => ({ ...current, comune_residenza: event.target.value }))}
+                    readOnly={!isEditMode}
+                  />
+                </label>
+                <label className="block text-sm font-medium text-gray-700">
+                  CAP
+                  <input
+                    className={cn("form-control mt-1", readOnlyControlClassName)}
+                    value={personDetails.cap}
+                    onChange={(event) => setPersonDetails((current) => ({ ...current, cap: event.target.value }))}
+                    readOnly={!isEditMode}
+                  />
+                </label>
+                <label className="block text-sm font-medium text-gray-700">
+                  Email
+                  <input
+                    className={cn("form-control mt-1", readOnlyControlClassName)}
+                    type="email"
+                    value={personDetails.email}
+                    onChange={(event) => setPersonDetails((current) => ({ ...current, email: event.target.value }))}
+                    readOnly={!isEditMode}
+                  />
+                </label>
+                <label className="block text-sm font-medium text-gray-700">
+                  Telefono
+                  <input
+                    className={cn("form-control mt-1", readOnlyControlClassName)}
+                    value={personDetails.telefono}
+                    onChange={(event) => setPersonDetails((current) => ({ ...current, telefono: event.target.value }))}
+                    readOnly={!isEditMode}
+                  />
+                </label>
+                <label className="block text-sm font-medium text-gray-700 md:col-span-2">
+                  Note
+                  <textarea
+                    className={cn("form-textarea mt-1 min-h-24", !isEditMode ? "bg-gray-50 text-gray-500" : "")}
+                    value={personDetails.note}
+                    onChange={(event) => setPersonDetails((current) => ({ ...current, note: event.target.value }))}
+                    readOnly={!isEditMode}
+                  />
+                </label>
+              </>
+            ) : null}
+
+            {subject.company ? (
+              <>
+                <label className="block text-sm font-medium text-gray-700">
+                  Codice fiscale
+                  <input
+                    className={cn("form-control mt-1", readOnlyControlClassName)}
+                    value={companyDetails.codice_fiscale}
+                    onChange={(event) => setCompanyDetails((current) => ({ ...current, codice_fiscale: event.target.value }))}
+                    readOnly={!isEditMode}
+                  />
+                </label>
+                <label className="block text-sm font-medium text-gray-700">
+                  Telefono
+                  <input
+                    className={cn("form-control mt-1", readOnlyControlClassName)}
+                    value={companyDetails.telefono}
+                    onChange={(event) => setCompanyDetails((current) => ({ ...current, telefono: event.target.value }))}
+                    readOnly={!isEditMode}
+                  />
+                </label>
+                <label className="block text-sm font-medium text-gray-700 md:col-span-2">
+                  Sede legale
+                  <input
+                    className={cn("form-control mt-1", readOnlyControlClassName)}
+                    value={companyDetails.sede_legale}
+                    onChange={(event) => setCompanyDetails((current) => ({ ...current, sede_legale: event.target.value }))}
+                    readOnly={!isEditMode}
+                  />
+                </label>
+                <label className="block text-sm font-medium text-gray-700">
+                  Comune sede
+                  <input
+                    className={cn("form-control mt-1", readOnlyControlClassName)}
+                    value={companyDetails.comune_sede}
+                    onChange={(event) => setCompanyDetails((current) => ({ ...current, comune_sede: event.target.value }))}
+                    readOnly={!isEditMode}
+                  />
+                </label>
+                <label className="block text-sm font-medium text-gray-700">
+                  CAP
+                  <input
+                    className={cn("form-control mt-1", readOnlyControlClassName)}
+                    value={companyDetails.cap}
+                    onChange={(event) => setCompanyDetails((current) => ({ ...current, cap: event.target.value }))}
+                    readOnly={!isEditMode}
+                  />
+                </label>
+                <label className="block text-sm font-medium text-gray-700 md:col-span-2">
+                  PEC / Email
+                  <input
+                    className={cn("form-control mt-1", readOnlyControlClassName)}
+                    type="email"
+                    value={companyDetails.email_pec}
+                    onChange={(event) => setCompanyDetails((current) => ({ ...current, email_pec: event.target.value }))}
+                    readOnly={!isEditMode}
+                  />
+                </label>
+                <label className="block text-sm font-medium text-gray-700 md:col-span-2">
+                  Note
+                  <textarea
+                    className={cn("form-textarea mt-1 min-h-24", !isEditMode ? "bg-gray-50 text-gray-500" : "")}
+                    value={companyDetails.note}
+                    onChange={(event) => setCompanyDetails((current) => ({ ...current, note: event.target.value }))}
+                    readOnly={!isEditMode}
+                  />
+                </label>
+              </>
+            ) : null}
           </div>
           <div className="mt-4 flex justify-end">
-            <button className="btn-primary" onClick={() => void handleSave()} type="button" disabled={isSaving}>
+            <button className="btn-primary" onClick={() => void handleSave()} type="button" disabled={!isEditMode || isSaving}>
               {isSaving ? "Salvataggio..." : "Salva scheda"}
             </button>
           </div>
-        </article>
-
-        <article className="panel-card">
-          <p className="section-title">Metadati archivio</p>
-          <dl className="mt-5 space-y-4">
-            <div>
-              <dt className="label-caption">Tipo soggetto</dt>
-              <dd className="mt-1 text-sm text-gray-800">{subject.subject_type}</dd>
-            </div>
-            <div>
-              <dt className="label-caption">Lettera archivio</dt>
-              <dd className="mt-1 text-sm text-gray-800">{subject.nas_folder_letter || "—"}</dd>
-            </div>
-            <div>
-              <dt className="label-caption">Percorso NAS</dt>
-              <dd className="mt-1 break-all text-sm text-gray-800">{subject.nas_folder_path || "—"}</dd>
-            </div>
-            <div>
-              <dt className="label-caption">Importato il</dt>
-              <dd className="mt-1 text-sm text-gray-800">{formatDateTime(subject.imported_at)}</dd>
-            </div>
-            <div>
-              <dt className="label-caption">Aggiornato il</dt>
-              <dd className="mt-1 text-sm text-gray-800">{formatDateTime(subject.updated_at)}</dd>
-            </div>
-          </dl>
-        </article>
-      </div>
+      </article>
 
       <article className="panel-card">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="section-title">Override cartella NAS</p>
-            <p className="section-copy">Carica le cartelle candidate trovate per lettera archivio, seleziona quella corretta e salvala sulla scheda.</p>
-          </div>
-          <button className="btn-secondary" type="button" onClick={() => void handleLoadNasCandidates()} disabled={isLoadingNasCandidates}>
-            {isLoadingNasCandidates ? "Ricerca cartelle..." : "Trova cartelle candidate"}
-          </button>
-        </div>
-
-        <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
-          <div className="space-y-3">
-            <label className="block text-sm font-medium text-gray-700">
-              Percorso NAS selezionato
-              <input
-                className="form-control mt-1"
-                value={selectedNasPath}
-                onChange={(event) => setSelectedNasPath(event.target.value)}
-                placeholder="/volume1/.../CartellaSoggetto"
-              />
-            </label>
-            <div className="flex justify-end">
-              <button className="btn-primary" type="button" onClick={() => void handleSaveNasPath()} disabled={isSavingNasPath}>
-                {isSavingNasPath ? "Salvataggio..." : "Salva percorso NAS"}
-              </button>
-            </div>
-          </div>
-
-          <div>
-            {nasCandidates.length === 0 ? (
-              <p className="text-sm text-gray-500">Nessuna cartella candidata caricata. Avvia la ricerca per vedere le opzioni trovate sul NAS.</p>
-            ) : (
-              <div className="space-y-3">
-                {nasCandidates.map((candidate) => (
-                  <label key={candidate.nas_folder_path} className="flex cursor-pointer gap-3 rounded-lg border border-gray-100 px-4 py-3 transition hover:bg-gray-50">
-                    <input
-                      type="radio"
-                      name="nas-candidate"
-                      checked={selectedNasPath === candidate.nas_folder_path}
-                      onChange={() => setSelectedNasPath(candidate.nas_folder_path)}
-                    />
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-sm font-medium text-gray-900">{candidate.folder_name}</p>
-                        <span className="rounded-full bg-gray-100 px-2 py-1 text-[11px] font-medium text-gray-700">score {candidate.score}</span>
-                        <span className="rounded-full bg-sky-50 px-2 py-1 text-[11px] font-medium text-sky-700">{candidate.subject_type}</span>
-                      </div>
-                      <p className="mt-1 break-all text-xs text-gray-500">{candidate.nas_folder_path}</p>
-                      <p className="mt-2 text-xs text-gray-500">
-                        confidenza {Math.round(candidate.confidence * 100)}% · {candidate.codice_fiscale || candidate.partita_iva || "identificativo non disponibile"} · review {candidate.requires_review ? "si" : "no"}
-                      </p>
-                    </div>
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </article>
-
-      <article className="panel-card">
-        <div className="mb-4">
           <p className="section-title">Documenti associati</p>
-          <p className="section-copy">Classificazione manuale e rimozione dal catalogo GAIA.</p>
+          <p className="section-copy">Classificazione manuale, upload e rimozione dal catalogo GAIA.</p>
+          </div>
+          {isEditMode ? (
+            <button className="btn-secondary" type="button" onClick={() => setIsManualUploadModalOpen(true)}>
+              Inserisci file
+            </button>
+          ) : null}
         </div>
         {subject.documents.length === 0 ? (
           <p className="text-sm text-gray-500">Nessun documento associato.</p>
@@ -846,7 +1002,7 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
                     <p className="mt-1 break-all text-xs text-gray-500">{document.nas_path}</p>
                   </div>
                   <select
-                    className="form-control"
+                    className={cn("form-control", readOnlyControlClassName)}
                     value={document.doc_type}
                     onClick={(event) => event.stopPropagation()}
                     onChange={(event) => {
@@ -854,6 +1010,7 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
                         void handleDocumentTypeChange(document.id, event.target.value);
                       }
                     }}
+                    disabled={!isEditMode}
                   >
                     <option value="ingiunzione">Ingiunzione</option>
                     <option value="notifica">Notifica</option>
@@ -876,16 +1033,18 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
                     >
                       Preview
                     </button>
-                    <button
-                      className="text-sm font-medium text-red-600 transition hover:text-red-700"
-                      type="button"
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        setDocumentPendingDeletion(document);
-                      }}
-                    >
-                      Rimuovi
-                    </button>
+                    {isEditMode ? (
+                      <button
+                        className="text-sm font-medium text-red-600 transition hover:text-red-700"
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setDocumentPendingDeletion(document);
+                        }}
+                      >
+                        Rimuovi
+                      </button>
+                    ) : null}
                   </div>
                 </div>
               </div>
@@ -923,6 +1082,69 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
       </article>
 
       <article className="panel-card">
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="section-title">Override cartella NAS</p>
+            <p className="section-copy">Carica le cartelle candidate trovate per lettera archivio, seleziona quella corretta e salvala sulla scheda.</p>
+          </div>
+          <button className="btn-secondary" type="button" onClick={() => void handleLoadNasCandidates()} disabled={!isEditMode || isLoadingNasCandidates}>
+            {isLoadingNasCandidates ? "Ricerca cartelle..." : "Trova cartelle candidate"}
+          </button>
+        </div>
+
+        <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+          <div className="space-y-3">
+            <label className="block text-sm font-medium text-gray-700">
+              Percorso NAS selezionato
+              <input
+                className={cn("form-control mt-1", readOnlyControlClassName)}
+                value={selectedNasPath}
+                onChange={(event) => setSelectedNasPath(event.target.value)}
+                placeholder="/volume1/.../CartellaSoggetto"
+                readOnly={!isEditMode}
+              />
+            </label>
+            <div className="flex justify-end">
+              <button className="btn-primary" type="button" onClick={() => void handleSaveNasPath()} disabled={!isEditMode || isSavingNasPath}>
+                {isSavingNasPath ? "Salvataggio..." : "Salva percorso NAS"}
+              </button>
+            </div>
+          </div>
+
+          <div>
+            {nasCandidates.length === 0 ? (
+              <p className="text-sm text-gray-500">Nessuna cartella candidata caricata. Avvia la ricerca per vedere le opzioni trovate sul NAS.</p>
+            ) : (
+              <div className="space-y-3">
+                {nasCandidates.map((candidate) => (
+                  <label key={candidate.nas_folder_path} className={cn("flex gap-3 rounded-lg border border-gray-100 px-4 py-3 transition", isEditMode ? "cursor-pointer hover:bg-gray-50" : "cursor-default bg-gray-50/50")}>
+                    <input
+                      type="radio"
+                      name="nas-candidate"
+                      checked={selectedNasPath === candidate.nas_folder_path}
+                      onChange={() => setSelectedNasPath(candidate.nas_folder_path)}
+                      disabled={!isEditMode}
+                    />
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-sm font-medium text-gray-900">{candidate.folder_name}</p>
+                        <span className="rounded-full bg-gray-100 px-2 py-1 text-[11px] font-medium text-gray-700">score {candidate.score}</span>
+                        <span className="rounded-full bg-sky-50 px-2 py-1 text-[11px] font-medium text-sky-700">{candidate.subject_type}</span>
+                      </div>
+                      <p className="mt-1 break-all text-xs text-gray-500">{candidate.nas_folder_path}</p>
+                      <p className="mt-2 text-xs text-gray-500">
+                        confidenza {Math.round(candidate.confidence * 100)}% · {candidate.codice_fiscale || candidate.partita_iva || "identificativo non disponibile"} · review {candidate.requires_review ? "si" : "no"}
+                      </p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </article>
+
+      <article className="panel-card">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="section-title">Audit log</p>
@@ -952,6 +1174,54 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
               </div>
             ))}
           </div>
+        )}
+      </article>
+
+      <article className="panel-card">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="section-title">Metadati archivio</p>
+            <p className="section-copy">Informazioni tecniche sul collegamento NAS e sullo stato archivistico del soggetto.</p>
+          </div>
+          <button className="btn-secondary" type="button" onClick={() => setIsMetadataExpanded((current) => !current)}>
+            {isMetadataExpanded ? "Riduci" : "Espandi"}
+          </button>
+        </div>
+        {!isMetadataExpanded ? (
+          <p className="mt-4 text-sm text-gray-500">
+            Metadati ridotti di default. {subject.nas_folder_path ? "Percorso NAS collegato disponibile." : "Nessun percorso NAS collegato."}
+          </p>
+        ) : (
+          <dl className="mt-5 grid gap-4 md:grid-cols-2">
+            <div>
+              <dt className="label-caption">Tipo soggetto</dt>
+              <dd className="mt-1 text-sm text-gray-800">{subject.subject_type}</dd>
+            </div>
+            <div>
+              <dt className="label-caption">Lettera archivio</dt>
+              <dd className="mt-1 text-sm text-gray-800">{subject.nas_folder_letter || "—"}</dd>
+            </div>
+            <div className="md:col-span-2">
+              <dt className="label-caption">Percorso NAS</dt>
+              <dd className="mt-1 break-all text-sm text-gray-800">{subject.nas_folder_path || "—"}</dd>
+            </div>
+            <div>
+              <dt className="label-caption">Importato il</dt>
+              <dd className="mt-1 text-sm text-gray-800">{formatDateTime(subject.imported_at)}</dd>
+            </div>
+            <div>
+              <dt className="label-caption">Aggiornato il</dt>
+              <dd className="mt-1 text-sm text-gray-800">{formatDateTime(subject.updated_at)}</dd>
+            </div>
+            <div>
+              <dt className="label-caption">Creato il</dt>
+              <dd className="mt-1 text-sm text-gray-800">{formatDateTime(subject.created_at)}</dd>
+            </div>
+            <div>
+              <dt className="label-caption">Richiede revisione</dt>
+              <dd className="mt-1 text-sm text-gray-800">{subject.requires_review ? "Si" : "No"}</dd>
+            </div>
+          </dl>
         )}
       </article>
     </div>

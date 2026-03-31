@@ -532,6 +532,65 @@ def test_subject_detail_skips_thumbs_db_documents() -> None:
     assert "visura.xlsx" in filenames
 
 
+def test_documents_summary_skips_thumbs_db_documents() -> None:
+    create_user("thumbs_summary", module_anagrafica=True)
+    token = login("thumbs_summary")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    create_response = client.post(
+        "/anagrafica/subjects",
+        headers=headers,
+        json={
+            "subject_type": "person",
+            "source_name_raw": "Verdi_Luca_VRDLCU80A01H501Z",
+            "nas_folder_letter": "V",
+            "person": {
+                "cognome": "Verdi",
+                "nome": "Luca",
+                "codice_fiscale": "VRDLCU80A01H501Z",
+            },
+        },
+    )
+    assert create_response.status_code == 201
+    subject_id = create_response.json()["id"]
+
+    db = TestingSessionLocal()
+    try:
+        db.add(
+            AnagraficaDocument(
+                subject_id=uuid.UUID(subject_id),
+                doc_type="altro",
+                filename="Thumbs.db",
+                classification_source="auto",
+                storage_type="nas_link",
+                nas_path="/archive/V/Verdi_Luca_VRDLCU80A01H501Z/Thumbs.db",
+            )
+        )
+        db.add(
+            AnagraficaDocument(
+                subject_id=uuid.UUID(subject_id),
+                doc_type="visura",
+                filename="visura-valida.pdf",
+                classification_source="manual",
+                storage_type="local_upload",
+                local_path="/tmp/visura-valida.pdf",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get("/anagrafica/documents/summary", headers=headers)
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total_documents"] == 1
+    assert payload["documents_unclassified"] == 0
+    assert payload["classified_documents"] == 1
+    assert payload["recent_unclassified"] == []
+    assert all(bucket["doc_type"] != "altro" for bucket in payload["by_doc_type"])
+    assert any(bucket["doc_type"] == "visura" and bucket["count"] == 1 for bucket in payload["by_doc_type"])
+
+
 def test_document_update_and_delete() -> None:
     create_user("franco", module_anagrafica=True)
     token = login("franco")
@@ -915,6 +974,72 @@ def test_manual_document_upload_creates_local_document(tmp_path) -> None:
       assert len(detail_response.json()["documents"]) == 1
     finally:
       settings.anagrafica_document_storage_path = original_storage_path
+
+
+def test_manual_document_upload_syncs_to_nas_when_subject_has_nas_path(tmp_path, monkeypatch) -> None:
+    create_user("manual_upload_nas", module_anagrafica=True)
+    token = login("manual_upload_nas")
+    headers = {"Authorization": f"Bearer {token}"}
+    original_storage_path = settings.anagrafica_document_storage_path
+    settings.anagrafica_document_storage_path = str(tmp_path / "anagrafica-docs")
+    uploaded: dict[str, bytes] = {}
+
+    class FakeNasClient:
+        def __init__(self) -> None:
+            self.existing_paths = {
+                "/volume1/Settore Catasto/ARCHIVIO/A/Atzori_Antonio_TZRNTN56E11B314E/manuale-sync.pdf"
+            }
+
+        def ensure_directory(self, path: str) -> None:
+            uploaded[f"dir:{path}"] = b""
+
+        def path_exists(self, path: str) -> bool:
+            return path in self.existing_paths or path in uploaded
+
+        def upload_file(self, path: str, content: bytes) -> None:
+            uploaded[path] = content
+
+        def close(self) -> None:
+            return None
+
+    monkeypatch.setattr("app.modules.anagrafica.services.import_service.get_nas_client", lambda: FakeNasClient())
+
+    try:
+        create_response = client.post(
+            "/anagrafica/subjects",
+            headers=headers,
+            json={
+                "subject_type": "person",
+                "source_name_raw": "ATZORI_ANTONIO_TZRNTN56E11B314E",
+                "nas_folder_path": "/volume1/Settore Catasto/ARCHIVIO/A/Atzori_Antonio_TZRNTN56E11B314E",
+                "nas_folder_letter": "A",
+                "person": {
+                    "cognome": "ATZORI",
+                    "nome": "ANTONIO",
+                    "codice_fiscale": "TZRNTN56E11B314E",
+                },
+            },
+        )
+        assert create_response.status_code == 201
+        subject_id = create_response.json()["id"]
+
+        upload_response = client.post(
+            f"/anagrafica/subjects/{subject_id}/documents/upload",
+            headers=headers,
+            files={"file": ("manuale-sync.pdf", b"%PDF-1.4 manual sync", "application/pdf")},
+            data={"doc_type": "visura", "notes": "upload con sync nas"},
+        )
+        assert upload_response.status_code == 200
+        payload = upload_response.json()
+        assert payload["filename"] == "manuale-sync.pdf"
+        assert payload["nas_path"].endswith("/manuale-sync (1).pdf")
+
+        matching_paths = [path for path in uploaded if path.endswith(".pdf")]
+        assert len(matching_paths) == 1
+        assert matching_paths[0].endswith("/manuale-sync (1).pdf")
+        assert uploaded[matching_paths[0]] == b"%PDF-1.4 manual sync"
+    finally:
+        settings.anagrafica_document_storage_path = original_storage_path
 
 
 def test_bulk_import_from_existing_registry_and_reset(tmp_path) -> None:

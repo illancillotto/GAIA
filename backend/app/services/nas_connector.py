@@ -93,6 +93,32 @@ class NasSSHClient:
             except Exception as fallback_exc:  # pragma: no cover
                 raise NasConnectorError(f"SSH file download failed: {path}") from fallback_exc
 
+    def ensure_directory(self, path: str) -> None:
+        quoted_path = shlex.quote(path)
+        self.run_command(f"mkdir -p {quoted_path}")
+
+    def path_exists(self, path: str) -> bool:
+        quoted_path = shlex.quote(path)
+        output = self.run_command(f"if [ -e {quoted_path} ]; then printf '1'; else printf '0'; fi")
+        return output.strip() == "1"
+
+    def upload_file(self, path: str, content: bytes) -> None:
+        client = self._get_client()
+        parent_path = path.rsplit("/", 1)[0] if "/" in path else None
+        if parent_path:
+            self.run_command(f"mkdir -p {shlex.quote(parent_path)}")
+
+        try:
+            sftp = client.open_sftp()
+            try:
+                with sftp.file(path, "wb") as remote_file:
+                    remote_file.write(content)
+                    remote_file.flush()
+            finally:
+                sftp.close()
+        except Exception as exc:  # pragma: no cover
+            raise NasConnectorError(f"SSH file upload failed: {path}") from exc
+
     def _download_file_via_shell(self, client: Any, path: str) -> bytes:
         quoted_path = shlex.quote(path)
         _, stdout, stderr = client.exec_command(f"cat {quoted_path}", timeout=self.timeout)

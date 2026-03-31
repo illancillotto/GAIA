@@ -150,7 +150,7 @@ function DashboardContent({ token }: { token: string }) {
             <div className="flex-1 overflow-hidden p-4">
               <iframe
                 key={selectedSubject.id}
-                src={`/anagrafica/${selectedSubject.id}`}
+                src={`/anagrafica/${selectedSubject.id}?embedded=1`}
                 title={`Dettaglio ${selectedSubject.display_name}`}
                 className="h-full w-full rounded-xl border border-gray-200 bg-white"
               />

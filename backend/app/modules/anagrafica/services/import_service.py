@@ -40,6 +40,15 @@ class NasCommandRunner(Protocol):
     def download_file(self, path: str) -> bytes:
         ...
 
+    def ensure_directory(self, path: str) -> None:
+        ...
+
+    def path_exists(self, path: str) -> bool:
+        ...
+
+    def upload_file(self, path: str, content: bytes) -> None:
+        ...
+
 
 @dataclass(slots=True)
 class AnagraficaNASWarning:
@@ -1496,12 +1505,24 @@ def create_manual_document(
     subject = db.get(AnagraficaSubject, subject_id)
     if subject is None:
         raise ValueError("Subject not found")
+
     local_path = store_uploaded_document(subject_id, filename, file_bytes)
+    nas_target_path = None
+
+    if subject.nas_folder_path:
+        connector = get_nas_client()
+        try:
+            nas_target_path = _store_document_on_nas(connector, subject, filename, file_bytes)
+        finally:
+            close = getattr(connector, "close", None)
+            if callable(close):
+                close()
+
     document = AnagraficaDocument(
         subject_id=subject_id,
         doc_type=doc_type,
         filename=Path(filename).name or "document.bin",
-        nas_path=None,
+        nas_path=nas_target_path,
         classification_source="manual",
         storage_type=AnagraficaStorageType.LOCAL_UPLOAD.value,
         local_path=local_path,
@@ -1515,11 +1536,55 @@ def create_manual_document(
         subject_id,
         current_user.id,
         "document_manual_uploaded",
-        {"document_filename": document.filename, "doc_type": doc_type, "notes": notes},
+        {
+            "document_filename": document.filename,
+            "doc_type": doc_type,
+            "notes": notes,
+            "nas_path": nas_target_path,
+            "nas_synced": bool(nas_target_path),
+        },
     )
     db.commit()
     db.refresh(document)
     return document
+
+
+def _store_document_on_nas(
+    connector: NasCommandRunner,
+    subject: AnagraficaSubject,
+    filename: str,
+    file_bytes: bytes,
+) -> str:
+    if not subject.nas_folder_path:
+        raise ValueError("Subject NAS folder path is not configured")
+
+    safe_name = Path(filename).name or "document.bin"
+    upload_root = PurePosixPath(subject.nas_folder_path)
+    connector.ensure_directory(str(upload_root))
+
+    target_path = _resolve_unique_nas_target_path(connector, upload_root, safe_name)
+    connector.upload_file(str(target_path), file_bytes)
+    return str(target_path)
+
+
+def _resolve_unique_nas_target_path(
+    connector: NasCommandRunner,
+    upload_root: PurePosixPath,
+    filename: str,
+) -> PurePosixPath:
+    base_name = Path(filename).stem or "document"
+    suffix = Path(filename).suffix
+
+    candidate = upload_root / filename
+    if not connector.path_exists(str(candidate)):
+        return candidate
+
+    attempt = 1
+    while True:
+        candidate = upload_root / f"{base_name} ({attempt}){suffix}"
+        if not connector.path_exists(str(candidate)):
+            return candidate
+        attempt += 1
 
 
 def _clear_local_storage(storage_root: Path) -> int:
