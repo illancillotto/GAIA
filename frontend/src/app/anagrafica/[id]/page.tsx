@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AnagraficaModulePage } from "@/components/anagrafica/anagrafica-module-page";
 import {
@@ -10,6 +10,7 @@ import {
   getAnagraficaSubjectNasCandidates,
   getAnagraficaSubjectNasImportStatus,
   getAnagraficaSubject,
+  deleteAnagraficaDocument,
   importAnagraficaSubjectFromNas,
   updateAnagraficaDocument,
   updateAnagraficaSubject,
@@ -32,9 +33,26 @@ type SpreadsheetPreviewSheet = {
   rows: string[][];
 };
 
+type ManualUploadItem = {
+  id: string;
+  file: File;
+  docType: string;
+  notes: string;
+};
+
 const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg"]);
 const SPREADSHEET_EXTENSIONS = new Set([".xls", ".xlsx"]);
 const TEXT_EXTENSIONS = new Set([".txt", ".csv", ".log", ".md", ".json", ".xml"]);
+const DOCUMENT_TYPE_OPTIONS = [
+  { value: "ingiunzione", label: "Ingiunzione" },
+  { value: "notifica", label: "Notifica" },
+  { value: "estratto_debito", label: "Estratto debito" },
+  { value: "pratica_interna", label: "Pratica interna" },
+  { value: "visura", label: "Visura" },
+  { value: "corrispondenza", label: "Corrispondenza" },
+  { value: "contratto", label: "Contratto" },
+  { value: "altro", label: "Altro" },
+] as const;
 
 function isPreviewableImage(extension: string | null): boolean {
   return extension != null && IMAGE_EXTENSIONS.has(extension.toLowerCase());
@@ -50,6 +68,7 @@ function isPreviewableText(extension: string | null): boolean {
 
 function DetailContent({ token, subjectId }: { token: string; subjectId: string }) {
   const router = useRouter();
+  const manualFileInputRef = useRef<HTMLInputElement | null>(null);
   const [subject, setSubject] = useState<AnagraficaSubjectDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -75,10 +94,12 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
   const [isMetadataExpanded, setIsMetadataExpanded] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [isEnableEditConfirmOpen, setIsEnableEditConfirmOpen] = useState(false);
-  const [manualFile, setManualFile] = useState<File | null>(null);
-  const [manualDocType, setManualDocType] = useState("altro");
-  const [manualNotes, setManualNotes] = useState("");
+  const [manualUploadItems, setManualUploadItems] = useState<ManualUploadItem[]>([]);
   const [isUploadingManualDocument, setIsUploadingManualDocument] = useState(false);
+  const [isManualDropActive, setIsManualDropActive] = useState(false);
+  const [deleteDocumentTarget, setDeleteDocumentTarget] = useState<AnagraficaDocument | null>(null);
+  const [deletePassword, setDeletePassword] = useState("");
+  const [isDeletingDocument, setIsDeletingDocument] = useState(false);
 
   const [sourceNameRaw, setSourceNameRaw] = useState("");
   const [requiresReview, setRequiresReview] = useState(false);
@@ -159,6 +180,12 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
       });
     }
   }, [subject]);
+
+  useEffect(() => {
+    if (!isManualUploadModalOpen) {
+      setManualUploadItems([]);
+    }
+  }, [isManualUploadModalOpen]);
 
   async function reloadSubject() {
     const response = await getAnagraficaSubject(token, subjectId);
@@ -310,8 +337,8 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
   }
 
   async function handleManualUpload() {
-    if (!manualFile) {
-      setSaveError("Seleziona un file da caricare.");
+    if (manualUploadItems.length === 0) {
+      setSaveError("Seleziona almeno un file da caricare.");
       return;
     }
 
@@ -319,19 +346,86 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
     setSaveError(null);
     setSaveMessage(null);
     try {
-      await uploadAnagraficaSubjectDocument(token, subjectId, manualFile, manualDocType, manualNotes || undefined);
+      for (const item of manualUploadItems) {
+        await uploadAnagraficaSubjectDocument(token, subjectId, item.file, item.docType, item.notes || undefined);
+      }
       await reloadSubject();
       await loadNasImportStatus();
-      setManualFile(null);
-      setManualDocType("altro");
-      setManualNotes("");
+      setManualUploadItems([]);
       setIsManualUploadModalOpen(false);
-      setSaveMessage("Documento caricato manualmente e associato al soggetto.");
+      setSaveMessage(
+        manualUploadItems.length === 1
+          ? "Documento caricato manualmente e associato al soggetto."
+          : `${manualUploadItems.length} documenti caricati manualmente e associati al soggetto.`,
+      );
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : "Errore caricamento manuale documento");
     } finally {
       setIsUploadingManualDocument(false);
     }
+  }
+
+  async function handleDeleteDocument() {
+    if (!deleteDocumentTarget?.id) {
+      setSaveError("Documento non valido per la cancellazione.");
+      return;
+    }
+    const password = deletePassword.trim();
+    if (!password) {
+      setSaveError("Inserisci la password per cancellare il documento.");
+      return;
+    }
+
+    setIsDeletingDocument(true);
+    setSaveError(null);
+    setSaveMessage(null);
+    try {
+      await deleteAnagraficaDocument(token, deleteDocumentTarget.id, password);
+      await reloadSubject();
+      await loadNasImportStatus();
+      setDeleteDocumentTarget(null);
+      setDeletePassword("");
+      setSaveMessage("Documento eliminato.");
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Errore eliminazione documento");
+    } finally {
+      setIsDeletingDocument(false);
+    }
+  }
+
+  function handleManualFilesSelection(files: FileList | null) {
+    if (!files || files.length === 0) {
+      return;
+    }
+
+    const newItems = Array.from(files).map((file) => ({
+      id: `${file.name}-${file.lastModified}-${crypto.randomUUID()}`,
+      file,
+      docType: "altro",
+      notes: "",
+    }));
+
+    setManualUploadItems((current) => [...current, ...newItems]);
+  }
+
+  const handleManualDrop = useCallback(
+    (event: React.DragEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setIsManualDropActive(false);
+      handleManualFilesSelection(event.dataTransfer?.files ?? null);
+    },
+    [handleManualFilesSelection],
+  );
+
+  function handleManualItemChange(itemId: string, updates: Partial<Pick<ManualUploadItem, "docType" | "notes">>) {
+    setManualUploadItems((current) =>
+      current.map((item) => (item.id === itemId ? { ...item, ...updates } : item)),
+    );
+  }
+
+  function handleManualItemRemove(itemId: string) {
+    setManualUploadItems((current) => current.filter((item) => item.id !== itemId));
   }
 
   const closePreviewModal = useCallback(() => {
@@ -577,66 +671,202 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
       ) : null}
 
       {isManualUploadModalOpen ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl">
-            <div className="mb-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4 py-6">
+          <div className="flex h-full max-h-[90vh] w-full max-w-5xl flex-col rounded-2xl bg-white shadow-2xl">
+            <div className="border-b border-gray-100 px-6 py-5">
               <p className="section-title">Import manuale documento</p>
               <p className="section-copy mt-2">
-                Carica un file locale e categorizzalo subito per associarlo al soggetto.
-                {subject.nas_folder_path ? " Il file verra salvato in GAIA e sincronizzato anche sul NAS nella cartella GAIA_UPLOADS." : " Il file verra salvato in GAIA; il soggetto non ha ancora una cartella NAS collegata."}
+                Carica uno o piu file locali e categorizzali subito per associarli al soggetto.
+                {subject.nas_folder_path ? " I file verranno salvati in GAIA e sincronizzati anche sul NAS nella cartella GAIA_UPLOADS." : " I file verranno salvati in GAIA; il soggetto non ha ancora una cartella NAS collegata."}
               </p>
             </div>
-            <div className="mb-4 rounded-xl border border-gray-200 bg-gray-50 p-4">
-              <p className="text-sm font-medium text-gray-900">Documenti gia associati</p>
-              {subject.documents.length === 0 ? (
-                <p className="mt-2 text-sm text-gray-500">Nessun documento presente.</p>
-              ) : (
-                <div className="mt-3 space-y-2">
-                  {subject.documents.map((document) => (
-                    <div key={document.id || document.nas_path} className="rounded-lg border border-gray-200 bg-white px-3 py-2">
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="truncate text-sm font-medium text-gray-900">{document.filename}</p>
-                        <span className="rounded-full bg-gray-100 px-2 py-1 text-[11px] font-medium text-gray-700">{document.doc_type}</span>
+            <div className="flex-1 overflow-hidden px-6 py-5">
+              <div className="grid h-full min-h-0 gap-4 md:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+              <div className="flex min-h-0 flex-col rounded-xl border border-gray-200 bg-gray-50 p-4">
+                <p className="text-sm font-medium text-gray-900">Documenti gia associati</p>
+                {subject.documents.length === 0 ? (
+                  <p className="mt-2 text-sm text-gray-500">Nessun documento presente.</p>
+                ) : (
+                  <div className="mt-3 min-h-0 flex-1 space-y-2 overflow-auto pr-1">
+                    {subject.documents.map((document) => (
+                      <div key={document.id || document.nas_path} className="rounded-lg border border-gray-200 bg-white px-3 py-2">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="truncate text-sm font-medium text-gray-900">{document.filename}</p>
+                          <span className="rounded-full bg-gray-100 px-2 py-1 text-[11px] font-medium text-gray-700">{document.doc_type}</span>
+                        </div>
+                        <p className="mt-1 truncate text-xs text-gray-500">{document.nas_path}</p>
                       </div>
-                      <p className="mt-1 truncate text-xs text-gray-500">{document.nas_path}</p>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="flex min-h-0 flex-col space-y-4">
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-gray-700">File</p>
+                  <div
+                    className={cn(
+                      "relative rounded-xl border border-dashed bg-gray-50 px-4 py-6 transition",
+                      isManualDropActive ? "border-[#1D4E35] bg-[#1D4E35]/5" : "border-gray-200 hover:bg-gray-100/60",
+                      isUploadingManualDocument ? "pointer-events-none opacity-60" : "cursor-pointer",
+                    )}
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => manualFileInputRef.current?.click()}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        manualFileInputRef.current?.click();
+                      }
+                    }}
+                    onDragEnter={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setIsManualDropActive(true);
+                    }}
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setIsManualDropActive(true);
+                    }}
+                    onDragLeave={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      setIsManualDropActive(false);
+                    }}
+                    onDrop={handleManualDrop}
+                    aria-label="Trascina qui i file o clicca per selezionarli"
+                  >
+                    <div className="text-center">
+                      <p className="text-sm font-medium text-gray-900">
+                        Trascina qui i file oppure clicca per selezionarli
+                      </p>
+                      <p className="mt-1 text-xs text-gray-500">Puoi selezionare piu file e classificarli singolarmente prima del caricamento.</p>
                     </div>
-                  ))}
+                    <input
+                      ref={manualFileInputRef}
+                      className="sr-only"
+                      type="file"
+                      multiple
+                      onChange={(event) => {
+                        handleManualFilesSelection(event.target.files);
+                        event.target.value = "";
+                      }}
+                    />
+                  </div>
                 </div>
-              )}
+                {manualUploadItems.length === 0 ? (
+                  <div className="grid min-h-[14rem] place-items-center rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-8 text-center text-sm text-gray-500">
+                    Nessun file selezionato. Puoi scegliere piu file e classificarli singolarmente prima del caricamento.
+                  </div>
+                ) : (
+                  <div className="min-h-0 flex-1 space-y-3 overflow-auto pr-1">
+                    {manualUploadItems.map((item, index) => (
+                      <div key={item.id} className="rounded-xl border border-gray-200 bg-white p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-gray-900">{item.file.name}</p>
+                            <p className="mt-1 text-xs text-gray-500">
+                              File {index + 1} · {(item.file.size / 1024 / 1024).toFixed(2)} MB
+                            </p>
+                          </div>
+                          <button
+                            className="text-sm font-medium text-red-600 transition hover:text-red-700"
+                            type="button"
+                            onClick={() => handleManualItemRemove(item.id)}
+                            disabled={isUploadingManualDocument}
+                          >
+                            Rimuovi
+                          </button>
+                        </div>
+                        <div className="mt-4 space-y-4">
+                          <label className="block text-sm font-medium text-gray-700">
+                            Categoria documento
+                            <select
+                              className="form-control mt-1"
+                              value={item.docType}
+                              onChange={(event) => handleManualItemChange(item.id, { docType: event.target.value })}
+                              disabled={isUploadingManualDocument}
+                            >
+                              {DOCUMENT_TYPE_OPTIONS.map((option) => (
+                                <option key={option.value} value={option.value}>
+                                  {option.label}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                            <label className="block text-sm font-medium text-gray-700">
+                              Note
+                              <textarea
+                                className="form-textarea mt-1 min-h-24"
+                                value={item.notes}
+                                onChange={(event) => handleManualItemChange(item.id, { notes: event.target.value })}
+                                disabled={isUploadingManualDocument}
+                              />
+                          </label>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-            <div className="space-y-4">
-              <label className="block text-sm font-medium text-gray-700">
-                File
-                <input
-                  className="form-control mt-1"
-                  type="file"
-                  onChange={(event) => setManualFile(event.target.files?.[0] ?? null)}
-                />
-              </label>
-              <label className="block text-sm font-medium text-gray-700">
-                Categoria documento
-                <select className="form-control mt-1" value={manualDocType} onChange={(event) => setManualDocType(event.target.value)}>
-                  <option value="ingiunzione">Ingiunzione</option>
-                  <option value="notifica">Notifica</option>
-                  <option value="estratto_debito">Estratto debito</option>
-                  <option value="pratica_interna">Pratica interna</option>
-                  <option value="visura">Visura</option>
-                  <option value="corrispondenza">Corrispondenza</option>
-                  <option value="contratto">Contratto</option>
-                  <option value="altro">Altro</option>
-                </select>
-              </label>
-              <label className="block text-sm font-medium text-gray-700">
-                Note
-                <textarea className="form-control mt-1 min-h-24" value={manualNotes} onChange={(event) => setManualNotes(event.target.value)} />
-              </label>
             </div>
-            <div className="mt-6 flex justify-end gap-3">
-              <button className="btn-secondary" type="button" onClick={() => setIsManualUploadModalOpen(false)} disabled={isUploadingManualDocument}>
+            <div className="flex justify-end gap-3 border-t border-gray-100 px-6 py-4">
+              <button
+                className="btn-secondary"
+                type="button"
+                onClick={() => {
+                  setManualUploadItems([]);
+                  setIsManualUploadModalOpen(false);
+                }}
+                disabled={isUploadingManualDocument}
+              >
                 Annulla
               </button>
               <button className="btn-primary" type="button" onClick={() => void handleManualUpload()} disabled={isUploadingManualDocument}>
-                {isUploadingManualDocument ? "Caricamento..." : "Carica documento"}
+                {isUploadingManualDocument ? "Caricamento..." : manualUploadItems.length > 1 ? `Carica ${manualUploadItems.length} documenti` : "Carica documento"}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {deleteDocumentTarget ? (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 px-4 py-6">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
+            <div>
+              <p className="section-title">Cancellazione documento</p>
+              <p className="section-copy mt-2">
+                Stai per eliminare <span className="font-medium text-gray-900">{deleteDocumentTarget.filename}</span>. Inserisci la password per continuare.
+              </p>
+            </div>
+            <div className="mt-5 space-y-4">
+              <label className="block text-sm font-medium text-gray-700">
+                Password
+                <input
+                  className="form-control mt-1"
+                  type="password"
+                  value={deletePassword}
+                  onChange={(event) => setDeletePassword(event.target.value)}
+                  disabled={isDeletingDocument}
+                  autoFocus
+                />
+              </label>
+            </div>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                className="btn-secondary"
+                type="button"
+                onClick={() => {
+                  setDeleteDocumentTarget(null);
+                  setDeletePassword("");
+                }}
+                disabled={isDeletingDocument}
+              >
+                Annulla
+              </button>
+              <button className="btn-primary" type="button" onClick={() => void handleDeleteDocument()} disabled={isDeletingDocument}>
+                {isDeletingDocument ? "Eliminazione..." : "Elimina"}
               </button>
             </div>
           </div>
@@ -945,10 +1175,6 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
           <p className="text-sm text-gray-500">Nessun documento associato.</p>
         ) : (
           <div className="space-y-3">
-            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              {/* TODO(next15): ripristinare la rimozione documenti dal frontend quando la misura temporanea sara revocata. */}
-              La rimozione dei file dal frontend e temporaneamente disattivata.
-            </div>
             {subject.documents.map((document) => (
               <div
                 key={document.id || document.nas_path}
@@ -1000,8 +1226,20 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
                     >
                       Preview
                     </button>
-                    {isEditMode ? (
-                      <span className="text-sm font-medium text-gray-400">Rimozione disattivata</span>
+                    {isEditMode && document.id ? (
+                      <button
+                        className="text-sm font-medium text-red-600 transition hover:text-red-700"
+                        type="button"
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setSaveError(null);
+                          setSaveMessage(null);
+                          setDeleteDocumentTarget(document);
+                          setDeletePassword("");
+                        }}
+                      >
+                        Rimuovi
+                      </button>
                     ) : null}
                   </div>
                 </div>

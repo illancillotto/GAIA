@@ -4,14 +4,16 @@ from io import BytesIO, StringIO
 import csv
 import mimetypes
 from pathlib import Path
+import secrets
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse, StreamingResponse
 from openpyxl import Workbook
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user, require_module
+from app.core.config import settings
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
 from app.models.catasto import CatastoDocument
@@ -678,7 +680,14 @@ def delete_document(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     _: Annotated[ApplicationUser, RequireAnagraficaModule],
     db: Annotated[Session, Depends(get_db)],
+    delete_password: Annotated[str | None, Header(alias="X-GAIA-Delete-Password")] = None,
 ) -> None:
+    expected_password = (settings.anagrafica_delete_password or "").strip()
+    if expected_password:
+        provided_password = (delete_password or "").strip()
+        if not provided_password or not secrets.compare_digest(provided_password, expected_password):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Password di cancellazione non valida")
+
     document = db.get(AnagraficaDocument, document_id)
     if document is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Document not found")

@@ -641,11 +641,12 @@ export async function updateAnagraficaDocument(
   });
 }
 
-export async function deleteAnagraficaDocument(token: string, documentId: string): Promise<void> {
+export async function deleteAnagraficaDocument(token: string, documentId: string, deletePassword?: string): Promise<void> {
   await fetch(`${getApiBaseUrl()}/anagrafica/documents/${documentId}`, {
     method: "DELETE",
     headers: {
       Authorization: `Bearer ${token}`,
+      ...(deletePassword ? { "X-GAIA-Delete-Password": deletePassword } : {}),
     },
     cache: "no-store",
   }).then(async (response) => {

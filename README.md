@@ -125,6 +125,14 @@ I package storici fuori da `app/modules/` restano disponibili come layer di comp
 8. Accedi all'applicazione:
    `http://localhost:8080`
 
+### Cancellazione documenti Anagrafica (protetta da password)
+
+Per riabilitare la rimozione dei documenti dal frontend (modulo Anagrafica) con controllo lato server, imposta in `.env` (backend):
+
+- `ANAGRAFICA_DELETE_PASSWORD`: se valorizzata, ogni `DELETE /api/anagrafica/documents/{id}` richiede l'header `X-GAIA-Delete-Password`.
+
+Se la variabile e vuota/non impostata, la password non viene richiesta.
+
 ## Documentazione
 
 - GAIA Accessi: `domain-docs/accessi/docs/`
