@@ -30,6 +30,8 @@ export default function RootLayout({
     <html lang="it" className={`${newsreader.variable} ${manrope.variable}`}>
       <head>
         {/* Material Symbols icon font */}
+        {/* TODO(next15): replace this stylesheet link with a supported icon-loading strategy. */}
+        {/* eslint-disable-next-line @next/next/no-page-custom-font */}
         <link
           rel="stylesheet"
           href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap"
