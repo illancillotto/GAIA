@@ -17,6 +17,8 @@ const DEFAULT_SORTING: SortingState = [
   { id: "ip_address_order", desc: false },
 ];
 
+type DeviceKnowledgeFilter = "all" | "known" | "unknown";
+
 function toComparableIp(ipAddress: string): number {
   const parts = ipAddress.split(".").map((part) => Number(part));
   if (parts.length !== 4 || parts.some((part) => Number.isNaN(part) || part < 0 || part > 255)) {
@@ -111,6 +113,13 @@ function DevicesContent({ token }: { token: string }) {
   const [items, setItems] = useState<NetworkDevice[]>([]);
   const [total, setTotal] = useState(0);
   const [search, setSearch] = useState(searchParams.get("search") ?? "");
+  const [knowledgeFilter, setKnowledgeFilter] = useState<DeviceKnowledgeFilter>(() => {
+    const initialValue = searchParams.get("known");
+    if (initialValue === "known" || initialValue === "unknown") {
+      return initialValue;
+    }
+    return "all";
+  });
   const [status, setStatus] = useState(searchParams.get("status") ?? "");
   const [deviceType, setDeviceType] = useState(searchParams.get("type") ?? "");
   const [vendor, setVendor] = useState(searchParams.get("vendor") ?? "");
@@ -158,6 +167,12 @@ function DevicesContent({ token }: { token: string }) {
     if (normalizedSearch && !searchHaystack.includes(normalizedSearch)) {
       return false;
     }
+    if (knowledgeFilter === "known" && !item.is_known_device) {
+      return false;
+    }
+    if (knowledgeFilter === "unknown" && item.is_known_device) {
+      return false;
+    }
     if (status && item.status !== status) {
       return false;
     }
@@ -170,12 +185,47 @@ function DevicesContent({ token }: { token: string }) {
     return true;
   });
 
+  const knownDevicesCount = items.filter((item) => item.is_known_device).length;
+  const unknownDevicesCount = items.length - knownDevicesCount;
+
   const availableDeviceTypes = Array.from(new Set(items.map((item) => item.device_type).filter(Boolean))).sort((left, right) => (left || "").localeCompare(right || "", "it"));
   const availableVendors = Array.from(new Set(items.map((item) => item.vendor).filter(Boolean))).sort((left, right) => (left || "").localeCompare(right || "", "it"));
 
   return (
     <div className="page-stack">
       <article className="panel-card">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="inline-flex rounded-xl border border-gray-200 bg-gray-50 p-1">
+            <button
+              className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
+                knowledgeFilter === "all" ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
+              }`}
+              type="button"
+              onClick={() => setKnowledgeFilter("all")}
+            >
+              Tutti
+            </button>
+            <button
+              className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
+                knowledgeFilter === "known" ? "bg-white text-[#1D4E35] shadow-sm" : "text-gray-600 hover:text-gray-900"
+              }`}
+              type="button"
+              onClick={() => setKnowledgeFilter("known")}
+            >
+              Conosciuti ({knownDevicesCount})
+            </button>
+            <button
+              className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
+                knowledgeFilter === "unknown" ? "bg-white text-amber-700 shadow-sm" : "text-gray-600 hover:text-gray-900"
+              }`}
+              type="button"
+              onClick={() => setKnowledgeFilter("unknown")}
+            >
+              Sconosciuti ({unknownDevicesCount})
+            </button>
+          </div>
+          <p className="text-xs text-gray-500">Filtra rapidamente l&apos;inventario tra dispositivi censiti e dispositivi da classificare.</p>
+        </div>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1.4fr)_180px_220px_220px_auto]">
           <input
             className="form-control"
