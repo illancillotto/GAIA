@@ -6,7 +6,6 @@ import { useCallback, useEffect, useState } from "react";
 
 import { AnagraficaModulePage } from "@/components/anagrafica/anagrafica-module-page";
 import {
-  deleteAnagraficaDocument,
   downloadAnagraficaDocumentBlob,
   getAnagraficaSubjectNasCandidates,
   getAnagraficaSubjectNasImportStatus,
@@ -72,8 +71,6 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [spreadsheetPreview, setSpreadsheetPreview] = useState<SpreadsheetPreviewSheet[]>([]);
   const [textPreview, setTextPreview] = useState<string | null>(null);
-  const [documentPendingDeletion, setDocumentPendingDeletion] = useState<AnagraficaDocument | null>(null);
-  const [isDeletingDocument, setIsDeletingDocument] = useState(false);
   const [isAuditLogExpanded, setIsAuditLogExpanded] = useState(false);
   const [isMetadataExpanded, setIsMetadataExpanded] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
@@ -248,19 +245,6 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
       await reloadSubject();
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : "Errore aggiornamento documento");
-    }
-  }
-
-  async function handleDeleteDocument(documentId: string) {
-    setIsDeletingDocument(true);
-    try {
-      await deleteAnagraficaDocument(token, documentId);
-      await reloadSubject();
-      setDocumentPendingDeletion(null);
-    } catch (error) {
-      setSaveError(error instanceof Error ? error.message : "Errore rimozione documento");
-    } finally {
-      setIsDeletingDocument(false);
     }
   }
 
@@ -460,17 +444,12 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
   }, [previewUrl]);
 
   useEffect(() => {
-    if (!isManualUploadModalOpen && !previewDocument && !documentPendingDeletion) {
+    if (!isManualUploadModalOpen && !previewDocument) {
       return;
     }
 
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key !== "Escape") {
-        return;
-      }
-
-      if (documentPendingDeletion) {
-        setDocumentPendingDeletion(null);
         return;
       }
 
@@ -486,7 +465,7 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [closePreviewModal, documentPendingDeletion, isManualUploadModalOpen, previewDocument]);
+  }, [closePreviewModal, isManualUploadModalOpen, previewDocument]);
 
   if (loadError) {
     return (
@@ -758,42 +737,6 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
         </div>
       ) : null}
 
-      {documentPendingDeletion ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
-          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-2xl">
-            <div>
-              <p className="section-title">Conferma rimozione documento</p>
-              <p className="section-copy mt-2">
-                Stai per rimuovere <span className="font-medium text-gray-900">{documentPendingDeletion.filename}</span> dai documenti associati.
-              </p>
-              <p className="mt-3 text-sm text-gray-500">L&apos;operazione rimuove il documento dal catalogo GAIA del soggetto corrente.</p>
-            </div>
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                className="btn-secondary"
-                type="button"
-                onClick={() => setDocumentPendingDeletion(null)}
-                disabled={isDeletingDocument}
-              >
-                Annulla
-              </button>
-              <button
-                className="rounded-full bg-red-600 px-4 py-2 text-sm font-medium text-white transition hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-60"
-                type="button"
-                onClick={() => {
-                  if (documentPendingDeletion.id) {
-                    void handleDeleteDocument(documentPendingDeletion.id);
-                  }
-                }}
-                disabled={isDeletingDocument}
-              >
-                {isDeletingDocument ? "Rimozione..." : "Conferma rimozione"}
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
       <article className="panel-card">
           <div className="mb-4">
             <p className="section-title">Scheda anagrafica</p>
@@ -990,7 +933,7 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
           <p className="section-title">Documenti associati</p>
-          <p className="section-copy">Classificazione manuale, upload e rimozione dal catalogo GAIA.</p>
+          <p className="section-copy">Classificazione manuale e upload dal catalogo GAIA.</p>
           </div>
           {isEditMode ? (
             <button className="btn-secondary" type="button" onClick={() => setIsManualUploadModalOpen(true)}>
@@ -1002,6 +945,10 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
           <p className="text-sm text-gray-500">Nessun documento associato.</p>
         ) : (
           <div className="space-y-3">
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              {/* TODO(next15): ripristinare la rimozione documenti dal frontend quando la misura temporanea sara revocata. */}
+              La rimozione dei file dal frontend e temporaneamente disattivata.
+            </div>
             {subject.documents.map((document) => (
               <div
                 key={document.id || document.nas_path}
@@ -1054,16 +1001,7 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
                       Preview
                     </button>
                     {isEditMode ? (
-                      <button
-                        className="text-sm font-medium text-red-600 transition hover:text-red-700"
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          setDocumentPendingDeletion(document);
-                        }}
-                      >
-                        Rimuovi
-                      </button>
+                      <span className="text-sm font-medium text-gray-400">Rimozione disattivata</span>
                     ) : null}
                   </div>
                 </div>
