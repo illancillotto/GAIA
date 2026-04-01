@@ -16,7 +16,7 @@ import {
 import { NavItem } from "@/components/layout/nav-item";
 
 type ModuleSidebarProps = {
-  currentModuleKey: "nas_control" | "network" | "inventory" | "catasto" | "anagrafica" | "gaia";
+  currentModuleKey: "nas_control" | "network" | "inventory" | "catasto" | "utenze" | "gaia";
   reviewBadge?: number;
   userBadge?: number;
   grantedSectionKeys?: string[];
@@ -101,13 +101,13 @@ export function ModuleSidebar({
     );
   }
 
-  if (currentModuleKey === "anagrafica") {
+  if (currentModuleKey === "utenze") {
     return (
       <div className="space-y-0.5 px-2 pb-3">
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Panoramica</p>
-        <NavItem href="/anagrafica" icon={GridIcon} label="Dashboard" />
-        <NavItem href="/anagrafica/subjects" icon={UserIcon} label="Soggetti" match="prefix" />
-        <NavItem href="/anagrafica/import" icon={RefreshIcon} label="Import archivio" match="prefix" />
+        <NavItem href="/utenze" icon={GridIcon} label="Dashboard" />
+        <NavItem href="/utenze/subjects" icon={UserIcon} label="Soggetti" match="prefix" />
+        <NavItem href="/utenze/import" icon={RefreshIcon} label="Import archivio" match="prefix" />
       </div>
     );
   }

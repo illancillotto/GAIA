@@ -1,13 +1,13 @@
-from app.modules.anagrafica.services.classify_service import (
+from app.modules.utenze.services.classify_service import (
     classify_filename,
     classify_filenames,
 )
-from app.modules.anagrafica.services.csv_import_service import (
+from app.modules.utenze.services.csv_import_service import (
     CsvImportError,
     CsvImportResult,
     import_subjects_from_csv,
 )
-from app.modules.anagrafica.services.import_service import (
+from app.modules.utenze.services.import_service import (
     AnagraficaImportPreviewService,
     AnagraficaNASWarning,
     AnagraficaPreviewDocument,
@@ -22,7 +22,7 @@ from app.modules.anagrafica.services.import_service import (
     reset_anagrafica_data,
     run_import,
 )
-from app.modules.anagrafica.services.parser_service import ParseResult, parse_folder_name
+from app.modules.utenze.services.parser_service import ParseResult, parse_folder_name
 
 __all__ = [
     "AnagraficaImportPreviewService",

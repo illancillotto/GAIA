@@ -53,7 +53,7 @@ def create_application_user(db: Session, payload: ApplicationUserCreate) -> Appl
         module_rete=payload.module_rete,
         module_inventario=payload.module_inventario,
         module_catasto=payload.module_catasto,
-        module_anagrafica=payload.module_anagrafica,
+        module_anagrafica=payload.module_anagrafica or payload.module_utenze,
     )
     db.add(user)
     db.commit()
@@ -64,6 +64,10 @@ def create_application_user(db: Session, payload: ApplicationUserCreate) -> Appl
 def update_application_user(db: Session, user: ApplicationUser, payload: ApplicationUserUpdate) -> ApplicationUser:
     data = payload.model_dump(exclude_unset=True)
     password = data.pop("password", None)
+    if "module_utenze" in data and "module_anagrafica" not in data:
+        data["module_anagrafica"] = data.pop("module_utenze")
+    else:
+        data.pop("module_utenze", None)
     for key, value in data.items():
         setattr(user, key, value)
     if password:

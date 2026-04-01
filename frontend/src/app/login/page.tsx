@@ -12,14 +12,8 @@ const modules = [
   { name: "GAIA NAS Control", icon: "storage", status: "Operativo", active: true },
   { name: "GAIA Catasto", icon: "account_balance", status: "Operativo", active: true },
   { name: "GAIA Rete", icon: "hub", status: "Operativo", active: true },
-  { name: "GAIA Anagrafica", icon: "badge", status: "Operativo", active: true },
+  { name: "GAIA Utenze", icon: "badge", status: "In sviluppo", active: false },
   { name: "GAIA Inventario", icon: "inventory_2", status: "In sviluppo", active: false },
-];
-
-const topNavItems = [
-  { label: "Moduli", hint: "In sviluppo" },
-  { label: "Supporto", hint: "In corso di sviluppo" },
-  { label: "Documentazione", hint: "In corso di sviluppo" },
 ];
 
 export default function LoginPage() {
@@ -71,21 +65,13 @@ export default function LoginPage() {
         <div className="flex justify-between items-center w-full px-8 py-4 max-w-screen-2xl mx-auto">
           <span className="font-headline text-2xl font-bold tracking-tight text-primary">GAIA</span>
           <nav className="hidden md:flex gap-8 items-center">
-            {topNavItems.map((item) => (
-              <span key={item.label} className="group relative inline-flex items-center gap-2 font-body font-medium text-outline">
-                <span>{item.label}</span>
-                <span
-                  className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-outline-variant/40 text-[11px] font-bold text-outline transition-colors group-hover:border-primary/40 group-hover:text-primary"
-                  aria-hidden="true"
-                >
-                  ?
-                </span>
-                <span className="pointer-events-none absolute left-1/2 top-full z-10 mt-3 -translate-x-1/2 rounded-lg bg-[#173627] px-3 py-2 text-[11px] font-medium text-white opacity-0 shadow-[0_12px_30px_rgba(17,45,31,0.16)] transition duration-150 group-hover:opacity-100 group-focus-within:opacity-100 whitespace-nowrap">
-                  {item.hint}
-                </span>
-              </span>
-            ))}
-            <span className="bg-primary text-on-primary px-6 py-2 rounded-lg font-medium text-sm">Accesso</span>
+            <span className="font-body font-medium text-outline">home GAIA</span>
+            <span className="font-body font-medium text-outline">Moduli</span>
+            <span className="font-body font-medium text-outline">Supporto</span>
+            <span className="font-body font-medium text-outline">Documentazione</span>
+            <span className="bg-primary text-on-primary px-6 py-2 rounded-lg font-medium text-sm">
+              Accesso 
+            </span>
           </nav>
         </div>
         <div className="bg-surface-container h-[1px] w-full" />
@@ -146,7 +132,9 @@ export default function LoginPage() {
               <span className="font-label text-[10px] tracking-[0.2em] uppercase text-outline font-semibold mb-2 block">
                 Identità e Accesso
               </span>
-              <h1 className="font-headline text-4xl font-bold text-primary mb-4 tracking-tight">Accesso</h1>
+              <h1 className="font-headline text-4xl font-bold text-primary mb-4 tracking-tight">
+                Accesso
+              </h1>
               <p className="text-on-surface-variant font-light">
                 Inserisci le tue credenziali autorizzate per accedere al sistema di governance.
               </p>

@@ -92,7 +92,7 @@ export function AnagraficaModulePage({
           <h1 className="page-heading">{title}</h1>
           <p className="mt-2 text-sm text-gray-500">{description}</p>
           <p className={`mt-4 text-sm ${loadError ? "text-red-600" : "text-gray-500"}`}>
-            {loadError ?? "Controllo credenziali locali e modulo GAIA Anagrafica."}
+            {loadError ?? "Controllo credenziali locali e modulo GAIA Utenze."}
           </p>
           <Link className="btn-primary mt-6" href="/login">
             Vai al login
@@ -102,13 +102,13 @@ export function AnagraficaModulePage({
     );
   }
 
-  if (!currentUser.enabled_modules.includes("anagrafica")) {
+  if (!currentUser.enabled_modules.includes("anagrafica") && !currentUser.enabled_modules.includes("utenze")) {
     if (isEmbedded) {
       return (
         <section className="min-h-full bg-white p-6">
           <article className="rounded-xl border border-red-100 bg-red-50 p-5">
             <p className="text-sm font-medium text-red-700">Accesso non autorizzato</p>
-            <p className="mt-2 text-sm text-gray-600">Il tuo account non ha il modulo GAIA Anagrafica abilitato.</p>
+            <p className="mt-2 text-sm text-gray-600">Il tuo account non ha il modulo GAIA Utenze abilitato.</p>
           </article>
         </section>
       );
@@ -124,7 +124,7 @@ export function AnagraficaModulePage({
           </div>
           <article className="panel-card">
             <p className="text-sm font-medium text-red-700">Accesso non autorizzato</p>
-            <p className="mt-2 text-sm text-gray-600">Il tuo account non ha il modulo GAIA Anagrafica abilitato.</p>
+            <p className="mt-2 text-sm text-gray-600">Il tuo account non ha il modulo GAIA Utenze abilitato.</p>
           </article>
         </section>
       </AppShell>

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { AnagraficaModulePage } from "@/components/anagrafica/anagrafica-module-page";
+import { AnagraficaModulePage } from "@/components/utenze/anagrafica-module-page";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FolderIcon } from "@/components/ui/icons";
 import {

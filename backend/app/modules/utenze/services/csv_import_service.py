@@ -11,7 +11,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.application_user import ApplicationUser
-from app.modules.anagrafica.models import (
+from app.modules.utenze.models import (
     AnagraficaAuditLog,
     AnagraficaPerson,
     AnagraficaSubject,

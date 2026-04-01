@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useDeferredValue, useEffect, useState } from "react";
 
-import { AnagraficaModulePage } from "@/components/anagrafica/anagrafica-module-page";
+import { AnagraficaModulePage } from "@/components/utenze/anagrafica-module-page";
 import { EmptyState } from "@/components/ui/empty-state";
 import { MetricCard } from "@/components/ui/metric-card";
 import { FolderIcon, RefreshIcon, SearchIcon, UserIcon } from "@/components/ui/icons";
@@ -139,7 +139,7 @@ function DashboardContent({ token }: { token: string }) {
                 <p className="mt-1 truncate text-sm text-gray-500">{selectedSubject.display_name}</p>
               </div>
               <div className="flex items-center gap-3">
-                <Link className="btn-secondary" href={`/anagrafica/${selectedSubject.id}`} target="_blank">
+                <Link className="btn-secondary" href={`/utenze/${selectedSubject.id}`} target="_blank">
                   Apri pagina
                 </Link>
                 <button className="btn-secondary" type="button" onClick={() => setSelectedSubject(null)}>
@@ -150,7 +150,7 @@ function DashboardContent({ token }: { token: string }) {
             <div className="flex-1 overflow-hidden p-4">
               <iframe
                 key={selectedSubject.id}
-                src={`/anagrafica/${selectedSubject.id}?embedded=1`}
+                src={`/utenze/${selectedSubject.id}?embedded=1`}
                 title={`Dettaglio ${selectedSubject.display_name}`}
                 className="h-full w-full rounded-xl border border-gray-200 bg-white"
               />
@@ -168,7 +168,7 @@ function DashboardContent({ token }: { token: string }) {
                 <p className="mt-1 text-sm text-gray-500">Dettaglio classificazione e ultimi documenti non classificati.</p>
               </div>
               <div className="flex items-center gap-3">
-                <Link className="btn-secondary" href="/anagrafica/subjects" target="_blank">
+                <Link className="btn-secondary" href="/utenze/subjects" target="_blank">
                   Apri pagina
                 </Link>
                 <button className="btn-secondary" type="button" onClick={() => setIsDocumentSummaryOpen(false)}>
@@ -261,11 +261,11 @@ function DashboardContent({ token }: { token: string }) {
           Registro soggetti del Consorzio, con snapshot archivio NAS, classificazione documentale e ricerca operativa.
         </p>
         <div className="flex flex-wrap gap-2">
-          <Link className="btn-secondary" href="/anagrafica/subjects">
+          <Link className="btn-secondary" href="/utenze/subjects">
             <SearchIcon className="h-4 w-4" />
             Apri soggetti
           </Link>
-          <Link className="btn-primary" href="/anagrafica/import">
+          <Link className="btn-primary" href="/utenze/import">
             <RefreshIcon className="h-4 w-4" />
             Crea snapshot
           </Link>
@@ -304,7 +304,7 @@ function DashboardContent({ token }: { token: string }) {
             <p className="section-title">Ricerca soggetti</p>
             <p className="section-copy">Inserisci almeno 3 lettere del nome, cognome o ragione sociale per trovare subito i record.</p>
           </div>
-          <Link href="/anagrafica/subjects" className="text-sm font-medium text-[#1D4E35]">
+          <Link href="/utenze/subjects" className="text-sm font-medium text-[#1D4E35]">
             Ricerca avanzata
           </Link>
         </div>
@@ -378,9 +378,9 @@ function DashboardContent({ token }: { token: string }) {
           <div className="mb-3 flex items-center justify-between gap-3">
             <div>
               <p className="section-title">Soggetti recenti</p>
-              <p className="section-copy">Ultimi record creati o aggiornati nel dominio Anagrafica.</p>
+              <p className="section-copy">Ultimi record creati o aggiornati nel dominio Utenze.</p>
             </div>
-            <Link href="/anagrafica/subjects" className="text-sm font-medium text-[#1D4E35]">
+            <Link href="/utenze/subjects" className="text-sm font-medium text-[#1D4E35]">
               Lista completa
             </Link>
           </div>
@@ -424,7 +424,7 @@ function DashboardContent({ token }: { token: string }) {
               <p className="section-title">Snapshot recenti</p>
               <p className="section-copy">Storico breve delle acquisizioni di staging archivio.</p>
             </div>
-            <Link href="/anagrafica/import" className="text-sm font-medium text-[#1D4E35]">
+            <Link href="/utenze/import" className="text-sm font-medium text-[#1D4E35]">
               Apri wizard
             </Link>
           </div>

@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { AnagraficaModulePage } from "@/components/anagrafica/anagrafica-module-page";
+import { AnagraficaModulePage } from "@/components/utenze/anagrafica-module-page";
 import {
   downloadAnagraficaDocumentBlob,
   getAnagraficaSubjectNasCandidates,
@@ -636,7 +636,7 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
               Nessun dato rilevato nel NAS, importa manualmente
             </button>
           ) : null}
-          <button className="btn-secondary" type="button" onClick={() => router.push("/anagrafica/subjects")}>
+          <button className="btn-secondary" type="button" onClick={() => router.push("/utenze/subjects")}>
             Torna alla lista
           </button>
         </div>

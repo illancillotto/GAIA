@@ -17,7 +17,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
 from app.models.catasto import CatastoDocument
-from app.modules.anagrafica.models import (
+from app.modules.utenze.models import (
     AnagraficaAuditLog,
     AnagraficaClassificationSource,
     AnagraficaCompany,
@@ -30,7 +30,7 @@ from app.modules.anagrafica.models import (
     AnagraficaSubject,
     AnagraficaSubjectStatus,
 )
-from app.modules.anagrafica.schemas import (
+from app.modules.utenze.schemas import (
     AnagraficaAuditLogResponse,
     AnagraficaCatastoDocumentResponse,
     AnagraficaCompanyResponse,
@@ -62,7 +62,7 @@ from app.modules.anagrafica.schemas import (
     AnagraficaSubjectListResponse,
     AnagraficaSubjectUpdateRequest,
 )
-from app.modules.anagrafica.services.import_service import (
+from app.modules.utenze.services.import_service import (
     AnagraficaImportPreviewService,
     create_import_snapshot,
     create_manual_document,
@@ -71,11 +71,11 @@ from app.modules.anagrafica.services.import_service import (
     preview_import,
     reset_anagrafica_data,
 )
-from app.modules.anagrafica.services.csv_import_service import import_subjects_from_csv
+from app.modules.utenze.services.csv_import_service import import_subjects_from_csv
 from app.services.nas_connector import NasConnectorError, get_nas_client
 
-router = APIRouter(prefix="/anagrafica", tags=["anagrafica"])
-RequireAnagraficaModule = Depends(require_module("anagrafica"))
+router = APIRouter(tags=["utenze"])
+RequireUtenzeModule = Depends(require_module("anagrafica"))
 
 
 def get_anagrafica_import_service() -> AnagraficaImportPreviewService:
@@ -152,12 +152,12 @@ def _serialize_import_job(db: Session, job: AnagraficaImportJob) -> AnagraficaIm
 @router.get("", response_model=AnagraficaModuleStatusResponse)
 def get_anagrafica_module_status(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
-    _: Annotated[ApplicationUser, RequireAnagraficaModule],
+    _: Annotated[ApplicationUser, RequireUtenzeModule],
 ) -> AnagraficaModuleStatusResponse:
     return {
-        "module": "anagrafica",
+        "module": "utenze",
         "enabled": True,
-        "message": "GAIA Anagrafica module is enabled for the current user.",
+        "message": "GAIA Utenze module is enabled for the current user.",
         "username": current_user.username,
     }
 
@@ -166,7 +166,7 @@ def get_anagrafica_module_status(
 def post_import_preview(
     payload: AnagraficaImportPreviewRequest,
     _: Annotated[ApplicationUser, Depends(require_active_user)],
-    __: Annotated[ApplicationUser, RequireAnagraficaModule],
+    __: Annotated[ApplicationUser, RequireUtenzeModule],
     service: Annotated[AnagraficaImportPreviewService, Depends(get_anagrafica_import_service)],
 ) -> AnagraficaImportPreviewResponse:
     try:
@@ -181,7 +181,7 @@ def post_import_preview(
 def post_import_run(
     payload: AnagraficaImportPreviewRequest,
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
-    _: Annotated[ApplicationUser, RequireAnagraficaModule],
+    _: Annotated[ApplicationUser, RequireUtenzeModule],
     db: Annotated[Session, Depends(get_db)],
     service: Annotated[AnagraficaImportPreviewService, Depends(get_anagrafica_import_service)],
 ) -> AnagraficaImportRunResponse:
@@ -219,7 +219,7 @@ def post_import_run(
 @router.post("/import/run-from-subjects", response_model=AnagraficaImportRunResponse, status_code=status.HTTP_202_ACCEPTED)
 def post_import_run_from_subjects(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
-    _: Annotated[ApplicationUser, RequireAnagraficaModule],
+    _: Annotated[ApplicationUser, RequireUtenzeModule],
     db: Annotated[Session, Depends(get_db)],
     service: Annotated[AnagraficaImportPreviewService, Depends(get_anagrafica_import_service)],
 ) -> AnagraficaImportRunResponse:
@@ -258,7 +258,7 @@ def post_import_run_from_subjects(
 @router.get("/import/jobs", response_model=list[AnagraficaImportJobResponse])
 def get_import_jobs(
     _: Annotated[ApplicationUser, Depends(require_active_user)],
-    __: Annotated[ApplicationUser, RequireAnagraficaModule],
+    __: Annotated[ApplicationUser, RequireUtenzeModule],
     db: Annotated[Session, Depends(get_db)],
 ) -> list[AnagraficaImportJobResponse]:
     jobs = db.scalars(select(AnagraficaImportJob).order_by(AnagraficaImportJob.created_at.desc())).all()
@@ -269,7 +269,7 @@ def get_import_jobs(
 def get_import_job(
     job_id: uuid.UUID,
     _: Annotated[ApplicationUser, Depends(require_active_user)],
-    __: Annotated[ApplicationUser, RequireAnagraficaModule],
+    __: Annotated[ApplicationUser, RequireUtenzeModule],
     db: Annotated[Session, Depends(get_db)],
 ) -> AnagraficaImportJobResponse:
     job = db.get(AnagraficaImportJob, job_id)
@@ -282,7 +282,7 @@ def get_import_job(
 def post_resume_import_job(
     job_id: uuid.UUID,
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
-    _: Annotated[ApplicationUser, RequireAnagraficaModule],
+    _: Annotated[ApplicationUser, RequireUtenzeModule],
     db: Annotated[Session, Depends(get_db)],
 ) -> AnagraficaImportRunResponse:
     raise HTTPException(
@@ -332,7 +332,7 @@ def post_resume_import_job(
 @router.get("/subjects", response_model=AnagraficaSubjectListResponse)
 def get_subjects(
     _: Annotated[ApplicationUser, Depends(require_active_user)],
-    __: Annotated[ApplicationUser, RequireAnagraficaModule],
+    __: Annotated[ApplicationUser, RequireUtenzeModule],
     db: Annotated[Session, Depends(get_db)],
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=25, ge=1, le=200),
@@ -357,7 +357,7 @@ def get_subjects(
 def create_subject(
     payload: AnagraficaSubjectCreateRequest,
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
-    _: Annotated[ApplicationUser, RequireAnagraficaModule],
+    _: Annotated[ApplicationUser, RequireUtenzeModule],
     db: Annotated[Session, Depends(get_db)],
 ) -> AnagraficaSubjectDetailResponse:
     _validate_subject_payload(payload.subject_type, payload.person, payload.company)
@@ -393,7 +393,7 @@ def create_subject(
 async def import_subjects_csv(
     file: Annotated[UploadFile, File()],
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
-    _: Annotated[ApplicationUser, RequireAnagraficaModule],
+    _: Annotated[ApplicationUser, RequireUtenzeModule],
     db: Annotated[Session, Depends(get_db)],
 ) -> AnagraficaCsvImportResponse:
     filename = (file.filename or "").lower()
@@ -432,7 +432,7 @@ async def import_subjects_csv(
 def get_subject(
     subject_id: uuid.UUID,
     _: Annotated[ApplicationUser, Depends(require_active_user)],
-    __: Annotated[ApplicationUser, RequireAnagraficaModule],
+    __: Annotated[ApplicationUser, RequireUtenzeModule],
     db: Annotated[Session, Depends(get_db)],
 ) -> AnagraficaSubjectDetailResponse:
     return _build_subject_detail(db, subject_id)
@@ -442,7 +442,7 @@ def get_subject(
 def post_import_subject_from_nas(
     subject_id: uuid.UUID,
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
-    _: Annotated[ApplicationUser, RequireAnagraficaModule],
+    _: Annotated[ApplicationUser, RequireUtenzeModule],
     db: Annotated[Session, Depends(get_db)],
     service: Annotated[AnagraficaImportPreviewService, Depends(get_anagrafica_import_service)],
 ) -> AnagraficaSubjectImportResponse:
@@ -476,7 +476,7 @@ def post_import_subject_from_nas(
 def get_subject_nas_import_status(
     subject_id: uuid.UUID,
     _: Annotated[ApplicationUser, Depends(require_active_user)],
-    __: Annotated[ApplicationUser, RequireAnagraficaModule],
+    __: Annotated[ApplicationUser, RequireUtenzeModule],
     db: Annotated[Session, Depends(get_db)],
     service: Annotated[AnagraficaImportPreviewService, Depends(get_anagrafica_import_service)],
 ) -> AnagraficaSubjectNasImportStatusResponse:
@@ -503,7 +503,7 @@ def get_subject_nas_import_status(
 def get_subject_nas_candidates(
     subject_id: uuid.UUID,
     _: Annotated[ApplicationUser, Depends(require_active_user)],
-    __: Annotated[ApplicationUser, RequireAnagraficaModule],
+    __: Annotated[ApplicationUser, RequireUtenzeModule],
     db: Annotated[Session, Depends(get_db)],
     service: Annotated[AnagraficaImportPreviewService, Depends(get_anagrafica_import_service)],
     limit: int = Query(default=20, ge=1, le=100),
@@ -540,7 +540,7 @@ def update_subject(
     subject_id: uuid.UUID,
     payload: AnagraficaSubjectUpdateRequest,
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
-    _: Annotated[ApplicationUser, RequireAnagraficaModule],
+    _: Annotated[ApplicationUser, RequireUtenzeModule],
     db: Annotated[Session, Depends(get_db)],
 ) -> AnagraficaSubjectDetailResponse:
     subject = db.get(AnagraficaSubject, subject_id)
@@ -577,7 +577,7 @@ def update_subject(
 def deactivate_subject(
     subject_id: uuid.UUID,
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
-    _: Annotated[ApplicationUser, RequireAnagraficaModule],
+    _: Annotated[ApplicationUser, RequireUtenzeModule],
     db: Annotated[Session, Depends(get_db)],
 ) -> AnagraficaSubjectDetailResponse:
     subject = db.get(AnagraficaSubject, subject_id)
@@ -594,7 +594,7 @@ def deactivate_subject(
 def get_subject_documents(
     subject_id: uuid.UUID,
     _: Annotated[ApplicationUser, Depends(require_active_user)],
-    __: Annotated[ApplicationUser, RequireAnagraficaModule],
+    __: Annotated[ApplicationUser, RequireUtenzeModule],
     db: Annotated[Session, Depends(get_db)],
 ) -> list[AnagraficaPreviewDocumentResponse]:
     _require_subject_exists(db, subject_id)
@@ -613,7 +613,7 @@ async def upload_subject_document(
     doc_type: Annotated[str, Form()],
     notes: Annotated[str | None, Form()] = None,
     current_user: Annotated[ApplicationUser, Depends(require_active_user)] = None,
-    _: Annotated[ApplicationUser, RequireAnagraficaModule] = None,
+    _: Annotated[ApplicationUser, RequireUtenzeModule] = None,
     db: Annotated[Session, Depends(get_db)] = None,
 ) -> AnagraficaPreviewDocumentResponse:
     filename = (file.filename or "").strip()
@@ -650,7 +650,7 @@ def patch_document(
     document_id: uuid.UUID,
     payload: AnagraficaDocumentUpdateRequest,
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
-    _: Annotated[ApplicationUser, RequireAnagraficaModule],
+    _: Annotated[ApplicationUser, RequireUtenzeModule],
     db: Annotated[Session, Depends(get_db)],
 ) -> AnagraficaPreviewDocumentResponse:
     document = db.get(AnagraficaDocument, document_id)
@@ -678,7 +678,7 @@ def patch_document(
 def delete_document(
     document_id: uuid.UUID,
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
-    _: Annotated[ApplicationUser, RequireAnagraficaModule],
+    _: Annotated[ApplicationUser, RequireUtenzeModule],
     db: Annotated[Session, Depends(get_db)],
     delete_password: Annotated[str | None, Header(alias="X-GAIA-Delete-Password")] = None,
 ) -> None:
@@ -707,7 +707,7 @@ def delete_document(
 def download_document(
     document_id: uuid.UUID,
     _: Annotated[ApplicationUser, Depends(require_active_user)],
-    __: Annotated[ApplicationUser, RequireAnagraficaModule],
+    __: Annotated[ApplicationUser, RequireUtenzeModule],
     db: Annotated[Session, Depends(get_db)],
 ) -> FileResponse:
     document = db.get(AnagraficaDocument, document_id)
@@ -732,7 +732,7 @@ def download_document(
 def post_reset_anagrafica(
     payload: AnagraficaResetRequest,
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
-    _: Annotated[ApplicationUser, RequireAnagraficaModule],
+    _: Annotated[ApplicationUser, RequireUtenzeModule],
     db: Annotated[Session, Depends(get_db)],
 ) -> AnagraficaResetResponse:
     if payload.confirm.strip().upper() != "RESET ANAGRAFICA":
@@ -755,7 +755,7 @@ def post_reset_anagrafica(
 @router.get("/stats", response_model=AnagraficaStatsResponse)
 def get_stats(
     _: Annotated[ApplicationUser, Depends(require_active_user)],
-    __: Annotated[ApplicationUser, RequireAnagraficaModule],
+    __: Annotated[ApplicationUser, RequireUtenzeModule],
     db: Annotated[Session, Depends(get_db)],
 ) -> AnagraficaStatsResponse:
     visible_document_condition = _visible_document_condition()
@@ -810,7 +810,7 @@ def get_stats(
 @router.get("/documents/summary", response_model=AnagraficaDocumentSummaryResponse)
 def get_documents_summary(
     _: Annotated[ApplicationUser, Depends(require_active_user)],
-    __: Annotated[ApplicationUser, RequireAnagraficaModule],
+    __: Annotated[ApplicationUser, RequireUtenzeModule],
     db: Annotated[Session, Depends(get_db)],
 ) -> AnagraficaDocumentSummaryResponse:
     visible_document_condition = _visible_document_condition()
@@ -871,7 +871,7 @@ def get_documents_summary(
 @router.get("/search", response_model=AnagraficaSearchResultResponse)
 def search_subjects(
     _: Annotated[ApplicationUser, Depends(require_active_user)],
-    __: Annotated[ApplicationUser, RequireAnagraficaModule],
+    __: Annotated[ApplicationUser, RequireUtenzeModule],
     db: Annotated[Session, Depends(get_db)],
     q: str = Query(min_length=3),
     limit: int = Query(default=20, ge=1, le=100),
@@ -885,7 +885,7 @@ def search_subjects(
 @router.get("/export")
 def export_subjects(
     _: Annotated[ApplicationUser, Depends(require_active_user)],
-    __: Annotated[ApplicationUser, RequireAnagraficaModule],
+    __: Annotated[ApplicationUser, RequireUtenzeModule],
     db: Annotated[Session, Depends(get_db)],
     format: str = Query(default="csv", pattern="^(csv|xlsx)$"),
     search: str | None = Query(default=None),

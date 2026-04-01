@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import settings
 from app.models.application_user import ApplicationUser
-from app.modules.anagrafica.models import (
+from app.modules.utenze.models import (
     AnagraficaAuditLog,
     AnagraficaCompany,
     AnagraficaDocument,
@@ -28,8 +28,8 @@ from app.modules.anagrafica.models import (
     AnagraficaSubject,
     AnagraficaSubjectStatus,
 )
-from app.modules.anagrafica.services.classify_service import classify_filename
-from app.modules.anagrafica.services.parser_service import parse_folder_name
+from app.modules.utenze.services.classify_service import classify_filename
+from app.modules.utenze.services.parser_service import parse_folder_name
 from app.services.nas_connector import NasConnectorError, get_nas_client
 
 

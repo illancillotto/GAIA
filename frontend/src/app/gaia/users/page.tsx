@@ -76,8 +76,8 @@ function formatModules(user: ApplicationUser): string {
   if (user.module_catasto) {
     labels.push("Catasto");
   }
-  if (user.module_anagrafica) {
-    labels.push("Anagrafica");
+  if (user.module_utenze ?? user.module_anagrafica) {
+    labels.push("Utenze");
   }
 
   return labels.length > 0 ? labels.join(", ") : "Nessun modulo";
@@ -137,7 +137,7 @@ export default function GaiaUsersPage() {
       moduleRete: selectedUser.module_rete,
       moduleInventario: selectedUser.module_inventario,
       moduleCatasto: selectedUser.module_catasto,
-      moduleAnagrafica: selectedUser.module_anagrafica,
+      moduleAnagrafica: selectedUser.module_utenze ?? selectedUser.module_anagrafica,
     });
   }, [selectedUser]);
 
@@ -253,7 +253,7 @@ export default function GaiaUsersPage() {
           module_rete: formState.moduleRete,
           module_inventario: formState.moduleInventario,
           module_catasto: formState.moduleCatasto,
-          module_anagrafica: formState.moduleAnagrafica,
+          module_utenze: formState.moduleAnagrafica,
         });
         setSuccessMessage(`Utente ${selectedUser.username} aggiornato.`);
       } else {
@@ -267,7 +267,7 @@ export default function GaiaUsersPage() {
           module_rete: formState.moduleRete,
           module_inventario: formState.moduleInventario,
           module_catasto: formState.moduleCatasto,
-          module_anagrafica: formState.moduleAnagrafica,
+          module_utenze: formState.moduleAnagrafica,
         });
         setSuccessMessage(`Utente ${formState.username} creato.`);
       }
@@ -324,7 +324,7 @@ export default function GaiaUsersPage() {
         <MetricCard label="Admin" value={users.filter((user) => user.role === "admin" || user.role === "super_admin").length} sub="Profili amministrativi" />
         <MetricCard label="NAS Control" value={users.filter((user) => user.module_accessi).length} sub="Utenti con modulo NAS abilitato" />
         <MetricCard label="Catasto" value={users.filter((user) => user.module_catasto).length} sub="Utenti con modulo Catasto abilitato" />
-        <MetricCard label="Anagrafica" value={users.filter((user) => user.module_anagrafica).length} sub="Utenti con modulo Anagrafica abilitato" />
+        <MetricCard label="Utenze" value={users.filter((user) => user.module_utenze ?? user.module_anagrafica).length} sub="Utenti con modulo Utenze abilitato" />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">

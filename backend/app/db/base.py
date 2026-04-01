@@ -1,6 +1,6 @@
 from app.core.database import Base
 from app.models.application_user import ApplicationUser
-from app.modules.anagrafica.models import (
+from app.modules.utenze.models import (
     AnagraficaAuditLog,
     AnagraficaCompany,
     AnagraficaDocument,

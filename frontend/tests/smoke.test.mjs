@@ -154,8 +154,8 @@ test("effective permissions page keeps preview and persistent table", () => {
   assert.match(permissionsPage, /groupsInput/);
 });
 
-test("anagrafica dashboard opens subject and document summaries in modal overlays", () => {
-  const dashboardPage = read("src/app/anagrafica/page.tsx");
+test("utenze dashboard opens subject and document summaries in modal overlays", () => {
+  const dashboardPage = read("src/app/utenze/page.tsx");
   const apiClient = read("src/lib/api.ts");
 
   assert.match(dashboardPage, /selectedSubject/);
@@ -169,8 +169,8 @@ test("anagrafica dashboard opens subject and document summaries in modal overlay
   assert.match(apiClient, /export async function getAnagraficaDocumentSummary/);
 });
 
-test("anagrafica import page exposes bulk import progress feedback", () => {
-  const importPage = read("src/app/anagrafica/import/page.tsx");
+test("utenze import page exposes bulk import progress feedback", () => {
+  const importPage = read("src/app/utenze/import/page.tsx");
 
   assert.match(importPage, /Import massivo in corso/);
   assert.match(importPage, /activeBulkJob/);
@@ -182,14 +182,14 @@ test("anagrafica import page exposes bulk import progress feedback", () => {
   assert.match(importPage, /non duplica i soggetti/);
 });
 
-test("anagrafica detail page keeps preview modal and delete confirmation", () => {
-  const detailPage = read("src/app/anagrafica/[id]/page.tsx");
+test("utenze detail page keeps preview modal and delete password flow", () => {
+  const detailPage = read("src/app/utenze/[id]/page.tsx");
   const apiClient = read("src/lib/api.ts");
 
   assert.match(detailPage, /Anteprima documento/);
   assert.match(detailPage, /iframe className=/);
-  assert.match(detailPage, /Conferma rimozione documento/);
-  assert.match(detailPage, /documentPendingDeletion/);
+  assert.match(detailPage, /Cancellazione documento/);
+  assert.match(apiClient, /X-GAIA-Delete-Password/);
   assert.match(detailPage, /cursor-pointer rounded-lg border border-gray-100/);
   assert.match(detailPage, /event\.stopPropagation\(\)/);
   assert.match(apiClient, /export async function downloadAnagraficaDocumentBlob/);

@@ -11,7 +11,7 @@ import { hasSectionAccess } from "@/lib/section-access";
 import type { CurrentUser, DashboardSummary } from "@/types/api";
 
 type ModuleStatus = "active" | "warming" | "coming";
-type ModuleId = "accessi" | "rete" | "inventario" | "catasto" | "anagrafica";
+type ModuleId = "accessi" | "rete" | "inventario" | "catasto" | "utenze";
 
 type HomeModule = {
   id: ModuleId;
@@ -60,7 +60,7 @@ const allModules: HomeModule[] = [
     id: "catasto",
     title: "GAIA Catasto",
     description:
-      "Batch CSV, visure singole, CAPTCHA, ZIP e archivio documentale con una pipeline costruita per l'operatività quotidiana.",
+      "Servizi catastali: batch CSV, visure singole, CAPTCHA, ZIP e archivio documentale con una pipeline costruita per l'operatività quotidiana.",
     href: "/catasto",
     status: "active",
     statusLabel: "Operativo",
@@ -68,11 +68,11 @@ const allModules: HomeModule[] = [
     enabledKey: "catasto",
   },
   {
-    id: "anagrafica",
-    title: "GAIA Anagrafica",
+    id: "utenze",
+    title: "GAIA Utenze",
     description:
       "Gestione soggetti, documenti collegati al NAS e correlazioni con Catasto. Modulo operativo per ricerca, import archivio e qualità del dato.",
-    href: "/anagrafica",
+    href: "/utenze",
     status: "active",
     statusLabel: "Operativo",
     icon: "badge",

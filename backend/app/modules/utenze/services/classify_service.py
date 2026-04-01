@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 import re
 
-from app.modules.anagrafica.models import AnagraficaClassificationSource, AnagraficaDocType
+from app.modules.utenze.models import AnagraficaClassificationSource, AnagraficaDocType
 
 PATTERNS: dict[str, list[re.Pattern[str]]] = {
     AnagraficaDocType.INGIUNZIONE.value: [

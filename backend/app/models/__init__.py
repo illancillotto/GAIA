@@ -1,5 +1,5 @@
 from app.models.application_user import ApplicationUser, ApplicationUserRole
-from app.modules.anagrafica.models import (
+from app.modules.utenze.models import (
     AnagraficaAuditLog,
     AnagraficaClassificationSource,
     AnagraficaCompany,

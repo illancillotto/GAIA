@@ -33,8 +33,10 @@ export function Sidebar({
       ? "nas_control"
       : pathname.startsWith("/catasto")
       ? "catasto"
+      : pathname.startsWith("/utenze")
+      ? "utenze"
       : pathname.startsWith("/anagrafica")
-      ? "anagrafica"
+      ? "utenze"
       : pathname.startsWith("/network")
         ? "network"
       : pathname.startsWith("/inventory")
@@ -48,8 +50,8 @@ export function Sidebar({
       ? "NAS Control"
       : currentModuleKey === "catasto"
       ? "Catasto"
-      : currentModuleKey === "anagrafica"
-      ? "Anagrafica"
+      : currentModuleKey === "utenze"
+      ? "Utenze"
       : currentModuleKey === "network"
         ? "Rete"
       : currentModuleKey === "inventory"

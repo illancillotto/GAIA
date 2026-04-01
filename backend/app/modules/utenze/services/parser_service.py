@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import re
 
-from app.modules.anagrafica.models import AnagraficaSubjectType
+from app.modules.utenze.models import AnagraficaSubjectType
 
 CODICE_FISCALE_PATTERN = re.compile(
     r"^[A-Z]{6}[0-9LMNPQRSTUV]{2}[A-Z][0-9LMNPQRSTUV]{2}[A-Z][0-9LMNPQRSTUV]{3}[A-Z]$"

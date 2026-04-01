@@ -53,7 +53,7 @@ class ApplicationUser(Base):
     @property
     def enabled_modules(self) -> list[str]:
         if self.is_super_admin:
-            return ["accessi", "rete", "inventario", "catasto", "anagrafica"]
+            return ["accessi", "rete", "inventario", "catasto", "utenze", "anagrafica"]
 
         modules: list[str] = []
         if self.module_accessi:
@@ -65,5 +65,10 @@ class ApplicationUser(Base):
         if self.module_catasto:
             modules.append("catasto")
         if self.module_anagrafica:
+            modules.append("utenze")
             modules.append("anagrafica")
         return modules
+
+    @property
+    def module_utenze(self) -> bool:
+        return bool(self.module_anagrafica)

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 
-import { AnagraficaModulePage } from "@/components/anagrafica/anagrafica-module-page";
+import { AnagraficaModulePage } from "@/components/utenze/anagrafica-module-page";
 import { DataTable } from "@/components/table/data-table";
 import { TableFilters } from "@/components/table/table-filters";
 import { createAnagraficaSubject, downloadAnagraficaDocumentBlob, downloadAnagraficaExportBlob, getAnagraficaSubject, getAnagraficaSubjects, importAnagraficaSubjectsCsv } from "@/lib/api";
@@ -883,7 +883,7 @@ function SubjectsContent({ token }: { token: string }) {
                 <h3 className="mt-1 text-xl font-medium text-gray-900">Vista rapida del registro</h3>
               </div>
               <div className="flex items-center gap-3">
-                <Link className="text-sm font-medium text-[#1D4E35]" href={`/anagrafica/${selectedSubjectId}`}>
+                <Link className="text-sm font-medium text-[#1D4E35]" href={`/utenze/${selectedSubjectId}`}>
                   Apri pagina completa
                 </Link>
                 <button className="btn-secondary" onClick={() => setSelectedSubjectId(null)} type="button">
