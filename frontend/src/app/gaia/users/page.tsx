@@ -38,7 +38,7 @@ type UserFormState = {
   moduleRete: boolean;
   moduleInventario: boolean;
   moduleCatasto: boolean;
-  moduleAnagrafica: boolean;
+  moduleUtenze: boolean;
 };
 
 const emptyFormState: UserFormState = {
@@ -51,7 +51,7 @@ const emptyFormState: UserFormState = {
   moduleRete: false,
   moduleInventario: false,
   moduleCatasto: false,
-  moduleAnagrafica: false,
+  moduleUtenze: false,
 };
 
 const roleOptions = [
@@ -76,7 +76,7 @@ function formatModules(user: ApplicationUser): string {
   if (user.module_catasto) {
     labels.push("Catasto");
   }
-  if (user.module_utenze ?? user.module_anagrafica) {
+  if (user.module_utenze) {
     labels.push("Utenze");
   }
 
@@ -137,7 +137,7 @@ export default function GaiaUsersPage() {
       moduleRete: selectedUser.module_rete,
       moduleInventario: selectedUser.module_inventario,
       moduleCatasto: selectedUser.module_catasto,
-      moduleAnagrafica: selectedUser.module_utenze ?? selectedUser.module_anagrafica,
+      moduleUtenze: selectedUser.module_utenze,
     });
   }, [selectedUser]);
 
@@ -253,7 +253,7 @@ export default function GaiaUsersPage() {
           module_rete: formState.moduleRete,
           module_inventario: formState.moduleInventario,
           module_catasto: formState.moduleCatasto,
-          module_utenze: formState.moduleAnagrafica,
+          module_utenze: formState.moduleUtenze,
         });
         setSuccessMessage(`Utente ${selectedUser.username} aggiornato.`);
       } else {
@@ -267,7 +267,7 @@ export default function GaiaUsersPage() {
           module_rete: formState.moduleRete,
           module_inventario: formState.moduleInventario,
           module_catasto: formState.moduleCatasto,
-          module_utenze: formState.moduleAnagrafica,
+          module_utenze: formState.moduleUtenze,
         });
         setSuccessMessage(`Utente ${formState.username} creato.`);
       }
@@ -324,7 +324,7 @@ export default function GaiaUsersPage() {
         <MetricCard label="Admin" value={users.filter((user) => user.role === "admin" || user.role === "super_admin").length} sub="Profili amministrativi" />
         <MetricCard label="NAS Control" value={users.filter((user) => user.module_accessi).length} sub="Utenti con modulo NAS abilitato" />
         <MetricCard label="Catasto" value={users.filter((user) => user.module_catasto).length} sub="Utenti con modulo Catasto abilitato" />
-        <MetricCard label="Utenze" value={users.filter((user) => user.module_utenze ?? user.module_anagrafica).length} sub="Utenti con modulo Utenze abilitato" />
+        <MetricCard label="Utenze" value={users.filter((user) => user.module_utenze).length} sub="Utenti con modulo Utenze abilitato" />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
@@ -470,8 +470,8 @@ export default function GaiaUsersPage() {
                   Catasto
                 </label>
                 <label className="flex items-center gap-3">
-                  <input type="checkbox" checked={formState.moduleAnagrafica} onChange={(event) => updateFormState("moduleAnagrafica", event.target.checked)} />
-                  Anagrafica
+                  <input type="checkbox" checked={formState.moduleUtenze} onChange={(event) => updateFormState("moduleUtenze", event.target.checked)} />
+                  Utenze
                 </label>
                 <label className="flex items-center gap-3 pt-2">
                   <input type="checkbox" checked={formState.isActive} onChange={(event) => updateFormState("isActive", event.target.checked)} />

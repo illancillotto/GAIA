@@ -1,14 +1,6 @@
-"use client";
-
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { redirect } from "next/navigation";
 
 export default function AnagraficaSubjectsRedirectPage() {
-  const router = useRouter();
-  useEffect(() => {
-    router.replace("/utenze/subjects");
-  }, [router]);
-
-  return null;
+  redirect("/utenze/subjects");
 }
 

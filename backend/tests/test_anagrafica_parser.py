@@ -1,4 +1,4 @@
-from app.modules.anagrafica.services.parser_service import parse_folder_name
+from app.modules.utenze.services.parser_service import parse_folder_name
 
 
 def test_parse_person_folder_name() -> None:

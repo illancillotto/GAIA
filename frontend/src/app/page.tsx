@@ -21,7 +21,7 @@ type HomeModule = {
   status: ModuleStatus;
   statusLabel: string;
   icon: string;
-  enabledKey: string;
+  enabledKeys: string[];
 };
 
 const emptySummary: DashboardSummary = {
@@ -43,7 +43,7 @@ const allModules: HomeModule[] = [
     status: "active",
     statusLabel: "Operativo",
     icon: "storage",
-    enabledKey: "accessi",
+    enabledKeys: ["accessi"],
   },
   {
     id: "rete",
@@ -54,7 +54,7 @@ const allModules: HomeModule[] = [
     status: "active",
     statusLabel: "Operativo",
     icon: "hub",
-    enabledKey: "rete",
+    enabledKeys: ["rete"],
   },
   {
     id: "catasto",
@@ -65,7 +65,7 @@ const allModules: HomeModule[] = [
     status: "active",
     statusLabel: "Operativo",
     icon: "account_balance",
-    enabledKey: "catasto",
+    enabledKeys: ["catasto"],
   },
   {
     id: "utenze",
@@ -76,7 +76,7 @@ const allModules: HomeModule[] = [
     status: "active",
     statusLabel: "Operativo",
     icon: "badge",
-    enabledKey: "anagrafica",
+    enabledKeys: ["utenze"],
   },
   {
     id: "inventario",
@@ -87,7 +87,7 @@ const allModules: HomeModule[] = [
     status: "coming",
     statusLabel: "In sviluppo",
     icon: "inventory_2",
-    enabledKey: "inventario",
+    enabledKeys: ["inventario"],
   },
 ];
 
@@ -177,7 +177,7 @@ export default function HomePage() {
 
   const visibleModules = allModules.filter((mod) => {
     if (mod.status === "coming") return true;
-    return currentUser.enabled_modules.includes(mod.enabledKey);
+    return mod.enabledKeys.some((key) => currentUser.enabled_modules.includes(key));
   });
 
   const stats = [

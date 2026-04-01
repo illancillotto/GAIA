@@ -43,6 +43,7 @@ def list_application_users(
 
 
 def create_application_user(db: Session, payload: ApplicationUserCreate) -> ApplicationUser:
+    utenze_enabled = bool(payload.module_utenze)
     user = ApplicationUser(
         username=payload.username,
         email=str(payload.email),
@@ -53,7 +54,7 @@ def create_application_user(db: Session, payload: ApplicationUserCreate) -> Appl
         module_rete=payload.module_rete,
         module_inventario=payload.module_inventario,
         module_catasto=payload.module_catasto,
-        module_anagrafica=payload.module_anagrafica or payload.module_utenze,
+        module_utenze=utenze_enabled,
     )
     db.add(user)
     db.commit()
@@ -64,10 +65,9 @@ def create_application_user(db: Session, payload: ApplicationUserCreate) -> Appl
 def update_application_user(db: Session, user: ApplicationUser, payload: ApplicationUserUpdate) -> ApplicationUser:
     data = payload.model_dump(exclude_unset=True)
     password = data.pop("password", None)
-    if "module_utenze" in data and "module_anagrafica" not in data:
-        data["module_anagrafica"] = data.pop("module_utenze")
-    else:
-        data.pop("module_utenze", None)
+
+    # module_utenze is the sole source of truth.
+
     for key, value in data.items():
         setattr(user, key, value)
     if password:

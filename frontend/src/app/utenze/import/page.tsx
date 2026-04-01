@@ -2,38 +2,38 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-import { AnagraficaModulePage } from "@/components/utenze/anagrafica-module-page";
+import { UtenzeModulePage } from "@/components/utenze/utenze-module-page";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FolderIcon } from "@/components/ui/icons";
 import {
-  getAnagraficaImportJob,
-  getAnagraficaImportJobs,
-  previewAnagraficaImport,
-  resetAnagraficaData,
-  runAnagraficaImport,
-  runAnagraficaImportFromSubjects,
+  getUtenzeImportJob,
+  getUtenzeImportJobs,
+  previewUtenzeImport,
+  resetUtenzeData,
+  runUtenzeImport,
+  runUtenzeImportFromSubjects,
 } from "@/lib/api";
 import { formatDateTime } from "@/lib/presentation";
-import type { AnagraficaImportJob, AnagraficaImportPreview, AnagraficaImportRunResult, AnagraficaResetResult } from "@/types/api";
+import type { UtenzeImportJob, UtenzeImportPreview, UtenzeImportRunResult, UtenzeResetResult } from "@/types/api";
 
 function ImportContent({ token }: { token: string }) {
-  const [preview, setPreview] = useState<AnagraficaImportPreview | null>(null);
-  const [jobs, setJobs] = useState<AnagraficaImportJob[]>([]);
-  const [runResult, setRunResult] = useState<AnagraficaImportRunResult | null>(null);
-  const [selectedJob, setSelectedJob] = useState<AnagraficaImportJob | null>(null);
-  const [bulkRunResult, setBulkRunResult] = useState<AnagraficaImportRunResult | null>(null);
-  const [resetResult, setResetResult] = useState<AnagraficaResetResult | null>(null);
+  const [preview, setPreview] = useState<UtenzeImportPreview | null>(null);
+  const [jobs, setJobs] = useState<UtenzeImportJob[]>([]);
+  const [runResult, setRunResult] = useState<UtenzeImportRunResult | null>(null);
+  const [selectedJob, setSelectedJob] = useState<UtenzeImportJob | null>(null);
+  const [bulkRunResult, setBulkRunResult] = useState<UtenzeImportRunResult | null>(null);
+  const [resetResult, setResetResult] = useState<UtenzeResetResult | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isPreviewing, setIsPreviewing] = useState(false);
   const [isSavingSnapshot, setIsSavingSnapshot] = useState(false);
   const [isRunningBulkImport, setIsRunningBulkImport] = useState(false);
   const [isResetting, setIsResetting] = useState(false);
   const [isBulkImportModalOpen, setIsBulkImportModalOpen] = useState(false);
-  const [activeBulkJob, setActiveBulkJob] = useState<AnagraficaImportJob | null>(null);
+  const [activeBulkJob, setActiveBulkJob] = useState<UtenzeImportJob | null>(null);
 
   const loadJobs = useCallback(async () => {
     try {
-      const response = await getAnagraficaImportJobs(token);
+      const response = await getUtenzeImportJobs(token);
       setJobs(response);
       setActiveBulkJob((current) => {
         if (current) {
@@ -72,7 +72,7 @@ function ImportContent({ token }: { token: string }) {
     setIsPreviewing(true);
     setError(null);
     try {
-      const response = await previewAnagraficaImport(token);
+      const response = await previewUtenzeImport(token);
       setPreview(response);
       setRunResult(null);
       setBulkRunResult(null);
@@ -87,10 +87,10 @@ function ImportContent({ token }: { token: string }) {
     setIsSavingSnapshot(true);
     setError(null);
     try {
-      const response = await runAnagraficaImport(token);
+      const response = await runUtenzeImport(token);
       setRunResult(response);
       setBulkRunResult(null);
-      const job = await getAnagraficaImportJob(token, response.job_id);
+      const job = await getUtenzeImportJob(token, response.job_id);
       setSelectedJob(job);
       await loadJobs();
     } catch (saveError) {
@@ -111,7 +111,7 @@ function ImportContent({ token }: { token: string }) {
     try {
       pollTimer = window.setInterval(async () => {
         try {
-          const response = await getAnagraficaImportJobs(token);
+          const response = await getUtenzeImportJobs(token);
           setJobs(response);
           const candidate = response.find((job) => {
             if (job.letter !== "REGISTRY") {
@@ -128,15 +128,15 @@ function ImportContent({ token }: { token: string }) {
         }
       }, 1200);
 
-      const response = await runAnagraficaImportFromSubjects(token);
+      const response = await runUtenzeImportFromSubjects(token);
       setBulkRunResult(response);
       setRunResult(null);
-      const job = await getAnagraficaImportJob(token, response.job_id);
+      const job = await getUtenzeImportJob(token, response.job_id);
       setActiveBulkJob(job);
       setSelectedJob(job);
       await loadJobs();
     } catch (runError) {
-      setError(runError instanceof Error ? runError.message : "Errore import massivo da anagrafiche");
+      setError(runError instanceof Error ? runError.message : "Errore import massivo da utenze");
     } finally {
       if (pollTimer !== null) {
         window.clearInterval(pollTimer);
@@ -157,7 +157,7 @@ function ImportContent({ token }: { token: string }) {
     setIsResetting(true);
     setError(null);
     try {
-      const response = await resetAnagraficaData(token);
+      const response = await resetUtenzeData(token);
       setResetResult(response);
       setPreview(null);
       setRunResult(null);
@@ -165,7 +165,7 @@ function ImportContent({ token }: { token: string }) {
       setSelectedJob(null);
       await loadJobs();
     } catch (resetError) {
-      setError(resetError instanceof Error ? resetError.message : "Errore reset anagrafica");
+      setError(resetError instanceof Error ? resetError.message : "Errore reset utenze");
     } finally {
       setIsResetting(false);
     }
@@ -190,7 +190,7 @@ function ImportContent({ token }: { token: string }) {
             {isSavingSnapshot ? "Salvataggio..." : "Salva snapshot"}
           </button>
           <button className="btn-primary" type="button" onClick={() => setIsBulkImportModalOpen(true)} disabled={isRunningBulkImport}>
-            {isRunningBulkImport ? "Import massivo..." : "Importa da anagrafiche"}
+          {isRunningBulkImport ? "Import massivo..." : "Importa da utenze"}
           </button>
           <button className="btn-secondary" type="button" onClick={() => void handleReset()} disabled={isResetting}>
             {isResetting ? "Reset..." : "Pulisci dati importati NAS"}
@@ -202,14 +202,14 @@ function ImportContent({ token }: { token: string }) {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-xl rounded-2xl bg-white p-6 shadow-2xl">
             <div className="mb-4">
-              <p className="section-title">Import massivo da anagrafiche</p>
+              <p className="section-title">Import massivo da utenze</p>
               <p className="section-copy mt-2">
                 Il sistema proverà a trovare per ogni soggetto la cartella NAS più probabile in base a lettera archivio, nominativo e identificativi, poi importerà i documenti collegandoli alla scheda.
               </p>
             </div>
 
             <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              Usa questo flusso solo quando vuoi lanciare un’importazione su tutto il database Anagrafica. Per casi ambigui o sporchi è meglio partire dalla scheda singola e scegliere manualmente la cartella NAS.
+              Usa questo flusso solo quando vuoi lanciare un’importazione su tutto il database Utenze. Per casi ambigui o sporchi è meglio partire dalla scheda singola e scegliere manualmente la cartella NAS.
             </div>
 
             <div className="mt-6 flex justify-end gap-3">
@@ -491,14 +491,14 @@ function ImportContent({ token }: { token: string }) {
   );
 }
 
-export default function AnagraficaImportPage() {
+export default function UtenzeImportPage() {
   return (
-    <AnagraficaModulePage
+    <UtenzeModulePage
       title="Import archivio"
-      description="Import singolo o massivo dei documenti NAS a partire dalle anagrafiche esistenti, con snapshot e reset operativo."
+      description="Import singolo o massivo dei documenti NAS a partire dalle utenze esistenti, con snapshot e reset operativo."
       breadcrumb="Import"
     >
       {({ token }) => <ImportContent token={token} />}
-    </AnagraficaModulePage>
+    </UtenzeModulePage>
   );
 }

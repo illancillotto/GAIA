@@ -45,7 +45,10 @@ def require_module(module_name: str):
     def _require_module(
         current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     ) -> ApplicationUser:
-        if not current_user.is_super_admin and module_name not in current_user.enabled_modules:
+        if current_user.is_super_admin:
+            return current_user
+
+        if module_name not in current_user.enabled_modules:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Module access denied")
         return current_user
 

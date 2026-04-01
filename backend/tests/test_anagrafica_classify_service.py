@@ -1,4 +1,4 @@
-from app.modules.anagrafica.services.classify_service import classify_filename
+from app.modules.utenze.services.classify_service import classify_filename
 
 
 def test_classify_ingiunzione_filename() -> None:

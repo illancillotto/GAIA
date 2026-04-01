@@ -9,7 +9,7 @@ from sqlalchemy.pool import StaticPool
 from app.core.security import hash_password
 from app.db.base import Base
 from app.models.application_user import ApplicationUser, ApplicationUserRole
-from app.modules.anagrafica.models import AnagraficaCompany, AnagraficaPerson, AnagraficaSubject
+from app.modules.utenze.models import AnagraficaCompany, AnagraficaPerson, AnagraficaSubject
 
 
 @pytest.fixture

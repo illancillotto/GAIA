@@ -50,9 +50,17 @@ class Settings(BaseSettings):
         default="/volume1/settore catasto/ARCHIVIO",
         alias="ANAGRAFICA_NAS_ARCHIVE_ROOT",
     )
+    utenze_nas_archive_root: str | None = Field(
+        default=None,
+        alias="UTENZE_NAS_ARCHIVE_ROOT",
+    )
     anagrafica_document_storage_path: str = Field(
         default="/data/anagrafica/documents",
         alias="ANAGRAFICA_DOCUMENT_STORAGE_PATH",
+    )
+    utenze_document_storage_path: str | None = Field(
+        default=None,
+        alias="UTENZE_DOCUMENT_STORAGE_PATH",
     )
     nas_passwd_command: str = Field(default="getent passwd", alias="NAS_PASSWD_COMMAND")
     nas_group_command: str = Field(default="getent group", alias="NAS_GROUP_COMMAND")
@@ -112,6 +120,7 @@ class Settings(BaseSettings):
     bootstrap_admin_password: str = Field(default="change_me_admin", alias="BOOTSTRAP_ADMIN_PASSWORD")
 
     anagrafica_delete_password: str | None = Field(default=None, alias="ANAGRAFICA_DELETE_PASSWORD")
+    utenze_delete_password: str | None = Field(default=None, alias="UTENZE_DELETE_PASSWORD")
 
     model_config = SettingsConfigDict(
         env_file=".env",

@@ -8,15 +8,15 @@ from sqlalchemy.pool import StaticPool
 from app.core.security import hash_password
 from app.db.base import Base
 from app.models.application_user import ApplicationUser, ApplicationUserRole
-from app.modules.anagrafica.models import (
+from app.modules.utenze.models import (
     AnagraficaAuditLog,
     AnagraficaDocument,
     AnagraficaImportJob,
     AnagraficaPerson,
     AnagraficaSubject,
 )
-from app.modules.anagrafica.services.import_service import AnagraficaImportPreviewService
-from app.modules.anagrafica.services.import_service import run_import
+from app.modules.utenze.services.import_service import AnagraficaImportPreviewService
+from app.modules.utenze.services.import_service import run_import
 from app.services.nas_connector import NasConnectorError
 
 

@@ -1,16 +1,11 @@
-"use client";
+import { redirect } from "next/navigation";
 
-import { useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
-
-export default function AnagraficaSubjectRedirectPage() {
-  const params = useParams<{ id: string }>();
-  const router = useRouter();
-
-  useEffect(() => {
-    router.replace(`/utenze/${params.id}`);
-  }, [params.id, router]);
-
-  return null;
+export default async function AnagraficaSubjectRedirectPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  redirect(`/utenze/${id}`);
 }
 

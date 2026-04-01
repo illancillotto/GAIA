@@ -102,7 +102,7 @@ export function AnagraficaModulePage({
     );
   }
 
-  if (!currentUser.enabled_modules.includes("anagrafica") && !currentUser.enabled_modules.includes("utenze")) {
+  if (!currentUser.enabled_modules.includes("utenze")) {
     if (isEmbedded) {
       return (
         <section className="min-h-full bg-white p-6">

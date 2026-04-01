@@ -27,7 +27,6 @@ class ApplicationUserCreate(BaseModel):
     module_rete: bool = False
     module_inventario: bool = False
     module_catasto: bool = False
-    module_anagrafica: bool = False
     module_utenze: bool = False
 
     @field_validator("email")
@@ -52,7 +51,6 @@ class ApplicationUserUpdate(BaseModel):
     module_rete: bool | None = None
     module_inventario: bool | None = None
     module_catasto: bool | None = None
-    module_anagrafica: bool | None = None
     module_utenze: bool | None = None
 
     @field_validator("email")
@@ -82,7 +80,6 @@ class ApplicationUserResponse(BaseModel):
     module_rete: bool
     module_inventario: bool
     module_catasto: bool
-    module_anagrafica: bool
     module_utenze: bool
     enabled_modules: list[str]
     created_at: datetime

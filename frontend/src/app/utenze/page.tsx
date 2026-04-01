@@ -3,15 +3,15 @@
 import Link from "next/link";
 import { useDeferredValue, useEffect, useState } from "react";
 
-import { AnagraficaModulePage } from "@/components/utenze/anagrafica-module-page";
+import { UtenzeModulePage } from "@/components/utenze/utenze-module-page";
 import { EmptyState } from "@/components/ui/empty-state";
 import { MetricCard } from "@/components/ui/metric-card";
 import { FolderIcon, RefreshIcon, SearchIcon, UserIcon } from "@/components/ui/icons";
-import { getAnagraficaDocumentSummary, getAnagraficaImportJobs, getAnagraficaStats, getAnagraficaSubjects, searchAnagraficaSubjects } from "@/lib/api";
+import { getUtenzeDocumentSummary, getUtenzeImportJobs, getUtenzeStats, getUtenzeSubjects, searchUtenzeSubjects } from "@/lib/api";
 import { formatDateTime } from "@/lib/presentation";
-import type { AnagraficaDocumentSummary, AnagraficaImportJob, AnagraficaStats, AnagraficaSubjectListItem } from "@/types/api";
+import type { UtenzeDocumentSummary, UtenzeImportJob, UtenzeStats, UtenzeSubjectListItem } from "@/types/api";
 
-const emptyStats: AnagraficaStats = {
+const emptyStats: UtenzeStats = {
   total_subjects: 0,
   total_persons: 0,
   total_companies: 0,
@@ -41,18 +41,18 @@ function badgeTone(value: string): string {
 }
 
 function DashboardContent({ token }: { token: string }) {
-  const [stats, setStats] = useState<AnagraficaStats>(emptyStats);
-  const [subjects, setSubjects] = useState<AnagraficaSubjectListItem[]>([]);
-  const [jobs, setJobs] = useState<AnagraficaImportJob[]>([]);
+  const [stats, setStats] = useState<UtenzeStats>(emptyStats);
+  const [subjects, setSubjects] = useState<UtenzeSubjectListItem[]>([]);
+  const [jobs, setJobs] = useState<UtenzeImportJob[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
-  const [searchResults, setSearchResults] = useState<AnagraficaSubjectListItem[]>([]);
+  const [searchResults, setSearchResults] = useState<UtenzeSubjectListItem[]>([]);
   const [searchTotal, setSearchTotal] = useState(0);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [isSearching, setIsSearching] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [selectedSubject, setSelectedSubject] = useState<AnagraficaSubjectListItem | null>(null);
-  const [documentSummary, setDocumentSummary] = useState<AnagraficaDocumentSummary | null>(null);
+  const [selectedSubject, setSelectedSubject] = useState<UtenzeSubjectListItem | null>(null);
+  const [documentSummary, setDocumentSummary] = useState<UtenzeDocumentSummary | null>(null);
   const [isDocumentSummaryOpen, setIsDocumentSummaryOpen] = useState(false);
   const [isLoadingDocumentSummary, setIsLoadingDocumentSummary] = useState(false);
   const [documentSummaryError, setDocumentSummaryError] = useState<string | null>(null);
@@ -64,9 +64,9 @@ function DashboardContent({ token }: { token: string }) {
     async function loadData() {
       try {
         const [statsResponse, subjectsResponse, jobsResponse] = await Promise.all([
-          getAnagraficaStats(token),
-          getAnagraficaSubjects(token, { pageSize: 6 }),
-          getAnagraficaImportJobs(token),
+          getUtenzeStats(token),
+          getUtenzeSubjects(token, { pageSize: 6 }),
+          getUtenzeImportJobs(token),
         ]);
         setStats(statsResponse);
         setSubjects(subjectsResponse.items);
@@ -94,7 +94,7 @@ function DashboardContent({ token }: { token: string }) {
 
       setIsSearching(true);
       try {
-        const response = await searchAnagraficaSubjects(token, normalizedSearchTerm, 12);
+        const response = await searchUtenzeSubjects(token, normalizedSearchTerm, 12);
         setSearchResults(response.items);
         setSearchTotal(response.total);
         setSearchError(null);
@@ -119,7 +119,7 @@ function DashboardContent({ token }: { token: string }) {
     setIsLoadingDocumentSummary(true);
     setDocumentSummaryError(null);
     try {
-      const response = await getAnagraficaDocumentSummary(token);
+      const response = await getUtenzeDocumentSummary(token);
       setDocumentSummary(response);
     } catch (error) {
       setDocumentSummaryError(error instanceof Error ? error.message : "Errore caricamento riepilogo documenti");
@@ -459,11 +459,11 @@ function DashboardContent({ token }: { token: string }) {
 
 export default function AnagraficaPage() {
   return (
-    <AnagraficaModulePage
+    <UtenzeModulePage
       title="Dashboard"
-      description="Vista sintetica del registro soggetti, dello stato import archivio e della qualità del dato Anagrafica."
+      description="Vista sintetica del registro soggetti, dello stato import archivio e della qualità del dato Utenze."
     >
       {({ token }) => <DashboardContent token={token} />}
-    </AnagraficaModulePage>
+    </UtenzeModulePage>
   );
 }

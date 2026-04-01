@@ -12,7 +12,7 @@ const modules = [
   { name: "GAIA NAS Control", icon: "storage", status: "Operativo", active: true },
   { name: "GAIA Catasto", icon: "account_balance", status: "Operativo", active: true },
   { name: "GAIA Rete", icon: "hub", status: "Operativo", active: true },
-  { name: "GAIA Utenze", icon: "badge", status: "In sviluppo", active: false },
+  { name: "GAIA Utenze", icon: "badge", status: "Operativo", active: true },
   { name: "GAIA Inventario", icon: "inventory_2", status: "In sviluppo", active: false },
 ];
 

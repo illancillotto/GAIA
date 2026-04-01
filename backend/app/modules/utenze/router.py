@@ -75,7 +75,7 @@ from app.modules.utenze.services.csv_import_service import import_subjects_from_
 from app.services.nas_connector import NasConnectorError, get_nas_client
 
 router = APIRouter(tags=["utenze"])
-RequireUtenzeModule = Depends(require_module("anagrafica"))
+RequireUtenzeModule = Depends(require_module("utenze"))
 
 
 def get_anagrafica_import_service() -> AnagraficaImportPreviewService:
@@ -682,7 +682,7 @@ def delete_document(
     db: Annotated[Session, Depends(get_db)],
     delete_password: Annotated[str | None, Header(alias="X-GAIA-Delete-Password")] = None,
 ) -> None:
-    expected_password = (settings.anagrafica_delete_password or "").strip()
+    expected_password = (settings.utenze_delete_password or settings.anagrafica_delete_password or "").strip()
     if expected_password:
         provided_password = (delete_password or "").strip()
         if not provided_password or not secrets.compare_digest(provided_password, expected_password):
@@ -735,10 +735,11 @@ def post_reset_anagrafica(
     _: Annotated[ApplicationUser, RequireUtenzeModule],
     db: Annotated[Session, Depends(get_db)],
 ) -> AnagraficaResetResponse:
-    if payload.confirm.strip().upper() != "RESET ANAGRAFICA":
+    confirm_text = payload.confirm.strip().upper()
+    if confirm_text not in {"RESET UTENZE", "RESET ANAGRAFICA"}:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Conferma non valida. Usa esattamente 'RESET ANAGRAFICA'.",
+            detail="Conferma non valida. Usa esattamente 'RESET UTENZE'.",
         )
 
     result = reset_anagrafica_data(db)

@@ -178,7 +178,7 @@ class SubjectNasImportStatus:
 class AnagraficaImportPreviewService:
     def __init__(self, connector: NasCommandRunner, archive_root: str | None = None) -> None:
         self.connector = connector
-        self.archive_root = (archive_root or settings.anagrafica_nas_archive_root).rstrip("/")
+        self.archive_root = (archive_root or settings.utenze_nas_archive_root or settings.anagrafica_nas_archive_root).rstrip("/")
 
     def preview_letter(self, letter: str) -> ImportPreviewResult:
         normalized_letter = self._normalize_letter(letter)
@@ -860,7 +860,9 @@ def reset_anagrafica_data(db: Session) -> ResetAnagraficaResult:
     ).count()
     deleted_import_jobs = db.query(AnagraficaImportJob).count()
     deleted_import_job_items = db.query(AnagraficaImportJobItem).count()
-    deleted_storage_files = _clear_local_storage(Path(settings.anagrafica_document_storage_path))
+    deleted_storage_files = _clear_local_storage(
+        Path(settings.utenze_document_storage_path or settings.anagrafica_document_storage_path)
+    )
 
     db.execute(delete(AnagraficaImportJobItem))
     db.execute(delete(AnagraficaImportJob))
@@ -1472,7 +1474,7 @@ def _store_document_locally(
     subject_id: uuid.UUID,
     document_preview: AnagraficaPreviewDocument,
 ) -> str:
-    storage_root = Path(settings.anagrafica_document_storage_path)
+    storage_root = Path(settings.utenze_document_storage_path or settings.anagrafica_document_storage_path)
     target_path = storage_root / str(subject_id) / Path(*_safe_relative_parts(document_preview.relative_path))
     target_path.parent.mkdir(parents=True, exist_ok=True)
     target_path.write_bytes(connector.download_file(document_preview.nas_path))
@@ -1484,7 +1486,7 @@ def store_uploaded_document(
     filename: str,
     file_bytes: bytes,
 ) -> str:
-    storage_root = Path(settings.anagrafica_document_storage_path)
+    storage_root = Path(settings.utenze_document_storage_path or settings.anagrafica_document_storage_path)
     safe_name = Path(filename).name or "document.bin"
     target_path = storage_root / str(subject_id) / "manual" / f"{uuid.uuid4()}-{safe_name}"
     target_path.parent.mkdir(parents=True, exist_ok=True)

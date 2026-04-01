@@ -163,10 +163,11 @@ test("utenze dashboard opens subject and document summaries in modal overlays", 
   assert.match(dashboardPage, /Dettaglio soggetto/);
   assert.match(dashboardPage, /Riepilogo documenti/);
   assert.match(dashboardPage, /recent_unclassified/);
-  assert.match(dashboardPage, /getAnagraficaDocumentSummary/);
+  assert.match(dashboardPage, /(getAnagraficaDocumentSummary|getUtenzeDocumentSummary)/);
   assert.match(dashboardPage, /onClick=\{\(\) => setSelectedSubject\(subject\)\}/);
   assert.match(dashboardPage, /onClick=\{\(\) => void handleOpenDocumentSummary\(\)\}/);
   assert.match(apiClient, /export async function getAnagraficaDocumentSummary/);
+  assert.match(apiClient, /export const getUtenzeDocumentSummary/);
 });
 
 test("utenze import page exposes bulk import progress feedback", () => {
@@ -192,5 +193,5 @@ test("utenze detail page keeps preview modal and delete password flow", () => {
   assert.match(apiClient, /X-GAIA-Delete-Password/);
   assert.match(detailPage, /cursor-pointer rounded-lg border border-gray-100/);
   assert.match(detailPage, /event\.stopPropagation\(\)/);
-  assert.match(apiClient, /export async function downloadAnagraficaDocumentBlob/);
+  assert.match(apiClient, /(export async function downloadAnagraficaDocumentBlob|export const downloadUtenzeDocumentBlob)/);
 });

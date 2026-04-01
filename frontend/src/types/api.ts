@@ -13,8 +13,7 @@ export type CurrentUser = {
   module_rete: boolean;
   module_inventario: boolean;
   module_catasto: boolean;
-  module_anagrafica: boolean;
-  module_utenze?: boolean;
+  module_utenze: boolean;
   enabled_modules: string[];
 };
 
@@ -41,8 +40,7 @@ export type ApplicationUser = {
   module_rete: boolean;
   module_inventario: boolean;
   module_catasto: boolean;
-  module_anagrafica: boolean;
-  module_utenze?: boolean;
+  module_utenze: boolean;
   enabled_modules: string[];
   created_at: string;
   updated_at: string;
@@ -63,8 +61,7 @@ export type ApplicationUserCreateInput = {
   module_rete: boolean;
   module_inventario: boolean;
   module_catasto: boolean;
-  module_anagrafica: boolean;
-  module_utenze?: boolean;
+  module_utenze: boolean;
 };
 
 export type ApplicationUserUpdateInput = {
@@ -76,7 +73,6 @@ export type ApplicationUserUpdateInput = {
   module_rete?: boolean;
   module_inventario?: boolean;
   module_catasto?: boolean;
-  module_anagrafica?: boolean;
   module_utenze?: boolean;
 };
 
@@ -301,10 +297,14 @@ export type AnagraficaStats = {
   by_letter: Record<string, number>;
 };
 
+export type UtenzeStats = AnagraficaStats;
+
 export type AnagraficaDocumentSummaryBucket = {
   doc_type: string;
   count: number;
 };
+
+export type UtenzeDocumentSummaryBucket = AnagraficaDocumentSummaryBucket;
 
 export type AnagraficaDocumentSummaryItem = {
   document_id: string;
@@ -316,6 +316,8 @@ export type AnagraficaDocumentSummaryItem = {
   created_at: string;
 };
 
+export type UtenzeDocumentSummaryItem = AnagraficaDocumentSummaryItem;
+
 export type AnagraficaDocumentSummary = {
   total_documents: number;
   documents_unclassified: number;
@@ -323,6 +325,8 @@ export type AnagraficaDocumentSummary = {
   by_doc_type: AnagraficaDocumentSummaryBucket[];
   recent_unclassified: AnagraficaDocumentSummaryItem[];
 };
+
+export type UtenzeDocumentSummary = AnagraficaDocumentSummary;
 
 export type AnagraficaDocument = {
   id: string | null;
@@ -336,6 +340,8 @@ export type AnagraficaDocument = {
   warnings: string[];
 };
 
+export type UtenzeDocument = AnagraficaDocument;
+
 export type AnagraficaAuditLog = {
   id: string;
   subject_id: string;
@@ -344,6 +350,8 @@ export type AnagraficaAuditLog = {
   diff_json: Record<string, unknown> | unknown[] | null;
   changed_at: string;
 };
+
+export type UtenzeAuditLog = AnagraficaAuditLog;
 
 export type AnagraficaCatastoDocument = {
   id: string;
@@ -358,6 +366,8 @@ export type AnagraficaCatastoDocument = {
   codice_fiscale: string | null;
   created_at: string;
 };
+
+export type UtenzeCatastoDocument = AnagraficaCatastoDocument;
 
 export type AnagraficaPerson = {
   subject_id: string;
@@ -376,6 +386,8 @@ export type AnagraficaPerson = {
   updated_at: string;
 };
 
+export type UtenzePerson = AnagraficaPerson;
+
 export type AnagraficaCompany = {
   subject_id: string;
   ragione_sociale: string;
@@ -391,6 +403,8 @@ export type AnagraficaCompany = {
   created_at: string;
   updated_at: string;
 };
+
+export type UtenzeCompany = AnagraficaCompany;
 
 export type AnagraficaSubjectListItem = {
   id: string;
@@ -409,12 +423,16 @@ export type AnagraficaSubjectListItem = {
   updated_at: string;
 };
 
+export type UtenzeSubjectListItem = AnagraficaSubjectListItem;
+
 export type AnagraficaSubjectListResponse = {
   items: AnagraficaSubjectListItem[];
   total: number;
   page: number;
   page_size: number;
 };
+
+export type UtenzeSubjectListResponse = AnagraficaSubjectListResponse;
 
 export type AnagraficaSubjectDetail = {
   id: string;
@@ -434,6 +452,8 @@ export type AnagraficaSubjectDetail = {
   catasto_documents: AnagraficaCatastoDocument[];
 };
 
+export type UtenzeSubjectDetail = AnagraficaSubjectDetail;
+
 export type AnagraficaSubjectCreateInput = {
   subject_type: "person" | "company" | "unknown";
   source_name_raw: string;
@@ -443,6 +463,8 @@ export type AnagraficaSubjectCreateInput = {
   person?: Omit<AnagraficaPerson, "subject_id" | "created_at" | "updated_at"> | null;
   company?: Omit<AnagraficaCompany, "subject_id" | "created_at" | "updated_at"> | null;
 };
+
+export type UtenzeSubjectCreateInput = AnagraficaSubjectCreateInput;
 
 export type AnagraficaSubjectUpdateInput = {
   source_name_raw?: string;
@@ -454,17 +476,23 @@ export type AnagraficaSubjectUpdateInput = {
   company?: Omit<AnagraficaCompany, "subject_id" | "created_at" | "updated_at"> | null;
 };
 
+export type UtenzeSubjectUpdateInput = AnagraficaSubjectUpdateInput;
+
 export type AnagraficaImportWarning = {
   code: string;
   message: string;
   path: string | null;
 };
 
+export type UtenzeImportWarning = AnagraficaImportWarning;
+
 export type AnagraficaCsvImportError = {
   row_number: number;
   message: string;
   codice_fiscale: string | null;
 };
+
+export type UtenzeCsvImportError = AnagraficaCsvImportError;
 
 export type AnagraficaCsvImportResult = {
   total_rows: number;
@@ -473,6 +501,8 @@ export type AnagraficaCsvImportResult = {
   skipped_rows: number;
   errors: AnagraficaCsvImportError[];
 };
+
+export type UtenzeCsvImportResult = AnagraficaCsvImportResult;
 
 export type AnagraficaPreviewSubject = {
   folder_name: string;
@@ -491,6 +521,8 @@ export type AnagraficaPreviewSubject = {
   documents: AnagraficaDocument[];
 };
 
+export type UtenzePreviewSubject = AnagraficaPreviewSubject;
+
 export type AnagraficaImportPreview = {
   letter: string;
   archive_root: string;
@@ -504,6 +536,8 @@ export type AnagraficaImportPreview = {
   errors: AnagraficaImportWarning[];
   subjects: AnagraficaPreviewSubject[];
 };
+
+export type UtenzeImportPreview = AnagraficaImportPreview;
 
 export type AnagraficaImportRunResult = {
   job_id: string;
@@ -526,6 +560,8 @@ export type AnagraficaImportRunResult = {
   log_json: Record<string, unknown> | unknown[] | null;
 };
 
+export type UtenzeImportRunResult = AnagraficaImportRunResult;
+
 export type AnagraficaSubjectImportResult = {
   subject_id: string;
   matched_folder_path: string;
@@ -536,6 +572,8 @@ export type AnagraficaSubjectImportResult = {
   imported_at: string;
 };
 
+export type UtenzeSubjectImportResult = AnagraficaSubjectImportResult;
+
 export type AnagraficaResetResult = {
   cleared_subject_links: number;
   deleted_documents: number;
@@ -544,6 +582,8 @@ export type AnagraficaResetResult = {
   deleted_import_job_items: number;
   deleted_storage_files: number;
 };
+
+export type UtenzeResetResult = AnagraficaResetResult;
 
 export type AnagraficaNasFolderCandidate = {
   folder_name: string;
@@ -560,6 +600,8 @@ export type AnagraficaNasFolderCandidate = {
   nome: string | null;
 };
 
+export type UtenzeNasFolderCandidate = AnagraficaNasFolderCandidate;
+
 export type AnagraficaSubjectNasImportStatus = {
   can_import_from_nas: boolean;
   missing_in_nas: boolean;
@@ -569,6 +611,8 @@ export type AnagraficaSubjectNasImportStatus = {
   pending_files_in_nas: number;
   message: string;
 };
+
+export type UtenzeSubjectNasImportStatus = AnagraficaSubjectNasImportStatus;
 
 export type AnagraficaImportJob = {
   job_id: string;
@@ -591,6 +635,8 @@ export type AnagraficaImportJob = {
   updated_at: string;
 };
 
+export type UtenzeImportJob = AnagraficaImportJob;
+
 export type AnagraficaImportJobItem = {
   id: string;
   subject_id: string | null;
@@ -610,10 +656,14 @@ export type AnagraficaImportJobItem = {
   updated_at: string;
 };
 
+export type UtenzeImportJobItem = AnagraficaImportJobItem;
+
 export type AnagraficaSearchResult = {
   items: AnagraficaSubjectListItem[];
   total: number;
 };
+
+export type UtenzeSearchResult = AnagraficaSearchResult;
 
 export type NasUser = {
   id: number;

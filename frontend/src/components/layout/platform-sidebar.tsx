@@ -41,10 +41,11 @@ export function PlatformSidebar({ currentModuleLabel, currentUser }: PlatformSid
             : href === "/catasto"
               ? "catasto"
               : href === "/utenze"
-                ? "anagrafica"
+                ? "utenze"
               : "";
 
-    return moduleKey ? currentUser.enabled_modules.includes(moduleKey) : true;
+    if (!moduleKey) return true;
+    return currentUser.enabled_modules.includes(moduleKey);
   });
   const activePlatformModule = useMemo(
     () => visiblePlatformModules.find(({ href }) => pathname === href || pathname.startsWith(`${href}/`)),

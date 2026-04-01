@@ -76,22 +76,22 @@ def test_admin_users_lifecycle_and_module_flags() -> None:
             "module_rete": True,
             "module_inventario": False,
             "module_catasto": True,
-            "module_anagrafica": True,
+            "module_utenze": True,
         },
     )
     assert create_resp.status_code == 201
-    assert create_resp.json()["enabled_modules"] == ["accessi", "rete", "catasto", "anagrafica"]
+    assert create_resp.json()["enabled_modules"] == ["accessi", "rete", "catasto", "utenze"]
 
     list_resp = client.get("/admin/users", headers={"Authorization": f"Bearer {token}"})
     assert list_resp.status_code == 200
     assert list_resp.json()["total"] == 2
 
     patch_resp = client.patch(
-        f"/admin/users/{create_resp.json()['id']}/modules?module_accessi=false&module_rete=false&module_inventario=true&module_catasto=true&module_anagrafica=true",
+        f"/admin/users/{create_resp.json()['id']}/modules?module_accessi=false&module_rete=false&module_inventario=true&module_catasto=true&module_utenze=true",
         headers={"Authorization": f"Bearer {token}"},
     )
     assert patch_resp.status_code == 200
-    assert patch_resp.json()["enabled_modules"] == ["inventario", "catasto", "anagrafica"]
+    assert patch_resp.json()["enabled_modules"] == ["inventario", "catasto", "utenze"]
 
 
 def test_viewer_cannot_access_admin_users() -> None:
@@ -111,7 +111,7 @@ def test_admin_without_accessi_module_cannot_access_admin_users() -> None:
         is_active=True,
         module_accessi=False,
         module_catasto=True,
-        module_anagrafica=True,
+        module_utenze=True,
     )
     db.add(user)
     db.commit()
@@ -122,13 +122,13 @@ def test_admin_without_accessi_module_cannot_access_admin_users() -> None:
     assert resp.status_code == 403
 
 
-def test_anagrafica_module_route_requires_module_flag() -> None:
+def test_utenze_module_route_requires_module_flag() -> None:
     create_user("root", "super_admin")
     token = login("root")
 
-    allowed = client.get("/anagrafica", headers={"Authorization": f"Bearer {token}"})
+    allowed = client.get("/utenze", headers={"Authorization": f"Bearer {token}"})
     assert allowed.status_code == 200
-    assert allowed.json()["module"] == "anagrafica"
+    assert allowed.json()["module"] == "utenze"
 
     db = TestingSessionLocal()
     user = ApplicationUser(
@@ -138,12 +138,12 @@ def test_anagrafica_module_route_requires_module_flag() -> None:
         role=ApplicationUserRole.VIEWER.value,
         is_active=True,
         module_accessi=True,
-        module_anagrafica=False,
+        module_utenze=False,
     )
     db.add(user)
     db.commit()
     db.close()
 
     denied_token = login("viewer_no_anagrafica")
-    denied = client.get("/anagrafica", headers={"Authorization": f"Bearer {denied_token}"})
+    denied = client.get("/utenze", headers={"Authorization": f"Bearer {denied_token}"})
     assert denied.status_code == 403

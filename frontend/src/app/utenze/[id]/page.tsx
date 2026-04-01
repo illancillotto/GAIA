@@ -4,17 +4,17 @@ import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { AnagraficaModulePage } from "@/components/utenze/anagrafica-module-page";
+import { UtenzeModulePage } from "@/components/utenze/utenze-module-page";
 import {
-  downloadAnagraficaDocumentBlob,
-  getAnagraficaSubjectNasCandidates,
-  getAnagraficaSubjectNasImportStatus,
-  getAnagraficaSubject,
-  deleteAnagraficaDocument,
-  importAnagraficaSubjectFromNas,
-  updateAnagraficaDocument,
-  updateAnagraficaSubject,
-  uploadAnagraficaSubjectDocument,
+  deleteUtenzeDocument,
+  downloadUtenzeDocumentBlob,
+  getUtenzeSubject,
+  getUtenzeSubjectNasCandidates,
+  getUtenzeSubjectNasImportStatus,
+  importUtenzeSubjectFromNas,
+  updateUtenzeDocument,
+  updateUtenzeSubject,
+  uploadUtenzeSubjectDocument,
 } from "@/lib/api";
 import { formatDateTime } from "@/lib/presentation";
 import { cn } from "@/lib/cn";
@@ -130,7 +130,7 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
   useEffect(() => {
     async function loadSubject() {
       try {
-        const response = await getAnagraficaSubject(token, subjectId);
+        const response = await getUtenzeSubject(token, subjectId);
         setSubject(response);
         setLoadError(null);
       } catch (error) {
@@ -188,14 +188,14 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
   }, [isManualUploadModalOpen]);
 
   async function reloadSubject() {
-    const response = await getAnagraficaSubject(token, subjectId);
+    const response = await getUtenzeSubject(token, subjectId);
     setSubject(response);
   }
 
   const loadNasImportStatus = useCallback(async () => {
     setIsLoadingNasStatus(true);
     try {
-      const response = await getAnagraficaSubjectNasImportStatus(token, subjectId);
+      const response = await getUtenzeSubjectNasImportStatus(token, subjectId);
       setNasImportStatus(response);
     } catch (error) {
       setNasImportStatus({
@@ -256,7 +256,7 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
     }
 
     try {
-      const response = await updateAnagraficaSubject(token, subjectId, payload);
+      const response = await updateUtenzeSubject(token, subjectId, payload);
       setSubject(response);
       setSaveMessage("Scheda soggetto aggiornata.");
     } catch (error) {
@@ -268,7 +268,7 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
 
   async function handleDocumentTypeChange(documentId: string, docType: string) {
     try {
-      await updateAnagraficaDocument(token, documentId, { doc_type: docType });
+      await updateUtenzeDocument(token, documentId, { doc_type: docType });
       await reloadSubject();
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : "Errore aggiornamento documento");
@@ -281,7 +281,7 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
     setSaveMessage(null);
 
     try {
-      const result = await importAnagraficaSubjectFromNas(token, subjectId);
+      const result = await importUtenzeSubjectFromNas(token, subjectId);
       await reloadSubject();
       await loadNasImportStatus();
       setSaveMessage(
@@ -298,7 +298,7 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
     setIsLoadingNasCandidates(true);
     setSaveError(null);
     try {
-      const response = await getAnagraficaSubjectNasCandidates(token, subjectId);
+      const response = await getUtenzeSubjectNasCandidates(token, subjectId);
       setNasCandidates(response);
       if (!selectedNasPath && response[0]?.nas_folder_path) {
         setSelectedNasPath(response[0].nas_folder_path);
@@ -322,7 +322,7 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
     setSaveError(null);
     setSaveMessage(null);
     try {
-      const response = await updateAnagraficaSubject(token, subjectId, {
+      const response = await updateUtenzeSubject(token, subjectId, {
         nas_folder_path: selectedNasPath,
         nas_folder_letter: selectedCandidate?.letter ?? subject?.nas_folder_letter ?? null,
       });
@@ -347,7 +347,7 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
     setSaveMessage(null);
     try {
       for (const item of manualUploadItems) {
-        await uploadAnagraficaSubjectDocument(token, subjectId, item.file, item.docType, item.notes || undefined);
+        await uploadUtenzeSubjectDocument(token, subjectId, item.file, item.docType, item.notes || undefined);
       }
       await reloadSubject();
       await loadNasImportStatus();
@@ -380,7 +380,7 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
     setSaveError(null);
     setSaveMessage(null);
     try {
-      await deleteAnagraficaDocument(token, deleteDocumentTarget.id, password);
+      await deleteUtenzeDocument(token, deleteDocumentTarget.id, password);
       await reloadSubject();
       await loadNasImportStatus();
       setDeleteDocumentTarget(null);
@@ -462,7 +462,7 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
     setTextPreview(null);
 
     try {
-      const blob = await downloadAnagraficaDocumentBlob(token, document.id);
+      const blob = await downloadUtenzeDocumentBlob(token, document.id);
       const objectUrl = URL.createObjectURL(blob);
       const extension = document.extension?.toLowerCase() ?? null;
       setPreviewUrl(objectUrl);
@@ -1424,15 +1424,15 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
   );
 }
 
-export default function AnagraficaSubjectDetailPage() {
+export default function UtenzeSubjectDetailPage() {
   const params = useParams<{ id: string }>();
   return (
-    <AnagraficaModulePage
+    <UtenzeModulePage
       title="Dettaglio soggetto"
-      description="Scheda anagrafica completa del soggetto, documenti associati e audit log."
+      description="Scheda utenza completa del soggetto, documenti associati e audit log."
       breadcrumb={params.id}
     >
       {({ token }) => <DetailContent token={token} subjectId={params.id} />}
-    </AnagraficaModulePage>
+    </UtenzeModulePage>
   );
 }

@@ -5,12 +5,12 @@ import Link from "next/link";
 import { useCallback, useDeferredValue, useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 
-import { AnagraficaModulePage } from "@/components/utenze/anagrafica-module-page";
+import { UtenzeModulePage } from "@/components/utenze/utenze-module-page";
 import { DataTable } from "@/components/table/data-table";
 import { TableFilters } from "@/components/table/table-filters";
-import { createAnagraficaSubject, downloadAnagraficaDocumentBlob, downloadAnagraficaExportBlob, getAnagraficaSubject, getAnagraficaSubjects, importAnagraficaSubjectsCsv } from "@/lib/api";
+import { createUtenzeSubject, downloadUtenzeDocumentBlob, downloadUtenzeExportBlob, getUtenzeSubject, getUtenzeSubjects, importUtenzeSubjectsCsv } from "@/lib/api";
 import { formatDateTime } from "@/lib/presentation";
-import type { AnagraficaCsvImportResult, AnagraficaDocument, AnagraficaSubjectCreateInput, AnagraficaSubjectDetail, AnagraficaSubjectListItem } from "@/types/api";
+import type { UtenzeCsvImportResult, UtenzeDocument, UtenzeSubjectCreateInput, UtenzeSubjectDetail, UtenzeSubjectListItem } from "@/types/api";
 
 type FilterState = {
   search: string;
@@ -86,7 +86,7 @@ function buildSourceNameRaw(createType: "person" | "company", values: {
 }
 
 function SubjectsContent({ token }: { token: string }) {
-  const [items, setItems] = useState<AnagraficaSubjectListItem[]>([]);
+  const [items, setItems] = useState<UtenzeSubjectListItem[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [filters, setFilters] = useState<FilterState>(emptyFilters);
@@ -106,13 +106,13 @@ function SubjectsContent({ token }: { token: string }) {
   const [companyName, setCompanyName] = useState("");
   const [companyVat, setCompanyVat] = useState("");
   const [csvFile, setCsvFile] = useState<File | null>(null);
-  const [csvImportResult, setCsvImportResult] = useState<AnagraficaCsvImportResult | null>(null);
+  const [csvImportResult, setCsvImportResult] = useState<UtenzeCsvImportResult | null>(null);
   const [duplicateCfMessage, setDuplicateCfMessage] = useState<string | null>(null);
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
-  const [selectedSubject, setSelectedSubject] = useState<AnagraficaSubjectDetail | null>(null);
+  const [selectedSubject, setSelectedSubject] = useState<UtenzeSubjectDetail | null>(null);
   const [isSubjectModalLoading, setIsSubjectModalLoading] = useState(false);
   const [subjectModalError, setSubjectModalError] = useState<string | null>(null);
-  const [previewDocument, setPreviewDocument] = useState<AnagraficaDocument | null>(null);
+  const [previewDocument, setPreviewDocument] = useState<UtenzeDocument | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [isLoadingPreview, setIsLoadingPreview] = useState(false);
@@ -141,7 +141,7 @@ function SubjectsContent({ token }: { token: string }) {
   );
 
   const refreshSubjects = useCallback(async (targetPage: number = page) => {
-    const response = await getAnagraficaSubjects(token, {
+    const response = await getUtenzeSubjects(token, {
       page: targetPage,
       pageSize: 20,
       search: effectiveSearch,
@@ -197,7 +197,7 @@ function SubjectsContent({ token }: { token: string }) {
       setIsSubjectModalLoading(true);
       setSubjectModalError(null);
       try {
-        const detail = await getAnagraficaSubject(token, subjectId);
+        const detail = await getUtenzeSubject(token, subjectId);
         if (!cancelled) {
           setSelectedSubject(detail);
         }
@@ -266,7 +266,7 @@ function SubjectsContent({ token }: { token: string }) {
     };
   }, [previewUrl]);
 
-  const columns = useMemo<ColumnDef<AnagraficaSubjectListItem>[]>(
+  const columns = useMemo<ColumnDef<UtenzeSubjectListItem>[]>(
     () => [
       {
         header: "Utente",
@@ -330,7 +330,7 @@ function SubjectsContent({ token }: { token: string }) {
     setSaveMessage(null);
     setDuplicateCfMessage(null);
 
-    const payload: AnagraficaSubjectCreateInput = {
+    const payload: UtenzeSubjectCreateInput = {
       subject_type: createType,
       source_name_raw: derivedSourceNameRaw,
       nas_folder_letter: derivedLetter || null,
@@ -367,7 +367,7 @@ function SubjectsContent({ token }: { token: string }) {
     }
 
     try {
-      await createAnagraficaSubject(token, payload);
+      await createUtenzeSubject(token, payload);
       setSaveMessage("Utente creato correttamente.");
       setPersonSurname("");
       setPersonName("");
@@ -400,7 +400,7 @@ function SubjectsContent({ token }: { token: string }) {
     setSaveMessage(null);
     setCsvImportResult(null);
     try {
-      const result = await importAnagraficaSubjectsCsv(token, csvFile, setCsvUploadProgress);
+      const result = await importUtenzeSubjectsCsv(token, csvFile, setCsvUploadProgress);
       setCsvImportResult(result);
       setSaveMessage(
         `Import CSV completato: ${result.created_subjects} creati, ${result.updated_subjects} aggiornati, ${result.skipped_rows} scartati.`,
@@ -430,7 +430,7 @@ function SubjectsContent({ token }: { token: string }) {
     setTextPreview(null);
   }, [previewUrl]);
 
-  async function handlePreviewDocument(document: AnagraficaDocument) {
+  async function handlePreviewDocument(document: UtenzeDocument) {
     if (!document.id) {
       setSubjectModalError("Il documento selezionato non ha un identificativo valido.");
       return;
@@ -450,7 +450,7 @@ function SubjectsContent({ token }: { token: string }) {
     setTextPreview(null);
 
     try {
-      const blob = await downloadAnagraficaDocumentBlob(token, document.id);
+      const blob = await downloadUtenzeDocumentBlob(token, document.id);
       const objectUrl = URL.createObjectURL(blob);
       const extension = document.extension?.toLowerCase() ?? null;
       setPreviewUrl(objectUrl);
@@ -542,7 +542,7 @@ function SubjectsContent({ token }: { token: string }) {
     const setter = format === "csv" ? setIsExportingCsv : setIsExportingXlsx;
     setter(true);
     try {
-      const blob = await downloadAnagraficaExportBlob(token, {
+      const blob = await downloadUtenzeExportBlob(token, {
         format,
         search: filters.search || undefined,
         subjectType: filters.subjectType || undefined,
@@ -550,9 +550,9 @@ function SubjectsContent({ token }: { token: string }) {
         letter: filters.letter || undefined,
         requiresReview: filters.requiresReview === "" ? undefined : filters.requiresReview === "true",
       });
-      triggerDownload(blob, `anagrafica-export.${format}`);
+      triggerDownload(blob, `utenze-export.${format}`);
     } catch (error) {
-      setLoadError(error instanceof Error ? error.message : "Errore export anagrafica");
+      setLoadError(error instanceof Error ? error.message : "Errore export utenze");
     } finally {
       setter(false);
     }
@@ -922,7 +922,7 @@ function SubjectsContent({ token }: { token: string }) {
 
                 {selectedSubject.person ? (
                   <section className="rounded-2xl border border-[#D9E8DF] bg-white p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Anagrafica persona</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Utenza persona</p>
                     <div className="mt-4 grid gap-3 md:grid-cols-2 text-sm text-gray-600">
                       <p><span className="font-medium text-gray-900">Email:</span> {selectedSubject.person.email || "n/d"}</p>
                       <p><span className="font-medium text-gray-900">Telefono:</span> {selectedSubject.person.telefono || "n/d"}</p>
@@ -934,7 +934,7 @@ function SubjectsContent({ token }: { token: string }) {
 
                 {selectedSubject.company ? (
                   <section className="rounded-2xl border border-[#D9E8DF] bg-white p-4">
-                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Anagrafica societa</p>
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Utenza societa</p>
                     <div className="mt-4 grid gap-3 md:grid-cols-2 text-sm text-gray-600">
                       <p><span className="font-medium text-gray-900">Ragione sociale:</span> {selectedSubject.company.ragione_sociale}</p>
                       <p><span className="font-medium text-gray-900">Partita IVA:</span> {selectedSubject.company.partita_iva}</p>
@@ -1094,14 +1094,14 @@ function SubjectsContent({ token }: { token: string }) {
   );
 }
 
-export default function AnagraficaSubjectsPage() {
+export default function UtenzeSubjectsPage() {
   return (
-    <AnagraficaModulePage
+    <UtenzeModulePage
       title="Utenti"
       description="Lista operativa degli utenti del Consorzio con filtri server-side e inserimento manuale."
       breadcrumb="Utenti"
     >
       {({ token }) => <SubjectsContent token={token} />}
-    </AnagraficaModulePage>
+    </UtenzeModulePage>
   );
 }
