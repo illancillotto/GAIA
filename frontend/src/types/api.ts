@@ -854,6 +854,85 @@ export type CatastoCredentialTestWebSocketEvent = {
   test: CatastoCredentialTestResult;
 };
 
+export type CapacitasCredential = {
+  id: number;
+  label: string;
+  username: string;
+  active: boolean;
+  allowed_hours_start: number;
+  allowed_hours_end: number;
+  last_used_at: string | null;
+  last_error: string | null;
+  consecutive_failures: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CapacitasCredentialCreateInput = {
+  label: string;
+  username: string;
+  password: string;
+  active?: boolean;
+  allowed_hours_start?: number;
+  allowed_hours_end?: number;
+};
+
+export type CapacitasCredentialUpdateInput = {
+  label?: string;
+  username?: string;
+  password?: string;
+  active?: boolean;
+  allowed_hours_start?: number;
+  allowed_hours_end?: number;
+};
+
+export type CapacitasCredentialTestResult = {
+  ok: boolean;
+  token: string | null;
+  error: string | null;
+};
+
+export type CapacitasAnagrafica = {
+  id?: string | null;
+  IDXANA?: string | null;
+  Stato?: string | null;
+  Patrimonio?: string | null;
+  Prg?: string | null;
+  Di?: string | null;
+  TP?: string | null;
+  TA?: string | null;
+  PVC?: string | null;
+  COM?: string | null;
+  Belfiore?: string | null;
+  CCO?: string | null;
+  Fraz?: string | null;
+  Sche?: string | null;
+  Comune?: string | null;
+  Denominazione?: string | null;
+  DataNascita?: string | null;
+  LuogoNascita?: string | null;
+  CodiceFiscale?: string | null;
+  CertAT?: string | null;
+  Deceduto?: string | null;
+  PartitaIva?: string | null;
+  Titolo1?: string | null;
+  TitoloLib1?: string | null;
+  TitoloLib2?: string | null;
+  NTerreni?: string | null;
+};
+
+export type CapacitasSearchInput = {
+  q: string;
+  tipo_ricerca?: number;
+  solo_con_beni?: boolean;
+  credential_id?: number | null;
+};
+
+export type CapacitasSearchResult = {
+  total: number;
+  rows: CapacitasAnagrafica[];
+};
+
 export type CatastoSingleVisuraPayload = {
   comune: string;
   catasto: string;
@@ -945,6 +1024,12 @@ export type CatastoDocument = {
 export type CatastoOperationResponse = {
   success: boolean;
   message: string;
+};
+
+export type CatastoCaptchaSummary = {
+  processed: number;
+  correct: number;
+  wrong: number;
 };
 
 export type CatastoBatchProgressEvent = {

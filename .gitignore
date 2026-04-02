@@ -46,3 +46,7 @@ Thumbs.db
 .vscode/
 *.swp
 *.swo
+anagrafica_data.tar.gz
+catasto_data.tar.gz
+gaia-images.tar.gz
+postgres_data.tar.gz

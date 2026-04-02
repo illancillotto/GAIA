@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from sqlalchemy import select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
-from app.models.catasto import CatastoVisuraRequest, CatastoVisuraRequestStatus
+from app.models.catasto import CatastoCaptchaLog, CatastoVisuraRequest, CatastoVisuraRequestStatus
 
 
 class CatastoCaptchaRequestNotFoundError(Exception):
@@ -36,6 +36,26 @@ def list_pending_captcha_requests(db: Session, user_id: int) -> list[CatastoVisu
         .order_by(CatastoVisuraRequest.captcha_requested_at.asc(), CatastoVisuraRequest.created_at.asc())
     )
     return list(db.scalars(statement).all())
+
+
+def get_manual_captcha_summary_for_user(db: Session, user_id: int) -> dict[str, int]:
+    statement = select(
+        func.count(CatastoCaptchaLog.id).label("processed"),
+        func.coalesce(func.sum(case((CatastoCaptchaLog.is_correct.is_(True), 1), else_=0)), 0).label("correct"),
+        func.coalesce(func.sum(case((CatastoCaptchaLog.is_correct.is_(False), 1), else_=0)), 0).label("wrong"),
+    ).join(
+        CatastoVisuraRequest,
+        CatastoVisuraRequest.id == CatastoCaptchaLog.request_id,
+    ).where(
+        CatastoVisuraRequest.user_id == user_id,
+        CatastoCaptchaLog.method == "manual",
+    )
+    row = db.execute(statement).one()
+    return {
+        "processed": int(row.processed or 0),
+        "correct": int(row.correct or 0),
+        "wrong": int(row.wrong or 0),
+    }
 
 
 def submit_manual_captcha_solution(db: Session, user_id: int, request_id, text: str) -> CatastoVisuraRequest:

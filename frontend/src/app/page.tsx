@@ -4,11 +4,25 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
-import { getCurrentUser, getDashboardSummary, getMyPermissions, isAuthError } from "@/lib/api";
+import {
+  getCatastoDocuments,
+  getCurrentUser,
+  getDashboardSummary,
+  getMyPermissions,
+  getNetworkDashboard,
+  getUtenzeStats,
+  isAuthError,
+} from "@/lib/api";
 import { clearStoredAccessToken, getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 import { hasSectionAccess } from "@/lib/section-access";
-import type { CurrentUser, DashboardSummary } from "@/types/api";
+import type {
+  AnagraficaStats,
+  CatastoDocument,
+  CurrentUser,
+  DashboardSummary,
+  NetworkDashboardSummary,
+} from "@/types/api";
 
 type ModuleStatus = "active" | "warming" | "coming";
 type ModuleId = "accessi" | "rete" | "inventario" | "catasto" | "utenze";
@@ -31,6 +45,29 @@ const emptySummary: DashboardSummary = {
   reviews: 0,
   snapshots: 0,
   sync_runs: 0,
+};
+
+const emptyNetworkSummary: NetworkDashboardSummary = {
+  total_devices: 0,
+  online_devices: 0,
+  offline_devices: 0,
+  open_alerts: 0,
+  scans_last_24h: 0,
+  floor_plans: 0,
+  latest_scan_at: null,
+};
+
+const emptyUtenzeSummary: AnagraficaStats = {
+  total_subjects: 0,
+  total_persons: 0,
+  total_companies: 0,
+  total_unknown: 0,
+  total_documents: 0,
+  requires_review: 0,
+  active_subjects: 0,
+  inactive_subjects: 0,
+  documents_unclassified: 0,
+  by_letter: {},
 };
 
 const allModules: HomeModule[] = [
@@ -117,6 +154,9 @@ export default function HomePage() {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [summary, setSummary] = useState<DashboardSummary>(emptySummary);
+  const [networkSummary, setNetworkSummary] = useState<NetworkDashboardSummary>(emptyNetworkSummary);
+  const [utenzeSummary, setUtenzeSummary] = useState<AnagraficaStats>(emptyUtenzeSummary);
+  const [catastoDocuments, setCatastoDocuments] = useState<CatastoDocument[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [grantedSectionKeys, setGrantedSectionKeys] = useState<string[]>([]);
@@ -137,8 +177,21 @@ export default function HomePage() {
           getMyPermissions(token),
         ]);
 
+        const hasNetwork = user.enabled_modules.includes("rete");
+        const hasUtenze = user.enabled_modules.includes("utenze");
+        const hasCatasto = user.enabled_modules.includes("catasto");
+
+        const [networkDashboard, utenzeStats, documents] = await Promise.all([
+          hasNetwork ? getNetworkDashboard(token) : Promise.resolve(emptyNetworkSummary),
+          hasUtenze ? getUtenzeStats(token) : Promise.resolve(emptyUtenzeSummary),
+          hasCatasto ? getCatastoDocuments(token) : Promise.resolve([]),
+        ]);
+
         setCurrentUser(user);
         setSummary(dashboardSummary);
+        setNetworkSummary(networkDashboard);
+        setUtenzeSummary(utenzeStats);
+        setCatastoDocuments(documents);
         setGrantedSectionKeys(permissionSummary.granted_keys);
         setLoadError(null);
       } catch (error) {
@@ -147,6 +200,9 @@ export default function HomePage() {
           clearStoredAccessToken();
           setCurrentUser(null);
           setSummary(emptySummary);
+          setNetworkSummary(emptyNetworkSummary);
+          setUtenzeSummary(emptyUtenzeSummary);
+          setCatastoDocuments([]);
           setGrantedSectionKeys([]);
           router.replace("/login");
         }
@@ -162,6 +218,9 @@ export default function HomePage() {
     clearStoredAccessToken();
     setCurrentUser(null);
     setSummary(emptySummary);
+    setNetworkSummary(emptyNetworkSummary);
+    setUtenzeSummary(emptyUtenzeSummary);
+    setCatastoDocuments([]);
     setGrantedSectionKeys([]);
     router.replace("/login");
   }
@@ -180,24 +239,39 @@ export default function HomePage() {
     return mod.enabledKeys.some((key) => currentUser.enabled_modules.includes(key));
   });
 
-  const stats = [
+  const platformStats = [
     {
-      label: "Shared Managed Units",
-      value: formatNumber(summary.shares),
-      copy: "Unità attive monitorate in tempo reale",
-      icon: "hub",
+      label: "Utenze gestite",
+      value: formatNumber(utenzeSummary.total_subjects),
+      copy: `${formatNumber(utenzeSummary.active_subjects)} soggetti attivi e ${formatNumber(utenzeSummary.requires_review)} da verificare`,
+      icon: "badge",
     },
     {
-      label: "Sync Runs",
+      label: "Dispositivi connessi",
+      value: formatNumber(networkSummary.online_devices),
+      copy: `${formatNumber(networkSummary.total_devices)} rilevati, ${formatNumber(networkSummary.offline_devices)} offline`,
+      icon: "lan",
+    },
+    {
+      label: "Alert rete aperti",
+      value: formatNumber(networkSummary.open_alerts),
+      copy: networkSummary.open_alerts === 0 ? "Nessun alert infrastrutturale aperto" : "Dispositivi sconosciuti o assenti da gestire",
+      icon: "notifications_active",
+    },
+  ];
+
+  const operationalStats = [
+    {
+      label: "Sync runs",
       value: formatNumber(summary.sync_runs),
       copy: "Cicli completati nelle ultime 24 ore",
       icon: "sync",
     },
     {
-      label: "Open Reviews",
-      value: formatNumber(summary.reviews),
-      copy: summary.reviews === 0 ? "Tutti i sistemi sono conformi alle policy" : "Richieste in attesa di decisione",
-      icon: "assignment_late",
+      label: "Documenti catasto",
+      value: formatNumber(catastoDocuments.length),
+      copy: "Archivio PDF disponibile per ricerca e download",
+      icon: "description",
     },
   ];
 
@@ -264,7 +338,7 @@ export default function HomePage() {
       <main className="pt-24 pb-12 px-8 max-w-7xl mx-auto min-h-screen">
         {/* Hero */}
         <section className="mb-16">
-          <div className="max-w-3xl">
+          <div>
             <h1 className="text-6xl font-headline font-medium text-primary leading-tight mb-4">
               Gestione Apparati Informativi
             </h1>
@@ -276,24 +350,31 @@ export default function HomePage() {
           </div>
         </section>
 
-        {/* Stats bento */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-16">
-          {stats.map((stat) => (
-            <div
-              key={stat.label}
-              className="bg-surface-container-low p-8 rounded-xl flex flex-col justify-between min-h-[180px]"
-            >
-              <div className="flex justify-between items-start">
-                <span className="text-xs font-label tracking-[0.05em] uppercase text-outline">{stat.label}</span>
-                <span className="material-symbols-outlined text-primary">{stat.icon}</span>
-              </div>
-              <div className="mt-4">
-                <span className="text-5xl font-headline text-primary">{stat.value}</span>
-                <p className="text-sm text-on-secondary-container mt-2">{stat.copy}</p>
-              </div>
+        <section className="mb-16">
+          <div className="mb-5 flex items-end justify-between gap-4">
+            <div>
+              <h2 className="text-2xl font-headline text-primary">Cruscotto rapido</h2>
+              <p className="text-sm text-outline">Tutti i numeri principali in una sola riga sui layout desktop ampi.</p>
             </div>
-          ))}
-        </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+            {[...platformStats, ...operationalStats].map((stat) => (
+              <div
+                key={`quick-${stat.label}`}
+                className="bg-surface-container-low p-5 rounded-xl flex flex-col justify-between min-h-[138px]"
+              >
+                <div className="flex justify-between items-start gap-3">
+                  <span className="text-[11px] font-label tracking-[0.05em] uppercase text-outline">{stat.label}</span>
+                  <span className="material-symbols-outlined text-primary text-[20px]">{stat.icon}</span>
+                </div>
+                <div className="mt-3">
+                  <span className="text-3xl font-headline text-primary">{stat.value}</span>
+                  <p className="text-xs text-on-secondary-container mt-2 leading-relaxed">{stat.copy}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
 
         {/* Admin section */}
         {canManageGaiaUsers ? (

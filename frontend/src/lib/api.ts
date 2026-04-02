@@ -21,6 +21,7 @@ import type {
   ApplicationUserUpdateInput,
   CatastoBatch,
   CatastoBatchDetail,
+  CatastoCaptchaSummary,
   CatastoDocument,
   CatastoBatchWebSocketEvent,
   CatastoComune,
@@ -31,6 +32,12 @@ import type {
   CatastoOperationResponse,
   CatastoSingleVisuraPayload,
   CatastoVisuraRequest,
+  CapacitasCredential,
+  CapacitasCredentialCreateInput,
+  CapacitasCredentialTestResult as CapacitasCredentialProbeResult,
+  CapacitasCredentialUpdateInput,
+  CapacitasSearchInput,
+  CapacitasSearchResult,
   CurrentUser,
   DashboardSummary,
   EffectivePermission,
@@ -1032,6 +1039,91 @@ export function createCatastoCredentialTestWebSocket(testId: string, token: stri
   return new WebSocket(url.toString());
 }
 
+export async function listCapacitasCredentials(token: string): Promise<CapacitasCredential[]> {
+  return request<CapacitasCredential[]>("/catasto/capacitas/credentials", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function createCapacitasCredential(
+  token: string,
+  payload: CapacitasCredentialCreateInput,
+): Promise<CapacitasCredential> {
+  return request<CapacitasCredential>("/catasto/capacitas/credentials", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateCapacitasCredential(
+  token: string,
+  credentialId: number,
+  payload: CapacitasCredentialUpdateInput,
+): Promise<CapacitasCredential> {
+  return request<CapacitasCredential>(`/catasto/capacitas/credentials/${credentialId}`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteCapacitasCredential(token: string, credentialId: number): Promise<void> {
+  const response = await fetch(`${getApiBaseUrl()}/catasto/capacitas/credentials/${credentialId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    let detail = "Request failed";
+
+    try {
+      const payload = (await response.json()) as { detail?: unknown };
+      if (typeof payload.detail === "string") {
+        detail = payload.detail;
+      }
+    } catch {
+      detail = response.statusText || detail;
+    }
+
+    throw new ApiError(detail, undefined, response.status);
+  }
+}
+
+export async function testCapacitasCredential(
+  token: string,
+  credentialId: number,
+): Promise<CapacitasCredentialProbeResult> {
+  return request<CapacitasCredentialProbeResult>(`/catasto/capacitas/credentials/${credentialId}/test`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function searchCapacitasInvolture(
+  token: string,
+  payload: CapacitasSearchInput,
+): Promise<CapacitasSearchResult> {
+  return request<CapacitasSearchResult>("/catasto/capacitas/involture/search", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function getCatastoComuni(token: string, search?: string): Promise<CatastoComune[]> {
   const query = createQueryString({ search });
   return request<CatastoComune[]>(`/catasto/comuni${query}`, {
@@ -1120,6 +1212,14 @@ export async function createCatastoSingleVisura(
 
 export async function getPendingCatastoCaptcha(token: string): Promise<CatastoVisuraRequest[]> {
   return request<CatastoVisuraRequest[]>("/catasto/captcha/pending", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getCatastoCaptchaSummary(token: string): Promise<CatastoCaptchaSummary> {
+  return request<CatastoCaptchaSummary>("/catasto/captcha/summary", {
     headers: {
       Authorization: `Bearer ${token}`,
     },

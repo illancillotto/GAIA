@@ -408,15 +408,12 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
     setManualUploadItems((current) => [...current, ...newItems]);
   }
 
-  const handleManualDrop = useCallback(
-    (event: React.DragEvent<HTMLDivElement>) => {
-      event.preventDefault();
-      event.stopPropagation();
-      setIsManualDropActive(false);
-      handleManualFilesSelection(event.dataTransfer?.files ?? null);
-    },
-    [handleManualFilesSelection],
-  );
+  function handleManualDrop(event: React.DragEvent<HTMLDivElement>) {
+    event.preventDefault();
+    event.stopPropagation();
+    setIsManualDropActive(false);
+    handleManualFilesSelection(event.dataTransfer?.files ?? null);
+  }
 
   function handleManualItemChange(itemId: string, updates: Partial<Pick<ManualUploadItem, "docType" | "notes">>) {
     setManualUploadItems((current) =>

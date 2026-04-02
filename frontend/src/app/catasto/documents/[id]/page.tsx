@@ -5,6 +5,8 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 
 import { ProtectedPage } from "@/components/app/protected-page";
+import { CatastoHero, CatastoMiniStat, CatastoNoticeCard, CatastoPanelHeader } from "@/components/catasto/module-chrome";
+import { DocumentIcon, FolderIcon } from "@/components/ui/icons";
 import { downloadCatastoDocumentBlob, getCatastoDocument } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import { formatDateTime } from "@/lib/presentation";
@@ -100,11 +102,47 @@ export default function CatastoDocumentDetailPage() {
       description="Metadati della visura scaricata e visualizzazione PDF inline."
       breadcrumb="Catasto / Documento"
     >
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      <CatastoHero
+        badge={
+          <>
+            <DocumentIcon className="h-3.5 w-3.5" />
+            Viewer documento
+          </>
+        }
+        title={documentItem?.filename ?? "Visualizzazione PDF della visura archiviata"}
+        description="Questa pagina accorpa metadati catastali e preview inline del PDF, così il controllo documentale resta nello stesso contesto operativo."
+        actions={
+          error ? (
+            <CatastoNoticeCard title="Errore documento" description={error} tone="danger" />
+          ) : (
+            <CatastoNoticeCard
+              title="PDF inline"
+              description="Il file viene scaricato dal backend, convertito in blob locale e mostrato direttamente nel viewer integrato."
+            />
+          )
+        }
+      >
+        <div className="grid gap-3 sm:grid-cols-3">
+          <CatastoMiniStat eyebrow="Comune" value={documentItem?.comune ?? "—"} description="Localizzazione della visura archiviata." />
+          <CatastoMiniStat eyebrow="Tipo visura" value={documentItem?.tipo_visura ?? "—"} description="Modalità di estrazione del documento." />
+          <CatastoMiniStat eyebrow="Batch sorgente" value={documentItem?.batch_id ? "Presente" : "Assente"} description="Collegamento al lotto di origine quando disponibile." tone={documentItem?.batch_id ? "success" : "default"} />
+        </div>
+      </CatastoHero>
 
       {documentItem ? (
         <>
-          <article className="panel-card">
+          <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
+            <CatastoPanelHeader
+              badge={
+                <>
+                  <FolderIcon className="h-3.5 w-3.5" />
+                  Metadati documento
+                </>
+              }
+              title="Riferimenti catastali e azioni documento"
+              description="Scarica il PDF oppure torna al batch che ha prodotto questa visura."
+            />
+            <div className="p-6">
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
               <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
                 <p className="label-caption">Comune</p>
@@ -136,17 +174,24 @@ export default function CatastoDocumentDetailPage() {
                   Apri batch
                 </Link>
               ) : null}
-              <Link className="text-sm font-medium text-[#1D4E35]" href="/catasto/documents">
+              <Link className="text-sm font-medium text-[#1D4E35]" href="/catasto/archive?view=documents">
                 Torna all&apos;archivio
               </Link>
             </div>
+            </div>
           </article>
 
-          <article className="panel-card overflow-hidden p-0">
-            <div className="border-b border-gray-100 px-5 py-4">
-              <p className="section-title">PDF viewer</p>
-              <p className="section-copy">{documentItem.filename}</p>
-            </div>
+          <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white p-0 shadow-panel">
+            <CatastoPanelHeader
+              badge={
+                <>
+                  <DocumentIcon className="h-3.5 w-3.5" />
+                  PDF viewer
+                </>
+              }
+              title={documentItem.filename}
+              description="Viewer inline del blob PDF restituito dal backend."
+            />
             {pdfUrl ? (
               <iframe className="h-[820px] w-full bg-gray-50" src={pdfUrl} title={`Viewer PDF ${documentItem.filename}`} />
             ) : (

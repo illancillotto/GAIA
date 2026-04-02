@@ -25,6 +25,7 @@ from app.schemas.catasto import (
     CatastoBatchDetailResponse,
     CatastoBatchResponse,
     CatastoCaptchaSolveRequest,
+    CatastoCaptchaSummaryResponse,
     CatastoComuneResponse,
     CatastoComuneUpsertRequest,
     CatastoCredentialResponse,
@@ -56,6 +57,7 @@ from app.services.catasto_batches import (
 from app.services.catasto_captcha import (
     CatastoCaptchaConflictError,
     CatastoCaptchaRequestNotFoundError,
+    get_manual_captcha_summary_for_user,
     get_captcha_request_for_user,
     list_pending_captcha_requests,
     skip_captcha_request,
@@ -575,6 +577,14 @@ def pending_captcha_requests(
 ) -> list[CatastoVisuraRequestResponse]:
     requests = list_pending_captcha_requests(db, current_user.id)
     return [CatastoVisuraRequestResponse.model_validate(item) for item in requests]
+
+
+@router.get("/captcha/summary", response_model=CatastoCaptchaSummaryResponse)
+def captcha_summary(
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> CatastoCaptchaSummaryResponse:
+    return CatastoCaptchaSummaryResponse(**get_manual_captcha_summary_for_user(db, current_user.id))
 
 
 @router.get("/captcha/{request_id}/image")

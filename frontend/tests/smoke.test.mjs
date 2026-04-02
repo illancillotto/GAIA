@@ -64,6 +64,7 @@ test("layout includes app shell, sidebar and topbar", () => {
   assert.match(platformSidebar, /Catasto/);
   assert.match(moduleSidebar, /Sincronizzazione/);
   assert.match(moduleSidebar, /Review NAS/);
+  assert.match(moduleSidebar, /Capacitas/);
   assert.match(topbar, /StatusPill/);
   assert.match(statusPill, /Backend connesso/);
 });
@@ -71,6 +72,7 @@ test("layout includes app shell, sidebar and topbar", () => {
 test("catasto pages wire api client and realtime workflow", () => {
   const dashboardPage = read("src/app/catasto/page.tsx");
   const settingsPage = read("src/app/catasto/settings/page.tsx");
+  const capacitasPage = read("src/app/catasto/capacitas/page.tsx");
   const newBatchPage = read("src/app/catasto/new-batch/page.tsx");
   const newSinglePage = read("src/app/catasto/new-single/page.tsx");
   const batchDetailPage = read("src/app/catasto/batches/[id]/page.tsx");
@@ -78,10 +80,20 @@ test("catasto pages wire api client and realtime workflow", () => {
   const documentDetailPage = read("src/app/catasto/documents/[id]/page.tsx");
 
   assert.match(dashboardPage, /GAIA Catasto/);
-  assert.match(settingsPage, /Credenziali SISTER/);
+  assert.match(dashboardPage, /Capacitas inVOLTURE/);
+  assert.match(settingsPage, /Credenziali/);
+  assert.match(settingsPage, /Sezione SISTER/);
+  assert.match(settingsPage, /Sezione Capacitas/);
   assert.match(settingsPage, /testCatastoCredentials/);
   assert.match(settingsPage, /getCatastoCredentialTest/);
   assert.match(settingsPage, /createCatastoCredentialTestWebSocket/);
+  assert.match(settingsPage, /createCapacitasCredential/);
+  assert.match(settingsPage, /updateCapacitasCredential/);
+  assert.match(settingsPage, /listCapacitasCredentials/);
+  assert.match(capacitasPage, /Capacitas inVOLTURE/);
+  assert.match(capacitasPage, /searchCapacitasInvolture/);
+  assert.match(capacitasPage, /listCapacitasCredentials/);
+  assert.match(capacitasPage, /Codice fiscale/);
   assert.match(newBatchPage, /createCatastoBatch/);
   assert.match(newBatchPage, /startCatastoBatch/);
   assert.match(newBatchPage, /Scarica template CSV/);

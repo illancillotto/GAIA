@@ -4,21 +4,30 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import { ProtectedPage } from "@/components/app/protected-page";
+import { CatastoHero, CatastoMiniStat, CatastoNoticeCard, CatastoPanelHeader } from "@/components/catasto/module-chrome";
 import { CatastoOperationMessage } from "@/components/catasto/operation-message";
 import { MetricCard } from "@/components/ui/metric-card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { DocumentIcon, FolderIcon, LockIcon, SearchIcon } from "@/components/ui/icons";
-import { getCatastoBatches, getCatastoCredentials, getPendingCatastoCaptcha, retryFailedCatastoBatch, startCatastoBatch } from "@/lib/api";
+import { DocumentIcon, FolderIcon, LockIcon, RefreshIcon, SearchIcon, UsersIcon } from "@/components/ui/icons";
+import {
+  getCatastoBatches,
+  getCatastoCaptchaSummary,
+  getCatastoCredentials,
+  listCapacitasCredentials,
+  retryFailedCatastoBatch,
+  startCatastoBatch,
+} from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import { formatDateTime } from "@/lib/presentation";
-import type { CatastoBatch, CatastoCredentialStatus, CatastoVisuraRequest } from "@/types/api";
+import type { CapacitasCredential, CatastoBatch, CatastoCaptchaSummary, CatastoCredentialStatus } from "@/types/api";
 
 const DASHBOARD_REFRESH_INTERVAL_MS = 5000;
 
 export default function CatastoDashboardPage() {
   const [batches, setBatches] = useState<CatastoBatch[]>([]);
   const [credentialStatus, setCredentialStatus] = useState<CatastoCredentialStatus | null>(null);
-  const [pendingCaptcha, setPendingCaptcha] = useState<CatastoVisuraRequest[]>([]);
+  const [captchaSummary, setCaptchaSummary] = useState<CatastoCaptchaSummary | null>(null);
+  const [capacitasCredentials, setCapacitasCredentials] = useState<CapacitasCredential[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [retryBusyId, setRetryBusyId] = useState<string | null>(null);
 
@@ -27,14 +36,16 @@ export default function CatastoDashboardPage() {
     if (!token) return;
 
     try {
-      const [credentialsResult, batchesResult, captchaResult] = await Promise.all([
+      const [credentialsResult, batchesResult, captchaSummaryResult, capacitasResult] = await Promise.all([
         getCatastoCredentials(token),
         getCatastoBatches(token),
-        getPendingCatastoCaptcha(token),
+        getCatastoCaptchaSummary(token),
+        listCapacitasCredentials(token),
       ]);
       setCredentialStatus(credentialsResult);
       setBatches(batchesResult.slice(0, 6));
-      setPendingCaptcha(captchaResult);
+      setCaptchaSummary(captchaSummaryResult);
+      setCapacitasCredentials(capacitasResult);
       setError(null);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Errore caricamento dashboard Catasto");
@@ -85,34 +96,94 @@ export default function CatastoDashboardPage() {
     }
   }
 
-  const activeBatch = batches.find((batch) => batch.status === "processing");
   const completedToday = batches.filter((batch) => batch.status === "completed").length;
+  const activeCapacitasCredentials = capacitasCredentials.filter((credential) => credential.active);
+  const capacitasWarningCount = capacitasCredentials.filter((credential) => Boolean(credential.last_error)).length;
+  const latestCapacitasUsage = capacitasCredentials
+    .map((credential) => credential.last_used_at)
+    .filter((value): value is string => Boolean(value))
+    .sort()
+    .at(-1);
 
   return (
     <ProtectedPage
       title="GAIA Catasto"
-      description="Controllo batch visure, credenziali SISTER e richieste CAPTCHA del modulo Agenzia delle Entrate."
+      description="Controllo batch visure, credenziali SISTER, operatività Capacitas e richieste CAPTCHA del modulo Agenzia delle Entrate."
       breadcrumb="Catasto"
     >
-      {error ? <p className="text-sm text-red-600">{error}</p> : null}
+      <CatastoHero
+        badge={
+          <>
+            <LockIcon className="h-3.5 w-3.5" />
+            Workspace Catasto
+          </>
+        }
+        title="Console operativa del modulo Catasto per visure, batch, CAPTCHA e pool Capacitas."
+        description="La dashboard ora riassume stato credenziali, utilizzo del pool e attività recenti prima di entrare nei singoli flussi. Il refresh resta realtime quando la pagina è visibile."
+        actions={
+          error ? (
+            <CatastoNoticeCard title="Errore dashboard" description={error} tone="danger" />
+          ) : (
+            <CatastoNoticeCard
+              title="Refresh automatico attivo"
+              description="Quando la pagina è in primo piano, i dati vengono ricaricati periodicamente per tenere allineati batch, pool e richieste CAPTCHA."
+            />
+          )
+        }
+      >
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <CatastoMiniStat
+            eyebrow="SISTER"
+            value={credentialStatus?.configured ? "Attivo" : "Da configurare"}
+            description={credentialStatus?.credential?.sister_username ?? "Configura SISTER dalla pagina credenziali"}
+            tone={credentialStatus?.configured ? "success" : "default"}
+          />
+          <CatastoMiniStat
+            eyebrow="Capacitas"
+            value={`${activeCapacitasCredentials.length}/${capacitasCredentials.length}`}
+            description={
+              capacitasCredentials.length > 0
+                ? `${capacitasWarningCount} account con warning recenti`
+                : "Nessun account Capacitas configurato"
+            }
+            tone={capacitasWarningCount > 0 ? "warning" : activeCapacitasCredentials.length > 0 ? "success" : "default"}
+          />
+          <CatastoMiniStat
+            eyebrow="CAPTCHA"
+            value={captchaSummary?.processed ?? 0}
+            description="CAPTCHA manuali elaborati dal worker."
+            tone={(captchaSummary?.processed ?? 0) > 0 ? "success" : "default"}
+          />
+          <CatastoMiniStat
+            eyebrow="Ultimo utilizzo"
+            value={latestCapacitasUsage ? formatDateTime(latestCapacitasUsage) : "Nessun uso"}
+            description="Ultima attività registrata sul pool Capacitas."
+          />
+        </div>
+      </CatastoHero>
 
       <div className="surface-grid">
         <MetricCard
-          label="Credenziali SISTER"
-          value={credentialStatus?.configured ? "Configurate" : "Assenti"}
-          sub={credentialStatus?.credential?.sister_username ?? "Salva le credenziali per avviare le visure"}
+          label="Credenziali"
+          value={credentialStatus?.configured ? "SISTER attivo" : "Da configurare"}
+          sub={credentialStatus?.credential?.sister_username ?? "Configura SISTER e Capacitas dalla pagina credenziali"}
           variant={credentialStatus?.configured ? "success" : "default"}
         />
         <MetricCard
-          label="Batch recenti"
-          value={batches.length}
-          sub={activeBatch ? `Attivo: ${activeBatch.name ?? activeBatch.id}` : "Nessun batch in esecuzione"}
+          label="Capacitas"
+          value={activeCapacitasCredentials.length}
+          sub={
+            capacitasCredentials.length > 0
+              ? `${capacitasWarningCount} account con warning su ${capacitasCredentials.length}`
+              : "Nessun account Capacitas configurato"
+          }
+          variant={capacitasWarningCount > 0 ? "warning" : activeCapacitasCredentials.length > 0 ? "success" : "default"}
         />
         <MetricCard
-          label="CAPTCHA pendenti"
-          value={pendingCaptcha.length}
-          sub={pendingCaptcha.length > 0 ? "Richieste in attesa di input manuale" : "Nessun intervento richiesto"}
-          variant={pendingCaptcha.length > 0 ? "warning" : "success"}
+          label="CAPTCHA elaborati"
+          value={captchaSummary?.processed ?? 0}
+          sub={`${captchaSummary?.correct ?? 0} corretti · ${captchaSummary?.wrong ?? 0} sbagliati`}
+          variant={(captchaSummary?.wrong ?? 0) > 0 ? "warning" : (captchaSummary?.processed ?? 0) > 0 ? "success" : "default"}
         />
         <MetricCard
           label="Batch completati"
@@ -122,78 +193,133 @@ export default function CatastoDashboardPage() {
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.4fr,1fr]">
-        <article className="panel-card">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <p className="section-title">Azioni rapide</p>
-              <p className="section-copy">Apri direttamente i flussi operativi del modulo Catasto.</p>
-            </div>
-          </div>
+        <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
+          <CatastoPanelHeader
+            badge={
+              <>
+                <RefreshIcon className="h-3.5 w-3.5" />
+                Azioni rapide
+              </>
+            }
+            title="Accesso diretto ai flussi principali"
+            description="Le aree più usate del modulo sono raccolte qui con descrizioni più orientate all'operatività."
+          />
+          <div className="p-6">
           <div className="grid gap-3 md:grid-cols-2">
             <Link className="rounded-xl border border-gray-100 bg-gray-50 p-4 transition hover:border-gray-200 hover:bg-white" href="/catasto/settings">
               <LockIcon className="h-5 w-5 text-[#1D4E35]" />
-              <p className="mt-3 text-sm font-medium text-gray-900">Credenziali SISTER</p>
-              <p className="mt-1 text-sm text-gray-500">Vault cifrato con master key in ambiente.</p>
+              <p className="mt-3 text-sm font-medium text-gray-900">Credenziali</p>
+              <p className="mt-1 text-sm text-gray-500">SISTER e Capacitas nello stesso hub operativo.</p>
             </Link>
-            <Link className="rounded-xl border border-gray-100 bg-gray-50 p-4 transition hover:border-gray-200 hover:bg-white" href="/catasto/new-batch">
+            <Link className="rounded-xl border border-gray-100 bg-gray-50 p-4 transition hover:border-gray-200 hover:bg-white" href="/catasto/new?mode=batch">
               <FolderIcon className="h-5 w-5 text-[#1D4E35]" />
-              <p className="mt-3 text-sm font-medium text-gray-900">Nuovo batch</p>
+              <p className="mt-3 text-sm font-medium text-gray-900">Import batch</p>
               <p className="mt-1 text-sm text-gray-500">Upload CSV o XLSX, preview e avvio worker.</p>
             </Link>
-            <Link className="rounded-xl border border-gray-100 bg-gray-50 p-4 transition hover:border-gray-200 hover:bg-white" href="/catasto/new-single">
+            <Link className="rounded-xl border border-gray-100 bg-gray-50 p-4 transition hover:border-gray-200 hover:bg-white" href="/catasto/new?mode=single">
               <SearchIcon className="h-5 w-5 text-[#1D4E35]" />
               <p className="mt-3 text-sm font-medium text-gray-900">Visura singola</p>
               <p className="mt-1 text-sm text-gray-500">Richiesta puntuale con selezione comune e avvio immediato.</p>
             </Link>
-            <Link className="rounded-xl border border-gray-100 bg-gray-50 p-4 transition hover:border-gray-200 hover:bg-white" href="/catasto/batches">
+            <Link className="rounded-xl border border-gray-100 bg-gray-50 p-4 transition hover:border-gray-200 hover:bg-white" href="/catasto/capacitas">
+              <UsersIcon className="h-5 w-5 text-[#1D4E35]" />
+              <p className="mt-3 text-sm font-medium text-gray-900">Capacitas inVOLTURE</p>
+              <p className="mt-1 text-sm text-gray-500">Ricerca anagrafica tramite pool account dedicato.</p>
+            </Link>
+            <Link className="rounded-xl border border-gray-100 bg-gray-50 p-4 transition hover:border-gray-200 hover:bg-white" href="/catasto/archive?view=batches">
               <DocumentIcon className="h-5 w-5 text-[#1D4E35]" />
-              <p className="mt-3 text-sm font-medium text-gray-900">Storico batch</p>
+              <p className="mt-3 text-sm font-medium text-gray-900">Archivio batch</p>
               <p className="mt-1 text-sm text-gray-500">Consulta progress, esiti e CAPTCHA aperti.</p>
             </Link>
-            <Link className="rounded-xl border border-gray-100 bg-gray-50 p-4 transition hover:border-gray-200 hover:bg-white" href="/catasto/documents">
+            <Link className="rounded-xl border border-gray-100 bg-gray-50 p-4 transition hover:border-gray-200 hover:bg-white" href="/catasto/archive?view=documents">
               <DocumentIcon className="h-5 w-5 text-[#1D4E35]" />
               <p className="mt-3 text-sm font-medium text-gray-900">Archivio documenti</p>
               <p className="mt-1 text-sm text-gray-500">Ricerca per comune, foglio, particella e apertura PDF inline.</p>
             </Link>
           </div>
+          </div>
         </article>
 
-        <article className="panel-card">
-          <div className="mb-4">
-            <p className="section-title">CAPTCHA in attesa</p>
-            <p className="section-copy">Le richieste bloccate richiedono input manuale entro la scadenza.</p>
-          </div>
-          {pendingCaptcha.length === 0 ? (
-            <EmptyState icon={SearchIcon} title="Nessun CAPTCHA aperto" description="Il worker non ha richiesto interventi manuali." />
-          ) : (
-            <div className="space-y-3">
-              {pendingCaptcha.slice(0, 5).map((request) => (
-                <Link
-                  key={request.id}
-                  href={`/catasto/batches/${request.batch_id}`}
-                  className="block rounded-lg border border-amber-100 bg-amber-50 px-4 py-3 transition hover:bg-amber-100"
-                >
-                  <p className="text-sm font-medium text-amber-900">
-                    {request.comune} · Fg.{request.foglio} Part.{request.particella}
+        <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
+          <CatastoPanelHeader
+            badge={
+              <>
+                <UsersIcon className="h-3.5 w-3.5" />
+                Monitor operativo
+              </>
+            }
+            title="Pool Capacitas e riepilogo CAPTCHA"
+            description="Una vista laterale dedicata agli account attivi e ai risultati dei CAPTCHA manuali."
+          />
+          <div className="space-y-5 p-6">
+            <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="label-caption">Pool Capacitas</p>
+                  <p className="mt-2 text-sm font-medium text-gray-900">
+                    {capacitasCredentials.length > 0
+                      ? `${activeCapacitasCredentials.length} account attivi su ${capacitasCredentials.length}`
+                      : "Nessun account Capacitas configurato"}
                   </p>
-                  <p className="mt-1 text-xs text-amber-700">
-                    Richiesto {formatDateTime(request.captcha_requested_at)} · batch {request.batch_id.slice(0, 8)}
+                  <p className="mt-1 text-sm text-gray-500">
+                    {latestCapacitasUsage
+                      ? `Ultimo utilizzo ${formatDateTime(latestCapacitasUsage)}`
+                      : "Nessun utilizzo registrato al momento"}
                   </p>
+                </div>
+                <Link className="btn-secondary" href="/catasto/capacitas">
+                  Apri Capacitas
                 </Link>
-              ))}
+              </div>
+              {capacitasWarningCount > 0 ? (
+                <p className="mt-3 text-sm text-amber-700">
+                  {capacitasWarningCount} account Capacitas presentano errori recenti o richiedono verifica.
+                </p>
+              ) : null}
             </div>
-          )}
+
+            <div>
+              <div className="mb-3">
+                <p className="label-caption">CAPTCHA manuali</p>
+                <p className="mt-1 text-sm text-gray-500">Dati dei CAPTCHA elaborati, inseriti corretti e inseriti sbagliati.</p>
+              </div>
+              {(captchaSummary?.processed ?? 0) === 0 ? (
+                <EmptyState icon={SearchIcon} title="Nessun CAPTCHA elaborato" description="Non risultano ancora CAPTCHA elaborati o inserimenti registrati." />
+              ) : (
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
+                    <p className="label-caption">Elaborati</p>
+                    <p className="mt-2 text-2xl font-semibold text-gray-900">{captchaSummary?.processed ?? 0}</p>
+                  </div>
+                  <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-4">
+                    <p className="label-caption text-emerald-700">Inseriti corretti</p>
+                    <p className="mt-2 text-2xl font-semibold text-emerald-800">{captchaSummary?.correct ?? 0}</p>
+                  </div>
+                  <div className="rounded-lg border border-amber-100 bg-amber-50 p-4">
+                    <p className="label-caption text-amber-700">Inseriti sbagliati</p>
+                    <p className="mt-2 text-2xl font-semibold text-amber-800">{captchaSummary?.wrong ?? 0}</p>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </article>
       </div>
 
-      <article className="panel-card overflow-hidden p-0">
-        <div className="border-b border-gray-100 px-5 py-4">
-          <p className="section-title">Batch recenti</p>
-          <p className="section-copy">Ultimi lotti visure creati dall’utente corrente.</p>
-        </div>
+      <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white p-0 shadow-panel">
+        <CatastoPanelHeader
+          badge={
+            <>
+              <FolderIcon className="h-3.5 w-3.5" />
+              Batch recenti
+            </>
+          }
+          title="Ultimi lotti creati dall'utente corrente"
+          description="I retry disponibili restano accessibili direttamente dalla tabella."
+        />
         {batches.length === 0 ? (
           <div className="p-5">
-            <EmptyState icon={SearchIcon} title="Nessun batch presente" description="Carica un CSV da /catasto/new-batch per iniziare." />
+            <EmptyState icon={SearchIcon} title="Nessun batch presente" description="Apri /catasto/new per creare una richiesta o importare un lotto." />
           </div>
         ) : (
           <div className="overflow-x-auto">

@@ -76,6 +76,12 @@ class CatastoCaptchaSolveRequest(BaseModel):
     text: str = Field(min_length=1, max_length=64)
 
 
+class CatastoCaptchaSummaryResponse(BaseModel):
+    processed: int
+    correct: int
+    wrong: int
+
+
 class CatastoVisuraRequestResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
