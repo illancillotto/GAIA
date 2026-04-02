@@ -1,10 +1,16 @@
 # Prompt operativo — Ristrutturazione frontend GAIA
 
+> Stato documento
+> Documento storico, mantenuto solo come nota di contesto.
+> Il refactor descritto qui e gia stato completato.
+> Per il runtime attuale del modulo Catasto fare riferimento a:
+> `frontend/src/app/catasto/`, `README.md`, `domain-docs/catasto/docs/PRD_catasto.md`.
+
 > Regola frontend
 > Il frontend Catasto resta dentro il frontend unico GAIA. Non creare app frontend separata.
 
 > Documento storico.
-> Il refactor e' stato completato: il frontend condiviso della piattaforma ora vive in `frontend/`.
+> Il refactor e' stato completato: il frontend condiviso della piattaforma vive in `frontend/`.
 
 ---
 

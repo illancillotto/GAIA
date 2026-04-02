@@ -1,200 +1,163 @@
 # Prompt Codex — GAIA Catasto
 
+> Stato documento
+> Prompt riallineato alla struttura reale del repository al 2 aprile 2026.
+
 > Regola strutturale vincolante
-> GAIA usa un backend monolitico modulare. Il codice backend del dominio Catasto va creato in `backend/app/modules/catasto/`. Il frontend del modulo vive in `frontend/src/app/catasto/`. Il worker browser-based e un servizio tecnico separato, ma non un backend applicativo autonomo.
-
-> Da usare come system prompt o primo messaggio in una sessione di sviluppo dedicata al modulo Catasto.
-
----
+> GAIA usa backend monolitico modulare, frontend condiviso e worker tecnico separato.
+> Il codice backend del dominio Catasto vive in `backend/app/modules/catasto/`.
+> Il frontend del modulo vive in `frontend/src/app/catasto/`.
+> Il worker browser-based vive in `modules/catasto/worker/`.
 
 ## Contesto del progetto
 
-Stai sviluppando **GAIA Catasto**, il modulo di integrazione con i servizi dell'Agenzia delle Entrate della piattaforma **GAIA**.
+Stai sviluppando o modificando **GAIA Catasto**, il modulo di integrazione con i servizi dell'Agenzia delle Entrate della piattaforma **GAIA**.
 
-GAIA e una piattaforma multi-modulo con backend e frontend condivisi. I moduli applicativi convivono nello stesso monolite:
+Il modulo oggi copre:
 
-- **Accessi**
-- **Network**
-- **Inventory**
-- **Catasto**
+- credenziali SISTER cifrate
+- test connessione asincrono via worker
+- upload batch CSV/XLSX
+- visure singole
+- gestione CAPTCHA automatica e manuale
+- archivio PDF
+- aggiornamenti realtime tramite WebSocket
 
-Il repository adotta una struttura canonica in cui il backend applicativo vive sotto `backend/` e i moduli di dominio sotto `backend/app/modules/`.
+## Sorgenti da trattare come canoniche
 
----
+Ordine di priorita:
 
-## Stack obbligatorio
+1. codice runtime
+2. `README.md`
+3. `domain-docs/catasto/docs/PRD_catasto.md`
+4. `domain-docs/catasto/docs/SISTER_debug_runbook.md`
+5. questo prompt
 
-**Backend**
-- FastAPI
-- SQLAlchemy
-- Alembic
-- PostgreSQL
-- Pydantic
-- cryptography per credential vault
-- pandas per validazione import CSV
+Superfici primarie:
 
-**Worker**
-- Playwright async + Chromium
-- Pillow + pytesseract per OCR CAPTCHA
-- asyncio + polling loop su PostgreSQL o coda equivalente basata sull'infrastruttura GAIA
-
-**Frontend**
-- Next.js
-- React
-- TypeScript
-- TailwindCSS
-- TanStack Table
-- react-hook-form
-- WebSocket o stream realtime coerente con lo stack gia adottato dal progetto
-
-**Infrastructure**
-- Docker Compose esistente
-- backend e database condivisi con gli altri moduli
-- servizio tecnico `catasto-worker` separato per automazione browser
-- volume dati dedicato per PDF e asset transitori del worker
-
----
+- `backend/app/modules/catasto/router.py`
+- `backend/app/modules/catasto/routes.py`
+- `backend/app/modules/catasto/models.py`
+- `backend/app/modules/catasto/schemas.py`
+- `backend/app/services/catasto_batches.py`
+- `backend/app/services/catasto_captcha.py`
+- `backend/app/services/catasto_comuni.py`
+- `backend/app/services/catasto_credentials.py`
+- `backend/app/services/catasto_documents.py`
+- `modules/catasto/worker/`
+- `frontend/src/app/catasto/`
 
 ## Principi architetturali
 
-- Il backend resta un **monolite modulare**: nuove feature del dominio Catasto vanno sviluppate nel modulo canonico `backend/app/modules/catasto/`
-- Il punto di integrazione backend e il router di modulo `backend/app/modules/catasto/router.py`, incluso in `backend/app/api/router.py`
-- Il modulo puo usare un file `routes.py` o una struttura a package di route, ma `router.py` resta l'entrypoint del modulo
-- I path legacy fuori da `backend/app/modules/` vanno trattati come area di compatibilita, non come destinazione primaria per nuove feature
-- Il frontend del modulo vive in `frontend/src/app/catasto/` nel frontend condiviso
-- Non creare un frontend separato o un backend applicativo separato per Catasto
-- Il browser worker gira come container/processo tecnico separato e comunica con il backend tramite database condiviso, coda applicativa e canali realtime gia previsti
-- Auth, sessione DB, logging, config e dipendenze FastAPI vanno riutilizzati dall'app esistente
-- Alembic resta unico: nuove migration in `backend/alembic/versions/`
-- Le credenziali SISTER vanno cifrate; la master key deve vivere solo in configurazione sicura, non nel codice
-- Le credenziali decriptate devono restare in memoria solo per il tempo strettamente necessario e non devono finire in log, response o persistenza non cifrata
+- il backend resta un monolite modulare
+- `backend/app/modules/catasto/router.py` e l'entrypoint del modulo
+- `backend/app/modules/catasto/routes.py` contiene le route HTTP e WebSocket
+- `backend/app/modules/catasto/models.py` e `schemas.py` sono superfici canoniche del modulo, anche se oggi re-esportano definizioni condivise
+- la business logic backend del dominio Catasto oggi e distribuita nei file `backend/app/services/catasto_*`
+- il worker resta un processo tecnico separato e non un backend applicativo parallelo
+- il frontend del modulo resta nel frontend condiviso
+- Alembic resta unico sotto `backend/alembic/versions/`
 
----
+## API attuali del modulo
 
-## Modello dati da implementare
+Credenziali:
 
-Entita principali del modulo:
+- `POST /catasto/credentials`
+- `GET /catasto/credentials`
+- `DELETE /catasto/credentials`
+- `POST /catasto/credentials/test`
+- `GET /catasto/credentials/test/{test_id}`
+- `WS /catasto/ws/credentials-test/{test_id}`
 
-```text
-catasto_credentials
-catasto_batches
-catasto_visure_requests
-catasto_documents
-catasto_captcha_log
-catasto_comuni
-```
+Comuni:
 
-Riferimento funzionale e campi iniziali: `domain-docs/catasto/docs/PRD_catasto.md`, sezione modello dati.
+- `GET /catasto/comuni`
+- `POST /catasto/comuni`
+- `PUT /catasto/comuni/{comune_id}`
 
-Linee guida:
+Batch:
 
-- una credenziale SISTER per utente applicativo, cifrata a riposo
-- batch e richieste separate per tracciare avanzamento, errori e retry
-- documenti persistiti con metadata chiari e path relativi
-- log CAPTCHA ammesso solo se giustificato e compatibile con i vincoli di sicurezza e privacy del progetto
+- `POST /catasto/batches`
+- `GET /catasto/batches`
+- `GET /catasto/batches/{batch_id}`
+- `GET /catasto/batches/{batch_id}/download`
+- `POST /catasto/batches/{batch_id}/start`
+- `POST /catasto/batches/{batch_id}/cancel`
+- `POST /catasto/batches/{batch_id}/retry-failed`
+- `WS /catasto/ws/{batch_id}`
 
----
+Visure:
 
-## API da implementare
+- `POST /catasto/visure`
+- `GET /catasto/visure/{request_id}`
 
-Tutti gli endpoint del modulo devono essere esposti dal backend condiviso sotto prefisso `/catasto`.
+Documenti:
 
-Pattern architetturale:
+- `GET /catasto/documents`
+- `GET /catasto/documents/search`
+- `POST /catasto/documents/download`
+- `GET /catasto/documents/{document_id}`
+- `GET /catasto/documents/{document_id}/download`
 
-- route del modulo nel package `backend/app/modules/catasto/`
-- business logic in `services.py`
-- schemi request/response in `schemas.py`
-- modelli SQLAlchemy in `models.py`
-- eventuale realtime tramite WebSocket o meccanismo equivalente integrato nel backend condiviso
+CAPTCHA:
 
-Riferimento endpoint: `domain-docs/catasto/docs/PRD_catasto.md`, sezione API.
+- `GET /catasto/captcha/pending`
+- `GET /catasto/captcha/{request_id}/image`
+- `POST /catasto/captcha/{request_id}/solve`
+- `POST /catasto/captcha/{request_id}/skip`
 
-Se previsti canali realtime, devono essere pubblicati dal backend condiviso e non da un servizio applicativo parallelo.
+## Frontend attuale
 
----
+Route attive:
 
-## Pagine frontend da implementare
+- `/catasto`
+- `/catasto/new-batch`
+- `/catasto/new-single`
+- `/catasto/batches`
+- `/catasto/batches/[id]`
+- `/catasto/documents`
+- `/catasto/documents/[id]`
+- `/catasto/settings`
 
-```text
-/catasto
-/catasto/new-batch
-/catasto/new-single
-/catasto/batches
-/catasto/batches/[id]
-/catasto/documents
-/catasto/documents/[id]
-/catasto/settings
-```
+Obiettivo UI:
 
-Linee guida frontend:
+- interfaccia amministrativa sobria
+- leggibilita operativa prima dell'estetica
+- feedback chiaro su stati batch, errori e CAPTCHA
+- ricerca documentale rapida
 
-- usare App Router nella struttura esistente di `frontend/src/app/`
-- mantenere coerenza con auth flow, layout e componenti condivisi del progetto
-- trattare avanzamento batch, errori e richiesta CAPTCHA come flussi operativi, non come demo tecniche
-- tabelle con sorting, filtri e paginazione lato server quando il dataset lo richiede
+## Worker e SISTER
 
----
+File primari:
 
-## Requisiti UI/UX
+- `modules/catasto/worker/worker.py`
+- `modules/catasto/worker/browser_session.py`
+- `modules/catasto/worker/visura_flow.py`
+- `modules/catasto/worker/sister_selectors.py`
+- `modules/catasto/worker/sister_selectors.json`
 
-- UI amministrativa sobria, leggibile, coerente con gli altri moduli GAIA
-- stati richiesta ben distinguibili e stabili
-- dialog CAPTCHA chiaro, rapido e focalizzato sul completamento del task
-- progress batch immediatamente leggibile
-- archivio documenti orientato a ricerca e download
-- responsive desktop-first; mobile secondario
+Regole:
 
----
-
-## Priorita di sviluppo
-
-1. Modello dati, migration Alembic e seed dei comuni
-2. Credential vault cifrato
-3. Batch service con upload CSV e validazione
-4. Router di modulo `backend/app/modules/catasto/router.py`
-5. API `/catasto`
-6. Worker base con login e navigazione
-7. Worker visura e download PDF
-8. Gestione CAPTCHA e realtime
-9. Frontend settings, new-batch e batch detail
-10. Archivio documenti e dashboard
-
----
-
-## Vincoli tecnici
-
-- non creare un backend separato per Catasto
-- non introdurre nuovi path primari fuori da `backend/app/modules/catasto/` per il codice backend di dominio
-- il worker deve usare configurazione condivisa e persistenza coordinata con il backend monolitico
-- la master key per cifratura credenziali deve arrivare da environment/config sicura
-- i path dei documenti devono essere relativi e compatibili con i volumi Docker del progetto
-- il worker deve gestire retry, resume e shutdown in modo robusto
-- i selettori e il DOM di SISTER possono cambiare: i dettagli operativi del portale vanno verificati in fase di sviluppo
-
----
-
-## Flusso operativo SISTER
-
-Usa `domain-docs/catasto/docs/PRD_catasto.md` come riferimento funzionale per:
-
-- formato CSV atteso
-- stati batch e richieste
-- selettori del portale
-- gestione CAPTCHA
-- download documenti
-
-I dettagli del DOM di SISTER sono intrinsecamente instabili: trattali come riferimento operativo da verificare, non come verita permanente.
-
----
+- tratta `sister_selectors.json` come configurazione runtime dei selettori
+- usa il runbook SISTER come memoria tecnica dei casi osservati
+- non dare per immutabile il DOM del portale
+- se cambi il flusso browser, aggiorna anche il runbook
 
 ## Istruzioni operative per Codex
 
 Quando implementi o modifichi il modulo Catasto:
 
-- verifica prima la struttura reale del repository e segui i pattern gia presenti in `backend/app/modules/catasto/`
+- verifica prima i pattern reali del codice esistente
 - usa `backend/app/modules/catasto/` come superficie primaria del backend
-- aggiungi o modifica integrazioni backend passando sempre da `backend/app/api/router.py` e dal router di modulo
-- mantieni separati router HTTP, modelli, schemi, servizi e logica del worker
-- non spostare la logica di automazione browser nel backend HTTP se puo restare nel worker tecnico
-- preserva compatibilita con il monolite condiviso, con Alembic unico e con il database unico
-- usa `domain-docs/catasto/docs/PRD_catasto.md` come riferimento funzionale, ma fai prevalere l'architettura canonica del repository quando trovi indicazioni obsolete nei documenti piu vecchi
+- integra il modulo passando da `backend/app/api/router.py`
+- mantieni separati route HTTP, schemi, modelli, servizi backend e logica worker
+- non spostare logica Playwright nel backend HTTP
+- usa `PRD_catasto.md` come documento di prodotto e struttura, non come sorgente superiore al codice
+- se trovi indicazioni legacy o divergenti nei documenti, fai prevalere l'architettura reale del repository
+
+## Antipattern da evitare
+
+- creare path runtime primari tipo `app/routers/catasto.py`
+- documentare `modules/catasto/backend/` come se fosse backend reale
+- descrivere un solo `services.py` quando i servizi sono separati in `app/services/catasto_*`
+- affidarsi a sezioni numerate inesistenti del vecchio PRD
