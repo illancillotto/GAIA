@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+import html
 import logging
 import re
 
@@ -89,9 +90,11 @@ class CapacitasSessionManager:
 
         token = self._extract_token(str(response.url)) or self._extract_token_from_cookies()
         if not token:
+            diagnostics = self._build_login_diagnostics(response)
+            logger.error("Capacitas login fallito per %s: %s", self.username, diagnostics)
             raise RuntimeError(
-                f"Capacitas login fallito: token non trovato. URL finale: {response.url}. "
-                "Verifica credenziali e nomi campi form.",
+                "Capacitas login fallito: token non trovato dopo il POST credenziali. "
+                f"{diagnostics}",
             )
 
         logger.info("Capacitas login OK: token=%s...", token[:8])
@@ -177,3 +180,81 @@ class CapacitasSessionManager:
             return None
         auth_cookie = self._http.cookies.get("AUTH_COOKIE", "")
         return auth_cookie.split("|")[0] if auth_cookie and "|" in auth_cookie else None
+
+    def _build_login_diagnostics(self, response: httpx.Response) -> str:
+        title = self._extract_html_title(response.text)
+        snippet = self._extract_html_snippet(response.text)
+        cookie_names = self._list_cookie_names()
+        page_signals = self._detect_login_signals(response.text)
+
+        diagnostics = [
+            f"URL finale={response.url}",
+            f"title={title or 'n/d'}",
+            f"cookies={cookie_names or 'nessuno'}",
+        ]
+        if page_signals:
+            diagnostics.append(f"segnali={page_signals}")
+        if snippet:
+            diagnostics.append(f"snippet={snippet}")
+        return " | ".join(diagnostics)
+
+    def _list_cookie_names(self) -> str:
+        if self._http is None:
+            return ""
+        names = sorted({cookie.name for cookie in self._http.cookies.jar})
+        return ",".join(names[:12])
+
+    @staticmethod
+    def _extract_html_title(html_text: str) -> str:
+        match = re.search(r"<title[^>]*>(.*?)</title>", html_text, re.IGNORECASE | re.DOTALL)
+        if not match:
+            return ""
+        return CapacitasSessionManager._clean_html_fragment(match.group(1), limit=160)
+
+    @staticmethod
+    def _extract_html_snippet(html_text: str) -> str:
+        interesting_patterns = [
+            r"Credenziali[^<]{0,120}",
+            r"utente[^<]{0,120}",
+            r"password[^<]{0,120}",
+            r"errore[^<]{0,160}",
+            r"sessione[^<]{0,160}",
+            r"accesso[^<]{0,160}",
+            r"login[^<]{0,160}",
+        ]
+        for pattern in interesting_patterns:
+            match = re.search(pattern, html_text, re.IGNORECASE)
+            if match:
+                return CapacitasSessionManager._clean_html_fragment(match.group(0), limit=220)
+
+        body_text = CapacitasSessionManager._clean_html_fragment(html_text, limit=220)
+        return body_text
+
+    @staticmethod
+    def _detect_login_signals(html_text: str) -> str:
+        normalized = CapacitasSessionManager._clean_html_fragment(html_text, limit=1200).lower()
+        signals: list[str] = []
+        if "__viewstate" in html_text.lower():
+            signals.append("login_form")
+        if "capacitias$contentmain$txtusername".lower() in html_text.lower() or "txtusername" in html_text.lower():
+            signals.append("username_field")
+        if "txtpassword" in html_text.lower():
+            signals.append("password_field")
+        if "token=" in html_text.lower():
+            signals.append("token_in_body")
+        if "credenzial" in normalized:
+            signals.append("credential_message")
+        if "errore" in normalized:
+            signals.append("error_message")
+        if "sessione" in normalized:
+            signals.append("session_message")
+        return ",".join(signals[:8])
+
+    @staticmethod
+    def _clean_html_fragment(fragment: str, limit: int = 220) -> str:
+        cleaned = re.sub(r"<[^>]+>", " ", fragment)
+        cleaned = html.unescape(cleaned)
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()
+        if len(cleaned) > limit:
+            return f"{cleaned[:limit].rstrip()}..."
+        return cleaned

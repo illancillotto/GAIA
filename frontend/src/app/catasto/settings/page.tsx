@@ -13,6 +13,7 @@ import {
   UsersIcon,
 } from "@/components/ui/icons";
 import {
+  ApiError,
   createCapacitasCredential,
   createCatastoCredentialTestWebSocket,
   deleteCapacitasCredential,
@@ -132,6 +133,95 @@ function DetailCard({ label, value }: { label: string; value: string | null | un
   );
 }
 
+type CapacitasTestDialogState = {
+  open: boolean;
+  phase: "idle" | "running" | "success" | "error";
+  credential: CapacitasCredential | null;
+  startedAt: string | null;
+  finishedAt: string | null;
+  statusCode: number | null;
+  title: string;
+  summary: string;
+  backendDetail: string | null;
+  tokenPreview: string | null;
+  diagnosis: string | null;
+};
+
+function CapacitasTestDialog({
+  state,
+  onClose,
+}: {
+  state: CapacitasTestDialogState;
+  onClose: () => void;
+}) {
+  if (!state.open) {
+    return null;
+  }
+
+  const toneClasses =
+    state.phase === "success"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+      : state.phase === "error"
+        ? "border-red-200 bg-red-50 text-red-800"
+        : "border-sky-200 bg-sky-50 text-sky-800";
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 px-4 py-6 backdrop-blur-sm">
+      <div className="w-full max-w-3xl rounded-[28px] border border-gray-200 bg-white p-6 shadow-2xl">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="section-title">Test credenziale Capacitas</p>
+            <p className="section-copy">
+              Verifica di login SSO verso `sso.servizicapacitas.com` con diagnostica completa lato utente.
+            </p>
+          </div>
+          <button className="btn-secondary" onClick={onClose} type="button">
+            Chiudi
+          </button>
+        </div>
+
+        <div className={`mt-5 rounded-2xl border px-4 py-4 ${toneClasses}`}>
+          <p className="text-sm font-semibold">{state.title}</p>
+          <p className="mt-1 text-sm leading-6">{state.summary}</p>
+        </div>
+
+        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <DetailCard label="Credenziale" value={state.credential?.label ?? "—"} />
+          <DetailCard label="Username" value={state.credential?.username ?? "—"} />
+          <DetailCard
+            label="Fascia oraria"
+            value={
+              state.credential
+                ? `${formatHour(state.credential.allowed_hours_start)} - ${formatHour(state.credential.allowed_hours_end)}`
+                : "—"
+            }
+          />
+          <DetailCard label="HTTP status" value={state.statusCode != null ? String(state.statusCode) : "—"} />
+          <DetailCard label="Avviato" value={formatDateTime(state.startedAt)} />
+          <DetailCard label="Concluso" value={formatDateTime(state.finishedAt)} />
+          <DetailCard label="Ultimo uso noto" value={formatDateTime(state.credential?.last_used_at ?? null)} />
+          <DetailCard label="Token preview" value={state.tokenPreview ?? "—"} />
+        </div>
+
+        <div className="mt-5 grid gap-4 lg:grid-cols-2">
+          <div className="rounded-2xl border border-gray-200/80 bg-gray-50 p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">Dettaglio backend</p>
+            <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-gray-700">
+              {state.backendDetail ?? "Nessun dettaglio aggiuntivo restituito dal backend."}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-gray-200/80 bg-gray-50 p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">Diagnosi operativa</p>
+            <p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-gray-700">
+              {state.diagnosis ?? "Nessuna diagnosi aggiuntiva disponibile."}
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function CatastoSettingsPage() {
   const [credentialStatus, setCredentialStatus] = useState<CatastoCredentialStatus | null>(null);
   const [formState, setFormState] = useState({
@@ -157,6 +247,19 @@ export default function CatastoSettingsPage() {
   const [capacitasTestingId, setCapacitasTestingId] = useState<number | null>(null);
   const [capacitasStatusMessage, setCapacitasStatusMessage] = useState<string | null>(null);
   const [capacitasError, setCapacitasError] = useState<string | null>(null);
+  const [capacitasTestDialog, setCapacitasTestDialog] = useState<CapacitasTestDialogState>({
+    open: false,
+    phase: "idle",
+    credential: null,
+    startedAt: null,
+    finishedAt: null,
+    statusCode: null,
+    title: "Test Capacitas",
+    summary: "Nessun test avviato.",
+    backendDetail: null,
+    tokenPreview: null,
+    diagnosis: null,
+  });
 
   useEffect(() => {
     void Promise.all([loadCredentials(), loadCapacitasCredentials()]);
@@ -200,6 +303,21 @@ export default function CatastoSettingsPage() {
 
   function resetCapacitasForm(): void {
     setCapacitasForm(DEFAULT_CAPACITAS_FORM);
+  }
+
+  function buildCapacitasDiagnosis(detail: string | null, statusCode: number | null): string | null {
+    const normalized = normalizeIssueText(detail);
+
+    if (normalized.includes("token non trovato")) {
+      return "Il login HTTP risponde 200 ma il backend non riesce a estrarre il token di sessione. Di solito significa login rifiutato senza redirect, markup del form cambiato, oppure cookie AUTH_COOKIE non impostato dal portale.";
+    }
+    if (normalized.includes("viewstate")) {
+      return "La pagina SSO sembra aver cambiato i campi ASP.NET richiesti. Va verificato il parsing di __VIEWSTATE / __EVENTVALIDATION nel backend.";
+    }
+    if (statusCode === 502) {
+      return "Il frontend raggiunge correttamente il backend, ma il backend non completa la negoziazione con il portale esterno. Il punto da verificare e il parser di login Capacitas o la risposta HTML reale post-login.";
+    }
+    return null;
   }
 
   async function handleSave(): Promise<void> {
@@ -346,20 +464,79 @@ export default function CatastoSettingsPage() {
     const token = getStoredAccessToken();
     if (!token) return;
 
+    const credential = capacitasCredentials.find((item) => item.id === credentialId) ?? null;
+    const startedAt = new Date().toISOString();
     setCapacitasTestingId(credentialId);
+    setCapacitasTestDialog({
+      open: true,
+      phase: "running",
+      credential,
+      startedAt,
+      finishedAt: null,
+      statusCode: null,
+      title: "Test Capacitas in corso",
+      summary: "Sto verificando il login SSO e l'estrazione della sessione del portale esterno.",
+      backendDetail: null,
+      tokenPreview: null,
+      diagnosis: null,
+    });
     try {
       const result = await testCapacitasCredential(token, credentialId);
       await loadCapacitasCredentials();
       if (result.ok) {
         setCapacitasStatusMessage(`Connessione Capacitas confermata${result.token ? ` · token ${result.token}` : ""}.`);
         setCapacitasError(null);
+        setCapacitasTestDialog((current) => ({
+          ...current,
+          phase: "success",
+          finishedAt: new Date().toISOString(),
+          statusCode: 200,
+          title: "Test Capacitas completato",
+          summary: "Autenticazione completata con successo e sessione rilevata dal backend.",
+          backendDetail: result.error ?? "Login completato senza errori.",
+          tokenPreview: result.token,
+          diagnosis: "Il backend ha ottenuto una sessione valida. Puoi usare questa credenziale per ricerca e diagnostica inVOLTURE.",
+        }));
       } else {
         setCapacitasError(result.error ?? "Test Capacitas fallito");
         setCapacitasStatusMessage(null);
+        setCapacitasTestDialog((current) => ({
+          ...current,
+          phase: "error",
+          finishedAt: new Date().toISOString(),
+          statusCode: 200,
+          title: "Test Capacitas fallito",
+          summary: "Il backend ha risposto, ma il test non ha restituito una sessione valida.",
+          backendDetail: result.error ?? null,
+          tokenPreview: result.token,
+          diagnosis: buildCapacitasDiagnosis(result.error ?? null, 200),
+        }));
       }
     } catch (testError) {
-      setCapacitasError(testError instanceof Error ? testError.message : "Errore test credenziale Capacitas");
+      const message = testError instanceof Error ? testError.message : "Errore test credenziale Capacitas";
+      const statusCode = testError instanceof ApiError ? testError.status ?? null : null;
+      const backendDetail =
+        testError instanceof ApiError
+          ? typeof testError.detailData === "string"
+            ? testError.detailData
+            : testError.detailData != null
+              ? JSON.stringify(testError.detailData, null, 2)
+              : message
+          : message;
+
+      setCapacitasError(message);
       setCapacitasStatusMessage(null);
+      setCapacitasTestDialog((current) => ({
+        ...current,
+        phase: "error",
+        finishedAt: new Date().toISOString(),
+        statusCode,
+        title: "Test Capacitas interrotto",
+        summary: "Il backend ha restituito un errore durante il tentativo di login verso il portale esterno.",
+        backendDetail,
+        tokenPreview: null,
+        diagnosis: buildCapacitasDiagnosis(backendDetail, statusCode),
+      }));
     } finally {
       setCapacitasTestingId(null);
     }
@@ -499,6 +676,16 @@ export default function CatastoSettingsPage() {
       description="Hub operativo del modulo Catasto per SISTER e Capacitas."
       breadcrumb="Catasto / Credenziali"
     >
+      <CapacitasTestDialog
+        state={capacitasTestDialog}
+        onClose={() =>
+          setCapacitasTestDialog((current) => ({
+            ...current,
+            open: false,
+          }))
+        }
+      />
+
       <section className="overflow-hidden rounded-[28px] border border-[#d8dfd3] bg-[radial-gradient(circle_at_top_left,_rgba(212,231,220,0.95),_rgba(248,246,238,0.92)_55%,_rgba(255,255,255,0.98)_100%)] p-6 shadow-panel">
         <div className="grid gap-6 xl:grid-cols-[1.15fr,0.85fr]">
           <div>
@@ -745,6 +932,13 @@ export default function CatastoSettingsPage() {
                   senza warning prima di tornare ai batch.
                 </p>
               </div>
+            </div>
+            <div className="mt-5 rounded-2xl border border-white/10 bg-white/5 p-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-white/45">Test Capacitas</p>
+              <p className="mt-2 text-sm leading-6 text-white/75">
+                Il pulsante <span className="font-semibold text-white">Test</span> apre ora una modal con stato del test,
+                codice HTTP, dettaglio backend e diagnosi operativa del fallimento.
+              </p>
             </div>
           </article>
         </aside>

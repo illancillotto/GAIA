@@ -218,3 +218,43 @@ def test_capacitas_involture_search_uses_selected_credential_and_returns_rows(
         assert credential.last_used_at.tzinfo is not None or credential.last_used_at == credential.last_used_at.replace(tzinfo=None)
     finally:
         db.close()
+
+
+def test_capacitas_credential_test_returns_diagnostic_detail_on_login_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    create_response = client.post(
+        "/catasto/capacitas/credentials",
+        headers=auth_headers(),
+        json={
+            "label": "Probe errore",
+            "username": "capacitas-user",
+            "password": "capacitas-secret",
+        },
+    )
+    credential_id = create_response.json()["id"]
+
+    async def fake_login(self):
+        raise RuntimeError(
+            "Capacitas login fallito: token non trovato dopo il POST credenziali. "
+            "URL finale=https://sso.servizicapacitas.com/pages/login.aspx | "
+            "title=Login | cookies=ASP.NET_SessionId | segnali=login_form,error_message | "
+            "snippet=Credenziali non valide",
+        )
+
+    async def fake_close(self) -> None:
+        return None
+
+    monkeypatch.setattr("app.modules.catasto.capacitas.session.CapacitasSessionManager.login", fake_login)
+    monkeypatch.setattr("app.modules.catasto.capacitas.session.CapacitasSessionManager.close", fake_close)
+
+    response = client.post(
+        f"/catasto/capacitas/credentials/{credential_id}/test",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 502
+    payload = response.json()
+    assert "token non trovato" in payload["detail"]
+    assert "URL finale=" in payload["detail"]
+    assert "cookies=" in payload["detail"]
