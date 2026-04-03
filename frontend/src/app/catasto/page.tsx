@@ -118,7 +118,7 @@ export default function CatastoDashboardPage() {
             Workspace Catasto
           </>
         }
-        title="Console operativa del modulo Catasto per visure, batch, CAPTCHA e pool Capacitas."
+        title="Console operativa del modulo Catasto per visure, batch e pool Capacitas."
         description="La dashboard ora riassume stato credenziali, utilizzo del pool e attività recenti prima di entrare nei singoli flussi. Il refresh resta realtime quando la pagina è visibile."
         actions={
           error ? (

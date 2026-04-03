@@ -1,0 +1,145 @@
+# GAIA Docs e Struttura File
+
+## Dove si trovano le docs
+
+La documentazione del progetto e distribuita principalmente in due aree:
+
+1. Root del repository: documentazione generale di piattaforma, architettura e piani.
+2. `domain-docs/`: documentazione funzionale per dominio/modulo.
+
+## Documentazione generale in root
+
+- `README.md`: overview del progetto, stack, quick start e riferimenti principali.
+- `ARCHITECTURE.md`: architettura generale.
+- `PRD.md`: product requirements di livello progetto.
+- `IMPLEMENTATION_PLAN.md`: piano di implementazione generale.
+- `AGENTS.md`: linee guida operative per agenti/tooling.
+- `PROMPT_BACKEND.md`: prompt e istruzioni backend.
+- `PROMPT_FRONTEND.md`: prompt e istruzioni frontend.
+- `PROMPT_DEVOPS.md`: prompt e istruzioni DevOps.
+- `PROMPT_CODEX_permissions.md`: note operative sui permessi per Codex.
+- `.github/workflows/`: pipeline CI/CD GitHub Actions.
+- `backend/app/MONOLITH_MODULAR.md`: note architetturali sul backend monolite modulare.
+- `modules/README.md`: note sulla directory `modules/`.
+
+## Documentazione per dominio
+
+### Indice generale
+
+- `domain-docs/README.md`: convenzioni e ruolo della cartella `domain-docs/`.
+
+### Accessi
+
+- `domain-docs/accessi/README.md` non presente
+- `domain-docs/accessi/docs/PRD.md`
+- `domain-docs/accessi/docs/ARCHITECTURE.md`
+- `domain-docs/accessi/docs/IMPLEMENTATION_PLAN.md`
+- `domain-docs/accessi/docs/EXECUTION_PLAN.md`
+- `domain-docs/accessi/docs/DEPLOYMENT.md`
+- `domain-docs/accessi/docs/PROGRESS.md`
+- `domain-docs/accessi/docs/CODEX_PROMPT.md`
+
+### Catasto
+
+- `domain-docs/catasto/README.md` non presente
+- `domain-docs/catasto/docs/PRD_catasto.md`
+- `domain-docs/catasto/docs/PROMPT_CODEX_catasto.md`
+- `domain-docs/catasto/docs/PROMPT_CLAUDE_CODE_catasto.md`
+- `domain-docs/catasto/docs/PROMPT_CLAUDE_CODE_frontend_restructure.md`
+- `domain-docs/catasto/docs/SISTER_debug_runbook.md`
+- `domain-docs/catasto/capacitas/docs/CAPACITAS_integration.md`
+
+### Inventory
+
+- `domain-docs/inventory/README.md`
+- `domain-docs/inventory/docs/PRD_inventory.md`
+- `domain-docs/inventory/docs/PROMPT_CODEX_inventory.md`
+
+### Network
+
+- `domain-docs/network/README.md`
+- `domain-docs/network/docs/PRD_network.md`
+- `domain-docs/network/docs/PROMPT_CODEX_network.md`
+
+### Utenze
+
+- `domain-docs/utenze/README.md` non presente
+- `domain-docs/utenze/docs/PRD_anagrafica.md`
+- `domain-docs/utenze/docs/PROMPT_CODEX_anagrafica.md`
+- `domain-docs/utenze/docs/EXECUTION_PLAN.md`
+- `domain-docs/utenze/docs/PROGRESS.md`
+
+## Struttura sintetica del repository
+
+```text
+GAIA/
+├── .github/
+│   └── workflows/
+├── backend/
+│   ├── alembic/
+│   │   └── versions/
+│   ├── app/
+│   │   ├── api/
+│   │   ├── core/
+│   │   ├── db/
+│   │   ├── jobs/
+│   │   ├── models/
+│   │   ├── modules/
+│   │   ├── repositories/
+│   │   ├── schemas/
+│   │   ├── scripts/
+│   │   ├── services/
+│   │   └── utils/
+│   ├── scripts/
+│   └── tests/
+├── domain-docs/
+│   ├── accessi/
+│   │   ├── docs/
+│   │   └── frontend/
+│   ├── catasto/
+│   │   ├── capacitas/
+│   │   │   └── docs/
+│   │   └── docs/
+│   ├── inventory/
+│   │   ├── docs/
+│   │   └── frontend/
+│   ├── network/
+│   │   └── docs/
+│   └── utenze/
+│       └── docs/
+├── frontend/
+│   ├── public/
+│   ├── scripts/
+│   ├── src/
+│   │   ├── app/
+│   │   ├── components/
+│   │   ├── features/
+│   │   ├── hooks/
+│   │   ├── lib/
+│   │   ├── services/
+│   │   ├── types/
+│   │   └── utils/
+│   └── tests/
+├── modules/
+│   └── catasto/
+│       └── worker/
+├── nginx/
+├── scripts/
+├── AGENTS.md
+├── ARCHITECTURE.md
+├── IMPLEMENTATION_PLAN.md
+├── PRD.md
+├── PROMPT_BACKEND.md
+├── PROMPT_CODEX_permissions.md
+├── PROMPT_DEVOPS.md
+├── PROMPT_FRONTEND.md
+├── README.md
+└── DOCS_STRUCTURE.md
+```
+
+## Note utili
+
+- La directory piu importante per la documentazione funzionale e `domain-docs/`.
+- La documentazione architetturale generale e concentrata in root e in `backend/app/MONOLITH_MODULAR.md`.
+- Nel repository c'e una discrepanza terminologica: il `README.md` cita piu volte `anagrafica`, ma sul filesystem la cartella presente e `domain-docs/utenze/`.
+- Nel `README.md` compare `domain-docs/anagrafica/docs/`, ma nel repository attuale quella directory non esiste.
