@@ -9,6 +9,8 @@ import re
 
 import httpx
 
+from app.modules.catasto.capacitas.apps import get_app_hosts, get_capacitas_app
+
 logger = logging.getLogger(__name__)
 
 SSO_BASE = "https://sso.servizicapacitas.com"
@@ -16,11 +18,7 @@ LOGIN_URL = f"{SSO_BASE}/pages/login.aspx"
 KEEP_ALIVE_PATH = "/pages/handler/handlerKeepSessionAlive.ashx"
 KEEP_ALIVE_INTERVAL = 25
 
-APP_HOSTS = {
-    "involture": "https://involture1.servizicapacitas.com",
-    "incass": "https://incass3.servizicapacitas.com",
-    "inbollettini": "https://inbollettini.servizicapacitas.com",
-}
+APP_HOSTS = get_app_hosts()
 
 
 @dataclass
@@ -102,34 +100,33 @@ class CapacitasSessionManager:
         return self._session
 
     async def activate_app(self, app: str) -> None:
-        if app not in APP_HOSTS:
-            raise ValueError(f"App '{app}' non configurata. Disponibili: {list(APP_HOSTS)}")
         if self._session is None or self._http is None:
             raise RuntimeError("Sessione non inizializzata. Chiamare login() prima.")
 
-        host = APP_HOSTS[app]
-        url = f"{host}/pages/main.aspx?token={self._session.token}&app={app}&tenant="
+        app_config = get_capacitas_app(app)
+        url = app_config.main_url(self._session.token)
         logger.info("Capacitas activate_app: GET %s", url)
         response = await self._http.get(url)
         response.raise_for_status()
 
-        app_cookie_name = f"{app}__AUTH_COOKIE"
         cookies = dict(self._http.cookies)
-        if app_cookie_name not in cookies:
-            logger.warning("Cookie %s non impostato dopo activate_app", app_cookie_name)
-        self._session.app_cookies[app] = cookies
+        if app_config.auth_cookie_name not in cookies:
+            logger.warning("Cookie %s non impostato dopo activate_app", app_config.auth_cookie_name)
+        self._session.app_cookies[app_config.key] = cookies
 
     async def start_keepalive(self, app: str) -> None:
-        if app in self._keepalive_tasks and not self._keepalive_tasks[app].done():
+        app_config = get_capacitas_app(app)
+        if app_config.key in self._keepalive_tasks and not self._keepalive_tasks[app_config.key].done():
             return
-        host = APP_HOSTS[app]
-        task = asyncio.create_task(self._keepalive_loop(app, host), name=f"capacitas-keepalive-{app}")
-        self._keepalive_tasks[app] = task
+        task = asyncio.create_task(
+            self._keepalive_loop(app_config.key, app_config.keepalive_url(KEEP_ALIVE_PATH)),
+            name=f"capacitas-keepalive-{app_config.key}",
+        )
+        self._keepalive_tasks[app_config.key] = task
 
-    async def _keepalive_loop(self, app: str, host: str) -> None:
+    async def _keepalive_loop(self, app: str, url: str) -> None:
         if self._session is None or self._http is None:
             return
-        url = f"{host}{KEEP_ALIVE_PATH}"
         while True:
             await asyncio.sleep(KEEP_ALIVE_INTERVAL)
             try:
@@ -140,7 +137,8 @@ class CapacitasSessionManager:
                 logger.warning("Capacitas keep-alive error: app=%s err=%s", app, exc)
 
     def stop_keepalive(self, app: str) -> None:
-        task = self._keepalive_tasks.get(app)
+        app_key = get_capacitas_app(app).key
+        task = self._keepalive_tasks.get(app_key)
         if task and not task.done():
             task.cancel()
 

@@ -16,6 +16,11 @@ Riferimenti canonici:
 
 Esempio:
 
-- documentazione Anagrafica: `domain-docs/anagrafica/docs/`
-- backend Anagrafica: `backend/app/modules/anagrafica/`
-- frontend Anagrafica: `frontend/src/app/anagrafica/`
+- documentazione Utenze: `domain-docs/utenze/docs/`
+- backend Utenze: `backend/app/modules/utenze/`
+- frontend Utenze: `frontend/src/app/utenze/`
+
+Nota di compatibilita:
+
+- nel codice runtime possono essere ancora presenti superfici `anagrafica/`
+- la documentazione di dominio consolidata vive sotto `domain-docs/utenze/`

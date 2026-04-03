@@ -28,6 +28,7 @@ Superfici principali del modulo:
 - backend HTTP e WebSocket: `backend/app/modules/catasto/`
 - entrypoint router di modulo: `backend/app/modules/catasto/router.py`
 - implementazione route: `backend/app/modules/catasto/routes.py`
+- integrazione Capacitas: `backend/app/modules/catasto/capacitas/`, con registry app e sottopackage verticali `apps/<app>/`
 - modelli e schemi canonici re-export: `backend/app/modules/catasto/models.py`, `backend/app/modules/catasto/schemas.py`
 - servizi applicativi runtime: `backend/app/services/catasto_batches.py`, `catasto_captcha.py`, `catasto_comuni.py`, `catasto_credentials.py`, `catasto_documents.py`
 - frontend condiviso: `frontend/src/app/catasto/`

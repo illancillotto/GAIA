@@ -7,9 +7,26 @@
 ## Stato
 
 - Modulo: `backend/app/modules/catasto/capacitas/`
+- Registry app Capacitas: `backend/app/modules/catasto/capacitas/apps/registry.py`
+- Macro-moduli verticali: `backend/app/modules/catasto/capacitas/apps/<app>/`
 - Service: `backend/app/services/catasto_capacitas.py`
 - Routes: `backend/app/modules/catasto/capacitas_routes.py`
 - Migration: `backend/alembic/versions/20260402_0027_capacitas_credentials.py`
+
+## Struttura runtime
+
+- `session.py` gestisce solo login SSO, token, cookie applicativi e keep-alive
+- `apps/registry.py` centralizza chiave logica app, host, alias e nomi cookie
+- ogni macro-modulo Capacitas vive sotto `apps/<app>/` e contiene i client e i sottomoduli specifici del servizio
+- `client.py` al root resta come shim di compatibilita per gli import esistenti di `InVoltureClient`
+
+Macro-moduli registrati ad oggi:
+
+- `involture` → host `involture1.servizicapacitas.com`, alias `visure`, `invisure`
+- `incass` → host `incass3.servizicapacitas.com`
+- `inbollettini` → host `inbollettini.servizicapacitas.com`
+
+Questa struttura consente di aggiungere nuovi moduli Capacitas senza estendere `session.py` con logica applicativa dedicata.
 
 ## Decoder risposta
 
@@ -55,6 +72,12 @@ POST involture1.servizicapacitas.com/pages/ajax/ajaxRicerca.aspx
 POST */pages/handler/handlerKeepSessionAlive.ashx  ogni 25s
 ```
 
+Nota implementativa:
+
+- l'attivazione di un'app non usa piu host hardcoded in `session.py`
+- `CapacitasSessionManager.activate_app()` risolve la configurazione tramite registry
+- alias applicativi come `visure` o `invisure` vengono normalizzati alla chiave canonica `involture`
+
 ## Credenziali — gestione
 
 - Tabella: `capacitas_credentials`
@@ -88,7 +111,8 @@ router.include_router(capacitas_router)
 ## TODO successivi
 
 - [ ] Verificare nomi campi form login (`Capacitas$ContentMain$txtUsername` ecc.)
+- [ ] Estrarre i client di `incass` in `apps/incass/`
+- [ ] Estrarre i client di `inbollettini` in `apps/inbollettini/`
+- [ ] Organizzare ogni macro-modulo in sottopackage per servizi AJAX, parser e mapping risposta
 - [ ] Aggiungere endpoint `/involture/search` con paginazione/cache opzionale
-- [ ] Implementare `incass_routes.py` per inCASS
-- [ ] Implementare `bollettini_routes.py` per inBOLLETTINI
 - [ ] Frontend: pagina `/catasto/settings` → tab "Capacitas" con gestione credenziali

@@ -7,10 +7,10 @@
 
 ## Cos'è GAIA
 
-GAIA centralizza la governance IT del Consorzio in quattro moduli integrati,
-accessibili da un'unica interfaccia dopo il login.
+GAIA centralizza la governance IT del Consorzio in cinque domini applicativi
+integrati, accessibili da un'unica interfaccia dopo il login.
 
-## I quattro moduli
+## I cinque moduli
 
 ### GAIA Accessi — NAS Audit
 Audit completo degli accessi al NAS Synology: utenti, gruppi, cartelle condivise,
@@ -33,6 +33,11 @@ Automazione delle visure catastali dal portale SISTER: upload batch CSV/XLSX,
 worker Playwright separato, gestione CAPTCHA, archivio PDF e download ZIP.
 Stato: MVP in integrazione.
 
+### GAIA Utenze — Anagrafica soggetti
+Registro centralizzato dei soggetti del Consorzio, con import da archivio NAS,
+classificazione documentale e ricerca anagrafica.
+Stato: in consolidamento.
+
 ## Stack tecnologico
 
 - Backend: FastAPI, SQLAlchemy, Alembic, PostgreSQL
@@ -47,14 +52,15 @@ Il frontend condiviso della piattaforma vive in `frontend/`.
 GAIA/
 ├── domain-docs/
 │   ├── accessi/docs/
-│   ├── anagrafica/docs/
 │   ├── catasto/docs/
 │   ├── inventory/docs/
-│   └── network/docs/
+│   ├── network/docs/
+│   └── utenze/docs/
 ├── frontend/
 │   └── src/app/
 │       ├── nas-control/
 │       ├── anagrafica/
+│       ├── utenze/
 │       ├── network/
 │       ├── inventory/
 │       └── catasto/
@@ -67,6 +73,7 @@ GAIA/
 │   │   │   ├── core/
 │   │   │   ├── accessi/
 │   │   │   ├── anagrafica/
+│   │   │   ├── utenze/
 │   │   │   ├── network/
 │   │   │   ├── inventory/
 │   │   │   └── catasto/
@@ -99,10 +106,15 @@ La directory fisica del backend e:
 La struttura logica canonica del codice backend e invece:
 - `backend/app/modules/core`
 - `backend/app/modules/accessi`
+- `backend/app/modules/anagrafica`
+- `backend/app/modules/utenze`
+- `backend/app/modules/inventory`
 - `backend/app/modules/network`
 - `backend/app/modules/catasto`
 
 I package storici fuori da `app/modules/` restano disponibili come layer di compatibilita.
+Per il dominio anagrafico convivono ancora namespace runtime `anagrafica` e `utenze`;
+la documentazione di dominio fa riferimento a `domain-docs/utenze/`.
 
 ## Quick Start
 
@@ -136,9 +148,9 @@ Se la variabile e vuota/non impostata, la password non viene richiesta.
 ## Documentazione
 
 - GAIA Accessi: `domain-docs/accessi/docs/`
-- GAIA Anagrafica PRD: `domain-docs/anagrafica/docs/PRD_anagrafica.md`
-- GAIA Anagrafica Prompt: `domain-docs/anagrafica/docs/PROMPT_CODEX_anagrafica.md`
-- GAIA Anagrafica Plan: `domain-docs/anagrafica/docs/EXECUTION_PLAN.md`
+- GAIA Utenze PRD: `domain-docs/utenze/docs/PRD_anagrafica.md`
+- GAIA Utenze Prompt: `domain-docs/utenze/docs/PROMPT_CODEX_anagrafica.md`
+- GAIA Utenze Plan: `domain-docs/utenze/docs/EXECUTION_PLAN.md`
 - GAIA Rete PRD: `domain-docs/network/docs/PRD_network.md`
 - GAIA Rete Prompt: `domain-docs/network/docs/PROMPT_CODEX_network.md`
 - Backend monolite modulare: `backend/app/MONOLITH_MODULAR.md`

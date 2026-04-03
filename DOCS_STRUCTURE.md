@@ -141,5 +141,5 @@ GAIA/
 
 - La directory piu importante per la documentazione funzionale e `domain-docs/`.
 - La documentazione architetturale generale e concentrata in root e in `backend/app/MONOLITH_MODULAR.md`.
-- Nel repository c'e una discrepanza terminologica: il `README.md` cita piu volte `anagrafica`, ma sul filesystem la cartella presente e `domain-docs/utenze/`.
-- Nel `README.md` compare `domain-docs/anagrafica/docs/`, ma nel repository attuale quella directory non esiste.
+- Il dominio anagrafico usa `domain-docs/utenze/` come posizione canonica della documentazione.
+- Nel runtime possono coesistere superfici `anagrafica` e `utenze` per compatibilita applicativa.

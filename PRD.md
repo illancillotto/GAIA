@@ -1,312 +1,105 @@
-# NAS Access Audit Platform (NAAP)
+# GAIA Product Requirements Document
 
 > Nota repository
-> Questo documento descrive il dominio Accessi. Nel repository attuale il backend e condiviso tra moduli ed e organizzato come monolite modulare.
+> Questo documento descrive il prodotto GAIA a livello di piattaforma.
+> I PRD di dominio restano in `domain-docs/<dominio>/docs/`.
 
-## 1. Overview
+## 1. Visione
 
-### 1.1 Obiettivo
-Realizzare una web application interna per il Consorzio di Bonifica dell'Oristanese che consenta:
+GAIA e la piattaforma interna del Consorzio di Bonifica dell'Oristanese per la
+governance di accessi, rete, inventario, catasto e anagrafica soggetti tramite
+un backend monolitico modulare, un frontend condiviso e un database unico.
 
-- Audit completo degli accessi al NAS Synology
-- Visualizzazione dei permessi effettivi per utente
-- Validazione degli accessi da parte dei capi servizio
-- Produzione di report e piano di bonifica
+## 2. Obiettivo di prodotto
 
----
+Fornire un unico punto di accesso operativo per:
 
-### 1.2 Contesto
+- audit e review degli accessi al NAS
+- monitoraggio continuo della rete LAN
+- gestione dell'inventario IT
+- automazione delle visure catastali e della relativa documentazione
+- gestione anagrafica dei soggetti e dei documenti correlati
 
-Attualmente il sistema NAS presenta:
+## 3. Domini funzionali
 
-- Permessi assegnati tramite gruppi
-- Ereditarietà non tracciata
-- Mancanza di visibilità sugli accessi reali
-- Assenza di strumenti di audit
+### 3.1 Accessi
 
-Questo comporta:
+- ingestione utenti, gruppi, share e ACL dal NAS
+- calcolo permessi effettivi
+- workflow di review e reporting audit
 
-- Rischio accessi non autorizzati
-- Difficoltà di governance
-- Impossibilità di validazione organizzativa
+### 3.2 Network
 
----
+- scansioni LAN schedulate e manuali
+- inventory osservato della rete
+- alert su dispositivi sconosciuti o assenti
+- planimetrie e storico snapshot
 
-## 2. Goals
+### 3.3 Inventory
 
-### 2.1 Obiettivi principali
+- anagrafica centralizzata degli asset IT
+- import dati e correlazione con apparati rilevati in rete
+- stato operativo, assegnazioni e garanzie
 
-- Centralizzare la visibilità degli accessi
-- Determinare i permessi effettivi per ogni utente
-- Coinvolgere i capi servizio nella validazione
-- Generare report strutturati per bonifica
+### 3.4 Catasto
 
----
+- gestione credenziali SISTER e Capacitas
+- batch e richieste singole di visura
+- worker browser-based con gestione CAPTCHA
+- archivio PDF e tracciamento realtime avanzamento
 
-### 2.2 Non Obiettivi (MVP)
+### 3.5 Utenze
 
-- Modifica automatica dei permessi NAS
-- Integrazione con Active Directory (fase futura)
-- Gestione provisioning utenti
+- registro soggetti persone fisiche e giuridiche
+- import da archivio NAS
+- classificazione e ricerca documentale
+- integrazione progressiva con Catasto e Accessi
 
----
+## 4. Architettura di riferimento
 
-## 3. Architettura
+- backend unico FastAPI sotto `backend/`
+- namespace canonici di dominio in `backend/app/modules/<modulo>/`
+- frontend unico Next.js sotto `frontend/`
+- database PostgreSQL condiviso
+- worker tecnici separati solo dove necessario, ad esempio `modules/catasto/worker/` e scanner LAN
 
-### 3.1 Stack Tecnologico
+## 5. Requisiti trasversali
 
-**Backend**
-- FastAPI
-- SQLAlchemy / SQLModel
-- Paramiko (SSH)
-- PostgreSQL
+### 5.1 Sicurezza e accesso
 
-**Frontend**
-- Next.js
-- TailwindCSS
-- TanStack Table
+- autenticazione applicativa centralizzata
+- autorizzazioni per modulo e sezione
+- audit trail delle operazioni critiche
 
-**Infrastructure**
-- Docker / Docker Compose
-- Nginx (reverse proxy)
+### 5.2 Osservabilita e operativita
 
----
+- log applicativi coerenti tra moduli
+- job e workflow asincroni monitorabili
+- documentazione allineata alla struttura reale del repository
 
-### 3.2 Componenti
+### 5.3 Coerenza architetturale
 
-- Backend API (FastAPI)
-- Frontend Dashboard (Next.js)
-- Database (PostgreSQL)
-- NAS Connector (SSH)
+- nessun backend separato per dominio
+- nessuna duplicazione di stack applicativo per modulo
+- migrazioni centralizzate in `backend/alembic/versions/`
 
----
+## 6. Non obiettivi di piattaforma
 
-## 4. Funzionalità MVP
+- microservizi per ogni dominio
+- provisioning infrastrutturale automatico fuori dallo stack Compose
+- portali esterni pubblici nella baseline corrente
 
-### 4.1 Sync NAS
+## 7. KPI iniziali
 
-- Estrazione utenti
-- Estrazione gruppi
-- Mapping utenti-gruppi
-- Elenco cartelle condivise
-- Lettura ACL
+- bootstrap locale ripetibile del repository
+- navigazione unificata tra domini da una sola web app
+- workflow core di ogni dominio eseguibile nel backend condiviso
+- documentazione root e dominio coerente con la struttura effettiva
 
----
+## 8. Roadmap sintetica
 
-### 4.2 Vista Utente
-
-- Elenco gruppi
-- Cartelle accessibili
-- Permessi effettivi (read/write)
-- Origine permesso (gruppo / diretto)
-
----
-
-### 4.3 Vista Cartella
-
-- Elenco utenti con accesso
-- Tipo di accesso
-- Fonte del permesso
-
----
-
-### 4.4 Vista Responsabile Settore
-
-- Utenti del proprio settore
-- Accessi correnti
-- Azioni:
-  - Conferma
-  - Revoca
-  - Note
-
----
-
-### 4.5 Export
-
-- CSV
-- Excel
-
----
-
-## 5. Modello Dati
-
-### 5.1 Tabelle principali
-
-#### Users
-- id
-- username
-- email
-
-#### Groups
-- id
-- name
-
-#### UserGroups
-- user_id
-- group_id
-
-#### Shares
-- id
-- name
-- path
-- settore
-
-#### Permissions
-- id
-- share_id
-- subject_type (user/group)
-- subject_name
-- level
-
-#### EffectivePermissions
-- user_id
-- share_id
-- read (bool)
-- write (bool)
-- source
-
-#### Reviews
-- id
-- user_id
-- share_id
-- reviewer
-- decision
-- note
-- reviewed_at
-
-#### Snapshots
-- id
-- created_at
-- checksum
-
----
-
-## 6. Regole di Business
-
-- I permessi derivano da:
-  - Utente diretto
-  - Gruppi
-- I permessi di tipo DENY hanno priorità
-- WRITE implica READ
-- I permessi effettivi sono calcolati a runtime o su snapshot
-
----
-
-## 7. API Endpoints
-
-### 7.1 Core
-
-- `POST /auth/login`
-- `GET /users`
-- `GET /groups`
-- `GET /shares`
-- `GET /permissions`
-- `GET /effective-permissions`
-- `POST /reviews`
-- `POST /sync`
-
----
-
-## 8. Workflow
-
-### 8.1 Processo operativo
-
-1. Sync dati dal NAS
-2. Creazione snapshot
-3. Analisi permessi
-4. Validazione capi servizio
-5. Generazione report
-6. Pianificazione bonifica
-
----
-
-## 9. Sicurezza
-
-- Autenticazione JWT
-- RBAC:
-  - Admin
-  - Reviewer (capo servizio)
-  - Viewer
-- Audit log operazioni
-
----
-
-## 10. UI/UX
-
-### 10.1 Dashboard
-
-- Overview sistema
-- Numero utenti
-- Numero accessi
-
-### 10.2 Tabelle
-
-- Filtri per:
-  - Utente
-  - Settore
-  - Cartella
-
----
-
-## 11. Deployment
-
-- Docker Compose
-- Backend + Frontend + DB
-- Accesso via rete interna o VPN
-
----
-
-## 12. Roadmap
-
-### Fase 1
-- Backend base
-- Connessione NAS
-- DB
-
-### Fase 2
-- API complete
-- Frontend base
-
-### Fase 3
-- Validazione capi servizio
-
-### Fase 4
-- Export e report
-
----
-
-## 13. Estensioni Future
-
-- Integrazione Active Directory
-- Automazione modifica permessi
-- Alert accessi anomali
-- Versioning completo accessi
-
----
-
-## 14. Naming Progetto
-
-Nome consigliato:
-
-**NAS Access Audit (NAA)**
-oppure  
-**CBO Access Governance**
-
----
-
-## 15. Rischi
-
-- Complessità parsing ACL Synology
-- Incoerenza dati legacy
-- Resistenza organizzativa al cambiamento
-
----
-
-## 16. Success Metrics
-
-- % utenti con accessi validati
-- riduzione accessi non necessari
-- tempo medio audit accessi
-- numero anomalie rilevate
-
----
+1. consolidamento del monolite modulare e dei namespace canonici
+2. completamento del dominio Catasto e integrazione Capacitas
+3. consolidamento del dominio Utenze e dei collegamenti documentali
+4. avanzamento del dominio Inventory con correlazione ai dati Network
+5. hardening operativo, permessi applicativi e documentazione trasversale
