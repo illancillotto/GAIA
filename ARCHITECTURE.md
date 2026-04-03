@@ -17,7 +17,9 @@ La piattaforma **GAIA** e una web application interna progettata per:
 - supportare i capi servizio nella validazione
 - produrre report per audit e bonifica
 - monitorare la rete LAN
+- gestire un inventario IT condiviso con il monitoraggio di rete
 - integrare automazioni catastali dedicate
+- gestire anagrafiche soggetti e documenti correlati
 
 Il sistema, nel MVP, è **read-only rispetto al NAS**:
 - legge
@@ -78,14 +80,17 @@ backend/app/
   modules/
     core/
     accessi/
+    anagrafica/
+    utenze/
     network/
-    inventory/   # target futuro
+    inventory/
     catasto/
 ```
 
 Nota:
 - la directory fisica del backend e `backend/`
 - il backend non rappresenta piu il solo modulo Accessi
+- per il dominio anagrafico possono coesistere namespace runtime `anagrafica` e `utenze`
 
 ---
 
@@ -147,6 +152,7 @@ L’applicazione gira tramite Docker Compose con questi servizi:
 - `nginx`
 - `catasto-worker`
 - `scanner`
+- `arp-helper`
 
 ---
 
@@ -160,6 +166,9 @@ Espone API, applica auth condivisa, coordina i moduli e usa router separati per 
 
 Moduli logici attuali:
 - `accessi`
+- `anagrafica`
+- `utenze`
+- `inventory`
 - `network`
 - `catasto`
 - `core`
@@ -168,6 +177,8 @@ Stato del refactor:
 - `network` gia in struttura canonica sotto `app/modules/network`
 - `accessi` gia instradato tramite route canoniche sotto `app/modules/accessi/routes`
 - `accessi` con entrypoint canonici di modulo per route, modelli, schemi e servizi
+- `inventory` presente nel monolite condiviso come modulo dedicato
+- il dominio anagrafico espone ancora superfici `anagrafica` e `utenze` per compatibilita
 - `catasto` con route implementation canonica e surface di modulo
 
 ### postgres
@@ -181,6 +192,10 @@ Fa da reverse proxy:
 
 ### scanner
 Esegue la scansione LAN del modulo GAIA Rete e persiste snapshot, dispositivi e alert.
+
+### arp-helper
+Servizio tecnico host-side di supporto al modulo Rete per recuperare informazioni
+ARP quando i container non vedono direttamente la neighbor table dell'host.
 
 ---
 
