@@ -99,8 +99,8 @@ const allModules: HomeModule[] = [
     description:
       "Dominio in corso di sviluppo, con perimetro funzionale in ridefinizione.",
     href: "/catasto",
-    status: "active",
-    statusLabel: "Operativo",
+    status: "warming",
+    statusLabel: "In sviluppo",
     icon: "account_balance",
     enabledKeys: ["catasto"],
   },
@@ -110,8 +110,8 @@ const allModules: HomeModule[] = [
     description:
       "Modulo operativo per richieste singole e batch catastali, gestione CAPTCHA, download ZIP e monitoraggio esecuzioni.",
     href: "/elaborazioni",
-    status: "active",
-    statusLabel: "Operativo",
+    status: "warming",
+    statusLabel: "In sviluppo",
     icon: "sync_alt",
     enabledKeys: ["catasto"],
   },
@@ -132,7 +132,7 @@ const allModules: HomeModule[] = [
     description:
       "Registro centralizzato di device, garanzie, assegnazioni e import da CSV. Struttura pronta, attivazione funzionale in corso.",
     href: "/inventory",
-    status: "coming",
+    status: "warming",
     statusLabel: "In sviluppo",
     icon: "inventory_2",
     enabledKeys: ["inventario"],
@@ -246,7 +246,7 @@ export default function HomePage() {
     && hasSectionAccess(grantedSectionKeys, "accessi.users");
 
   const visibleModules = allModules.filter((mod) => {
-    if (mod.status === "coming") return true;
+    if (mod.status === "coming" || mod.status === "warming") return true;
     return mod.enabledKeys.some((key) => currentUser.enabled_modules.includes(key));
   });
 
@@ -288,7 +288,7 @@ export default function HomePage() {
 
   const statusBadge: Record<ModuleStatus, string> = {
     active: "bg-primary-fixed text-on-primary-fixed",
-    warming: "bg-secondary-fixed text-on-secondary-fixed",
+    warming: "bg-tertiary-fixed-dim text-on-tertiary-fixed-variant",
     coming: "bg-tertiary-fixed-dim text-on-tertiary-fixed-variant",
   };
 

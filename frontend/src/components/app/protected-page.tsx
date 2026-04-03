@@ -119,7 +119,8 @@ export function ProtectedPage({
   }
 
   const isSectionAllowed = requiredSection ? hasSectionAccess(grantedSectionKeys, requiredSection) : true;
-  const isModuleAllowed = requiredModule ? currentUser.enabled_modules.includes(requiredModule) : true;
+  const isAdmin = currentUser.role === "admin" || currentUser.role === "super_admin";
+  const isModuleAllowed = requiredModule ? isAdmin || currentUser.enabled_modules.includes(requiredModule) : true;
   const isRoleAllowed = requiredRoles ? requiredRoles.includes(currentUser.role) : true;
 
   if (!isSectionAllowed || !isModuleAllowed || !isRoleAllowed) {
