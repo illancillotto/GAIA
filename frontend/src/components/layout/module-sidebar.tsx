@@ -16,7 +16,7 @@ import {
 import { NavItem } from "@/components/layout/nav-item";
 
 type ModuleSidebarProps = {
-  currentModuleKey: "nas_control" | "network" | "inventory" | "catasto" | "utenze" | "gaia";
+  currentModuleKey: "nas_control" | "network" | "inventory" | "catasto" | "elaborazioni" | "utenze" | "gaia";
   reviewBadge?: number;
   userBadge?: number;
   grantedSectionKeys?: string[];
@@ -68,12 +68,24 @@ export function ModuleSidebar({
       <div className="space-y-0.5 px-2 pb-3">
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Panoramica</p>
         <NavItem href="/catasto" icon={GridIcon} label="Dashboard" />
+
+        <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Temporaneo</p>
+        <NavItem href="/elaborazioni" icon={RefreshIcon} label="Apri Elaborazioni" />
+      </div>
+    );
+  }
+
+  if (currentModuleKey === "elaborazioni") {
+    return (
+      <div className="space-y-0.5 px-2 pb-3">
+        <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Panoramica</p>
+        <NavItem href="/elaborazioni" icon={GridIcon} label="Dashboard" />
         <NavItem href="/elaborazioni/new-batch" icon={RefreshIcon} label="Nuova richiesta" />
 
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Operazioni</p>
         <NavItem href="/elaborazioni/batches" icon={FolderIcon} label="Elaborazioni" match="prefix" />
-        <NavItem href="/catasto/capacitas" icon={SearchIcon} label="Capacitas" match="prefix" />
         <NavItem href="/elaborazioni/settings" icon={LockIcon} label="Credenziali" />
+        <NavItem href="/catasto/capacitas" icon={SearchIcon} label="Capacitas" match="prefix" />
       </div>
     );
   }

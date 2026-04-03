@@ -31,6 +31,8 @@ export function Sidebar({
       ? "gaia"
       : pathname.startsWith("/nas-control")
       ? "nas_control"
+      : pathname.startsWith("/elaborazioni")
+      ? "elaborazioni"
       : pathname.startsWith("/catasto")
       ? "catasto"
       : pathname.startsWith("/utenze")
@@ -48,6 +50,8 @@ export function Sidebar({
       ? "Utenti GAIA"
       : currentModuleKey === "nas_control"
       ? "NAS Control"
+      : currentModuleKey === "elaborazioni"
+      ? "Elaborazioni"
       : currentModuleKey === "catasto"
       ? "Catasto"
       : currentModuleKey === "utenze"

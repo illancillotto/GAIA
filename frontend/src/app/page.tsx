@@ -25,7 +25,7 @@ import type {
 } from "@/types/api";
 
 type ModuleStatus = "active" | "warming" | "coming";
-type ModuleId = "accessi" | "rete" | "inventario" | "catasto" | "utenze";
+type ModuleId = "accessi" | "rete" | "inventario" | "catasto" | "elaborazioni" | "utenze";
 
 type HomeModule = {
   id: ModuleId;
@@ -97,11 +97,22 @@ const allModules: HomeModule[] = [
     id: "catasto",
     title: "GAIA Catasto",
     description:
-      "Servizi catastali: batch CSV, visure singole, CAPTCHA, ZIP e archivio documentale con una pipeline costruita per l'operatività quotidiana.",
+      "Dominio in corso di sviluppo, con perimetro funzionale in ridefinizione.",
     href: "/catasto",
     status: "active",
     statusLabel: "Operativo",
     icon: "account_balance",
+    enabledKeys: ["catasto"],
+  },
+  {
+    id: "elaborazioni",
+    title: "GAIA Elaborazioni",
+    description:
+      "Modulo operativo per richieste singole e batch catastali, gestione CAPTCHA, download ZIP e monitoraggio esecuzioni.",
+    href: "/elaborazioni",
+    status: "active",
+    statusLabel: "Operativo",
+    icon: "sync_alt",
     enabledKeys: ["catasto"],
   },
   {

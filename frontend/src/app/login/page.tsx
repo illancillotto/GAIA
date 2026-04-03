@@ -11,6 +11,7 @@ import { cn } from "@/lib/cn";
 const modules = [
   { name: "GAIA NAS Control", icon: "storage", status: "Operativo", active: true },
   { name: "GAIA Catasto", icon: "account_balance", status: "Operativo", active: true },
+  { name: "GAIA Elaborazioni", icon: "sync_alt", status: "Operativo", active: true },
   { name: "GAIA Rete", icon: "hub", status: "Operativo", active: true },
   { name: "GAIA Utenze", icon: "badge", status: "Operativo", active: true },
   { name: "GAIA Inventario", icon: "inventory_2", status: "In sviluppo", active: false },
@@ -70,7 +71,7 @@ export default function LoginPage() {
             <span className="font-body font-medium text-outline">Supporto</span>
             <span className="font-body font-medium text-outline">Documentazione</span>
             <span className="bg-primary text-on-primary px-6 py-2 rounded-lg font-medium text-sm">
-              Accesso 
+              Accesso
             </span>
           </nav>
         </div>
