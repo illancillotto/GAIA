@@ -7,6 +7,11 @@ export LC_ALL="${LC_ALL:-C.UTF-8}"
 PROJECT_ROOT="$(git rev-parse --show-toplevel)"
 cd "$PROJECT_ROOT"
 
+if [ "${SKIP_DOCS_UPDATE:-}" = "1" ]; then
+  echo "SKIP_DOCS_UPDATE=1: salto aggiornamento documentazione."
+  exit 0
+fi
+
 echo "==> Verifica file staged..."
 STAGED_FILES="$(git diff --cached --name-only --diff-filter=ACMR)"
 
@@ -244,10 +249,19 @@ echo "==> File consentiti:"
 printf ' - %s\n' "${ALLOWED_FILES[@]}"
 
 echo "==> Avvio Codex per aggiornare la documentazione..."
-codex exec \
-  --skip-git-repo-check \
-  --cd "$PROJECT_ROOT" \
-  - < "$PROMPT_FILE"
+if ! command -v codex >/dev/null 2>&1; then
+  echo "codex non trovato nel PATH. Salto aggiornamento documentazione automatica."
+  exit 0
+fi
+
+# Quando eseguito da GUI (es. integrazione Git di Cursor), spesso non c'è un TTY:
+# in quel caso `codex exec` può restare in attesa e bloccare il commit.
+if [ ! -t 0 ] || [ ! -t 1 ]; then
+  echo "Nessun TTY disponibile (commit da GUI). Salto aggiornamento documentazione automatica."
+  exit 0
+fi
+
+codex exec --skip-git-repo-check --cd "$PROJECT_ROOT" - < "$PROMPT_FILE"
 
 echo "==> Aggiungo allo staging i file documentali consentiti..."
 git add -- "${ALLOWED_FILES[@]}" 2>/dev/null || true
