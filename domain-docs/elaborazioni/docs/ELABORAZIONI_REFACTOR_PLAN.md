@@ -119,7 +119,7 @@ Servizi che possono restare in area `catasto`:
 
 - `backend/app/services/catasto_documents.py`
 - `backend/app/services/catasto_comuni.py`
-- `backend/app/services/catasto_capacitas.py` come candidate a successivo rename in `catasto_provider_capacitas.py`
+- `backend/app/services/elaborazioni_capacitas.py` come candidate a successivo rename in `elaborazioni_provider_capacitas.py`
 
 Nota:
 

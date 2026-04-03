@@ -67,8 +67,8 @@ def setup_database(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, Non
     db = TestingSessionLocal()
     db.add(
         ApplicationUser(
-            username="catasto-admin",
-            email="catasto@example.local",
+            username="elaborazioni-admin",
+            email="elaborazioni@example.local",
             password_hash=hash_password("secret123"),
             role=ApplicationUserRole.ADMIN.value,
             is_active=True,
@@ -84,7 +84,7 @@ def setup_database(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, Non
 
 
 def auth_headers() -> dict[str, str]:
-    response = client.post("/auth/login", json={"username": "catasto-admin", "password": "secret123"})
+    response = client.post("/auth/login", json={"username": "elaborazioni-admin", "password": "secret123"})
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
@@ -99,7 +99,7 @@ def create_awaiting_captcha_request(tmp_path) -> tuple[str, str]:
 
     db = TestingSessionLocal()
     try:
-        user = db.query(ApplicationUser).filter(ApplicationUser.username == "catasto-admin").one()
+        user = db.query(ApplicationUser).filter(ApplicationUser.username == "elaborazioni-admin").one()
         batch = CatastoBatch(
             user_id=user.id,
             name="Batch captcha",
@@ -140,7 +140,7 @@ def create_document(tmp_path) -> tuple[str, str]:
 
     db = TestingSessionLocal()
     try:
-        user = db.query(ApplicationUser).filter(ApplicationUser.username == "catasto-admin").one()
+        user = db.query(ApplicationUser).filter(ApplicationUser.username == "elaborazioni-admin").one()
         batch = CatastoBatch(
             user_id=user.id,
             name="Batch documenti",
@@ -198,7 +198,7 @@ def create_document(tmp_path) -> tuple[str, str]:
 def create_completed_connection_test() -> str:
     db = TestingSessionLocal()
     try:
-        user = db.query(ApplicationUser).filter(ApplicationUser.username == "catasto-admin").one()
+        user = db.query(ApplicationUser).filter(ApplicationUser.username == "elaborazioni-admin").one()
         connection_test = CatastoConnectionTest(
             user_id=user.id,
             sister_username="RSSMRA80A01G113X",

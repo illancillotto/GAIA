@@ -53,8 +53,8 @@ def setup_database(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, Non
     db = TestingSessionLocal()
     db.add(
         ApplicationUser(
-            username="catasto-admin",
-            email="catasto@example.local",
+            username="elaborazioni-admin",
+            email="elaborazioni@example.local",
             password_hash=hash_password("secret123"),
             role=ApplicationUserRole.ADMIN.value,
             is_active=True,
@@ -70,7 +70,7 @@ def setup_database(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, Non
 
 
 def auth_headers() -> dict[str, str]:
-    response = client.post("/auth/login", json={"username": "catasto-admin", "password": "secret123"})
+    response = client.post("/auth/login", json={"username": "elaborazioni-admin", "password": "secret123"})
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 

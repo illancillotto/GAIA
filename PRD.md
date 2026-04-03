@@ -43,10 +43,14 @@ Fornire un unico punto di accesso operativo per:
 
 ### 3.4 Catasto
 
-- gestione credenziali SISTER e Capacitas
+- gestione credenziali SISTER
 - batch e richieste singole di visura
 - worker browser-based con gestione CAPTCHA
 - archivio PDF e tracciamento realtime avanzamento
+
+### 3.4.1 Elaborazioni (integrazioni operative)
+
+- integrazione Capacitas (inVOLTURE) per workflow di elaborazione e ricerca
 
 ### 3.5 Utenze
 
