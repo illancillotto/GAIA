@@ -232,7 +232,7 @@ export default function ElaborazioniPage() {
                 <p className="mt-3 text-sm font-medium text-gray-900">Visura singola</p>
                 <p className="mt-1 text-sm text-gray-500">Richiesta puntuale con selezione comune e avvio immediato.</p>
               </Link>
-              <Link className="rounded-xl border border-gray-100 bg-gray-50 p-4 transition hover:border-gray-200 hover:bg-white" href="/catasto/capacitas">
+              <Link className="rounded-xl border border-gray-100 bg-gray-50 p-4 transition hover:border-gray-200 hover:bg-white" href="/elaborazioni/capacitas">
                 <UsersIcon className="h-5 w-5 text-[#1D4E35]" />
                 <p className="mt-3 text-sm font-medium text-gray-900">Capacitas inVOLTURE</p>
                 <p className="mt-1 text-sm text-gray-500">Ricerca anagrafica tramite pool account dedicato.</p>
@@ -278,7 +278,7 @@ export default function ElaborazioniPage() {
                       : "Nessun utilizzo registrato al momento"}
                   </p>
                 </div>
-                <Link className="btn-secondary" href="/catasto/capacitas">
+                <Link className="btn-secondary" href="/elaborazioni/capacitas">
                   Apri Capacitas
                 </Link>
               </div>

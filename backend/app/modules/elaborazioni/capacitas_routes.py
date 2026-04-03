@@ -8,17 +8,17 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user, require_admin_user
 from app.core.database import get_db
-from app.modules.catasto.capacitas.client import InVoltureClient
-from app.modules.catasto.capacitas.models import (
+from app.modules.elaborazioni.capacitas.client import InVoltureClient
+from app.modules.elaborazioni.capacitas.models import (
     AnagraficaSearchRequest,
     CapacitasCredentialCreate,
     CapacitasCredentialOut,
     CapacitasCredentialUpdate,
     CapacitasSearchResult,
 )
-from app.modules.catasto.capacitas.session import CapacitasSessionManager
+from app.modules.elaborazioni.capacitas.session import CapacitasSessionManager
 from app.models.application_user import ApplicationUser
-from app.services.catasto_capacitas import (
+from app.services.elaborazioni_capacitas import (
     create_credential,
     delete_credential,
     get_credential,
@@ -32,7 +32,7 @@ from app.services.catasto_capacitas import (
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/catasto/capacitas", tags=["catasto-capacitas"])
+router = APIRouter(prefix="/elaborazioni/capacitas", tags=["elaborazioni-capacitas"])
 
 
 @router.post("/credentials", response_model=CapacitasCredentialOut, status_code=status.HTTP_201_CREATED)

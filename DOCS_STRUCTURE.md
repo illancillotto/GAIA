@@ -46,9 +46,16 @@ La documentazione del progetto e distribuita principalmente in due aree:
 - `domain-docs/catasto/docs/PROMPT_CODEX_catasto.md`
 - `domain-docs/catasto/docs/PROMPT_CLAUDE_CODE_catasto.md`
 - `domain-docs/catasto/docs/PROMPT_CLAUDE_CODE_frontend_restructure.md`
-- `domain-docs/catasto/docs/elaborazioni/ELABORAZIONI_REFACTOR_PLAN.md`
-- `domain-docs/catasto/docs/elaborazioni/SISTER_debug_runbook.md`
-- `domain-docs/catasto/capacitas/docs/CAPACITAS_integration.md`
+
+### Elaborazioni
+
+- `domain-docs/elaborazioni/README.md`
+- `domain-docs/elaborazioni/docs/ELABORAZIONI_REFACTOR_PLAN.md`
+- `domain-docs/elaborazioni/docs/SISTER_debug_runbook.md`
+- `domain-docs/elaborazioni/capacitas/docs/CAPACITAS_integration.md`
+- `domain-docs/elaborazioni/GAIA_VISURE_PROMPT_1_ANALISI.md`
+- `domain-docs/elaborazioni/GAIA_VISURE_PROMPT_2_IMPLEMENTAZIONE.md`
+- `domain-docs/elaborazioni/GAIA_VISURE_PROMPT_3_REVIEW.md`
 
 ### Inventory
 
@@ -100,10 +107,11 @@ GAIA/
 │   │   ├── docs/
 │   │   └── frontend/
 │   ├── catasto/
+│   │   └── docs/
+│   ├── elaborazioni/
 │   │   ├── capacitas/
 │   │   │   └── docs/
 │   │   └── docs/
-│   │       └── elaborazioni/
 │   ├── inventory/
 │   │   ├── docs/
 │   │   └── frontend/

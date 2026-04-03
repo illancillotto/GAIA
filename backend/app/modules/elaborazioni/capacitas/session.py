@@ -9,7 +9,7 @@ import re
 
 import httpx
 
-from app.modules.catasto.capacitas.apps import get_app_hosts, get_capacitas_app
+from app.modules.elaborazioni.capacitas.apps import get_app_hosts, get_capacitas_app
 
 logger = logging.getLogger(__name__)
 

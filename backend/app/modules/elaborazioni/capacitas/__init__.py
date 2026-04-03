@@ -1,6 +1,6 @@
-from app.modules.catasto.capacitas.apps import CAPACITAS_APPS
-from app.modules.catasto.capacitas.client import InVoltureClient
-from app.modules.catasto.capacitas.models import (
+from app.modules.elaborazioni.capacitas.apps import CAPACITAS_APPS
+from app.modules.elaborazioni.capacitas.client import InVoltureClient
+from app.modules.elaborazioni.capacitas.models import (
     AnagraficaSearchRequest,
     CapacitasAnagrafica,
     CapacitasCredentialCreate,
@@ -8,7 +8,7 @@ from app.modules.catasto.capacitas.models import (
     CapacitasCredentialUpdate,
     CapacitasSearchResult,
 )
-from app.modules.catasto.capacitas.session import APP_HOSTS, CapacitasSessionManager
+from app.modules.elaborazioni.capacitas.session import APP_HOSTS, CapacitasSessionManager
 
 __all__ = [
     "APP_HOSTS",

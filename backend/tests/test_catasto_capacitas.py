@@ -16,7 +16,7 @@ from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.models.capacitas import CapacitasCredential
-from app.modules.catasto.capacitas.models import CapacitasSearchResult
+from app.modules.elaborazioni.capacitas.models import CapacitasSearchResult
 from app.services.catasto_credentials import get_credential_fernet
 
 
@@ -76,7 +76,7 @@ def auth_headers() -> dict[str, str]:
 
 
 def test_capacitas_decoder_decodes_real_payload() -> None:
-    from app.modules.catasto.capacitas.decoder import decode_response
+    from app.modules.elaborazioni.capacitas.decoder import decode_response
 
     payload = (
         "SZ7VLLbtswEPwV3nwJYfEhkepNlptCgGMbihMEKAqUIlcpAVsMaLmHFP2yHvpJ/YVyHdvpNUWP3YM0uzucXSzm14+fH8"
@@ -96,7 +96,7 @@ def test_capacitas_decoder_decodes_real_payload() -> None:
 
 def test_capacitas_credentials_crud_encrypts_password() -> None:
     create_response = client.post(
-        "/catasto/capacitas/credentials",
+        "/elaborazioni/capacitas/credentials",
         headers=auth_headers(),
         json={
             "label": "Account principale",
@@ -113,7 +113,7 @@ def test_capacitas_credentials_crud_encrypts_password() -> None:
     assert payload["label"] == "Account principale"
     assert "password" not in payload
 
-    list_response = client.get("/catasto/capacitas/credentials", headers=auth_headers())
+    list_response = client.get("/elaborazioni/capacitas/credentials", headers=auth_headers())
     assert list_response.status_code == 200
     assert len(list_response.json()) == 1
 
@@ -126,7 +126,7 @@ def test_capacitas_credentials_crud_encrypts_password() -> None:
         db.close()
 
     update_response = client.patch(
-        f"/catasto/capacitas/credentials/{payload['id']}",
+        f"/elaborazioni/capacitas/credentials/{payload['id']}",
         headers=auth_headers(),
         json={"active": False},
     )
@@ -134,7 +134,7 @@ def test_capacitas_credentials_crud_encrypts_password() -> None:
     assert update_response.json()["active"] is False
 
     delete_response = client.delete(
-        f"/catasto/capacitas/credentials/{payload['id']}",
+        f"/elaborazioni/capacitas/credentials/{payload['id']}",
         headers=auth_headers(),
     )
     assert delete_response.status_code == 204
@@ -144,7 +144,7 @@ def test_capacitas_involture_search_uses_selected_credential_and_returns_rows(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     create_response = client.post(
-        "/catasto/capacitas/credentials",
+        "/elaborazioni/capacitas/credentials",
         headers=auth_headers(),
         json={
             "label": "Ricerca CF",
@@ -155,7 +155,7 @@ def test_capacitas_involture_search_uses_selected_credential_and_returns_rows(
     credential_id = create_response.json()["id"]
 
     async def fake_login(self):
-        from app.modules.catasto.capacitas.session import CapacitasSession
+        from app.modules.elaborazioni.capacitas.session import CapacitasSession
 
         self._session = CapacitasSession(token="123e4567-e89b-12d3-a456-426614174000")
         return self._session
@@ -188,13 +188,13 @@ def test_capacitas_involture_search_uses_selected_credential_and_returns_rows(
             ],
         )
 
-    monkeypatch.setattr("app.modules.catasto.capacitas.session.CapacitasSessionManager.login", fake_login)
-    monkeypatch.setattr("app.modules.catasto.capacitas.session.CapacitasSessionManager.activate_app", fake_activate_app)
-    monkeypatch.setattr("app.modules.catasto.capacitas.session.CapacitasSessionManager.close", fake_close)
-    monkeypatch.setattr("app.modules.catasto.capacitas.client.InVoltureClient.search_anagrafica", fake_search_anagrafica)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.login", fake_login)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.activate_app", fake_activate_app)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.close", fake_close)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.search_anagrafica", fake_search_anagrafica)
 
     search_response = client.post(
-        "/catasto/capacitas/involture/search",
+        "/elaborazioni/capacitas/involture/search",
         headers=auth_headers(),
         json={
             "q": "PRCLSN82R27B354B",
@@ -224,7 +224,7 @@ def test_capacitas_credential_test_returns_diagnostic_detail_on_login_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     create_response = client.post(
-        "/catasto/capacitas/credentials",
+        "/elaborazioni/capacitas/credentials",
         headers=auth_headers(),
         json={
             "label": "Probe errore",
@@ -245,11 +245,11 @@ def test_capacitas_credential_test_returns_diagnostic_detail_on_login_failure(
     async def fake_close(self) -> None:
         return None
 
-    monkeypatch.setattr("app.modules.catasto.capacitas.session.CapacitasSessionManager.login", fake_login)
-    monkeypatch.setattr("app.modules.catasto.capacitas.session.CapacitasSessionManager.close", fake_close)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.login", fake_login)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.close", fake_close)
 
     response = client.post(
-        f"/catasto/capacitas/credentials/{credential_id}/test",
+        f"/elaborazioni/capacitas/credentials/{credential_id}/test",
         headers=auth_headers(),
     )
 

@@ -85,7 +85,7 @@ export function ModuleSidebar({
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Operazioni</p>
         <NavItem href="/elaborazioni/batches" icon={FolderIcon} label="Elaborazioni" match="prefix" />
         <NavItem href="/elaborazioni/settings" icon={LockIcon} label="Credenziali" />
-        <NavItem href="/catasto/capacitas" icon={SearchIcon} label="Capacitas" match="prefix" />
+        <NavItem href="/elaborazioni/capacitas" icon={SearchIcon} label="Capacitas" match="prefix" />
       </div>
     );
   }

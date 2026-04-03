@@ -3,10 +3,10 @@ from __future__ import annotations
 import logging
 from urllib.parse import quote
 
-from app.modules.catasto.capacitas.apps import get_capacitas_app
-from app.modules.catasto.capacitas.decoder import decode_response
-from app.modules.catasto.capacitas.models import CapacitasAnagrafica, CapacitasSearchResult
-from app.modules.catasto.capacitas.session import CapacitasSessionManager
+from app.modules.elaborazioni.capacitas.apps import get_capacitas_app
+from app.modules.elaborazioni.capacitas.decoder import decode_response
+from app.modules.elaborazioni.capacitas.models import CapacitasAnagrafica, CapacitasSearchResult
+from app.modules.elaborazioni.capacitas.session import CapacitasSessionManager
 
 logger = logging.getLogger(__name__)
 

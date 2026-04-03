@@ -7,12 +7,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.capacitas import CapacitasCredential
-from app.modules.catasto.capacitas.models import (
+from app.modules.elaborazioni.capacitas.models import (
     CapacitasCredentialCreate,
     CapacitasCredentialOut,
     CapacitasCredentialUpdate,
 )
-from app.modules.catasto.capacitas.session import CapacitasSessionManager
+from app.modules.elaborazioni.capacitas.session import CapacitasSessionManager
 from app.services.catasto_credentials import get_credential_fernet
 
 logger = logging.getLogger(__name__)

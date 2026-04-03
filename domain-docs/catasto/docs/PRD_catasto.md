@@ -13,7 +13,7 @@ Nota evolutiva:
 
 - `catasto` e in fase di riposizionamento come modulo di aggregazione dati catastali
 - i workflow operativi batch, CAPTCHA e orchestrazione esecutiva sono candidati a migrare nel nuovo modulo `elaborazioni`
-- il piano operativo del runtime e tracciato in `domain-docs/catasto/docs/elaborazioni/ELABORAZIONI_REFACTOR_PLAN.md`
+- il piano operativo del runtime e tracciato in `domain-docs/elaborazioni/docs/ELABORAZIONI_REFACTOR_PLAN.md`
 
 Obiettivi operativi del modulo:
 
@@ -34,7 +34,7 @@ Superfici principali del modulo:
 - backend HTTP e WebSocket: `backend/app/modules/catasto/`
 - entrypoint router di modulo: `backend/app/modules/catasto/router.py`
 - implementazione route: `backend/app/modules/catasto/routes.py`
-- integrazione Capacitas: `backend/app/modules/catasto/capacitas/`, con registry app e sottopackage verticali `apps/<app>/`
+- integrazioni provider dominio in definizione; il runtime `Capacitas` e ora ospitato in `backend/app/modules/elaborazioni/capacitas/`
 - modelli e schemi canonici re-export: `backend/app/modules/catasto/models.py`, `backend/app/modules/catasto/schemas.py`
 - servizi applicativi runtime: `backend/app/services/elaborazioni_batches.py`, `elaborazioni_captcha.py`, `elaborazioni_credentials.py`, oltre ai servizi dominio `catasto_comuni.py` e `catasto_documents.py`
 - frontend condiviso dominio dati: `frontend/src/app/catasto/`
@@ -287,7 +287,7 @@ Il file Python `sister_selectors.py` contiene default e caricamento configurabil
 
 I selettori SISTER vanno trattati come configurazione operativa instabile. Il runbook tecnico resta in:
 
-- `domain-docs/catasto/docs/elaborazioni/SISTER_debug_runbook.md`
+- `domain-docs/elaborazioni/docs/SISTER_debug_runbook.md`
 
 ## Configurazione operativa
 
@@ -314,5 +314,5 @@ Variabili principali del worker:
 
 - se cambia la struttura del modulo, aggiornare prima questo file e poi i prompt operativi
 - se cambiano gli endpoint, verificare sempre `backend/app/modules/catasto/routes.py`
-- se cambia il flusso SISTER, aggiornare `docs/elaborazioni/SISTER_debug_runbook.md` e i selettori runtime
+- se cambia il flusso SISTER, aggiornare `domain-docs/elaborazioni/docs/SISTER_debug_runbook.md` e i selettori runtime
 - se una nota e solo storica, marcarla esplicitamente come storica

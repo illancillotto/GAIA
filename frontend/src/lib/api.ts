@@ -1040,7 +1040,7 @@ export function createElaborazioneCredentialTestWebSocket(testId: string, token:
 }
 
 export async function listCapacitasCredentials(token: string): Promise<CapacitasCredential[]> {
-  return request<CapacitasCredential[]>("/catasto/capacitas/credentials", {
+  return request<CapacitasCredential[]>("/elaborazioni/capacitas/credentials", {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -1051,7 +1051,7 @@ export async function createCapacitasCredential(
   token: string,
   payload: CapacitasCredentialCreateInput,
 ): Promise<CapacitasCredential> {
-  return request<CapacitasCredential>("/catasto/capacitas/credentials", {
+  return request<CapacitasCredential>("/elaborazioni/capacitas/credentials", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1065,7 +1065,7 @@ export async function updateCapacitasCredential(
   credentialId: number,
   payload: CapacitasCredentialUpdateInput,
 ): Promise<CapacitasCredential> {
-  return request<CapacitasCredential>(`/catasto/capacitas/credentials/${credentialId}`, {
+  return request<CapacitasCredential>(`/elaborazioni/capacitas/credentials/${credentialId}`, {
     method: "PATCH",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1075,7 +1075,7 @@ export async function updateCapacitasCredential(
 }
 
 export async function deleteCapacitasCredential(token: string, credentialId: number): Promise<void> {
-  const response = await fetch(`${getApiBaseUrl()}/catasto/capacitas/credentials/${credentialId}`, {
+  const response = await fetch(`${getApiBaseUrl()}/elaborazioni/capacitas/credentials/${credentialId}`, {
     method: "DELETE",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1103,7 +1103,7 @@ export async function testCapacitasCredential(
   token: string,
   credentialId: number,
 ): Promise<CapacitasCredentialProbeResult> {
-  return request<CapacitasCredentialProbeResult>(`/catasto/capacitas/credentials/${credentialId}/test`, {
+  return request<CapacitasCredentialProbeResult>(`/elaborazioni/capacitas/credentials/${credentialId}/test`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1115,7 +1115,7 @@ export async function searchCapacitasInvolture(
   token: string,
   payload: CapacitasSearchInput,
 ): Promise<CapacitasSearchResult> {
-  return request<CapacitasSearchResult>("/catasto/capacitas/involture/search", {
+  return request<CapacitasSearchResult>("/elaborazioni/capacitas/involture/search", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,

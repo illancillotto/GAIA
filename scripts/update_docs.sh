@@ -58,7 +58,7 @@ ACCESSI_DOC_FILES=(
 CATASTO_DOC_FILES=(
   "domain-docs/catasto/docs/PRD_catasto.md"
   "domain-docs/catasto/docs/SISTER_debug_runbook.md"
-  "domain-docs/catasto/capacitas/docs/CAPACITAS_integration.md"
+  "domain-docs/elaborazioni/capacitas/docs/CAPACITAS_integration.md"
 )
 
 INVENTORY_DOC_FILES=(

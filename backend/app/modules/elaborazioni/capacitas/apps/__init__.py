@@ -1,4 +1,4 @@
-from app.modules.catasto.capacitas.apps.registry import (
+from app.modules.elaborazioni.capacitas.apps.registry import (
     CAPACITAS_APPS,
     CapacitasAppDefinition,
     get_app_hosts,
