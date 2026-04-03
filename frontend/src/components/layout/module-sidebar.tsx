@@ -68,12 +68,12 @@ export function ModuleSidebar({
       <div className="space-y-0.5 px-2 pb-3">
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Panoramica</p>
         <NavItem href="/catasto" icon={GridIcon} label="Dashboard" />
-        <NavItem href="/catasto/new" icon={RefreshIcon} label="Nuova richiesta" />
+        <NavItem href="/elaborazioni/new-batch" icon={RefreshIcon} label="Nuova richiesta" />
 
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Operazioni</p>
-        <NavItem href="/catasto/archive" icon={FolderIcon} label="Archivio" match="prefix" />
+        <NavItem href="/elaborazioni/batches" icon={FolderIcon} label="Elaborazioni" match="prefix" />
         <NavItem href="/catasto/capacitas" icon={SearchIcon} label="Capacitas" match="prefix" />
-        <NavItem href="/catasto/settings" icon={LockIcon} label="Credenziali" />
+        <NavItem href="/elaborazioni/settings" icon={LockIcon} label="Credenziali" />
       </div>
     );
   }

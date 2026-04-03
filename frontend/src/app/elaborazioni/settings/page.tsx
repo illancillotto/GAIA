@@ -222,7 +222,7 @@ function CapacitasTestDialog({
   );
 }
 
-export default function CatastoSettingsPage() {
+export default function ElaborazioniSettingsPage() {
   const [credentialStatus, setCredentialStatus] = useState<ElaborazioneCredentialStatus | null>(null);
   const [formState, setFormState] = useState({
     sister_username: "",
@@ -329,7 +329,7 @@ export default function CatastoSettingsPage() {
       await saveElaborazioneCredentials(token, formState);
       await loadCredentials();
       setFormState((current) => ({ ...current, sister_password: "" }));
-      setStatusMessage("Credenziali SISTER salvate nella pagina unificata del modulo Catasto.");
+      setStatusMessage("Credenziali SISTER salvate nella pagina unificata del modulo elaborazioni.");
       setError(null);
       setTestResult(null);
     } catch (saveError) {
@@ -355,7 +355,7 @@ export default function CatastoSettingsPage() {
         codice_richiesta: "",
         ufficio_provinciale: DEFAULT_UFFICIO,
       });
-      setStatusMessage("Credenziali SISTER rimosse dalla configurazione Catasto.");
+      setStatusMessage("Credenziali SISTER rimosse dalla configurazione elaborazioni.");
       setError(null);
       setTestResult(null);
     } catch (deleteError) {
@@ -673,8 +673,8 @@ export default function CatastoSettingsPage() {
   return (
     <ProtectedPage
       title="Credenziali"
-      description="Hub operativo del modulo Catasto per SISTER e Capacitas."
-      breadcrumb="Catasto / Credenziali"
+      description="Hub operativo del modulo elaborazioni per SISTER e Capacitas."
+      breadcrumb="Elaborazioni / Credenziali"
     >
       <CapacitasTestDialog
         state={capacitasTestDialog}
@@ -694,7 +694,7 @@ export default function CatastoSettingsPage() {
               Stitch-style workspace
             </div>
             <h3 className="mt-4 max-w-2xl text-3xl font-semibold tracking-tight text-[#183325]">
-              Credenziali Catasto ripensate come console unica per accesso, verifica e rotazione operativa.
+              Credenziali elaborazioni ripensate come console unica per accesso, verifica e rotazione operativa.
             </h3>
             <p className="mt-4 max-w-2xl text-sm leading-7 text-gray-600">
               La pagina ora separa meglio il canale SISTER dal pool Capacitas, mette in evidenza lo stato reale del modulo e
@@ -887,7 +887,7 @@ export default function CatastoSettingsPage() {
                             ? "Portale raggiungibile"
                             : "Test connessione fallito"}
                   </p>
-                  <p className="mt-2 text-sm leading-6">{testResult.message ?? "Richiesta inoltrata al worker Catasto."}</p>
+                  <p className="mt-2 text-sm leading-6">{testResult.message ?? "Richiesta inoltrata al worker elaborazioni."}</p>
                   <p className="mt-3 text-[11px] uppercase tracking-[0.18em]">
                     Stato: {testResult.status} · Modalita&apos;: {testResult.mode ?? "worker"} · Reachable:{" "}
                     {testResult.reachable == null ? "n/d" : testResult.reachable ? "si" : "no"} · Auth:{" "}

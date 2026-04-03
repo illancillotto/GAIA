@@ -9,6 +9,12 @@
 
 GAIA Catasto e il modulo della piattaforma GAIA che automatizza le visure catastali tramite il portale SISTER dell'Agenzia delle Entrate.
 
+Nota evolutiva:
+
+- `catasto` e in fase di riposizionamento come modulo di aggregazione dati catastali
+- i workflow operativi batch, CAPTCHA e orchestrazione esecutiva sono candidati a migrare nel nuovo modulo `elaborazioni`
+- il piano operativo e tracciato in `domain-docs/catasto/docs/ELABORAZIONI_REFACTOR_PLAN.md`
+
 Obiettivi operativi del modulo:
 
 - salvare e verificare in modo sicuro le credenziali SISTER
@@ -33,6 +39,16 @@ Superfici principali del modulo:
 - servizi applicativi runtime: `backend/app/services/catasto_batches.py`, `catasto_captcha.py`, `catasto_comuni.py`, `catasto_credentials.py`, `catasto_documents.py`
 - frontend condiviso: `frontend/src/app/catasto/`
 - worker tecnico separato: `modules/catasto/worker/`
+
+Target architetturale in corso di definizione:
+
+- `catasto` come superficie di aggregazione dati, documenti e provider
+- `elaborazioni` come superficie operativa per batch, richieste singole, CAPTCHA e avanzamento esecuzioni
+- a livello backend il confine router e gia stato introdotto: `catasto` mantiene consultazione e provider, `elaborazioni` concentra i workflow runtime
+- anche il service layer operativo e in transizione verso namespace canonici `elaborazioni_*`
+- lato frontend il namespace canonico per i flussi operativi e `frontend/src/app/elaborazioni/`
+- anche il naming applicativo del runtime sta convergendo su alias `Elaborazione*` per model, schema e tipi frontend
+- i componenti UI condivisi del runtime stanno convergendo su `frontend/src/components/elaborazioni/`, con batch detail, request workspace, archive workspace e settings gia resi concreti nel nuovo namespace
 
 Vincoli architetturali:
 
@@ -124,16 +140,17 @@ Il worker puo riportare anche un `current_operation` descrittivo per rendere leg
 
 ## API correnti
 
-Tutti gli endpoint sono esposti sotto prefisso `/catasto`.
+Gli endpoint di dominio restano sotto prefisso `/catasto`.
+Gli endpoint runtime operativi sono esposti sotto prefisso `/elaborazioni`.
 
 ### Credenziali
 
-- `POST /catasto/credentials`
-- `GET /catasto/credentials`
-- `DELETE /catasto/credentials`
-- `POST /catasto/credentials/test`
-- `GET /catasto/credentials/test/{test_id}`
-- `WS /catasto/ws/credentials-test/{test_id}`
+- `POST /elaborazioni/credentials`
+- `GET /elaborazioni/credentials`
+- `DELETE /elaborazioni/credentials`
+- `POST /elaborazioni/credentials/test`
+- `GET /elaborazioni/credentials/test/{test_id}`
+- `WS /elaborazioni/ws/credentials-test/{test_id}`
 
 ### Dizionario comuni
 
@@ -147,19 +164,19 @@ Note:
 
 ### Batch
 
-- `POST /catasto/batches`
-- `GET /catasto/batches`
-- `GET /catasto/batches/{batch_id}`
-- `GET /catasto/batches/{batch_id}/download`
-- `POST /catasto/batches/{batch_id}/start`
-- `POST /catasto/batches/{batch_id}/cancel`
-- `POST /catasto/batches/{batch_id}/retry-failed`
-- `WS /catasto/ws/{batch_id}`
+- `POST /elaborazioni/batches`
+- `GET /elaborazioni/batches`
+- `GET /elaborazioni/batches/{batch_id}`
+- `GET /elaborazioni/batches/{batch_id}/download`
+- `POST /elaborazioni/batches/{batch_id}/start`
+- `POST /elaborazioni/batches/{batch_id}/cancel`
+- `POST /elaborazioni/batches/{batch_id}/retry-failed`
+- `WS /elaborazioni/ws/{batch_id}`
 
 ### Visure singole
 
-- `POST /catasto/visure`
-- `GET /catasto/visure/{request_id}`
+- `POST /elaborazioni/requests`
+- `GET /elaborazioni/requests/{request_id}`
 
 ### Documenti
 
@@ -171,10 +188,10 @@ Note:
 
 ### CAPTCHA
 
-- `GET /catasto/captcha/pending`
-- `GET /catasto/captcha/{request_id}/image`
-- `POST /catasto/captcha/{request_id}/solve`
-- `POST /catasto/captcha/{request_id}/skip`
+- `GET /elaborazioni/captcha/pending`
+- `GET /elaborazioni/captcha/{request_id}/image`
+- `POST /elaborazioni/captcha/{request_id}/solve`
+- `POST /elaborazioni/captcha/{request_id}/skip`
 
 ## Contratti realtime
 
@@ -182,7 +199,7 @@ Note:
 
 Path:
 
-- `/catasto/ws/{batch_id}`
+- `/elaborazioni/ws/{batch_id}`
 
 Eventi pubblicati:
 
@@ -202,7 +219,7 @@ Payload principali:
 
 Path:
 
-- `/catasto/ws/credentials-test/{test_id}`
+- `/elaborazioni/ws/credentials-test/{test_id}`
 
 Evento pubblicato:
 

@@ -1,4 +1,4 @@
-import { CatastoRequestWorkspace } from "@/components/catasto/request-workspace";
+import { redirect } from "next/navigation";
 
 type CatastoNewRequestPageProps = {
   searchParams?: Promise<{
@@ -8,7 +8,5 @@ type CatastoNewRequestPageProps = {
 
 export default async function CatastoNewRequestPage({ searchParams }: CatastoNewRequestPageProps) {
   const resolvedSearchParams = await searchParams;
-  const mode = resolvedSearchParams?.mode === "batch" ? "batch" : "single";
-
-  return <CatastoRequestWorkspace initialMode={mode} />;
+  redirect(resolvedSearchParams?.mode === "batch" ? "/elaborazioni/new-batch" : "/elaborazioni/new-single");
 }

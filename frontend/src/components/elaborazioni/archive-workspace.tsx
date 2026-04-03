@@ -2,12 +2,11 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { usePathname } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 
 import { ProtectedPage } from "@/components/app/protected-page";
-import { CatastoHero, CatastoMiniStat, CatastoNoticeCard, CatastoPanelHeader } from "@/components/catasto/module-chrome";
-import { CatastoStatusBadge } from "@/components/catasto/status-badge";
+import { ElaborazioneHero, ElaborazioneMiniStat, ElaborazioneNoticeCard, ElaborazionePanelHeader } from "@/components/elaborazioni/module-chrome";
+import { ElaborazioneStatusBadge } from "@/components/elaborazioni/status-badge";
 import { DataTable } from "@/components/table/data-table";
 import { TableFilters } from "@/components/table/table-filters";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -62,10 +61,8 @@ function triggerDownload(blob: Blob, filename: string): void {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export function CatastoArchiveWorkspace({ initialView }: { initialView: ArchiveView }) {
-  const pathname = usePathname();
+export function ElaborazioneArchiveWorkspace({ initialView }: { initialView: ArchiveView }) {
   const activeView = initialView;
-  const isElaborazioni = pathname.startsWith("/elaborazioni");
   const [batches, setBatches] = useState<ElaborazioneBatch[]>([]);
   const [batchError, setBatchError] = useState<string | null>(null);
   const [cancelBusyId, setCancelBusyId] = useState<string | null>(null);
@@ -295,36 +292,24 @@ export function CatastoArchiveWorkspace({ initialView }: { initialView: ArchiveV
 
   return (
     <ProtectedPage
-      title={isElaborazioni ? "Elaborazioni" : "Archivio"}
-      description={
-        isElaborazioni
-          ? "Monitoraggio dei batch e accesso ai documenti prodotti dal runtime."
-          : "Consultazione unificata di batch e documenti del modulo Catasto."
-      }
-      breadcrumb={isElaborazioni ? "Elaborazioni / Batch" : "Catasto / Archivio"}
+      title="Elaborazioni"
+      description="Monitoraggio dei batch e accesso ai documenti prodotti dal runtime."
+      breadcrumb="Elaborazioni / Batch"
     >
-      <CatastoHero
+      <ElaborazioneHero
         badge={
           <>
             <FolderIcon className="h-3.5 w-3.5" />
             Archivio
           </>
         }
-        title={
-          isElaborazioni
-            ? "Monitor operativo delle elaborazioni e accesso ai documenti prodotti."
-            : "Un unico archivio per seguire la filiera Catasto: dai lotti eseguiti ai documenti prodotti."
-        }
-        description={
-          isElaborazioni
-            ? "La vista batch è il punto d'accesso canonico al runtime. I documenti restano consultabili nel dominio Catasto."
-            : "Le due viste restano distinte perché rappresentano entità diverse, ma la consultazione è concentrata in una sola pagina, con navigazione più lineare."
-        }
+        title="Monitor operativo delle elaborazioni e accesso ai documenti prodotti."
+        description="La vista batch è il punto d'accesso canonico al runtime. I documenti restano consultabili nel dominio catasto."
         actions={
           sharedError ? (
-            <CatastoNoticeCard title="Errore archivio" description={sharedError} tone="danger" />
+            <ElaborazioneNoticeCard title="Errore archivio" description={sharedError} tone="danger" />
           ) : (
-            <CatastoNoticeCard
+            <ElaborazioneNoticeCard
               title="Vista unificata"
               description="Usa Batch per monitorare lotti e retry; usa Documenti per ricerca, ZIP e apertura viewer."
             />
@@ -332,15 +317,15 @@ export function CatastoArchiveWorkspace({ initialView }: { initialView: ArchiveV
         }
       >
         <div className="grid gap-3 sm:grid-cols-4">
-          <CatastoMiniStat eyebrow="Documenti" value={documents.length} description="Risultati correnti della ricerca documentale." />
-          <CatastoMiniStat eyebrow="Selezione ZIP" value={selectedDocumentIds.length} description="Documenti pronti per export massivo." tone={selectedDocumentIds.length > 0 ? "success" : "default"} />
-          <CatastoMiniStat eyebrow="Batch" value={batches.length} description={`${processingCount} in lavorazione · ${failedCount} con errori`} />
-          <CatastoMiniStat eyebrow="Completati" value={completedCount} description="Lotti conclusi disponibili nello storico." tone={completedCount > 0 ? "success" : "default"} />
+          <ElaborazioneMiniStat eyebrow="Documenti" value={documents.length} description="Risultati correnti della ricerca documentale." />
+          <ElaborazioneMiniStat eyebrow="Selezione ZIP" value={selectedDocumentIds.length} description="Documenti pronti per export massivo." tone={selectedDocumentIds.length > 0 ? "success" : "default"} />
+          <ElaborazioneMiniStat eyebrow="Batch" value={batches.length} description={`${processingCount} in lavorazione · ${failedCount} con errori`} />
+          <ElaborazioneMiniStat eyebrow="Completati" value={completedCount} description="Lotti conclusi disponibili nello storico." tone={completedCount > 0 ? "success" : "default"} />
         </div>
-      </CatastoHero>
+      </ElaborazioneHero>
 
       <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
-        <CatastoPanelHeader
+        <ElaborazionePanelHeader
           badge={
             <>
               <RefreshIcon className="h-3.5 w-3.5" />
@@ -384,14 +369,14 @@ export function CatastoArchiveWorkspace({ initialView }: { initialView: ArchiveV
 
       {activeView === "batches" ? (
         <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white p-0 shadow-panel">
-          <CatastoPanelHeader
+          <ElaborazionePanelHeader
             badge={
               <>
                 <RefreshIcon className="h-3.5 w-3.5" />
                 Storico batch
               </>
             }
-            title="Monitoraggio dei lotti creati nel modulo Catasto"
+            title="Monitoraggio dei lotti creati nel modulo elaborazioni"
             description="Apri il dettaglio per vedere progress realtime, richieste riga per riga e CAPTCHA manuali."
           />
           {batches.length === 0 ? (
@@ -416,7 +401,7 @@ export function CatastoArchiveWorkspace({ initialView }: { initialView: ArchiveV
                   {batches.map((batch) => (
                     <tr key={batch.id}>
                       <td>{batch.name ?? batch.id}</td>
-                      <td><CatastoStatusBadge status={batch.status} /></td>
+                      <td><ElaborazioneStatusBadge status={batch.status} /></td>
                       <td>{batch.total_items}</td>
                       <td>{batch.current_operation ?? "—"}</td>
                       <td>{formatDateTime(batch.created_at)}</td>
@@ -455,7 +440,7 @@ export function CatastoArchiveWorkspace({ initialView }: { initialView: ArchiveV
       ) : (
         <>
           <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
-            <CatastoPanelHeader
+            <ElaborazionePanelHeader
               badge={
                 <>
                   <SearchIcon className="h-3.5 w-3.5" />
@@ -558,7 +543,7 @@ export function CatastoArchiveWorkspace({ initialView }: { initialView: ArchiveV
           </article>
 
           <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white p-0 shadow-panel">
-            <CatastoPanelHeader
+            <ElaborazionePanelHeader
               badge={
                 <>
                   <DocumentIcon className="h-3.5 w-3.5" />

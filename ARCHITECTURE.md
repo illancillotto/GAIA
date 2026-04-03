@@ -85,6 +85,7 @@ backend/app/
     network/
     inventory/
     catasto/
+    elaborazioni/
 ```
 
 Nota:
@@ -171,6 +172,7 @@ Moduli logici attuali:
 - `inventory`
 - `network`
 - `catasto`
+- `elaborazioni` previsto come modulo operativo dedicato per i workflow esecutivi catastali
 - `core`
 
 Stato del refactor:
@@ -180,6 +182,17 @@ Stato del refactor:
 - `inventory` presente nel monolite condiviso come modulo dedicato
 - il dominio anagrafico espone ancora superfici `anagrafica` e `utenze` per compatibilita
 - `catasto` con route implementation canonica e surface di modulo
+- `elaborazioni` introdotto come nuovo namespace di transizione per i workflow runtime
+- `catasto` mantiene progressivamente le sole superfici di dominio, documenti e provider
+- `elaborazioni` centralizza batch, richieste singole, credenziali runtime, CAPTCHA e WebSocket operativi
+- il service layer operativo associato al dominio catastale sta convergendo su moduli `app/services/elaborazioni_*` con shim legacy `catasto_*`
+- il frontend sta convergendo su route canoniche `frontend/src/app/elaborazioni/*` per la parte operativa, lasciando `catasto` come area dati e provider
+- per evitare refactor distruttivi su DB e payload, il linguaggio del modulo runtime usa alias `Elaborazione*` sopra i model e gli schema legacy `catasto_*`
+- lo stesso criterio e applicato al layer UI con namespace dedicato `frontend/src/components/elaborazioni/*`
+- il dettaglio batch runtime, i componenti UI di base e i workspace operativi principali sono ora implementati direttamente sotto `elaborazioni`
+- il backend non espone piu alias runtime sotto `/catasto`; le route operative canoniche sono solo sotto `/elaborazioni`
+- gli helper tecnici condivisi tra dominio `catasto` e runtime `elaborazioni` sono stati spostati in `backend/app/modules/shared/` per evitare dipendenze inverse sul dominio
+- refactor pianificato: `catasto` evolve verso aggregazione dati, `elaborazioni` diventa il modulo runtime per batch, CAPTCHA, worker orchestration e stato avanzamento
 
 ### postgres
 Salva i dati persistenti della piattaforma.

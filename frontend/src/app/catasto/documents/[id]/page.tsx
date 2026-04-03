@@ -170,7 +170,7 @@ export default function CatastoDocumentDetailPage() {
                 {downloadBusy ? "Download..." : "Scarica PDF"}
               </button>
               {documentItem.batch_id ? (
-                <Link className="btn-secondary" href={`/catasto/batches/${documentItem.batch_id}`}>
+                <Link className="btn-secondary" href={`/elaborazioni/batches/${documentItem.batch_id}`}>
                   Apri batch
                 </Link>
               ) : null}

@@ -10,23 +10,23 @@ import { MetricCard } from "@/components/ui/metric-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DocumentIcon, FolderIcon, LockIcon, RefreshIcon, SearchIcon, UsersIcon } from "@/components/ui/icons";
 import {
-  getCatastoBatches,
-  getCatastoCaptchaSummary,
-  getCatastoCredentials,
+  getElaborazioneBatches,
+  getElaborazioneCaptchaSummary,
+  getElaborazioneCredentials,
   listCapacitasCredentials,
-  retryFailedCatastoBatch,
-  startCatastoBatch,
+  retryFailedElaborazioneBatch,
+  startElaborazioneBatch,
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import { formatDateTime } from "@/lib/presentation";
-import type { CapacitasCredential, CatastoBatch, CatastoCaptchaSummary, CatastoCredentialStatus } from "@/types/api";
+import type { CapacitasCredential, ElaborazioneBatch, ElaborazioneCaptchaSummary, ElaborazioneCredentialStatus } from "@/types/api";
 
 const DASHBOARD_REFRESH_INTERVAL_MS = 5000;
 
 export default function CatastoDashboardPage() {
-  const [batches, setBatches] = useState<CatastoBatch[]>([]);
-  const [credentialStatus, setCredentialStatus] = useState<CatastoCredentialStatus | null>(null);
-  const [captchaSummary, setCaptchaSummary] = useState<CatastoCaptchaSummary | null>(null);
+  const [batches, setBatches] = useState<ElaborazioneBatch[]>([]);
+  const [credentialStatus, setCredentialStatus] = useState<ElaborazioneCredentialStatus | null>(null);
+  const [captchaSummary, setCaptchaSummary] = useState<ElaborazioneCaptchaSummary | null>(null);
   const [capacitasCredentials, setCapacitasCredentials] = useState<CapacitasCredential[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [retryBusyId, setRetryBusyId] = useState<string | null>(null);
@@ -37,9 +37,9 @@ export default function CatastoDashboardPage() {
 
     try {
       const [credentialsResult, batchesResult, captchaSummaryResult, capacitasResult] = await Promise.all([
-        getCatastoCredentials(token),
-        getCatastoBatches(token),
-        getCatastoCaptchaSummary(token),
+        getElaborazioneCredentials(token),
+        getElaborazioneBatches(token),
+        getElaborazioneCaptchaSummary(token),
         listCapacitasCredentials(token),
       ]);
       setCredentialStatus(credentialsResult);
@@ -77,16 +77,16 @@ export default function CatastoDashboardPage() {
     };
   }, [loadCatastoDashboard]);
 
-  async function handleRetryBatch(batch: CatastoBatch): Promise<void> {
+  async function handleRetryBatch(batch: ElaborazioneBatch): Promise<void> {
     const token = getStoredAccessToken();
     if (!token) return;
 
     setRetryBusyId(batch.id);
     try {
       if (batch.status === "failed" && batch.failed_items > 0) {
-        await retryFailedCatastoBatch(token, batch.id);
+        await retryFailedElaborazioneBatch(token, batch.id);
       }
-      await startCatastoBatch(token, batch.id);
+      await startElaborazioneBatch(token, batch.id);
       await loadCatastoDashboard();
       setError(null);
     } catch (retryError) {
@@ -206,17 +206,17 @@ export default function CatastoDashboardPage() {
           />
           <div className="p-6">
           <div className="grid gap-3 md:grid-cols-2">
-            <Link className="rounded-xl border border-gray-100 bg-gray-50 p-4 transition hover:border-gray-200 hover:bg-white" href="/catasto/settings">
+            <Link className="rounded-xl border border-gray-100 bg-gray-50 p-4 transition hover:border-gray-200 hover:bg-white" href="/elaborazioni/settings">
               <LockIcon className="h-5 w-5 text-[#1D4E35]" />
               <p className="mt-3 text-sm font-medium text-gray-900">Credenziali</p>
               <p className="mt-1 text-sm text-gray-500">SISTER e Capacitas nello stesso hub operativo.</p>
             </Link>
-            <Link className="rounded-xl border border-gray-100 bg-gray-50 p-4 transition hover:border-gray-200 hover:bg-white" href="/catasto/new?mode=batch">
+            <Link className="rounded-xl border border-gray-100 bg-gray-50 p-4 transition hover:border-gray-200 hover:bg-white" href="/elaborazioni/new-batch">
               <FolderIcon className="h-5 w-5 text-[#1D4E35]" />
               <p className="mt-3 text-sm font-medium text-gray-900">Import batch</p>
               <p className="mt-1 text-sm text-gray-500">Upload CSV o XLSX, preview e avvio worker.</p>
             </Link>
-            <Link className="rounded-xl border border-gray-100 bg-gray-50 p-4 transition hover:border-gray-200 hover:bg-white" href="/catasto/new?mode=single">
+            <Link className="rounded-xl border border-gray-100 bg-gray-50 p-4 transition hover:border-gray-200 hover:bg-white" href="/elaborazioni/new-single">
               <SearchIcon className="h-5 w-5 text-[#1D4E35]" />
               <p className="mt-3 text-sm font-medium text-gray-900">Visura singola</p>
               <p className="mt-1 text-sm text-gray-500">Richiesta puntuale con selezione comune e avvio immediato.</p>
@@ -226,7 +226,7 @@ export default function CatastoDashboardPage() {
               <p className="mt-3 text-sm font-medium text-gray-900">Capacitas inVOLTURE</p>
               <p className="mt-1 text-sm text-gray-500">Ricerca anagrafica tramite pool account dedicato.</p>
             </Link>
-            <Link className="rounded-xl border border-gray-100 bg-gray-50 p-4 transition hover:border-gray-200 hover:bg-white" href="/catasto/archive?view=batches">
+            <Link className="rounded-xl border border-gray-100 bg-gray-50 p-4 transition hover:border-gray-200 hover:bg-white" href="/elaborazioni/batches">
               <DocumentIcon className="h-5 w-5 text-[#1D4E35]" />
               <p className="mt-3 text-sm font-medium text-gray-900">Archivio batch</p>
               <p className="mt-1 text-sm text-gray-500">Consulta progress, esiti e CAPTCHA aperti.</p>
@@ -319,7 +319,7 @@ export default function CatastoDashboardPage() {
         />
         {batches.length === 0 ? (
           <div className="p-5">
-            <EmptyState icon={SearchIcon} title="Nessun batch presente" description="Apri /catasto/new per creare una richiesta o importare un lotto." />
+            <EmptyState icon={SearchIcon} title="Nessun batch presente" description="Apri /elaborazioni/new-batch per creare una richiesta o importare un lotto." />
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -338,7 +338,7 @@ export default function CatastoDashboardPage() {
                 {batches.map((batch) => (
                   <tr key={batch.id}>
                     <td>
-                      <Link className="font-medium text-[#1D4E35]" href={`/catasto/batches/${batch.id}`}>
+                      <Link className="font-medium text-[#1D4E35]" href={`/elaborazioni/batches/${batch.id}`}>
                         {batch.name ?? batch.id}
                       </Link>
                     </td>

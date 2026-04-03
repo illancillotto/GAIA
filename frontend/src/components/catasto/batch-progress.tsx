@@ -1,9 +1,9 @@
 "use client";
 
-import type { CatastoBatch } from "@/types/api";
+import type { ElaborazioneBatch } from "@/types/api";
 
 type BatchProgressProps = {
-  batch: CatastoBatch;
+  batch: ElaborazioneBatch;
 };
 
 export function BatchProgress({ batch }: BatchProgressProps) {

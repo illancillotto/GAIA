@@ -1,3 +1,5 @@
+import { redirect } from "next/navigation";
+
 import { CatastoArchiveWorkspace } from "@/components/catasto/archive-workspace";
 
 type CatastoArchivePageProps = {
@@ -8,7 +10,11 @@ type CatastoArchivePageProps = {
 
 export default async function CatastoArchivePage({ searchParams }: CatastoArchivePageProps) {
   const resolvedSearchParams = await searchParams;
-  const initialView = resolvedSearchParams?.view === "batches" ? "batches" : "documents";
+  if (resolvedSearchParams?.view === "batches") {
+    redirect("/elaborazioni/batches");
+  }
+
+  const initialView = "documents";
 
   return <CatastoArchiveWorkspace initialView={initialView} />;
 }

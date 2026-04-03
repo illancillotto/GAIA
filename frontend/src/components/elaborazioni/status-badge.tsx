@@ -43,7 +43,7 @@ const STATUS_CONFIG: Record<StatusValue, { label: string; className: string; dot
   },
 };
 
-export function CatastoStatusBadge({ status }: { status: StatusValue }) {
+export function ElaborazioneStatusBadge({ status }: { status: StatusValue }) {
   const config = STATUS_CONFIG[status];
 
   return (

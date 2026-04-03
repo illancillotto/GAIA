@@ -1,16 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname, useRouter } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 
 import { ProtectedPage } from "@/components/app/protected-page";
-import { CatastoHero, CatastoMiniStat, CatastoNoticeCard, CatastoPanelHeader } from "@/components/catasto/module-chrome";
-import { CatastoStatusBadge } from "@/components/catasto/status-badge";
+import { ElaborazioneHero, ElaborazioneMiniStat, ElaborazioneNoticeCard, ElaborazionePanelHeader } from "@/components/elaborazioni/module-chrome";
+import { ElaborazioneStatusBadge } from "@/components/elaborazioni/status-badge";
 import { DocumentIcon, FolderIcon, LockIcon, RefreshIcon, SearchIcon } from "@/components/ui/icons";
 import { ApiError, createElaborazioneBatch, createElaborazioneRichiesta, getCatastoComuni, startElaborazioneBatch } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
-import type { CatastoComune, ElaborazioneBatchDetail, ElaborazioneRichiestaCreateInput } from "@/types/api";
+import type { ElaborazioneBatchDetail, CatastoComune, ElaborazioneRichiestaCreateInput } from "@/types/api";
 
 type ValidationRowError = {
   row_index: number;
@@ -19,7 +19,7 @@ type ValidationRowError = {
 
 type WorkspaceMode = "single" | "batch";
 
-type RequestWorkspaceProps = {
+type ElaborazioneRequestWorkspaceProps = {
   initialMode?: WorkspaceMode;
 };
 
@@ -39,12 +39,10 @@ const TEMPLATE_CSV = [
   "ORISTANO,Terreni e Fabbricati,,5,120,3,Completa",
 ].join("\n");
 
-export function CatastoRequestWorkspace({ initialMode = "single" }: RequestWorkspaceProps) {
-  const pathname = usePathname();
+export function ElaborazioneRequestWorkspace({ initialMode = "single" }: ElaborazioneRequestWorkspaceProps) {
   const router = useRouter();
   const [mode, setMode] = useState<WorkspaceMode>(initialMode);
-  const isElaborazioni = pathname.startsWith("/elaborazioni");
-
+  
   useEffect(() => {
     setMode(initialMode);
   }, [initialMode]);
@@ -163,43 +161,39 @@ export function CatastoRequestWorkspace({ initialMode = "single" }: RequestWorks
 
   return (
     <ProtectedPage
-      title={isElaborazioni ? "Nuova elaborazione" : "Nuova richiesta Catasto"}
-      description={
-        isElaborazioni
-          ? "Punto di ingresso operativo per batch e richieste singole."
-          : "Un unico punto di ingresso per visura puntuale e import massivo."
-      }
-      breadcrumb={isElaborazioni ? "Elaborazioni / Nuova richiesta" : "Catasto / Nuova richiesta"}
+      title="Nuova elaborazione"
+      description="Punto di ingresso operativo per batch e richieste singole."
+      breadcrumb="Elaborazioni / Nuova richiesta"
     >
-      <CatastoHero
+      <ElaborazioneHero
         badge={
           <>
             <FolderIcon className="h-3.5 w-3.5" />
             Nuova richiesta
           </>
         }
-        title="Un solo ingresso per il modulo Catasto: scegli se lavorare una singola particella o un lotto completo."
+        title="Un solo ingresso per il runtime elaborazioni: scegli se lavorare una singola richiesta o un lotto completo."
         description="La pagina separa chiaramente i due casi d'uso ma li tiene nello stesso percorso. Prima scegli il tipo di lavoro, poi compili solo i campi rilevanti."
         actions={
           mode === "single" ? (
             singleError ? (
-              <CatastoNoticeCard title="Errore visura singola" description={singleError} tone="danger" />
+              <ElaborazioneNoticeCard title="Errore visura singola" description={singleError} tone="danger" />
             ) : (
-              <CatastoNoticeCard
+              <ElaborazioneNoticeCard
                 title="Flusso rapido"
                 description="Usa la modalità singola quando hai già comune, foglio e particella e vuoi partire subito."
               />
             )
           ) : batchError ? (
-            <CatastoNoticeCard title="Errore batch" description={batchError} tone="danger" />
+            <ElaborazioneNoticeCard title="Errore batch" description={batchError} tone="danger" />
           ) : draftBatch ? (
-            <CatastoNoticeCard
+            <ElaborazioneNoticeCard
               title="Bozza batch pronta"
               description={`Sono state importate ${draftBatch.total_items} righe. Rivedi l'anteprima e poi avvia.`}
               tone="success"
             />
           ) : (
-            <CatastoNoticeCard
+            <ElaborazioneNoticeCard
               title="Import guidato"
               description="Usa la modalità batch quando lavori da CSV o XLSX e vuoi validare l'intero lotto prima dell'avvio."
             />
@@ -207,15 +201,15 @@ export function CatastoRequestWorkspace({ initialMode = "single" }: RequestWorks
         }
       >
         <div className="grid gap-3 sm:grid-cols-4">
-          <CatastoMiniStat eyebrow="Modalità attiva" value={mode === "single" ? "Singola" : "Batch"} description="Puoi cambiare modalità in qualsiasi momento senza uscire dalla pagina." tone="success" />
-          <CatastoMiniStat eyebrow="Comuni" value={comuni.length} description="Archivio comuni disponibile per richieste puntuali." />
-          <CatastoMiniStat eyebrow="File batch" value={file ? file.name : "Nessun file"} description="CSV e XLSX supportati per l'import massivo." />
-          <CatastoMiniStat eyebrow="Validazione" value={validationErrors.length} description="Righe batch con errori bloccanti rilevate." tone={validationErrors.length > 0 ? "warning" : "default"} />
+          <ElaborazioneMiniStat eyebrow="Modalità attiva" value={mode === "single" ? "Singola" : "Batch"} description="Puoi cambiare modalità in qualsiasi momento senza uscire dalla pagina." tone="success" />
+          <ElaborazioneMiniStat eyebrow="Comuni" value={comuni.length} description="Archivio comuni disponibile per richieste puntuali." />
+          <ElaborazioneMiniStat eyebrow="File batch" value={file ? file.name : "Nessun file"} description="CSV e XLSX supportati per l'import massivo." />
+          <ElaborazioneMiniStat eyebrow="Validazione" value={validationErrors.length} description="Righe batch con errori bloccanti rilevate." tone={validationErrors.length > 0 ? "warning" : "default"} />
         </div>
-      </CatastoHero>
+      </ElaborazioneHero>
 
       <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
-        <CatastoPanelHeader
+        <ElaborazionePanelHeader
           badge={
             <>
               <RefreshIcon className="h-3.5 w-3.5" />
@@ -264,7 +258,7 @@ export function CatastoRequestWorkspace({ initialMode = "single" }: RequestWorks
           className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel"
           onSubmit={(event) => void handleSubmit(onSubmitSingle)(event)}
         >
-          <CatastoPanelHeader
+          <ElaborazionePanelHeader
             badge={
               <>
                 <LockIcon className="h-3.5 w-3.5" />
@@ -357,7 +351,7 @@ export function CatastoRequestWorkspace({ initialMode = "single" }: RequestWorks
                 {singleBusy ? "Avvio in corso..." : "Avvia visura singola"}
               </button>
               <p className="text-xs text-gray-400">
-                La richiesta crea un batch da una sola riga e parte subito se le credenziali SISTER sono presenti.
+                La richiesta crea un batch da una sola riga e parte subito se le credenziali runtime sono presenti.
               </p>
             </div>
           </div>
@@ -365,7 +359,7 @@ export function CatastoRequestWorkspace({ initialMode = "single" }: RequestWorks
       ) : (
         <>
           <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
-            <CatastoPanelHeader
+            <ElaborazionePanelHeader
               badge={
                 <>
                   <DocumentIcon className="h-3.5 w-3.5" />
@@ -410,7 +404,7 @@ export function CatastoRequestWorkspace({ initialMode = "single" }: RequestWorks
 
           {validationErrors.length > 0 ? (
             <article className="overflow-hidden rounded-[28px] border border-red-100 bg-white shadow-panel">
-              <CatastoPanelHeader
+              <ElaborazionePanelHeader
                 badge={
                   <>
                     <RefreshIcon className="h-3.5 w-3.5" />
@@ -433,7 +427,7 @@ export function CatastoRequestWorkspace({ initialMode = "single" }: RequestWorks
 
           {draftBatch ? (
             <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white p-0 shadow-panel">
-              <CatastoPanelHeader
+              <ElaborazionePanelHeader
                 badge={
                   <>
                     <FolderIcon className="h-3.5 w-3.5" />
@@ -470,7 +464,7 @@ export function CatastoRequestWorkspace({ initialMode = "single" }: RequestWorks
                           {request.subalterno ? ` Sub.${request.subalterno}` : ""}
                         </td>
                         <td>{request.tipo_visura}</td>
-                        <td><CatastoStatusBadge status={request.status} /></td>
+                        <td><ElaborazioneStatusBadge status={request.status} /></td>
                         <td>{request.error_message ?? request.current_operation ?? "—"}</td>
                       </tr>
                     ))}

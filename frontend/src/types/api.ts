@@ -1067,3 +1067,20 @@ export type CatastoBatchWebSocketEvent =
   | CatastoBatchCaptchaEvent
   | CatastoBatchCompletedEvent
   | CatastoVisuraCompletedEvent;
+
+export type ElaborazioneCredential = CatastoCredential;
+export type ElaborazioneCredentialStatus = CatastoCredentialStatus;
+export type ElaborazioneCredentialTestResult = CatastoCredentialTestResult;
+export type ElaborazioneCredentialTestWebSocketEvent = CatastoCredentialTestWebSocketEvent;
+export type ElaborazioneRichiestaCreateInput = CatastoSingleVisuraPayload;
+export type ElaborazioneRequestStatus = CatastoRequestStatus;
+export type ElaborazioneRichiesta = CatastoVisuraRequest;
+export type ElaborazioneBatch = CatastoBatch;
+export type ElaborazioneBatchDetail = CatastoBatchDetail;
+export type ElaborazioneOperationResponse = CatastoOperationResponse;
+export type ElaborazioneCaptchaSummary = CatastoCaptchaSummary;
+export type ElaborazioneBatchProgressEvent = CatastoBatchProgressEvent;
+export type ElaborazioneBatchCaptchaEvent = CatastoBatchCaptchaEvent;
+export type ElaborazioneBatchCompletedEvent = CatastoBatchCompletedEvent;
+export type ElaborazioneRichiestaCompletedEvent = CatastoVisuraCompletedEvent;
+export type ElaborazioneBatchWebSocketEvent = CatastoBatchWebSocketEvent;

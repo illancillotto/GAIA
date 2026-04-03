@@ -1,18 +1,23 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { useParams, usePathname } from "next/navigation";
+import { useParams } from "next/navigation";
 
 import { ProtectedPage } from "@/components/app/protected-page";
-import { CatastoOperationMessage } from "@/components/catasto/operation-message";
-import { BatchProgress } from "@/components/catasto/batch-progress";
-import { CaptchaDialog } from "@/components/catasto/captcha-dialog";
-import { CatastoHero, CatastoMiniStat, CatastoNoticeCard, CatastoPanelHeader } from "@/components/catasto/module-chrome";
-import { CatastoStatusBadge } from "@/components/catasto/status-badge";
+import { ElaborazioneBatchProgress } from "@/components/elaborazioni/batch-progress";
+import { ElaborazioneCaptchaDialog } from "@/components/elaborazioni/captcha-dialog";
+import {
+  ElaborazioneHero,
+  ElaborazioneMiniStat,
+  ElaborazioneNoticeCard,
+  ElaborazionePanelHeader,
+} from "@/components/elaborazioni/module-chrome";
+import { ElaborazioneOperationMessage } from "@/components/elaborazioni/operation-message";
+import { ElaborazioneStatusBadge } from "@/components/elaborazioni/status-badge";
 import { AlertTriangleIcon, FolderIcon, RefreshIcon } from "@/components/ui/icons";
 import {
-  cancelElaborazioneBatch,
   createElaborazioneBatchWebSocket,
+  cancelElaborazioneBatch,
   downloadElaborazioneBatchZipBlob,
   fetchElaborazioneCaptchaImageBlob,
   getElaborazioneBatch,
@@ -25,11 +30,9 @@ import { getStoredAccessToken } from "@/lib/auth";
 import { formatDateTime } from "@/lib/presentation";
 import type { ElaborazioneBatchDetail } from "@/types/api";
 
-export default function CatastoBatchDetailPage() {
+export default function ElaborazioneBatchDetailPage() {
   const params = useParams<{ id: string }>();
-  const pathname = usePathname();
   const batchId = params.id;
-  const isElaborazioni = pathname.startsWith("/elaborazioni");
   const [batch, setBatch] = useState<ElaborazioneBatchDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [captchaBusy, setCaptchaBusy] = useState(false);
@@ -89,8 +92,8 @@ export default function CatastoBatchDetailPage() {
       return;
     }
 
-    const safeToken: string = token;
-    const safeRequestId: string = requestId;
+    const safeToken = token;
+    const safeRequestId = requestId;
     let cancelled = false;
 
     async function loadCaptchaImage(): Promise<void> {
@@ -242,30 +245,30 @@ export default function CatastoBatchDetailPage() {
 
   return (
     <ProtectedPage
-      title={isElaborazioni ? "Dettaglio elaborazione" : "Dettaglio batch Catasto"}
+      title="Dettaglio elaborazione"
       description="Progress realtime, stato per riga e gestione manuale dei CAPTCHA richiesti dal worker."
-      breadcrumb={isElaborazioni ? "Elaborazioni / Dettaglio batch" : "Catasto / Batch detail"}
+      breadcrumb="Elaborazioni / Dettaglio batch"
     >
-      <CatastoHero
+      <ElaborazioneHero
         badge={
           <>
             <FolderIcon className="h-3.5 w-3.5" />
             Dettaglio batch
           </>
         }
-        title={batch?.name ?? "Monitor realtime del batch Catasto"}
+        title={batch?.name ?? "Monitor realtime del batch"}
         description="Lo stream websocket mantiene questa vista aggiornata su stato righe, operazioni correnti e richieste CAPTCHA che richiedono intervento manuale."
         actions={
           error ? (
-            <CatastoNoticeCard title="Errore batch" description={error} tone="danger" />
+            <ElaborazioneNoticeCard title="Errore batch" description={error} tone="danger" />
           ) : activeCaptchaRequest ? (
-            <CatastoNoticeCard
+            <ElaborazioneNoticeCard
               title="Intervento richiesto"
               description={`CAPTCHA aperto per ${activeCaptchaRequest.comune} · Fg.${activeCaptchaRequest.foglio} Part.${activeCaptchaRequest.particella}.`}
               tone="warning"
             />
           ) : (
-            <CatastoNoticeCard
+            <ElaborazioneNoticeCard
               title="Canale realtime"
               description="Ogni aggiornamento ricevuto dal websocket forza un refresh del dettaglio batch."
             />
@@ -273,19 +276,34 @@ export default function CatastoBatchDetailPage() {
         }
       >
         <div className="grid gap-3 sm:grid-cols-4">
-          <CatastoMiniStat eyebrow="Stato" value={batch?.status ?? "Caricamento"} description={batch?.current_operation ?? "Recupero stato batch"} tone={batch?.status === "completed" ? "success" : batch?.status === "failed" ? "warning" : "default"} />
-          <CatastoMiniStat eyebrow="Totale" value={batch?.total_items ?? 0} description="Righe inserite nel lotto." />
-          <CatastoMiniStat eyebrow="Completate" value={batch?.completed_items ?? 0} description={`${batch?.failed_items ?? 0} fallite · ${batch?.skipped_items ?? 0} saltate`} tone={(batch?.completed_items ?? 0) > 0 ? "success" : "default"} />
-          <CatastoMiniStat eyebrow="CAPTCHA" value={activeCaptchaRequest ? "Aperto" : "Nessuno"} description="Richieste manuali ancora da risolvere per il worker." tone={activeCaptchaRequest ? "warning" : "default"} />
+          <ElaborazioneMiniStat
+            description={batch?.current_operation ?? "Recupero stato batch"}
+            eyebrow="Stato"
+            tone={batch?.status === "completed" ? "success" : batch?.status === "failed" ? "warning" : "default"}
+            value={batch?.status ?? "Caricamento"}
+          />
+          <ElaborazioneMiniStat eyebrow="Totale" value={batch?.total_items ?? 0} description="Righe inserite nel lotto." />
+          <ElaborazioneMiniStat
+            description={`${batch?.failed_items ?? 0} fallite · ${batch?.skipped_items ?? 0} saltate`}
+            eyebrow="Completate"
+            tone={(batch?.completed_items ?? 0) > 0 ? "success" : "default"}
+            value={batch?.completed_items ?? 0}
+          />
+          <ElaborazioneMiniStat
+            description="Richieste manuali ancora da risolvere per il worker."
+            eyebrow="CAPTCHA"
+            tone={activeCaptchaRequest ? "warning" : "default"}
+            value={activeCaptchaRequest ? "Aperto" : "Nessuno"}
+          />
         </div>
-      </CatastoHero>
+      </ElaborazioneHero>
 
       {batch ? (
         <>
-          <BatchProgress batch={batch} />
+          <ElaborazioneBatchProgress batch={batch} />
 
           <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white p-0 shadow-panel">
-            <CatastoPanelHeader
+            <ElaborazionePanelHeader
               badge={
                 <>
                   <RefreshIcon className="h-3.5 w-3.5" />
@@ -296,38 +314,38 @@ export default function CatastoBatchDetailPage() {
               description={`Creato ${formatDateTime(batch.created_at)} · Avvio ${formatDateTime(batch.started_at)} · Chiusura ${formatDateTime(batch.completed_at)}`}
               actions={
                 <div className="flex flex-wrap gap-2">
-                <button
-                  className="btn-secondary"
-                  disabled={startBusy || !canStartBatch}
-                  onClick={() => void handleStartBatch()}
-                  type="button"
-                >
-                  {startBusy ? "Avvio..." : "Avvia batch"}
-                </button>
-                <button
-                  className="btn-secondary"
-                  disabled={downloadBusy || batch.completed_items === 0}
-                  onClick={() => void handleDownloadBatch()}
-                  type="button"
-                >
-                  {downloadBusy ? "Preparazione ZIP..." : "Scarica tutti i PDF (ZIP)"}
-                </button>
-                <button
-                  className="btn-secondary"
-                  disabled={retryBusy || !canRetryFailedBatch}
-                  onClick={() => void handleRetryFailedBatch()}
-                  type="button"
-                >
-                  {retryBusy ? "Retry..." : "Riprova richieste fallite"}
-                </button>
-                <button
-                  className="btn-secondary"
-                  disabled={cancelBusy || !canCancelBatch}
-                  onClick={() => void handleCancelBatch()}
-                  type="button"
-                >
-                  {cancelBusy ? "Annullamento..." : "Annulla batch"}
-                </button>
+                  <button
+                    className="btn-secondary"
+                    disabled={startBusy || !canStartBatch}
+                    onClick={() => void handleStartBatch()}
+                    type="button"
+                  >
+                    {startBusy ? "Avvio..." : "Avvia batch"}
+                  </button>
+                  <button
+                    className="btn-secondary"
+                    disabled={downloadBusy || batch.completed_items === 0}
+                    onClick={() => void handleDownloadBatch()}
+                    type="button"
+                  >
+                    {downloadBusy ? "Preparazione ZIP..." : "Scarica tutti i PDF (ZIP)"}
+                  </button>
+                  <button
+                    className="btn-secondary"
+                    disabled={retryBusy || !canRetryFailedBatch}
+                    onClick={() => void handleRetryFailedBatch()}
+                    type="button"
+                  >
+                    {retryBusy ? "Retry..." : "Riprova richieste fallite"}
+                  </button>
+                  <button
+                    className="btn-secondary"
+                    disabled={cancelBusy || !canCancelBatch}
+                    onClick={() => void handleCancelBatch()}
+                    type="button"
+                  >
+                    {cancelBusy ? "Annullamento..." : "Annulla batch"}
+                  </button>
                 </div>
               }
             />
@@ -354,9 +372,15 @@ export default function CatastoBatchDetailPage() {
                         <br />
                         <span className="text-xs text-gray-400">{request.tipo_visura}</span>
                       </td>
-                      <td><CatastoStatusBadge status={request.status} /></td>
-                      <td><CatastoOperationMessage value={request.current_operation} /></td>
-                      <td className="text-xs text-gray-500"><CatastoOperationMessage value={request.error_message} /></td>
+                      <td>
+                        <ElaborazioneStatusBadge status={request.status} />
+                      </td>
+                      <td>
+                        <ElaborazioneOperationMessage value={request.current_operation} />
+                      </td>
+                      <td className="text-xs text-gray-500">
+                        <ElaborazioneOperationMessage value={request.error_message} />
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -373,8 +397,10 @@ export default function CatastoBatchDetailPage() {
                 <div>
                   <p className="text-lg font-semibold text-gray-900">CAPTCHA attualmente bloccante</p>
                   <p className="mt-2 text-sm leading-6 text-gray-600">
-                    {activeCaptchaRequest.comune} · Fg.{activeCaptchaRequest.foglio} Part.{activeCaptchaRequest.particella}
-                    {activeCaptchaRequest.subalterno ? ` Sub.${activeCaptchaRequest.subalterno}` : ""}. Inserisci il codice o usa skip per far proseguire il worker secondo la logica backend.
+                    {activeCaptchaRequest.comune} · Fg.{activeCaptchaRequest.foglio} Part.
+                    {activeCaptchaRequest.particella}
+                    {activeCaptchaRequest.subalterno ? ` Sub.${activeCaptchaRequest.subalterno}` : ""}. Inserisci il
+                    codice o usa skip per far proseguire il worker secondo la logica backend.
                   </p>
                 </div>
               </div>
@@ -387,7 +413,7 @@ export default function CatastoBatchDetailPage() {
         </article>
       )}
 
-      <CaptchaDialog
+      <ElaborazioneCaptchaDialog
         busy={captchaBusy}
         imageUrl={captchaImageUrl}
         open={Boolean(activeCaptchaRequest)}

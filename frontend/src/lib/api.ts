@@ -19,19 +19,19 @@ import type {
   ApplicationUserCreateInput,
   ApplicationUserListResponse,
   ApplicationUserUpdateInput,
-  CatastoBatch,
-  CatastoBatchDetail,
-  CatastoCaptchaSummary,
   CatastoDocument,
-  CatastoBatchWebSocketEvent,
   CatastoComune,
-  CatastoCredential,
-  CatastoCredentialTestResult,
-  CatastoCredentialTestWebSocketEvent,
-  CatastoCredentialStatus,
-  CatastoOperationResponse,
-  CatastoSingleVisuraPayload,
-  CatastoVisuraRequest,
+  ElaborazioneBatch,
+  ElaborazioneBatchDetail,
+  ElaborazioneBatchWebSocketEvent,
+  ElaborazioneCaptchaSummary,
+  ElaborazioneCredential,
+  ElaborazioneCredentialStatus,
+  ElaborazioneCredentialTestResult,
+  ElaborazioneCredentialTestWebSocketEvent,
+  ElaborazioneOperationResponse,
+  ElaborazioneRichiesta,
+  ElaborazioneRichiestaCreateInput,
   CapacitasCredential,
   CapacitasCredentialCreateInput,
   CapacitasCredentialTestResult as CapacitasCredentialProbeResult,
@@ -963,15 +963,15 @@ export async function calculatePermissionPreview(
   });
 }
 
-export async function getCatastoCredentials(token: string): Promise<CatastoCredentialStatus> {
-  return request<CatastoCredentialStatus>("/catasto/credentials", {
+export async function getElaborazioneCredentials(token: string): Promise<ElaborazioneCredentialStatus> {
+  return request<ElaborazioneCredentialStatus>("/elaborazioni/credentials", {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
 }
 
-export async function saveCatastoCredentials(
+export async function saveElaborazioneCredentials(
   token: string,
   payload: {
     sister_username: string;
@@ -980,8 +980,8 @@ export async function saveCatastoCredentials(
     codice_richiesta?: string;
     ufficio_provinciale?: string;
   },
-): Promise<CatastoCredential> {
-  return request<CatastoCredential>("/catasto/credentials", {
+): Promise<ElaborazioneCredential> {
+  return request<ElaborazioneCredential>("/elaborazioni/credentials", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -990,8 +990,8 @@ export async function saveCatastoCredentials(
   });
 }
 
-export async function deleteCatastoCredentials(token: string): Promise<CatastoOperationResponse> {
-  return request<CatastoOperationResponse>("/catasto/credentials", {
+export async function deleteElaborazioneCredentials(token: string): Promise<ElaborazioneOperationResponse> {
+  return request<ElaborazioneOperationResponse>("/elaborazioni/credentials", {
     method: "DELETE",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -999,7 +999,7 @@ export async function deleteCatastoCredentials(token: string): Promise<CatastoOp
   });
 }
 
-export async function testCatastoCredentials(
+export async function testElaborazioneCredentials(
   token: string,
   payload?: {
     sister_username: string;
@@ -1008,8 +1008,8 @@ export async function testCatastoCredentials(
     codice_richiesta?: string;
     ufficio_provinciale?: string;
   },
-): Promise<CatastoCredentialTestResult> {
-  return request<CatastoCredentialTestResult>("/catasto/credentials/test", {
+): Promise<ElaborazioneCredentialTestResult> {
+  return request<ElaborazioneCredentialTestResult>("/elaborazioni/credentials/test", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1018,23 +1018,23 @@ export async function testCatastoCredentials(
   });
 }
 
-export async function getCatastoCredentialTest(
+export async function getElaborazioneCredentialTest(
   token: string,
   testId: string,
-): Promise<CatastoCredentialTestResult> {
-  return request<CatastoCredentialTestResult>(`/catasto/credentials/test/${testId}`, {
+): Promise<ElaborazioneCredentialTestResult> {
+  return request<ElaborazioneCredentialTestResult>(`/elaborazioni/credentials/test/${testId}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
 }
 
-export function createCatastoCredentialTestWebSocket(testId: string, token: string): WebSocket | null {
+export function createElaborazioneCredentialTestWebSocket(testId: string, token: string): WebSocket | null {
   if (typeof window === "undefined") {
     return null;
   }
 
-  const url = new URL(`${getWebSocketBaseUrl()}/catasto/ws/credentials-test/${testId}`);
+  const url = new URL(`${getWebSocketBaseUrl()}/elaborazioni/ws/credentials-test/${testId}`);
   url.searchParams.set("token", token);
   return new WebSocket(url.toString());
 }
@@ -1133,18 +1133,18 @@ export async function getCatastoComuni(token: string, search?: string): Promise<
   });
 }
 
-export async function createCatastoBatch(
+export async function createElaborazioneBatch(
   token: string,
   file: File,
   name?: string,
-): Promise<CatastoBatchDetail> {
+): Promise<ElaborazioneBatchDetail> {
   const formData = new FormData();
   formData.append("file", file);
   if (name) {
     formData.append("name", name);
   }
 
-  return request<CatastoBatchDetail>("/catasto/batches", {
+  return request<ElaborazioneBatchDetail>("/elaborazioni/batches", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1153,25 +1153,25 @@ export async function createCatastoBatch(
   });
 }
 
-export async function getCatastoBatches(token: string, status?: string): Promise<CatastoBatch[]> {
+export async function getElaborazioneBatches(token: string, status?: string): Promise<ElaborazioneBatch[]> {
   const query = createQueryString({ status });
-  return request<CatastoBatch[]>(`/catasto/batches${query}`, {
+  return request<ElaborazioneBatch[]>(`/elaborazioni/batches${query}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
 }
 
-export async function getCatastoBatch(token: string, batchId: string): Promise<CatastoBatchDetail> {
-  return request<CatastoBatchDetail>(`/catasto/batches/${batchId}`, {
+export async function getElaborazioneBatch(token: string, batchId: string): Promise<ElaborazioneBatchDetail> {
+  return request<ElaborazioneBatchDetail>(`/elaborazioni/batches/${batchId}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
 }
 
-export async function startCatastoBatch(token: string, batchId: string): Promise<CatastoBatch> {
-  return request<CatastoBatch>(`/catasto/batches/${batchId}/start`, {
+export async function startElaborazioneBatch(token: string, batchId: string): Promise<ElaborazioneBatch> {
+  return request<ElaborazioneBatch>(`/elaborazioni/batches/${batchId}/start`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1179,8 +1179,8 @@ export async function startCatastoBatch(token: string, batchId: string): Promise
   });
 }
 
-export async function cancelCatastoBatch(token: string, batchId: string): Promise<CatastoBatch> {
-  return request<CatastoBatch>(`/catasto/batches/${batchId}/cancel`, {
+export async function cancelElaborazioneBatch(token: string, batchId: string): Promise<ElaborazioneBatch> {
+  return request<ElaborazioneBatch>(`/elaborazioni/batches/${batchId}/cancel`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1188,8 +1188,8 @@ export async function cancelCatastoBatch(token: string, batchId: string): Promis
   });
 }
 
-export async function retryFailedCatastoBatch(token: string, batchId: string): Promise<CatastoBatch> {
-  return request<CatastoBatch>(`/catasto/batches/${batchId}/retry-failed`, {
+export async function retryFailedElaborazioneBatch(token: string, batchId: string): Promise<ElaborazioneBatch> {
+  return request<ElaborazioneBatch>(`/elaborazioni/batches/${batchId}/retry-failed`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1197,11 +1197,11 @@ export async function retryFailedCatastoBatch(token: string, batchId: string): P
   });
 }
 
-export async function createCatastoSingleVisura(
+export async function createElaborazioneRichiesta(
   token: string,
-  payload: CatastoSingleVisuraPayload,
-): Promise<CatastoBatchDetail> {
-  return request<CatastoBatchDetail>("/catasto/visure", {
+  payload: ElaborazioneRichiestaCreateInput,
+): Promise<ElaborazioneBatchDetail> {
+  return request<ElaborazioneBatchDetail>("/elaborazioni/requests", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1210,28 +1210,28 @@ export async function createCatastoSingleVisura(
   });
 }
 
-export async function getPendingCatastoCaptcha(token: string): Promise<CatastoVisuraRequest[]> {
-  return request<CatastoVisuraRequest[]>("/catasto/captcha/pending", {
+export async function getPendingElaborazioneCaptcha(token: string): Promise<ElaborazioneRichiesta[]> {
+  return request<ElaborazioneRichiesta[]>("/elaborazioni/captcha/pending", {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
 }
 
-export async function getCatastoCaptchaSummary(token: string): Promise<CatastoCaptchaSummary> {
-  return request<CatastoCaptchaSummary>("/catasto/captcha/summary", {
+export async function getElaborazioneCaptchaSummary(token: string): Promise<ElaborazioneCaptchaSummary> {
+  return request<ElaborazioneCaptchaSummary>("/elaborazioni/captcha/summary", {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
 }
 
-export async function solveCatastoCaptcha(
+export async function solveElaborazioneCaptcha(
   token: string,
   requestId: string,
   text: string,
-): Promise<CatastoVisuraRequest> {
-  return request<CatastoVisuraRequest>(`/catasto/captcha/${requestId}/solve`, {
+): Promise<ElaborazioneRichiesta> {
+  return request<ElaborazioneRichiesta>(`/elaborazioni/captcha/${requestId}/solve`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1240,8 +1240,8 @@ export async function solveCatastoCaptcha(
   });
 }
 
-export async function skipCatastoCaptcha(token: string, requestId: string): Promise<CatastoVisuraRequest> {
-  return request<CatastoVisuraRequest>(`/catasto/captcha/${requestId}/skip`, {
+export async function skipElaborazioneCaptcha(token: string, requestId: string): Promise<ElaborazioneRichiesta> {
+  return request<ElaborazioneRichiesta>(`/elaborazioni/captcha/${requestId}/skip`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1295,8 +1295,8 @@ export async function getCatastoDocument(token: string, documentId: string): Pro
   });
 }
 
-export async function fetchCatastoCaptchaImageBlob(token: string, requestId: string): Promise<Blob> {
-  return requestBlob(`/catasto/captcha/${requestId}/image`, {
+export async function fetchElaborazioneCaptchaImageBlob(token: string, requestId: string): Promise<Blob> {
+  return requestBlob(`/elaborazioni/captcha/${requestId}/image`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -1311,8 +1311,8 @@ export async function downloadCatastoDocumentBlob(token: string, documentId: str
   });
 }
 
-export async function downloadCatastoBatchZipBlob(token: string, batchId: string): Promise<Blob> {
-  return requestBlob(`/catasto/batches/${batchId}/download`, {
+export async function downloadElaborazioneBatchZipBlob(token: string, batchId: string): Promise<Blob> {
+  return requestBlob(`/elaborazioni/batches/${batchId}/download`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -1333,15 +1333,26 @@ export async function downloadSelectedCatastoDocumentsZipBlob(
   });
 }
 
-export function createCatastoBatchWebSocket(batchId: string, token: string): WebSocket | null {
+export function createElaborazioneBatchWebSocket(batchId: string, token: string): WebSocket | null {
   if (typeof window === "undefined") {
     return null;
   }
 
-  const url = new URL(`${getWebSocketBaseUrl()}/catasto/ws/${batchId}`);
+  const url = new URL(`${getWebSocketBaseUrl()}/elaborazioni/ws/${batchId}`);
   url.searchParams.set("token", token);
   return new WebSocket(url.toString());
 }
 
-export type { CatastoBatchWebSocketEvent };
-export type { CatastoCredentialTestWebSocketEvent };
+export type {
+  ElaborazioneBatch,
+  ElaborazioneBatchDetail,
+  ElaborazioneBatchWebSocketEvent,
+  ElaborazioneCaptchaSummary,
+  ElaborazioneCredential,
+  ElaborazioneCredentialStatus,
+  ElaborazioneCredentialTestResult,
+  ElaborazioneCredentialTestWebSocketEvent,
+  ElaborazioneOperationResponse,
+  ElaborazioneRichiesta,
+  ElaborazioneRichiestaCreateInput,
+} from "@/types/api";
