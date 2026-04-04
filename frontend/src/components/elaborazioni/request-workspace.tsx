@@ -196,6 +196,7 @@ export function ElaborazioneRequestWorkspace({
   const content = (
     <>
       <ElaborazioneHero
+        compact={embedded}
         badge={
           <>
             <FolderIcon className="h-3.5 w-3.5" />
@@ -207,23 +208,26 @@ export function ElaborazioneRequestWorkspace({
         actions={
           mode === "single" ? (
             singleError ? (
-              <ElaborazioneNoticeCard title="Errore visura singola" description={singleError} tone="danger" />
+              <ElaborazioneNoticeCard compact={embedded} title="Errore visura singola" description={singleError} tone="danger" />
             ) : (
               <ElaborazioneNoticeCard
+                compact={embedded}
                 title="Flusso rapido"
                 description="Usa la modalità singola quando hai già comune, foglio e particella e vuoi partire subito."
               />
             )
           ) : batchError ? (
-            <ElaborazioneNoticeCard title="Errore batch" description={batchError} tone="danger" />
+            <ElaborazioneNoticeCard compact={embedded} title="Errore batch" description={batchError} tone="danger" />
           ) : draftBatch ? (
             <ElaborazioneNoticeCard
+              compact={embedded}
               title="Bozza batch pronta"
               description={`Sono state importate ${draftBatch.total_items} righe. Rivedi l'anteprima e poi avvia.`}
               tone="success"
             />
           ) : (
             <ElaborazioneNoticeCard
+              compact={embedded}
               title="Import guidato"
               description="Usa la modalità batch quando lavori da CSV o XLSX e vuoi validare l'intero lotto prima dell'avvio."
             />
@@ -231,10 +235,10 @@ export function ElaborazioneRequestWorkspace({
         }
       >
         <div className="grid gap-3 sm:grid-cols-4">
-          <ElaborazioneMiniStat eyebrow="Modalità attiva" value={mode === "single" ? "Singola" : "Batch"} description="Puoi cambiare modalità in qualsiasi momento senza uscire dalla pagina." tone="success" />
-          <ElaborazioneMiniStat eyebrow="Comuni" value={comuni.length} description="Archivio comuni disponibile per richieste puntuali." />
-          <ElaborazioneMiniStat eyebrow="File batch" value={file ? file.name : "Nessun file"} description="CSV e XLSX supportati per l'import massivo." />
-          <ElaborazioneMiniStat eyebrow="Validazione" value={validationErrors.length} description="Righe batch con errori bloccanti rilevate." tone={validationErrors.length > 0 ? "warning" : "default"} />
+          <ElaborazioneMiniStat compact={embedded} eyebrow="Modalità attiva" value={mode === "single" ? "Singola" : "Batch"} description="Puoi cambiare modalità in qualsiasi momento senza uscire dalla pagina." tone="success" />
+          <ElaborazioneMiniStat compact={embedded} eyebrow="Comuni" value={comuni.length} description="Archivio comuni disponibile per richieste puntuali." />
+          <ElaborazioneMiniStat compact={embedded} eyebrow="File batch" value={file ? file.name : "Nessun file"} description="CSV e XLSX supportati per l'import massivo." />
+          <ElaborazioneMiniStat compact={embedded} eyebrow="Validazione" value={validationErrors.length} description="Righe batch con errori bloccanti rilevate." tone={validationErrors.length > 0 ? "warning" : "default"} />
         </div>
       </ElaborazioneHero>
 

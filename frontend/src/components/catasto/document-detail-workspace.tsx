@@ -102,6 +102,7 @@ export function CatastoDocumentDetailWorkspace({
   const content = (
     <>
       <CatastoHero
+        compact={embedded}
         badge={
           <>
             <DocumentIcon className="h-3.5 w-3.5" />
@@ -112,9 +113,10 @@ export function CatastoDocumentDetailWorkspace({
         description="Questa pagina accorpa metadati catastali e preview inline del PDF, così il controllo documentale resta nello stesso contesto operativo."
         actions={
           error ? (
-            <CatastoNoticeCard title="Errore documento" description={error} tone="danger" />
+            <CatastoNoticeCard compact={embedded} title="Errore documento" description={error} tone="danger" />
           ) : (
             <CatastoNoticeCard
+              compact={embedded}
               title="PDF inline"
               description="Il file viene scaricato dal backend, convertito in blob locale e mostrato direttamente nel viewer integrato."
             />
@@ -122,9 +124,9 @@ export function CatastoDocumentDetailWorkspace({
         }
       >
         <div className="grid gap-3 sm:grid-cols-3">
-          <CatastoMiniStat eyebrow="Comune" value={documentItem?.comune ?? "—"} description="Localizzazione della visura archiviata." />
-          <CatastoMiniStat eyebrow="Tipo visura" value={documentItem?.tipo_visura ?? "—"} description="Modalità di estrazione del documento." />
-          <CatastoMiniStat eyebrow="Batch sorgente" value={documentItem?.batch_id ? "Presente" : "Assente"} description="Collegamento al lotto di origine quando disponibile." tone={documentItem?.batch_id ? "success" : "default"} />
+          <CatastoMiniStat compact={embedded} eyebrow="Comune" value={documentItem?.comune ?? "—"} description="Localizzazione della visura archiviata." />
+          <CatastoMiniStat compact={embedded} eyebrow="Tipo visura" value={documentItem?.tipo_visura ?? "—"} description="Modalità di estrazione del documento." />
+          <CatastoMiniStat compact={embedded} eyebrow="Batch sorgente" value={documentItem?.batch_id ? "Presente" : "Assente"} description="Collegamento al lotto di origine quando disponibile." tone={documentItem?.batch_id ? "success" : "default"} />
         </div>
       </CatastoHero>
 

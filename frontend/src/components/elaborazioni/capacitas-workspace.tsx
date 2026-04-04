@@ -111,6 +111,7 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
     <>
       <div className="space-y-6">
         <ElaborazioneHero
+          compact={embedded}
           badge={
             <>
               <UsersIcon className="h-3.5 w-3.5" />
@@ -121,10 +122,11 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
           description="La schermata mette in evidenza il pool disponibile, la credenziale effettiva selezionata e il risultato della ricerca in un layout coerente con il resto del modulo."
           actions={
             error ? (
-              <ElaborazioneNoticeCard title="Errore ricerca" description={error} tone="danger" />
+              <ElaborazioneNoticeCard compact={embedded} title="Errore ricerca" description={error} tone="danger" />
             ) : (
               <>
                 <ElaborazioneNoticeCard
+                  compact={embedded}
                   title="Credenziali dedicate"
                   description="Se non selezioni un account manualmente, il backend sceglie una credenziale attiva nella finestra oraria corretta."
                 />
@@ -136,9 +138,9 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
           }
         >
           <div className="grid gap-3 sm:grid-cols-3">
-            <ElaborazioneMiniStat eyebrow="Pool" value={`${activeCredentialsCount}/${credentials.length}`} description="Account attivi sul totale configurato." />
-            <ElaborazioneMiniStat eyebrow="Ricerca corrente" value={results?.total ?? 0} description="Record restituiti dall'ultima ricerca." tone={results && results.total > 0 ? "success" : "default"} />
-            <ElaborazioneMiniStat eyebrow="Account forzato" value={activeCredential ? activeCredential.label : "Auto"} description="Se impostato, il backend non esegue auto-selezione." />
+            <ElaborazioneMiniStat compact={embedded} eyebrow="Pool" value={`${activeCredentialsCount}/${credentials.length}`} description="Account attivi sul totale configurato." />
+            <ElaborazioneMiniStat compact={embedded} eyebrow="Ricerca corrente" value={results?.total ?? 0} description="Record restituiti dall'ultima ricerca." tone={results && results.total > 0 ? "success" : "default"} />
+            <ElaborazioneMiniStat compact={embedded} eyebrow="Account forzato" value={activeCredential ? activeCredential.label : "Auto"} description="Se impostato, il backend non esegue auto-selezione." />
           </div>
         </ElaborazioneHero>
 

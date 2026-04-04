@@ -314,6 +314,7 @@ export function ElaborazioneBatchDetailWorkspace({
   const content = (
     <>
       <ElaborazioneHero
+        compact={embedded}
         badge={
           <>
             <FolderIcon className="h-3.5 w-3.5" />
@@ -324,15 +325,17 @@ export function ElaborazioneBatchDetailWorkspace({
         description="Lo stream websocket mantiene questa vista aggiornata su stato righe, operazioni correnti e richieste CAPTCHA che richiedono intervento manuale."
         actions={
           error ? (
-            <ElaborazioneNoticeCard title="Errore batch" description={error} tone="danger" />
+            <ElaborazioneNoticeCard compact={embedded} title="Errore batch" description={error} tone="danger" />
           ) : activeCaptchaRequest ? (
             <ElaborazioneNoticeCard
+              compact={embedded}
               title="Intervento richiesto"
               description={`CAPTCHA aperto per ${activeCaptchaRequest.comune} · Fg.${activeCaptchaRequest.foglio} Part.${activeCaptchaRequest.particella}.`}
               tone="warning"
             />
           ) : (
             <ElaborazioneNoticeCard
+              compact={embedded}
               title="Canale realtime"
               description="Ogni aggiornamento ricevuto dal websocket forza un refresh del dettaglio batch."
             />
@@ -341,19 +344,22 @@ export function ElaborazioneBatchDetailWorkspace({
       >
         <div className="grid gap-3 sm:grid-cols-4">
           <ElaborazioneMiniStat
+            compact={embedded}
             description={batch?.current_operation ?? "Recupero stato batch"}
             eyebrow="Stato"
             tone={batch?.status === "completed" ? "success" : batch?.status === "failed" ? "warning" : "default"}
             value={batch?.status ?? "Caricamento"}
           />
-          <ElaborazioneMiniStat eyebrow="Totale" value={batch?.total_items ?? 0} description="Righe inserite nel lotto." />
+          <ElaborazioneMiniStat compact={embedded} eyebrow="Totale" value={batch?.total_items ?? 0} description="Righe inserite nel lotto." />
           <ElaborazioneMiniStat
+            compact={embedded}
             description={`${batch?.failed_items ?? 0} fallite · ${batch?.skipped_items ?? 0} saltate`}
             eyebrow="Completate"
             tone={(batch?.completed_items ?? 0) > 0 ? "success" : "default"}
             value={batch?.completed_items ?? 0}
           />
           <ElaborazioneMiniStat
+            compact={embedded}
             description="Richieste manuali ancora da risolvere per il worker."
             eyebrow="CAPTCHA"
             tone={activeCaptchaRequest ? "warning" : "default"}

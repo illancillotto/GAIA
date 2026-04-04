@@ -321,6 +321,7 @@ export function ElaborazioneArchiveWorkspaceContent({
   const content = (
     <>
       <ElaborazioneHero
+        compact={embedded}
         badge={
           <>
             <FolderIcon className="h-3.5 w-3.5" />
@@ -335,9 +336,10 @@ export function ElaborazioneArchiveWorkspaceContent({
         }
         actions={
           sharedError ? (
-            <ElaborazioneNoticeCard title="Errore archivio" description={sharedError} tone="danger" />
+            <ElaborazioneNoticeCard compact={embedded} title="Errore archivio" description={sharedError} tone="danger" />
           ) : (
             <ElaborazioneNoticeCard
+              compact={embedded}
               title={batchOnlyMode ? "Archivio batch" : "Vista unificata"}
               description={
                 batchOnlyMode
@@ -350,16 +352,16 @@ export function ElaborazioneArchiveWorkspaceContent({
       >
         {batchOnlyMode ? (
           <div className="grid gap-3 sm:grid-cols-3">
-            <ElaborazioneMiniStat eyebrow="Batch" value={batches.length} description={`${processingCount} in lavorazione · ${failedCount} con errori`} />
-            <ElaborazioneMiniStat eyebrow="Completati" value={completedCount} description="Lotti conclusi disponibili nello storico." tone={completedCount > 0 ? "success" : "default"} />
-            <ElaborazioneMiniStat eyebrow="Falliti" value={failedCount} description="Batch con richieste fallite o errori in corso." tone={failedCount > 0 ? "warning" : "default"} />
+            <ElaborazioneMiniStat compact={embedded} eyebrow="Batch" value={batches.length} description={`${processingCount} in lavorazione · ${failedCount} con errori`} />
+            <ElaborazioneMiniStat compact={embedded} eyebrow="Completati" value={completedCount} description="Lotti conclusi disponibili nello storico." tone={completedCount > 0 ? "success" : "default"} />
+            <ElaborazioneMiniStat compact={embedded} eyebrow="Falliti" value={failedCount} description="Batch con richieste fallite o errori in corso." tone={failedCount > 0 ? "warning" : "default"} />
           </div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-4">
-            <ElaborazioneMiniStat eyebrow="Documenti" value={documents.length} description="Risultati correnti della ricerca documentale." />
-            <ElaborazioneMiniStat eyebrow="Selezione ZIP" value={selectedDocumentIds.length} description="Documenti pronti per export massivo." tone={selectedDocumentIds.length > 0 ? "success" : "default"} />
-            <ElaborazioneMiniStat eyebrow="Batch" value={batches.length} description={`${processingCount} in lavorazione · ${failedCount} con errori`} />
-            <ElaborazioneMiniStat eyebrow="Completati" value={completedCount} description="Lotti conclusi disponibili nello storico." tone={completedCount > 0 ? "success" : "default"} />
+            <ElaborazioneMiniStat compact={embedded} eyebrow="Documenti" value={documents.length} description="Risultati correnti della ricerca documentale." />
+            <ElaborazioneMiniStat compact={embedded} eyebrow="Selezione ZIP" value={selectedDocumentIds.length} description="Documenti pronti per export massivo." tone={selectedDocumentIds.length > 0 ? "success" : "default"} />
+            <ElaborazioneMiniStat compact={embedded} eyebrow="Batch" value={batches.length} description={`${processingCount} in lavorazione · ${failedCount} con errori`} />
+            <ElaborazioneMiniStat compact={embedded} eyebrow="Completati" value={completedCount} description="Lotti conclusi disponibili nello storico." tone={completedCount > 0 ? "success" : "default"} />
           </div>
         )}
       </ElaborazioneHero>

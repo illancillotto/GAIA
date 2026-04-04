@@ -309,6 +309,7 @@ export function CatastoArchiveWorkspaceContent({
   const content = (
     <>
       <CatastoHero
+        compact={embedded}
         badge={
           <>
             <FolderIcon className="h-3.5 w-3.5" />
@@ -331,9 +332,10 @@ export function CatastoArchiveWorkspaceContent({
         }
         actions={
           sharedError ? (
-            <CatastoNoticeCard title="Errore archivio" description={sharedError} tone="danger" />
+            <CatastoNoticeCard compact={embedded} title="Errore archivio" description={sharedError} tone="danger" />
           ) : (
             <CatastoNoticeCard
+              compact={embedded}
               title={documentsOnlyMode ? "Archivio documenti" : "Vista unificata"}
               description={
                 documentsOnlyMode
@@ -346,16 +348,16 @@ export function CatastoArchiveWorkspaceContent({
       >
         {documentsOnlyMode ? (
           <div className="grid gap-3 sm:grid-cols-3">
-            <CatastoMiniStat eyebrow="Documenti" value={documents.length} description="Risultati correnti della ricerca documentale." />
-            <CatastoMiniStat eyebrow="Selezione ZIP" value={selectedDocumentIds.length} description="Documenti pronti per export massivo." tone={selectedDocumentIds.length > 0 ? "success" : "default"} />
-            <CatastoMiniStat eyebrow="Ricerca" value={documentsBusy ? "In corso" : "Pronta"} description="Stato della consultazione archivio documentale." tone={documentsBusy ? "warning" : "default"} />
+            <CatastoMiniStat compact={embedded} eyebrow="Documenti" value={documents.length} description="Risultati correnti della ricerca documentale." />
+            <CatastoMiniStat compact={embedded} eyebrow="Selezione ZIP" value={selectedDocumentIds.length} description="Documenti pronti per export massivo." tone={selectedDocumentIds.length > 0 ? "success" : "default"} />
+            <CatastoMiniStat compact={embedded} eyebrow="Ricerca" value={documentsBusy ? "In corso" : "Pronta"} description="Stato della consultazione archivio documentale." tone={documentsBusy ? "warning" : "default"} />
           </div>
         ) : (
           <div className="grid gap-3 sm:grid-cols-4">
-            <CatastoMiniStat eyebrow="Documenti" value={documents.length} description="Risultati correnti della ricerca documentale." />
-            <CatastoMiniStat eyebrow="Selezione ZIP" value={selectedDocumentIds.length} description="Documenti pronti per export massivo." tone={selectedDocumentIds.length > 0 ? "success" : "default"} />
-            <CatastoMiniStat eyebrow="Batch" value={batches.length} description={`${processingCount} in lavorazione · ${failedCount} con errori`} />
-            <CatastoMiniStat eyebrow="Completati" value={completedCount} description="Lotti conclusi disponibili nello storico." tone={completedCount > 0 ? "success" : "default"} />
+            <CatastoMiniStat compact={embedded} eyebrow="Documenti" value={documents.length} description="Risultati correnti della ricerca documentale." />
+            <CatastoMiniStat compact={embedded} eyebrow="Selezione ZIP" value={selectedDocumentIds.length} description="Documenti pronti per export massivo." tone={selectedDocumentIds.length > 0 ? "success" : "default"} />
+            <CatastoMiniStat compact={embedded} eyebrow="Batch" value={batches.length} description={`${processingCount} in lavorazione · ${failedCount} con errori`} />
+            <CatastoMiniStat compact={embedded} eyebrow="Completati" value={completedCount} description="Lotti conclusi disponibili nello storico." tone={completedCount > 0 ? "success" : "default"} />
           </div>
         )}
       </CatastoHero>
