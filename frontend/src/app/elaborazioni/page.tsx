@@ -152,6 +152,7 @@ export default function ElaborazioniPage() {
 
   const activeCapacitasCredentials = capacitasCredentials.filter((credential) => credential.active);
   const capacitasWarningCount = capacitasCredentials.filter((credential) => Boolean(credential.last_error)).length;
+  const activeSisterCredentials = credentialStatus?.credentials.filter((credential) => credential.active) ?? [];
   const latestCapacitasUsage = capacitasCredentials
     .map((credential) => credential.last_used_at)
     .filter((value): value is string => Boolean(value))
@@ -194,7 +195,11 @@ export default function ElaborazioniPage() {
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">SISTER</p>
             <div className="mt-2 flex items-baseline justify-between gap-3">
               <p className="text-lg font-semibold text-gray-900">{credentialStatus?.configured ? "Attivo" : "Setup"}</p>
-              <p className="truncate text-xs text-gray-500">{credentialStatus?.credential?.sister_username ?? "non configurato"}</p>
+              <p className="truncate text-xs text-gray-500">
+                {credentialStatus?.configured
+                  ? `${activeSisterCredentials.length}/${credentialStatus?.credentials.length ?? 0} attive · ${credentialStatus?.default_credential?.label ?? "default"}`
+                  : "non configurato"}
+              </p>
             </div>
           </div>
           <div className="rounded-2xl border border-amber-200/80 bg-white/80 px-4 py-3">
@@ -280,7 +285,9 @@ export default function ElaborazioniPage() {
                     {credentialStatus?.configured ? "Configurate e pronte all'uso" : "Configurazione richiesta"}
                   </p>
                   <p className="mt-1 text-sm text-gray-500">
-                    {credentialStatus?.credential?.sister_username ?? "Apri le credenziali per configurare l'accesso Agenzia delle Entrate."}
+                    {credentialStatus?.default_credential
+                      ? `${credentialStatus.default_credential.label} · ${credentialStatus.default_credential.sister_username}`
+                      : "Apri le credenziali per configurare l'accesso Agenzia delle Entrate."}
                   </p>
                 </div>
                 <button

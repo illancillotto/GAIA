@@ -17,8 +17,8 @@ import {
   ApiError,
   createCapacitasCredential,
   createElaborazioneCredentialTestWebSocket,
+  deleteElaborazioneCredential,
   deleteCapacitasCredential,
-  deleteElaborazioneCredentials,
   getElaborazioneCredentialTest,
   getElaborazioneCredentials,
   listCapacitasCredentials,
@@ -26,17 +26,30 @@ import {
   testCapacitasCredential,
   testElaborazioneCredentials,
   updateCapacitasCredential,
+  updateElaborazioneCredential,
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import { formatDateTime } from "@/lib/presentation";
 import type {
   CapacitasCredential,
+  ElaborazioneCredential,
   ElaborazioneCredentialStatus,
   ElaborazioneCredentialTestResult,
   ElaborazioneCredentialTestWebSocketEvent,
 } from "@/types/api";
 
 const DEFAULT_UFFICIO = "ORISTANO Territorio";
+const DEFAULT_SISTER_FORM = {
+  id: null as string | null,
+  label: "",
+  sister_username: "",
+  sister_password: "",
+  convenzione: "",
+  codice_richiesta: "",
+  ufficio_provinciale: DEFAULT_UFFICIO,
+  active: true,
+  is_default: false,
+};
 
 const DEFAULT_CAPACITAS_FORM = {
   id: null as number | null,
@@ -231,13 +244,7 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
   const [sisterExpanded, setSisterExpanded] = useState(true);
   const [capacitasExpanded, setCapacitasExpanded] = useState(true);
   const [credentialStatus, setCredentialStatus] = useState<ElaborazioneCredentialStatus | null>(null);
-  const [formState, setFormState] = useState({
-    sister_username: "",
-    sister_password: "",
-    convenzione: "",
-    codice_richiesta: "",
-    ufficio_provinciale: DEFAULT_UFFICIO,
-  });
+  const [formState, setFormState] = useState(DEFAULT_SISTER_FORM);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -272,6 +279,24 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
     void Promise.all([loadCredentials(), loadCapacitasCredentials()]);
   }, []);
 
+  function resetSisterForm(): void {
+    setFormState(DEFAULT_SISTER_FORM);
+  }
+
+  function applyCredentialToForm(credential: ElaborazioneCredential): void {
+    setFormState({
+      id: credential.id,
+      label: credential.label,
+      sister_username: credential.sister_username,
+      sister_password: "",
+      convenzione: credential.convenzione ?? "",
+      codice_richiesta: credential.codice_richiesta ?? "",
+      ufficio_provinciale: credential.ufficio_provinciale,
+      active: credential.active,
+      is_default: credential.is_default,
+    });
+  }
+
   async function loadCredentials(): Promise<void> {
     const token = getStoredAccessToken();
     if (!token) return;
@@ -279,13 +304,39 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
     try {
       const result = await getElaborazioneCredentials(token);
       setCredentialStatus(result);
-      setFormState((current) => ({
-        ...current,
-        sister_username: result.credential?.sister_username ?? current.sister_username,
-        convenzione: result.credential?.convenzione ?? "",
-        codice_richiesta: result.credential?.codice_richiesta ?? "",
-        ufficio_provinciale: result.credential?.ufficio_provinciale ?? DEFAULT_UFFICIO,
-      }));
+      setFormState((current) => {
+        if (current.id != null) {
+          const selected = result.credentials.find((credential) => credential.id === current.id);
+          if (selected) {
+            return {
+              ...current,
+              label: selected.label,
+              sister_username: selected.sister_username,
+              convenzione: selected.convenzione ?? "",
+              codice_richiesta: selected.codice_richiesta ?? "",
+              ufficio_provinciale: selected.ufficio_provinciale,
+              active: selected.active,
+              is_default: selected.is_default,
+            };
+          }
+        }
+
+        if (result.default_credential && !current.sister_username.trim()) {
+          return {
+            ...current,
+            id: result.default_credential.id,
+            label: result.default_credential.label,
+            sister_username: result.default_credential.sister_username,
+            convenzione: result.default_credential.convenzione ?? "",
+            codice_richiesta: result.default_credential.codice_richiesta ?? "",
+            ufficio_provinciale: result.default_credential.ufficio_provinciale,
+            active: result.default_credential.active,
+            is_default: result.default_credential.is_default,
+          };
+        }
+
+        return current;
+      });
       setError(null);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Errore caricamento credenziali");
@@ -333,10 +384,43 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
 
     setBusy(true);
     try {
-      await saveElaborazioneCredentials(token, formState);
+      let savedCredential: ElaborazioneCredential;
+      if (formState.id) {
+        savedCredential = await updateElaborazioneCredential(token, formState.id, {
+          label: formState.label,
+          sister_username: formState.sister_username,
+          sister_password: formState.sister_password.trim().length > 0 ? formState.sister_password : undefined,
+          convenzione: formState.convenzione || null,
+          codice_richiesta: formState.codice_richiesta || null,
+          ufficio_provinciale: formState.ufficio_provinciale,
+          active: formState.active,
+          is_default: formState.is_default,
+        });
+      } else {
+        savedCredential = await saveElaborazioneCredentials(token, {
+          label: formState.label,
+          sister_username: formState.sister_username,
+          sister_password: formState.sister_password,
+          convenzione: formState.convenzione || undefined,
+          codice_richiesta: formState.codice_richiesta || undefined,
+          ufficio_provinciale: formState.ufficio_provinciale,
+          active: formState.active,
+          is_default: formState.is_default,
+        });
+      }
       await loadCredentials();
-      setFormState((current) => ({ ...current, sister_password: "" }));
-      setStatusMessage("Credenziali SISTER salvate nella pagina unificata del modulo elaborazioni.");
+      setFormState({
+        id: savedCredential.id,
+        label: savedCredential.label,
+        sister_username: savedCredential.sister_username,
+        sister_password: "",
+        convenzione: savedCredential.convenzione ?? "",
+        codice_richiesta: savedCredential.codice_richiesta ?? "",
+        ufficio_provinciale: savedCredential.ufficio_provinciale,
+        active: savedCredential.active,
+        is_default: savedCredential.is_default,
+      });
+      setStatusMessage(formState.id ? "Credenziale SISTER aggiornata." : "Credenziale SISTER creata.");
       setError(null);
       setTestResult(null);
     } catch (saveError) {
@@ -349,20 +433,14 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
 
   async function handleDelete(): Promise<void> {
     const token = getStoredAccessToken();
-    if (!token) return;
+    if (!token || !formState.id) return;
 
     setBusy(true);
     try {
-      await deleteElaborazioneCredentials(token);
+      await deleteElaborazioneCredential(token, formState.id);
       await loadCredentials();
-      setFormState({
-        sister_username: "",
-        sister_password: "",
-        convenzione: "",
-        codice_richiesta: "",
-        ufficio_provinciale: DEFAULT_UFFICIO,
-      });
-      setStatusMessage("Credenziali SISTER rimosse dalla configurazione elaborazioni.");
+      resetSisterForm();
+      setStatusMessage("Credenziale SISTER rimossa.");
       setError(null);
       setTestResult(null);
     } catch (deleteError) {
@@ -390,7 +468,9 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
               codice_richiesta: formState.codice_richiesta || undefined,
               ufficio_provinciale: formState.ufficio_provinciale,
             }
-          : undefined,
+          : formState.id
+            ? { credential_id: formState.id }
+            : undefined,
       );
       setTestResult(result);
       setTestBusy(["pending", "processing"].includes(result.status));
@@ -557,13 +637,22 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
       setError(null);
       if (result.verified_at) {
         setCredentialStatus((current) =>
-          current && current.credential
+          current
             ? {
                 ...current,
-                credential: {
-                  ...current.credential,
-                  verified_at: result.verified_at,
-                },
+                credentials: current.credentials.map((credential) =>
+                  credential.id === (result.credential_id ?? current.default_credential?.id)
+                    ? { ...credential, verified_at: result.verified_at }
+                    : credential,
+                ),
+                default_credential:
+                  current.default_credential && current.default_credential.id === (result.credential_id ?? current.default_credential.id)
+                    ? { ...current.default_credential, verified_at: result.verified_at }
+                    : current.default_credential,
+                credential:
+                  current.credential && current.credential.id === (result.credential_id ?? current.credential.id)
+                    ? { ...current.credential, verified_at: result.verified_at }
+                    : current.credential,
               }
             : current,
         );
@@ -604,13 +693,22 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
         setError(null);
         if (nextResult.verified_at) {
           setCredentialStatus((current) =>
-            current && current.credential
+            current
               ? {
                   ...current,
-                  credential: {
-                    ...current.credential,
-                    verified_at: nextResult.verified_at,
-                  },
+                  credentials: current.credentials.map((credential) =>
+                    credential.id === (nextResult.credential_id ?? current.default_credential?.id)
+                      ? { ...credential, verified_at: nextResult.verified_at }
+                      : credential,
+                  ),
+                  default_credential:
+                    current.default_credential && current.default_credential.id === (nextResult.credential_id ?? current.default_credential.id)
+                      ? { ...current.default_credential, verified_at: nextResult.verified_at }
+                      : current.default_credential,
+                  credential:
+                    current.credential && current.credential.id === (nextResult.credential_id ?? current.credential.id)
+                      ? { ...current.credential, verified_at: nextResult.verified_at }
+                      : current.credential,
                 }
               : current,
           );
@@ -636,7 +734,7 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
   }, [activeTestId, activeTestStatus, refreshConnectionTest]);
 
   const canTestConnection = Boolean(
-    (!busy && credentialStatus?.configured) || (formState.sister_username.trim() && formState.sister_password.trim()),
+    (!busy && credentialStatus?.configured && formState.id != null) || (formState.sister_username.trim() && formState.sister_password.trim()),
   );
   const normalizedTestMessage = normalizeIssueText(testResult?.message);
   const hasExistingSessionIssue =
@@ -664,7 +762,13 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
       (isEditingCapacitas || capacitasForm.password.trim()),
   );
 
+  const sisterCredentials = credentialStatus?.credentials ?? [];
+  const selectedCredential =
+    (formState.id ? sisterCredentials.find((credential) => credential.id === formState.id) : null) ??
+    credentialStatus?.default_credential ??
+    null;
   const hasSisterCredentials = Boolean(credentialStatus?.configured);
+  const activeSisterCount = sisterCredentials.filter((credential) => credential.active).length;
   const activeCapacitasCount = capacitasCredentials.filter((credential) => credential.active).length;
   const capacitasWarningCount = capacitasCredentials.filter((credential) => Boolean(credential.last_error)).length;
   const latestCapacitasUsage = capacitasCredentials
@@ -674,7 +778,7 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
     .at(-1);
   const sisterStateLabel = hasSisterCredentials ? "Operativo" : "Non configurato";
   const sisterStateDescription = hasSisterCredentials
-    ? credentialStatus?.credential?.sister_username ?? "Credenziali presenti nel vault"
+    ? `${activeSisterCount}/${sisterCredentials.length} attive · default ${credentialStatus?.default_credential?.label ?? "non impostato"}`
     : "Salva username e password per attivare il worker visure";
 
   const content = (
@@ -791,7 +895,7 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                   <div className={`rounded-2xl border border-white/80 bg-white/80 text-right ${embedded ? "px-3 py-2.5" : "px-4 py-3"}`}>
                     <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">Ultima verifica</p>
                     <p className={`${embedded ? "mt-1.5 text-xs" : "mt-2 text-sm"} font-semibold text-gray-900`}>
-                      {formatDateTime(credentialStatus?.credential?.verified_at ?? null)}
+                      {formatDateTime(selectedCredential?.verified_at ?? null)}
                     </p>
                   </div>
                 </div>
@@ -800,6 +904,15 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
               <div className={`grid gap-6 ${embedded ? "p-5 lg:grid-cols-1" : "p-6 lg:grid-cols-[1.25fr,0.75fr]"}`}>
                 <div className="space-y-5">
                   <div className="grid gap-4 md:grid-cols-2">
+                    <label className="space-y-2">
+                      <span className="label-caption">Label operativa</span>
+                      <input
+                        className="form-control"
+                        onChange={(event) => setFormState((current) => ({ ...current, label: event.target.value }))}
+                        placeholder="SISTER principale"
+                        value={formState.label}
+                      />
+                    </label>
                     <label className="space-y-2">
                       <span className="label-caption">Username SISTER</span>
                       <input
@@ -845,24 +958,49 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                         value={formState.ufficio_provinciale}
                       />
                     </label>
+                    <label className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-[#f8faf8] px-4 py-3">
+                      <input
+                        checked={formState.active}
+                        className="h-4 w-4 accent-[#1D4E35]"
+                        type="checkbox"
+                        onChange={(event) => setFormState((current) => ({ ...current, active: event.target.checked }))}
+                      />
+                      <span className="text-sm text-gray-700">Credenziale attiva per test e batch</span>
+                    </label>
+                    <label className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-[#f8faf8] px-4 py-3">
+                      <input
+                        checked={formState.is_default}
+                        className="h-4 w-4 accent-[#1D4E35]"
+                        type="checkbox"
+                        onChange={(event) => setFormState((current) => ({ ...current, is_default: event.target.checked }))}
+                      />
+                      <span className="text-sm text-gray-700">Usa come profilo predefinito del worker</span>
+                    </label>
                   </div>
 
                   <div className="flex flex-wrap items-center gap-3">
                     <button
                       className="btn-primary"
-                      disabled={busy || !formState.sister_username || !formState.sister_password}
+                      disabled={
+                        busy ||
+                        !formState.sister_username.trim() ||
+                        (!formState.id && !formState.sister_password.trim())
+                      }
                       onClick={() => void handleSave()}
                       type="button"
                     >
-                      {busy ? "Salvataggio..." : credentialStatus?.configured ? "Aggiorna credenziali" : "Salva credenziali"}
+                      {busy ? "Salvataggio..." : formState.id ? "Aggiorna credenziale" : "Aggiungi credenziale"}
                     </button>
                     <button
                       className="btn-secondary"
-                      disabled={busy || !credentialStatus?.configured}
+                      disabled={busy || !formState.id}
                       onClick={() => void handleDelete()}
                       type="button"
                     >
                       Elimina
+                    </button>
+                    <button className="btn-secondary" disabled={busy} onClick={resetSisterForm} type="button">
+                      {formState.id ? "Nuova credenziale" : "Reset form"}
                     </button>
                     <button
                       className="btn-secondary"
@@ -872,6 +1010,129 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                     >
                       {testBusy ? "Test in corso..." : "Testa connessione"}
                     </button>
+                  </div>
+
+                  <div className="overflow-hidden rounded-[24px] border border-[#e1e8df] bg-[#fbfcfa]">
+                    <div className="border-b border-[#edf1eb] px-4 py-3">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">Pool credenziali SISTER</p>
+                      <p className="mt-1 text-sm text-gray-500">
+                        Gestisci piu profili, scegli il predefinito del worker e modifica quello selezionato nel form.
+                      </p>
+                    </div>
+                    {sisterCredentials.length === 0 ? (
+                      <div className="px-4 py-4 text-sm text-gray-500">Nessuna credenziale SISTER configurata.</div>
+                    ) : (
+                      <div className="overflow-x-auto">
+                        <table className="data-table">
+                          <thead>
+                            <tr>
+                              <th>Label</th>
+                              <th>Username</th>
+                              <th>Stato</th>
+                              <th>Default</th>
+                              <th>Verifica</th>
+                              <th>Azioni</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {sisterCredentials.map((credential) => (
+                              <tr key={credential.id}>
+                                <td className="font-medium text-gray-900">{credential.label}</td>
+                                <td>{credential.sister_username}</td>
+                                <td>{credential.active ? "Attiva" : "Disattiva"}</td>
+                                <td>{credential.is_default ? "Si" : "No"}</td>
+                                <td>{formatDateTime(credential.verified_at)}</td>
+                                <td>
+                                  <div className="flex flex-wrap gap-3 text-sm">
+                                    <button
+                                      className="text-[#1D4E35] transition hover:text-[#143726]"
+                                      onClick={() => applyCredentialToForm(credential)}
+                                      type="button"
+                                    >
+                                      Modifica
+                                    </button>
+                                    {!credential.is_default ? (
+                                      <button
+                                        className="text-[#1D4E35] transition hover:text-[#143726]"
+                                        onClick={async () => {
+                                          const token = getStoredAccessToken();
+                                          if (!token) return;
+                                          setBusy(true);
+                                          try {
+                                            await updateElaborazioneCredential(token, credential.id, { is_default: true, active: true });
+                                            await loadCredentials();
+                                            setStatusMessage(`Credenziale ${credential.label} impostata come predefinita.`);
+                                            setError(null);
+                                          } catch (updateError) {
+                                            setError(updateError instanceof Error ? updateError.message : "Errore aggiornamento credenziale");
+                                            setStatusMessage(null);
+                                          } finally {
+                                            setBusy(false);
+                                          }
+                                        }}
+                                        type="button"
+                                      >
+                                        Rendi default
+                                      </button>
+                                    ) : null}
+                                    <button
+                                      className="text-[#1D4E35] transition hover:text-[#143726]"
+                                      disabled={testBusy}
+                                      onClick={async () => {
+                                        applyCredentialToForm(credential);
+                                        const token = getStoredAccessToken();
+                                        if (!token) return;
+                                        setTestBusy(true);
+                                        try {
+                                          const result = await testElaborazioneCredentials(token, { credential_id: credential.id });
+                                          setTestResult(result);
+                                          setTestBusy(["pending", "processing"].includes(result.status));
+                                          setError(null);
+                                        } catch (testError) {
+                                          setError(testError instanceof Error ? testError.message : "Errore test connessione SISTER");
+                                          setTestResult(null);
+                                          setTestBusy(false);
+                                        }
+                                      }}
+                                      type="button"
+                                    >
+                                      Test
+                                    </button>
+                                    <button
+                                      className="text-red-600 transition hover:text-red-700"
+                                      disabled={busy}
+                                      onClick={async () => {
+                                        const token = getStoredAccessToken();
+                                        if (!token) return;
+                                        setBusy(true);
+                                        try {
+                                          await deleteElaborazioneCredential(token, credential.id);
+                                          await loadCredentials();
+                                          if (formState.id === credential.id) {
+                                            resetSisterForm();
+                                          }
+                                          setStatusMessage(`Credenziale ${credential.label} rimossa.`);
+                                          setError(null);
+                                          setTestResult(null);
+                                        } catch (deleteError) {
+                                          setError(deleteError instanceof Error ? deleteError.message : "Errore eliminazione credenziale");
+                                          setStatusMessage(null);
+                                        } finally {
+                                          setBusy(false);
+                                        }
+                                      }}
+                                      type="button"
+                                    >
+                                      Elimina
+                                    </button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -884,10 +1145,10 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                           <ServerIcon className="h-4 w-4" />
                         </div>
                         <div>
-                          <p className="text-sm font-semibold text-gray-900">{hasSisterCredentials ? "Vault pronto" : "Configurazione assente"}</p>
+                          <p className="text-sm font-semibold text-gray-900">{hasSisterCredentials ? "Pool pronto" : "Configurazione assente"}</p>
                           <p className={`mt-1 text-sm text-gray-500 ${embedded ? "leading-5" : "leading-6"}`}>
                             {hasSisterCredentials
-                              ? "Il backend dispone gia di una credenziale persistente per il worker."
+                              ? `${activeSisterCount} profili attivi disponibili per il worker.`
                               : "Inserisci le credenziali per attivare batch e visure singole."}
                           </p>
                         </div>
@@ -897,8 +1158,10 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                           <RefreshIcon className="h-4 w-4" />
                         </div>
                         <div>
-                          <p className="text-sm font-semibold text-gray-900">Ufficio corrente</p>
-                          <p className={`mt-1 text-sm text-gray-500 ${embedded ? "leading-5" : "leading-6"}`}>{formState.ufficio_provinciale || DEFAULT_UFFICIO}</p>
+                          <p className="text-sm font-semibold text-gray-900">Profilo selezionato</p>
+                          <p className={`mt-1 text-sm text-gray-500 ${embedded ? "leading-5" : "leading-6"}`}>
+                            {selectedCredential ? `${selectedCredential.label} · ${selectedCredential.ufficio_provinciale}` : formState.ufficio_provinciale || DEFAULT_UFFICIO}
+                          </p>
                         </div>
                       </div>
                     </div>
@@ -943,10 +1206,11 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
               <article className="rounded-[28px] border border-[#d9dfd6] bg-white p-6 shadow-panel">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">Dettagli SISTER</p>
                 <div className="mt-4 grid gap-3">
-                  <DetailCard label="Configurazione" value={hasSisterCredentials ? "Credenziali presenti" : "Nessuna credenziale salvata"} />
-                  <DetailCard label="Username" value={credentialStatus?.credential?.sister_username ?? "—"} />
-                  <DetailCard label="Ultima verifica" value={formatDateTime(credentialStatus?.credential?.verified_at ?? null)} />
-                  <DetailCard label="Ultimo update" value={formatDateTime(credentialStatus?.credential?.updated_at ?? null)} />
+                  <DetailCard label="Configurazione" value={hasSisterCredentials ? `${sisterCredentials.length} profili` : "Nessuna credenziale salvata"} />
+                  <DetailCard label="Default" value={credentialStatus?.default_credential?.label ?? "—"} />
+                  <DetailCard label="Username" value={selectedCredential?.sister_username ?? "—"} />
+                  <DetailCard label="Ultima verifica" value={formatDateTime(selectedCredential?.verified_at ?? null)} />
+                  <DetailCard label="Ultimo update" value={formatDateTime(selectedCredential?.updated_at ?? null)} />
                 </div>
               </article>
 

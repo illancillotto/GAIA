@@ -58,6 +58,7 @@ def build_connection_test_response(db: Session, connection_test: object) -> Cata
 
     return CatastoCredentialTestResponse(
         id=connection_test.id,
+        credential_id=getattr(connection_test, "credential_id", None),
         status=connection_test.status,
         success=success,
         mode=connection_test.mode,

@@ -228,10 +228,20 @@ class CatastoWorker:
                 return
             batch.current_operation = "Batch preso in carico dal worker"
             db.commit()
-            credential = db.scalar(select(CatastoCredential).where(CatastoCredential.user_id == batch.user_id))
+            credentials = list(
+                db.scalars(
+                    select(CatastoCredential)
+                    .where(CatastoCredential.user_id == batch.user_id)
+                    .order_by(CatastoCredential.is_default.desc(), CatastoCredential.active.desc(), CatastoCredential.updated_at.desc())
+                ).all()
+            )
+            credential = next(
+                (item for item in credentials if item.is_default and item.active),
+                next((item for item in credentials if item.active), None),
+            )
             if credential is None:
                 batch.status = CatastoBatchStatus.FAILED.value
-                batch.current_operation = "Credenziali SISTER mancanti"
+                batch.current_operation = "Credenziali SISTER attive mancanti"
                 db.commit()
                 return
             password = self.vault.decrypt(credential.sister_password_encrypted)

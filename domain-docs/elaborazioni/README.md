@@ -7,6 +7,7 @@ Ambito runtime attuale:
 - visure per soggetto PF/PNF
 - gestione CAPTCHA
 - report e artifact diagnostici batch/richiesta
+- pool credenziali SISTER con profilo default per worker e test connessione
 
 ## Dashboard operativa
 
@@ -20,6 +21,7 @@ La pagina `/elaborazioni` usa una struttura a sezioni stabili:
 - i workspace principali (`nuova richiesta`, `archivio batch`, `dettaglio batch`, `Capacitas`) sono renderizzati nativamente in overlay React; l'`iframe` resta solo come fallback per percorsi non ancora convertiti
 - anche `Credenziali` e il viewer dei documenti catastali sono ora componenti nativi riusabili, quindi l'overlay non dipende piu dall'`iframe` nei percorsi operativi principali del modulo
 - nel workspace `Credenziali` i blocchi `SISTER` e `Capacitas` sono collassabili, cosi la modale puo comprimere i pannelli non necessari senza perdere il contesto operativo
+- il workspace `Credenziali` gestisce ora piu credenziali SISTER per utente: ogni profilo puo essere attivo/disattivo, editabile e impostato come `default`; il worker usa il profilo default attivo, oppure il primo profilo attivo disponibile
 
 ## Struttura
 

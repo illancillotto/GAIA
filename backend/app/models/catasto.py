@@ -43,7 +43,7 @@ class CatastoConnectionTestStatus(StrEnum):
 
 class CatastoCredential(Base):
     __tablename__ = "catasto_credentials"
-    __table_args__ = (UniqueConstraint("user_id", name="uq_catasto_credentials_user_id"),)
+    __table_args__ = (UniqueConstraint("user_id", "sister_username", name="uq_catasto_credentials_user_username"),)
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     user_id: Mapped[int] = mapped_column(
@@ -51,6 +51,7 @@ class CatastoCredential(Base):
         nullable=False,
         index=True,
     )
+    label: Mapped[str] = mapped_column(String(255), nullable=False)
     sister_username: Mapped[str] = mapped_column(String(128), nullable=False)
     sister_password_encrypted: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
     convenzione: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -60,6 +61,8 @@ class CatastoCredential(Base):
         default="ORISTANO Territorio",
         nullable=False,
     )
+    active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_default: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),

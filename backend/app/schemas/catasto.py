@@ -6,12 +6,46 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
-class CatastoCredentialUpsertRequest(BaseModel):
+class CatastoCredentialCreateRequest(BaseModel):
+    label: str | None = Field(default=None, max_length=255)
     sister_username: str = Field(min_length=1, max_length=128)
     sister_password: str = Field(min_length=1)
     convenzione: str | None = None
     codice_richiesta: str | None = None
     ufficio_provinciale: str = "ORISTANO Territorio"
+    active: bool = True
+    is_default: bool = False
+
+
+class CatastoCredentialUpdateRequest(BaseModel):
+    label: str | None = Field(default=None, max_length=255)
+    sister_username: str | None = Field(default=None, min_length=1, max_length=128)
+    sister_password: str | None = Field(default=None, min_length=1)
+    convenzione: str | None = None
+    codice_richiesta: str | None = None
+    ufficio_provinciale: str | None = None
+    active: bool | None = None
+    is_default: bool | None = None
+
+
+class CatastoCredentialTestRequest(BaseModel):
+    credential_id: UUID | None = None
+    sister_username: str | None = Field(default=None, min_length=1, max_length=128)
+    sister_password: str | None = Field(default=None, min_length=1)
+    convenzione: str | None = None
+    codice_richiesta: str | None = None
+    ufficio_provinciale: str | None = None
+
+    @model_validator(mode="after")
+    def validate_payload(self) -> "CatastoCredentialTestRequest":
+        has_transient_credentials = bool(self.sister_username and self.sister_password)
+        if self.credential_id is None and not has_transient_credentials:
+            return self
+        if self.credential_id is not None and has_transient_credentials:
+            raise ValueError("Provide either credential_id or transient SISTER credentials, not both")
+        if (self.sister_username is None) != (self.sister_password is None):
+            raise ValueError("Both sister_username and sister_password are required for transient test")
+        return self
 
 
 class CatastoCredentialResponse(BaseModel):
@@ -19,10 +53,13 @@ class CatastoCredentialResponse(BaseModel):
 
     id: UUID
     user_id: int
+    label: str
     sister_username: str
     convenzione: str | None
     codice_richiesta: str | None
     ufficio_provinciale: str
+    active: bool
+    is_default: bool
     verified_at: datetime | None
     created_at: datetime
     updated_at: datetime
@@ -30,11 +67,14 @@ class CatastoCredentialResponse(BaseModel):
 
 class CatastoCredentialStatusResponse(BaseModel):
     configured: bool
+    credentials: list[CatastoCredentialResponse]
+    default_credential: CatastoCredentialResponse | None
     credential: CatastoCredentialResponse | None
 
 
 class CatastoCredentialTestResponse(BaseModel):
     id: UUID
+    credential_id: UUID | None = None
     status: str
     success: bool | None
     mode: str | None

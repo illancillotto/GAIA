@@ -222,9 +222,10 @@ def create_completed_connection_test() -> str:
 
 def test_credentials_are_encrypted_and_hidden_from_api() -> None:
     response = client.post(
-        "/catasto/credentials",
+        "/elaborazioni/credentials",
         headers=auth_headers(),
         json={
+            "label": "Profilo principale",
             "sister_username": "RSSMRA80A01G113X",
             "sister_password": "sister-secret",
             "convenzione": "Consorzio",
@@ -242,41 +243,75 @@ def test_credentials_are_encrypted_and_hidden_from_api() -> None:
     finally:
         db.close()
 
-    get_response = client.get("/catasto/credentials", headers=auth_headers())
+    get_response = client.get("/elaborazioni/credentials", headers=auth_headers())
     assert get_response.status_code == 200
     assert get_response.json()["configured"] is True
     assert get_response.json()["credential"]["sister_username"] == "RSSMRA80A01G113X"
+    assert get_response.json()["credentials"][0]["label"] == "Profilo principale"
 
 
-def test_delete_credentials_returns_not_configured_afterwards() -> None:
-    client.post(
-        "/catasto/credentials",
+def test_multiple_sister_credentials_support_default_and_delete() -> None:
+    first_response = client.post(
+        "/elaborazioni/credentials",
         headers=auth_headers(),
-        json={"sister_username": "RSSMRA80A01G113X", "sister_password": "sister-secret"},
+        json={
+            "label": "Profilo A",
+            "sister_username": "RSSMRA80A01G113X",
+            "sister_password": "sister-secret",
+            "is_default": True,
+        },
     )
+    second_response = client.post(
+        "/elaborazioni/credentials",
+        headers=auth_headers(),
+        json={
+            "label": "Profilo B",
+            "sister_username": "VRDLGI80A01H501U",
+            "sister_password": "sister-secret-2",
+        },
+    )
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
 
-    delete_response = client.delete("/catasto/credentials", headers=auth_headers())
+    list_response = client.get("/elaborazioni/credentials", headers=auth_headers())
+    assert list_response.status_code == 200
+    payload = list_response.json()
+    assert payload["configured"] is True
+    assert len(payload["credentials"]) == 2
+    assert payload["default_credential"]["label"] == "Profilo A"
+
+    second_id = second_response.json()["id"]
+    patch_response = client.patch(
+        f"/elaborazioni/credentials/{second_id}",
+        headers=auth_headers(),
+        json={"is_default": True, "active": True},
+    )
+    assert patch_response.status_code == 200
+    assert patch_response.json()["is_default"] is True
+
+    delete_response = client.delete(f"/elaborazioni/credentials/{second_id}", headers=auth_headers())
     assert delete_response.status_code == 200
-    assert delete_response.json()["message"] == "Credentials deleted"
+    assert delete_response.json()["message"] == "Credential deleted"
 
-    get_response = client.get("/catasto/credentials", headers=auth_headers())
+    get_response = client.get("/elaborazioni/credentials", headers=auth_headers())
     assert get_response.status_code == 200
-    assert get_response.json() == {"configured": False, "credential": None}
+    assert len(get_response.json()["credentials"]) == 1
+    assert get_response.json()["default_credential"]["label"] == "Profilo A"
 
 
 def test_credentials_test_queues_saved_credentials_and_exposes_worker_result() -> None:
     client.post(
-        "/catasto/credentials",
+        "/elaborazioni/credentials",
         headers=auth_headers(),
-        json={"sister_username": "RSSMRA80A01G113X", "sister_password": "sister-secret"},
+        json={"label": "Profilo A", "sister_username": "RSSMRA80A01G113X", "sister_password": "sister-secret"},
     )
 
-    response = client.post("/catasto/credentials/test", headers=auth_headers())
+    response = client.post("/elaborazioni/credentials/test", headers=auth_headers())
     assert response.status_code == 202
     payload = response.json()
     assert payload["status"] == "pending"
     assert payload["success"] is None
-    assert payload["message"] == "Queued for Catasto worker"
+    assert payload["message"] == "Queued for elaborazioni worker"
     test_id = payload["id"]
 
     db = TestingSessionLocal()
@@ -296,7 +331,7 @@ def test_credentials_test_queues_saved_credentials_and_exposes_worker_result() -
     finally:
         db.close()
 
-    status_response = client.get(f"/catasto/credentials/test/{test_id}", headers=auth_headers())
+    status_response = client.get(f"/elaborazioni/credentials/test/{test_id}", headers=auth_headers())
     assert status_response.status_code == 200
     status_payload = status_response.json()
     assert status_payload["status"] == "completed"
@@ -308,7 +343,7 @@ def test_credentials_test_queues_saved_credentials_and_exposes_worker_result() -
 
 def test_credentials_test_accepts_transient_payload_without_persisting() -> None:
     response = client.post(
-        "/catasto/credentials/test",
+        "/elaborazioni/credentials/test",
         headers=auth_headers(),
         json={"sister_username": "TEMPUSER", "sister_password": "temp-secret"},
     )
@@ -339,11 +374,12 @@ def test_comuni_endpoint_seeds_and_returns_oristano_dictionary() -> None:
 
 
 def test_create_batch_from_csv_builds_requests() -> None:
-    client.post(
-        "/catasto/credentials",
+    credentials_response = client.post(
+        "/elaborazioni/credentials",
         headers=auth_headers(),
         json={"sister_username": "RSSMRA80A01G113X", "sister_password": "sister-secret"},
     )
+    assert credentials_response.status_code == 200
 
     csv_content = (
         "citta,catasto,sezione,foglio,particella,subalterno,tipo_visura\n"
@@ -352,7 +388,7 @@ def test_create_batch_from_csv_builds_requests() -> None:
     )
 
     response = client.post(
-        "/catasto/batches",
+        "/elaborazioni/batches",
         headers=auth_headers(),
         files={"file": ("visure.csv", csv_content, "text/csv")},
         data={"name": "Lotto marzo"},
@@ -367,7 +403,7 @@ def test_create_batch_from_csv_builds_requests() -> None:
     assert payload["requests"][0]["comune_codice"] == "E972#MARRUBIU#0#0"
 
     batch_id = payload["id"]
-    start_response = client.post(f"/catasto/batches/{batch_id}/start", headers=auth_headers())
+    start_response = client.post(f"/elaborazioni/batches/{batch_id}/start", headers=auth_headers())
     assert start_response.status_code == 200
     assert start_response.json()["status"] == "processing"
 
@@ -379,7 +415,7 @@ def test_create_batch_rejects_invalid_rows_with_detail() -> None:
     )
 
     response = client.post(
-        "/catasto/batches",
+        "/elaborazioni/batches",
         headers=auth_headers(),
         files={"file": ("visure.csv", csv_content, "text/csv")},
     )
@@ -392,11 +428,12 @@ def test_create_batch_rejects_invalid_rows_with_detail() -> None:
 
 
 def test_create_batch_from_legacy_xlsx_maps_comune_code_and_skips_ue() -> None:
-    client.post(
-        "/catasto/credentials",
+    credentials_response = client.post(
+        "/elaborazioni/credentials",
         headers=auth_headers(),
         json={"sister_username": "RSSMRA80A01G113X", "sister_password": "sister-secret"},
     )
+    assert credentials_response.status_code == 200
 
     dataframe = pd.DataFrame(
         [
@@ -426,7 +463,7 @@ def test_create_batch_from_legacy_xlsx_maps_comune_code_and_skips_ue() -> None:
     dataframe.to_excel(buffer, index=False)
 
     response = client.post(
-        "/catasto/batches",
+        "/elaborazioni/batches",
         headers=auth_headers(),
         files={"file": ("FileDiPartenza.xlsx", buffer.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
         data={"name": "Import legacy xlsx"},
@@ -451,14 +488,15 @@ def test_create_batch_from_legacy_xlsx_maps_comune_code_and_skips_ue() -> None:
 
 
 def test_create_single_visura_auto_starts_batch_and_exposes_request_status() -> None:
-    client.post(
-        "/catasto/credentials",
+    credentials_response = client.post(
+        "/elaborazioni/credentials",
         headers=auth_headers(),
         json={"sister_username": "RSSMRA80A01G113X", "sister_password": "sister-secret"},
     )
+    assert credentials_response.status_code == 200
 
     response = client.post(
-        "/catasto/visure",
+        "/elaborazioni/requests",
         headers=auth_headers(),
         json={
             "comune": "Oristano",
@@ -475,7 +513,7 @@ def test_create_single_visura_auto_starts_batch_and_exposes_request_status() -> 
     assert payload["status"] == "processing"
     request_id = payload["requests"][0]["id"]
 
-    request_response = client.get(f"/catasto/visure/{request_id}", headers=auth_headers())
+    request_response = client.get(f"/elaborazioni/requests/{request_id}", headers=auth_headers())
     assert request_response.status_code == 200
     assert request_response.json()["status"] == "pending"
 
@@ -489,12 +527,12 @@ def test_create_single_visura_auto_starts_batch_and_exposes_request_status() -> 
 def test_captcha_endpoints_store_manual_solution_and_skip_flag(tmp_path) -> None:
     _, request_id = create_awaiting_captcha_request(tmp_path)
 
-    image_response = client.get(f"/catasto/captcha/{request_id}/image", headers=auth_headers())
+    image_response = client.get(f"/elaborazioni/captcha/{request_id}/image", headers=auth_headers())
     assert image_response.status_code == 200
     assert image_response.content == b"fake-png"
 
     solve_response = client.post(
-        f"/catasto/captcha/{request_id}/solve",
+        f"/elaborazioni/captcha/{request_id}/solve",
         headers=auth_headers(),
         json={"text": "AB12C"},
     )
@@ -509,7 +547,7 @@ def test_captcha_endpoints_store_manual_solution_and_skip_flag(tmp_path) -> None
     finally:
         db.close()
 
-    skip_response = client.post(f"/catasto/captcha/{request_id}/skip", headers=auth_headers())
+    skip_response = client.post(f"/elaborazioni/captcha/{request_id}/skip", headers=auth_headers())
     assert skip_response.status_code == 200
     assert skip_response.json()["current_operation"] == "Skip requested by user"
 
@@ -549,7 +587,7 @@ def test_documents_archive_lists_filters_details_and_downloads(tmp_path) -> None
     assert download_response.headers["content-type"] == "application/pdf"
     assert download_response.content == b"%PDF-1.4 fake pdf"
 
-    batch_download_response = client.get(f"/catasto/batches/{batch_id}/download", headers=auth_headers())
+    batch_download_response = client.get(f"/elaborazioni/batches/{batch_id}/download", headers=auth_headers())
     assert batch_download_response.status_code == 200
     assert batch_download_response.headers["content-type"] == "application/zip"
 
@@ -572,7 +610,7 @@ def test_documents_archive_lists_filters_details_and_downloads(tmp_path) -> None
 def test_batch_websocket_emits_progress_and_captcha_notification(tmp_path) -> None:
     batch_id, request_id = create_awaiting_captcha_request(tmp_path)
 
-    with client.websocket_connect(f"/catasto/ws/{batch_id}?token={auth_token()}") as websocket:
+    with client.websocket_connect(f"/elaborazioni/ws/{batch_id}?token={auth_token()}") as websocket:
         progress_event = websocket.receive_json()
         captcha_event = websocket.receive_json()
 
@@ -582,14 +620,14 @@ def test_batch_websocket_emits_progress_and_captcha_notification(tmp_path) -> No
     assert captcha_event == {
         "type": "captcha_needed",
         "request_id": request_id,
-        "image_url": f"/catasto/captcha/{request_id}/image",
+        "image_url": f"/elaborazioni/captcha/{request_id}/image",
     }
 
 
 def test_credentials_test_websocket_emits_terminal_state() -> None:
     test_id = create_completed_connection_test()
 
-    with client.websocket_connect(f"/catasto/ws/credentials-test/{test_id}?token={auth_token()}") as websocket:
+    with client.websocket_connect(f"/elaborazioni/ws/credentials-test/{test_id}?token={auth_token()}") as websocket:
         event = websocket.receive_json()
 
     assert event["type"] == "credentials_test"

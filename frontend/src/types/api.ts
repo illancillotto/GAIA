@@ -821,10 +821,13 @@ export type EffectivePermissionPreview = {
 export type CatastoCredential = {
   id: string;
   user_id: number;
+  label: string;
   sister_username: string;
   convenzione: string | null;
   codice_richiesta: string | null;
   ufficio_provinciale: string;
+  active: boolean;
+  is_default: boolean;
   verified_at: string | null;
   created_at: string;
   updated_at: string;
@@ -832,11 +835,14 @@ export type CatastoCredential = {
 
 export type CatastoCredentialStatus = {
   configured: boolean;
+  credentials: CatastoCredential[];
+  default_credential: CatastoCredential | null;
   credential: CatastoCredential | null;
 };
 
 export type CatastoCredentialTestResult = {
   id: string;
+  credential_id: string | null;
   status: "pending" | "processing" | "completed" | "failed";
   success: boolean | null;
   mode: string | null;

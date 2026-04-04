@@ -29,10 +29,12 @@ from app.schemas.elaborazioni import (
     ElaborazioneBatchResponse,
     ElaborazioneCaptchaSolveRequest,
     ElaborazioneCaptchaSummaryResponse,
+    ElaborazioneCredentialCreateRequest,
     ElaborazioneCredentialResponse,
     ElaborazioneCredentialStatusResponse,
+    ElaborazioneCredentialTestRequest,
     ElaborazioneCredentialTestResponse,
-    ElaborazioneCredentialUpsertRequest,
+    ElaborazioneCredentialUpdateRequest,
     ElaborazioneOperationResponse,
     ElaborazioneRichiestaCreateRequest,
     ElaborazioneRichiestaResponse,
@@ -66,11 +68,14 @@ from app.services.elaborazioni_credentials import (
     ElaborazioneConnectionTestNotFoundError,
     ElaborazioneCredentialConfigurationError,
     ElaborazioneCredentialNotFoundError,
-    delete_credentials,
+    create_credential,
+    delete_credential,
     get_connection_test_for_user,
-    get_credentials_for_user,
+    get_credential_for_user,
+    get_default_credential_for_user,
+    list_credentials_for_user,
     queue_credentials_connection_test,
-    upsert_credentials,
+    update_credential,
 )
 from app.services.catasto_documents import list_documents_for_batch
 
@@ -79,12 +84,12 @@ router = APIRouter(prefix="/elaborazioni", tags=["elaborazioni"])
 
 @router.post("/credentials", response_model=ElaborazioneCredentialResponse)
 def save_credentials(
-    payload: ElaborazioneCredentialUpsertRequest,
+    payload: ElaborazioneCredentialCreateRequest,
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> ElaborazioneCredentialResponse:
     try:
-        credential = upsert_credentials(db, current_user.id, payload)
+        credential = create_credential(db, current_user.id, payload)
     except ElaborazioneCredentialConfigurationError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
     return ElaborazioneCredentialResponse.model_validate(credential)
@@ -95,10 +100,13 @@ def get_credentials(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> ElaborazioneCredentialStatusResponse:
-    credential = get_credentials_for_user(db, current_user.id)
+    credentials = list_credentials_for_user(db, current_user.id)
+    default_credential = get_default_credential_for_user(db, current_user.id)
     return ElaborazioneCredentialStatusResponse(
-        configured=credential is not None,
-        credential=ElaborazioneCredentialResponse.model_validate(credential) if credential is not None else None,
+        configured=bool(credentials),
+        credentials=[ElaborazioneCredentialResponse.model_validate(item) for item in credentials],
+        default_credential=ElaborazioneCredentialResponse.model_validate(default_credential) if default_credential is not None else None,
+        credential=ElaborazioneCredentialResponse.model_validate(default_credential) if default_credential is not None else None,
     )
 
 
@@ -106,13 +114,41 @@ def get_credentials(
 def test_credentials(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     db: Annotated[Session, Depends(get_db)],
-    payload: ElaborazioneCredentialUpsertRequest | None = None,
+    payload: ElaborazioneCredentialTestRequest | None = None,
 ) -> ElaborazioneCredentialTestResponse:
     try:
         connection_test = queue_credentials_connection_test(db, current_user.id, payload)
     except (ElaborazioneCredentialConfigurationError, ElaborazioneCredentialNotFoundError) as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     return build_connection_test_response(db, connection_test)
+
+
+@router.get("/credentials/{credential_id}", response_model=ElaborazioneCredentialResponse)
+def get_credential(
+    credential_id: UUID,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> ElaborazioneCredentialResponse:
+    credential = get_credential_for_user(db, current_user.id, credential_id)
+    if credential is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"SISTER credential {credential_id} not found")
+    return ElaborazioneCredentialResponse.model_validate(credential)
+
+
+@router.patch("/credentials/{credential_id}", response_model=ElaborazioneCredentialResponse)
+def patch_credential(
+    credential_id: UUID,
+    payload: ElaborazioneCredentialUpdateRequest,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> ElaborazioneCredentialResponse:
+    try:
+        credential = update_credential(db, current_user.id, credential_id, payload)
+    except ElaborazioneCredentialConfigurationError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    except ElaborazioneCredentialNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    return ElaborazioneCredentialResponse.model_validate(credential)
 
 
 @router.get("/credentials/test/{test_id}", response_model=ElaborazioneCredentialTestResponse)
@@ -167,8 +203,21 @@ def remove_credentials(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> ElaborazioneOperationResponse:
-    deleted = delete_credentials(db, current_user.id)
+    default_credential = get_default_credential_for_user(db, current_user.id)
+    deleted = delete_credential(db, current_user.id, default_credential.id) if default_credential is not None else False
     return ElaborazioneOperationResponse(message="Credentials deleted" if deleted else "No credentials stored")
+
+
+@router.delete("/credentials/{credential_id}", response_model=ElaborazioneOperationResponse)
+def remove_credential(
+    credential_id: UUID,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> ElaborazioneOperationResponse:
+    deleted = delete_credential(db, current_user.id, credential_id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"SISTER credential {credential_id} not found")
+    return ElaborazioneOperationResponse(message="Credential deleted")
 
 
 @router.post("/batches", response_model=ElaborazioneBatchDetailResponse, status_code=status.HTTP_201_CREATED)

@@ -972,15 +972,41 @@ export async function getElaborazioneCredentials(token: string): Promise<Elabora
 export async function saveElaborazioneCredentials(
   token: string,
   payload: {
+    label?: string;
     sister_username: string;
     sister_password: string;
     convenzione?: string;
     codice_richiesta?: string;
     ufficio_provinciale?: string;
+    active?: boolean;
+    is_default?: boolean;
   },
 ): Promise<ElaborazioneCredential> {
   return request<ElaborazioneCredential>("/elaborazioni/credentials", {
     method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateElaborazioneCredential(
+  token: string,
+  credentialId: string,
+  payload: {
+    label?: string;
+    sister_username?: string;
+    sister_password?: string;
+    convenzione?: string | null;
+    codice_richiesta?: string | null;
+    ufficio_provinciale?: string;
+    active?: boolean;
+    is_default?: boolean;
+  },
+): Promise<ElaborazioneCredential> {
+  return request<ElaborazioneCredential>(`/elaborazioni/credentials/${credentialId}`, {
+    method: "PATCH",
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -997,14 +1023,29 @@ export async function deleteElaborazioneCredentials(token: string): Promise<Elab
   });
 }
 
+export async function deleteElaborazioneCredential(
+  token: string,
+  credentialId: string,
+): Promise<ElaborazioneOperationResponse> {
+  return request<ElaborazioneOperationResponse>(`/elaborazioni/credentials/${credentialId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
 export async function testElaborazioneCredentials(
   token: string,
   payload?: {
+    credential_id?: string;
     sister_username: string;
     sister_password: string;
     convenzione?: string;
     codice_richiesta?: string;
     ufficio_provinciale?: string;
+  } | {
+    credential_id: string;
   },
 ): Promise<ElaborazioneCredentialTestResult> {
   return request<ElaborazioneCredentialTestResult>("/elaborazioni/credentials/test", {
