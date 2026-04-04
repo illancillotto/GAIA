@@ -4,11 +4,15 @@ import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 import html
+import json
 import logging
+from pathlib import Path
 import re
+from uuid import uuid4
 
 import httpx
 
+from app.core.config import settings
 from app.modules.elaborazioni.capacitas.apps import get_app_hosts, get_capacitas_app
 
 logger = logging.getLogger(__name__)
@@ -39,6 +43,8 @@ class CapacitasSessionManager:
         self._session: CapacitasSession | None = None
         self._http: httpx.AsyncClient | None = None
         self._keepalive_tasks: dict[str, asyncio.Task] = {}
+        self._debug_dir: Path | None = None
+        self._last_login_page: str | None = None
 
     async def __aenter__(self) -> "CapacitasSessionManager":
         await self.login()
@@ -64,6 +70,7 @@ class CapacitasSessionManager:
         logger.info("Capacitas login: GET %s", LOGIN_URL)
         response = await self._http.get(LOGIN_URL)
         response.raise_for_status()
+        self._last_login_page = response.text
 
         viewstate, eventvalidation = self._extract_aspnet_fields(response.text)
         if not viewstate:
@@ -86,13 +93,19 @@ class CapacitasSessionManager:
         )
         response.raise_for_status()
 
-        token = self._extract_token(str(response.url)) or self._extract_token_from_cookies()
+        token = (
+            self._extract_token_from_response(response)
+            or self._extract_token_from_cookies()
+            or self._extract_token_from_html(response.text)
+        )
         if not token:
             diagnostics = self._build_login_diagnostics(response)
+            artifact_path = self._write_login_debug_artifacts(response, diagnostics)
             logger.error("Capacitas login fallito per %s: %s", self.username, diagnostics)
             raise RuntimeError(
                 "Capacitas login fallito: token non trovato dopo il POST credenziali. "
-                f"{diagnostics}",
+                f"{diagnostics}"
+                + (f" | artifact={artifact_path}" if artifact_path else ""),
             )
 
         logger.info("Capacitas login OK: token=%s...", token[:8])
@@ -173,11 +186,43 @@ class CapacitasSessionManager:
         match = re.search(r"[?&]token=([0-9a-f-]{36})", url, re.IGNORECASE)
         return match.group(1) if match else None
 
+    def _extract_token_from_response(self, response: httpx.Response) -> str | None:
+        candidates = [str(response.url)]
+        candidates.extend(str(item.url) for item in response.history)
+        for candidate in candidates:
+            token = self._extract_token(candidate)
+            if token:
+                return token
+        return None
+
     def _extract_token_from_cookies(self) -> str | None:
         if self._http is None:
             return None
-        auth_cookie = self._http.cookies.get("AUTH_COOKIE", "")
-        return auth_cookie.split("|")[0] if auth_cookie and "|" in auth_cookie else None
+        cookie_values: list[str] = []
+        for cookie in self._http.cookies.jar:
+            if cookie.name.upper().endswith("AUTH_COOKIE") or cookie.name.upper() == "AUTH_COOKIE":
+                cookie_values.append(cookie.value)
+        for value in cookie_values:
+            match = re.search(r"([0-9a-f-]{36})", value, re.IGNORECASE)
+            if match:
+                return match.group(1)
+            if "|" in value and value.split("|", maxsplit=1)[0]:
+                return value.split("|", maxsplit=1)[0]
+        return None
+
+    @staticmethod
+    def _extract_token_from_html(html_text: str) -> str | None:
+        patterns = [
+            r"[?&]token=([0-9a-f-]{36})",
+            r'["\']token["\']\s*[:=]\s*["\']([0-9a-f-]{36})["\']',
+            r'name=["\']token["\'][^>]+value=["\']([0-9a-f-]{36})["\']',
+            r'id=["\']token["\'][^>]+value=["\']([0-9a-f-]{36})["\']',
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, html_text, re.IGNORECASE)
+            if match:
+                return match.group(1)
+        return None
 
     def _build_login_diagnostics(self, response: httpx.Response) -> str:
         title = self._extract_html_title(response.text)
@@ -195,6 +240,40 @@ class CapacitasSessionManager:
         if snippet:
             diagnostics.append(f"snippet={snippet}")
         return " | ".join(diagnostics)
+
+    def _write_login_debug_artifacts(self, response: httpx.Response, diagnostics: str) -> str | None:
+        try:
+            base_dir = Path(settings.capacitas_debug_storage_path)
+            timestamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
+            safe_username = re.sub(r"[^a-zA-Z0-9._-]+", "_", self.username)[:80] or "credential"
+            debug_dir = base_dir / f"{timestamp}-{safe_username}-{uuid4().hex[:8]}"
+            debug_dir.mkdir(parents=True, exist_ok=True)
+            self._debug_dir = debug_dir
+
+            metadata = {
+                "username": self.username,
+                "login_url": LOGIN_URL,
+                "final_url": str(response.url),
+                "history_urls": [str(item.url) for item in response.history],
+                "status_code": response.status_code,
+                "diagnostics": diagnostics,
+                "cookies": [
+                    {
+                        "name": cookie.name,
+                        "domain": cookie.domain,
+                        "path": cookie.path,
+                        "value_preview": cookie.value[:80],
+                    }
+                    for cookie in self._http.cookies.jar
+                ] if self._http is not None else [],
+            }
+            (debug_dir / "login-get.html").write_text(self._last_login_page or "", encoding="utf-8")
+            (debug_dir / "login-post.html").write_text(response.text, encoding="utf-8")
+            (debug_dir / "metadata.json").write_text(json.dumps(metadata, ensure_ascii=True, indent=2), encoding="utf-8")
+            return str(debug_dir)
+        except Exception as exc:  # pragma: no cover - diagnostics fallback
+            logger.warning("Capacitas debug artifact write failed for %s: %s", self.username, exc)
+            return None
 
     def _list_cookie_names(self) -> str:
         if self._http is None:

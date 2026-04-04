@@ -8,6 +8,7 @@ Ambito runtime attuale:
 - gestione CAPTCHA
 - report e artifact diagnostici batch/richiesta
 - pool credenziali SISTER con profilo default per worker e test connessione
+- diagnostica login Capacitas con dump HTML/metadata del tentativo quando il token SSO non viene estratto
 
 ## Dashboard operativa
 

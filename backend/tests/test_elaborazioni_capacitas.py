@@ -94,6 +94,24 @@ def test_capacitas_decoder_decodes_real_payload() -> None:
     assert any("PORCU" in str(row.get("Denominazione", "")).upper() for row in rows)
 
 
+def test_capacitas_session_extracts_token_from_html_and_auth_cookie() -> None:
+    from app.modules.elaborazioni.capacitas.session import CapacitasSessionManager
+
+    manager = CapacitasSessionManager("user", "secret")
+
+    html_token = manager._extract_token_from_html(
+        '<html><body><script>window.appConfig = {"token":"123e4567-e89b-12d3-a456-426614174000"}</script></body></html>'
+    )
+    assert html_token == "123e4567-e89b-12d3-a456-426614174000"
+
+    import httpx
+
+    manager._http = httpx.AsyncClient()
+    manager._http.cookies.set("involture__AUTH_COOKIE", "123e4567-e89b-12d3-a456-426614174000|tenant|rest")
+    cookie_token = manager._extract_token_from_cookies()
+    assert cookie_token == "123e4567-e89b-12d3-a456-426614174000"
+
+
 def test_capacitas_credentials_crud_encrypts_password() -> None:
     create_response = client.post(
         "/elaborazioni/capacitas/credentials",
