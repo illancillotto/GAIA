@@ -75,8 +75,11 @@ API target indicative:
 - `POST /elaborazioni/batches/{id}/cancel`
 - `POST /elaborazioni/requests`
 - `GET /elaborazioni/requests/{id}`
+- `GET /elaborazioni/requests/{id}/artifacts/download`
 - `GET /elaborazioni/captcha/pending`
 - `POST /elaborazioni/captcha/{request_id}/solve`
+- `GET /elaborazioni/batches/{id}/report.json`
+- `GET /elaborazioni/batches/{id}/report.md`
 - `WS /elaborazioni/ws/{batch_id}`
 
 ## Mappa runtime proposta
@@ -207,6 +210,11 @@ Stato attuale:
   - `backend/app/services/elaborazioni_batches.py`
   - `backend/app/services/elaborazioni_captcha.py`
   - `backend/app/services/elaborazioni_credentials.py`
+- il modello runtime batch/richiesta e stato esteso per supportare:
+  - richieste `immobile`
+  - richieste `soggetto`
+  - esito terminale `not_found`
+  - path persistiti per artifact richiesta e report batch
 - i moduli `catasto_*` corrispondenti restano come shim di compatibilita sugli import legacy
 - introdotti alias canonici di naming:
   - backend model: `backend/app/models/elaborazioni.py`

@@ -31,6 +31,11 @@ const STATUS_CONFIG: Record<StatusValue, { label: string; className: string; dot
     className: "bg-red-100 text-red-700",
     dotClassName: "bg-red-500",
   },
+  not_found: {
+    label: "Non trovato",
+    className: "bg-orange-100 text-orange-700",
+    dotClassName: "bg-orange-500",
+  },
   skipped: {
     label: "Saltato",
     className: "bg-slate-100 text-slate-700",

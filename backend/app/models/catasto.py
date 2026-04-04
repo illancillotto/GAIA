@@ -31,6 +31,7 @@ class CatastoVisuraRequestStatus(StrEnum):
     COMPLETED = "completed"
     FAILED = "failed"
     SKIPPED = "skipped"
+    NOT_FOUND = "not_found"
 
 
 class CatastoConnectionTestStatus(StrEnum):
@@ -133,8 +134,11 @@ class CatastoBatch(Base):
     completed_items: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     failed_items: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     skipped_items: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    not_found_items: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     source_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
     current_operation: Mapped[str | None] = mapped_column(Text, nullable=True)
+    report_json_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    report_md_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -155,12 +159,17 @@ class CatastoDocument(Base):
         index=True,
     )
     request_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True)
-    comune: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
-    foglio: Mapped[str] = mapped_column(String(64), nullable=False)
-    particella: Mapped[str] = mapped_column(String(64), nullable=False)
+    search_mode: Mapped[str] = mapped_column(String(32), default="immobile", nullable=False, index=True)
+    comune: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    foglio: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    particella: Mapped[str | None] = mapped_column(String(64), nullable=True)
     subalterno: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    catasto: Mapped[str] = mapped_column(String(64), nullable=False)
+    catasto: Mapped[str | None] = mapped_column(String(64), nullable=True)
     tipo_visura: Mapped[str] = mapped_column(String(64), nullable=False)
+    subject_kind: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    subject_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    request_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    intestazione: Mapped[str | None] = mapped_column(String(255), nullable=True)
     filename: Mapped[str] = mapped_column(String(255), nullable=False)
     filepath: Mapped[str] = mapped_column(String(1024), nullable=False)
     file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -188,14 +197,19 @@ class CatastoVisuraRequest(Base):
         index=True,
     )
     row_index: Mapped[int] = mapped_column(Integer, nullable=False)
-    comune: Mapped[str] = mapped_column(String(255), nullable=False)
+    search_mode: Mapped[str] = mapped_column(String(32), default="immobile", nullable=False, index=True)
+    comune: Mapped[str | None] = mapped_column(String(255), nullable=True)
     comune_codice: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    catasto: Mapped[str] = mapped_column(String(64), nullable=False)
+    catasto: Mapped[str | None] = mapped_column(String(64), nullable=True)
     sezione: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    foglio: Mapped[str] = mapped_column(String(64), nullable=False)
-    particella: Mapped[str] = mapped_column(String(64), nullable=False)
+    foglio: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    particella: Mapped[str | None] = mapped_column(String(64), nullable=True)
     subalterno: Mapped[str | None] = mapped_column(String(64), nullable=True)
     tipo_visura: Mapped[str] = mapped_column(String(64), nullable=False, default="Sintetica")
+    subject_kind: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    subject_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    request_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    intestazione: Mapped[str | None] = mapped_column(String(255), nullable=True)
     status: Mapped[str] = mapped_column(
         String(32),
         default=CatastoVisuraRequestStatus.PENDING.value,
@@ -210,6 +224,7 @@ class CatastoVisuraRequest(Base):
     captcha_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     captcha_manual_solution: Mapped[str | None] = mapped_column(String(64), nullable=True)
     captcha_skip_requested: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    artifact_dir: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     document_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("catasto_documents.id", ondelete="SET NULL"),
         nullable=True,

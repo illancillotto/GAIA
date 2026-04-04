@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class CatastoCredentialUpsertRequest(BaseModel):
@@ -63,13 +63,38 @@ class CatastoComuneResponse(BaseModel):
 
 
 class CatastoSingleVisuraCreateRequest(BaseModel):
-    comune: str = Field(min_length=1)
-    catasto: str = Field(min_length=1)
+    search_mode: str = Field(default="immobile", min_length=1)
+    comune: str | None = None
+    catasto: str | None = None
     sezione: str | None = None
-    foglio: str = Field(min_length=1)
-    particella: str = Field(min_length=1)
+    foglio: str | None = None
+    particella: str | None = None
     subalterno: str | None = None
     tipo_visura: str = Field(default="Sintetica", min_length=1)
+    subject_kind: str | None = None
+    subject_id: str | None = None
+    request_type: str | None = None
+    intestazione: str | None = None
+
+    @model_validator(mode="after")
+    def validate_payload(self) -> "CatastoSingleVisuraCreateRequest":
+        mode = self.search_mode.strip().lower()
+        if mode == "soggetto":
+            if not self.subject_id or not self.subject_id.strip():
+                raise ValueError("subject_id is required for search_mode='soggetto'")
+            return self
+
+        if mode != "immobile":
+            raise ValueError("search_mode must be either 'immobile' or 'soggetto'")
+
+        missing = [
+            field_name
+            for field_name in ("comune", "catasto", "foglio", "particella")
+            if not getattr(self, field_name) or not str(getattr(self, field_name)).strip()
+        ]
+        if missing:
+            raise ValueError(f"Missing required fields for search_mode='immobile': {', '.join(missing)}")
+        return self
 
 
 class CatastoCaptchaSolveRequest(BaseModel):
@@ -89,14 +114,19 @@ class CatastoVisuraRequestResponse(BaseModel):
     batch_id: UUID
     user_id: int
     row_index: int
-    comune: str
+    search_mode: str
+    comune: str | None
     comune_codice: str | None
-    catasto: str
+    catasto: str | None
     sezione: str | None
-    foglio: str
-    particella: str
+    foglio: str | None
+    particella: str | None
     subalterno: str | None
     tipo_visura: str
+    subject_kind: str | None
+    subject_id: str | None
+    request_type: str | None
+    intestazione: str | None
     status: str
     current_operation: str | None
     error_message: str | None
@@ -105,6 +135,7 @@ class CatastoVisuraRequestResponse(BaseModel):
     captcha_requested_at: datetime | None
     captcha_expires_at: datetime | None
     captcha_skip_requested: bool
+    artifact_dir: str | None
     document_id: UUID | None
     created_at: datetime
     processed_at: datetime | None
@@ -117,12 +148,17 @@ class CatastoDocumentResponse(BaseModel):
     user_id: int
     request_id: UUID | None
     batch_id: UUID | None = None
-    comune: str
-    foglio: str
-    particella: str
+    search_mode: str
+    comune: str | None
+    foglio: str | None
+    particella: str | None
     subalterno: str | None
-    catasto: str
+    catasto: str | None
     tipo_visura: str
+    subject_kind: str | None
+    subject_id: str | None
+    request_type: str | None
+    intestazione: str | None
     filename: str
     file_size: int | None
     codice_fiscale: str | None
@@ -144,8 +180,11 @@ class CatastoBatchResponse(BaseModel):
     completed_items: int
     failed_items: int
     skipped_items: int
+    not_found_items: int
     source_filename: str | None
     current_operation: str | None
+    report_json_path: str | None
+    report_md_path: str | None
     created_at: datetime
     started_at: datetime | None
     completed_at: datetime | None

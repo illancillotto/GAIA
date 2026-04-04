@@ -139,6 +139,14 @@ Responsabilita:
 #### Catasto Worker
 Container separato per le automazioni browser-based del modulo Catasto.
 
+Responsabilita runtime attuali:
+- login, session recovery e navigazione SISTER
+- flusso visure per immobile
+- flusso visure per soggetto PF/PNF
+- gestione CAPTCHA OCR, esterno e manuale
+- produzione artifact diagnostici per richiesta
+- produzione report batch JSON/Markdown
+
 ---
 
 ## 3. Architettura fisica
@@ -185,6 +193,8 @@ Stato del refactor:
 - `elaborazioni` introdotto come nuovo namespace di transizione per i workflow runtime
 - `catasto` mantiene progressivamente le sole superfici di dominio, documenti e provider
 - `elaborazioni` centralizza batch, richieste singole, credenziali runtime, CAPTCHA e WebSocket operativi
+- il runtime `elaborazioni` supporta richieste visure tipizzate `immobile` e `soggetto`
+- il runtime distingue esiti terminali `completed`, `failed`, `skipped` e `not_found`
 - il service layer operativo associato al dominio catastale sta convergendo su moduli `app/services/elaborazioni_*` con shim legacy `catasto_*`
 - il frontend sta convergendo su route canoniche `frontend/src/app/elaborazioni/*` per la parte operativa, lasciando `catasto` come area dati e provider
 - per evitare refactor distruttivi su DB e payload, il linguaggio del modulo runtime usa alias `Elaborazione*` sopra i model e gli schema legacy `catasto_*`

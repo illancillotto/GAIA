@@ -934,13 +934,18 @@ export type CapacitasSearchResult = {
 };
 
 export type CatastoSingleVisuraPayload = {
-  comune: string;
-  catasto: string;
+  search_mode?: "immobile" | "soggetto";
+  comune?: string;
+  catasto?: string;
   sezione?: string;
-  foglio: string;
-  particella: string;
+  foglio?: string;
+  particella?: string;
   subalterno?: string;
   tipo_visura: string;
+  subject_kind?: "PF" | "PNF";
+  subject_id?: string;
+  request_type?: "ATTUALITA" | "STORICA";
+  intestazione?: string;
 };
 
 export type CatastoComune = {
@@ -956,21 +961,27 @@ export type CatastoRequestStatus =
   | "awaiting_captcha"
   | "completed"
   | "failed"
-  | "skipped";
+  | "skipped"
+  | "not_found";
 
 export type CatastoVisuraRequest = {
   id: string;
   batch_id: string;
   user_id: number;
   row_index: number;
-  comune: string;
+  search_mode: "immobile" | "soggetto";
+  comune: string | null;
   comune_codice: string | null;
-  catasto: string;
+  catasto: string | null;
   sezione: string | null;
-  foglio: string;
-  particella: string;
+  foglio: string | null;
+  particella: string | null;
   subalterno: string | null;
   tipo_visura: string;
+  subject_kind: "PF" | "PNF" | null;
+  subject_id: string | null;
+  request_type: "ATTUALITA" | "STORICA" | null;
+  intestazione: string | null;
   status: CatastoRequestStatus;
   current_operation: string | null;
   error_message: string | null;
@@ -979,6 +990,7 @@ export type CatastoVisuraRequest = {
   captcha_requested_at: string | null;
   captcha_expires_at: string | null;
   captcha_skip_requested: boolean;
+  artifact_dir: string | null;
   document_id: string | null;
   created_at: string;
   processed_at: string | null;
@@ -993,8 +1005,11 @@ export type CatastoBatch = {
   completed_items: number;
   failed_items: number;
   skipped_items: number;
+  not_found_items: number;
   source_filename: string | null;
   current_operation: string | null;
+  report_json_path: string | null;
+  report_md_path: string | null;
   created_at: string;
   started_at: string | null;
   completed_at: string | null;
@@ -1009,12 +1024,17 @@ export type CatastoDocument = {
   user_id: number;
   request_id: string | null;
   batch_id: string | null;
-  comune: string;
-  foglio: string;
-  particella: string;
+  search_mode: "immobile" | "soggetto";
+  comune: string | null;
+  foglio: string | null;
+  particella: string | null;
   subalterno: string | null;
-  catasto: string;
+  catasto: string | null;
   tipo_visura: string;
+  subject_kind: "PF" | "PNF" | null;
+  subject_id: string | null;
+  request_type: "ATTUALITA" | "STORICA" | null;
+  intestazione: string | null;
   filename: string;
   file_size: number | null;
   codice_fiscale: string | null;
@@ -1038,6 +1058,7 @@ export type CatastoBatchProgressEvent = {
   completed: number;
   failed: number;
   skipped: number;
+  not_found?: number;
   total: number;
   current: string | null;
 };
@@ -1054,6 +1075,7 @@ export type CatastoBatchCompletedEvent = {
   ok: number;
   failed: number;
   skipped: number;
+  not_found?: number;
 };
 
 export type CatastoVisuraCompletedEvent = {

@@ -12,6 +12,8 @@
   "visure_link_name": "Visure catastali",
   "conferma_lettura_button_name": "Conferma Lettura",
   "immobile_link_name": "Immobile",
+  "subject_pf_url": "https://sister3.agenziaentrate.gov.it/Visure/SceltaLink.do?lista=PF&codUfficio=OR",
+  "subject_pnf_url": "https://sister3.agenziaentrate.gov.it/Visure/SceltaLink.do?lista=PNF&codUfficio=OR",
   "catasto_selector": "select[name='tipoCatasto']",
   "comune_selector": "select[name='denomComune']",
   "sezione_input_selector": "input[name='sezione']",
@@ -22,6 +24,28 @@
   "motivo_selector": "select[name='motivoLista']",
   "motivo_value": "Altri fini istituzionali ",
   "visura_button_selector": "input[name='scelta'][value='Visura']",
+  "subject_search_button_selectors": [
+    "input[value='Ricerca']",
+    "button:has-text('Ricerca')",
+    "text=Ricerca"
+  ],
+  "subject_open_visura_button_selectors": [
+    "input[name='visura']",
+    "input[value='Visura per Soggetto']",
+    "input[value='VISURA PER SOGGETTO']",
+    "button:has-text('Visura per Soggetto')",
+    "button:has-text('VISURA PER SOGGETTO')",
+    "text=Visura per Soggetto",
+    "text=VISURA PER SOGGETTO"
+  ],
+  "subject_result_selector_candidates": [
+    "input[name='omonimoSelezionato'][type='radio']",
+    "input[name='omonimoSelezionato'][type='checkbox']",
+    "table input[type='radio']",
+    "input[type='radio']",
+    "table input[type='checkbox']",
+    "input[type='checkbox']"
+  ],
   "tipo_visura_selector": "input[name='tipoVisura']",
   "captcha_field_selector": "input[name='codSicurezza']",
   "captcha_image_selector": "img[src*='captcha' i]",

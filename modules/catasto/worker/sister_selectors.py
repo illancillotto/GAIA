@@ -22,6 +22,8 @@ class SisterSelectorsConfig:
     visure_link_name: str = "Visure catastali"
     conferma_lettura_button_name: str = "Conferma Lettura"
     immobile_link_name: str = "Immobile"
+    subject_pf_url: str = "https://sister3.agenziaentrate.gov.it/Visure/SceltaLink.do?lista=PF&codUfficio=OR"
+    subject_pnf_url: str = "https://sister3.agenziaentrate.gov.it/Visure/SceltaLink.do?lista=PNF&codUfficio=OR"
     catasto_selector: str = "select[name='tipoCatasto']"
     comune_selector: str = "select[name='denomComune']"
     sezione_input_selector: str = "input[name='sezione']"
@@ -32,6 +34,9 @@ class SisterSelectorsConfig:
     motivo_selector: str = "select[name='motivoLista']"
     motivo_value: str = "Altri fini istituzionali "
     visura_button_selector: str = "input[name='scelta'][value='Visura']"
+    subject_search_button_selectors: list[str] | None = None
+    subject_open_visura_button_selectors: list[str] | None = None
+    subject_result_selector_candidates: list[str] | None = None
     tipo_visura_selector: str = "input[name='tipoVisura']"
     captcha_field_selector: str = "input[name='codSicurezza']"
     captcha_image_selector: str = "img[src*='captcha' i]"

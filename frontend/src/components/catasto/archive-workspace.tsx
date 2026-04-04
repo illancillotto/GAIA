@@ -63,6 +63,18 @@ function triggerDownload(blob: Blob, filename: string): void {
 }
 
 export function CatastoArchiveWorkspace({ initialView }: { initialView: ArchiveView }) {
+  return <CatastoArchiveWorkspaceContent initialView={initialView} embedded={false} />;
+}
+
+export function CatastoArchiveWorkspaceContent({
+  initialView,
+  embedded = false,
+  isolatedView = false,
+}: {
+  initialView: ArchiveView;
+  embedded?: boolean;
+  isolatedView?: boolean;
+}) {
   const pathname = usePathname();
   const activeView = initialView;
   const isElaborazioni = pathname.startsWith("/elaborazioni");
@@ -292,17 +304,10 @@ export function CatastoArchiveWorkspace({ initialView }: { initialView: ArchiveV
   const processingCount = batches.filter((batch) => batch.status === "processing").length;
   const failedCount = batches.filter((batch) => batch.failed_items > 0 || batch.status === "failed").length;
   const sharedError = activeView === "batches" ? batchError : documentsError;
+  const documentsOnlyMode = isolatedView && activeView === "documents";
 
-  return (
-    <ProtectedPage
-      title={isElaborazioni ? "Elaborazioni" : "Archivio"}
-      description={
-        isElaborazioni
-          ? "Monitoraggio dei batch e accesso ai documenti prodotti dal runtime."
-          : "Consultazione unificata di batch e documenti del modulo Catasto."
-      }
-      breadcrumb={isElaborazioni ? "Elaborazioni / Batch" : "Catasto / Archivio"}
-    >
+  const content = (
+    <>
       <CatastoHero
         badge={
           <>
@@ -311,12 +316,16 @@ export function CatastoArchiveWorkspace({ initialView }: { initialView: ArchiveV
           </>
         }
         title={
-          isElaborazioni
+          documentsOnlyMode
+            ? "Archivio documenti catastali"
+            : isElaborazioni
             ? "Monitor operativo delle elaborazioni e accesso ai documenti prodotti."
             : "Un unico archivio per seguire la filiera Catasto: dai lotti eseguiti ai documenti prodotti."
         }
         description={
-          isElaborazioni
+          documentsOnlyMode
+            ? "Ricerca documentale dedicata: filtri, selezione multipla, ZIP e viewer PDF senza elementi legati ai batch."
+            : isElaborazioni
             ? "La vista batch è il punto d'accesso canonico al runtime. I documenti restano consultabili nel dominio Catasto."
             : "Le due viste restano distinte perché rappresentano entità diverse, ma la consultazione è concentrata in una sola pagina, con navigazione più lineare."
         }
@@ -325,62 +334,76 @@ export function CatastoArchiveWorkspace({ initialView }: { initialView: ArchiveV
             <CatastoNoticeCard title="Errore archivio" description={sharedError} tone="danger" />
           ) : (
             <CatastoNoticeCard
-              title="Vista unificata"
-              description="Usa Batch per monitorare lotti e retry; usa Documenti per ricerca, ZIP e apertura viewer."
+              title={documentsOnlyMode ? "Archivio documenti" : "Vista unificata"}
+              description={
+                documentsOnlyMode
+                  ? "Questa vista e focalizzata solo sui documenti prodotti, con apertura viewer e download inline."
+                  : "Usa Batch per monitorare lotti e retry; usa Documenti per ricerca, ZIP e apertura viewer."
+              }
             />
           )
         }
       >
-        <div className="grid gap-3 sm:grid-cols-4">
-          <CatastoMiniStat eyebrow="Documenti" value={documents.length} description="Risultati correnti della ricerca documentale." />
-          <CatastoMiniStat eyebrow="Selezione ZIP" value={selectedDocumentIds.length} description="Documenti pronti per export massivo." tone={selectedDocumentIds.length > 0 ? "success" : "default"} />
-          <CatastoMiniStat eyebrow="Batch" value={batches.length} description={`${processingCount} in lavorazione · ${failedCount} con errori`} />
-          <CatastoMiniStat eyebrow="Completati" value={completedCount} description="Lotti conclusi disponibili nello storico." tone={completedCount > 0 ? "success" : "default"} />
-        </div>
+        {documentsOnlyMode ? (
+          <div className="grid gap-3 sm:grid-cols-3">
+            <CatastoMiniStat eyebrow="Documenti" value={documents.length} description="Risultati correnti della ricerca documentale." />
+            <CatastoMiniStat eyebrow="Selezione ZIP" value={selectedDocumentIds.length} description="Documenti pronti per export massivo." tone={selectedDocumentIds.length > 0 ? "success" : "default"} />
+            <CatastoMiniStat eyebrow="Ricerca" value={documentsBusy ? "In corso" : "Pronta"} description="Stato della consultazione archivio documentale." tone={documentsBusy ? "warning" : "default"} />
+          </div>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-4">
+            <CatastoMiniStat eyebrow="Documenti" value={documents.length} description="Risultati correnti della ricerca documentale." />
+            <CatastoMiniStat eyebrow="Selezione ZIP" value={selectedDocumentIds.length} description="Documenti pronti per export massivo." tone={selectedDocumentIds.length > 0 ? "success" : "default"} />
+            <CatastoMiniStat eyebrow="Batch" value={batches.length} description={`${processingCount} in lavorazione · ${failedCount} con errori`} />
+            <CatastoMiniStat eyebrow="Completati" value={completedCount} description="Lotti conclusi disponibili nello storico." tone={completedCount > 0 ? "success" : "default"} />
+          </div>
+        )}
       </CatastoHero>
 
-      <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
-        <CatastoPanelHeader
-          badge={
-            <>
-              <RefreshIcon className="h-3.5 w-3.5" />
-              Vista archivio
-            </>
-          }
-          title="Scegli la vista di consultazione"
-          description="Batch per la parte operativa. Documenti per l'output PDF e la ricerca archivistica."
-        />
-        <div className="grid gap-4 p-6 md:grid-cols-2">
-          <Link
-            className={`rounded-[24px] border p-5 text-left transition ${activeView === "documents" ? "border-[#1D4E35] bg-[#eef6f0] shadow-sm" : "border-gray-200 bg-white hover:border-gray-300"}`}
-            href="/catasto/archive?view=documents"
-          >
-            <div className="flex items-center gap-3">
-              <div className={`rounded-2xl p-3 ${activeView === "documents" ? "bg-[#1D4E35] text-white" : "bg-gray-100 text-gray-700"}`}>
-                <DocumentIcon className="h-5 w-5" />
+      {!isolatedView ? (
+        <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
+          <CatastoPanelHeader
+            badge={
+              <>
+                <RefreshIcon className="h-3.5 w-3.5" />
+                Vista archivio
+              </>
+            }
+            title="Scegli la vista di consultazione"
+            description="Batch per la parte operativa. Documenti per l'output PDF e la ricerca archivistica."
+          />
+          <div className="grid gap-4 p-6 md:grid-cols-2">
+            <Link
+              className={`rounded-[24px] border p-5 text-left transition ${activeView === "documents" ? "border-[#1D4E35] bg-[#eef6f0] shadow-sm" : "border-gray-200 bg-white hover:border-gray-300"}`}
+              href="/catasto/archive?view=documents"
+            >
+              <div className="flex items-center gap-3">
+                <div className={`rounded-2xl p-3 ${activeView === "documents" ? "bg-[#1D4E35] text-white" : "bg-gray-100 text-gray-700"}`}>
+                  <DocumentIcon className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-base font-semibold text-gray-900">Documenti</p>
+                  <p className="mt-1 text-sm leading-6 text-gray-600">Ricerca PDF, selezione multipla, ZIP e viewer inline.</p>
+                </div>
               </div>
-              <div>
-                <p className="text-base font-semibold text-gray-900">Documenti</p>
-                <p className="mt-1 text-sm leading-6 text-gray-600">Ricerca PDF, selezione multipla, ZIP e viewer inline.</p>
+            </Link>
+            <Link
+              className={`rounded-[24px] border p-5 text-left transition ${activeView === "batches" ? "border-[#1D4E35] bg-[#eef6f0] shadow-sm" : "border-gray-200 bg-white hover:border-gray-300"}`}
+              href="/elaborazioni/batches"
+            >
+              <div className="flex items-center gap-3">
+                <div className={`rounded-2xl p-3 ${activeView === "batches" ? "bg-[#1D4E35] text-white" : "bg-gray-100 text-gray-700"}`}>
+                  <RefreshIcon className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-base font-semibold text-gray-900">Batch</p>
+                  <p className="mt-1 text-sm leading-6 text-gray-600">Monitoraggio lotti, retry, annullamento e accesso al dettaglio.</p>
+                </div>
               </div>
-            </div>
-          </Link>
-          <Link
-            className={`rounded-[24px] border p-5 text-left transition ${activeView === "batches" ? "border-[#1D4E35] bg-[#eef6f0] shadow-sm" : "border-gray-200 bg-white hover:border-gray-300"}`}
-            href="/elaborazioni/batches"
-          >
-            <div className="flex items-center gap-3">
-              <div className={`rounded-2xl p-3 ${activeView === "batches" ? "bg-[#1D4E35] text-white" : "bg-gray-100 text-gray-700"}`}>
-                <RefreshIcon className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-base font-semibold text-gray-900">Batch</p>
-                <p className="mt-1 text-sm leading-6 text-gray-600">Monitoraggio lotti, retry, annullamento e accesso al dettaglio.</p>
-              </div>
-            </div>
-          </Link>
-        </div>
-      </article>
+            </Link>
+          </div>
+        </article>
+      ) : null}
 
       {activeView === "batches" ? (
         <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white p-0 shadow-panel">
@@ -580,6 +603,24 @@ export function CatastoArchiveWorkspace({ initialView }: { initialView: ArchiveV
           </article>
         </>
       )}
+    </>
+  );
+
+  if (embedded) {
+    return <div className="space-y-6">{content}</div>;
+  }
+
+  return (
+    <ProtectedPage
+      title={isElaborazioni ? "Elaborazioni" : "Archivio"}
+      description={
+        isElaborazioni
+          ? "Monitoraggio dei batch e accesso ai documenti prodotti dal runtime."
+          : "Consultazione unificata di batch e documenti del modulo Catasto."
+      }
+      breadcrumb={isElaborazioni ? "Elaborazioni / Batch" : "Catasto / Archivio"}
+    >
+      {content}
     </ProtectedPage>
   );
 }

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import logging
@@ -197,6 +198,19 @@ class BrowserSession:
         logger.info("Form visura SISTER pronto")
         await self._trace_state("visura-form-ready")
 
+    async def open_subject_form(self, subject_kind: str) -> None:
+        page = self.page
+        normalized_kind = (subject_kind or "PF").strip().upper()
+        subject_url = self.selectors.subject_pf_url if normalized_kind == "PF" else self.selectors.subject_pnf_url
+        logger.info("Apertura form visura soggetto kind=%s", normalized_kind)
+        await self._maybe_accept_privacy_notice()
+        await page.goto(subject_url, wait_until="domcontentloaded")
+        if await page.locator(self.selectors.territorio_selector).count() > 0:
+            await page.select_option(self.selectors.territorio_selector, value=self.selectors.territorio_value)
+            await page.get_by_role("button", name=self.selectors.territorio_apply_button_name).click()
+            await self._trace_state(f"subject-after-territorio-{normalized_kind}")
+        await self._trace_state(f"subject-form-ready-{normalized_kind}")
+
     async def fill_visura_form(self, request) -> None:
         page = self.page
         logger.info(
@@ -228,6 +242,82 @@ class BrowserSession:
         logger.info("Form visura inviato per richiesta %s", request.id)
         await self._trace_state(f"visura-form-submitted-{request.id}")
 
+    async def fill_subject_form(self, request) -> None:
+        page = self.page
+        logger.info(
+            "Compilazione form soggetto per richiesta %s kind=%s subject_id=%s request_type=%s",
+            request.id,
+            request.subject_kind,
+            request.subject_id,
+            request.request_type,
+        )
+        await self._select_request_type_if_present(request.request_type or "ATTUALITA")
+        await self._fill_subject_identifier(request.subject_id or "")
+        await page.select_option(self.selectors.motivo_selector, value=self.selectors.motivo_value)
+        await self._trace_state(f"subject-form-filled-{request.id}")
+
+    async def search_subject_and_open_visura(self, request) -> str | None:
+        logger.info("Ricerca soggetto per richiesta %s", request.id)
+        await self._click_first_visible(
+            self.selectors.subject_search_button_selectors
+            or ["input[value='Ricerca']", "button:has-text('Ricerca')", "text=Ricerca"]
+        )
+        await self.page.wait_for_timeout(1500)
+        subject_not_found = await self.detect_subject_not_found_message(request.subject_kind, request.subject_id)
+        if subject_not_found:
+            await self._trace_state(f"subject-not-found-{request.id}")
+            return subject_not_found
+
+        for selector in (
+            self.selectors.subject_result_selector_candidates
+            or [
+                "input[name='omonimoSelezionato'][type='radio']",
+                "input[name='omonimoSelezionato'][type='checkbox']",
+                "table input[type='radio']",
+                "input[type='radio']",
+                "table input[type='checkbox']",
+                "input[type='checkbox']",
+            ]
+        ):
+            locator = self.page.locator(selector).first
+            if await locator.count() > 0 and await locator.is_visible():
+                with contextlib.suppress(Exception):
+                    await locator.check(timeout=5000)
+                break
+
+        await self._click_first_visible(
+            self.selectors.subject_open_visura_button_selectors
+            or [
+                "input[name='visura']",
+                "input[value='Visura per Soggetto']",
+                "input[value='VISURA PER SOGGETTO']",
+                "button:has-text('Visura per Soggetto')",
+                "button:has-text('VISURA PER SOGGETTO')",
+                "text=Visura per Soggetto",
+                "text=VISURA PER SOGGETTO",
+            ]
+        )
+        await self.page.wait_for_timeout(1500)
+        await self._trace_state(f"subject-visura-open-{request.id}")
+        return None
+
+    async def detect_subject_not_found_message(self, subject_kind: str | None, subject_id: str | None) -> str | None:
+        try:
+            page_text = await self.page.locator("body").inner_text(timeout=2000)
+        except Exception:
+            page_text = ""
+        normalized_text = re.sub(r"\s+", " ", page_text).upper()
+        markers = [
+            "NESSUNA CORRISPONDENZA TROVATA",
+            "NESSUN RISULTATO",
+            "NESSUN DATO TROVATO",
+            "SOGGETTO NON TROVATO",
+            "NON RISULTANO DATI",
+        ]
+        if any(marker in normalized_text for marker in markers):
+            return f"Nessuna corrispondenza catastale per {(subject_kind or 'SOGGETTO').strip()} '{(subject_id or '').strip()}'"
+        return None
+
     async def capture_captcha_image(self) -> bytes:
         await self.page.wait_for_selector(self.selectors.captcha_image_selector)
         return await self.page.locator(self.selectors.captcha_image_selector).screenshot(type="png")
@@ -257,6 +347,10 @@ class BrowserSession:
         await download.save_as(str(destination))
         logger.info("Download PDF completato: %s", destination)
         return destination.stat().st_size
+
+    async def capture_debug_snapshot(self, target_dir: Path, label: str) -> list[str]:
+        target_dir.mkdir(parents=True, exist_ok=True)
+        return await self._write_artifacts_to_dir(target_dir, label)
 
     async def _goto_visura_menu(self) -> None:
         page = self.page
@@ -312,6 +406,78 @@ class BrowserSession:
         locator = self.page.get_by_role("button", name=text)
         if await locator.count() > 0:
             await locator.first.click()
+
+    async def _click_first_visible(self, selectors: list[str]) -> None:
+        last_error: Exception | None = None
+        for selector in selectors:
+            locator = self.page.locator(selector).first
+            try:
+                if await locator.count() == 0:
+                    continue
+                if not await locator.is_visible():
+                    continue
+                await locator.click(timeout=15000)
+                return
+            except Exception as exc:
+                last_error = exc
+                continue
+        if last_error is not None:
+            raise last_error
+        raise TimeoutError(f"No clickable selector found in candidates: {selectors}")
+
+    async def _fill_subject_identifier(self, subject_id: str) -> None:
+        normalized = (subject_id or "").strip().upper()
+        if not normalized:
+            raise RuntimeError("Campo identificativo soggetto mancante")
+
+        radio_candidates = [
+            "input[name='selDatiAna'][value='CF_PF']",
+            "input[name='selCfDn'][value='CF_PNF']",
+        ]
+        for radio_selector in radio_candidates:
+            radio = self.page.locator(radio_selector).first
+            if await radio.count() > 0:
+                with contextlib.suppress(Exception):
+                    await radio.check(timeout=3000)
+
+        candidates = [
+            "input[name*='cod' i][name*='fisc' i]",
+            "input[id*='cod' i][id*='fisc' i]",
+            "input[name*='codice' i][name*='fisc' i]",
+            "input[name*='partita' i][name*='iva' i]",
+            "input[id*='partita' i][id*='iva' i]",
+            "input[name*='piva' i]",
+            "input[id*='piva' i]",
+            "input[type='text']",
+        ]
+        for selector in candidates:
+            locator = self.page.locator(selector).first
+            if await locator.count() == 0:
+                continue
+            name_attr = ((await locator.get_attribute("name")) or "").lower()
+            if "captcha" in name_attr or "sicurezza" in name_attr:
+                continue
+            if not await locator.is_visible():
+                continue
+            await locator.fill(normalized, timeout=5000)
+            return
+        raise RuntimeError("Campo identificativo soggetto non trovato (CF/P.IVA)")
+
+    async def _select_request_type_if_present(self, request_type: str) -> None:
+        desired = "Storica" if (request_type or "").strip().upper() == "STORICA" else "Attualità"
+        label_candidates = [
+            f"label:has-text('{desired}')",
+            f"input[type='radio'] >> xpath=following-sibling::label[contains(., '{desired}')]",
+        ]
+        for selector in label_candidates:
+            locator = self.page.locator(selector).first
+            if await locator.count() == 0:
+                continue
+            if not await locator.is_visible():
+                continue
+            with contextlib.suppress(Exception):
+                await locator.click(timeout=1500)
+                return
 
     async def _maybe_accept_privacy_notice(self) -> None:
         page = self.page
@@ -455,6 +621,9 @@ class BrowserSession:
     async def _write_debug_artifacts(self, reason: str) -> list[str]:
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         target_dir = self.config.debug_artifacts_path / "connection-tests" / timestamp
+        return await self._write_artifacts_to_dir(target_dir, reason)
+
+    async def _write_artifacts_to_dir(self, target_dir: Path, reason: str) -> list[str]:
         target_dir.mkdir(parents=True, exist_ok=True)
 
         screenshot_path = target_dir / f"{reason}.png"

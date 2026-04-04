@@ -127,6 +127,7 @@ def build_request_state_map(requests: list[object]) -> dict[str, dict[str, objec
             "current_operation": request.current_operation,
             "document_id": str(request.document_id) if request.document_id else None,
             "captcha_image_path": request.captcha_image_path,
+            "artifact_dir": request.artifact_dir,
             "captcha_requested_at": request.captcha_requested_at.isoformat() if request.captcha_requested_at else None,
         }
     return state_map

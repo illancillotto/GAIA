@@ -31,6 +31,8 @@ Stato: in sviluppo.
 ### GAIA Catasto — Servizi AdE
 Automazione delle visure catastali dal portale SISTER: upload batch CSV/XLSX,
 worker Playwright separato, gestione CAPTCHA, archivio PDF e download ZIP.
+Il runtime supporta sia visure per immobile sia visure per soggetto PF/PNF,
+con esiti diagnostici distinti `completed`, `failed`, `skipped`, `not_found`.
 Stato: MVP in integrazione.
 
 ### GAIA Utenze — Anagrafica soggetti
@@ -161,7 +163,7 @@ Se la variabile e vuota/non impostata, la password non viene richiesta.
 
 ## Catasto MVP
 
-- Router backend integrato sotto `/catasto`
+- Runtime operativo backend esposto sotto `/elaborazioni`; `/catasto` resta area dominio/documenti/comuni
 - Worker dedicato `catasto-worker` con Playwright e OCR CAPTCHA
 - Volume Docker `catasto-data` per PDF e immagini CAPTCHA
 - Archivio documenti con download singolo e ZIP per batch
@@ -169,6 +171,11 @@ Se la variabile e vuota/non impostata, la password non viene richiesta.
 - Variabili operative in `.env.example` per storage documenti/CAPTCHA e chiave Fernet condivisa
 - Selettori SISTER esterni in `modules/catasto/worker/sister_selectors.json`, sovrascrivibili via `CATASTO_SISTER_SELECTORS_PATH`
 - Diagnostica probe SISTER del worker con log stdout e snapshot HTML/PNG in `CATASTO_DEBUG_ARTIFACTS_PATH`
+- Supporto ai due flussi SISTER:
+  - ricerca per immobile con comune, foglio, particella e subalterno
+  - ricerca per soggetto con `subject_id`, inferenza PF/PNF e richiesta `ATTUALITA`/`STORICA`
+- Report batch `JSON` e `Markdown` persistiti dal worker
+- Artifact per richiesta con path persistito e download ZIP dal runtime `elaborazioni`
 
 ## Network MVP
 

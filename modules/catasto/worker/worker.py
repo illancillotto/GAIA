@@ -27,6 +27,8 @@ from anti_captcha_client import AntiCaptchaClient
 from browser_session import BrowserSession, BrowserSessionConfig
 from captcha_solver import CaptchaSolver
 from credential_vault import WorkerCredentialVault
+from reporting import write_batch_report
+from runtime_policy import classify_terminal_status
 from visura_flow import ManualCaptchaDecision, VisuraFlowResult, execute_visura_flow
 
 
@@ -43,6 +45,7 @@ SESSION_TIMEOUT_SEC = int(os.getenv("SESSION_TIMEOUT_SEC", "1680"))
 DOCUMENT_STORAGE_PATH = Path(os.getenv("CATASTO_DOCUMENT_STORAGE_PATH", "/data/catasto/documents"))
 CAPTCHA_STORAGE_PATH = Path(os.getenv("CATASTO_CAPTCHA_STORAGE_PATH", "/data/catasto/captcha"))
 DEBUG_ARTIFACTS_PATH = Path(os.getenv("CATASTO_DEBUG_ARTIFACTS_PATH", "/data/catasto/debug"))
+REPORT_STORAGE_PATH = Path(os.getenv("CATASTO_REPORT_STORAGE_PATH", "/data/catasto/reports"))
 HEADLESS = os.getenv("CATASTO_HEADLESS", "true").lower() != "false"
 DEBUG_BROWSER = os.getenv("CATASTO_DEBUG_BROWSER", "false").lower() == "true"
 
@@ -71,11 +74,12 @@ class CatastoWorker:
                 api_key=ANTI_CAPTCHA_API_KEY,
                 poll_interval_sec=ANTI_CAPTCHA_POLL_INTERVAL_SEC,
                 timeout_sec=ANTI_CAPTCHA_TIMEOUT_SEC,
-            )
+        )
             if ANTI_CAPTCHA_API_KEY
             else None
         )
         DEBUG_ARTIFACTS_PATH.mkdir(parents=True, exist_ok=True)
+        REPORT_STORAGE_PATH.mkdir(parents=True, exist_ok=True)
 
     async def run(self) -> None:
         self._install_signal_handlers()
@@ -339,13 +343,15 @@ class CatastoWorker:
             if request is None or batch is None:
                 return
             logger.info(
-                "Elaborazione richiesta %s del batch %s riga=%s comune=%s foglio=%s particella=%s",
+                "Elaborazione richiesta %s del batch %s riga=%s mode=%s comune=%s foglio=%s particella=%s subject_id=%s",
                 request_id,
                 batch_id,
                 request.row_index,
+                request.search_mode,
                 request.comune,
                 request.foglio,
                 request.particella,
+                request.subject_id,
             )
 
             if request.status == CatastoVisuraRequestStatus.AWAITING_CAPTCHA.value and request.captcha_manual_solution:
@@ -379,6 +385,11 @@ class CatastoWorker:
                 request.attempts += 1
 
             batch.current_operation = f"Lavorazione {request.comune} Fg.{request.foglio} Part.{request.particella}"
+            if request.search_mode == "soggetto":
+                batch.current_operation = (
+                    f"Lavorazione {request.subject_kind or 'SOGGETTO'} {request.subject_id or '-'}"
+                )
+            request.artifact_dir = str(self._build_request_artifact_dir(batch_id, request))
             db.commit()
             db.refresh(request)
             db.expunge(request)
@@ -418,6 +429,8 @@ class CatastoWorker:
             result.status,
             result.error_message,
         )
+        if request_snapshot.artifact_dir:
+            await browser.capture_debug_snapshot(Path(request_snapshot.artifact_dir), f"final-{result.status}")
         self._persist_flow_result(batch_id, request_id, credential.sister_username, result)
 
     async def _wait_for_manual_captcha(self, batch_id, request_id, image_path: Path) -> ManualCaptchaDecision:
@@ -472,16 +485,23 @@ class CatastoWorker:
             if result.captcha_image_path:
                 request.captcha_image_path = str(result.captcha_image_path)
 
-            if result.status == "completed" and result.file_path is not None and result.file_size is not None:
+            terminal_status = classify_terminal_status(result.status)
+
+            if terminal_status == "completed" and result.file_path is not None and result.file_size is not None:
                 document = CatastoDocument(
                     user_id=request.user_id,
                     request_id=request.id,
+                    search_mode=request.search_mode,
                     comune=request.comune,
                     foglio=request.foglio,
                     particella=request.particella,
                     subalterno=request.subalterno,
                     catasto=request.catasto,
                     tipo_visura=request.tipo_visura,
+                    subject_kind=request.subject_kind,
+                    subject_id=request.subject_id,
+                    request_type=request.request_type,
+                    intestazione=request.intestazione,
                     filename=result.file_path.name,
                     filepath=str(result.file_path),
                     file_size=result.file_size,
@@ -494,12 +514,18 @@ class CatastoWorker:
                 request.current_operation = "PDF scaricato"
                 request.processed_at = datetime.now(timezone.utc)
                 batch.current_operation = f"Completata riga {request.row_index}"
-            elif result.status == "skipped":
+            elif terminal_status == "skipped":
                 request.status = CatastoVisuraRequestStatus.SKIPPED.value
                 request.current_operation = "Saltata"
                 request.error_message = result.error_message
                 request.processed_at = datetime.now(timezone.utc)
                 batch.current_operation = f"Saltata riga {request.row_index}"
+            elif terminal_status == "not_found":
+                request.status = CatastoVisuraRequestStatus.NOT_FOUND.value
+                request.current_operation = "Nessuna corrispondenza"
+                request.error_message = result.error_message
+                request.processed_at = datetime.now(timezone.utc)
+                batch.current_operation = f"Nessuna corrispondenza riga {request.row_index}"
             else:
                 request.status = CatastoVisuraRequestStatus.FAILED.value
                 request.current_operation = "Fallita"
@@ -530,12 +556,25 @@ class CatastoWorker:
             self._refresh_batch_counts(db, batch)
             if all(item.status in {CatastoVisuraRequestStatus.COMPLETED.value, CatastoVisuraRequestStatus.SKIPPED.value} for item in requests):
                 batch.status = CatastoBatchStatus.COMPLETED.value
+            elif all(
+                item.status
+                in {
+                    CatastoVisuraRequestStatus.COMPLETED.value,
+                    CatastoVisuraRequestStatus.SKIPPED.value,
+                    CatastoVisuraRequestStatus.NOT_FOUND.value,
+                }
+                for item in requests
+            ):
+                batch.status = CatastoBatchStatus.COMPLETED.value
             elif any(item.status == CatastoVisuraRequestStatus.PENDING.value for item in requests):
                 batch.status = CatastoBatchStatus.PROCESSING.value
             else:
                 batch.status = CatastoBatchStatus.FAILED.value if batch.failed_items else CatastoBatchStatus.COMPLETED.value
             batch.completed_at = datetime.now(timezone.utc)
             batch.current_operation = "Batch terminato"
+            report_json_path, report_md_path = write_batch_report(batch, requests, self._build_batch_report_dir(batch))
+            batch.report_json_path = str(report_json_path)
+            batch.report_md_path = str(report_md_path)
             db.commit()
 
     def _refresh_batch_counts(self, db: Session, batch: CatastoBatch) -> None:
@@ -546,6 +585,7 @@ class CatastoWorker:
         batch.completed_items = sum(1 for item in requests if item.status == CatastoVisuraRequestStatus.COMPLETED.value)
         batch.failed_items = sum(1 for item in requests if item.status == CatastoVisuraRequestStatus.FAILED.value)
         batch.skipped_items = sum(1 for item in requests if item.status == CatastoVisuraRequestStatus.SKIPPED.value)
+        batch.not_found_items = sum(1 for item in requests if item.status == CatastoVisuraRequestStatus.NOT_FOUND.value)
 
     def _set_batch_operation(self, batch_id, operation: str) -> None:
         with SessionLocal() as db:
@@ -581,13 +621,27 @@ class CatastoWorker:
         )
 
     def _build_document_path(self, codice_fiscale: str, request: CatastoVisuraRequest) -> Path:
-        comune_component = self._slugify(request.comune)
+        if request.search_mode == "soggetto":
+            kind_component = self._slugify(request.subject_kind or "SOGGETTO")
+            subject_component = self._slugify(request.subject_id or "UNKNOWN")
+            request_type_component = self._slugify(request.request_type or "ATTUALITA")
+            filename = f"{kind_component}_{subject_component}_{request_type_component}.pdf"
+            year_component = datetime.now(timezone.utc).strftime("%Y")
+            return DOCUMENT_STORAGE_PATH / year_component / "soggetti" / filename
+
+        comune_component = self._slugify(request.comune or "SCONOSCIUTO")
         year_component = datetime.now(timezone.utc).strftime("%Y")
         filename = f"{codice_fiscale}_{request.foglio}_{request.particella}"
         if request.subalterno:
             filename += f"_{request.subalterno}"
         filename += ".pdf"
         return DOCUMENT_STORAGE_PATH / year_component / comune_component / filename
+
+    def _build_request_artifact_dir(self, batch_id, request: CatastoVisuraRequest) -> Path:
+        return DEBUG_ARTIFACTS_PATH / "requests" / str(batch_id) / str(request.id)
+
+    def _build_batch_report_dir(self, batch: CatastoBatch) -> Path:
+        return REPORT_STORAGE_PATH / str(batch.user_id) / str(batch.id)
 
     @staticmethod
     def _slugify(value: str) -> str:

@@ -4,10 +4,11 @@ import asyncio
 from dataclasses import dataclass
 import logging
 from pathlib import Path
-from typing import Awaitable, Callable
+from typing import TYPE_CHECKING, Awaitable, Callable
 
-from browser_session import BrowserSession
-from captcha_solver import CaptchaSolver
+if TYPE_CHECKING:
+    from browser_session import BrowserSession
+    from captcha_solver import CaptchaSolver
 
 logger = logging.getLogger(__name__)
 
@@ -30,24 +31,40 @@ class VisuraFlowResult:
 
 
 async def execute_visura_flow(
-    browser: BrowserSession,
+    browser: "BrowserSession",
     request,
     document_path: Path,
     captcha_dir: Path,
-    captcha_solver: CaptchaSolver,
+    captcha_solver: "CaptchaSolver",
     max_ocr_attempts: int,
     get_manual_captcha_decision: Callable[[Path], Awaitable[ManualCaptchaDecision]],
     solve_external_captcha: Callable[[bytes], Awaitable[str | None]] | None = None,
     update_operation: Callable[[str], None] | None = None,
 ) -> VisuraFlowResult:
-    if update_operation is not None:
-        update_operation("Apertura form visura")
-    logger.info("Richiesta %s apertura form visura", request.id)
-    await browser.open_visura_form()
-    if update_operation is not None:
-        update_operation("Compilazione dati visura")
-    logger.info("Richiesta %s compilazione form visura", request.id)
-    await browser.fill_visura_form(request)
+    search_mode = str(getattr(request, "search_mode", "immobile") or "immobile").strip().lower()
+    if search_mode == "soggetto":
+        if update_operation is not None:
+            update_operation("Apertura form visura per soggetto")
+        logger.info("Richiesta %s apertura form soggetto", request.id)
+        await browser.open_subject_form(getattr(request, "subject_kind", "PF") or "PF")
+        if update_operation is not None:
+            update_operation("Compilazione dati soggetto")
+        logger.info("Richiesta %s compilazione form soggetto", request.id)
+        await browser.fill_subject_form(request)
+        if update_operation is not None:
+            update_operation("Ricerca soggetto")
+        subject_not_found = await browser.search_subject_and_open_visura(request)
+        if subject_not_found:
+            return VisuraFlowResult(status="not_found", error_message=subject_not_found)
+    else:
+        if update_operation is not None:
+            update_operation("Apertura form visura")
+        logger.info("Richiesta %s apertura form visura", request.id)
+        await browser.open_visura_form()
+        if update_operation is not None:
+            update_operation("Compilazione dati visura")
+        logger.info("Richiesta %s compilazione form visura", request.id)
+        await browser.fill_visura_form(request)
 
     last_ocr_text: str | None = None
     for attempt in range(1, max_ocr_attempts + 1):

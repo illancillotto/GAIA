@@ -1,12 +1,12 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 
 import { ProtectedPage } from "@/components/app/protected-page";
 import { ElaborazioneHero, ElaborazioneMiniStat, ElaborazioneNoticeCard, ElaborazionePanelHeader } from "@/components/elaborazioni/module-chrome";
 import { ElaborazioneStatusBadge } from "@/components/elaborazioni/status-badge";
+import { ElaborazioneWorkspaceModal } from "@/components/elaborazioni/workspace-modal";
 import { DataTable } from "@/components/table/data-table";
 import { TableFilters } from "@/components/table/table-filters";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -62,7 +62,20 @@ function triggerDownload(blob: Blob, filename: string): void {
 }
 
 export function ElaborazioneArchiveWorkspace({ initialView }: { initialView: ArchiveView }) {
+  return <ElaborazioneArchiveWorkspaceContent initialView={initialView} embedded={false} />;
+}
+
+export function ElaborazioneArchiveWorkspaceContent({
+  initialView,
+  embedded = false,
+  isolatedView = false,
+}: {
+  initialView: ArchiveView;
+  embedded?: boolean;
+  isolatedView?: boolean;
+}) {
   const activeView = initialView;
+  const [modalState, setModalState] = useState<{ href: string; title: string; description?: string | null } | null>(null);
   const [batches, setBatches] = useState<ElaborazioneBatch[]>([]);
   const [batchError, setBatchError] = useState<string | null>(null);
   const [cancelBusyId, setCancelBusyId] = useState<string | null>(null);
@@ -76,6 +89,10 @@ export function ElaborazioneArchiveWorkspace({ initialView }: { initialView: Arc
   const [downloadingId, setDownloadingId] = useState<string | null>(null);
   const [selectedDocumentIds, setSelectedDocumentIds] = useState<string[]>([]);
   const [zipBusy, setZipBusy] = useState(false);
+
+  function openWorkspaceModal(href: string, title: string, description?: string): void {
+    setModalState({ href, title, description });
+  }
 
   useEffect(() => {
     void refreshBatches();
@@ -267,9 +284,19 @@ export function ElaborazioneArchiveWorkspace({ initialView }: { initialView: Arc
         accessorKey: "filename",
         cell: ({ row }) => (
           <div className="flex items-center gap-3">
-            <Link className="text-sm font-medium text-[#1D4E35]" href={`/catasto/documents/${row.original.id}`}>
+            <button
+              className="text-sm font-medium text-[#1D4E35] transition hover:text-[#143726]"
+              onClick={() =>
+                openWorkspaceModal(
+                  `/catasto/documents/${row.original.id}`,
+                  row.original.filename,
+                  "Viewer documento aperto in modale per non interrompere la consultazione dell'archivio.",
+                )
+              }
+              type="button"
+            >
               Apri viewer
-            </Link>
+            </button>
             <button
               className="text-sm text-gray-500 transition hover:text-gray-800"
               disabled={downloadingId === row.original.id}
@@ -289,13 +316,10 @@ export function ElaborazioneArchiveWorkspace({ initialView }: { initialView: Arc
   const processingCount = batches.filter((batch) => batch.status === "processing").length;
   const failedCount = batches.filter((batch) => batch.failed_items > 0 || batch.status === "failed").length;
   const sharedError = activeView === "batches" ? batchError : documentsError;
+  const batchOnlyMode = isolatedView && activeView === "batches";
 
-  return (
-    <ProtectedPage
-      title="Elaborazioni"
-      description="Monitoraggio dei batch e accesso ai documenti prodotti dal runtime."
-      breadcrumb="Elaborazioni / Batch"
-    >
+  const content = (
+    <>
       <ElaborazioneHero
         badge={
           <>
@@ -304,68 +328,104 @@ export function ElaborazioneArchiveWorkspace({ initialView }: { initialView: Arc
           </>
         }
         title="Monitor operativo delle elaborazioni e accesso ai documenti prodotti."
-        description="La vista batch è il punto d'accesso canonico al runtime. I documenti restano consultabili nel dominio catasto."
+        description={
+          batchOnlyMode
+            ? "Archivio operativo dedicato ai lotti del runtime elaborazioni: monitoraggio, retry, annullamento e accesso al dettaglio."
+            : "La vista batch è il punto d'accesso canonico al runtime. I documenti restano consultabili nel dominio catasto."
+        }
         actions={
           sharedError ? (
             <ElaborazioneNoticeCard title="Errore archivio" description={sharedError} tone="danger" />
           ) : (
             <ElaborazioneNoticeCard
-              title="Vista unificata"
-              description="Usa Batch per monitorare lotti e retry; usa Documenti per ricerca, ZIP e apertura viewer."
+              title={batchOnlyMode ? "Archivio batch" : "Vista unificata"}
+              description={
+                batchOnlyMode
+                  ? "Questa vista e concentrata solo sui batch del runtime, senza elementi documentali."
+                  : "Usa Batch per monitorare lotti e retry; usa Documenti per ricerca, ZIP e apertura viewer."
+              }
             />
           )
         }
       >
-        <div className="grid gap-3 sm:grid-cols-4">
-          <ElaborazioneMiniStat eyebrow="Documenti" value={documents.length} description="Risultati correnti della ricerca documentale." />
-          <ElaborazioneMiniStat eyebrow="Selezione ZIP" value={selectedDocumentIds.length} description="Documenti pronti per export massivo." tone={selectedDocumentIds.length > 0 ? "success" : "default"} />
-          <ElaborazioneMiniStat eyebrow="Batch" value={batches.length} description={`${processingCount} in lavorazione · ${failedCount} con errori`} />
-          <ElaborazioneMiniStat eyebrow="Completati" value={completedCount} description="Lotti conclusi disponibili nello storico." tone={completedCount > 0 ? "success" : "default"} />
-        </div>
+        {batchOnlyMode ? (
+          <div className="grid gap-3 sm:grid-cols-3">
+            <ElaborazioneMiniStat eyebrow="Batch" value={batches.length} description={`${processingCount} in lavorazione · ${failedCount} con errori`} />
+            <ElaborazioneMiniStat eyebrow="Completati" value={completedCount} description="Lotti conclusi disponibili nello storico." tone={completedCount > 0 ? "success" : "default"} />
+            <ElaborazioneMiniStat eyebrow="Falliti" value={failedCount} description="Batch con richieste fallite o errori in corso." tone={failedCount > 0 ? "warning" : "default"} />
+          </div>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-4">
+            <ElaborazioneMiniStat eyebrow="Documenti" value={documents.length} description="Risultati correnti della ricerca documentale." />
+            <ElaborazioneMiniStat eyebrow="Selezione ZIP" value={selectedDocumentIds.length} description="Documenti pronti per export massivo." tone={selectedDocumentIds.length > 0 ? "success" : "default"} />
+            <ElaborazioneMiniStat eyebrow="Batch" value={batches.length} description={`${processingCount} in lavorazione · ${failedCount} con errori`} />
+            <ElaborazioneMiniStat eyebrow="Completati" value={completedCount} description="Lotti conclusi disponibili nello storico." tone={completedCount > 0 ? "success" : "default"} />
+          </div>
+        )}
       </ElaborazioneHero>
 
-      <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
-        <ElaborazionePanelHeader
-          badge={
-            <>
-              <RefreshIcon className="h-3.5 w-3.5" />
-              Vista archivio
-            </>
-          }
-          title="Scegli la vista di consultazione"
-          description="Batch per la parte operativa. Documenti per l'output PDF e la ricerca archivistica."
-        />
-        <div className="grid gap-4 p-6 md:grid-cols-2">
-          <Link
-            className={`rounded-[24px] border p-5 text-left transition ${activeView === "documents" ? "border-[#1D4E35] bg-[#eef6f0] shadow-sm" : "border-gray-200 bg-white hover:border-gray-300"}`}
-            href="/catasto/archive?view=documents"
-          >
-            <div className="flex items-center gap-3">
-              <div className={`rounded-2xl p-3 ${activeView === "documents" ? "bg-[#1D4E35] text-white" : "bg-gray-100 text-gray-700"}`}>
-                <DocumentIcon className="h-5 w-5" />
+      {!isolatedView ? (
+        <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
+          <ElaborazionePanelHeader
+            badge={
+              <>
+                <RefreshIcon className="h-3.5 w-3.5" />
+                Vista archivio
+              </>
+            }
+            title="Scegli la vista di consultazione"
+            description="Batch per la parte operativa. Documenti per l'output PDF e la ricerca archivistica."
+          />
+          <div className="grid gap-4 p-6 md:grid-cols-2">
+            <button
+              className={`rounded-[24px] border p-5 text-left transition ${activeView === "documents" ? "border-[#1D4E35] bg-[#eef6f0] shadow-sm" : "border-gray-200 bg-white hover:border-gray-300"}`}
+              onClick={() =>
+                activeView === "documents"
+                  ? undefined
+                  : openWorkspaceModal(
+                      "/catasto/archive?view=documents",
+                      "Archivio documenti",
+                      "Vista documentale aperta in modale per mantenere il contesto dell'archivio elaborazioni.",
+                    )
+              }
+              type="button"
+            >
+              <div className="flex items-center gap-3">
+                <div className={`rounded-2xl p-3 ${activeView === "documents" ? "bg-[#1D4E35] text-white" : "bg-gray-100 text-gray-700"}`}>
+                  <DocumentIcon className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-base font-semibold text-gray-900">Documenti</p>
+                  <p className="mt-1 text-sm leading-6 text-gray-600">Ricerca PDF, selezione multipla, ZIP e viewer inline.</p>
+                </div>
               </div>
-              <div>
-                <p className="text-base font-semibold text-gray-900">Documenti</p>
-                <p className="mt-1 text-sm leading-6 text-gray-600">Ricerca PDF, selezione multipla, ZIP e viewer inline.</p>
+            </button>
+            <button
+              className={`rounded-[24px] border p-5 text-left transition ${activeView === "batches" ? "border-[#1D4E35] bg-[#eef6f0] shadow-sm" : "border-gray-200 bg-white hover:border-gray-300"}`}
+              onClick={() =>
+                activeView === "batches"
+                  ? undefined
+                  : openWorkspaceModal(
+                      "/elaborazioni/batches",
+                      "Archivio batch",
+                      "Vista batch aperta in modale per evitare navigazioni fuori dal workspace corrente.",
+                    )
+              }
+              type="button"
+            >
+              <div className="flex items-center gap-3">
+                <div className={`rounded-2xl p-3 ${activeView === "batches" ? "bg-[#1D4E35] text-white" : "bg-gray-100 text-gray-700"}`}>
+                  <RefreshIcon className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="text-base font-semibold text-gray-900">Batch</p>
+                  <p className="mt-1 text-sm leading-6 text-gray-600">Monitoraggio lotti, retry, annullamento e accesso al dettaglio.</p>
+                </div>
               </div>
-            </div>
-          </Link>
-          <Link
-            className={`rounded-[24px] border p-5 text-left transition ${activeView === "batches" ? "border-[#1D4E35] bg-[#eef6f0] shadow-sm" : "border-gray-200 bg-white hover:border-gray-300"}`}
-            href="/elaborazioni/batches"
-          >
-            <div className="flex items-center gap-3">
-              <div className={`rounded-2xl p-3 ${activeView === "batches" ? "bg-[#1D4E35] text-white" : "bg-gray-100 text-gray-700"}`}>
-                <RefreshIcon className="h-5 w-5" />
-              </div>
-              <div>
-                <p className="text-base font-semibold text-gray-900">Batch</p>
-                <p className="mt-1 text-sm leading-6 text-gray-600">Monitoraggio lotti, retry, annullamento e accesso al dettaglio.</p>
-              </div>
-            </div>
-          </Link>
-        </div>
-      </article>
+            </button>
+          </div>
+        </article>
+      ) : null}
 
       {activeView === "batches" ? (
         <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white p-0 shadow-panel">
@@ -426,9 +486,19 @@ export function ElaborazioneArchiveWorkspace({ initialView }: { initialView: Arc
                         </div>
                       </td>
                       <td>
-                        <Link className="font-medium text-[#1D4E35]" href={`/elaborazioni/batches/${batch.id}`}>
+                        <button
+                          className="font-medium text-[#1D4E35] transition hover:text-[#143726]"
+                          onClick={() =>
+                            openWorkspaceModal(
+                              `/elaborazioni/batches/${batch.id}`,
+                              batch.name ?? batch.id,
+                              "Dettaglio batch aperto in modale per restare nell'archivio.",
+                            )
+                          }
+                          type="button"
+                        >
                           Apri
-                        </Link>
+                        </button>
                       </td>
                     </tr>
                   ))}
@@ -565,6 +635,27 @@ export function ElaborazioneArchiveWorkspace({ initialView }: { initialView: Arc
           </article>
         </>
       )}
+      <ElaborazioneWorkspaceModal
+        description={modalState?.description}
+        href={modalState?.href ?? null}
+        onClose={() => setModalState(null)}
+        open={modalState != null}
+        title={modalState?.title ?? "Workspace"}
+      />
+    </>
+  );
+
+  if (embedded) {
+    return <div className="space-y-6">{content}</div>;
+  }
+
+  return (
+    <ProtectedPage
+      title="Elaborazioni"
+      description="Monitoraggio dei batch e accesso ai documenti prodotti dal runtime."
+      breadcrumb="Elaborazioni / Batch"
+    >
+      {content}
     </ProtectedPage>
   );
 }

@@ -1,17 +1,15 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import { ProtectedPage } from "@/components/app/protected-page";
 import {
   ElaborazioneHero,
-  ElaborazioneMiniStat,
   ElaborazioneNoticeCard,
   ElaborazionePanelHeader,
 } from "@/components/elaborazioni/module-chrome";
 import { ElaborazioneOperationMessage } from "@/components/elaborazioni/operation-message";
-import { MetricCard } from "@/components/ui/metric-card";
+import { ElaborazioneWorkspaceModal } from "@/components/elaborazioni/workspace-modal";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DocumentIcon, FolderIcon, LockIcon, RefreshIcon, SearchIcon, UsersIcon } from "@/components/ui/icons";
 import {
@@ -33,6 +31,51 @@ import type {
 
 const DASHBOARD_REFRESH_INTERVAL_MS = 5000;
 
+const QUICK_ACTIONS = [
+  {
+    href: "/elaborazioni/settings",
+    title: "Credenziali",
+    description: "Accesso e configurazione account operativi.",
+    icon: LockIcon,
+  },
+  {
+    href: "/elaborazioni/new-batch",
+    title: "Import batch",
+    description: "Upload CSV o XLSX con preview e avvio worker.",
+    icon: FolderIcon,
+  },
+  {
+    href: "/elaborazioni/new-single",
+    title: "Visura singola",
+    description: "Richiesta puntuale per immobile o soggetto.",
+    icon: SearchIcon,
+  },
+  {
+    href: "/elaborazioni/capacitas",
+    title: "Capacitas",
+    description: "Ricerca anagrafica e monitor pool account.",
+    icon: UsersIcon,
+  },
+  {
+    href: "/elaborazioni/batches",
+    title: "Archivio batch",
+    description: "Esiti, progress e retry dei lotti.",
+    icon: DocumentIcon,
+  },
+  {
+    href: "/catasto/archive?view=documents",
+    title: "Archivio documenti",
+    description: "Consultazione PDF e documenti acquisiti.",
+    icon: DocumentIcon,
+  },
+] as const;
+
+type DashboardModalState = {
+  href: string;
+  title: string;
+  description?: string | null;
+};
+
 export default function ElaborazioniPage() {
   const [batches, setBatches] = useState<ElaborazioneBatch[]>([]);
   const [credentialStatus, setCredentialStatus] = useState<ElaborazioneCredentialStatus | null>(null);
@@ -40,6 +83,7 @@ export default function ElaborazioniPage() {
   const [capacitasCredentials, setCapacitasCredentials] = useState<CapacitasCredential[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [retryBusyId, setRetryBusyId] = useState<string | null>(null);
+  const [modalState, setModalState] = useState<DashboardModalState | null>(null);
 
   const loadDashboard = useCallback(async (): Promise<void> => {
     const token = getStoredAccessToken();
@@ -106,7 +150,6 @@ export default function ElaborazioniPage() {
     }
   }
 
-  const completedToday = batches.filter((batch) => batch.status === "completed").length;
   const activeCapacitasCredentials = capacitasCredentials.filter((credential) => credential.active);
   const capacitasWarningCount = capacitasCredentials.filter((credential) => Boolean(credential.last_error)).length;
   const latestCapacitasUsage = capacitasCredentials
@@ -114,6 +157,10 @@ export default function ElaborazioniPage() {
     .filter((value): value is string => Boolean(value))
     .sort()
     .at(-1);
+
+  function openWorkspaceModal(href: string, title: string, description?: string): void {
+    setModalState({ href, title, description });
+  }
 
   return (
     <ProtectedPage
@@ -142,157 +189,183 @@ export default function ElaborazioniPage() {
           )
         }
       >
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <ElaborazioneMiniStat
-            eyebrow="SISTER"
-            value={credentialStatus?.configured ? "Attivo" : "Da configurare"}
-            description={credentialStatus?.credential?.sister_username ?? "Configura SISTER dalla pagina credenziali"}
-            tone={credentialStatus?.configured ? "success" : "default"}
-          />
-          <ElaborazioneMiniStat
-            eyebrow="Capacitas"
-            value={`${activeCapacitasCredentials.length}/${capacitasCredentials.length}`}
-            description={
-              capacitasCredentials.length > 0
-                ? `${capacitasWarningCount} account con warning recenti`
-                : "Nessun account Capacitas configurato"
-            }
-            tone={capacitasWarningCount > 0 ? "warning" : activeCapacitasCredentials.length > 0 ? "success" : "default"}
-          />
-          <ElaborazioneMiniStat
-            eyebrow="CAPTCHA"
-            value={captchaSummary?.processed ?? 0}
-            description="CAPTCHA manuali elaborati dal worker."
-            tone={(captchaSummary?.processed ?? 0) > 0 ? "success" : "default"}
-          />
-          <ElaborazioneMiniStat
-            eyebrow="Ultimo utilizzo"
-            value={latestCapacitasUsage ? formatDateTime(latestCapacitasUsage) : "Nessun uso"}
-            description="Ultima attività registrata sul pool Capacitas."
-          />
+        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-2xl border border-emerald-200/70 bg-white/80 px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">SISTER</p>
+            <div className="mt-2 flex items-baseline justify-between gap-3">
+              <p className="text-lg font-semibold text-gray-900">{credentialStatus?.configured ? "Attivo" : "Setup"}</p>
+              <p className="truncate text-xs text-gray-500">{credentialStatus?.credential?.sister_username ?? "non configurato"}</p>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-amber-200/80 bg-white/80 px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">Capacitas</p>
+            <div className="mt-2 flex items-baseline justify-between gap-3">
+              <p className="text-lg font-semibold text-gray-900">{`${activeCapacitasCredentials.length}/${capacitasCredentials.length}`}</p>
+              <p className="text-xs text-gray-500">{capacitasWarningCount} warning</p>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">CAPTCHA</p>
+            <div className="mt-2 flex items-baseline justify-between gap-3">
+              <p className="text-lg font-semibold text-gray-900">{captchaSummary?.processed ?? 0}</p>
+              <p className="text-xs text-gray-500">{captchaSummary?.correct ?? 0} ok · {captchaSummary?.wrong ?? 0} ko</p>
+            </div>
+          </div>
+          <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">Ultimo uso</p>
+            <div className="mt-2 flex items-baseline justify-between gap-3">
+              <p className="text-lg font-semibold text-gray-900">{latestCapacitasUsage ? "Registrato" : "Assente"}</p>
+              <p className="text-xs text-gray-500">{latestCapacitasUsage ? formatDateTime(latestCapacitasUsage) : "mai"}</p>
+            </div>
+          </div>
         </div>
       </ElaborazioneHero>
 
-      <div className="surface-grid">
-        <MetricCard
-          label="Credenziali"
-          value={credentialStatus?.configured ? "SISTER attivo" : "Da configurare"}
-          sub={credentialStatus?.credential?.sister_username ?? "Configura SISTER e Capacitas dalla pagina credenziali"}
-          variant={credentialStatus?.configured ? "success" : "default"}
-        />
-        <MetricCard
-          label="Capacitas"
-          value={activeCapacitasCredentials.length}
-          sub={
-            capacitasCredentials.length > 0
-              ? `${capacitasWarningCount} account con warning su ${capacitasCredentials.length}`
-              : "Nessun account Capacitas configurato"
+      <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
+        <ElaborazionePanelHeader
+          badge={
+            <>
+              <RefreshIcon className="h-3.5 w-3.5" />
+              Azioni rapide
+            </>
           }
-          variant={capacitasWarningCount > 0 ? "warning" : activeCapacitasCredentials.length > 0 ? "success" : "default"}
+          title="Flussi principali del runtime"
+          description="Accessi diretti ai percorsi operativi più usati. La barra resta orizzontale per mantenere leggibile la mappa del modulo."
         />
-        <MetricCard
-          label="CAPTCHA elaborati"
-          value={captchaSummary?.processed ?? 0}
-          sub={`${captchaSummary?.correct ?? 0} corretti · ${captchaSummary?.wrong ?? 0} sbagliati`}
-          variant={(captchaSummary?.wrong ?? 0) > 0 ? "warning" : (captchaSummary?.processed ?? 0) > 0 ? "success" : "default"}
-        />
-        <MetricCard
-          label="Batch completati"
-          value={completedToday}
-          sub="Storico batch completati disponibili nel modulo"
-        />
-      </div>
-
-      <div className="grid gap-6 xl:grid-cols-[1.4fr,1fr]">
-        <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
-          <ElaborazionePanelHeader
-            badge={
-              <>
-                <RefreshIcon className="h-3.5 w-3.5" />
-                Azioni rapide
-              </>
-            }
-            title="Accesso diretto ai flussi principali"
-            description="Le aree più usate del modulo sono raccolte qui con descrizioni orientate all'operatività."
-          />
-          <div className="p-6">
-            <div className="grid gap-3 md:grid-cols-2">
-              <Link className="rounded-xl border border-gray-100 bg-gray-50 p-4 transition hover:border-gray-200 hover:bg-white" href="/elaborazioni/settings">
-                <LockIcon className="h-5 w-5 text-[#1D4E35]" />
-                <p className="mt-3 text-sm font-medium text-gray-900">Credenziali</p>
-                <p className="mt-1 text-sm text-gray-500">SISTER e Capacitas nello stesso hub operativo.</p>
-              </Link>
-              <Link className="rounded-xl border border-gray-100 bg-gray-50 p-4 transition hover:border-gray-200 hover:bg-white" href="/elaborazioni/new-batch">
-                <FolderIcon className="h-5 w-5 text-[#1D4E35]" />
-                <p className="mt-3 text-sm font-medium text-gray-900">Import batch</p>
-                <p className="mt-1 text-sm text-gray-500">Upload CSV o XLSX, preview e avvio worker.</p>
-              </Link>
-              <Link className="rounded-xl border border-gray-100 bg-gray-50 p-4 transition hover:border-gray-200 hover:bg-white" href="/elaborazioni/new-single">
-                <SearchIcon className="h-5 w-5 text-[#1D4E35]" />
-                <p className="mt-3 text-sm font-medium text-gray-900">Visura singola</p>
-                <p className="mt-1 text-sm text-gray-500">Richiesta puntuale con selezione comune e avvio immediato.</p>
-              </Link>
-              <Link className="rounded-xl border border-gray-100 bg-gray-50 p-4 transition hover:border-gray-200 hover:bg-white" href="/elaborazioni/capacitas">
-                <UsersIcon className="h-5 w-5 text-[#1D4E35]" />
-                <p className="mt-3 text-sm font-medium text-gray-900">Capacitas inVOLTURE</p>
-                <p className="mt-1 text-sm text-gray-500">Ricerca anagrafica tramite pool account dedicato.</p>
-              </Link>
-              <Link className="rounded-xl border border-gray-100 bg-gray-50 p-4 transition hover:border-gray-200 hover:bg-white" href="/elaborazioni/batches">
-                <DocumentIcon className="h-5 w-5 text-[#1D4E35]" />
-                <p className="mt-3 text-sm font-medium text-gray-900">Archivio batch</p>
-                <p className="mt-1 text-sm text-gray-500">Consulta progress, esiti e CAPTCHA aperti.</p>
-              </Link>
-              <Link className="rounded-xl border border-gray-100 bg-gray-50 p-4 transition hover:border-gray-200 hover:bg-white" href="/catasto/archive?view=documents">
-                <DocumentIcon className="h-5 w-5 text-[#1D4E35]" />
-                <p className="mt-3 text-sm font-medium text-gray-900">Archivio documenti</p>
-                <p className="mt-1 text-sm text-gray-500">Ricerca per comune, foglio, particella e apertura PDF inline.</p>
-              </Link>
-            </div>
+        <div className="p-6">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+            {QUICK_ACTIONS.map((action) => {
+              const Icon = action.icon;
+              return (
+                <button
+                  key={action.href}
+                  className="group rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-left transition hover:border-[#c8d8ce] hover:bg-white"
+                  onClick={() => openWorkspaceModal(action.href, action.title, action.description)}
+                  type="button"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-white text-[#1D4E35] shadow-sm ring-1 ring-[#dfe8e2] transition group-hover:bg-[#edf5f0]">
+                      <Icon className="h-4.5 w-4.5" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900">{action.title}</p>
+                      <p className="mt-0.5 line-clamp-2 text-xs leading-5 text-gray-500">{action.description}</p>
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
           </div>
-        </article>
+        </div>
+      </article>
 
+      <div className="grid gap-6 xl:grid-cols-2">
         <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
           <ElaborazionePanelHeader
             badge={
               <>
-                <UsersIcon className="h-3.5 w-3.5" />
-                Monitor operativo
+                <LockIcon className="h-3.5 w-3.5" />
+                Agenzia delle Entrate
               </>
             }
-            title="Pool Capacitas e riepilogo CAPTCHA"
-            description="Vista laterale dedicata agli account attivi e ai risultati dei CAPTCHA manuali."
+            title="Area SISTER"
+            description="Raggruppa credenziali, visure, batch, archivio documenti e riepilogo CAPTCHA del flusso catastale."
           />
           <div className="space-y-5 p-6">
             <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="label-caption">Pool Capacitas</p>
+                  <p className="label-caption">Credenziali SISTER</p>
                   <p className="mt-2 text-sm font-medium text-gray-900">
-                    {capacitasCredentials.length > 0
-                      ? `${activeCapacitasCredentials.length} account attivi su ${capacitasCredentials.length}`
-                      : "Nessun account Capacitas configurato"}
+                    {credentialStatus?.configured ? "Configurate e pronte all'uso" : "Configurazione richiesta"}
                   </p>
                   <p className="mt-1 text-sm text-gray-500">
-                    {latestCapacitasUsage
-                      ? `Ultimo utilizzo ${formatDateTime(latestCapacitasUsage)}`
-                      : "Nessun utilizzo registrato al momento"}
+                    {credentialStatus?.credential?.sister_username ?? "Apri le credenziali per configurare l'accesso Agenzia delle Entrate."}
                   </p>
                 </div>
-                <Link className="btn-secondary" href="/elaborazioni/capacitas">
-                  Apri Capacitas
-                </Link>
+                <button
+                  className="btn-secondary"
+                  onClick={() =>
+                    openWorkspaceModal(
+                      "/elaborazioni/settings",
+                      "Credenziali",
+                      "Gestione accessi SISTER e account operativi senza lasciare la dashboard.",
+                    )
+                  }
+                  type="button"
+                >
+                  Apri credenziali
+                </button>
               </div>
-              {capacitasWarningCount > 0 ? (
-                <p className="mt-3 text-sm text-amber-700">
-                  {capacitasWarningCount} account Capacitas presentano errori recenti o richiedono verifica.
-                </p>
-              ) : null}
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <button
+                className="rounded-xl border border-gray-100 bg-gray-50 p-4 text-left transition hover:border-gray-200 hover:bg-white"
+                onClick={() =>
+                  openWorkspaceModal(
+                    "/elaborazioni/new-single",
+                    "Visura singola",
+                    "Avvio diretto di una richiesta per immobile o soggetto in una modale operativa.",
+                  )
+                }
+                type="button"
+              >
+                <SearchIcon className="h-5 w-5 text-[#1D4E35]" />
+                <p className="mt-3 text-sm font-medium text-gray-900">Visura singola</p>
+                <p className="mt-1 text-sm text-gray-500">Avvio diretto delle ricerche per immobile o soggetto.</p>
+              </button>
+              <button
+                className="rounded-xl border border-gray-100 bg-gray-50 p-4 text-left transition hover:border-gray-200 hover:bg-white"
+                onClick={() =>
+                  openWorkspaceModal(
+                    "/elaborazioni/new-batch",
+                    "Import batch",
+                    "Importazione lotto con preview e avvio worker senza cambiare pagina.",
+                  )
+                }
+                type="button"
+              >
+                <FolderIcon className="h-5 w-5 text-[#1D4E35]" />
+                <p className="mt-3 text-sm font-medium text-gray-900">Import batch</p>
+                <p className="mt-1 text-sm text-gray-500">Caricamento lotti e preview dei record prima dell&apos;esecuzione.</p>
+              </button>
+              <button
+                className="rounded-xl border border-gray-100 bg-gray-50 p-4 text-left transition hover:border-gray-200 hover:bg-white"
+                onClick={() =>
+                  openWorkspaceModal(
+                    "/elaborazioni/batches",
+                    "Archivio batch",
+                    "Storico lotti, esiti, report e retry direttamente dentro la dashboard.",
+                  )
+                }
+                type="button"
+              >
+                <DocumentIcon className="h-5 w-5 text-[#1D4E35]" />
+                <p className="mt-3 text-sm font-medium text-gray-900">Archivio batch</p>
+                <p className="mt-1 text-sm text-gray-500">Monitoraggio stato, retry, report e richieste CAPTCHA.</p>
+              </button>
+              <button
+                className="rounded-xl border border-gray-100 bg-gray-50 p-4 text-left transition hover:border-gray-200 hover:bg-white"
+                onClick={() =>
+                  openWorkspaceModal(
+                    "/catasto/archive?view=documents",
+                    "Archivio documenti",
+                    "Consultazione dei documenti estratti senza uscire dal cruscotto operativo.",
+                  )
+                }
+                type="button"
+              >
+                <DocumentIcon className="h-5 w-5 text-[#1D4E35]" />
+                <p className="mt-3 text-sm font-medium text-gray-900">Archivio documenti</p>
+                <p className="mt-1 text-sm text-gray-500">Consultazione dei PDF estratti dal portale catastale.</p>
+              </button>
             </div>
 
             <div>
               <div className="mb-3">
                 <p className="label-caption">CAPTCHA manuali</p>
-                <p className="mt-1 text-sm text-gray-500">Dati dei CAPTCHA elaborati, inseriti corretti e inseriti sbagliati.</p>
+                <p className="mt-1 text-sm text-gray-500">Esito degli inserimenti manuali richiesti durante i flussi SISTER.</p>
               </div>
               {(captchaSummary?.processed ?? 0) === 0 ? (
                 <EmptyState icon={SearchIcon} title="Nessun CAPTCHA elaborato" description="Non risultano ancora CAPTCHA elaborati o inserimenti registrati." />
@@ -312,6 +385,77 @@ export default function ElaborazioniPage() {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </article>
+
+        <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
+          <ElaborazionePanelHeader
+            badge={
+              <>
+                <UsersIcon className="h-3.5 w-3.5" />
+                Capacitas
+              </>
+            }
+            title="Pool operativo dedicato"
+            description="Colonna separata per account, utilizzo e anomalie del servizio Capacitas. Altri servizi esterni potranno essere aggiunti con lo stesso schema."
+          />
+          <div className="space-y-5 p-6">
+            <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="label-caption">Pool Capacitas</p>
+                  <p className="mt-2 text-sm font-medium text-gray-900">
+                    {capacitasCredentials.length > 0
+                      ? `${activeCapacitasCredentials.length} account attivi su ${capacitasCredentials.length}`
+                      : "Nessun account Capacitas configurato"}
+                  </p>
+                  <p className="mt-1 text-sm text-gray-500">
+                    {latestCapacitasUsage
+                      ? `Ultimo utilizzo ${formatDateTime(latestCapacitasUsage)}`
+                      : "Nessun utilizzo registrato al momento"}
+                  </p>
+                </div>
+                <button
+                  className="btn-secondary"
+                  onClick={() =>
+                    openWorkspaceModal(
+                      "/elaborazioni/capacitas",
+                      "Capacitas",
+                      "Ricerca anagrafica e monitor operativo del pool account in una modale dedicata.",
+                    )
+                  }
+                  type="button"
+                >
+                  Apri Capacitas
+                </button>
+              </div>
+              {capacitasWarningCount > 0 ? (
+                <p className="mt-3 text-sm text-amber-700">
+                  {capacitasWarningCount} account Capacitas presentano errori recenti o richiedono verifica.
+                </p>
+              ) : null}
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4">
+                <p className="label-caption text-emerald-700">Account attivi</p>
+                <p className="mt-2 text-2xl font-semibold text-emerald-800">{activeCapacitasCredentials.length}</p>
+                <p className="mt-1 text-sm text-emerald-700">Disponibili per ricerche e lavorazioni Capacitas.</p>
+              </div>
+              <div className="rounded-xl border border-amber-100 bg-amber-50 p-4">
+                <p className="label-caption text-amber-700">Warning recenti</p>
+                <p className="mt-2 text-2xl font-semibold text-amber-800">{capacitasWarningCount}</p>
+                <p className="mt-1 text-sm text-amber-700">Account da verificare prima di nuove esecuzioni.</p>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-dashed border-[#cbd8cf] bg-[#f8fbf8] p-4">
+              <p className="label-caption">Estensione futura</p>
+              <p className="mt-2 text-sm font-medium text-gray-900">Nuovi servizi verranno aggiunti qui sotto forma di colonne o pannelli dedicati.</p>
+              <p className="mt-1 text-sm text-gray-500">
+                La dashboard viene ora organizzata per provider: oggi `Agenzia delle Entrate (SISTER)` e `Capacitas`, poi eventuali altri processi.
+              </p>
             </div>
           </div>
         </article>
@@ -349,9 +493,19 @@ export default function ElaborazioniPage() {
                 {batches.map((batch) => (
                   <tr key={batch.id}>
                     <td>
-                      <Link className="font-medium text-[#1D4E35]" href={`/elaborazioni/batches/${batch.id}`}>
+                      <button
+                        className="font-medium text-[#1D4E35] transition hover:text-[#143726]"
+                        onClick={() =>
+                          openWorkspaceModal(
+                            `/elaborazioni/batches/${batch.id}`,
+                            batch.name ?? "Dettaglio batch",
+                            "Dettaglio batch aperto in modale per consultare stato, richieste e CAPTCHA senza lasciare la dashboard.",
+                          )
+                        }
+                        type="button"
+                      >
                         {batch.name ?? batch.id}
-                      </Link>
+                      </button>
                     </td>
                     <td>{batch.status}</td>
                     <td>{batch.total_items}</td>
@@ -378,6 +532,13 @@ export default function ElaborazioniPage() {
           </div>
         )}
       </article>
+      <ElaborazioneWorkspaceModal
+        description={modalState?.description}
+        href={modalState?.href ?? null}
+        onClose={() => setModalState(null)}
+        open={modalState != null}
+        title={modalState?.title ?? "Workspace"}
+      />
     </ProtectedPage>
   );
 }

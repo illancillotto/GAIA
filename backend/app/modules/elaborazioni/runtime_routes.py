@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import asyncio
+from io import BytesIO
 from pathlib import Path
 from typing import Annotated
 from uuid import UUID
+import zipfile
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user
@@ -230,6 +232,36 @@ def download_batch_documents(
     return build_zip_response(f"{batch_label or batch.id}.zip", documents)
 
 
+@router.get("/batches/{batch_id}/report.json")
+def download_batch_report_json(
+    batch_id: UUID,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> FileResponse:
+    try:
+        batch = get_batch_for_user(db, current_user.id, batch_id)
+    except BatchNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    if not batch.report_json_path or not Path(batch.report_json_path).exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Batch JSON report not available")
+    return FileResponse(batch.report_json_path, media_type="application/json")
+
+
+@router.get("/batches/{batch_id}/report.md")
+def download_batch_report_markdown(
+    batch_id: UUID,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> FileResponse:
+    try:
+        batch = get_batch_for_user(db, current_user.id, batch_id)
+    except BatchNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    if not batch.report_md_path or not Path(batch.report_md_path).exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Batch Markdown report not available")
+    return FileResponse(batch.report_md_path, media_type="text/markdown")
+
+
 @router.post("/batches/{batch_id}/start", response_model=ElaborazioneBatchResponse)
 def start_batch_route(
     batch_id: UUID,
@@ -301,6 +333,36 @@ def get_single_visura(
     except RequestNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return ElaborazioneRichiestaResponse.model_validate(request)
+
+
+@router.get("/requests/{request_id}/artifacts/download")
+def download_request_artifacts(
+    request_id: UUID,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    try:
+        request = get_request_for_user(db, current_user.id, request_id)
+    except RequestNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    if not request.artifact_dir:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No artifact directory stored for request")
+    artifact_dir = Path(request.artifact_dir)
+    if not artifact_dir.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stored request artifacts are missing")
+
+    archive_buffer = BytesIO()
+    with zipfile.ZipFile(archive_buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
+        for file_path in artifact_dir.rglob("*"):
+            if file_path.is_file():
+                archive.write(file_path, arcname=file_path.relative_to(artifact_dir))
+    archive_buffer.seek(0)
+    filename = f"request-{request.id}-artifacts.zip"
+    return StreamingResponse(
+        archive_buffer,
+        media_type="application/zip",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 @router.get("/captcha/pending", response_model=list[ElaborazioneRichiestaResponse])
@@ -397,6 +459,7 @@ async def batch_updates_websocket(websocket: WebSocket, batch_id: UUID) -> None:
                 batch.completed_items,
                 batch.failed_items,
                 batch.skipped_items,
+                batch.not_found_items,
                 batch.current_operation,
             )
             request_state = build_request_state_map(requests)
@@ -409,6 +472,7 @@ async def batch_updates_websocket(websocket: WebSocket, batch_id: UUID) -> None:
                         "completed": batch.completed_items,
                         "failed": batch.failed_items,
                         "skipped": batch.skipped_items,
+                        "not_found": batch.not_found_items,
                         "total": batch.total_items,
                         "current": batch.current_operation,
                     }
@@ -445,6 +509,7 @@ async def batch_updates_websocket(websocket: WebSocket, batch_id: UUID) -> None:
                             "ok": batch.completed_items,
                             "failed": batch.failed_items,
                             "skipped": batch.skipped_items,
+                            "not_found": batch.not_found_items,
                         }
                     )
                     terminal_sent = True

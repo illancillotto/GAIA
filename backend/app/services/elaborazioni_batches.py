@@ -28,6 +28,8 @@ from app.services.elaborazioni_credentials import (
 
 
 UPLOAD_COLUMN_ALIASES = {
+    "search_mode": "search_mode",
+    "modalita_ricerca": "search_mode",
     "citta": "comune",
     "comune": "comune",
     "catasto": "catasto",
@@ -39,8 +41,15 @@ UPLOAD_COLUMN_ALIASES = {
     "subalterno": "subalterno",
     "tipo_visura": "tipo_visura",
     "tipovisura": "tipo_visura",
+    "codice_fiscale": "subject_id",
+    "cf": "subject_id",
+    "partita_iva": "subject_id",
+    "partita iva": "subject_id",
+    "piva": "subject_id",
+    "tipo_soggetto": "subject_kind",
+    "tipo_richiesta": "request_type",
+    "intestazione": "intestazione",
 }
-REQUIRED_UPLOAD_COLUMNS = {"comune", "catasto", "foglio", "particella", "tipo_visura"}
 ALLOWED_CATASTO = {
     "terreni": "Terreni",
     "terreni e fabbricati": "Terreni e Fabbricati",
@@ -49,6 +58,13 @@ ALLOWED_TIPO_VISURA = {
     "sintetica": "Sintetica",
     "completa": "Completa",
 }
+ALLOWED_SEARCH_MODE = {"immobile", "soggetto"}
+ALLOWED_SUBJECT_KIND = {"PF", "PNF"}
+ALLOWED_REQUEST_TYPE = {"ATTUALITA", "STORICA"}
+IMMOBILE_REQUIRED_UPLOAD_COLUMNS = {"comune", "catasto", "foglio", "particella"}
+
+CF_PF_RE = re.compile(r"^[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]$")
+PIVA_RE = re.compile(r"^\d{11}$")
 
 
 class BatchValidationError(Exception):
@@ -76,14 +92,19 @@ class RequestNotFoundError(Exception):
 @dataclass(slots=True)
 class ValidatedVisuraRow:
     row_index: int
-    comune: str
-    comune_codice: str
-    catasto: str
+    search_mode: str
+    comune: str | None
+    comune_codice: str | None
+    catasto: str | None
     sezione: str | None
-    foglio: str
-    particella: str
+    foglio: str | None
+    particella: str | None
     subalterno: str | None
     tipo_visura: str
+    subject_kind: str | None = None
+    subject_id: str | None = None
+    request_type: str | None = None
+    intestazione: str | None = None
     status: str = ElaborazioneRichiestaStatus.PENDING.value
     current_operation: str = "Pending"
     error_message: str | None = None
@@ -104,6 +125,15 @@ def clean_cell(value: object) -> str:
     if isinstance(value, str):
         return value.strip()
     return str(value).strip()
+
+
+def infer_subject_kind(subject_id: str) -> str:
+    normalized = clean_cell(subject_id).upper()
+    if CF_PF_RE.match(normalized):
+        return "PF"
+    if PIVA_RE.match(normalized):
+        return "PNF"
+    return "PF" if any(char.isalpha() for char in normalized) else "PNF"
 
 
 def _is_legacy_excel_layout(columns: set[str]) -> bool:
@@ -159,14 +189,39 @@ def load_upload_records(filename: str, content: bytes) -> list[dict[str, str]]:
         dataframe["catasto"] = "Terreni"
         dataframe["tipo_visura"] = "Sintetica"
 
-    missing = sorted(REQUIRED_UPLOAD_COLUMNS - set(dataframe.columns))
-    if missing:
-        raise BatchValidationError(
-            "Missing required upload columns.",
-            errors=[{"missing_columns": missing}],
-        )
-
     return [{key: clean_cell(value) for key, value in row.items()} for row in dataframe.to_dict(orient="records")]
+
+
+def _detect_search_mode(record: dict[str, str]) -> str:
+    explicit_mode = normalize_lookup_value(clean_cell(record.get("search_mode")))
+    if explicit_mode in ALLOWED_SEARCH_MODE:
+        return explicit_mode
+    if clean_cell(record.get("subject_id")):
+        return "soggetto"
+    return "immobile"
+
+
+def _normalize_tipo_visura(value: str) -> str | None:
+    normalized = normalize_lookup_value(clean_cell(value))
+    if not normalized:
+        return ALLOWED_TIPO_VISURA["sintetica"]
+    return ALLOWED_TIPO_VISURA.get(normalized)
+
+
+def _normalize_request_type(value: str) -> str:
+    normalized = normalize_lookup_value(clean_cell(value))
+    if normalized in {"storica", "s"}:
+        return "STORICA"
+    return "ATTUALITA"
+
+
+def _normalize_subject_kind(value: str, subject_id: str) -> str:
+    normalized = normalize_lookup_value(clean_cell(value))
+    if normalized in {"pg", "persona giuridica", "giuridica", "pnf"}:
+        return "PNF"
+    if normalized in {"pf", "persona fisica", "fisica"}:
+        return "PF"
+    return infer_subject_kind(subject_id)
 
 
 def validate_visure_records(db: Session, records: list[dict[str, str]]) -> list[ValidatedVisuraRow]:
@@ -177,11 +232,52 @@ def validate_visure_records(db: Session, records: list[dict[str, str]]) -> list[
 
     for row_index, record in enumerate(records, start=1):
         row_errors: list[str] = []
+        search_mode = _detect_search_mode(record)
+        tipo_visura_value = _normalize_tipo_visura(clean_cell(record.get("tipo_visura")))
+
+        if tipo_visura_value is None:
+            row_errors.append("Tipo visura deve essere 'Sintetica' o 'Completa'.")
+
+        if search_mode == "soggetto":
+            subject_id = clean_cell(record.get("subject_id")).upper()
+            if not subject_id:
+                row_errors.append("subject_id obbligatorio per la ricerca soggetto.")
+            request_type = _normalize_request_type(clean_cell(record.get("request_type")))
+            subject_kind = _normalize_subject_kind(clean_cell(record.get("subject_kind")), subject_id)
+            if subject_kind not in ALLOWED_SUBJECT_KIND:
+                row_errors.append("Tipo soggetto deve essere PF o PNF.")
+
+            if row_errors:
+                errors.append({"row_index": row_index, "errors": row_errors, "values": record})
+                continue
+
+            assert tipo_visura_value is not None
+            validated_rows.append(
+                ValidatedVisuraRow(
+                    row_index=row_index,
+                    search_mode="soggetto",
+                    comune=None,
+                    comune_codice=None,
+                    catasto=None,
+                    sezione=None,
+                    foglio=None,
+                    particella=None,
+                    subalterno=None,
+                    tipo_visura=tipo_visura_value,
+                    subject_kind=subject_kind,
+                    subject_id=subject_id,
+                    request_type=request_type,
+                    intestazione=clean_cell(record.get("intestazione")) or None,
+                )
+            )
+            continue
+
         comune_value = clean_cell(record.get("comune"))
         if comune_value.upper() in {"UE", "EU"}:
             validated_rows.append(
                 ValidatedVisuraRow(
                     row_index=row_index,
+                    search_mode="immobile",
                     comune=comune_value.upper(),
                     comune_codice=comune_value.upper(),
                     catasto=ALLOWED_CATASTO["terreni"],
@@ -197,6 +293,14 @@ def validate_visure_records(db: Session, records: list[dict[str, str]]) -> list[
             )
             continue
 
+        missing_immobile_columns = [
+            column_name for column_name in IMMOBILE_REQUIRED_UPLOAD_COLUMNS if not clean_cell(record.get(column_name))
+        ]
+        if missing_immobile_columns:
+            row_errors.append(
+                f"Campi obbligatori mancanti per ricerca immobile: {', '.join(sorted(missing_immobile_columns))}."
+            )
+
         comune = None
         if comune_value:
             comune = comune_lookup.get(normalize_lookup_value(comune_value))
@@ -207,7 +311,6 @@ def validate_visure_records(db: Session, records: list[dict[str, str]]) -> list[
         particella_value = clean_cell(record.get("particella"))
         subalterno_value = clean_cell(record.get("subalterno"))
         sezione_value = clean_cell(record.get("sezione"))
-        tipo_visura_value = ALLOWED_TIPO_VISURA.get(normalize_lookup_value(clean_cell(record.get("tipo_visura"))))
 
         if comune is None:
             row_errors.append("Comune non valido o non censito in catasto_comuni.")
@@ -232,6 +335,7 @@ def validate_visure_records(db: Session, records: list[dict[str, str]]) -> list[
         validated_rows.append(
             ValidatedVisuraRow(
                 row_index=row_index,
+                search_mode="immobile",
                 comune=comune.nome,
                 comune_codice=comune.codice_sister,
                 catasto=catasto_value,
@@ -268,7 +372,10 @@ def create_single_visura_batch(
     payload: ElaborazioneRichiestaCreateRequest,
 ) -> ElaborazioneBatch:
     row = validate_visure_records(db, [payload.model_dump()])[0]
-    batch_name = f"Visura singola {row.comune} Fg.{row.foglio} Part.{row.particella}"
+    if row.search_mode == "soggetto":
+        batch_name = f"Visura soggetto {row.subject_kind or 'PF'} {row.subject_id}"
+    else:
+        batch_name = f"Visura singola {row.comune} Fg.{row.foglio} Part.{row.particella}"
     batch, _ = create_batch_from_validated_rows(db, user_id, [row], batch_name, None)
     return start_batch(db, user_id, batch.id)
 
@@ -287,6 +394,7 @@ def create_batch_from_validated_rows(
         total_items=len(rows),
         status=ElaborazioneBatchStatus.PENDING.value,
         current_operation="Awaiting start",
+        not_found_items=0,
     )
     db.add(batch)
     db.flush()
@@ -296,6 +404,7 @@ def create_batch_from_validated_rows(
             batch_id=batch.id,
             user_id=user_id,
             row_index=row.row_index,
+            search_mode=row.search_mode,
             comune=row.comune,
             comune_codice=row.comune_codice,
             catasto=row.catasto,
@@ -304,6 +413,10 @@ def create_batch_from_validated_rows(
             particella=row.particella,
             subalterno=row.subalterno,
             tipo_visura=row.tipo_visura,
+            subject_kind=row.subject_kind,
+            subject_id=row.subject_id,
+            request_type=row.request_type,
+            intestazione=row.intestazione,
             status=row.status,
             current_operation=row.current_operation,
             error_message=row.error_message,
@@ -387,6 +500,8 @@ def start_batch(db: Session, user_id: int, batch_id: UUID) -> ElaborazioneBatch:
     batch.started_at = batch.started_at or datetime.now(UTC)
     batch.completed_at = None
     batch.current_operation = "Queued for worker"
+    batch.report_json_path = None
+    batch.report_md_path = None
     db.commit()
     db.refresh(batch)
     return batch
@@ -445,6 +560,8 @@ def retry_failed_batch(db: Session, user_id: int, batch_id: UUID) -> Elaborazion
     batch.status = ElaborazioneBatchStatus.PENDING.value
     batch.completed_at = None
     batch.current_operation = "Retry queued"
+    batch.report_json_path = None
+    batch.report_md_path = None
     recalculate_batch_counters(batch, requests)
     db.commit()
     db.refresh(batch)
@@ -456,3 +573,4 @@ def recalculate_batch_counters(batch: ElaborazioneBatch, requests: list[Elaboraz
     batch.completed_items = sum(1 for item in requests if item.status == ElaborazioneRichiestaStatus.COMPLETED.value)
     batch.failed_items = sum(1 for item in requests if item.status == ElaborazioneRichiestaStatus.FAILED.value)
     batch.skipped_items = sum(1 for item in requests if item.status == ElaborazioneRichiestaStatus.SKIPPED.value)
+    batch.not_found_items = sum(1 for item in requests if item.status == ElaborazioneRichiestaStatus.NOT_FOUND.value)

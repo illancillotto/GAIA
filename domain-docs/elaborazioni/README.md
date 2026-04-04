@@ -2,6 +2,24 @@
 
 Area documentale dedicata al runtime operativo delle lavorazioni catastali.
 
+Ambito runtime attuale:
+- visure per immobile
+- visure per soggetto PF/PNF
+- gestione CAPTCHA
+- report e artifact diagnostici batch/richiesta
+
+## Dashboard operativa
+
+La pagina `/elaborazioni` usa una struttura a sezioni stabili:
+- barra superiore con azioni rapide in linea
+- colonna `Agenzia delle Entrate (SISTER)` per credenziali, visure, batch, documenti e CAPTCHA
+- colonna `Capacitas` per pool account e monitor del servizio
+- spazio riservato all'aggiunta futura di altri provider/processi senza rimescolare i flussi esistenti
+- i workspace rapidi della dashboard si aprono in modale, con fallback a pagina completa quando serve approfondire o condividere il link
+- anche i punti di uscita frequenti nei workspace interni (`archivio batch/documenti`, `Capacitas`) riusano il pattern modale per ridurre i salti di pagina
+- i workspace principali (`nuova richiesta`, `archivio batch`, `dettaglio batch`, `Capacitas`) sono renderizzati nativamente in overlay React; l'`iframe` resta solo come fallback per percorsi non ancora convertiti
+- anche `Credenziali` e il viewer dei documenti catastali sono ora componenti nativi riusabili, quindi l'overlay non dipende piu dall'`iframe` nei percorsi operativi principali del modulo
+
 ## Struttura
 
 - `docs/`: documentazione canonica del modulo `elaborazioni`

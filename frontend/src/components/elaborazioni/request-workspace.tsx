@@ -21,9 +21,12 @@ type WorkspaceMode = "single" | "batch";
 
 type ElaborazioneRequestWorkspaceProps = {
   initialMode?: WorkspaceMode;
+  embedded?: boolean;
+  onOpenBatch?: (batchId: string) => void;
 };
 
 const DEFAULT_VALUES: ElaborazioneRichiestaCreateInput = {
+  search_mode: "immobile",
   comune: "",
   catasto: "Terreni e Fabbricati",
   sezione: "",
@@ -31,15 +34,27 @@ const DEFAULT_VALUES: ElaborazioneRichiestaCreateInput = {
   particella: "",
   subalterno: "",
   tipo_visura: "Sintetica",
+  subject_kind: "PF",
+  subject_id: "",
+  request_type: "ATTUALITA",
+  intestazione: "",
 };
 
 const TEMPLATE_CSV = [
   "citta,catasto,sezione,foglio,particella,subalterno,tipo_visura",
   "MARRUBIU,Terreni,,12,603,,Sintetica",
   "ORISTANO,Terreni e Fabbricati,,5,120,3,Completa",
+  "",
+  "subject_id,subject_kind,request_type,intestazione,tipo_visura",
+  "RSSMRA80A01H501U,PF,ATTUALITA,Rossi Mario,Sintetica",
+  "01234567890,PNF,STORICA,Impresa Rossi SRL,Completa",
 ].join("\n");
 
-export function ElaborazioneRequestWorkspace({ initialMode = "single" }: ElaborazioneRequestWorkspaceProps) {
+export function ElaborazioneRequestWorkspace({
+  initialMode = "single",
+  embedded = false,
+  onOpenBatch,
+}: ElaborazioneRequestWorkspaceProps) {
   const router = useRouter();
   const [mode, setMode] = useState<WorkspaceMode>(initialMode);
   
@@ -62,10 +77,12 @@ export function ElaborazioneRequestWorkspace({ initialMode = "single" }: Elabora
     register,
     handleSubmit,
     reset,
+    watch,
     formState: { errors },
   } = useForm<ElaborazioneRichiestaCreateInput>({
     defaultValues: DEFAULT_VALUES,
   });
+  const singleSearchMode = watch("search_mode") ?? "immobile";
 
   useEffect(() => {
     async function loadComuni(): Promise<void> {
@@ -77,7 +94,7 @@ export function ElaborazioneRequestWorkspace({ initialMode = "single" }: Elabora
         setComuni(result);
         setSingleError(null);
         if (result[0]) {
-          reset({ ...DEFAULT_VALUES, comune: result[0].nome });
+          reset({ ...DEFAULT_VALUES, search_mode: "immobile", comune: result[0].nome });
         }
       } catch (loadError) {
         setSingleError(loadError instanceof Error ? loadError.message : "Errore caricamento comuni");
@@ -95,11 +112,24 @@ export function ElaborazioneRequestWorkspace({ initialMode = "single" }: Elabora
     try {
       const batch = await createElaborazioneRichiesta(token, {
         ...values,
+        search_mode: values.search_mode ?? "immobile",
         sezione: values.sezione?.trim() || undefined,
         subalterno: values.subalterno?.trim() || undefined,
+        comune: values.comune?.trim() || undefined,
+        catasto: values.catasto?.trim() || undefined,
+        foglio: values.foglio?.trim() || undefined,
+        particella: values.particella?.trim() || undefined,
+        subject_id: values.subject_id?.trim() || undefined,
+        subject_kind: values.subject_kind?.trim() as "PF" | "PNF" | undefined,
+        request_type: values.request_type?.trim() as "ATTUALITA" | "STORICA" | undefined,
+        intestazione: values.intestazione?.trim() || undefined,
       });
       setSingleError(null);
-      router.push(`/elaborazioni/batches/${batch.id}`);
+      if (onOpenBatch) {
+        onOpenBatch(batch.id);
+      } else {
+        router.push(`/elaborazioni/batches/${batch.id}`);
+      }
     } catch (submitError) {
       setSingleError(submitError instanceof Error ? submitError.message : "Errore avvio visura singola");
       setSingleBusy(false);
@@ -142,7 +172,11 @@ export function ElaborazioneRequestWorkspace({ initialMode = "single" }: Elabora
     setBatchBusy(true);
     try {
       await startElaborazioneBatch(token, draftBatch.id);
-      router.push(`/elaborazioni/batches/${draftBatch.id}`);
+      if (onOpenBatch) {
+        onOpenBatch(draftBatch.id);
+      } else {
+        router.push(`/elaborazioni/batches/${draftBatch.id}`);
+      }
     } catch (startError) {
       setBatchError(startError instanceof Error ? startError.message : "Errore avvio batch");
       setBatchBusy(false);
@@ -159,12 +193,8 @@ export function ElaborazioneRequestWorkspace({ initialMode = "single" }: Elabora
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
-  return (
-    <ProtectedPage
-      title="Nuova elaborazione"
-      description="Punto di ingresso operativo per batch e richieste singole."
-      breadcrumb="Elaborazioni / Nuova richiesta"
-    >
+  const content = (
+    <>
       <ElaborazioneHero
         badge={
           <>
@@ -266,76 +296,140 @@ export function ElaborazioneRequestWorkspace({ initialMode = "single" }: Elabora
               </>
             }
             title="Parametri catastali della visura singola"
-            description="Compila i campi strettamente necessari. Sezione e subalterno restano opzionali."
+            description="Puoi avviare una visura per immobile oppure una ricerca per soggetto PF/PNF. Il form mostra solo i campi utili al flusso selezionato."
           />
           <div className="p-6">
+            <div className="mb-6 grid gap-4 md:grid-cols-2">
+              <button
+                className={`rounded-[20px] border px-4 py-4 text-left transition ${singleSearchMode === "immobile" ? "border-[#1D4E35] bg-[#eef6f0]" : "border-gray-200 bg-white hover:border-gray-300"}`}
+                onClick={() => reset({ ...watch(), search_mode: "immobile", comune: comuni[0]?.nome ?? watch("comune") ?? "" })}
+                type="button"
+              >
+                <p className="text-sm font-semibold text-gray-900">Ricerca per immobile</p>
+                <p className="mt-1 text-sm text-gray-600">Comune, foglio, particella e subalterno opzionale.</p>
+              </button>
+              <button
+                className={`rounded-[20px] border px-4 py-4 text-left transition ${singleSearchMode === "soggetto" ? "border-[#1D4E35] bg-[#eef6f0]" : "border-gray-200 bg-white hover:border-gray-300"}`}
+                onClick={() => reset({ ...watch(), search_mode: "soggetto" })}
+                type="button"
+              >
+                <p className="text-sm font-semibold text-gray-900">Ricerca per soggetto</p>
+                <p className="mt-1 text-sm text-gray-600">Persona fisica o giuridica con CF/P.IVA e richiesta attualità/storica.</p>
+              </button>
+            </div>
+
+            <input type="hidden" {...register("search_mode")} />
+
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              <label className="space-y-2 xl:col-span-2">
-                <span className="label-caption">Comune</span>
-                <select className="form-control" {...register("comune", { required: "Seleziona un comune" })}>
-                  <option value="">Seleziona comune</option>
-                  {comuni.map((comune) => (
-                    <option key={comune.id} value={comune.nome}>
-                      {comune.nome}
-                    </option>
-                  ))}
-                </select>
-                {errors.comune ? <p className="text-xs text-red-600">{errors.comune.message}</p> : null}
-              </label>
+              {singleSearchMode === "immobile" ? (
+                <>
+                  <label className="space-y-2 xl:col-span-2">
+                    <span className="label-caption">Comune</span>
+                    <select className="form-control" {...register("comune", { required: "Seleziona un comune" })}>
+                      <option value="">Seleziona comune</option>
+                      {comuni.map((comune) => (
+                        <option key={comune.id} value={comune.nome}>
+                          {comune.nome}
+                        </option>
+                      ))}
+                    </select>
+                    {errors.comune ? <p className="text-xs text-red-600">{errors.comune.message}</p> : null}
+                  </label>
 
-              <label className="space-y-2">
-                <span className="label-caption">Catasto</span>
-                <select className="form-control" {...register("catasto", { required: true })}>
-                  <option value="Terreni">Terreni</option>
-                  <option value="Terreni e Fabbricati">Terreni e Fabbricati</option>
-                </select>
-              </label>
+                  <label className="space-y-2">
+                    <span className="label-caption">Catasto</span>
+                    <select className="form-control" {...register("catasto", { required: true })}>
+                      <option value="Terreni">Terreni</option>
+                      <option value="Terreni e Fabbricati">Terreni e Fabbricati</option>
+                    </select>
+                  </label>
 
-              <label className="space-y-2">
-                <span className="label-caption">Foglio</span>
-                <input
-                  className="form-control"
-                  inputMode="numeric"
-                  placeholder="Es. 5"
-                  {...register("foglio", {
-                    required: "Foglio obbligatorio",
-                    pattern: { value: /^\d+$/, message: "Inserisci un valore numerico" },
-                  })}
-                />
-                {errors.foglio ? <p className="text-xs text-red-600">{errors.foglio.message}</p> : null}
-              </label>
+                  <label className="space-y-2">
+                    <span className="label-caption">Foglio</span>
+                    <input
+                      className="form-control"
+                      inputMode="numeric"
+                      placeholder="Es. 5"
+                      {...register("foglio", {
+                        required: "Foglio obbligatorio",
+                        pattern: { value: /^\d+$/, message: "Inserisci un valore numerico" },
+                      })}
+                    />
+                    {errors.foglio ? <p className="text-xs text-red-600">{errors.foglio.message}</p> : null}
+                  </label>
 
-              <label className="space-y-2">
-                <span className="label-caption">Particella</span>
-                <input
-                  className="form-control"
-                  inputMode="numeric"
-                  placeholder="Es. 120"
-                  {...register("particella", {
-                    required: "Particella obbligatoria",
-                    pattern: { value: /^\d+$/, message: "Inserisci un valore numerico" },
-                  })}
-                />
-                {errors.particella ? <p className="text-xs text-red-600">{errors.particella.message}</p> : null}
-              </label>
+                  <label className="space-y-2">
+                    <span className="label-caption">Particella</span>
+                    <input
+                      className="form-control"
+                      inputMode="numeric"
+                      placeholder="Es. 120"
+                      {...register("particella", {
+                        required: "Particella obbligatoria",
+                        pattern: { value: /^\d+$/, message: "Inserisci un valore numerico" },
+                      })}
+                    />
+                    {errors.particella ? <p className="text-xs text-red-600">{errors.particella.message}</p> : null}
+                  </label>
 
-              <label className="space-y-2">
-                <span className="label-caption">Subalterno</span>
-                <input
-                  className="form-control"
-                  inputMode="numeric"
-                  placeholder="Opzionale"
-                  {...register("subalterno", {
-                    pattern: { value: /^\d*$/, message: "Solo valori numerici" },
-                  })}
-                />
-                {errors.subalterno ? <p className="text-xs text-red-600">{errors.subalterno.message}</p> : null}
-              </label>
+                  <label className="space-y-2">
+                    <span className="label-caption">Subalterno</span>
+                    <input
+                      className="form-control"
+                      inputMode="numeric"
+                      placeholder="Opzionale"
+                      {...register("subalterno", {
+                        pattern: { value: /^\d*$/, message: "Solo valori numerici" },
+                      })}
+                    />
+                    {errors.subalterno ? <p className="text-xs text-red-600">{errors.subalterno.message}</p> : null}
+                  </label>
 
-              <label className="space-y-2">
-                <span className="label-caption">Sezione</span>
-                <input className="form-control" placeholder="Opzionale" {...register("sezione")} />
-              </label>
+                  <label className="space-y-2">
+                    <span className="label-caption">Sezione</span>
+                    <input className="form-control" placeholder="Opzionale" {...register("sezione")} />
+                  </label>
+                </>
+              ) : (
+                <>
+                  <label className="space-y-2">
+                    <span className="label-caption">Tipo soggetto</span>
+                    <select className="form-control" {...register("subject_kind")}>
+                      <option value="PF">Persona fisica</option>
+                      <option value="PNF">Persona giuridica</option>
+                    </select>
+                  </label>
+
+                  <label className="space-y-2 xl:col-span-2">
+                    <span className="label-caption">Codice fiscale / Partita IVA</span>
+                    <input
+                      className="form-control"
+                      placeholder="RSSMRA80A01H501U oppure 01234567890"
+                      {...register("subject_id", {
+                        required: "Identificativo soggetto obbligatorio",
+                      })}
+                    />
+                    {errors.subject_id ? <p className="text-xs text-red-600">{errors.subject_id.message}</p> : null}
+                  </label>
+
+                  <label className="space-y-2">
+                    <span className="label-caption">Tipo richiesta</span>
+                    <select className="form-control" {...register("request_type")}>
+                      <option value="ATTUALITA">Attualità</option>
+                      <option value="STORICA">Storica</option>
+                    </select>
+                  </label>
+
+                  <label className="space-y-2 xl:col-span-2">
+                    <span className="label-caption">Intestazione</span>
+                    <input
+                      className="form-control"
+                      placeholder="Opzionale, utile per identificazione e naming documento"
+                      {...register("intestazione")}
+                    />
+                  </label>
+                </>
+              )}
 
               <label className="space-y-2">
                 <span className="label-caption">Tipo visura</span>
@@ -347,8 +441,8 @@ export function ElaborazioneRequestWorkspace({ initialMode = "single" }: Elabora
             </div>
 
             <div className="mt-6 flex flex-wrap items-center gap-3">
-              <button className="btn-primary" disabled={singleBusy || comuni.length === 0} type="submit">
-                {singleBusy ? "Avvio in corso..." : "Avvia visura singola"}
+              <button className="btn-primary" disabled={singleBusy || (singleSearchMode === "immobile" && comuni.length === 0)} type="submit">
+                {singleBusy ? "Avvio in corso..." : singleSearchMode === "soggetto" ? "Avvia ricerca soggetto" : "Avvia visura singola"}
               </button>
               <p className="text-xs text-gray-400">
                 La richiesta crea un batch da una sola riga e parte subito se le credenziali runtime sono presenti.
@@ -458,10 +552,19 @@ export function ElaborazioneRequestWorkspace({ initialMode = "single" }: Elabora
                     {draftBatch.requests.map((request) => (
                       <tr key={request.id}>
                         <td>{request.row_index}</td>
-                        <td>{request.comune}</td>
+                        <td>{request.search_mode === "soggetto" ? `${request.subject_kind ?? "SOGGETTO"} ${request.subject_id ?? ""}` : request.comune}</td>
                         <td>
-                          Fg.{request.foglio} Part.{request.particella}
-                          {request.subalterno ? ` Sub.${request.subalterno}` : ""}
+                          {request.search_mode === "soggetto" ? (
+                            <>
+                              {request.request_type ?? "ATTUALITA"}
+                              {request.intestazione ? ` · ${request.intestazione}` : ""}
+                            </>
+                          ) : (
+                            <>
+                              Fg.{request.foglio} Part.{request.particella}
+                              {request.subalterno ? ` Sub.${request.subalterno}` : ""}
+                            </>
+                          )}
                         </td>
                         <td>{request.tipo_visura}</td>
                         <td><ElaborazioneStatusBadge status={request.status} /></td>
@@ -475,6 +578,20 @@ export function ElaborazioneRequestWorkspace({ initialMode = "single" }: Elabora
           ) : null}
         </>
       )}
+    </>
+  );
+
+  if (embedded) {
+    return <div className="space-y-6">{content}</div>;
+  }
+
+  return (
+    <ProtectedPage
+      title="Nuova elaborazione"
+      description="Punto di ingresso operativo per batch e richieste singole."
+      breadcrumb="Elaborazioni / Nuova richiesta"
+    >
+      {content}
     </ProtectedPage>
   );
 }

@@ -23,12 +23,10 @@ import type {
   CatastoComune,
   ElaborazioneBatch,
   ElaborazioneBatchDetail,
-  ElaborazioneBatchWebSocketEvent,
   ElaborazioneCaptchaSummary,
   ElaborazioneCredential,
   ElaborazioneCredentialStatus,
   ElaborazioneCredentialTestResult,
-  ElaborazioneCredentialTestWebSocketEvent,
   ElaborazioneOperationResponse,
   ElaborazioneRichiesta,
   ElaborazioneRichiestaCreateInput,
@@ -1313,6 +1311,30 @@ export async function downloadCatastoDocumentBlob(token: string, documentId: str
 
 export async function downloadElaborazioneBatchZipBlob(token: string, batchId: string): Promise<Blob> {
   return requestBlob(`/elaborazioni/batches/${batchId}/download`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function downloadElaborazioneBatchReportJsonBlob(token: string, batchId: string): Promise<Blob> {
+  return requestBlob(`/elaborazioni/batches/${batchId}/report.json`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function downloadElaborazioneBatchReportMarkdownBlob(token: string, batchId: string): Promise<Blob> {
+  return requestBlob(`/elaborazioni/batches/${batchId}/report.md`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function downloadElaborazioneRequestArtifactsBlob(token: string, requestId: string): Promise<Blob> {
+  return requestBlob(`/elaborazioni/requests/${requestId}/artifacts/download`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
