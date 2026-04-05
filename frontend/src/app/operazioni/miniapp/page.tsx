@@ -1,82 +1,105 @@
 "use client";
 
-import { ProtectedPage } from "@/components/app/protected-page";
+import Link from "next/link";
+
+import { OperazioniModulePage } from "@/components/operazioni/operazioni-module-page";
 import { TruckIcon, RefreshIcon, AlertTriangleIcon } from "@/components/ui/icons";
-import { useState, useEffect } from "react";
+
+function MiniAppContent() {
+  return (
+    <div className="page-stack">
+      <article className="panel-card">
+        <div className="mb-6">
+          <p className="section-title">Operazioni rapide</p>
+          <p className="section-copy">Azioni principali per gli operatori sul campo.</p>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Link
+            href="/operazioni/miniapp"
+            className="flex items-center gap-4 rounded-xl border border-gray-100 bg-white p-6 transition hover:border-gray-200 hover:bg-gray-50"
+          >
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-[#D3EAD4] text-[#1D4E35]">
+              <RefreshIcon className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-900">Avvia attività</p>
+              <p className="text-xs text-gray-500">Seleziona e inizia una nuova attività</p>
+            </div>
+          </Link>
+
+          <Link
+            href="/operazioni/miniapp"
+            className="flex items-center gap-4 rounded-xl border border-gray-100 bg-white p-6 transition hover:border-gray-200 hover:bg-gray-50"
+          >
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-[#D3EAD4] text-[#1D4E35]">
+              <TruckIcon className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-900">Chiudi attività</p>
+              <p className="text-xs text-gray-500">Registra la chiusura dell&apos;attività in corso</p>
+            </div>
+          </Link>
+
+          <Link
+            href="/operazioni/miniapp"
+            className="flex items-center gap-4 rounded-xl border border-gray-100 bg-white p-6 transition hover:border-gray-200 hover:bg-gray-50"
+          >
+            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-[#D3EAD4] text-[#1D4E35]">
+              <AlertTriangleIcon className="h-6 w-6" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-900">Nuova segnalazione</p>
+              <p className="text-xs text-gray-500">Crea una segnalazione dal campo</p>
+            </div>
+          </Link>
+        </div>
+      </article>
+
+      <article className="panel-card">
+        <div className="mb-4">
+          <p className="section-title">Accesso rapido</p>
+          <p className="section-copy">Strumenti operativi per il personale.</p>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Link
+            href="/operazioni/miniapp/bozze"
+            className="flex items-center gap-4 rounded-xl border border-gray-100 bg-white p-5 transition hover:border-gray-200 hover:bg-gray-50"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#D3EAD4] text-[#1D4E35]">
+              <TruckIcon className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-900">Bozze locali</p>
+              <p className="text-xs text-gray-500">Gestione sincronizzazione offline</p>
+            </div>
+          </Link>
+          <Link
+            href="/operazioni"
+            className="flex items-center gap-4 rounded-xl border border-gray-100 bg-white p-5 transition hover:border-gray-200 hover:bg-gray-50"
+          >
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-[#D3EAD4] text-[#1D4E35]">
+              <TruckIcon className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-sm font-medium text-gray-900">Dashboard operazioni</p>
+              <p className="text-xs text-gray-500">Torna alla vista principale</p>
+            </div>
+          </Link>
+        </div>
+      </article>
+    </div>
+  );
+}
 
 export default function MiniAppPage() {
-  const [isOnline, setIsOnline] = useState(true);
-
-  useEffect(() => {
-    setIsOnline(navigator.onLine);
-    const handleOnline = () => setIsOnline(true);
-    const handleOffline = () => setIsOnline(false);
-    window.addEventListener("online", handleOnline);
-    window.addEventListener("offline", handleOffline);
-    return () => {
-      window.removeEventListener("online", handleOnline);
-      window.removeEventListener("offline", handleOffline);
-    };
-  }, []);
-
   return (
-    <ProtectedPage
-      title="Mini-App Operatori — GAIA Operazioni"
+    <OperazioniModulePage
+      title="Mini-app"
       description="Interfaccia mobile-first per operatori sul campo."
-      breadcrumb="Mini-App"
-      requiredModule="operazioni"
+      breadcrumb="Operatori"
     >
-      {!isOnline && (
-        <div className="mb-4 rounded-lg bg-amber-50 px-4 py-3 text-sm text-amber-800 border border-amber-200">
-          ⚠ Connessione assente — Le azioni verranno salvate come bozze locali e sincronizzate quando tornerà la rete.
-        </div>
-      )}
-
-      <div className="mx-auto max-w-md space-y-4 py-8">
-        <h2 className="text-center text-xl font-semibold text-gray-800">Operazioni Rapide</h2>
-
-        <div className="grid gap-4">
-          <button
-            type="button"
-            className="flex items-center gap-4 rounded-2xl border-2 border-green-200 bg-green-50 p-6 text-left transition hover:bg-green-100 active:scale-[0.98]"
-          >
-            <RefreshIcon className="h-8 w-8 shrink-0 text-green-700" />
-            <div>
-              <p className="text-lg font-semibold text-green-800">Avvia Attività</p>
-              <p className="text-sm text-green-600">Seleziona e inizia una nuova attività</p>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            className="flex items-center gap-4 rounded-2xl border-2 border-blue-200 bg-blue-50 p-6 text-left transition hover:bg-blue-100 active:scale-[0.98]"
-          >
-            <TruckIcon className="h-8 w-8 shrink-0 text-blue-700" />
-            <div>
-              <p className="text-lg font-semibold text-blue-800">Chiudi Attività</p>
-              <p className="text-sm text-blue-600">Registra la chiusura dell&apos;attività in corso</p>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            className="flex items-center gap-4 rounded-2xl border-2 border-amber-200 bg-amber-50 p-6 text-left transition hover:bg-amber-100 active:scale-[0.98]"
-          >
-            <AlertTriangleIcon className="h-8 w-8 shrink-0 text-amber-700" />
-            <div>
-              <p className="text-lg font-semibold text-amber-800">Nuova Segnalazione</p>
-              <p className="text-sm text-amber-600">Crea una segnalazione dal campo</p>
-            </div>
-          </button>
-        </div>
-
-        <div className="mt-6 rounded-xl border border-gray-200 bg-gray-50 p-4">
-          <p className="text-sm font-medium text-gray-600">Stato connessione</p>
-          <p className={`mt-1 text-sm font-semibold ${isOnline ? "text-green-600" : "text-amber-600"}`}>
-            {isOnline ? "Connesso" : "Non connesso — modalità offline"}
-          </p>
-        </div>
-      </div>
-    </ProtectedPage>
+      {() => <MiniAppContent />}
+    </OperazioniModulePage>
   );
 }

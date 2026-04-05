@@ -25,7 +25,7 @@ import type {
 } from "@/types/api";
 
 type ModuleStatus = "active" | "warming" | "coming";
-type ModuleId = "accessi" | "rete" | "inventario" | "catasto" | "elaborazioni" | "utenze";
+type ModuleId = "accessi" | "rete" | "inventario" | "catasto" | "elaborazioni" | "utenze" | "operazioni";
 
 type HomeModule = {
   id: ModuleId;
@@ -136,6 +136,17 @@ const allModules: HomeModule[] = [
     statusLabel: "In sviluppo",
     icon: "inventory_2",
     enabledKeys: ["inventario"],
+  },
+  {
+    id: "operazioni",
+    title: "GAIA Operazioni",
+    description:
+      "Gestione mezzi, attività operatori, segnalazioni e pratiche. Mini-app operatori mobile-first con supporto offline.",
+    href: "/operazioni",
+    status: "active",
+    statusLabel: "Operativo",
+    icon: "local_shipping",
+    enabledKeys: ["operazioni"],
   },
 ];
 

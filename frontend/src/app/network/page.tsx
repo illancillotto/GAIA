@@ -6,7 +6,12 @@ import { useCallback, useEffect, useState } from "react";
 import { NetworkDeviceModal } from "@/components/network/network-device-modal";
 import { NetworkModulePage } from "@/components/network/network-module-page";
 import { NetworkStatusBadge } from "@/components/network/network-status-badge";
-import { MetricCard } from "@/components/ui/metric-card";
+import {
+  ModuleWorkspaceHero,
+  ModuleWorkspaceKpiRow,
+  ModuleWorkspaceKpiTile,
+  ModuleWorkspaceNoticeCard,
+} from "@/components/layout/module-workspace-hero";
 import { EmptyState } from "@/components/ui/empty-state";
 import { AlertTriangleIcon, RefreshIcon, ServerIcon } from "@/components/ui/icons";
 import { getNetworkAlerts, getNetworkDashboard, getNetworkDevices, triggerNetworkScan } from "@/lib/api";
@@ -110,29 +115,49 @@ function DashboardContent({ token }: { token: string }) {
 
   return (
     <div className="page-stack">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-gray-500">
-          Monitoraggio LAN con tracciamento dispositivi conosciuti e alert per host non registrati o assenti oltre soglia.
-        </p>
-        <button className="btn-primary" onClick={handleScanTrigger} type="button" disabled={isTriggeringScan}>
-          <RefreshIcon className="h-4 w-4" />
-          {isTriggeringScan ? "Scansione in corso" : "Avvia scansione"}
-        </button>
-      </div>
-
-      {loadError ? (
-        <article className="panel-card">
-          <p className="text-sm font-medium text-red-700">Caricamento non riuscito</p>
-          <p className="mt-2 text-sm text-gray-600">{loadError}</p>
-        </article>
-      ) : null}
-
-      <div className="surface-grid">
-        <MetricCard label="Dispositivi totali" value={summary.total_devices} sub="Host rilevati nell’ultima base dati" />
-        <MetricCard label="Online" value={summary.online_devices} sub="Host raggiungibili all’ultimo scan" variant="success" />
-        <MetricCard label="Offline" value={summary.offline_devices} sub="Host non rilevati nell’ultimo scan" variant={summary.offline_devices > 0 ? "danger" : "default"} />
-        <MetricCard label="Alert aperti" value={summary.open_alerts} sub="Dispositivi sconosciuti o assenti oltre 15 giorni" variant={summary.open_alerts > 0 ? "warning" : "default"} />
-      </div>
+      <ModuleWorkspaceHero
+        badge={
+          <>
+            <ServerIcon className="h-3.5 w-3.5" />
+            Workspace Rete
+          </>
+        }
+        title="Monitoraggio LAN, inventario dispositivi e alert operativi."
+        description="Tracciamento host conosciuti, stato online/offline e segnalazioni per assenze prolungate o nodi non registrati."
+        actions={
+          <>
+            {loadError ? (
+              <ModuleWorkspaceNoticeCard title="Caricamento non riuscito" description={loadError} tone="danger" />
+            ) : (
+              <ModuleWorkspaceNoticeCard
+                title="Scansione manuale"
+                description="Avvia un nuovo giro di rilevamento quando serve aggiornare subito la vista senza attendere i job schedulati."
+              />
+            )}
+            <button className="btn-primary w-fit" onClick={handleScanTrigger} type="button" disabled={isTriggeringScan}>
+              <RefreshIcon className="h-4 w-4" />
+              {isTriggeringScan ? "Scansione in corso" : "Avvia scansione"}
+            </button>
+          </>
+        }
+      >
+        <ModuleWorkspaceKpiRow>
+          <ModuleWorkspaceKpiTile label="Dispositivi" variant="emerald" value={summary.total_devices} hint="host in anagrafica" />
+          <ModuleWorkspaceKpiTile label="Online" variant="emerald" value={summary.online_devices} hint="raggiungibili" />
+          <ModuleWorkspaceKpiTile
+            label="Offline"
+            variant={summary.offline_devices > 0 ? "amber" : "default"}
+            value={summary.offline_devices}
+            hint="non rilevati"
+          />
+          <ModuleWorkspaceKpiTile
+            label="Alert"
+            variant={summary.open_alerts > 0 ? "amber" : "default"}
+            value={summary.open_alerts}
+            hint="sconosciuti / assenti"
+          />
+        </ModuleWorkspaceKpiRow>
+      </ModuleWorkspaceHero>
 
       <div className="grid gap-6 xl:grid-cols-3">
         <article className="panel-card">

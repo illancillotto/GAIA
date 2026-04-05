@@ -4,7 +4,7 @@ const DB_NAME = "gaia-operazioni-drafts";
 const DB_VERSION = 1;
 const STORE_DRAFTS = "drafts";
 
-interface DraftRecord {
+export interface DraftRecord {
   id: string;
   type: "activity" | "report";
   data: Record<string, unknown>;

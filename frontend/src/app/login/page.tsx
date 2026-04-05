@@ -14,6 +14,7 @@ const modules = [
   { name: "GAIA Elaborazioni", icon: "sync_alt", status: "Operativo", active: true },
   { name: "GAIA Rete", icon: "hub", status: "Operativo", active: true },
   { name: "GAIA Utenze", icon: "badge", status: "Operativo", active: true },
+  { name: "GAIA Operazioni", icon: "local_shipping", status: "Operativo", active: true },
   { name: "GAIA Inventario", icon: "inventory_2", status: "In sviluppo", active: false },
 ];
 

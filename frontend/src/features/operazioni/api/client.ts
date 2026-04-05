@@ -1,10 +1,35 @@
-/** Operazioni API client. */
+/** Operazioni API client — same base URL as @/lib/api (NEXT_PUBLIC_API_BASE_URL, default /api). */
 
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "";
-const OPERAZIONI_PREFIX = "/api/operazioni";
+import { getApiBaseUrl } from "@/lib/api";
+import { getStoredAccessToken } from "@/lib/auth";
+
+function operazioniErrorMessage(payload: unknown, fallback: string): string {
+  if (payload && typeof payload === "object" && "detail" in payload) {
+    const detail = (payload as { detail: unknown }).detail;
+    if (typeof detail === "string") {
+      return detail;
+    }
+    if (Array.isArray(detail)) {
+      return detail
+        .map((item) =>
+          item && typeof item === "object" && "msg" in item
+            ? String((item as { msg: unknown }).msg)
+            : JSON.stringify(item),
+        )
+        .join(", ");
+    }
+  }
+  if (payload && typeof payload === "object" && "error" in payload) {
+    const err = (payload as { error?: { message?: string } }).error;
+    if (err?.message) {
+      return err.message;
+    }
+  }
+  return fallback;
+}
 
 async function fetchOperazioni(path: string, options?: RequestInit) {
-  const token = typeof window !== "undefined" ? localStorage.getItem("gaia_token") : null;
+  const token = getStoredAccessToken();
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
     ...(options?.headers as Record<string, string>),
@@ -13,14 +38,16 @@ async function fetchOperazioni(path: string, options?: RequestInit) {
     headers["Authorization"] = `Bearer ${token}`;
   }
 
-  const response = await fetch(`${BASE_URL}${OPERAZIONI_PREFIX}${path}`, {
+  const url = `${getApiBaseUrl()}/operazioni${path}`;
+  const response = await fetch(url, {
     ...options,
     headers,
+    cache: "no-store",
   });
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: { message: response.statusText } }));
-    throw new Error(error.error?.message || response.statusText);
+    const payload = await response.json().catch(() => null);
+    throw new Error(operazioniErrorMessage(payload, response.statusText || "Request failed"));
   }
 
   return response.json();
