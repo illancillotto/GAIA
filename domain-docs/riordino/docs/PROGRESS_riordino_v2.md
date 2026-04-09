@@ -139,6 +139,8 @@
 - Allineata la pagina configurazione anche a `requiredSection="riordino.config"` lato frontend.
 - Aggiunte CTA frontend nel workspace pratica per export CSV riepilogo e dossier ZIP.
 - Rifinita la UX del workspace con badge stato leggibili, evidenza scadenze, dialoghi di conferma per azioni sensibili su fasi, step, issue, ricorsi e documenti, oltre a messaggistica esplicita su conflitti `409`.
+- Allineati i form operativi del workspace alla configurazione persistente di tipologie documento e issue, eliminando liste frontend hardcoded.
+- Esteso l'export dossier per includere anche documenti collegati a ricorsi e issue privi di `step_id`.
 - Stato residuo: collaudo manuale finale e rifiniture visuali minori.
 
 ---

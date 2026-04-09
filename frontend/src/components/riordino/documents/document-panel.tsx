@@ -1,14 +1,14 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { EmptyState } from "@/components/ui/empty-state";
 import { DocumentIcon } from "@/components/ui/icons";
 import { RiordinoConfirmDialog } from "@/components/riordino/shared/confirm-dialog";
 import { formatRiordinoDate, formatRiordinoFileSize, formatRiordinoLabel } from "@/components/riordino/shared/format";
-import { deleteRiordinoDocument, downloadRiordinoDocument, uploadRiordinoDocument } from "@/lib/riordino-api";
+import { deleteRiordinoDocument, downloadRiordinoDocument, listRiordinoDocumentTypes, uploadRiordinoDocument } from "@/lib/riordino-api";
 import { ApiError } from "@/lib/api";
-import type { RiordinoDocument, RiordinoPhase } from "@/types/riordino";
+import type { RiordinoDocument, RiordinoDocumentTypeConfig, RiordinoPhase } from "@/types/riordino";
 
 type RiordinoDocumentPanelProps = {
   token: string;
@@ -18,16 +18,12 @@ type RiordinoDocumentPanelProps = {
   onUpdated: () => Promise<void>;
 };
 
-const DOCUMENT_TYPES = [
-  "decreto",
-  "ricorso",
-  "verbale_commissione",
-  "estratto_mappa",
-  "file_pregeo",
-  "documento_docte",
-  "documento_finale",
-  "altro",
-];
+function resolveActionError(currentError: unknown, fallback: string): string {
+  if (currentError instanceof ApiError && currentError.status === 409) {
+    return "Dati modificati da un altro utente. Ricarica la pratica e riprova.";
+  }
+  return currentError instanceof Error ? currentError.message : fallback;
+}
 
 export function RiordinoDocumentPanel({ token, practiceId, phases, documents, onUpdated }: RiordinoDocumentPanelProps) {
   const [documentType, setDocumentType] = useState("decreto");
@@ -38,9 +34,37 @@ export function RiordinoDocumentPanel({ token, practiceId, phases, documents, on
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<RiordinoDocument | null>(null);
+  const [documentTypes, setDocumentTypes] = useState<RiordinoDocumentTypeConfig[]>([]);
 
   const selectedPhase = useMemo(() => phases.find((phase) => phase.id === phaseId) ?? null, [phaseId, phases]);
   const steps = selectedPhase?.steps ?? [];
+  const availableDocumentTypes = useMemo(
+    () => documentTypes.filter((item) => item.is_active),
+    [documentTypes],
+  );
+
+  useEffect(() => {
+    async function loadDocumentTypes() {
+      try {
+        const items = await listRiordinoDocumentTypes(token);
+        setDocumentTypes(items);
+        setDocumentType((current) => {
+          if (items.length === 0) {
+            return current;
+          }
+          if (items.some((item) => item.code === current && item.is_active)) {
+            return current;
+          }
+          const firstActive = items.find((item) => item.is_active) ?? items[0];
+          return firstActive.code;
+        });
+      } catch (currentError) {
+        setError(resolveActionError(currentError, "Impossibile caricare le tipologie documento"));
+      }
+    }
+
+    void loadDocumentTypes();
+  }, [token]);
 
   async function handleUpload() {
     if (!file) {
@@ -137,8 +161,8 @@ export function RiordinoDocumentPanel({ token, practiceId, phases, documents, on
         <p className="section-title">Carica documento</p>
         <div className="mt-4 grid gap-3">
           <select className="form-control" value={documentType} onChange={(event) => setDocumentType(event.target.value)}>
-            {DOCUMENT_TYPES.map((item) => (
-              <option key={item} value={item}>{formatRiordinoLabel(item)}</option>
+            {availableDocumentTypes.map((item) => (
+              <option key={item.id} value={item.code}>{item.label}</option>
             ))}
           </select>
           <select
@@ -183,9 +207,3 @@ export function RiordinoDocumentPanel({ token, practiceId, phases, documents, on
     </div>
   );
 }
-  function resolveActionError(currentError: unknown, fallback: string): string {
-    if (currentError instanceof ApiError && currentError.status === 409) {
-      return "Dati modificati da un altro utente. Ricarica la pratica e riprova.";
-    }
-    return currentError instanceof Error ? currentError.message : fallback;
-  }

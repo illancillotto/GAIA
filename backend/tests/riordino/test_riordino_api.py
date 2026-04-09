@@ -713,6 +713,19 @@ def test_export_practice_dossier_zip():
         files={"file": ("atto.pdf", b"%PDF-1.4 test", "application/pdf")},
     )
     assert upload_response.status_code == 200, upload_response.text
+    appeal_response = client.post(
+        f"/api/riordino/practices/{practice['id']}/appeals",
+        headers=auth_headers(),
+        json={"appellant_name": "Ricorrente export", "filed_at": "2026-04-01"},
+    )
+    assert appeal_response.status_code == 200, appeal_response.text
+    appeal_upload_response = client.post(
+        f"/api/riordino/practices/{practice['id']}/documents",
+        headers=auth_headers(),
+        data={"document_type": "ricorso", "appeal_id": appeal_response.json()["id"]},
+        files={"file": ("ricorso.pdf", b"%PDF-1.4 appeal", "application/pdf")},
+    )
+    assert appeal_upload_response.status_code == 200, appeal_upload_response.text
 
     response = client.get(f"/api/riordino/practices/{practice['id']}/export/dossier", headers=auth_headers())
     assert response.status_code == 200, response.text
@@ -726,6 +739,7 @@ def test_export_practice_dossier_zip():
     assert "manifest.json" in names
     assert "summary/practice-summary.csv" in names
     assert any(name.endswith("/atto.pdf") for name in names)
+    assert any(name.endswith("/ricorso.pdf") and "documents/appeals/" in name for name in names)
 
 
 def test_riordino_module_denied_without_enabled_module():

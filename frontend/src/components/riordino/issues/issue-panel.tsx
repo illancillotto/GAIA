@@ -1,15 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { RiordinoConfirmDialog } from "@/components/riordino/shared/confirm-dialog";
 import { EmptyState } from "@/components/ui/empty-state";
 import { AlertTriangleIcon } from "@/components/ui/icons";
 import { formatRiordinoDate, formatRiordinoLabel } from "@/components/riordino/shared/format";
 import { RiordinoStatusBadge } from "@/components/riordino/shared/status-badge";
-import { closeRiordinoIssue, createRiordinoIssue } from "@/lib/riordino-api";
+import { closeRiordinoIssue, createRiordinoIssue, listRiordinoIssueTypes } from "@/lib/riordino-api";
 import { ApiError } from "@/lib/api";
-import type { RiordinoIssue, RiordinoPhase } from "@/types/riordino";
+import type { RiordinoIssue, RiordinoIssueTypeConfig, RiordinoPhase } from "@/types/riordino";
 
 type RiordinoIssuePanelProps = {
   token: string;
@@ -19,7 +19,6 @@ type RiordinoIssuePanelProps = {
   onUpdated: () => Promise<void>;
 };
 
-const ISSUE_CATEGORIES = ["administrative", "technical", "cadastral", "documentary", "gis"];
 const ISSUE_SEVERITIES = ["low", "medium", "high", "blocking"];
 
 export function RiordinoIssuePanel({ token, practiceId, phases, issues, onUpdated }: RiordinoIssuePanelProps) {
@@ -34,6 +33,7 @@ export function RiordinoIssuePanel({ token, practiceId, phases, issues, onUpdate
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmCloseIssue, setConfirmCloseIssue] = useState<RiordinoIssue | null>(null);
+  const [issueTypes, setIssueTypes] = useState<RiordinoIssueTypeConfig[]>([]);
 
   function resolveActionError(currentError: unknown, fallback: string): string {
     if (currentError instanceof ApiError && currentError.status === 409) {
@@ -44,6 +44,33 @@ export function RiordinoIssuePanel({ token, practiceId, phases, issues, onUpdate
 
   const selectedPhase = phases.find((phase) => phase.id === phaseId) ?? null;
   const steps = selectedPhase?.steps ?? [];
+  const availableIssueTypes = useMemo(() => issueTypes.filter((item) => item.is_active), [issueTypes]);
+
+  useEffect(() => {
+    async function loadIssueTypes() {
+      try {
+        setIssueTypes(await listRiordinoIssueTypes(token));
+      } catch (currentError) {
+        setError(resolveActionError(currentError, "Impossibile caricare le tipologie issue"));
+      }
+    }
+
+    void loadIssueTypes();
+  }, [token]);
+
+  useEffect(() => {
+    const activeItems = issueTypes.filter((item) => item.is_active);
+    if (activeItems.length === 0) {
+      return;
+    }
+
+    const selectedType = activeItems.find((item) => item.code === issueType) ?? activeItems[0];
+    if (selectedType.code !== issueType) {
+      setIssueType(selectedType.code);
+    }
+    setCategory(selectedType.category);
+    setSeverity(selectedType.default_severity);
+  }, [issueType, issueTypes]);
 
   async function handleCreate() {
     setBusy(true);
@@ -130,12 +157,23 @@ export function RiordinoIssuePanel({ token, practiceId, phases, issues, onUpdate
         <p className="section-title">Nuova issue</p>
         <div className="mt-4 grid gap-3">
           <input className="form-control" placeholder="Titolo issue" value={title} onChange={(event) => setTitle(event.target.value)} />
-          <input className="form-control" placeholder="Tipologia" value={issueType} onChange={(event) => setIssueType(event.target.value)} />
-          <select className="form-control" value={category} onChange={(event) => setCategory(event.target.value)}>
-            {ISSUE_CATEGORIES.map((item) => (
-              <option key={item} value={item}>{formatRiordinoLabel(item)}</option>
+          <select
+            className="form-control"
+            value={issueType}
+            onChange={(event) => {
+              const nextType = availableIssueTypes.find((item) => item.code === event.target.value);
+              setIssueType(event.target.value);
+              if (nextType) {
+                setCategory(nextType.category);
+                setSeverity(nextType.default_severity);
+              }
+            }}
+          >
+            {availableIssueTypes.map((item) => (
+              <option key={item.id} value={item.code}>{item.label}</option>
             ))}
           </select>
+          <input className="form-control bg-gray-50 text-gray-500" value={formatRiordinoLabel(category)} readOnly />
           <select className="form-control" value={severity} onChange={(event) => setSeverity(event.target.value)}>
             {ISSUE_SEVERITIES.map((item) => (
               <option key={item} value={item}>{formatRiordinoLabel(item)}</option>

@@ -93,6 +93,8 @@ def export_practice_summary_csv(db: Session, practice_id: UUID) -> tuple[bytes, 
 def export_practice_dossier_zip(db: Session, practice_id: UUID) -> tuple[BytesIO, str]:
     practice = _get_practice(db, practice_id)
     summary_content, _ = export_practice_summary_csv(db, practice_id)
+    phase_codes = {str(phase.id): phase.phase_code for phase in practice.phases}
+    step_codes = {str(step.id): (phase.phase_code, step.code) for phase in practice.phases for step in phase.steps}
 
     archive_buffer = BytesIO()
     manifest = {
@@ -119,23 +121,26 @@ def export_practice_dossier_zip(db: Session, practice_id: UUID) -> tuple[BytesIO
         archive.writestr("manifest.json", json.dumps(manifest, indent=2, ensure_ascii=False))
         archive.writestr("summary/practice-summary.csv", summary_content)
 
-        for phase in practice.phases:
-            for step in phase.steps:
-                for document in step.documents:
-                    if document.deleted_at is not None:
-                        continue
-                    path = Path(document.storage_path)
-                    if not path.exists():
-                        continue
-                    archive.write(path, arcname=f"documents/{phase.phase_code}/{step.code}/{document.original_filename}")
-
         for document in practice.documents:
-            if document.deleted_at is not None or document.step_id is not None:
+            if document.deleted_at is not None:
                 continue
             path = Path(document.storage_path)
             if not path.exists():
                 continue
-            archive.write(path, arcname=f"documents/_general/{document.original_filename}")
+
+            if document.step_id is not None and str(document.step_id) in step_codes:
+                phase_code, step_code = step_codes[str(document.step_id)]
+                arcname = f"documents/{phase_code}/{step_code}/{document.original_filename}"
+            elif document.appeal_id is not None:
+                arcname = f"documents/appeals/{document.appeal_id}/{document.original_filename}"
+            elif document.issue_id is not None:
+                arcname = f"documents/issues/{document.issue_id}/{document.original_filename}"
+            elif document.phase_id is not None and str(document.phase_id) in phase_codes:
+                arcname = f"documents/{phase_codes[str(document.phase_id)]}/_general/{document.original_filename}"
+            else:
+                arcname = f"documents/_general/{document.original_filename}"
+
+            archive.write(path, arcname=arcname)
 
     archive_buffer.seek(0)
     filename = f"{practice.code.lower()}-dossier.zip"
