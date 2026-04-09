@@ -1,23 +1,22 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
+import {
+  OperazioniCollectionHero,
+  OperazioniCollectionPanel,
+  OperazioniHeroNotice,
+  OperazioniList,
+  OperazioniListLink,
+  OperazioniMetricStrip,
+} from "@/components/operazioni/collection-layout";
 import { OperazioniModulePage } from "@/components/operazioni/operazioni-module-page";
 import { MetricCard } from "@/components/ui/metric-card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { AlertTriangleIcon, ChevronRightIcon } from "@/components/ui/icons";
+import { AlertTriangleIcon } from "@/components/ui/icons";
 import { getReports } from "@/features/operazioni/api/client";
 
-function BadgeCount({ value }: { value: number }) {
-  return (
-    <span className="rounded-full bg-[#EAF3E8] px-2.5 py-1 text-xs font-semibold text-[#1D4E35]">
-      {value}
-    </span>
-  );
-}
-
-function SegnalazioniContent({ token }: { token: string }) {
+function SegnalazioniContent() {
   const [reports, setReports] = useState<Record<string, unknown>[]>([]);
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -42,68 +41,68 @@ function SegnalazioniContent({ token }: { token: string }) {
 
   return (
     <div className="page-stack">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-gray-500">
-          Segnalazioni dal campo con generazione automatica di pratiche interne per il tracciamento.
-        </p>
-      </div>
+      <OperazioniCollectionHero
+        eyebrow="Field reports"
+        icon={<AlertTriangleIcon className="h-3.5 w-3.5" />}
+        title="Gestione segnalazioni dal campo con priorità visiva sul collegamento alle pratiche."
+        description="Questa vista evidenzia il volume delle segnalazioni, il legame con le pratiche interne e la necessità di presidio sulle voci ancora scollegate."
+      >
+        {loadError ? (
+          <OperazioniHeroNotice title="Caricamento non riuscito" description={loadError} tone="danger" />
+        ) : (
+          <OperazioniHeroNotice
+            title="Situazione attuale"
+            description={`${reports.filter((r) => r.internal_case_id).length} segnalazioni già collegate a pratica, ${reports.filter((r) => !r.internal_case_id).length} ancora da agganciare.`}
+          />
+        )}
+        <div className="rounded-2xl border border-white/80 bg-white/75 px-4 py-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">Lettura consigliata</p>
+          <p className="mt-2 text-sm font-medium text-gray-900">Parti dalle segnalazioni senza pratica</p>
+          <p className="mt-1 text-sm text-gray-600">Sono quelle che richiedono la prossima azione amministrativa o tecnica.</p>
+        </div>
+      </OperazioniCollectionHero>
 
-      {loadError ? (
-        <article className="panel-card">
-          <p className="text-sm font-medium text-red-700">Caricamento non riuscito</p>
-          <p className="mt-2 text-sm text-gray-600">{loadError}</p>
-        </article>
-      ) : null}
-
-      <div className="surface-grid">
+      <OperazioniMetricStrip>
         <MetricCard label="Segnalazioni totali" value={total} sub="Tutte le segnalazioni registrate" />
         <MetricCard label="Con pratica" value={reports.filter((r) => r.internal_case_id).length} sub="Segnalazioni con pratica collegata" variant="success" />
         <MetricCard label="Senza pratica" value={reports.filter((r) => !r.internal_case_id).length} sub="Da collegare a pratica" variant="warning" />
-      </div>
+      </OperazioniMetricStrip>
 
-      <article className="panel-card">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div>
-            <p className="section-title">Elenco segnalazioni</p>
-            <p className="section-copy">Tutte le segnalazioni dal campo con stato e dettagli.</p>
-          </div>
-          <BadgeCount value={reports.length} />
+      <OperazioniCollectionPanel
+        title="Registro segnalazioni"
+        description="Elenco operativo con numero segnalazione, data e stato di presa in carico amministrativa."
+        count={reports.length}
+      >
+        <div className="mt-1">
+          {isLoading ? (
+            <p className="text-sm text-gray-500">Caricamento segnalazioni in corso.</p>
+          ) : reports.length === 0 ? (
+            <EmptyState
+              icon={AlertTriangleIcon}
+              title="Nessuna segnalazione"
+              description="Non risultano segnalazioni registrate."
+            />
+          ) : (
+            <OperazioniList>
+              {reports.map((report) => (
+                <OperazioniListLink
+                  key={String(report.id)}
+                  href={`/operazioni/segnalazioni/${report.id as string}`}
+                  title={String(report.title ?? "Senza titolo")}
+                  meta={`${String(report.report_number ?? "Segnalazione senza numero")}${report.created_at ? ` · ${new Date(report.created_at as string).toLocaleDateString("it-IT")}` : ""}`}
+                  status={report.internal_case_id ? "Con pratica" : "Senza pratica"}
+                  statusTone={report.internal_case_id ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}
+                  aside={
+                    <span className="rounded-full border border-[#e2e6e1] bg-[#f6f7f4] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#5d695f]">
+                      {String(report.status ?? "submitted")}
+                    </span>
+                  }
+                />
+              ))}
+            </OperazioniList>
+          )}
         </div>
-
-        {isLoading ? (
-          <p className="text-sm text-gray-500">Caricamento segnalazioni in corso.</p>
-        ) : reports.length === 0 ? (
-          <EmptyState
-            icon={AlertTriangleIcon}
-            title="Nessuna segnalazione"
-            description="Non risultano segnalazioni registrate."
-          />
-        ) : (
-          <div className="max-h-[32rem] space-y-3 overflow-y-auto pr-1">
-            {reports.map((report) => (
-              <Link
-                key={String(report.id)}
-                href={`/operazioni/segnalazioni/${report.id as string}`}
-                className="flex w-full items-center justify-between rounded-lg border border-gray-100 px-4 py-3 text-left transition hover:bg-gray-50"
-              >
-                <div>
-                  <p className="text-sm font-medium text-gray-900">{String(report.title ?? "Senza titolo")}</p>
-                  <p className="mt-1 text-xs text-gray-500">
-                    {String(report.report_number ?? "")}
-                    {report.created_at ? ` · ${new Date(report.created_at as string).toLocaleDateString("it-IT")}` : ""}
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${report.status === "linked" ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
-                    {String(report.status ?? "submitted")}
-                  </span>
-                  <ChevronRightIcon className="h-4 w-4 text-gray-300" />
-                </div>
-              </Link>
-            ))}
-          </div>
-        )}
-      </article>
+      </OperazioniCollectionPanel>
     </div>
   );
 }
@@ -115,7 +114,7 @@ export default function SegnalazioniPage() {
       description="Segnalazioni dal campo e collegamento alle pratiche interne."
       breadcrumb="Lista"
     >
-      {({ token }) => <SegnalazioniContent token={token} />}
+      {() => <SegnalazioniContent />}
     </OperazioniModulePage>
   );
 }

@@ -130,6 +130,9 @@ la documentazione di dominio fa riferimento a `domain-docs/utenze/`.
    `make migrate`
 5. Crea l'admin iniziale:
    `make bootstrap-admin`
+   Il backend ora esegue anche un bootstrap admin idempotente all'avvio usando
+   `BOOTSTRAP_ADMIN_*`; il comando resta utile per forzare riallineamento delle
+   credenziali bootstrap su stack gia avviati.
 6. Carica i dati seed:
    `make bootstrap-domain`
    Il comando inizializza il seed del dominio audit e il dizionario `catasto_comuni`.
@@ -138,6 +141,11 @@ la documentazione di dominio fa riferimento a `domain-docs/utenze/`.
    La stessa chiave deve essere condivisa tra `backend` e `catasto-worker`.
 8. Accedi all'applicazione:
    `http://localhost:8080`
+
+Credenziali bootstrap locali:
+
+- username: valore di `BOOTSTRAP_ADMIN_USERNAME` in `.env`
+- password: valore di `BOOTSTRAP_ADMIN_PASSWORD` in `.env`
 
 ### Cancellazione documenti Anagrafica (protetta da password)
 

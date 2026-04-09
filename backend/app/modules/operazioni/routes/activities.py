@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import math
 from datetime import datetime
+from decimal import Decimal
 from typing import Annotated
 from uuid import UUID
 
@@ -18,10 +19,96 @@ from app.modules.operazioni.models.activities import (
     ActivityApproval,
     ActivityCatalog,
     OperatorActivity,
+    OperatorActivityAttachment,
     OperatorActivityEvent,
 )
+from app.modules.operazioni.models.attachments import Attachment
+from app.modules.operazioni.models.gps import GpsTrackSummary
 
 router = APIRouter(prefix="/activities", tags=["operazioni/activities"])
+
+
+def _as_float(value: object) -> float | None:
+    if value is None or isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float, Decimal)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value.strip())
+        except ValueError:
+            return None
+    return None
+
+
+def _build_gps_summary_payload(summary: GpsTrackSummary) -> dict:
+    return {
+        "id": str(summary.id),
+        "source_type": summary.source_type,
+        "provider_name": summary.provider_name,
+        "provider_track_id": summary.provider_track_id,
+        "started_at": summary.started_at,
+        "ended_at": summary.ended_at,
+        "start_latitude": float(summary.start_latitude)
+        if summary.start_latitude is not None
+        else None,
+        "start_longitude": float(summary.start_longitude)
+        if summary.start_longitude is not None
+        else None,
+        "end_latitude": float(summary.end_latitude)
+        if summary.end_latitude is not None
+        else None,
+        "end_longitude": float(summary.end_longitude)
+        if summary.end_longitude is not None
+        else None,
+        "total_distance_km": float(summary.total_distance_km)
+        if summary.total_distance_km is not None
+        else None,
+        "total_duration_seconds": summary.total_duration_seconds,
+    }
+
+
+def _extract_track_points(raw_payload: object) -> list[dict]:
+    points: list[dict] = []
+    seen: set[tuple[float, float, str | None]] = set()
+
+    def visit(node: object) -> None:
+        if isinstance(node, dict):
+            lat = _as_float(
+                node.get("latitude")
+                or node.get("lat")
+                or node.get("Latitude")
+                or node.get("LAT")
+            )
+            lng = _as_float(
+                node.get("longitude")
+                or node.get("lng")
+                or node.get("lon")
+                or node.get("Longitude")
+                or node.get("LON")
+            )
+            if lat is not None and lng is not None:
+                ts = node.get("timestamp") or node.get("recorded_at") or node.get("datetime")
+                key = (lat, lng, str(ts) if ts is not None else None)
+                if key not in seen:
+                    seen.add(key)
+                    points.append(
+                        {
+                            "latitude": lat,
+                            "longitude": lng,
+                            "timestamp": str(ts) if ts is not None else None,
+                        }
+                    )
+            for value in node.values():
+                visit(value)
+            return
+
+        if isinstance(node, list):
+            for item in node:
+                visit(item)
+
+    visit(raw_payload)
+    return points
 
 
 @router.get("/catalog", response_model=list[dict])
@@ -192,12 +279,144 @@ def get_activity(
         )
     return {
         "id": str(activity.id),
+        "activity_catalog_id": str(activity.activity_catalog_id),
         "status": activity.status,
         "started_at": activity.started_at,
         "ended_at": activity.ended_at,
         "operator_user_id": activity.operator_user_id,
+        "team_id": str(activity.team_id) if activity.team_id else None,
         "vehicle_id": str(activity.vehicle_id) if activity.vehicle_id else None,
+        "duration_minutes_declared": activity.duration_minutes_declared,
+        "duration_minutes_calculated": activity.duration_minutes_calculated,
+        "gps_track_summary_id": str(activity.gps_track_summary_id)
+        if activity.gps_track_summary_id
+        else None,
+        "audio_note_attachment_id": str(activity.audio_note_attachment_id)
+        if activity.audio_note_attachment_id
+        else None,
         "text_note": activity.text_note,
+        "submitted_at": activity.submitted_at,
+        "reviewed_by_user_id": activity.reviewed_by_user_id,
+        "reviewed_at": activity.reviewed_at,
+        "review_outcome": activity.review_outcome,
+        "review_note": activity.review_note,
+        "server_received_at": activity.server_received_at,
+        "created_at": activity.created_at,
+        "updated_at": activity.updated_at,
+    }
+
+
+@router.get("/{activity_id}/attachments", response_model=list[dict])
+def list_activity_attachments(
+    activity_id: UUID,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    activity = db.get(OperatorActivity, activity_id)
+    if not activity:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Activity not found"
+        )
+
+    rows = db.execute(
+        select(OperatorActivityAttachment, Attachment)
+        .join(Attachment, OperatorActivityAttachment.attachment_id == Attachment.id)
+        .where(OperatorActivityAttachment.operator_activity_id == activity_id)
+        .where(Attachment.is_deleted == False)
+        .order_by(OperatorActivityAttachment.created_at.desc())
+    ).all()
+    return [
+        {
+            "id": str(attachment.id),
+            "original_filename": attachment.original_filename,
+            "mime_type": attachment.mime_type,
+            "attachment_type": attachment.attachment_type,
+            "file_size_bytes": attachment.file_size_bytes,
+            "created_at": attachment.created_at,
+        }
+        for _, attachment in rows
+    ]
+
+
+@router.get("/{activity_id}/gps-summary", response_model=dict | None)
+def get_activity_gps_summary(
+    activity_id: UUID,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    activity = db.get(OperatorActivity, activity_id)
+    if not activity:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Activity not found"
+        )
+    if not activity.gps_track_summary_id:
+        return None
+
+    summary = db.get(GpsTrackSummary, activity.gps_track_summary_id)
+    if not summary:
+        return None
+
+    return _build_gps_summary_payload(summary)
+
+
+@router.get("/{activity_id}/gps-viewer", response_model=dict | None)
+def get_activity_gps_viewer(
+    activity_id: UUID,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    activity = db.get(OperatorActivity, activity_id)
+    if not activity:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Activity not found"
+        )
+    if not activity.gps_track_summary_id:
+        return None
+
+    summary = db.get(GpsTrackSummary, activity.gps_track_summary_id)
+    if not summary:
+        return None
+
+    points = _extract_track_points(summary.raw_payload_json)
+    if not points:
+        synthetic_points = []
+        if summary.start_latitude is not None and summary.start_longitude is not None:
+            synthetic_points.append(
+                {
+                    "latitude": float(summary.start_latitude),
+                    "longitude": float(summary.start_longitude),
+                    "timestamp": summary.started_at.isoformat()
+                    if summary.started_at
+                    else None,
+                }
+            )
+        if summary.end_latitude is not None and summary.end_longitude is not None:
+            synthetic_points.append(
+                {
+                    "latitude": float(summary.end_latitude),
+                    "longitude": float(summary.end_longitude),
+                    "timestamp": summary.ended_at.isoformat()
+                    if summary.ended_at
+                    else None,
+                }
+            )
+        points = synthetic_points
+
+    latitudes = [point["latitude"] for point in points]
+    longitudes = [point["longitude"] for point in points]
+
+    return {
+        "summary": _build_gps_summary_payload(summary),
+        "points": points,
+        "bounds": {
+            "min_latitude": min(latitudes) if latitudes else None,
+            "max_latitude": max(latitudes) if latitudes else None,
+            "min_longitude": min(longitudes) if longitudes else None,
+            "max_longitude": max(longitudes) if longitudes else None,
+        },
+        "viewer_mode": "track" if len(points) > 2 else "segment",
+        "point_count": len(points),
+        "uses_raw_payload": bool(summary.raw_payload_json and len(points) > 2),
     }
 
 

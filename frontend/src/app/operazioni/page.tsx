@@ -3,6 +3,11 @@
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
+import {
+  OperazioniCollectionPanel,
+  OperazioniList,
+  OperazioniListLink,
+} from "@/components/operazioni/collection-layout";
 import { OperazioniModulePage } from "@/components/operazioni/operazioni-module-page";
 import { OperazioniWorkspaceModal } from "@/components/operazioni/workspace-modal";
 import {
@@ -12,7 +17,7 @@ import {
   ModuleWorkspaceNoticeCard,
 } from "@/components/layout/module-workspace-hero";
 import { EmptyState } from "@/components/ui/empty-state";
-import { TruckIcon, RefreshIcon, AlertTriangleIcon, DocumentIcon, SearchIcon, ChevronRightIcon } from "@/components/ui/icons";
+import { TruckIcon, RefreshIcon, AlertTriangleIcon, DocumentIcon, SearchIcon } from "@/components/ui/icons";
 import { getVehicles, getActivities, getReports, getCases } from "@/features/operazioni/api/client";
 
 const vehicleStatusTone: Record<string, string> = {
@@ -226,7 +231,7 @@ function DashboardContent() {
       </article>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <article
+        <div
           className="panel-card group cursor-pointer transition hover:border-[#c8d8ce] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1D4E35]/25"
           tabIndex={0}
           aria-label="Mezzi recenti: apri la gestione in modale"
@@ -248,57 +253,45 @@ function DashboardContent() {
             }
           }}
         >
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <p className="section-title">Mezzi recenti</p>
-              <p className="section-copy">Clic sulla scheda per la lista completa; clic su una riga per il dettaglio.</p>
-            </div>
-            <ChevronRightIcon className="h-5 w-5 shrink-0 text-gray-300 transition group-hover:text-[#1D4E35]" aria-hidden />
-          </div>
+          <OperazioniCollectionPanel
+            title="Mezzi recenti"
+            description="Clic sulla scheda per la lista completa; clic su una riga per il dettaglio."
+            count={vehicles.length}
+          >
+            {isLoading ? (
+              <p className="text-sm text-gray-500">Caricamento mezzi in corso.</p>
+            ) : vehicles.length === 0 ? (
+              <EmptyState
+                icon={TruckIcon}
+                title="Nessun mezzo registrato"
+                description="Nessun veicolo corrisponde ai filtri correnti."
+              />
+            ) : (
+              <div className="max-h-[28rem] overflow-y-auto pr-1">
+                <OperazioniList>
+                  {vehicles.map((vehicle) => (
+                    <OperazioniListLink
+                      key={String(vehicle.id)}
+                      onClick={() => {
+                        setWorkspaceModal({
+                          href: `/operazioni/mezzi/${String(vehicle.id)}`,
+                          title: String(vehicle.name),
+                          description: `Scheda veicolo · ${String(vehicle.code ?? vehicle.id)}${vehicle.plate_number ? ` · ${vehicle.plate_number}` : ""}`,
+                        });
+                      }}
+                      title={String(vehicle.name)}
+                      meta={`${String(vehicle.code ?? "")}${vehicle.plate_number ? ` · ${vehicle.plate_number}` : ""}`}
+                      status={vehicleStatusLabels[String(vehicle.current_status)] || String(vehicle.current_status)}
+                      statusTone={vehicleStatusTone[String(vehicle.current_status)] || "bg-gray-100 text-gray-600"}
+                    />
+                  ))}
+                </OperazioniList>
+              </div>
+            )}
+          </OperazioniCollectionPanel>
+        </div>
 
-          {isLoading ? (
-            <p className="text-sm text-gray-500">Caricamento mezzi in corso.</p>
-          ) : vehicles.length === 0 ? (
-            <EmptyState
-              icon={TruckIcon}
-              title="Nessun mezzo registrato"
-              description="Nessun veicolo corrisponde ai filtri correnti."
-            />
-          ) : (
-            <div className="max-h-[28rem] space-y-3 overflow-y-auto pr-1">
-              {vehicles.map((vehicle) => (
-                <button
-                  key={String(vehicle.id)}
-                  type="button"
-                  className="flex w-full items-center justify-between rounded-lg border border-gray-100 bg-white px-4 py-3 text-left transition hover:bg-gray-50"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setWorkspaceModal({
-                      href: `/operazioni/mezzi/${String(vehicle.id)}`,
-                      title: String(vehicle.name),
-                      description: `Scheda veicolo · ${String(vehicle.code ?? vehicle.id)}${vehicle.plate_number ? ` · ${vehicle.plate_number}` : ""}`,
-                    });
-                  }}
-                >
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{String(vehicle.name)}</p>
-                    <p className="mt-1 text-xs text-gray-500">
-                      {String(vehicle.code ?? "")}{vehicle.plate_number ? ` · ${vehicle.plate_number}` : ""}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${vehicleStatusTone[String(vehicle.current_status)] || "bg-gray-100 text-gray-600"}`}>
-                      {vehicleStatusLabels[String(vehicle.current_status)] || String(vehicle.current_status)}
-                    </span>
-                    <ChevronRightIcon className="h-4 w-4 text-gray-300" aria-hidden />
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </article>
-
-        <article
+        <div
           className="panel-card group cursor-pointer transition hover:border-[#c8d8ce] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1D4E35]/25"
           tabIndex={0}
           aria-label="Attività recenti: apri la gestione in modale"
@@ -320,60 +313,45 @@ function DashboardContent() {
             }
           }}
         >
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <p className="section-title">Attività recenti</p>
-              <p className="section-copy">Clic sulla scheda per la lista completa; clic su una riga per il dettaglio.</p>
-            </div>
-            <ChevronRightIcon className="h-5 w-5 shrink-0 text-gray-300 transition group-hover:text-[#1D4E35]" aria-hidden />
-          </div>
+          <OperazioniCollectionPanel
+            title="Attività recenti"
+            description="Clic sulla scheda per la lista completa; clic su una riga per il dettaglio."
+            count={activities.length}
+          >
+            {isLoading ? (
+              <p className="text-sm text-gray-500">Caricamento attività in corso.</p>
+            ) : activities.length === 0 ? (
+              <EmptyState
+                icon={RefreshIcon}
+                title="Nessuna attività registrata"
+                description="Nessuna attività corrisponde ai filtri correnti."
+              />
+            ) : (
+              <div className="max-h-[28rem] overflow-y-auto pr-1">
+                <OperazioniList>
+                  {activities.map((activity) => (
+                    <OperazioniListLink
+                      key={String(activity.id)}
+                      onClick={() => {
+                        setWorkspaceModal({
+                          href: `/operazioni/attivita/${String(activity.id)}`,
+                          title: `Attività ${String(activity.id).substring(0, 8)}…`,
+                          description: "Dettaglio attività operatore in modale.",
+                        });
+                      }}
+                      title={`Attività ${String(activity.id).substring(0, 8)}…`}
+                      meta={`Operatore ID ${String(activity.operator_user_id ?? "—")}${activity.started_at ? ` · ${new Date(activity.started_at as string).toLocaleDateString("it-IT")}` : ""}`}
+                      status={activityStatusLabels[String(activity.status)] || String(activity.status)}
+                      statusTone={activityStatusTone[String(activity.status)] || "bg-gray-100 text-gray-600"}
+                    />
+                  ))}
+                </OperazioniList>
+              </div>
+            )}
+          </OperazioniCollectionPanel>
+        </div>
 
-          {isLoading ? (
-            <p className="text-sm text-gray-500">Caricamento attività in corso.</p>
-          ) : activities.length === 0 ? (
-            <EmptyState
-              icon={RefreshIcon}
-              title="Nessuna attività registrata"
-              description="Nessuna attività corrisponde ai filtri correnti."
-            />
-          ) : (
-            <div className="max-h-[28rem] space-y-3 overflow-y-auto pr-1">
-              {activities.map((activity) => (
-                <button
-                  key={String(activity.id)}
-                  type="button"
-                  className="flex w-full items-center justify-between rounded-lg border border-gray-100 bg-white px-4 py-3 text-left transition hover:bg-gray-50"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setWorkspaceModal({
-                      href: `/operazioni/attivita/${String(activity.id)}`,
-                      title: `Attività ${String(activity.id).substring(0, 8)}…`,
-                      description: "Dettaglio attività operatore in modale.",
-                    });
-                  }}
-                >
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">
-                      Attività {String(activity.id).substring(0, 8)}...
-                    </p>
-                    <p className="mt-1 text-xs text-gray-500">
-                      Operatore ID: {String(activity.operator_user_id ?? "—")}
-                      {activity.started_at ? ` · ${new Date(activity.started_at as string).toLocaleDateString("it-IT")}` : ""}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${activityStatusTone[String(activity.status)] || "bg-gray-100 text-gray-600"}`}>
-                      {activityStatusLabels[String(activity.status)] || String(activity.status)}
-                    </span>
-                    <ChevronRightIcon className="h-4 w-4 text-gray-300" aria-hidden />
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </article>
-
-        <article
+        <div
           className="panel-card group cursor-pointer transition hover:border-[#c8d8ce] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1D4E35]/25"
           tabIndex={0}
           aria-label="Segnalazioni recenti: apri la gestione in modale"
@@ -395,60 +373,47 @@ function DashboardContent() {
             }
           }}
         >
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <p className="section-title">Segnalazioni recenti</p>
-              <p className="section-copy">Clic sulla scheda per la lista completa; clic su una riga per il dettaglio.</p>
-            </div>
-            <ChevronRightIcon className="h-5 w-5 shrink-0 text-gray-300 transition group-hover:text-[#1D4E35]" aria-hidden />
-          </div>
+          <OperazioniCollectionPanel
+            title="Segnalazioni recenti"
+            description="Clic sulla scheda per la lista completa; clic su una riga per il dettaglio."
+            count={reports.length}
+          >
+            {isLoading ? (
+              <p className="text-sm text-gray-500">Caricamento segnalazioni in corso.</p>
+            ) : reports.length === 0 ? (
+              <EmptyState
+                icon={AlertTriangleIcon}
+                title="Nessuna segnalazione"
+                description="Non risultano segnalazioni registrate."
+              />
+            ) : (
+              <div className="max-h-[28rem] overflow-y-auto pr-1">
+                <OperazioniList>
+                  {reports.map((report) => (
+                    <OperazioniListLink
+                      key={String(report.id)}
+                      onClick={() => {
+                        setWorkspaceModal({
+                          href: `/operazioni/segnalazioni/${String(report.id)}`,
+                          title: String(report.title ?? "Segnalazione"),
+                          description: report.report_number
+                            ? `Segnalazione ${String(report.report_number)}`
+                            : "Dettaglio segnalazione in modale.",
+                        });
+                      }}
+                      title={String(report.title ?? "Senza titolo")}
+                      meta={`${String(report.report_number ?? "")}${report.created_at ? ` · ${new Date(report.created_at as string).toLocaleDateString("it-IT")}` : ""}`}
+                      status={report.internal_case_id ? "Con pratica" : "Senza pratica"}
+                      statusTone={report.internal_case_id ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}
+                    />
+                  ))}
+                </OperazioniList>
+              </div>
+            )}
+          </OperazioniCollectionPanel>
+        </div>
 
-          {isLoading ? (
-            <p className="text-sm text-gray-500">Caricamento segnalazioni in corso.</p>
-          ) : reports.length === 0 ? (
-            <EmptyState
-              icon={AlertTriangleIcon}
-              title="Nessuna segnalazione"
-              description="Non risultano segnalazioni registrate."
-            />
-          ) : (
-            <div className="max-h-[28rem] space-y-3 overflow-y-auto pr-1">
-              {reports.map((report) => (
-                <button
-                  key={String(report.id)}
-                  type="button"
-                  className="flex w-full items-center justify-between rounded-lg border border-gray-100 bg-white px-4 py-3 text-left transition hover:bg-gray-50"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setWorkspaceModal({
-                      href: `/operazioni/segnalazioni/${String(report.id)}`,
-                      title: String(report.title ?? "Segnalazione"),
-                      description: report.report_number
-                        ? `Segnalazione ${String(report.report_number)}`
-                        : "Dettaglio segnalazione in modale.",
-                    });
-                  }}
-                >
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{String(report.title ?? "Senza titolo")}</p>
-                    <p className="mt-1 text-xs text-gray-500">
-                      {String(report.report_number ?? "")}
-                      {report.created_at ? ` · ${new Date(report.created_at as string).toLocaleDateString("it-IT")}` : ""}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${report.internal_case_id ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
-                      {report.internal_case_id ? "Con pratica" : "Senza pratica"}
-                    </span>
-                    <ChevronRightIcon className="h-4 w-4 text-gray-300" aria-hidden />
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </article>
-
-        <article
+        <div
           className="panel-card group cursor-pointer transition hover:border-[#c8d8ce] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1D4E35]/25"
           tabIndex={0}
           aria-label="Pratiche recenti: apri la gestione in modale"
@@ -470,58 +435,45 @@ function DashboardContent() {
             }
           }}
         >
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <p className="section-title">Pratiche recenti</p>
-              <p className="section-copy">Clic sulla scheda per la lista completa; clic su una riga per il dettaglio.</p>
-            </div>
-            <ChevronRightIcon className="h-5 w-5 shrink-0 text-gray-300 transition group-hover:text-[#1D4E35]" aria-hidden />
-          </div>
-
-          {isLoading ? (
-            <p className="text-sm text-gray-500">Caricamento pratiche in corso.</p>
-          ) : cases.length === 0 ? (
-            <EmptyState
-              icon={DocumentIcon}
-              title="Nessuna pratica"
-              description="Non risultano pratiche registrate."
-            />
-          ) : (
-            <div className="max-h-[28rem] space-y-3 overflow-y-auto pr-1">
-              {cases.map((caseItem) => (
-                <button
-                  key={String(caseItem.id)}
-                  type="button"
-                  className="flex w-full items-center justify-between rounded-lg border border-gray-100 bg-white px-4 py-3 text-left transition hover:bg-gray-50"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setWorkspaceModal({
-                      href: `/operazioni/pratiche/${String(caseItem.id)}`,
-                      title: String(caseItem.title ?? "Pratica"),
-                      description: caseItem.case_number
-                        ? `Pratica ${String(caseItem.case_number)}`
-                        : "Dettaglio pratica in modale.",
-                    });
-                  }}
-                >
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">{String(caseItem.title ?? "Senza titolo")}</p>
-                    <p className="mt-1 text-xs text-gray-500">
-                      {String(caseItem.case_number ?? "")}
-                      {caseItem.created_at ? ` · ${new Date(caseItem.created_at as string).toLocaleDateString("it-IT")}` : ""}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-3">
-                    <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${caseStatusTone[String(caseItem.status)] || "bg-gray-100 text-gray-600"}`}>
-                      {caseStatusLabels[String(caseItem.status)] || String(caseItem.status)}
-                    </span>
-                    <ChevronRightIcon className="h-4 w-4 text-gray-300" aria-hidden />
-                  </div>
-                </button>
-              ))}
-            </div>
-          )}
-        </article>
+          <OperazioniCollectionPanel
+            title="Pratiche recenti"
+            description="Clic sulla scheda per la lista completa; clic su una riga per il dettaglio."
+            count={cases.length}
+          >
+            {isLoading ? (
+              <p className="text-sm text-gray-500">Caricamento pratiche in corso.</p>
+            ) : cases.length === 0 ? (
+              <EmptyState
+                icon={DocumentIcon}
+                title="Nessuna pratica"
+                description="Non risultano pratiche registrate."
+              />
+            ) : (
+              <div className="max-h-[28rem] overflow-y-auto pr-1">
+                <OperazioniList>
+                  {cases.map((caseItem) => (
+                    <OperazioniListLink
+                      key={String(caseItem.id)}
+                      onClick={() => {
+                        setWorkspaceModal({
+                          href: `/operazioni/pratiche/${String(caseItem.id)}`,
+                          title: String(caseItem.title ?? "Pratica"),
+                          description: caseItem.case_number
+                            ? `Pratica ${String(caseItem.case_number)}`
+                            : "Dettaglio pratica in modale.",
+                        });
+                      }}
+                      title={String(caseItem.title ?? "Senza titolo")}
+                      meta={`${String(caseItem.case_number ?? "")}${caseItem.created_at ? ` · ${new Date(caseItem.created_at as string).toLocaleDateString("it-IT")}` : ""}`}
+                      status={caseStatusLabels[String(caseItem.status)] || String(caseItem.status)}
+                      statusTone={caseStatusTone[String(caseItem.status)] || "bg-gray-100 text-gray-600"}
+                    />
+                  ))}
+                </OperazioniList>
+              </div>
+            )}
+          </OperazioniCollectionPanel>
+        </div>
       </div>
 
       <OperazioniWorkspaceModal

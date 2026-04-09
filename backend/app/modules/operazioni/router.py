@@ -1,13 +1,18 @@
 """GAIA Operazioni module entry point."""
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 
+from app.api.deps import require_module
 from app.modules.operazioni.routes.activities import router as activities_router
 from app.modules.operazioni.routes.dashboard import router as dashboard_router
 from app.modules.operazioni.routes.reports import router as reports_router
 from app.modules.operazioni.routes.vehicles import router as vehicles_router
 
-router = APIRouter(prefix="/operazioni", tags=["operazioni"])
+router = APIRouter(
+    prefix="/operazioni",
+    tags=["operazioni"],
+    dependencies=[Depends(require_module("operazioni"))],
+)
 
 router.include_router(vehicles_router)
 router.include_router(activities_router)

@@ -1,12 +1,20 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
+import {
+  OperazioniCollectionHero,
+  OperazioniCollectionPanel,
+  OperazioniHeroNotice,
+  OperazioniList,
+  OperazioniListLink,
+  OperazioniMetricStrip,
+  OperazioniToolbar,
+} from "@/components/operazioni/collection-layout";
 import { OperazioniModulePage } from "@/components/operazioni/operazioni-module-page";
 import { MetricCard } from "@/components/ui/metric-card";
 import { EmptyState } from "@/components/ui/empty-state";
-import { TruckIcon, ChevronRightIcon } from "@/components/ui/icons";
+import { TruckIcon } from "@/components/ui/icons";
 import { getVehicles } from "@/features/operazioni/api/client";
 
 interface VehicleItem {
@@ -36,15 +44,7 @@ const statusTone: Record<string, string> = {
   out_of_service: "bg-gray-100 text-gray-600",
 };
 
-function BadgeCount({ value }: { value: number }) {
-  return (
-    <span className="rounded-full bg-[#EAF3E8] px-2.5 py-1 text-xs font-semibold text-[#1D4E35]">
-      {value}
-    </span>
-  );
-}
-
-function MezziContent({ token }: { token: string }) {
+function MezziContent() {
   const [vehicles, setVehicles] = useState<VehicleItem[]>([]);
   const [total, setTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -78,86 +78,84 @@ function MezziContent({ token }: { token: string }) {
 
   return (
     <div className="page-stack">
-      <p className="text-sm text-gray-500">
-        Gestione anagrafica mezzi, assegnazioni a operatori e squadre, sessioni utilizzo, carburante e manutenzioni.
-      </p>
+      <OperazioniCollectionHero
+        eyebrow="Fleet registry"
+        icon={<TruckIcon className="h-3.5 w-3.5" />}
+        title="Gestione mezzi per disponibilità, utilizzo, manutenzioni e dotazioni operative."
+        description="Vista unica per leggere la flotta, isolare rapidamente i mezzi critici e aprire le schede veicolo senza perdere il contesto di lavoro."
+      >
+        {loadError ? (
+          <OperazioniHeroNotice title="Caricamento non riuscito" description={loadError} tone="danger" />
+        ) : (
+          <OperazioniHeroNotice
+            title="Quadro di presidio"
+            description={`${total} mezzi censiti. Usa ricerca e stato per convergere subito sui veicoli operativi o da fermo.`}
+          />
+        )}
+        <div className="rounded-2xl border border-white/80 bg-white/75 px-4 py-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">Filtro attivo</p>
+          <p className="mt-2 text-sm font-medium text-gray-900">{statusFilter ? statusLabels[statusFilter] ?? statusFilter : "Nessuno stato selezionato"}</p>
+          <p className="mt-1 text-sm text-gray-600">{search.trim() ? `Ricerca: ${search.trim()}` : "Nessuna ricerca testuale applicata."}</p>
+        </div>
+      </OperazioniCollectionHero>
 
-      {loadError ? (
-        <article className="panel-card">
-          <p className="text-sm font-medium text-red-700">Caricamento non riuscito</p>
-          <p className="mt-2 text-sm text-gray-600">{loadError}</p>
-        </article>
-      ) : null}
-
-      <div className="surface-grid">
+      <OperazioniMetricStrip>
         <MetricCard label="Mezzi totali" value={total} sub="Veicoli registrati nel sistema" />
         <MetricCard label="Disponibili" value={availableCount} sub="Mezzi pronti per l&apos;assegnazione" variant="success" />
         <MetricCard label="In utilizzo" value={inUseCount} sub="Mezzi attualmente in uso" variant="warning" />
         <MetricCard label="In manutenzione" value={maintenanceCount} sub="Mezzi fuori servizio per manutenzione" variant={maintenanceCount > 0 ? "danger" : "default"} />
-      </div>
+      </OperazioniMetricStrip>
 
-      <article className="panel-card">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <div>
-            <p className="section-title">Elenco mezzi</p>
-            <p className="section-copy">Tutti i veicoli registrati con stato e dettagli.</p>
-          </div>
-          <BadgeCount value={vehicles.length} />
+      <OperazioniCollectionPanel
+        title="Parco mezzi"
+        description="Lista compatta ad alta densità per nome, codice, targa, GPS e stato attuale."
+        count={vehicles.length}
+      >
+        <OperazioniToolbar
+          search={search}
+          onSearchChange={setSearch}
+          searchPlaceholder="Cerca per nome, codice o targa"
+          filterValue={statusFilter}
+          onFilterChange={setStatusFilter}
+          filterOptions={[
+            { value: "", label: "Tutti gli stati" },
+            { value: "available", label: "Disponibile" },
+            { value: "in_use", label: "In utilizzo" },
+            { value: "maintenance", label: "In manutenzione" },
+            { value: "out_of_service", label: "Fuori servizio" },
+          ]}
+        />
+
+        <div className="mt-4">
+          {isLoading ? (
+            <p className="text-sm text-gray-500">Caricamento mezzi in corso.</p>
+          ) : vehicles.length === 0 ? (
+            <EmptyState
+              icon={TruckIcon}
+              title="Nessun mezzo trovato"
+              description="Non risultano veicoli con i filtri correnti."
+            />
+          ) : (
+            <OperazioniList>
+              {vehicles.map((vehicle) => (
+                <OperazioniListLink
+                  key={vehicle.id}
+                  href={`/operazioni/mezzi/${vehicle.id}`}
+                  title={vehicle.name}
+                  meta={`${vehicle.code}${vehicle.plate_number ? ` · ${vehicle.plate_number}` : ""}${vehicle.has_gps_device ? " · GPS" : " · senza GPS"}`}
+                  status={statusLabels[vehicle.current_status] || vehicle.current_status}
+                  statusTone={statusTone[vehicle.current_status] || "bg-gray-100 text-gray-600"}
+                  aside={
+                    <span className="rounded-full border border-[#dbe6de] bg-[#f6faf7] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#476151]">
+                      {vehicle.vehicle_type}
+                    </span>
+                  }
+                />
+              ))}
+            </OperazioniList>
+          )}
         </div>
-
-        <div className="mb-4 flex flex-wrap gap-3">
-          <input
-            className="form-control flex-1 min-w-[200px]"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Cerca per nome, codice o targa"
-          />
-          <select
-            className="form-control"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-          >
-            <option value="">Tutti gli stati</option>
-            <option value="available">Disponibile</option>
-            <option value="in_use">In utilizzo</option>
-            <option value="maintenance">In manutenzione</option>
-            <option value="out_of_service">Fuori servizio</option>
-          </select>
-        </div>
-
-        {isLoading ? (
-          <p className="text-sm text-gray-500">Caricamento mezzi in corso.</p>
-        ) : vehicles.length === 0 ? (
-          <EmptyState
-            icon={TruckIcon}
-            title="Nessun mezzo trovato"
-            description="Non risultano veicoli con i filtri correnti."
-          />
-        ) : (
-          <div className="max-h-[32rem] space-y-3 overflow-y-auto pr-1">
-            {vehicles.map((vehicle) => (
-              <Link
-                key={vehicle.id}
-                href={`/operazioni/mezzi/${vehicle.id}`}
-                className="flex w-full items-center justify-between rounded-lg border border-gray-100 px-4 py-3 text-left transition hover:bg-gray-50"
-              >
-                <div>
-                  <p className="text-sm font-medium text-gray-900">{vehicle.name}</p>
-                  <p className="mt-1 text-xs text-gray-500">
-                    {vehicle.code}{vehicle.plate_number ? ` · ${vehicle.plate_number}` : ""}{vehicle.has_gps_device ? " · GPS" : ""}
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${statusTone[vehicle.current_status] || "bg-gray-100 text-gray-600"}`}>
-                    {statusLabels[vehicle.current_status] || vehicle.current_status}
-                  </span>
-                  <ChevronRightIcon className="h-4 w-4 text-gray-300" />
-                </div>
-              </Link>
-            ))}
-          </div>
-        )}
-      </article>
+      </OperazioniCollectionPanel>
     </div>
   );
 }
@@ -169,7 +167,7 @@ export default function MezziPage() {
       description="Anagrafica mezzi, assegnazioni, sessioni d’uso, carburante e manutenzioni."
       breadcrumb="Lista"
     >
-      {({ token }) => <MezziContent token={token} />}
+      {() => <MezziContent />}
     </OperazioniModulePage>
   );
 }

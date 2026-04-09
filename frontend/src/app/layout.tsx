@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Manrope, Newsreader } from "next/font/google";
 
+import "maplibre-gl/dist/maplibre-gl.css";
 import "./globals.css";
 
 const newsreader = Newsreader({

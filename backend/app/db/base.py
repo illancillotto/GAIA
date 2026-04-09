@@ -1,5 +1,6 @@
 from app.core.database import Base
 from app.models.application_user import ApplicationUser
+from app.models.bonifica_oristanese import BonificaOristaneseCredential
 from app.models.capacitas import CapacitasCredential
 from app.modules.utenze.models import (
     AnagraficaAuditLog,
@@ -48,6 +49,7 @@ __all__ = [
     "AnagraficaPerson",
     "AnagraficaSubject",
     "Base",
+    "BonificaOristaneseCredential",
     "CapacitasCredential",
     "CatastoBatch",
     "CatastoCaptchaLog",
