@@ -36,6 +36,16 @@ DEFAULT_SECTIONS = [
     ("utenze.import", "Import archivio Utenze", "utenze", "admin"),
     ("utenze.documents", "Documenti Utenze", "utenze", "viewer"),
     ("utenze.export", "Export Utenze", "utenze", "reviewer"),
+    ("riordino.dashboard", "Dashboard Riordino", "riordino", "viewer"),
+    ("riordino.practices", "Pratiche Riordino", "riordino", "viewer"),
+    ("riordino.workflow", "Workflow Riordino", "riordino", "viewer"),
+    ("riordino.appeals", "Ricorsi Riordino", "riordino", "viewer"),
+    ("riordino.issues", "Issue Riordino", "riordino", "viewer"),
+    ("riordino.documents", "Documenti Riordino", "riordino", "viewer"),
+    ("riordino.gis", "GIS Riordino", "riordino", "viewer"),
+    ("riordino.notifications", "Notifiche Riordino", "riordino", "viewer"),
+    ("riordino.export", "Export Riordino", "riordino", "reviewer"),
+    ("riordino.config", "Configurazione Riordino", "riordino", "admin"),
 ]
 
 

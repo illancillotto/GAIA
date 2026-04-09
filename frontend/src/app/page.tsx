@@ -25,7 +25,7 @@ import type {
 } from "@/types/api";
 
 type ModuleStatus = "active" | "warming" | "coming";
-type ModuleId = "accessi" | "rete" | "inventario" | "catasto" | "elaborazioni" | "utenze" | "operazioni";
+type ModuleId = "accessi" | "rete" | "inventario" | "catasto" | "elaborazioni" | "utenze" | "operazioni" | "riordino";
 
 type HomeModule = {
   id: ModuleId;
@@ -147,6 +147,17 @@ const allModules: HomeModule[] = [
     statusLabel: "Operativo",
     icon: "local_shipping",
     enabledKeys: ["operazioni"],
+  },
+  {
+    id: "riordino",
+    title: "GAIA Riordino",
+    description:
+      "Gestione digitale del riordino catastale: pratiche, workflow a fasi, documenti, ricorsi, anomalie e cronologia completa.",
+    href: "/riordino",
+    status: "warming",
+    statusLabel: "Backend pronto",
+    icon: "description",
+    enabledKeys: ["riordino"],
   },
 ];
 

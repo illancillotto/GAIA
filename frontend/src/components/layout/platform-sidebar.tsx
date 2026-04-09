@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMemo, useState } from "react";
 
-import { ChevronRightIcon, GridIcon, LockIcon, RefreshIcon, SearchIcon, ServerIcon, TruckIcon, UserIcon } from "@/components/ui/icons";
+import { ChevronRightIcon, DocumentIcon, GridIcon, LockIcon, RefreshIcon, SearchIcon, ServerIcon, TruckIcon, UserIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
 import type { CurrentUser } from "@/types/api";
 
@@ -27,6 +27,7 @@ const platformModules: PlatformModule[] = [
   { href: "/elaborazioni", label: "Elaborazioni", icon: RefreshIcon },
   { href: "/utenze", label: "Utenze", icon: UserIcon },
   { href: "/operazioni", label: "Operazioni", icon: TruckIcon },
+  { href: "/riordino", label: "Riordino", icon: DocumentIcon },
 ];
 
 export function PlatformSidebar({ currentModuleLabel, currentUser }: PlatformSidebarProps) {
@@ -46,9 +47,11 @@ export function PlatformSidebar({ currentModuleLabel, currentUser }: PlatformSid
                 ? "catasto"
               : href === "/utenze"
                 ? "utenze"
-              : href === "/operazioni"
-                ? "operazioni"
-              : "";
+                : href === "/operazioni"
+                  ? "operazioni"
+                  : href === "/riordino"
+                    ? "riordino"
+                  : "";
 
     if (!moduleKey) return true;
     return currentUser.enabled_modules.includes(moduleKey);

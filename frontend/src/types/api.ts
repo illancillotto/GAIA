@@ -14,6 +14,8 @@ export type CurrentUser = {
   module_inventario: boolean;
   module_catasto: boolean;
   module_utenze: boolean;
+  module_operazioni: boolean;
+  module_riordino: boolean;
   enabled_modules: string[];
 };
 
@@ -41,6 +43,8 @@ export type ApplicationUser = {
   module_inventario: boolean;
   module_catasto: boolean;
   module_utenze: boolean;
+  module_operazioni: boolean;
+  module_riordino: boolean;
   enabled_modules: string[];
   created_at: string;
   updated_at: string;
@@ -62,6 +66,8 @@ export type ApplicationUserCreateInput = {
   module_inventario: boolean;
   module_catasto: boolean;
   module_utenze: boolean;
+  module_operazioni: boolean;
+  module_riordino: boolean;
 };
 
 export type ApplicationUserUpdateInput = {
@@ -74,6 +80,8 @@ export type ApplicationUserUpdateInput = {
   module_inventario?: boolean;
   module_catasto?: boolean;
   module_utenze?: boolean;
+  module_operazioni?: boolean;
+  module_riordino?: boolean;
 };
 
 export type DashboardSummary = {

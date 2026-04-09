@@ -77,6 +77,16 @@ La documentazione del progetto e distribuita principalmente in due aree:
 - `domain-docs/utenze/docs/EXECUTION_PLAN.md`
 - `domain-docs/utenze/docs/PROGRESS.md`
 
+### Riordino
+
+- `domain-docs/riordino/docs/PRD_riordino_v2.md`
+- `domain-docs/riordino/docs/ARCHITECTURE_riordino_v2.md`
+- `domain-docs/riordino/docs/EXECUTION_PLAN_riordino_v2.md`
+- `domain-docs/riordino/docs/PROMPT_CODEX_riordino_backend_v2.md`
+- `domain-docs/riordino/docs/PROMPT_CODEX_riordino_frontend_v2.md`
+- `domain-docs/riordino/docs/PROMPT_CODEX_riordino_fullstack_v2.md`
+- `domain-docs/riordino/docs/PROGRESS_riordino_v2.md`
+
 ## Struttura sintetica del repository
 
 ```text
@@ -94,6 +104,7 @@ GAIA/
 │   │   ├── models/
 │   │   ├── modules/
 │   │   │   ├── elaborazioni/
+│   │   │   ├── riordino/
 │   │   │   └── shared/
 │   │   ├── repositories/
 │   │   ├── schemas/
@@ -102,6 +113,7 @@ GAIA/
 │   │   └── utils/
 │   ├── scripts/
 │   └── tests/
+│       └── riordino/
 ├── domain-docs/
 │   ├── accessi/
 │   │   ├── docs/
@@ -117,6 +129,8 @@ GAIA/
 │   │   └── frontend/
 │   ├── network/
 │   │   └── docs/
+│   ├── riordino/
+│   │   └── docs/
 │   └── utenze/
 │       └── docs/
 ├── frontend/
@@ -124,8 +138,10 @@ GAIA/
 │   ├── scripts/
 │   ├── src/
 │   │   ├── app/
-│   │   │   └── elaborazioni/
+│   │   │   ├── elaborazioni/
+│   │   │   └── riordino/
 │   │   ├── components/
+│   │   │   └── riordino/
 │   │   ├── features/
 │   │   ├── hooks/
 │   │   ├── lib/

@@ -45,6 +45,8 @@ export function Sidebar({
                     ? "inventory"
                     : pathname.startsWith("/operazioni")
                       ? "operazioni"
+                      : pathname.startsWith("/riordino")
+                        ? "riordino"
                       : "nas_control";
 
   const currentModuleLabel =
@@ -64,6 +66,8 @@ export function Sidebar({
                   ? "Inventario"
                   : currentModuleKey === "operazioni"
                     ? "Operazioni"
+                    : currentModuleKey === "riordino"
+                      ? "Riordino"
                     : "NAS Control";
   const canManageGaiaUsers =
     (currentUser.role === "admin" || currentUser.role === "super_admin")

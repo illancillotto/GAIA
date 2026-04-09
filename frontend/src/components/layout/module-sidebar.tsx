@@ -25,7 +25,8 @@ type ModuleSidebarProps = {
     | "elaborazioni"
     | "utenze"
     | "gaia"
-    | "operazioni";
+    | "operazioni"
+    | "riordino";
   reviewBadge?: number;
   userBadge?: number;
   grantedSectionKeys?: string[];
@@ -148,6 +149,19 @@ export function ModuleSidebar({
         <NavItem href="/operazioni/attivita" icon={RefreshIcon} label="Attività" match="prefix" />
         <NavItem href="/operazioni/segnalazioni" icon={AlertTriangleIcon} label="Segnalazioni" match="prefix" />
         <NavItem href="/operazioni/pratiche" icon={DocumentIcon} label="Pratiche" match="prefix" />
+      </div>
+    );
+  }
+
+  if (currentModuleKey === "riordino") {
+    return (
+      <div className="space-y-0.5 px-2 pb-3">
+        <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Panoramica</p>
+        <NavItem href="/riordino" icon={GridIcon} label="Dashboard" />
+        <NavItem href="/riordino/pratiche" icon={FolderIcon} label="Pratiche" match="prefix" />
+
+        <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Gestione</p>
+        <NavItem href="/riordino/configurazione" icon={LockIcon} label="Configurazione" match="prefix" />
       </div>
     );
   }
