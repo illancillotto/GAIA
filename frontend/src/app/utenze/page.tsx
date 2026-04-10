@@ -4,8 +4,13 @@ import Link from "next/link";
 import { useDeferredValue, useEffect, useState } from "react";
 
 import { UtenzeModulePage } from "@/components/utenze/utenze-module-page";
+import {
+  ModuleWorkspaceHero,
+  ModuleWorkspaceKpiRow,
+  ModuleWorkspaceKpiTile,
+  ModuleWorkspaceNoticeCard,
+} from "@/components/layout/module-workspace-hero";
 import { EmptyState } from "@/components/ui/empty-state";
-import { MetricCard } from "@/components/ui/metric-card";
 import { FolderIcon, RefreshIcon, SearchIcon, UserIcon } from "@/components/ui/icons";
 import { getUtenzeDocumentSummary, getUtenzeImportJobs, getUtenzeStats, getUtenzeSubjects, searchUtenzeSubjects } from "@/lib/api";
 import { formatDateTime } from "@/lib/presentation";
@@ -256,47 +261,66 @@ function DashboardContent({ token }: { token: string }) {
         </div>
       ) : null}
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-gray-500">
-          Registro soggetti del Consorzio, con snapshot archivio NAS, classificazione documentale e ricerca operativa.
-        </p>
-        <div className="flex flex-wrap gap-2">
-          <Link className="btn-secondary" href="/utenze/subjects">
-            <SearchIcon className="h-4 w-4" />
-            Apri soggetti
-          </Link>
-          <Link className="btn-primary" href="/utenze/import">
-            <RefreshIcon className="h-4 w-4" />
-            Crea snapshot
-          </Link>
-        </div>
-      </div>
-
-      {loadError ? (
-        <article className="panel-card">
-          <p className="text-sm font-medium text-red-700">Caricamento non riuscito</p>
-          <p className="mt-2 text-sm text-gray-600">{loadError}</p>
-        </article>
-      ) : null}
-
-      <div className="surface-grid">
-        <MetricCard label="Soggetti totali" value={stats.total_subjects} sub={`${stats.total_persons} PF · ${stats.total_companies} PG`} />
-        <button
-          type="button"
-          className="group rounded-[28px] text-left outline-none transition hover:-translate-y-0.5 focus-visible:ring-2 focus-visible:ring-[#1D4E35]/30"
-          onClick={() => void handleOpenDocumentSummary()}
-          aria-label="Apri riepilogo documenti"
-        >
-          <div className="relative">
-            <MetricCard label="Documenti" value={stats.total_documents} sub={`${stats.documents_unclassified} non classificati`} />
-            <span className="absolute right-5 top-4 rounded-full bg-[#1D4E35]/8 px-2.5 py-1 text-[11px] font-medium text-[#1D4E35] transition group-hover:bg-[#1D4E35] group-hover:text-white">
-              Apri dettaglio
-            </span>
-          </div>
-        </button>
-        <MetricCard label="Da revisionare" value={stats.requires_review} sub="Soggetti con warning o classificazione incerta" variant={stats.requires_review > 0 ? "warning" : "success"} />
-        <MetricCard label="Snapshot recenti" value={jobs.length} sub={`${jobs.filter((job) => job.status === "completed").length} completi`} />
-      </div>
+      <ModuleWorkspaceHero
+        badge={
+          <>
+            <UserIcon className="h-3.5 w-3.5" />
+            Workspace Utenze
+          </>
+        }
+        title="Registro soggetti, documenti classificati e snapshot dell’archivio NAS."
+        description="Ricerca rapida, indicatori di qualità dati e accesso alle liste complete per operare su PF, PG e allegati."
+        actions={
+          <>
+            {loadError ? (
+              <ModuleWorkspaceNoticeCard title="Caricamento non riuscito" description={loadError} tone="danger" />
+            ) : (
+              <ModuleWorkspaceNoticeCard
+                title="Riepilogo documenti"
+                description="Apri il pannello dedicato per classificati, non classificati e ultimi file senza tipo."
+              />
+            )}
+            <div className="flex flex-wrap gap-2">
+              <Link className="btn-secondary" href="/utenze/subjects">
+                <SearchIcon className="h-4 w-4" />
+                Apri soggetti
+              </Link>
+              <Link className="btn-primary" href="/utenze/import">
+                <RefreshIcon className="h-4 w-4" />
+                Crea snapshot
+              </Link>
+              <button className="btn-secondary" type="button" onClick={() => void handleOpenDocumentSummary()}>
+                Riepilogo documenti
+              </button>
+            </div>
+          </>
+        }
+      >
+        <ModuleWorkspaceKpiRow>
+          <ModuleWorkspaceKpiTile
+            label="Soggetti"
+            variant="emerald"
+            value={stats.total_subjects}
+            hint={`${stats.total_persons} PF · ${stats.total_companies} PG`}
+          />
+          <ModuleWorkspaceKpiTile
+            label="Documenti"
+            value={stats.total_documents}
+            hint={`${stats.documents_unclassified} non classificati`}
+          />
+          <ModuleWorkspaceKpiTile
+            label="Da revisionare"
+            variant={stats.requires_review > 0 ? "amber" : "default"}
+            value={stats.requires_review}
+            hint="warning / classificazione incerta"
+          />
+          <ModuleWorkspaceKpiTile
+            label="Import recenti"
+            value={jobs.length}
+            hint={`${jobs.filter((job) => job.status === "completed").length} completi`}
+          />
+        </ModuleWorkspaceKpiRow>
+      </ModuleWorkspaceHero>
 
       <article className="panel-card">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">

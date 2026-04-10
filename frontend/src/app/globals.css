@@ -131,6 +131,23 @@
   .auth-card {
     @apply w-full max-w-md rounded-2xl border border-gray-100 bg-white p-8 shadow-panel;
   }
+
+  .gps-map-marker {
+    @apply flex h-5 w-5 items-center justify-center rounded-full border-2 border-white shadow-md;
+  }
+
+  .gps-map-marker::after {
+    content: "";
+    @apply h-2.5 w-2.5 rounded-full bg-white;
+  }
+
+  .gps-map-marker-start {
+    @apply bg-[#1D4E35];
+  }
+
+  .gps-map-marker-end {
+    @apply bg-[#c26b2d];
+  }
 }
 
 @keyframes login-shake {

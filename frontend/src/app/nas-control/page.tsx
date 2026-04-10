@@ -5,9 +5,14 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { AppShell } from "@/components/layout/app-shell";
+import {
+  ModuleWorkspaceHero,
+  ModuleWorkspaceKpiRow,
+  ModuleWorkspaceKpiTile,
+  ModuleWorkspaceNoticeCard,
+} from "@/components/layout/module-workspace-hero";
 import { Topbar } from "@/components/layout/topbar";
 import { AlertBanner } from "@/components/ui/alert-banner";
-import { MetricCard } from "@/components/ui/metric-card";
 import { SyncButton } from "@/components/ui/sync-button";
 import { AlertTriangleIcon, ChevronRightIcon, FolderIcon, SearchIcon, UserIcon } from "@/components/ui/icons";
 import {
@@ -231,19 +236,34 @@ export default function AccessiPage() {
             </AlertBanner>
           ) : null}
 
-          <div>
-            <h2 className="page-heading">Controllo centralizzato NAS</h2>
-            <p className="mt-1 text-sm text-gray-500">
-              Vista sintetica di utenti, cartelle condivise, permessi effettivi e review aperte.
-            </p>
-          </div>
-
-          <div className="surface-grid">
-            <MetricCard label="Utenti NAS" value={summary.nas_users} sub="Utenti sincronizzati dal dominio audit" />
-            <MetricCard label="Cartelle" value={summary.shares} sub="Share presenti nell’ultimo snapshot" />
-            <MetricCard label="Permessi calcolati" value={permissions.length} sub="Permessi effettivi persistiti" variant="success" />
-            <MetricCard label="Permessi negati" value={deniedCount} sub="Regole con deny attivo" variant={deniedCount > 0 ? "danger" : "default"} />
-          </div>
+          <ModuleWorkspaceHero
+            badge={
+              <>
+                <FolderIcon className="h-3.5 w-3.5" />
+                Workspace NAS Control
+              </>
+            }
+            title="Controllo centralizzato di utenti, share e permessi effettivi."
+            description="Vista sintetica dell’ultimo snapshot sincronizzato: chi accede a cosa, regole deny e review in coda."
+            actions={
+              <ModuleWorkspaceNoticeCard
+                title="Sincronizzazione"
+                description="Usa “Apri Sync” in alto per avviare o monitorare i job; i numeri qui si aggiornano al completamento dello snapshot."
+              />
+            }
+          >
+            <ModuleWorkspaceKpiRow>
+              <ModuleWorkspaceKpiTile label="Utenti NAS" variant="emerald" value={summary.nas_users} hint="dominio audit" />
+              <ModuleWorkspaceKpiTile label="Cartelle" value={summary.shares} hint="share nello snapshot" />
+              <ModuleWorkspaceKpiTile label="Permessi" variant="emerald" value={permissions.length} hint="effettivi persistiti" />
+              <ModuleWorkspaceKpiTile
+                label="Deny"
+                variant={deniedCount > 0 ? "amber" : "default"}
+                value={deniedCount}
+                hint="regole negate attive"
+              />
+            </ModuleWorkspaceKpiRow>
+          </ModuleWorkspaceHero>
 
           <p className="text-sm text-gray-500">
             Gli snapshot mostrati in GAIA sono snapshot interni della piattaforma, generati durante la sincronizzazione, non snapshot nativi del NAS Synology.

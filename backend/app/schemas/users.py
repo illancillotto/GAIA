@@ -28,6 +28,8 @@ class ApplicationUserCreate(BaseModel):
     module_inventario: bool = False
     module_catasto: bool = False
     module_utenze: bool = False
+    module_operazioni: bool = False
+    module_riordino: bool = False
 
     @field_validator("email")
     @classmethod
@@ -52,6 +54,8 @@ class ApplicationUserUpdate(BaseModel):
     module_inventario: bool | None = None
     module_catasto: bool | None = None
     module_utenze: bool | None = None
+    module_operazioni: bool | None = None
+    module_riordino: bool | None = None
 
     @field_validator("email")
     @classmethod
@@ -81,6 +85,8 @@ class ApplicationUserResponse(BaseModel):
     module_inventario: bool
     module_catasto: bool
     module_utenze: bool
+    module_operazioni: bool
+    module_riordino: bool
     enabled_modules: list[str]
     created_at: datetime
     updated_at: datetime

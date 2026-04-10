@@ -14,6 +14,8 @@ export type CurrentUser = {
   module_inventario: boolean;
   module_catasto: boolean;
   module_utenze: boolean;
+  module_operazioni: boolean;
+  module_riordino: boolean;
   enabled_modules: string[];
 };
 
@@ -41,6 +43,8 @@ export type ApplicationUser = {
   module_inventario: boolean;
   module_catasto: boolean;
   module_utenze: boolean;
+  module_operazioni: boolean;
+  module_riordino: boolean;
   enabled_modules: string[];
   created_at: string;
   updated_at: string;
@@ -62,6 +66,8 @@ export type ApplicationUserCreateInput = {
   module_inventario: boolean;
   module_catasto: boolean;
   module_utenze: boolean;
+  module_operazioni: boolean;
+  module_riordino: boolean;
 };
 
 export type ApplicationUserUpdateInput = {
@@ -74,6 +80,8 @@ export type ApplicationUserUpdateInput = {
   module_inventario?: boolean;
   module_catasto?: boolean;
   module_utenze?: boolean;
+  module_operazioni?: boolean;
+  module_riordino?: boolean;
 };
 
 export type DashboardSummary = {
@@ -895,6 +903,43 @@ export type CapacitasCredentialUpdateInput = {
 export type CapacitasCredentialTestResult = {
   ok: boolean;
   token: string | null;
+  error: string | null;
+};
+
+export type BonificaOristaneseCredential = {
+  id: number;
+  label: string;
+  login_identifier: string;
+  remember_me: boolean;
+  active: boolean;
+  last_used_at: string | null;
+  last_authenticated_url: string | null;
+  last_error: string | null;
+  consecutive_failures: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BonificaOristaneseCredentialCreateInput = {
+  label: string;
+  login_identifier: string;
+  password: string;
+  remember_me?: boolean;
+  active?: boolean;
+};
+
+export type BonificaOristaneseCredentialUpdateInput = {
+  label?: string;
+  login_identifier?: string;
+  password?: string;
+  remember_me?: boolean;
+  active?: boolean;
+};
+
+export type BonificaOristaneseCredentialTestResult = {
+  ok: boolean;
+  authenticated_url: string | null;
+  cookies: string | null;
   error: string | null;
 };
 

@@ -30,37 +30,45 @@ export function Sidebar({
     pathname.startsWith("/gaia/users")
       ? "gaia"
       : pathname.startsWith("/nas-control")
-      ? "nas_control"
-      : pathname.startsWith("/elaborazioni")
-      ? "elaborazioni"
-      : pathname.startsWith("/catasto")
-      ? "catasto"
-      : pathname.startsWith("/utenze")
-      ? "utenze"
-      : pathname.startsWith("/anagrafica")
-      ? "utenze"
-      : pathname.startsWith("/network")
-        ? "network"
-      : pathname.startsWith("/inventory")
-          ? "inventory"
-          : "nas_control";
+        ? "nas_control"
+        : pathname.startsWith("/elaborazioni")
+          ? "elaborazioni"
+          : pathname.startsWith("/catasto")
+            ? "catasto"
+            : pathname.startsWith("/utenze")
+              ? "utenze"
+              : pathname.startsWith("/anagrafica")
+                ? "utenze"
+                : pathname.startsWith("/network")
+                  ? "network"
+                  : pathname.startsWith("/inventory")
+                    ? "inventory"
+                    : pathname.startsWith("/operazioni")
+                      ? "operazioni"
+                      : pathname.startsWith("/riordino")
+                        ? "riordino"
+                      : "nas_control";
 
   const currentModuleLabel =
     currentModuleKey === "gaia"
       ? "Utenti GAIA"
       : currentModuleKey === "nas_control"
-      ? "NAS Control"
-      : currentModuleKey === "elaborazioni"
-      ? "Elaborazioni"
-      : currentModuleKey === "catasto"
-      ? "Catasto"
-      : currentModuleKey === "utenze"
-      ? "Utenze"
-      : currentModuleKey === "network"
-        ? "Rete"
-      : currentModuleKey === "inventory"
-        ? "Inventario"
-          : "NAS Control";
+        ? "NAS Control"
+        : currentModuleKey === "elaborazioni"
+          ? "Elaborazioni"
+          : currentModuleKey === "catasto"
+            ? "Catasto"
+            : currentModuleKey === "utenze"
+              ? "Utenze"
+              : currentModuleKey === "network"
+                ? "Rete"
+                : currentModuleKey === "inventory"
+                  ? "Inventario"
+                  : currentModuleKey === "operazioni"
+                    ? "Operazioni"
+                    : currentModuleKey === "riordino"
+                      ? "Riordino"
+                    : "NAS Control";
   const canManageGaiaUsers =
     (currentUser.role === "admin" || currentUser.role === "super_admin")
     && currentUser.enabled_modules.includes("accessi");

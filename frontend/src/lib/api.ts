@@ -36,6 +36,10 @@ import type {
   CapacitasCredentialUpdateInput,
   CapacitasSearchInput,
   CapacitasSearchResult,
+  BonificaOristaneseCredential,
+  BonificaOristaneseCredentialCreateInput,
+  BonificaOristaneseCredentialTestResult as BonificaOristaneseCredentialProbeResult,
+  BonificaOristaneseCredentialUpdateInput,
   CurrentUser,
   DashboardSummary,
   EffectivePermission,
@@ -1148,6 +1152,81 @@ export async function testCapacitasCredential(
       Authorization: `Bearer ${token}`,
     },
   });
+}
+
+export async function listBonificaOristaneseCredentials(token: string): Promise<BonificaOristaneseCredential[]> {
+  return request<BonificaOristaneseCredential[]>("/elaborazioni/bonifica-oristanese/credentials", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function createBonificaOristaneseCredential(
+  token: string,
+  payload: BonificaOristaneseCredentialCreateInput,
+): Promise<BonificaOristaneseCredential> {
+  return request<BonificaOristaneseCredential>("/elaborazioni/bonifica-oristanese/credentials", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateBonificaOristaneseCredential(
+  token: string,
+  credentialId: number,
+  payload: BonificaOristaneseCredentialUpdateInput,
+): Promise<BonificaOristaneseCredential> {
+  return request<BonificaOristaneseCredential>(`/elaborazioni/bonifica-oristanese/credentials/${credentialId}`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteBonificaOristaneseCredential(token: string, credentialId: number): Promise<void> {
+  const response = await fetch(`${getApiBaseUrl()}/elaborazioni/bonifica-oristanese/credentials/${credentialId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    let detail = "Request failed";
+
+    try {
+      const payload = (await response.json()) as { detail?: unknown };
+      if (typeof payload.detail === "string") {
+        detail = payload.detail;
+      }
+    } catch {
+      detail = response.statusText || detail;
+    }
+
+    throw new ApiError(detail, undefined, response.status);
+  }
+}
+
+export async function testBonificaOristaneseCredential(
+  token: string,
+  credentialId: number,
+): Promise<BonificaOristaneseCredentialProbeResult> {
+  return request<BonificaOristaneseCredentialProbeResult>(
+    `/elaborazioni/bonifica-oristanese/credentials/${credentialId}/test`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
 }
 
 export async function searchCapacitasInvolture(

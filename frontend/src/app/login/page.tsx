@@ -10,10 +10,12 @@ import { cn } from "@/lib/cn";
 
 const modules = [
   { name: "GAIA NAS Control", icon: "storage", status: "Operativo", active: true },
-  { name: "GAIA Catasto", icon: "account_balance", status: "Operativo", active: true },
-  { name: "GAIA Elaborazioni", icon: "sync_alt", status: "Operativo", active: true },
   { name: "GAIA Rete", icon: "hub", status: "Operativo", active: true },
   { name: "GAIA Utenze", icon: "badge", status: "Operativo", active: true },
+  { name: "GAIA Operazioni", icon: "local_shipping", status: "Operativo", active: true },
+  { name: "GAIA Riordino", icon: "description", status: "Operativo", active: true },
+  { name: "GAIA Elaborazioni", icon: "sync_alt", status: "Operativo", active: true },
+  { name: "GAIA Catasto", icon: "account_balance", status: "In evoluzione", active: false },
   { name: "GAIA Inventario", icon: "inventory_2", status: "In sviluppo", active: false },
 ];
 
@@ -94,11 +96,11 @@ export default function LoginPage() {
 
           <div className="relative z-10">
             <h2 className="font-headline text-5xl font-bold text-primary mb-6 leading-tight">
-              Ecosistema Integrato
+              Piattaforma modulare unificata
             </h2>
             <p className="text-on-surface-variant text-lg mb-12 max-w-md font-light leading-relaxed">
-              GAIA centralizza la governance IT del Consorzio in moduli integrati, accessibili da un&apos;unica
-              interfaccia dopo il login.
+              GAIA centralizza governance IT, workflow documentali e moduli operativi del Consorzio in un
+              unico accesso, con perimetro abilitazioni definito per utente.
             </p>
 
             <div className="space-y-6">
@@ -137,7 +139,7 @@ export default function LoginPage() {
                 Accesso
               </h1>
               <p className="text-on-surface-variant font-light">
-                Inserisci le tue credenziali autorizzate per accedere al sistema di governance.
+                Inserisci le tue credenziali autorizzate per accedere ai moduli GAIA abilitati sul tuo profilo.
               </p>
             </div>
 

@@ -8,6 +8,7 @@ import {
   ElaborazioneNoticeCard,
   ElaborazionePanelHeader,
 } from "@/components/elaborazioni/module-chrome";
+import { ModuleWorkspaceKpiRow, ModuleWorkspaceKpiTile } from "@/components/layout/module-workspace-hero";
 import { ElaborazioneOperationMessage } from "@/components/elaborazioni/operation-message";
 import { ElaborazioneWorkspaceModal } from "@/components/elaborazioni/workspace-modal";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -190,40 +191,34 @@ export default function ElaborazioniPage() {
           )
         }
       >
-        <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-2xl border border-emerald-200/70 bg-white/80 px-4 py-3">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">SISTER</p>
-            <div className="mt-2 flex items-baseline justify-between gap-3">
-              <p className="text-lg font-semibold text-gray-900">{credentialStatus?.configured ? "Attivo" : "Setup"}</p>
-              <p className="truncate text-xs text-gray-500">
-                {credentialStatus?.configured
-                  ? `${activeSisterCredentials.length}/${credentialStatus?.credentials.length ?? 0} attive · ${credentialStatus?.default_credential?.label ?? "default"}`
-                  : "non configurato"}
-              </p>
-            </div>
-          </div>
-          <div className="rounded-2xl border border-amber-200/80 bg-white/80 px-4 py-3">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">Capacitas</p>
-            <div className="mt-2 flex items-baseline justify-between gap-3">
-              <p className="text-lg font-semibold text-gray-900">{`${activeCapacitasCredentials.length}/${capacitasCredentials.length}`}</p>
-              <p className="text-xs text-gray-500">{capacitasWarningCount} warning</p>
-            </div>
-          </div>
-          <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-3">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">CAPTCHA</p>
-            <div className="mt-2 flex items-baseline justify-between gap-3">
-              <p className="text-lg font-semibold text-gray-900">{captchaSummary?.processed ?? 0}</p>
-              <p className="text-xs text-gray-500">{captchaSummary?.correct ?? 0} ok · {captchaSummary?.wrong ?? 0} ko</p>
-            </div>
-          </div>
-          <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-3">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">Ultimo uso</p>
-            <div className="mt-2 flex items-baseline justify-between gap-3">
-              <p className="text-lg font-semibold text-gray-900">{latestCapacitasUsage ? "Registrato" : "Assente"}</p>
-              <p className="text-xs text-gray-500">{latestCapacitasUsage ? formatDateTime(latestCapacitasUsage) : "mai"}</p>
-            </div>
-          </div>
-        </div>
+        <ModuleWorkspaceKpiRow>
+          <ModuleWorkspaceKpiTile
+            label="SISTER"
+            variant="emerald"
+            value={credentialStatus?.configured ? "Attivo" : "Setup"}
+            hint={
+              credentialStatus?.configured
+                ? `${activeSisterCredentials.length}/${credentialStatus?.credentials.length ?? 0} attive · ${credentialStatus?.default_credential?.label ?? "default"}`
+                : "non configurato"
+            }
+          />
+          <ModuleWorkspaceKpiTile
+            label="Capacitas"
+            variant="amber"
+            value={`${activeCapacitasCredentials.length}/${capacitasCredentials.length}`}
+            hint={`${capacitasWarningCount} warning`}
+          />
+          <ModuleWorkspaceKpiTile
+            label="CAPTCHA"
+            value={captchaSummary?.processed ?? 0}
+            hint={`${captchaSummary?.correct ?? 0} ok · ${captchaSummary?.wrong ?? 0} ko`}
+          />
+          <ModuleWorkspaceKpiTile
+            label="Ultimo uso"
+            value={latestCapacitasUsage ? "Registrato" : "Assente"}
+            hint={latestCapacitasUsage ? formatDateTime(latestCapacitasUsage) : "mai"}
+          />
+        </ModuleWorkspaceKpiRow>
       </ElaborazioneHero>
 
       <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">

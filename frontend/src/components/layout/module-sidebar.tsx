@@ -10,13 +10,23 @@ import {
   RefreshIcon,
   SearchIcon,
   ServerIcon,
+  TruckIcon,
   UserIcon,
   UsersIcon,
 } from "@/components/ui/icons";
 import { NavItem } from "@/components/layout/nav-item";
 
 type ModuleSidebarProps = {
-  currentModuleKey: "nas_control" | "network" | "inventory" | "catasto" | "elaborazioni" | "utenze" | "gaia";
+  currentModuleKey:
+    | "nas_control"
+    | "network"
+    | "inventory"
+    | "catasto"
+    | "elaborazioni"
+    | "utenze"
+    | "gaia"
+    | "operazioni"
+    | "riordino";
   reviewBadge?: number;
   userBadge?: number;
   grantedSectionKeys?: string[];
@@ -119,6 +129,39 @@ export function ModuleSidebar({
         <NavItem href="/utenze" icon={GridIcon} label="Dashboard" />
         <NavItem href="/utenze/subjects" icon={UserIcon} label="Soggetti" match="prefix" />
         <NavItem href="/utenze/import" icon={RefreshIcon} label="Import archivio" match="prefix" />
+      </div>
+    );
+  }
+
+  if (currentModuleKey === "operazioni") {
+    return (
+      <div className="space-y-0.5 px-2 pb-3">
+        <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Accesso rapido</p>
+        <NavItem href="/operazioni/miniapp" icon={TruckIcon} label="Mini-app" />
+        <NavItem href="/operazioni/storage" icon={ServerIcon} label="Storage allegati" />
+        <NavItem href="/operazioni/miniapp/bozze" icon={DocumentIcon} label="Bozze locali" />
+
+        <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Panoramica</p>
+        <NavItem href="/operazioni" icon={GridIcon} label="Dashboard" />
+
+        <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Gestione</p>
+        <NavItem href="/operazioni/mezzi" icon={TruckIcon} label="Mezzi" match="prefix" />
+        <NavItem href="/operazioni/attivita" icon={RefreshIcon} label="Attività" match="prefix" />
+        <NavItem href="/operazioni/segnalazioni" icon={AlertTriangleIcon} label="Segnalazioni" match="prefix" />
+        <NavItem href="/operazioni/pratiche" icon={DocumentIcon} label="Pratiche" match="prefix" />
+      </div>
+    );
+  }
+
+  if (currentModuleKey === "riordino") {
+    return (
+      <div className="space-y-0.5 px-2 pb-3">
+        <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Panoramica</p>
+        <NavItem href="/riordino" icon={GridIcon} label="Dashboard" />
+        <NavItem href="/riordino/pratiche" icon={FolderIcon} label="Pratiche" match="prefix" />
+
+        <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Gestione</p>
+        <NavItem href="/riordino/configurazione" icon={LockIcon} label="Configurazione" match="prefix" />
       </div>
     );
   }

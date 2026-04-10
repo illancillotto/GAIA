@@ -953,6 +953,49 @@ Rimozione logica allegato.
 ## 16.1 GET `/api/operazioni/gps/tracks/{track_id}`
 Dettaglio summary track.
 
+## 16.1-bis GET `/api/operazioni/activities/{activity_id}/gps-viewer`
+Viewer GPS per scheda attività.
+
+### Response 200
+```json
+{
+  "summary": {
+    "id": "uuid",
+    "source_type": "provider_import",
+    "provider_name": "provider_x",
+    "provider_track_id": "PX-778899",
+    "started_at": "2026-04-03T08:00:00Z",
+    "ended_at": "2026-04-03T12:00:00Z",
+    "start_latitude": 39.9,
+    "start_longitude": 8.59,
+    "end_latitude": 39.91,
+    "end_longitude": 8.60,
+    "total_distance_km": 50.8,
+    "total_duration_seconds": 14400
+  },
+  "points": [
+    {
+      "latitude": 39.9,
+      "longitude": 8.59,
+      "timestamp": "2026-04-03T08:00:00Z"
+    }
+  ],
+  "bounds": {
+    "min_latitude": 39.9,
+    "max_latitude": 39.91,
+    "min_longitude": 8.59,
+    "max_longitude": 8.60
+  },
+  "viewer_mode": "track",
+  "point_count": 48,
+  "uses_raw_payload": true
+}
+```
+
+### Uso
+- usato dal dettaglio attività per viewer dedicato della traccia
+- degrada a segmento start/end se il payload GPS non contiene polilinea completa
+
 ## 16.2 POST `/api/operazioni/gps/provider/import`
 Import dati da provider GPS.
 

@@ -147,3 +147,24 @@ export function ChevronRightIcon(props: IconProps) {
     </BaseIcon>
   );
 }
+
+export function TruckIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <path d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2" />
+      <path d="M15 18H9" />
+      <path d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.624l-3.43-4.35A1 1 0 0 0 17.57 8H14v10" />
+      <circle cx="17" cy="18" r="2" />
+      <circle cx="7" cy="18" r="2" />
+    </BaseIcon>
+  );
+}
+
+export function BellIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <path d="M15 17h5l-1.4-1.4a2 2 0 0 1-.6-1.4V11a6 6 0 1 0-12 0v3.2a2 2 0 0 1-.6 1.4L4 17h5" />
+      <path d="M10 17a2 2 0 0 0 4 0" />
+    </BaseIcon>
+  );
+}
