@@ -30,6 +30,7 @@ type ModuleId = "accessi" | "rete" | "inventario" | "catasto" | "elaborazioni" |
 type HomeModule = {
   id: ModuleId;
   title: string;
+  eyebrow: string;
   description: string;
   href: string;
   status: ModuleStatus;
@@ -74,6 +75,7 @@ const allModules: HomeModule[] = [
   {
     id: "accessi",
     title: "GAIA NAS Control",
+    eyebrow: "Governance accessi",
     description:
       "Monitoraggio avanzato e gestione dei permessi per infrastrutture NAS Synology. Utenti, gruppi, cartelle condivise e workflow di review centralizzato.",
     href: "/nas-control",
@@ -85,6 +87,7 @@ const allModules: HomeModule[] = [
   {
     id: "rete",
     title: "GAIA Rete",
+    eyebrow: "Monitoraggio infrastruttura",
     description:
       "Scansione dispositivi, mappa per piano, alert operativi e controllo dello stato rete con visualizzazioni immediate.",
     href: "/network",
@@ -96,6 +99,7 @@ const allModules: HomeModule[] = [
   {
     id: "catasto",
     title: "GAIA Catasto",
+    eyebrow: "Dominio dati",
     description:
       "Dominio in corso di sviluppo, con perimetro funzionale in ridefinizione.",
     href: "/catasto",
@@ -107,17 +111,19 @@ const allModules: HomeModule[] = [
   {
     id: "elaborazioni",
     title: "GAIA Elaborazioni",
+    eyebrow: "Runtime operativo catasto",
     description:
-      "Modulo operativo per richieste singole e batch catastali, gestione CAPTCHA, download ZIP e monitoraggio esecuzioni.",
+      "Workspace operativo per richieste singole e batch catastali, credenziali provider, CAPTCHA, download ZIP e monitoraggio esecuzioni.",
     href: "/elaborazioni",
-    status: "warming",
-    statusLabel: "In sviluppo",
+    status: "active",
+    statusLabel: "Operativo",
     icon: "sync_alt",
     enabledKeys: ["catasto"],
   },
   {
     id: "utenze",
     title: "GAIA Utenze",
+    eyebrow: "Soggetti e documenti",
     description:
       "Gestione soggetti, documenti collegati al NAS e correlazioni con Catasto. Modulo operativo per ricerca, import archivio e qualità del dato.",
     href: "/utenze",
@@ -129,6 +135,7 @@ const allModules: HomeModule[] = [
   {
     id: "inventario",
     title: "GAIA Inventario",
+    eyebrow: "Asset fisici",
     description:
       "Registro centralizzato di device, garanzie, assegnazioni e import da CSV. Struttura pronta, attivazione funzionale in corso.",
     href: "/inventory",
@@ -140,8 +147,9 @@ const allModules: HomeModule[] = [
   {
     id: "operazioni",
     title: "GAIA Operazioni",
+    eyebrow: "Field operations",
     description:
-      "Gestione mezzi, attività operatori, segnalazioni e pratiche. Mini-app operatori mobile-first con supporto offline.",
+      "Gestione mezzi, attività operatori, segnalazioni, pratiche e allegati. Include mini-app operatori mobile-first con supporto offline.",
     href: "/operazioni",
     status: "active",
     statusLabel: "Operativo",
@@ -151,11 +159,12 @@ const allModules: HomeModule[] = [
   {
     id: "riordino",
     title: "GAIA Riordino",
+    eyebrow: "Workflow riordino catastale",
     description:
       "Gestione digitale del riordino catastale: pratiche, workflow a fasi, documenti, ricorsi, anomalie e cronologia completa.",
     href: "/riordino",
-    status: "warming",
-    statusLabel: "Backend pronto",
+    status: "active",
+    statusLabel: "Operativo",
     icon: "description",
     enabledKeys: ["riordino"],
   },
@@ -268,7 +277,7 @@ export default function HomePage() {
     && hasSectionAccess(grantedSectionKeys, "accessi.users");
 
   const visibleModules = allModules.filter((mod) => {
-    if (mod.status === "coming" || mod.status === "warming") return true;
+    if (mod.status === "coming") return true;
     return mod.enabledKeys.some((key) => currentUser.enabled_modules.includes(key));
   });
 
@@ -305,6 +314,12 @@ export default function HomePage() {
       value: formatNumber(catastoDocuments.length),
       copy: "Archivio PDF disponibile per ricerca e download",
       icon: "description",
+    },
+    {
+      label: "Moduli abilitati",
+      value: formatNumber(currentUser.enabled_modules.length),
+      copy: "Perimetro operativo disponibile nel profilo attuale",
+      icon: "apps",
     },
   ];
 
@@ -373,12 +388,11 @@ export default function HomePage() {
         <section className="mb-16">
           <div>
             <h1 className="text-6xl font-headline font-medium text-primary leading-tight mb-4">
-              Gestione Apparati Informativi
+              Hub operativo GAIA
             </h1>
             <p className="text-xl font-body text-outline leading-relaxed">
-              GAIA (Governance &amp; Audit for Information Assets) funge da nucleo centrale per il monitoraggio
-              istituzionale, garantendo integrità, sicurezza e controllo granulare su tutte le infrastrutture IT
-              e i flussi documentali dell&apos;ente.
+              GAIA unifica controllo accessi, rete, catasto, utenze e i nuovi workspace verticali di
+              elaborazioni, operazioni e riordino in un unico ingresso applicativo coerente.
             </p>
           </div>
         </section>
@@ -387,7 +401,7 @@ export default function HomePage() {
           <div className="mb-5 flex items-end justify-between gap-4">
             <div>
               <h2 className="text-2xl font-headline text-primary">Cruscotto rapido</h2>
-              <p className="text-sm text-outline">Tutti i numeri principali in una sola riga sui layout desktop ampi.</p>
+              <p className="text-sm text-outline">Stato sintetico della piattaforma e del perimetro utente corrente.</p>
             </div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
@@ -477,6 +491,7 @@ export default function HomePage() {
                     <div className="w-12 h-12 bg-primary-container rounded-lg flex items-center justify-center mb-6">
                       <span className="material-symbols-outlined text-primary-fixed">{mod.icon}</span>
                     </div>
+                    <p className="mb-2 text-[11px] font-label uppercase tracking-[0.18em] text-outline">{mod.eyebrow}</p>
                     <h3 className="text-2xl font-headline text-primary mb-3">{mod.title}</h3>
                     <p className="text-on-surface-variant leading-relaxed text-sm">{mod.description}</p>
                   </div>
