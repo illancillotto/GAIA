@@ -175,6 +175,9 @@ Espone API, applica auth condivisa, coordina i moduli e usa router separati per 
 All'avvio esegue un bootstrap admin idempotente basato su `BOOTSTRAP_ADMIN_*`
 quando la tabella `application_users` e disponibile, cosi lo stack locale
 mantiene sempre un utente applicativo iniziale utilizzabile.
+All'avvio riallinea anche il catalogo `sections` e i default per ruolo dei moduli
+quando la tabella `sections` e disponibile, evitando `403` dovuti a nuove aree
+applicative presenti nel codice ma non ancora bootstrapate nel database locale.
 
 Moduli logici attuali:
 - `accessi`

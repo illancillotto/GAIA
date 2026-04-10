@@ -133,6 +133,9 @@ la documentazione di dominio fa riferimento a `domain-docs/utenze/`.
    Il backend ora esegue anche un bootstrap admin idempotente all'avvio usando
    `BOOTSTRAP_ADMIN_*`; il comando resta utile per forzare riallineamento delle
    credenziali bootstrap su stack gia avviati.
+   All'avvio viene anche riallineato il catalogo `sections` dei moduli applicativi,
+   cosi `auth/my-permissions` e i controlli `require_section(...)` restano coerenti
+   anche su database locali inizializzati prima dell'introduzione di nuovi moduli.
 6. Carica i dati seed:
    `make bootstrap-domain`
    Il comando inizializza il seed del dominio audit e il dizionario `catasto_comuni`.

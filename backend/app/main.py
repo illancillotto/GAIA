@@ -10,6 +10,8 @@ from app.api.router import api_router
 from app.core.config import settings
 from app.core.database import SessionLocal, engine
 from app.core.logging import configure_logging
+from app.models.section_permission import Section
+from app.scripts.bootstrap_sections import ensure_default_sections
 from app.services.bootstrap_admin import ensure_bootstrap_admin
 
 configure_logging()
@@ -38,9 +40,32 @@ def _ensure_bootstrap_admin_on_startup() -> None:
         db.close()
 
 
+def _ensure_sections_on_startup() -> None:
+    try:
+        if not inspect(engine).has_table("sections"):
+            logger.warning("Sections bootstrap skipped: table sections not available yet")
+            return
+    except SQLAlchemyError as exc:
+        logger.warning("Sections bootstrap skipped while checking schema availability: %s", exc)
+        return
+
+    db = SessionLocal()
+    try:
+        created = ensure_default_sections(db)
+        total = db.query(Section).count()
+        logger.info(
+            "Sections bootstrap ready on startup: created=%s total=%s",
+            created,
+            total,
+        )
+    finally:
+        db.close()
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     _ensure_bootstrap_admin_on_startup()
+    _ensure_sections_on_startup()
     yield
 
 app = FastAPI(

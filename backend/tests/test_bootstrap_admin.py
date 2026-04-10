@@ -5,8 +5,9 @@ from sqlalchemy.pool import StaticPool
 from app.core.database import Base as RuntimeBase
 from app.core.security import verify_password
 from app.db.base import Base
-from app.main import _ensure_bootstrap_admin_on_startup
+from app.main import _ensure_bootstrap_admin_on_startup, _ensure_sections_on_startup
 from app.models.application_user import ApplicationUser
+from app.models.section_permission import Section
 from app.services.bootstrap_admin import ensure_bootstrap_admin
 
 
@@ -134,3 +135,33 @@ def test_startup_bootstrap_creates_user_when_table_exists(monkeypatch) -> None:
     assert user.email == "startup@example.local"
     assert user.role == "super_admin"
     assert verify_password("startup-secret", user.password_hash) is True
+
+
+def test_startup_bootstrap_creates_default_sections_when_table_exists(monkeypatch) -> None:
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+    RuntimeBase.metadata.create_all(bind=engine)
+
+    monkeypatch.setattr("app.main.engine", engine)
+    monkeypatch.setattr("app.main.SessionLocal", SessionLocal)
+
+    _ensure_sections_on_startup()
+
+    db = SessionLocal()
+    try:
+        keys = {
+            row[0]
+            for row in db.query(Section.key)
+            .filter(Section.module == "riordino")
+            .all()
+        }
+    finally:
+        db.close()
+
+    assert "riordino.dashboard" in keys
+    assert "riordino.practices" in keys
+    assert "riordino.notifications" in keys

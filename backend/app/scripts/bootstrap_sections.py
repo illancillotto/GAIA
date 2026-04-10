@@ -49,20 +49,25 @@ DEFAULT_SECTIONS = [
 ]
 
 
+def ensure_default_sections(db) -> int:
+    created = 0
+    for idx, (key, label, module, min_role) in enumerate(DEFAULT_SECTIONS):
+        existing = db.query(Section).filter(Section.key == key).one_or_none()
+        if existing is not None:
+            continue
+        create_section(
+            db,
+            SectionCreate(module=module, key=key, label=label, min_role=min_role, sort_order=idx),
+            updated_by_id=None,
+        )
+        created += 1
+    return created
+
+
 def main() -> None:
     db = SessionLocal()
-    created = 0
     try:
-        for idx, (key, label, module, min_role) in enumerate(DEFAULT_SECTIONS):
-            existing = db.query(Section).filter(Section.key == key).one_or_none()
-            if existing is not None:
-                continue
-            create_section(
-                db,
-                SectionCreate(module=module, key=key, label=label, min_role=min_role, sort_order=idx),
-                updated_by_id=None,
-            )
-            created += 1
+        created = ensure_default_sections(db)
     finally:
         db.close()
     print(f"sections_bootstrap_created={created}")
