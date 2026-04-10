@@ -7,4 +7,5 @@ from app.modules.elaborazioni.routes import router as elaborazioni_router
 router = APIRouter()
 router.include_router(elaborazioni_router)
 router.include_router(capacitas_router)
-router.include_router(bonifica_oristanese_router)
+router.include_router(bonifica_oristanese_router, prefix="/elaborazioni/bonifica")
+router.include_router(bonifica_oristanese_router, prefix="/elaborazioni/bonifica-oristanese")

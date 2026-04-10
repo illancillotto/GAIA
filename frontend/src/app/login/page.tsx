@@ -11,12 +11,12 @@ import { cn } from "@/lib/cn";
 const modules = [
   { name: "GAIA NAS Control", icon: "storage", status: "Operativo", active: true },
   { name: "GAIA Rete", icon: "hub", status: "Operativo", active: true },
-  { name: "GAIA Utenze", icon: "badge", status: "Operativo", active: true },
-  { name: "GAIA Operazioni", icon: "local_shipping", status: "Operativo", active: true },
-  { name: "GAIA Riordino", icon: "description", status: "Operativo", active: true },
-  { name: "GAIA Elaborazioni", icon: "sync_alt", status: "Operativo", active: true },
-  { name: "GAIA Catasto", icon: "account_balance", status: "In evoluzione", active: false },
-  { name: "GAIA Inventario", icon: "inventory_2", status: "In sviluppo", active: false },
+  { name: "GAIA Utenze", icon: "badge", status: "In sviluppo", active: false },
+  { name: "GAIA Operazioni", icon: "local_shipping", status: "In sviluppo", active: false },
+  { name: "GAIA Riordino", icon: "description", status: "In sviluppo", active: false },
+  { name: "GAIA Elaborazioni", icon: "sync_alt", status: "In sviluppo", active: false },
+  { name: "GAIA Catasto", icon: "account_balance", status: "Non avviato", active: false },
+  { name: "GAIA Inventario", icon: "inventory_2", status: "Non avviato", active: false },
 ];
 
 export default function LoginPage() {
@@ -99,8 +99,8 @@ export default function LoginPage() {
               Piattaforma modulare unificata
             </h2>
             <p className="text-on-surface-variant text-lg mb-12 max-w-md font-light leading-relaxed">
-              GAIA centralizza governance IT, workflow documentali e moduli operativi del Consorzio in un
-              unico accesso, con perimetro abilitazioni definito per utente.
+              GAIA centralizza i moduli del Consorzio in un unico accesso: oggi NAS Control e Rete sono
+              operativi, mentre gli altri domini restano in sviluppo o non ancora avviati.
             </p>
 
             <div className="space-y-6">

@@ -31,9 +31,11 @@ function operazioniErrorMessage(payload: unknown, fallback: string): string {
 async function fetchOperazioni(path: string, options?: RequestInit) {
   const token = getStoredAccessToken();
   const headers: Record<string, string> = {
-    "Content-Type": "application/json",
     ...(options?.headers as Record<string, string>),
   };
+  if (!(options?.body instanceof FormData) && !headers["Content-Type"]) {
+    headers["Content-Type"] = "application/json";
+  }
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
   }
@@ -180,6 +182,26 @@ export async function getReport(id: string) {
 
 export async function getReportAttachments(id: string) {
   return fetchOperazioni(`/reports/${id}/attachments`);
+}
+
+export async function getReportsDashboard(params?: Record<string, string>) {
+  const qs = params ? `?${new URLSearchParams(params).toString()}` : "";
+  return fetchOperazioni(`/reports/dashboard${qs}`);
+}
+
+export async function importWhiteReports(file: File): Promise<{
+  imported: number;
+  skipped: number;
+  errors: string[];
+  categories_created: string[];
+  total_events_created: number;
+}> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return fetchOperazioni("/reports/import-white", {
+    method: "POST",
+    body: formData,
+  });
 }
 
 // --- Cases ---

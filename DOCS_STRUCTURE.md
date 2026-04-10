@@ -53,6 +53,7 @@ La documentazione del progetto e distribuita principalmente in due aree:
 - `domain-docs/elaborazioni/docs/ELABORAZIONI_REFACTOR_PLAN.md`
 - `domain-docs/elaborazioni/docs/SISTER_debug_runbook.md`
 - `domain-docs/elaborazioni/capacitas/docs/CAPACITAS_integration.md`
+- `domain-docs/elaborazioni/whiteCompany/WHITECOMPANY_integration.md`
 - `domain-docs/elaborazioni/GAIA_VISURE_PROMPT_1_ANALISI.md`
 - `domain-docs/elaborazioni/GAIA_VISURE_PROMPT_2_IMPLEMENTAZIONE.md`
 - `domain-docs/elaborazioni/GAIA_VISURE_PROMPT_3_REVIEW.md`
@@ -134,6 +135,7 @@ GAIA/
 │   ├── elaborazioni/
 │   │   ├── capacitas/
 │   │   │   └── docs/
+│   │   ├── whiteCompany/
 │   │   └── docs/
 │   ├── inventory/
 │   │   ├── docs/

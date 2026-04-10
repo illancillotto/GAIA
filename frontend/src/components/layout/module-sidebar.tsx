@@ -147,6 +147,7 @@ export function ModuleSidebar({
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Gestione</p>
         <NavItem href="/operazioni/mezzi" icon={TruckIcon} label="Mezzi" match="prefix" />
         <NavItem href="/operazioni/attivita" icon={RefreshIcon} label="Attività" match="prefix" />
+        <NavItem href="/operazioni/segnalazioni/cruscotto" icon={GridIcon} label="Cruscotto segnalazioni" match="prefix" />
         <NavItem href="/operazioni/segnalazioni" icon={AlertTriangleIcon} label="Segnalazioni" match="prefix" />
         <NavItem href="/operazioni/pratiche" icon={DocumentIcon} label="Pratiche" match="prefix" />
       </div>

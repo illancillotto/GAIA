@@ -586,11 +586,13 @@ Gradi/priorità della segnalazione.
 
 ## 8.3 `field_report`
 Segnalazione generata dall'operatore. Genera sempre una pratica.
+Dal 2026-04-10 supporta anche import da sistema esterno White Company con codice sorgente, segnalatore testuale, area irrigua e tempi di completamento.
 
 | Campo | Tipo | Vincoli | Note |
 |---|---|---|---|
 | id | UUID | PK | |
 | report_number | VARCHAR(50) | UNIQUE NOT NULL | numerazione interna |
+| external_code | VARCHAR(50) | UNIQUE NULL | codice sorgente White |
 | reporter_user_id | UUID | FK -> application_user(id) NOT NULL | |
 | team_id | UUID | FK NULL | |
 | vehicle_id | UUID | FK NULL | |
@@ -599,8 +601,14 @@ Segnalazione generata dall'operatore. Genera sempre una pratica.
 | severity_id | UUID | FK NOT NULL | |
 | title | VARCHAR(200) | NOT NULL | |
 | description | TEXT | NULL | |
+| reporter_name | VARCHAR(200) | NULL | segnalatore testuale esterno |
+| area_code | VARCHAR(200) | NULL | distretto irriguo / area libera |
 | latitude | NUMERIC(10,7) | NULL | |
 | longitude | NUMERIC(10,7) | NULL | |
+| assigned_responsibles | TEXT | NULL | CSV responsabili importati |
+| completion_time_text | VARCHAR(200) | NULL | testo originale White |
+| completion_time_minutes | INTEGER | NULL | valore normalizzato per ordinamenti/KPI |
+| source_system | VARCHAR(50) | NULL DEFAULT 'gaia' | `gaia` oppure `white` |
 | gps_accuracy_meters | NUMERIC(10,2) | NULL | |
 | gps_source | VARCHAR(30) | NULL | |
 | status | VARCHAR(30) | NOT NULL DEFAULT 'submitted' | submitted/linked/invalidated |
@@ -621,6 +629,8 @@ Indici:
 - `idx_field_report_operator_activity_id`
 - `idx_field_report_created_at`
 - `idx_field_report_offline_client_uuid`
+- `idx_field_report_external_code`
+- `idx_field_report_area_code`
 
 ## 8.4 `field_report_attachment`
 Allegati della segnalazione.
@@ -688,6 +698,15 @@ Storico eventi della pratica.
 Indici:
 - `idx_internal_case_event_case_id`
 - `idx_internal_case_event_event_type`
+
+Event type aggiunti per import White:
+- `imported`
+- `richiesta_intervento`
+- `richiesta_materiale`
+- `assegnazione_incaricato`
+- `riparazione_eseguita`
+- `sopralluogo`
+- `contestazione_utente`
 - `idx_internal_case_event_event_at`
 
 ## 8.7 `internal_case_attachment`

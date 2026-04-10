@@ -17,6 +17,7 @@ import {
   getElaborazioneBatches,
   getElaborazioneCaptchaSummary,
   getElaborazioneCredentials,
+  listBonificaOristaneseCredentials,
   listCapacitasCredentials,
   retryFailedElaborazioneBatch,
   startElaborazioneBatch,
@@ -24,6 +25,7 @@ import {
 import { getStoredAccessToken } from "@/lib/auth";
 import { formatDateTime } from "@/lib/presentation";
 import type {
+  BonificaOristaneseCredential,
   CapacitasCredential,
   ElaborazioneBatch,
   ElaborazioneCaptchaSummary,
@@ -82,6 +84,7 @@ export default function ElaborazioniPage() {
   const [credentialStatus, setCredentialStatus] = useState<ElaborazioneCredentialStatus | null>(null);
   const [captchaSummary, setCaptchaSummary] = useState<ElaborazioneCaptchaSummary | null>(null);
   const [capacitasCredentials, setCapacitasCredentials] = useState<CapacitasCredential[]>([]);
+  const [bonificaCredentials, setBonificaCredentials] = useState<BonificaOristaneseCredential[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [retryBusyId, setRetryBusyId] = useState<string | null>(null);
   const [modalState, setModalState] = useState<DashboardModalState | null>(null);
@@ -91,16 +94,18 @@ export default function ElaborazioniPage() {
     if (!token) return;
 
     try {
-      const [credentialsResult, batchesResult, captchaSummaryResult, capacitasResult] = await Promise.all([
+      const [credentialsResult, batchesResult, captchaSummaryResult, capacitasResult, bonificaResult] = await Promise.all([
         getElaborazioneCredentials(token),
         getElaborazioneBatches(token),
         getElaborazioneCaptchaSummary(token),
         listCapacitasCredentials(token),
+        listBonificaOristaneseCredentials(token),
       ]);
       setCredentialStatus(credentialsResult);
       setBatches(batchesResult.slice(0, 6));
       setCaptchaSummary(captchaSummaryResult);
       setCapacitasCredentials(capacitasResult);
+      setBonificaCredentials(bonificaResult);
       setError(null);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Errore caricamento dashboard Elaborazioni");
@@ -153,8 +158,15 @@ export default function ElaborazioniPage() {
 
   const activeCapacitasCredentials = capacitasCredentials.filter((credential) => credential.active);
   const capacitasWarningCount = capacitasCredentials.filter((credential) => Boolean(credential.last_error)).length;
+  const activeBonificaCredentials = bonificaCredentials.filter((credential) => credential.active);
+  const bonificaWarningCount = bonificaCredentials.filter((credential) => Boolean(credential.last_error)).length;
   const activeSisterCredentials = credentialStatus?.credentials.filter((credential) => credential.active) ?? [];
   const latestCapacitasUsage = capacitasCredentials
+    .map((credential) => credential.last_used_at)
+    .filter((value): value is string => Boolean(value))
+    .sort()
+    .at(-1);
+  const latestBonificaUsage = bonificaCredentials
     .map((credential) => credential.last_used_at)
     .filter((value): value is string => Boolean(value))
     .sort()
@@ -207,6 +219,12 @@ export default function ElaborazioniPage() {
             variant="amber"
             value={`${activeCapacitasCredentials.length}/${capacitasCredentials.length}`}
             hint={`${capacitasWarningCount} warning`}
+          />
+          <ModuleWorkspaceKpiTile
+            label="Bonifica"
+            variant="emerald"
+            value={`${activeBonificaCredentials.length}/${bonificaCredentials.length}`}
+            hint={`${bonificaWarningCount} warning`}
           />
           <ModuleWorkspaceKpiTile
             label="CAPTCHA"
@@ -452,12 +470,40 @@ export default function ElaborazioniPage() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-dashed border-[#cbd8cf] bg-[#f8fbf8] p-4">
-              <p className="label-caption">Estensione futura</p>
-              <p className="mt-2 text-sm font-medium text-gray-900">Nuovi servizi verranno aggiunti qui sotto forma di colonne o pannelli dedicati.</p>
-              <p className="mt-1 text-sm text-gray-500">
-                La dashboard viene ora organizzata per provider: oggi `Agenzia delle Entrate (SISTER)` e `Capacitas`, poi eventuali altri processi.
-              </p>
+            <div className="rounded-2xl border border-[#dfe7dd] bg-[#f8faf8] p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="label-caption">Bonifica Oristanese</p>
+                  <p className="mt-2 text-sm font-medium text-gray-900">
+                    {bonificaCredentials.length > 0
+                      ? `${activeBonificaCredentials.length} account attivi su ${bonificaCredentials.length}`
+                      : "Nessun account Bonifica configurato"}
+                  </p>
+                  <p className="mt-1 text-sm text-gray-500">
+                    {latestBonificaUsage
+                      ? `Ultimo test o utilizzo ${formatDateTime(latestBonificaUsage)}`
+                      : "Solo gestione credenziali e test login disponibili al momento"}
+                  </p>
+                </div>
+                <button
+                  className="btn-secondary"
+                  onClick={() =>
+                    openWorkspaceModal(
+                      "/elaborazioni/settings",
+                      "Credenziali",
+                      "Gestione Bonifica Oristanese nello stesso workspace di SISTER e Capacitas.",
+                    )
+                  }
+                  type="button"
+                >
+                  Apri credenziali
+                </button>
+              </div>
+              {bonificaWarningCount > 0 ? (
+                <p className="mt-3 text-sm text-amber-700">
+                  {bonificaWarningCount} account Bonifica presentano errori recenti o richiedono verifica.
+                </p>
+              ) : null}
             </div>
           </div>
         </article>

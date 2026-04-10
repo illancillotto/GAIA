@@ -2,6 +2,7 @@ from app.core.database import Base
 from app.models.application_user import ApplicationUser
 from app.models.bonifica_oristanese import BonificaOristaneseCredential
 from app.models.capacitas import CapacitasCredential
+from app.models.wc_sync_job import WCSyncJob
 from app.modules.riordino.models import (
     RiordinoAppeal,
     RiordinoChecklistItem,
@@ -107,6 +108,7 @@ __all__ = [
     "RoleSectionPermission",
     "Section",
     "UserSectionPermission",
+    "WCSyncJob",
     "Share",
     "Snapshot",
     "SyncRun",

@@ -11,9 +11,13 @@ from app.models.application_user import ApplicationUser
 from app.modules.elaborazioni.bonifica_oristanese.models import (
     BonificaOristaneseCredentialCreate,
     BonificaOristaneseCredentialOut,
+    BonificaSyncRunRequest,
+    BonificaSyncRunResponse,
+    BonificaSyncStatusResponse,
     BonificaOristaneseCredentialTestResult,
     BonificaOristaneseCredentialUpdate,
 )
+from app.services.elaborazioni_bonifica_sync import get_bonifica_sync_status, run_bonifica_sync
 from app.services.elaborazioni_bonifica_oristanese import (
     create_credential,
     delete_credential,
@@ -23,7 +27,7 @@ from app.services.elaborazioni_bonifica_oristanese import (
     update_credential,
 )
 
-router = APIRouter(prefix="/elaborazioni/bonifica-oristanese", tags=["elaborazioni-bonifica-oristanese"])
+router = APIRouter(tags=["elaborazioni-bonifica-oristanese"])
 
 
 @router.post("/credentials", response_model=BonificaOristaneseCredentialOut, status_code=status.HTTP_201_CREATED)
@@ -88,3 +92,23 @@ async def test_cred(
     if not result.ok:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=result.error)
     return result
+
+
+@router.post("/sync/run", response_model=BonificaSyncRunResponse)
+async def run_sync(
+    body: BonificaSyncRunRequest,
+    current_user: Annotated[ApplicationUser, Depends(require_admin_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> BonificaSyncRunResponse:
+    try:
+        return await run_bonifica_sync(db, current_user, body)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.get("/sync/status", response_model=BonificaSyncStatusResponse)
+def get_sync_status(
+    _: Annotated[ApplicationUser, Depends(require_admin_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> BonificaSyncStatusResponse:
+    return get_bonifica_sync_status(db)

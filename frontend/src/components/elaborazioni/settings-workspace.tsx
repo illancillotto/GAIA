@@ -15,22 +15,28 @@ import {
 } from "@/components/ui/icons";
 import {
   ApiError,
+  createBonificaOristaneseCredential,
   createCapacitasCredential,
   createElaborazioneCredentialTestWebSocket,
+  deleteBonificaOristaneseCredential,
   deleteElaborazioneCredential,
   deleteCapacitasCredential,
   getElaborazioneCredentialTest,
   getElaborazioneCredentials,
+  listBonificaOristaneseCredentials,
   listCapacitasCredentials,
   saveElaborazioneCredentials,
+  testBonificaOristaneseCredential,
   testCapacitasCredential,
   testElaborazioneCredentials,
+  updateBonificaOristaneseCredential,
   updateCapacitasCredential,
   updateElaborazioneCredential,
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import { formatDateTime } from "@/lib/presentation";
 import type {
+  BonificaOristaneseCredential,
   CapacitasCredential,
   ElaborazioneCredential,
   ElaborazioneCredentialStatus,
@@ -61,6 +67,15 @@ const DEFAULT_CAPACITAS_FORM = {
   allowed_hours_end: 23,
 };
 
+const DEFAULT_BONIFICA_FORM = {
+  id: null as number | null,
+  label: "",
+  login_identifier: "",
+  password: "",
+  remember_me: false,
+  active: true,
+};
+
 function normalizeIssueText(value: string | null | undefined): string {
   return (value ?? "")
     .toLowerCase()
@@ -74,6 +89,22 @@ function summarizeCapacitasStatus(credential: CapacitasCredential): string {
   }
   if (credential.last_error) {
     return "Attiva con warning";
+  }
+  if (credential.last_used_at) {
+    return "Operativa";
+  }
+  return "Pronta";
+}
+
+function summarizeBonificaStatus(credential: BonificaOristaneseCredential): string {
+  if (!credential.active) {
+    return "Disattiva";
+  }
+  if (credential.last_error) {
+    return "Attiva con warning";
+  }
+  if (credential.last_authenticated_url) {
+    return "Autenticata";
   }
   if (credential.last_used_at) {
     return "Operativa";
@@ -242,6 +273,7 @@ function CapacitasTestDialog({
 
 export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?: boolean }) {
   const [sisterExpanded, setSisterExpanded] = useState(true);
+  const [bonificaExpanded, setBonificaExpanded] = useState(true);
   const [capacitasExpanded, setCapacitasExpanded] = useState(true);
   const [credentialStatus, setCredentialStatus] = useState<ElaborazioneCredentialStatus | null>(null);
   const [formState, setFormState] = useState(DEFAULT_SISTER_FORM);
@@ -274,9 +306,16 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
     tokenPreview: null,
     diagnosis: null,
   });
+  const [bonificaCredentials, setBonificaCredentials] = useState<BonificaOristaneseCredential[]>([]);
+  const [bonificaForm, setBonificaForm] = useState(DEFAULT_BONIFICA_FORM);
+  const [bonificaBusy, setBonificaBusy] = useState(false);
+  const [bonificaLoading, setBonificaLoading] = useState(false);
+  const [bonificaTestingId, setBonificaTestingId] = useState<number | null>(null);
+  const [bonificaStatusMessage, setBonificaStatusMessage] = useState<string | null>(null);
+  const [bonificaError, setBonificaError] = useState<string | null>(null);
 
   useEffect(() => {
-    void Promise.all([loadCredentials(), loadCapacitasCredentials()]);
+    void Promise.all([loadCredentials(), loadBonificaCredentials(), loadCapacitasCredentials()]);
   }, []);
 
   function resetSisterForm(): void {
@@ -363,6 +402,26 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
     setCapacitasForm(DEFAULT_CAPACITAS_FORM);
   }
 
+  function resetBonificaForm(): void {
+    setBonificaForm(DEFAULT_BONIFICA_FORM);
+  }
+
+  async function loadBonificaCredentials(): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) return;
+
+    setBonificaLoading(true);
+    try {
+      const result = await listBonificaOristaneseCredentials(token);
+      setBonificaCredentials(result);
+      setBonificaError(null);
+    } catch (loadError) {
+      setBonificaError(loadError instanceof Error ? loadError.message : "Errore caricamento credenziali Bonifica");
+    } finally {
+      setBonificaLoading(false);
+    }
+  }
+
   function buildCapacitasDiagnosis(detail: string | null, statusCode: number | null): string | null {
     const normalized = normalizeIssueText(detail);
 
@@ -374,6 +433,21 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
     }
     if (statusCode === 502) {
       return "Il frontend raggiunge correttamente il backend, ma il backend non completa la negoziazione con il portale esterno. Il punto da verificare e il parser di login Capacitas o la risposta HTML reale post-login.";
+    }
+    return null;
+  }
+
+  function buildBonificaDiagnosis(detail: string | null, statusCode: number | null): string | null {
+    const normalized = normalizeIssueText(detail);
+
+    if (normalized.includes("csrf") || normalized.includes("_token")) {
+      return "Il login page parser non ha trovato il token CSRF Laravel. Verificare markup del form /login o selettori nel backend.";
+    }
+    if (normalized.includes("credenziali non valide")) {
+      return "Il portale ha risposto con form di login ancora attivo. Le credenziali salvate non sono accettate oppure il provider ha cambiato i campi di autenticazione.";
+    }
+    if (statusCode === 502) {
+      return "Il frontend raggiunge correttamente il backend, ma il backend non completa l'autenticazione Laravel. Controllare redirect finale, cookie `laravel_session` e `XSRF-TOKEN`.";
     }
     return null;
   }
@@ -485,6 +559,92 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
       if (!hasTransientCredentials) {
         void loadCredentials();
       }
+    }
+  }
+
+  async function handleSaveBonifica(): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) return;
+
+    setBonificaBusy(true);
+    try {
+      if (bonificaForm.id == null) {
+        await createBonificaOristaneseCredential(token, {
+          label: bonificaForm.label.trim(),
+          login_identifier: bonificaForm.login_identifier.trim(),
+          password: bonificaForm.password,
+          remember_me: bonificaForm.remember_me,
+          active: bonificaForm.active,
+        });
+        setBonificaStatusMessage("Credenziale Bonifica creata.");
+      } else {
+        await updateBonificaOristaneseCredential(token, bonificaForm.id, {
+          label: bonificaForm.label.trim(),
+          login_identifier: bonificaForm.login_identifier.trim(),
+          password: bonificaForm.password.trim().length > 0 ? bonificaForm.password : undefined,
+          remember_me: bonificaForm.remember_me,
+          active: bonificaForm.active,
+        });
+        setBonificaStatusMessage("Credenziale Bonifica aggiornata.");
+      }
+      await loadBonificaCredentials();
+      resetBonificaForm();
+      setBonificaError(null);
+    } catch (saveError) {
+      setBonificaError(saveError instanceof Error ? saveError.message : "Errore salvataggio credenziale Bonifica");
+      setBonificaStatusMessage(null);
+    } finally {
+      setBonificaBusy(false);
+    }
+  }
+
+  async function handleDeleteBonifica(credentialId: number): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) return;
+
+    setBonificaBusy(true);
+    try {
+      await deleteBonificaOristaneseCredential(token, credentialId);
+      await loadBonificaCredentials();
+      if (bonificaForm.id === credentialId) {
+        resetBonificaForm();
+      }
+      setBonificaStatusMessage("Credenziale Bonifica rimossa.");
+      setBonificaError(null);
+    } catch (deleteError) {
+      setBonificaError(deleteError instanceof Error ? deleteError.message : "Errore eliminazione credenziale Bonifica");
+      setBonificaStatusMessage(null);
+    } finally {
+      setBonificaBusy(false);
+    }
+  }
+
+  async function handleTestBonifica(credentialId: number): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) return;
+
+    setBonificaTestingId(credentialId);
+    try {
+      const result = await testBonificaOristaneseCredential(token, credentialId);
+      await loadBonificaCredentials();
+      if (result.ok) {
+        setBonificaStatusMessage(
+          `Connessione Bonifica confermata${result.authenticated_url ? ` · ${result.authenticated_url}` : ""}.`,
+        );
+        setBonificaError(null);
+      } else {
+        setBonificaError(result.error ?? "Test Bonifica fallito");
+        setBonificaStatusMessage(null);
+      }
+    } catch (testError) {
+      let message = testError instanceof Error ? testError.message : "Errore test credenziale Bonifica";
+      if (testError instanceof ApiError && testError.status === 502) {
+        message = testError.message;
+      }
+      setBonificaError(message);
+      setBonificaStatusMessage(null);
+    } finally {
+      setBonificaTestingId(null);
     }
   }
 
@@ -752,9 +912,15 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
           ? "border-amber-200 bg-amber-50 text-amber-900"
           : testResult.authenticated
             ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-            : testResult.success
+          : testResult.success
               ? "border-amber-200 bg-amber-50 text-amber-800"
               : "border-red-200 bg-red-50 text-red-800";
+  const isEditingBonifica = bonificaForm.id != null;
+  const canSaveBonifica = Boolean(
+    bonificaForm.label.trim() &&
+      bonificaForm.login_identifier.trim() &&
+      (isEditingBonifica || bonificaForm.password.trim()),
+  );
   const isEditingCapacitas = capacitasForm.id != null;
   const canSaveCapacitas = Boolean(
     capacitasForm.label.trim() &&
@@ -769,6 +935,16 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
     null;
   const hasSisterCredentials = Boolean(credentialStatus?.configured);
   const activeSisterCount = sisterCredentials.filter((credential) => credential.active).length;
+  const activeBonificaCount = bonificaCredentials.filter((credential) => credential.active).length;
+  const bonificaWarningCount = bonificaCredentials.filter((credential) => Boolean(credential.last_error)).length;
+  const latestBonificaUsage = bonificaCredentials
+    .map((credential) => credential.last_used_at)
+    .filter((value): value is string => Boolean(value))
+    .sort()
+    .at(-1);
+  const selectedBonificaCredential =
+    (bonificaForm.id ? bonificaCredentials.find((credential) => credential.id === bonificaForm.id) : null) ?? null;
+  const latestBonificaIssue = bonificaCredentials.find((credential) => Boolean(credential.last_error))?.last_error ?? null;
   const activeCapacitasCount = capacitasCredentials.filter((credential) => credential.active).length;
   const capacitasWarningCount = capacitasCredentials.filter((credential) => Boolean(credential.last_error)).length;
   const latestCapacitasUsage = capacitasCredentials
@@ -807,17 +983,28 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
             </h3>
             <p className={`max-w-2xl text-sm text-gray-600 ${embedded ? "mt-3 leading-6" : "mt-4 leading-7"}`}>
               {embedded
-                ? "Canale SISTER e pool Capacitas nello stesso workspace, con stato operativo e controlli essenziali subito visibili."
-                : "La pagina ora separa meglio il canale SISTER dal pool Capacitas, mette in evidenza lo stato reale del modulo e concentra i controlli frequenti nella parte alta della schermata."}
+                ? "Canale SISTER, Bonifica e pool Capacitas nello stesso workspace, con stato operativo e controlli essenziali subito visibili."
+                : "La pagina ora separa meglio SISTER, Bonifica Oristanese e Capacitas, mette in evidenza lo stato reale del modulo e concentra i controlli frequenti nella parte alta della schermata."}
             </p>
 
-            <div className={`${embedded ? "mt-4 grid gap-3 md:grid-cols-2" : "mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-3"}`}>
+            <div className={`${embedded ? "mt-4 grid gap-3 md:grid-cols-2" : "mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"}`}>
               <StatCard
                 compact={embedded}
                 eyebrow="SISTER"
                 value={sisterStateLabel}
                 description={sisterStateDescription}
                 tone={hasSisterCredentials ? "success" : "default"}
+              />
+              <StatCard
+                compact={embedded}
+                eyebrow="Pool Bonifica"
+                value={`${activeBonificaCount}/${bonificaCredentials.length}`}
+                description={
+                  bonificaCredentials.length > 0
+                    ? `${bonificaWarningCount} warning recenti${latestBonificaUsage ? ` · ultimo uso ${formatDateTime(latestBonificaUsage)}` : ""}`
+                    : "Nessun account ancora configurato"
+                }
+                tone={bonificaWarningCount > 0 ? "warning" : activeBonificaCount > 0 ? "success" : "default"}
               />
               <StatCard
                 compact={embedded}
@@ -834,8 +1021,12 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                 <StatCard
                   compact={embedded}
                   eyebrow="Ultima attivita"
-                  value={latestCapacitasUsage ? formatDateTime(latestCapacitasUsage) : "Nessun uso"}
-                  description="Ultimo utilizzo registrato dal pool inVOLTURE."
+                  value={
+                    latestCapacitasUsage || latestBonificaUsage
+                      ? formatDateTime([latestCapacitasUsage, latestBonificaUsage].filter(Boolean).sort().at(-1) ?? null)
+                      : "Nessun uso"
+                  }
+                  description="Ultimo utilizzo registrato dai provider esterni."
                 />
               ) : null}
             </div>
@@ -844,15 +1035,19 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
           <div className={`grid self-start ${embedded ? "gap-2" : "gap-3"}`}>
             {error ? <StatusBanner compact={embedded} tone="danger" title="Errore sezione SISTER" description={error} /> : null}
             {statusMessage ? <StatusBanner compact={embedded} tone="success" title="Aggiornamento SISTER" description={statusMessage} /> : null}
+            {bonificaError ? <StatusBanner compact={embedded} tone="danger" title="Errore sezione Bonifica" description={bonificaError} /> : null}
+            {bonificaStatusMessage ? (
+              <StatusBanner compact={embedded} tone="success" title="Aggiornamento Bonifica" description={bonificaStatusMessage} />
+            ) : null}
             {capacitasError ? <StatusBanner compact={embedded} tone="danger" title="Errore sezione Capacitas" description={capacitasError} /> : null}
             {capacitasStatusMessage ? (
               <StatusBanner compact={embedded} tone="success" title="Aggiornamento Capacitas" description={capacitasStatusMessage} />
             ) : null}
-            {!error && !statusMessage && !capacitasError && !capacitasStatusMessage ? (
+            {!error && !statusMessage && !bonificaError && !bonificaStatusMessage && !capacitasError && !capacitasStatusMessage ? (
               <div className={`rounded-2xl border border-white/80 bg-white/70 text-sm text-gray-600 ${embedded ? "p-3 leading-5" : "p-4 leading-6"}`}>
                 {embedded
                   ? "Nessun alert aperto. Aggiorna le credenziali o lancia un test di connessione da questo workspace."
-                  : "Nessun alert aperto. Puoi aggiornare le credenziali, lanciare un test di connessione o gestire il pool Capacitas da questa stessa schermata."}
+                  : "Nessun alert aperto. Puoi aggiornare le credenziali, lanciare un test di connessione o gestire i pool esterni da questa stessa schermata."}
               </div>
             ) : null}
           </div>
@@ -1222,8 +1417,8 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                   <div>
                     <p className="text-sm font-semibold">Flusso consigliato</p>
                     <p className="mt-2 text-sm leading-6 text-white/70">
-                      Salva le credenziali, lancia un test realtime, poi verifica che Capacitas abbia almeno un account attivo
-                      senza warning prima di tornare ai batch.
+                      Salva le credenziali, lancia un test realtime su SISTER o Bonifica, poi verifica che Capacitas abbia
+                      almeno un account attivo senza warning prima di tornare ai batch.
                     </p>
                   </div>
                 </div>
@@ -1237,6 +1432,263 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
               </article>
             </aside>
           </section>
+        ) : null}
+      </section>
+
+      <section className="space-y-4">
+        <button
+          aria-expanded={bonificaExpanded}
+          className="flex w-full items-center justify-between rounded-[22px] border border-[#d9dfd6] bg-white px-5 py-4 text-left shadow-panel transition hover:border-[#c8d8ce]"
+          onClick={() => setBonificaExpanded((current) => !current)}
+          type="button"
+        >
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#1D4E35]">Sezione</p>
+            <p className="mt-1 text-base font-semibold text-gray-900">Bonifica Oristanese</p>
+          </div>
+          <ChevronRightIcon className={`h-5 w-5 text-gray-500 transition-transform ${bonificaExpanded ? "rotate-90" : ""}`} />
+        </button>
+
+        {bonificaExpanded ? (
+          <>
+            <section className={`grid gap-6 ${embedded ? "xl:grid-cols-1" : "xl:grid-cols-[0.95fr,1.05fr]"}`}>
+              <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
+                <div className={`border-b border-[#edf1eb] bg-[linear-gradient(135deg,_rgba(29,78,53,0.05),_rgba(255,255,255,0.98))] ${embedded ? "px-5 py-4" : "px-6 py-5"}`}>
+                  <div className="flex flex-wrap items-start justify-between gap-4">
+                    <div>
+                      <div className={`inline-flex items-center gap-2 rounded-full bg-[#e8f2ec] font-semibold uppercase tracking-[0.2em] text-[#1D4E35] ${embedded ? "px-3 py-1 text-[10px]" : "px-3 py-1 text-[11px]"}`}>
+                        <LockIcon className="h-3.5 w-3.5" />
+                        Bonifica
+                      </div>
+                      <p className={`font-semibold text-gray-900 ${embedded ? "mt-2 text-base" : "mt-3 text-lg"}`}>Credenziali Laravel e test sessione</p>
+                      <p className={`max-w-xl text-sm text-gray-600 ${embedded ? "mt-1.5 leading-5" : "mt-2 leading-6"}`}>
+                        {embedded
+                          ? "Login HTTP verso il portale Bonifica Oristanese con verifica cookie `laravel_session` e `XSRF-TOKEN`."
+                          : "Gestione delle credenziali del portale Bonifica Oristanese con test HTTP dedicato e diagnostica sul flusso Laravel."}
+                      </p>
+                    </div>
+                    <div className={`rounded-2xl border border-white/80 bg-white/80 text-right ${embedded ? "px-3 py-2.5" : "px-4 py-3"}`}>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">Ultimo esito noto</p>
+                      <p className={`${embedded ? "mt-1.5 text-xs" : "mt-2 text-sm"} font-semibold text-gray-900`}>
+                        {formatDateTime(selectedBonificaCredential?.last_used_at ?? latestBonificaUsage ?? null)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className={`space-y-5 ${embedded ? "p-5" : "p-6"}`}>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <label className="space-y-2">
+                      <span className="label-caption">Label operativa</span>
+                      <input
+                        className="form-control"
+                        placeholder="Account Bonifica primario"
+                        value={bonificaForm.label}
+                        onChange={(event) => setBonificaForm((current) => ({ ...current, label: event.target.value }))}
+                      />
+                    </label>
+                    <label className="space-y-2">
+                      <span className="label-caption">Email / login</span>
+                      <input
+                        className="form-control"
+                        placeholder="utente@example.local"
+                        value={bonificaForm.login_identifier}
+                        onChange={(event) => setBonificaForm((current) => ({ ...current, login_identifier: event.target.value }))}
+                      />
+                    </label>
+                    <label className="space-y-2 md:col-span-2">
+                      <span className="label-caption">{isEditingBonifica ? "Nuova password" : "Password"}</span>
+                      <input
+                        className="form-control"
+                        placeholder={isEditingBonifica ? "Lascia vuoto per non cambiarla" : "Password Bonifica"}
+                        type="password"
+                        value={bonificaForm.password}
+                        onChange={(event) => setBonificaForm((current) => ({ ...current, password: event.target.value }))}
+                      />
+                    </label>
+                    <label className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-[#f8faf8] px-4 py-3">
+                      <input
+                        checked={bonificaForm.active}
+                        className="h-4 w-4 accent-[#1D4E35]"
+                        type="checkbox"
+                        onChange={(event) => setBonificaForm((current) => ({ ...current, active: event.target.checked }))}
+                      />
+                      <span className="text-sm text-gray-700">Credenziale attiva e disponibile per i test</span>
+                    </label>
+                    <label className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-[#f8faf8] px-4 py-3">
+                      <input
+                        checked={bonificaForm.remember_me}
+                        className="h-4 w-4 accent-[#1D4E35]"
+                        type="checkbox"
+                        onChange={(event) => setBonificaForm((current) => ({ ...current, remember_me: event.target.checked }))}
+                      />
+                      <span className="text-sm text-gray-700">Richiedi sessione persistente lato portale</span>
+                    </label>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-3">
+                    <button
+                      className="btn-primary"
+                      disabled={bonificaBusy || !canSaveBonifica}
+                      onClick={() => void handleSaveBonifica()}
+                      type="button"
+                    >
+                      {bonificaBusy ? "Salvataggio..." : isEditingBonifica ? "Aggiorna account" : "Aggiungi account"}
+                    </button>
+                    <button className="btn-secondary" disabled={bonificaBusy} onClick={resetBonificaForm} type="button">
+                      {isEditingBonifica ? "Annulla modifica" : "Reset form"}
+                    </button>
+                    <span className="text-xs text-gray-400">
+                      Le chiamate applicative future riuseranno questa stessa sessione HTTP come base per DataTables e pagine dettaglio.
+                    </span>
+                  </div>
+                </div>
+              </article>
+
+              <article className={`rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel ${embedded ? "p-5" : "p-6"}`}>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">Monitor operativo</p>
+                <div className={`grid gap-3 ${embedded ? "mt-3 md:grid-cols-3" : "mt-4"}`}>
+                  <div className={`rounded-2xl border border-[#dfe7dd] bg-[#f8faf8] ${embedded ? "p-3" : "p-4"}`}>
+                    <div className="flex items-start gap-3">
+                      <div className="rounded-xl bg-white p-2 text-[#1D4E35]">
+                        <UsersIcon className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">Distribuzione account</p>
+                        <p className={`mt-1 text-sm text-gray-600 ${embedded ? "leading-5" : "leading-6"}`}>
+                          {bonificaCredentials.length > 0
+                            ? `${activeBonificaCount} account attivi, ${bonificaCredentials.length - activeBonificaCount} disattivi.`
+                            : "Nessun account disponibile nel pool."}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className={`rounded-2xl border border-[#f1e0af] bg-[#fff9e8] ${embedded ? "p-3" : "p-4"}`}>
+                    <div className="flex items-start gap-3">
+                      <div className="rounded-xl bg-white p-2 text-[#a36900]">
+                        <AlertTriangleIcon className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">Warning recenti</p>
+                        <p className={`mt-1 text-sm text-gray-600 ${embedded ? "leading-5" : "leading-6"}`}>
+                          {bonificaWarningCount > 0
+                            ? `${bonificaWarningCount} account richiedono controllo o nuovo test.`
+                            : "Nessun errore recente registrato sul provider."}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className={`rounded-2xl border border-[#e4e9f6] bg-[#f6f8ff] ${embedded ? "p-3" : "p-4"}`}>
+                    <div className="flex items-start gap-3">
+                      <div className="rounded-xl bg-white p-2 text-[#3056d3]">
+                        <RefreshIcon className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">Diagnosi corrente</p>
+                        <p className={`mt-1 text-sm text-gray-600 ${embedded ? "leading-5" : "leading-6"}`}>
+                          {latestBonificaIssue
+                            ? buildBonificaDiagnosis(latestBonificaIssue, 502) ?? latestBonificaIssue
+                            : "Nessuna anomalia aperta sul flusso di login Laravel."}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </article>
+            </section>
+
+            <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white p-0 shadow-panel">
+              <div className={`border-b border-[#edf1eb] ${embedded ? "px-5 py-4" : "px-6 py-5"}`}>
+                <p className="text-lg font-semibold text-gray-900">Pool Bonifica Oristanese</p>
+                <p className={`text-sm text-gray-500 ${embedded ? "mt-1.5 leading-5" : "mt-2 leading-6"}`}>
+                  Gestione credenziali del provider Bonifica, con esito ultimo login, URL autenticata e fallimenti consecutivi.
+                </p>
+              </div>
+              {bonificaLoading ? (
+                <div className={`${embedded ? "p-5" : "p-6"} text-sm text-gray-500`}>Caricamento credenziali Bonifica.</div>
+              ) : bonificaCredentials.length === 0 ? (
+                <div className={`${embedded ? "p-5" : "p-6"} text-sm text-gray-500`}>Nessuna credenziale Bonifica configurata.</div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Label</th>
+                        <th>Login</th>
+                        <th>Stato</th>
+                        <th>Ultimo uso</th>
+                        <th>Ultima URL</th>
+                        <th>Fallimenti</th>
+                        <th>Azioni</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {bonificaCredentials.map((credential) => (
+                        <tr key={credential.id}>
+                          <td className="font-medium text-gray-900">{credential.label}</td>
+                          <td>{credential.login_identifier}</td>
+                          <td>
+                            <div className="space-y-1">
+                              <p>{summarizeBonificaStatus(credential)}</p>
+                              {credential.last_error ? (
+                                <p className="max-w-[34ch] truncate text-xs text-red-600" title={credential.last_error}>
+                                  {credential.last_error}
+                                </p>
+                              ) : null}
+                            </div>
+                          </td>
+                          <td>{formatDateTime(credential.last_used_at)}</td>
+                          <td className="max-w-[28ch] truncate" title={credential.last_authenticated_url ?? undefined}>
+                            {credential.last_authenticated_url ?? "—"}
+                          </td>
+                          <td>{credential.consecutive_failures}</td>
+                          <td>
+                            <div className="flex flex-wrap gap-3 text-sm">
+                              <button
+                                className="text-[#1D4E35] transition hover:text-[#143726] disabled:cursor-not-allowed disabled:text-gray-300"
+                                disabled={bonificaBusy}
+                                onClick={() =>
+                                  setBonificaForm({
+                                    id: credential.id,
+                                    label: credential.label,
+                                    login_identifier: credential.login_identifier,
+                                    password: "",
+                                    remember_me: credential.remember_me,
+                                    active: credential.active,
+                                  })
+                                }
+                                type="button"
+                              >
+                                Modifica
+                              </button>
+                              <button
+                                className="text-[#1D4E35] transition hover:text-[#143726] disabled:cursor-not-allowed disabled:text-gray-300"
+                                disabled={bonificaTestingId === credential.id}
+                                onClick={() => void handleTestBonifica(credential.id)}
+                                type="button"
+                              >
+                                {bonificaTestingId === credential.id ? "Test..." : "Test"}
+                              </button>
+                              <button
+                                className="text-red-600 transition hover:text-red-700 disabled:cursor-not-allowed disabled:text-red-200"
+                                disabled={bonificaBusy}
+                                onClick={() => void handleDeleteBonifica(credential.id)}
+                                type="button"
+                              >
+                                Elimina
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </article>
+          </>
         ) : null}
       </section>
 
@@ -1532,7 +1984,7 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
   return (
     <ProtectedPage
       title="Credenziali"
-      description="Hub operativo del modulo elaborazioni per SISTER e Capacitas."
+      description="Hub operativo del modulo elaborazioni per SISTER, Bonifica Oristanese e Capacitas."
       breadcrumb="Elaborazioni / Credenziali"
     >
       {content}

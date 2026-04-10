@@ -101,10 +101,10 @@ const allModules: HomeModule[] = [
     title: "GAIA Catasto",
     eyebrow: "Dominio dati",
     description:
-      "Dominio in corso di sviluppo, con perimetro funzionale in ridefinizione.",
+      "Area non ancora avviata: nessun workspace operativo o flusso applicativo disponibile in questa fase.",
     href: "/catasto",
-    status: "warming",
-    statusLabel: "In sviluppo",
+    status: "coming",
+    statusLabel: "Non avviato",
     icon: "account_balance",
     enabledKeys: ["catasto"],
   },
@@ -113,10 +113,10 @@ const allModules: HomeModule[] = [
     title: "GAIA Elaborazioni",
     eyebrow: "Runtime operativo catasto",
     description:
-      "Workspace operativo per richieste singole e batch catastali, credenziali provider, CAPTCHA, download ZIP e monitoraggio esecuzioni.",
+      "Modulo in sviluppo: perimetro e workflow applicativi sono ancora in consolidamento.",
     href: "/elaborazioni",
-    status: "active",
-    statusLabel: "Operativo",
+    status: "warming",
+    statusLabel: "In sviluppo",
     icon: "sync_alt",
     enabledKeys: ["catasto"],
   },
@@ -125,10 +125,10 @@ const allModules: HomeModule[] = [
     title: "GAIA Utenze",
     eyebrow: "Soggetti e documenti",
     description:
-      "Gestione soggetti, documenti collegati al NAS e correlazioni con Catasto. Modulo operativo per ricerca, import archivio e qualità del dato.",
+      "Modulo in sviluppo per soggetti, documenti e qualità del dato, con superficie ancora non consolidata.",
     href: "/utenze",
-    status: "active",
-    statusLabel: "Operativo",
+    status: "warming",
+    statusLabel: "In sviluppo",
     icon: "badge",
     enabledKeys: ["utenze"],
   },
@@ -137,10 +137,10 @@ const allModules: HomeModule[] = [
     title: "GAIA Inventario",
     eyebrow: "Asset fisici",
     description:
-      "Registro centralizzato di device, garanzie, assegnazioni e import da CSV. Struttura pronta, attivazione funzionale in corso.",
+      "Area non ancora avviata: non sono presenti workflow o dati operativi utilizzabili.",
     href: "/inventory",
-    status: "warming",
-    statusLabel: "In sviluppo",
+    status: "coming",
+    statusLabel: "Non avviato",
     icon: "inventory_2",
     enabledKeys: ["inventario"],
   },
@@ -149,10 +149,10 @@ const allModules: HomeModule[] = [
     title: "GAIA Operazioni",
     eyebrow: "Field operations",
     description:
-      "Gestione mezzi, attività operatori, segnalazioni, pratiche e allegati. Include mini-app operatori mobile-first con supporto offline.",
+      "Modulo in sviluppo per mezzi, attività, segnalazioni e pratiche operative.",
     href: "/operazioni",
-    status: "active",
-    statusLabel: "Operativo",
+    status: "warming",
+    statusLabel: "In sviluppo",
     icon: "local_shipping",
     enabledKeys: ["operazioni"],
   },
@@ -161,10 +161,10 @@ const allModules: HomeModule[] = [
     title: "GAIA Riordino",
     eyebrow: "Workflow riordino catastale",
     description:
-      "Gestione digitale del riordino catastale: pratiche, workflow a fasi, documenti, ricorsi, anomalie e cronologia completa.",
+      "Modulo in sviluppo per pratiche, workflow, documenti e anomalie del riordino catastale.",
     href: "/riordino",
-    status: "active",
-    statusLabel: "Operativo",
+    status: "warming",
+    statusLabel: "In sviluppo",
     icon: "description",
     enabledKeys: ["riordino"],
   },
@@ -391,8 +391,8 @@ export default function HomePage() {
               Hub operativo GAIA
             </h1>
             <p className="text-xl font-body text-outline leading-relaxed">
-              GAIA unifica controllo accessi, rete, catasto, utenze e i nuovi workspace verticali di
-              elaborazioni, operazioni e riordino in un unico ingresso applicativo coerente.
+              GAIA concentra oggi i moduli realmente operativi su accessi NAS e rete, mantenendo gli
+              altri domini in evoluzione o non ancora avviati nello stesso ingresso applicativo.
             </p>
           </div>
         </section>
@@ -404,7 +404,7 @@ export default function HomePage() {
               <p className="text-sm text-outline">Stato sintetico della piattaforma e del perimetro utente corrente.</p>
             </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
             {[...platformStats, ...operationalStats].map((stat) => (
               <div
                 key={`quick-${stat.label}`}
@@ -458,7 +458,7 @@ export default function HomePage() {
                 <span className="w-2 h-2 rounded-full bg-primary-fixed" /> Operativo
               </span>
               <span className="flex items-center gap-2 text-xs font-label tracking-widest uppercase text-outline">
-                <span className="w-2 h-2 rounded-full bg-tertiary-fixed-dim" /> In sviluppo
+                <span className="w-2 h-2 rounded-full bg-tertiary-fixed-dim" /> In sviluppo o non avviato
               </span>
             </div>
           </div>

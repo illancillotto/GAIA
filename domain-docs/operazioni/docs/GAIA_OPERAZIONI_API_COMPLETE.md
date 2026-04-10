@@ -710,6 +710,15 @@ Lista segnalazioni.
 - `date_to`
 - `has_case`
 
+Response attuale sintetica:
+- `id`
+- `external_code`
+- `report_number`
+- `title`
+- `status`
+- `created_at`
+- `internal_case_id`
+
 ## 13.2 POST `/api/operazioni/reports`
 Crea segnalazione e genera pratica.
 
@@ -789,6 +798,101 @@ Upload allegato segnalazione.
 
 ## 13.4 GET `/api/operazioni/reports/{report_id}`
 Dettaglio segnalazione.
+
+Campi aggiuntivi esposti dal backend:
+- `external_code`
+- `reporter_name`
+- `area_code`
+- `assigned_responsibles`
+- `completion_time_text`
+- `completion_time_minutes`
+- `source_system`
+
+## 13.5 POST `/api/operazioni/reports/import-white`
+Import Excel `.xlsx` dal sistema White Company.
+
+### Multipart form-data
+- `file`
+
+### Comportamento
+- raggruppa le righe per `Codice`
+- identifica la riga padre come segnalazione e le righe figlie come eventi pratica
+- crea categoria se mancante
+- crea severity default `normal` se mancante
+- crea `field_report`, `internal_case` e `internal_case_event`
+- non sovrascrive import già esistenti: se `external_code` è già presente la segnalazione viene saltata
+
+### Response 200
+```json
+{
+  "imported": 180,
+  "skipped": 32,
+  "errors": [],
+  "categories_created": ["rottura_condotta_piantone_ac"],
+  "total_events_created": 236
+}
+```
+
+## 13.6 GET `/api/operazioni/reports/dashboard`
+Payload arricchito per il cruscotto segnalazioni.
+
+### Query params
+- `status_filter` CSV (`open,in_progress,resolved`)
+- `area_code`
+- `reporter_name`
+- `search`
+- `date_from`
+- `date_to`
+- `page`
+- `page_size`
+
+### Response 200
+```json
+{
+  "items": [
+    {
+      "id": "uuid",
+      "external_code": "60067",
+      "report_number": "REP-WHITE-60067",
+      "title": "Rottura condotta/Piantone (A-C)",
+      "description": "Apertura carico 1° vasca",
+      "status": "resolved",
+      "area_code": "Distr_34_2° Distretto Terralba Lotto Sud",
+      "reporter_name": "Stefano Biancu",
+      "latitude": 39.748869,
+      "longitude": 8.67927,
+      "assigned_responsibles": "Serafino Meloni, Franco Piras",
+      "completion_time_text": "12 ore 46 minuti e 37 secondi",
+      "completion_time_minutes": 767,
+      "created_at": "2026-04-08T18:18:00",
+      "resolved_at": "2026-04-09T07:04:00",
+      "source_system": "white",
+      "case_id": "uuid",
+      "case_status": "resolved",
+      "events_count": 2,
+      "events": [
+        {
+          "event_type": "richiesta_intervento",
+          "event_at": "2026-04-08T18:20:00",
+          "note": null
+        }
+      ]
+    }
+  ],
+  "total": 212,
+  "page": 1,
+  "page_size": 25,
+  "total_pages": 9,
+  "aggregates": {
+    "by_status": { "open": 41, "in_progress": 60, "resolved": 111 },
+    "by_area": [{ "area": "Distr_24_Arborea lotto Sud", "count": 63 }],
+    "by_reporter": [{ "name": "Andrea Madeddu", "count": 48 }],
+    "avg_completion_minutes": 420,
+    "total_with_events": 149,
+    "total_without_events": 63
+  }
+}
+```
 
 ---
 

@@ -5,7 +5,7 @@ from collections.abc import Generator
 from cryptography.fernet import Fernet
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -15,7 +15,11 @@ from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.models.bonifica_oristanese import BonificaOristaneseCredential
+from app.models.wc_sync_job import WCSyncJob
+from app.modules.elaborazioni.bonifica_oristanese.apps.report_types.client import BonificaReportTypeRow
+from app.modules.elaborazioni.bonifica_oristanese.apps.reports.client import BonificaReportRow
 from app.modules.elaborazioni.bonifica_oristanese.models import BonificaOristaneseCredentialTestResult
+from app.modules.operazioni.models.reports import FieldReport, FieldReportCategory
 from app.services.catasto_credentials import get_credential_fernet
 
 
@@ -143,6 +147,10 @@ def test_bonifica_oristanese_credentials_crud_encrypts_password() -> None:
     )
     assert delete_response.status_code == 204
 
+    alias_list_response = client.get("/elaborazioni/bonifica/credentials", headers=auth_headers())
+    assert alias_list_response.status_code == 200
+    assert alias_list_response.json() == []
+
 
 def test_bonifica_oristanese_credential_test_updates_usage(
     monkeypatch: pytest.MonkeyPatch,
@@ -236,3 +244,113 @@ def test_bonifica_oristanese_credential_test_returns_diagnostics_on_login_failur
     assert "URL finale=" in payload["detail"]
     assert "cookies=" in payload["detail"]
     assert "Credenziali non valide" in payload["detail"]
+
+
+def test_bonifica_sync_status_lists_supported_entities() -> None:
+    response = client.get("/elaborazioni/bonifica/sync/status", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["entities"]["reports"]["entity"] == "reports"
+    assert payload["entities"]["reports"]["status"] == "never"
+    assert payload["entities"]["report_types"]["status"] == "never"
+
+
+def test_bonifica_sync_run_creates_jobs_and_imports_reports(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    create_response = client.post(
+        "/elaborazioni/bonifica/credentials",
+        headers=auth_headers(),
+        json={
+            "label": "Account sync",
+            "login_identifier": "utente@example.local",
+            "password": "bonifica-secret",
+            "remember_me": True,
+        },
+    )
+    assert create_response.status_code == 201
+
+    async def fake_login(self):
+        from app.modules.elaborazioni.bonifica_oristanese.session import BonificaOristaneseSession
+
+        self._session = BonificaOristaneseSession(
+            authenticated_url="https://login.bonificaoristanese.it/dashboard",
+            cookie_names=["XSRF-TOKEN", "laravel_session"],
+        )
+        return self._session
+
+    async def fake_close(self) -> None:
+        return None
+
+    async def fake_fetch_report_types(self):
+        return ([BonificaReportTypeRow(wc_id=38, name="Rottura condotta/Piantone (A-C)", areas_csv="Distretto A")], 1)
+
+    async def fake_fetch_reports(self, *, date_from, date_to):
+        assert date_from is not None
+        assert date_to is not None
+        return (
+            [
+                BonificaReportRow(
+                    external_code="60067",
+                    report_type_name="Rottura condotta/Piantone (A-C)",
+                    urgent=False,
+                    description="Apertura carico 1 vasca",
+                    reporter_name="Stefano Biancu",
+                    area_code="Distr_34_2 Distretto Terralba Lotto Sud",
+                    created_at_text="08/04/2026 18:18",
+                    latitude_text="39.748869",
+                    longitude_text="8.679270",
+                    archived=False,
+                    status_text="Completato",
+                    assigned_responsibles="Serafino Meloni, Franco Piras",
+                )
+            ],
+            1,
+        )
+
+    monkeypatch.setattr("app.modules.elaborazioni.bonifica_oristanese.session.BonificaOristaneseSessionManager.login", fake_login)
+    monkeypatch.setattr("app.modules.elaborazioni.bonifica_oristanese.session.BonificaOristaneseSessionManager.close", fake_close)
+    monkeypatch.setattr(
+        "app.modules.elaborazioni.bonifica_oristanese.apps.report_types.client.BonificaReportTypesClient.fetch_report_types",
+        fake_fetch_report_types,
+    )
+    monkeypatch.setattr(
+        "app.modules.elaborazioni.bonifica_oristanese.apps.reports.client.BonificaReportsClient.fetch_reports",
+        fake_fetch_reports,
+    )
+
+    response = client.post(
+        "/elaborazioni/bonifica/sync/run",
+        headers=auth_headers(),
+        json={"entities": "all"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["jobs"]["report_types"]["status"] == "completed"
+    assert payload["jobs"]["reports"]["status"] == "completed"
+
+    db = TestingSessionLocal()
+    try:
+        jobs = db.query(WCSyncJob).all()
+        assert len(jobs) == 2
+
+        category = db.scalar(select(FieldReportCategory).where(FieldReportCategory.wc_id == 38))
+        assert category is not None
+        assert category.name == "Rottura condotta/Piantone (A-C)"
+
+        report = db.scalar(select(FieldReport).where(FieldReport.external_code == "60067"))
+        assert report is not None
+        assert report.report_number == "REP-WHITE-60067"
+        assert report.status == "resolved"
+        assert report.source_system == "white"
+    finally:
+        db.close()
+
+    status_response = client.get("/elaborazioni/bonifica/sync/status", headers=auth_headers())
+    assert status_response.status_code == 200
+    status_payload = status_response.json()
+    assert status_payload["entities"]["reports"]["status"] == "completed"
+    assert status_payload["entities"]["reports"]["records_synced"] == 1
+    assert status_payload["entities"]["report_types"]["records_synced"] == 1

@@ -30,6 +30,7 @@ class FieldReportCategory(Base):
     code: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     name: Mapped[str] = mapped_column(String(150), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    wc_id: Mapped[int | None] = mapped_column(Integer, unique=True, nullable=True, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(
@@ -70,6 +71,9 @@ class FieldReport(Base):
     report_number: Mapped[str] = mapped_column(
         String(50), unique=True, nullable=False, index=True
     )
+    external_code: Mapped[str | None] = mapped_column(
+        String(50), unique=True, nullable=True, index=True
+    )
     reporter_user_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("application_users.id"), nullable=False, index=True
     )
@@ -90,8 +94,22 @@ class FieldReport(Base):
     )
     title: Mapped[str] = mapped_column(String(200), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reporter_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    area_code: Mapped[str | None] = mapped_column(
+        String(200), nullable=True, index=True
+    )
     latitude: Mapped[Decimal | None] = mapped_column(Numeric(10, 7), nullable=True)
     longitude: Mapped[Decimal | None] = mapped_column(Numeric(10, 7), nullable=True)
+    assigned_responsibles: Mapped[str | None] = mapped_column(Text, nullable=True)
+    completion_time_text: Mapped[str | None] = mapped_column(
+        String(200), nullable=True
+    )
+    completion_time_minutes: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )
+    source_system: Mapped[str | None] = mapped_column(
+        String(50), nullable=True, default="gaia"
+    )
     gps_accuracy_meters: Mapped[Decimal | None] = mapped_column(
         Numeric(10, 2), nullable=True
     )

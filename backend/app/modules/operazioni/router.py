@@ -5,6 +5,10 @@ from fastapi import APIRouter, Depends
 from app.api.deps import require_module
 from app.modules.operazioni.routes.activities import router as activities_router
 from app.modules.operazioni.routes.dashboard import router as dashboard_router
+from app.modules.operazioni.routes.import_reports import router as import_reports_router
+from app.modules.operazioni.routes.reports_dashboard import (
+    router as reports_dashboard_router,
+)
 from app.modules.operazioni.routes.reports import router as reports_router
 from app.modules.operazioni.routes.vehicles import router as vehicles_router
 
@@ -16,6 +20,8 @@ router = APIRouter(
 
 router.include_router(vehicles_router)
 router.include_router(activities_router)
+router.include_router(reports_dashboard_router)
+router.include_router(import_reports_router)
 router.include_router(reports_router)
 router.include_router(dashboard_router)
 

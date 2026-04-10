@@ -15,7 +15,7 @@ Usare stati coerenti:
 - `BLOCKED`
 - `DONE`
 
-Data ultimo aggiornamento: 2026-04-09
+Data ultimo aggiornamento: 2026-04-10
 Responsabile aggiornamento: GSD Autonomous
 
 ---
@@ -31,9 +31,9 @@ Responsabile aggiornamento: GSD Autonomous
 | Migration Alembic | DONE | 3 migration applicate con successo (28 tabelle create) |
 | API Mezzi | DONE | CRUD completo + assegnazioni + sessioni + carburante + manutenzioni |
 | API Attività | DONE | Catalogo + start/stop + approvazioni |
-| API Segnalazioni/Pratiche | DONE | Report→Case automatico + workflow completo + eventi |
+| API Segnalazioni/Pratiche | DONE | Report→Case automatico + workflow completo + eventi + import White + dashboard arricchito |
 | Allegati/Storage | DONE | Model + service + dashboard + quote monitoring |
-| Frontend desktop | DONE | Pagine complete: dashboard, mezzi, attività, segnalazioni, pratiche, storage + pagine dettaglio; refresh UI liste, dettagli, storage e mini-app con shell condiviso hero/KPI/filter/list |
+| Frontend desktop | DONE | Pagine complete: dashboard, mezzi, attività, segnalazioni, pratiche, storage + pagine dettaglio; refresh UI liste, dettagli, storage e mini-app con shell condiviso hero/KPI/filter/list + cruscotto segnalazioni con import White |
 | Mini-app operatori | DONE | Pagina home con 3 azioni + stato connessione |
 | Offline minimo | TODO | Bozze locali IndexedDB da implementare |
 | GPS integration layer | DONE | Model GPS + track summary + adapter pattern pronto |
@@ -157,6 +157,8 @@ Responsabile aggiornamento: GSD Autonomous
 ### Note
 - Creazione report genera automaticamente InternalCase in transazione unica
 - Numerazione automatica REP-YYYY-NNNNNN e CAS-YYYY-NNNNNN
+- Import White Company disponibile via Excel `.xlsx` con idempotenza su `field_report.external_code`
+- Nuova vista `/operazioni/segnalazioni/cruscotto` con KPI, filtri avanzati, righe espandibili, timeline eventi e modale di import
 - Storico assegnazioni tracciato in InternalCaseAssignmentHistory
 - Le viste elenco `mezzi`, `attivita`, `segnalazioni` e `pratiche` usano ora un pattern frontend condiviso piu denso e leggibile, con hero operativo, metriche, toolbar filtri e righe lista ibride card/tabella
 - Anche dashboard e pagine dettaglio principali sono state riallineate allo stesso linguaggio visivo tramite componenti condivisi per breadcrumb, hero stato e pannelli informativi

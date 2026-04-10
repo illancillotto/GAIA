@@ -45,6 +45,10 @@ class Settings(BaseSettings):
         default="/data/elaborazioni/bonifica-oristanese-debug",
         alias="BONIFICA_ORISTANESE_DEBUG_STORAGE_PATH",
     )
+    wc_sync_default_days: int = Field(
+        default=30,
+        alias="WC_SYNC_DEFAULT_DAYS",
+    )
     jwt_secret_key: str = Field(default="change_this_secret", alias="JWT_SECRET_KEY")
     jwt_expire_minutes: int = Field(default=60, alias="JWT_EXPIRE_MINUTES")
     jwt_algorithm: str = "HS256"

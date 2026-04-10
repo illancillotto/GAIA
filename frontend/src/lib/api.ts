@@ -1155,7 +1155,7 @@ export async function testCapacitasCredential(
 }
 
 export async function listBonificaOristaneseCredentials(token: string): Promise<BonificaOristaneseCredential[]> {
-  return request<BonificaOristaneseCredential[]>("/elaborazioni/bonifica-oristanese/credentials", {
+  return request<BonificaOristaneseCredential[]>("/elaborazioni/bonifica/credentials", {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -1166,7 +1166,7 @@ export async function createBonificaOristaneseCredential(
   token: string,
   payload: BonificaOristaneseCredentialCreateInput,
 ): Promise<BonificaOristaneseCredential> {
-  return request<BonificaOristaneseCredential>("/elaborazioni/bonifica-oristanese/credentials", {
+  return request<BonificaOristaneseCredential>("/elaborazioni/bonifica/credentials", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1180,7 +1180,7 @@ export async function updateBonificaOristaneseCredential(
   credentialId: number,
   payload: BonificaOristaneseCredentialUpdateInput,
 ): Promise<BonificaOristaneseCredential> {
-  return request<BonificaOristaneseCredential>(`/elaborazioni/bonifica-oristanese/credentials/${credentialId}`, {
+  return request<BonificaOristaneseCredential>(`/elaborazioni/bonifica/credentials/${credentialId}`, {
     method: "PATCH",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1190,7 +1190,7 @@ export async function updateBonificaOristaneseCredential(
 }
 
 export async function deleteBonificaOristaneseCredential(token: string, credentialId: number): Promise<void> {
-  const response = await fetch(`${getApiBaseUrl()}/elaborazioni/bonifica-oristanese/credentials/${credentialId}`, {
+  const response = await fetch(`${getApiBaseUrl()}/elaborazioni/bonifica/credentials/${credentialId}`, {
     method: "DELETE",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -1219,7 +1219,7 @@ export async function testBonificaOristaneseCredential(
   credentialId: number,
 ): Promise<BonificaOristaneseCredentialProbeResult> {
   return request<BonificaOristaneseCredentialProbeResult>(
-    `/elaborazioni/bonifica-oristanese/credentials/${credentialId}/test`,
+    `/elaborazioni/bonifica/credentials/${credentialId}/test`,
     {
       method: "POST",
       headers: {

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -42,3 +42,34 @@ class BonificaOristaneseCredentialTestResult(BaseModel):
     authenticated_url: str | None = None
     cookies: str | None = None
     error: str | None = None
+
+
+class BonificaSyncRunRequest(BaseModel):
+    entities: list[str] | str = Field(default="all")
+    date_from: date | None = None
+    date_to: date | None = None
+
+
+class BonificaSyncJobStart(BaseModel):
+    job_id: str
+    status: str
+    started_at: datetime
+
+
+class BonificaSyncRunResponse(BaseModel):
+    jobs: dict[str, BonificaSyncJobStart]
+
+
+class BonificaSyncEntityStatus(BaseModel):
+    entity: str
+    status: str
+    last_started_at: datetime | None = None
+    last_finished_at: datetime | None = None
+    records_synced: int | None = None
+    records_skipped: int | None = None
+    records_errors: int | None = None
+    error_detail: str | None = None
+
+
+class BonificaSyncStatusResponse(BaseModel):
+    entities: dict[str, BonificaSyncEntityStatus]

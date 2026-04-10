@@ -30,9 +30,11 @@ class Vehicle(Base):
     code: Mapped[str] = mapped_column(
         String(50), unique=True, nullable=False, index=True
     )
+    wc_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     plate_number: Mapped[str | None] = mapped_column(
         String(20), unique=True, nullable=True
     )
+    wc_vehicle_id: Mapped[str | None] = mapped_column(String(50), nullable=True)
     asset_tag: Mapped[str | None] = mapped_column(
         String(100), unique=True, nullable=True
     )
@@ -46,10 +48,14 @@ class Vehicle(Base):
         String(50), nullable=False, default="available", index=True
     )
     ownership_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    vehicle_type_wc: Mapped[str | None] = mapped_column(String(20), nullable=True)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     gps_provider_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
     has_gps_device: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    wc_synced_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
@@ -179,6 +185,13 @@ class VehicleUsageSession(Base):
     status: Mapped[str] = mapped_column(
         String(30), nullable=False, default="open", index=True
     )
+    wc_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    km_start: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    km_end: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    operator_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    wc_synced_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     validated_by_user_id: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("application_users.id"), nullable=True
     )
@@ -215,6 +228,11 @@ class VehicleFuelLog(Base):
     liters: Mapped[Decimal] = mapped_column(Numeric(10, 3), nullable=False)
     total_cost: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     odometer_km: Mapped[Decimal | None] = mapped_column(Numeric(12, 3), nullable=True)
+    wc_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    operator_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    wc_synced_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     station_name: Mapped[str | None] = mapped_column(String(150), nullable=True)
     receipt_attachment_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid, ForeignKey("attachment.id"), nullable=True

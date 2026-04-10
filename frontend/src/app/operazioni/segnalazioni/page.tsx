@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 
 import {
@@ -59,6 +60,11 @@ function SegnalazioniContent() {
           <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">Lettura consigliata</p>
           <p className="mt-2 text-sm font-medium text-gray-900">Parti dalle segnalazioni senza pratica</p>
           <p className="mt-1 text-sm text-gray-600">Sono quelle che richiedono la prossima azione amministrativa o tecnica.</p>
+          <div className="mt-4">
+            <Link href="/operazioni/segnalazioni/cruscotto" className="btn-primary">
+              Apri cruscotto
+            </Link>
+          </div>
         </div>
       </OperazioniCollectionHero>
 
