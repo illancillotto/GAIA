@@ -906,6 +906,43 @@ export type CapacitasCredentialTestResult = {
   error: string | null;
 };
 
+export type BonificaOristaneseCredential = {
+  id: number;
+  label: string;
+  login_identifier: string;
+  remember_me: boolean;
+  active: boolean;
+  last_used_at: string | null;
+  last_authenticated_url: string | null;
+  last_error: string | null;
+  consecutive_failures: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BonificaOristaneseCredentialCreateInput = {
+  label: string;
+  login_identifier: string;
+  password: string;
+  remember_me?: boolean;
+  active?: boolean;
+};
+
+export type BonificaOristaneseCredentialUpdateInput = {
+  label?: string;
+  login_identifier?: string;
+  password?: string;
+  remember_me?: boolean;
+  active?: boolean;
+};
+
+export type BonificaOristaneseCredentialTestResult = {
+  ok: boolean;
+  authenticated_url: string | null;
+  cookies: string | null;
+  error: string | null;
+};
+
 export type CapacitasAnagrafica = {
   id?: string | null;
   IDXANA?: string | null;

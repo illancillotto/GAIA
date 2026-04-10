@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { use, useEffect, useState } from "react";
 
 import { RiordinoModulePage } from "@/components/riordino/module-page";
 import { RiordinoPracticeDetailView } from "@/components/riordino/practice-detail/practice-detail-view";
 import { getStoredAccessToken } from "@/lib/auth";
 
-export default function RiordinoPracticeDetailPage({ params }: { params: { id: string } }) {
+export default function RiordinoPracticeDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = use(params);
   const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
@@ -20,7 +21,7 @@ export default function RiordinoPracticeDetailPage({ params }: { params: { id: s
       breadcrumb="Riordino / Pratiche"
     >
       {token ? (
-        <RiordinoPracticeDetailView token={token} practiceId={params.id} />
+        <RiordinoPracticeDetailView token={token} practiceId={id} />
       ) : (
         <p className="text-sm text-gray-500">Caricamento sessione...</p>
       )}

@@ -16,12 +16,15 @@ from app.core.database import get_db
 from app.models.application_user import ApplicationUser
 from app.modules.operazioni.models.reports import (
     FieldReport,
+    FieldReportAttachment,
     FieldReportCategory,
     FieldReportSeverity,
     InternalCase,
+    InternalCaseAttachment,
     InternalCaseEvent,
     InternalCaseAssignmentHistory,
 )
+from app.modules.operazioni.models.attachments import Attachment
 
 router = APIRouter(prefix="", tags=["operazioni/reports-cases"])
 
@@ -162,8 +165,61 @@ def get_report(
         "id": str(report.id),
         "report_number": report.report_number,
         "title": report.title,
+        "description": report.description,
         "status": report.status,
+        "reporter_user_id": report.reporter_user_id,
+        "team_id": str(report.team_id) if report.team_id else None,
+        "vehicle_id": str(report.vehicle_id) if report.vehicle_id else None,
+        "operator_activity_id": str(report.operator_activity_id)
+        if report.operator_activity_id
+        else None,
+        "category_id": str(report.category_id),
+        "severity_id": str(report.severity_id),
+        "latitude": float(report.latitude) if report.latitude is not None else None,
+        "longitude": float(report.longitude) if report.longitude is not None else None,
+        "gps_accuracy_meters": float(report.gps_accuracy_meters)
+        if report.gps_accuracy_meters is not None
+        else None,
+        "gps_source": report.gps_source,
+        "internal_case_id": str(report.internal_case_id)
+        if report.internal_case_id
+        else None,
+        "created_at": report.created_at,
+        "updated_at": report.updated_at,
+        "server_received_at": report.server_received_at,
     }
+
+
+@router.get("/reports/{report_id}/attachments", response_model=list[dict])
+def list_report_attachments(
+    report_id: UUID,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    report = db.get(FieldReport, report_id)
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Report not found"
+        )
+
+    rows = db.execute(
+        select(FieldReportAttachment, Attachment)
+        .join(Attachment, FieldReportAttachment.attachment_id == Attachment.id)
+        .where(FieldReportAttachment.field_report_id == report_id)
+        .where(Attachment.is_deleted == False)
+        .order_by(FieldReportAttachment.created_at.desc())
+    ).all()
+    return [
+        {
+            "id": str(attachment.id),
+            "original_filename": attachment.original_filename,
+            "mime_type": attachment.mime_type,
+            "attachment_type": attachment.attachment_type,
+            "file_size_bytes": attachment.file_size_bytes,
+            "created_at": attachment.created_at,
+        }
+        for _, attachment in rows
+    ]
 
 
 @router.get("/cases", response_model=dict)
@@ -240,6 +296,9 @@ def get_case(
         .where(InternalCaseEvent.internal_case_id == case_id)
         .order_by(InternalCaseEvent.event_at)
     ).all()
+    source_report = db.get(FieldReport, case.source_report_id)
+    category = db.get(FieldReportCategory, case.category_id) if case.category_id else None
+    severity = db.get(FieldReportSeverity, case.severity_id) if case.severity_id else None
     return {
         "id": str(case.id),
         "case_number": case.case_number,
@@ -250,11 +309,74 @@ def get_case(
         "assigned_team_id": str(case.assigned_team_id)
         if case.assigned_team_id
         else None,
+        "acknowledged_at": case.acknowledged_at,
+        "started_at": case.started_at,
+        "resolved_at": case.resolved_at,
+        "closed_at": case.closed_at,
+        "resolution_note": case.resolution_note,
+        "priority_rank": case.priority_rank,
+        "created_at": case.created_at,
+        "updated_at": case.updated_at,
+        "category": {
+            "id": str(category.id),
+            "name": category.name,
+            "code": category.code,
+        }
+        if category
+        else None,
+        "severity": {
+            "id": str(severity.id),
+            "name": severity.name,
+            "code": severity.code,
+            "rank_order": severity.rank_order,
+        }
+        if severity
+        else None,
+        "source_report": {
+            "id": str(source_report.id),
+            "report_number": source_report.report_number,
+            "title": source_report.title,
+            "status": source_report.status,
+        }
+        if source_report
+        else None,
         "events": [
             {"event_type": e.event_type, "event_at": e.event_at, "note": e.note}
             for e in events
         ],
     }
+
+
+@router.get("/cases/{case_id}/attachments", response_model=list[dict])
+def list_case_attachments(
+    case_id: UUID,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    case = db.get(InternalCase, case_id)
+    if not case:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Case not found"
+        )
+
+    rows = db.execute(
+        select(InternalCaseAttachment, Attachment)
+        .join(Attachment, InternalCaseAttachment.attachment_id == Attachment.id)
+        .where(InternalCaseAttachment.internal_case_id == case_id)
+        .where(Attachment.is_deleted == False)
+        .order_by(InternalCaseAttachment.created_at.desc())
+    ).all()
+    return [
+        {
+            "id": str(attachment.id),
+            "original_filename": attachment.original_filename,
+            "mime_type": attachment.mime_type,
+            "attachment_type": attachment.attachment_type,
+            "file_size_bytes": attachment.file_size_bytes,
+            "created_at": attachment.created_at,
+        }
+        for _, attachment in rows
+    ]
 
 
 @router.post("/cases/{case_id}/assign", response_model=dict)

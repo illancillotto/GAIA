@@ -108,6 +108,7 @@ export async function markDraftPending(id: string): Promise<void> {
   if (draft) {
     draft.syncStatus = "pending";
     draft.updatedAt = new Date().toISOString();
+    delete draft.syncError;
     store.put(draft);
   }
   return new Promise((resolve, reject) => {
@@ -133,7 +134,11 @@ export async function updateDraftSyncStatus(
   if (draft) {
     draft.syncStatus = status;
     draft.updatedAt = new Date().toISOString();
-    if (errorMessage) draft.syncError = errorMessage;
+    if (errorMessage) {
+      draft.syncError = errorMessage;
+    } else {
+      delete draft.syncError;
+    }
     store.put(draft);
   }
   return new Promise((resolve, reject) => {

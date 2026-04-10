@@ -77,6 +77,16 @@ La documentazione del progetto e distribuita principalmente in due aree:
 - `domain-docs/utenze/docs/EXECUTION_PLAN.md`
 - `domain-docs/utenze/docs/PROGRESS.md`
 
+### Operazioni
+
+- `domain-docs/operazioni/README.md` non presente
+- `domain-docs/operazioni/docs/GAIA_OPERAZIONI_PRD.md`
+- `domain-docs/operazioni/docs/GAIA_OPERAZIONI_UI_UX.md`
+- `domain-docs/operazioni/docs/GAIA_OPERAZIONI_PROGRESS.md`
+- `domain-docs/operazioni/docs/GAIA_OPERAZIONI_API_COMPLETE.md`
+- `domain-docs/operazioni/docs/GAIA_OPERAZIONI_DEVOPS_LOCAL_SETUP.md`
+- `domain-docs/operazioni/docs/GAIA_OPERAZIONI_QUALITY.md`
+
 ### Riordino
 
 - `domain-docs/riordino/docs/PRD_riordino_v2.md`
@@ -104,6 +114,7 @@ GAIA/
 │   │   ├── models/
 │   │   ├── modules/
 │   │   │   ├── elaborazioni/
+│   │   │   ├── operazioni/
 │   │   │   ├── riordino/
 │   │   │   └── shared/
 │   │   ├── repositories/
@@ -129,6 +140,8 @@ GAIA/
 │   │   └── frontend/
 │   ├── network/
 │   │   └── docs/
+│   ├── operazioni/
+│   │   └── docs/
 │   ├── riordino/
 │   │   └── docs/
 │   └── utenze/
@@ -139,8 +152,10 @@ GAIA/
 │   ├── src/
 │   │   ├── app/
 │   │   │   ├── elaborazioni/
+│   │   │   ├── operazioni/
 │   │   │   └── riordino/
 │   │   ├── components/
+│   │   │   ├── operazioni/
 │   │   │   └── riordino/
 │   │   ├── features/
 │   │   ├── hooks/

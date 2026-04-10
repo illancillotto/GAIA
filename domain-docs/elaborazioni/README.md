@@ -9,6 +9,7 @@ Ambito runtime attuale:
 - report e artifact diagnostici batch/richiesta
 - pool credenziali SISTER con profilo default per worker e test connessione
 - diagnostica login Capacitas con dump HTML/metadata del tentativo quando il token SSO non viene estratto
+- provider iniziale `Bonifica Oristanese` con pool credenziali cifrato, test login HTTP su `https://login.bonificaoristanese.it/login` e base sessione pronta per lo scraping autenticato
 
 ## Dashboard operativa
 
@@ -16,6 +17,7 @@ La pagina `/elaborazioni` usa una struttura a sezioni stabili:
 - barra superiore con azioni rapide in linea
 - colonna `Agenzia delle Entrate (SISTER)` per credenziali, visure, batch, documenti e CAPTCHA
 - colonna `Capacitas` per pool account e monitor del servizio
+- spazio predisposto per il provider `Bonifica Oristanese`, oggi limitato alla gestione credenziali e al test di autenticazione
 - spazio riservato all'aggiunta futura di altri provider/processi senza rimescolare i flussi esistenti
 - i workspace rapidi della dashboard si aprono in modale, con fallback a pagina completa quando serve approfondire o condividere il link
 - anche i punti di uscita frequenti nei workspace interni (`archivio batch/documenti`, `Capacitas`) riusano il pattern modale per ridurre i salti di pagina

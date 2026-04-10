@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -31,7 +33,7 @@ router = APIRouter(tags=["operazioni/dashboard-storage"])
 # --- Dashboard ---
 
 
-@router.get("/operazioni/dashboard/summary", response_model=dict)
+@router.get("/dashboard/summary", response_model=dict)
 def dashboard_summary(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     db: Annotated[Session, Depends(get_db)],
@@ -129,7 +131,7 @@ def dashboard_summary(
     }
 
 
-@router.get("/operazioni/dashboard/pending-approvals", response_model=list[dict])
+@router.get("/dashboard/pending-approvals", response_model=list[dict])
 def pending_approvals(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     db: Annotated[Session, Depends(get_db)],
@@ -151,7 +153,7 @@ def pending_approvals(
     ]
 
 
-@router.get("/operazioni/dashboard/open-critical-cases", response_model=list[dict])
+@router.get("/dashboard/open-critical-cases", response_model=list[dict])
 def open_critical_cases(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     db: Annotated[Session, Depends(get_db)],
@@ -180,7 +182,7 @@ def open_critical_cases(
 # --- Storage ---
 
 
-@router.get("/operazioni/storage/metrics/latest", response_model=dict)
+@router.get("/storage/metrics/latest", response_model=dict)
 def latest_storage_metric(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     db: Annotated[Session, Depends(get_db)],
@@ -202,7 +204,7 @@ def latest_storage_metric(
     }
 
 
-@router.get("/operazioni/storage/alerts", response_model=list[dict])
+@router.get("/storage/alerts", response_model=list[dict])
 def storage_alerts(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     db: Annotated[Session, Depends(get_db)],
@@ -219,7 +221,7 @@ def storage_alerts(
     ]
 
 
-@router.post("/operazioni/storage/recalculate", response_model=dict)
+@router.post("/storage/recalculate", response_model=dict)
 def recalculate_storage(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     db: Annotated[Session, Depends(get_db)],
@@ -233,7 +235,7 @@ def recalculate_storage(
     }
 
 
-@router.get("/operazioni/attachments/{attachment_id}", response_model=dict)
+@router.get("/attachments/{attachment_id}", response_model=dict)
 def get_attachment(
     attachment_id: UUID,
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
@@ -254,7 +256,32 @@ def get_attachment(
     }
 
 
-@router.delete("/operazioni/attachments/{attachment_id}", response_model=dict)
+@router.get("/attachments/{attachment_id}/download")
+def download_attachment(
+    attachment_id: UUID,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> FileResponse:
+    attachment = db.get(Attachment, attachment_id)
+    if not attachment or attachment.is_deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Attachment not found"
+        )
+
+    path = Path(attachment.storage_path)
+    if not path.exists() or not path.is_file():
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Attachment file not found"
+        )
+
+    return FileResponse(
+        path,
+        media_type=attachment.mime_type,
+        filename=attachment.original_filename,
+    )
+
+
+@router.delete("/attachments/{attachment_id}", response_model=dict)
 def delete_attachment(
     attachment_id: UUID,
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],

@@ -15,7 +15,7 @@ Usare stati coerenti:
 - `BLOCKED`
 - `DONE`
 
-Data ultimo aggiornamento: 2026-04-05
+Data ultimo aggiornamento: 2026-04-09
 Responsabile aggiornamento: GSD Autonomous
 
 ---
@@ -33,7 +33,7 @@ Responsabile aggiornamento: GSD Autonomous
 | API Attività | DONE | Catalogo + start/stop + approvazioni |
 | API Segnalazioni/Pratiche | DONE | Report→Case automatico + workflow completo + eventi |
 | Allegati/Storage | DONE | Model + service + dashboard + quote monitoring |
-| Frontend desktop | DONE | Pagine complete: dashboard, mezzi, attività, segnalazioni, pratiche, storage + pagine dettaglio |
+| Frontend desktop | DONE | Pagine complete: dashboard, mezzi, attività, segnalazioni, pratiche, storage + pagine dettaglio; refresh UI liste, dettagli, storage e mini-app con shell condiviso hero/KPI/filter/list |
 | Mini-app operatori | DONE | Pagina home con 3 azioni + stato connessione |
 | Offline minimo | TODO | Bozze locali IndexedDB da implementare |
 | GPS integration layer | DONE | Model GPS + track summary + adapter pattern pronto |
@@ -158,6 +158,16 @@ Responsabile aggiornamento: GSD Autonomous
 - Creazione report genera automaticamente InternalCase in transazione unica
 - Numerazione automatica REP-YYYY-NNNNNN e CAS-YYYY-NNNNNN
 - Storico assegnazioni tracciato in InternalCaseAssignmentHistory
+- Le viste elenco `mezzi`, `attivita`, `segnalazioni` e `pratiche` usano ora un pattern frontend condiviso piu denso e leggibile, con hero operativo, metriche, toolbar filtri e righe lista ibride card/tabella
+- Anche dashboard e pagine dettaglio principali sono state riallineate allo stesso linguaggio visivo tramite componenti condivisi per breadcrumb, hero stato e pannelli informativi
+- La pagina `storage` e ora collegata agli endpoint reali di metriche/alert/ricalcolo quota, mentre `miniapp` e `miniapp/bozze` usano lo stesso linguaggio visuale del modulo
+- Le azioni della scheda pratica non sono piu placeholder statici: usano i route reali `assign`, `acknowledge`, `start`, `resolve`, `close`, `reopen`
+- La mini-app espone ora superfici dedicate per avvio attività, chiusura attività e nuova segnalazione, con fallback offline su IndexedDB quando il browser non è connesso
+- La pagina bozze supporta ora sincronizzazione manuale singola e bulk delle code `pending/error`, auto-sync alla riconnessione e rimozione automatica dei draft già sincronizzati
+- La mini-app espone anche `liste personali`, alimentata da filtri utente reali su attività in corso, segnalazioni inviate e pratiche assegnate, con ricerca rapida e focus per sezione lato client
+- I dettagli `attivita`, `segnalazioni` e `pratiche` riconoscono ora il contesto `miniapp` e aggiungono scorciatoie di rientro verso workset personale e azioni successive del workflow
+- Gli endpoint `get_activity`, `get_report` e `get_case` espongono ora metadati più ricchi, usati dal frontend per sostituire i placeholder con timing, contesto operativo, riferimenti sorgente e stato revisione
+- Sono disponibili anche endpoint di supporto per `activity attachments`, `report attachments`, `case attachments` e `activity gps summary`, già consumati dalle schede dettaglio
 
 ### Blocchi
 - Nessuno
@@ -200,17 +210,23 @@ Responsabile aggiornamento: GSD Autonomous
 ### Checklist
 - [x] Home mini-app
 - [x] Banner stato connessione
-- [ ] Pagina nuova attività
-- [ ] Pagina chiusura attività
-- [ ] Pagina nuova segnalazione
-- [ ] Liste personali
-- [ ] Bozze locali
-- [ ] Retry invii pendenti
+- [x] Pagina nuova attività
+- [x] Pagina chiusura attività
+- [x] Pagina nuova segnalazione
+- [x] Liste personali
+- [x] Bozze locali
+- [x] Retry invii pendenti
 
 ### Note
 - Home mini-app con 3 azioni principali implementata
 - Rilevamento stato connessione online/offline
-- Pagine dettaglio da implementare
+- Retry automatico delle bozze `pending/error` quando il browser torna online
+- Le bozze sincronizzate vengono rimosse automaticamente dalla coda locale
+- La vista `liste personali` usa i filtri `operator_user_id`, `reporter_user_id` e `assigned_to_user_id` già esposti dal backend
+- `Liste personali` include ricerca trasversale, focus su singola sezione e refresh manuale senza endpoint aggiuntivi
+- I link aperti da `liste personali` propagano `?context=miniapp` per mantenere breadcrumb operativo e shortcut coerenti nei dettagli
+- Le schede dettaglio mostrano ora anche team/mezzo/durata/revisione per attività, descrizione/GPS/attività collegata per segnalazioni e milestone temporali/priorità per pratiche
+- Le schede dettaglio supportano ora preview inline e download degli allegati; resta opzionale solo un eventuale viewer GPS ancora più esteso sul payload grezzo
 
 ### Blocchi
 - Nessuno
@@ -235,6 +251,7 @@ Responsabile aggiornamento: GSD Autonomous
 ### Note
 - Model GPS creato con adapter pattern pronto
 - Campi GPS già presenti in VehicleUsageSession e OperatorActivity
+- La scheda dettaglio attività espone anche un viewer GPS dedicato con traccia/segmento e bounds
 
 ### Blocchi
 - Nessuno
@@ -301,6 +318,16 @@ Responsabile aggiornamento: GSD Autonomous
   - Dashboard con KPI e storage monitoring
   - Pagine dettaglio con breadcrumb, status badge, timeline eventi
   - Offline IndexedDB per bozze locali con sync status
+- Aggiunto viewer GPS dedicato nel dettaglio attività:
+  - endpoint `GET /api/operazioni/activities/{activity_id}/gps-viewer`
+  - parser backend del `raw_payload_json` per estrarre punti lat/lon quando disponibili
+  - fallback automatico a segmento `start/end` se il provider non espone la traccia completa
+  - dialog frontend con mappa reale `maplibre-gl`, polyline/marker, metriche, bounds e coordinate iniziali/finali
+- Viewer GPS esteso con timeline punti campionata e riepilogo temporale direttamente nella modale attività
+- Preview allegati estesa anche a file testuali/JSON/XML/CSV oltre a immagini, PDF, audio e video
+- Hardening backend iniziale con test API dedicati per `gps-viewer` e download allegati
+- Corretto il routing backend `dashboard/storage/attachments` eliminando il doppio prefisso `/operazioni`
+- Aggiunta protezione modulo a livello router `operazioni`: accesso negato agli utenti autenticati senza `module_operazioni`
 - Fix migration 0031: riordinato creazione tabelle per FK (vehicle_usage_session prima di odometer/fuel_log)
 - Fix migration 0032: riordinato creazione attachment prima delle tabelle che lo referenziano, aggiunta FK deferred per tabelle 0031
 - Aggiornato .env per connessione localhost:5434

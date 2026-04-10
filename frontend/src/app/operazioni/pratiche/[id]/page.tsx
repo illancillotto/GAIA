@@ -2,10 +2,30 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 
+import { OperazioniAttachmentPreviewDialog } from "@/components/operazioni/attachment-preview-dialog";
+import {
+  OperazioniBreadcrumb,
+  OperazioniCollectionPanel,
+  OperazioniDetailHero,
+  OperazioniHeroNotice,
+  OperazioniInfoGrid,
+} from "@/components/operazioni/collection-layout";
 import { OperazioniModulePage } from "@/components/operazioni/operazioni-module-page";
-import { ChevronRightIcon } from "@/components/ui/icons";
+import {
+  acknowledgeCase,
+  assignCase,
+  closeCase,
+  downloadAttachment,
+  getAttachmentPreviewData,
+  getCase,
+  getCaseAttachments,
+  getCaseEvents,
+  reopenCase,
+  resolveCase,
+  startCase,
+} from "@/features/operazioni/api/client";
 
 const statusLabels: Record<string, string> = {
   open: "Aperta",
@@ -29,40 +49,101 @@ const statusTone: Record<string, string> = {
   reopened: "bg-orange-50 text-orange-700",
 };
 
-function PraticaDetailContent({ token, caseId }: { token: string; caseId: string }) {
+function PraticaDetailContent({ caseId, currentUserId, context }: { caseId: string; currentUserId: number; context: string | null }) {
   const [caseData, setCaseData] = useState<Record<string, unknown> | null>(null);
   const [events, setEvents] = useState<Record<string, unknown>[]>([]);
+  const [attachments, setAttachments] = useState<Record<string, unknown>[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [actionNote, setActionNote] = useState("");
+  const [previewState, setPreviewState] = useState<{ title: string; url: string | null; mimeType: string; textContent?: string | null } | null>(null);
 
   const loadCase = useCallback(async () => {
     try {
-      const [caseRes, eventsRes] = await Promise.all([
-        fetch(`/api/operazioni/cases/${caseId}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch(`/api/operazioni/cases/${caseId}/events`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
+      const [data, eventsData, attachmentsData] = await Promise.all([
+        getCase(caseId),
+        getCaseEvents(caseId).catch(() => []),
+        getCaseAttachments(caseId).catch(() => []),
       ]);
-      if (!caseRes.ok) throw new Error("Errore caricamento pratica");
-      const data = await caseRes.json();
       setCaseData(data);
-      if (eventsRes.ok) {
-        const eventsData = await eventsRes.json();
-        setEvents(Array.isArray(eventsData) ? eventsData : []);
-      }
+      setEvents(Array.isArray(eventsData) ? eventsData : []);
+      setAttachments(Array.isArray(attachmentsData) ? attachmentsData : []);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Errore caricamento pratica");
     } finally {
       setLoading(false);
     }
-  }, [token, caseId]);
+  }, [caseId]);
 
   useEffect(() => {
     void loadCase();
   }, [loadCase]);
+
+  useEffect(() => {
+    return () => {
+      if (previewState?.url) {
+        URL.revokeObjectURL(previewState.url);
+      }
+    };
+  }, [previewState]);
+
+  async function openAttachmentPreview(attachment: Record<string, unknown>) {
+    try {
+      if (previewState?.url) {
+        URL.revokeObjectURL(previewState.url);
+      }
+      const data = await getAttachmentPreviewData(String(attachment.id));
+      const url = data.textContent != null ? null : URL.createObjectURL(data.blob);
+      setPreviewState({
+        title: String(attachment.original_filename ?? data.filename ?? "Allegato"),
+        url,
+        mimeType: data.mimeType,
+        textContent: data.textContent ?? null,
+      });
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Errore anteprima allegato");
+    }
+  }
+
+  function closePreview() {
+    if (previewState?.url) {
+      URL.revokeObjectURL(previewState.url);
+    }
+    setPreviewState(null);
+  }
+
+  async function runCaseAction(action: "assign" | "acknowledge" | "start" | "resolve" | "close" | "reopen") {
+    try {
+      setIsSubmitting(true);
+      const notePayload =
+        action === "resolve" || action === "close"
+          ? { resolution_note: actionNote, note: actionNote }
+          : { note: actionNote };
+
+      if (action === "assign") {
+        await assignCase(caseId, { assigned_to_user_id: currentUserId, ...notePayload });
+      } else if (action === "acknowledge") {
+        await acknowledgeCase(caseId, notePayload);
+      } else if (action === "start") {
+        await startCase(caseId, notePayload);
+      } else if (action === "resolve") {
+        await resolveCase(caseId, notePayload);
+      } else if (action === "close") {
+        await closeCase(caseId, notePayload);
+      } else {
+        await reopenCase(caseId, notePayload);
+      }
+
+      setActionNote("");
+      await loadCase();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Errore aggiornamento pratica");
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
 
   if (loading) {
     return <p className="text-sm text-gray-500">Caricamento pratica in corso...</p>;
@@ -76,52 +157,80 @@ function PraticaDetailContent({ token, caseId }: { token: string; caseId: string
     );
   }
 
+  const sourceReportId = String((caseData.source_report as Record<string, unknown> | undefined)?.id ?? "");
+
   return (
     <div className="page-stack">
-      <nav className="flex items-center gap-1 text-sm text-gray-500">
-        <Link href="/operazioni" className="hover:text-[#1D4E35]">Operazioni</Link>
-        <ChevronRightIcon className="h-3 w-3" />
-        <Link href="/operazioni/pratiche" className="hover:text-[#1D4E35]">Pratiche</Link>
-        <ChevronRightIcon className="h-3 w-3" />
-        <span className="text-gray-800">{String(caseData.case_number)}</span>
-      </nav>
+      <OperazioniBreadcrumb
+        items={[
+          { label: "Operazioni", href: "/operazioni" },
+          { label: "Pratiche", href: "/operazioni/pratiche" },
+          { label: String(caseData.case_number ?? "Dettaglio") },
+        ]}
+      />
 
-      <article className="panel-card">
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="section-title">{String(caseData.title)}</p>
-            <p className="mt-1 text-sm text-gray-500">{String(caseData.case_number)}</p>
-          </div>
-          <span className={`rounded-full px-3 py-1 text-xs font-medium ${statusTone[String(caseData.status)] || "bg-gray-100 text-gray-600"}`}>
-            {statusLabels[String(caseData.status)] || String(caseData.status)}
-          </span>
+      <OperazioniDetailHero
+        eyebrow="Case workflow"
+        title={String(caseData.title ?? "Pratica")}
+        description={String(caseData.description ?? "Scheda pratica con stato corrente, classificazione e cronologia eventi operativi.")}
+        status={statusLabels[String(caseData.status)] || String(caseData.status)}
+        statusTone={statusTone[String(caseData.status)] || "bg-gray-100 text-gray-600"}
+      >
+        <OperazioniHeroNotice
+          title="Segnalazione sorgente"
+          description={String((caseData.source_report as Record<string, unknown>)?.report_number ?? "Nessuna segnalazione collegata.")}
+        />
+      </OperazioniDetailHero>
+
+      <OperazioniCollectionPanel
+        title="Classificazione pratica"
+        description="Informazioni di contesto utili per assegnazione, priorita e lettura amministrativa."
+        count={8}
+      >
+        <OperazioniInfoGrid
+          items={[
+            { label: "Numero pratica", value: String(caseData.case_number ?? "—") },
+            { label: "Categoria", value: String((caseData.category as Record<string, unknown>)?.name ?? "—") },
+            { label: "Gravita", value: String((caseData.severity as Record<string, unknown>)?.name ?? "—") },
+            { label: "Segnalazione", value: String((caseData.source_report as Record<string, unknown>)?.report_number ?? "—") },
+            { label: "Assegnata a", value: caseData.assigned_to_user_id ? `ID ${String(caseData.assigned_to_user_id)}` : "Non assegnata" },
+            { label: "Team assegnato", value: caseData.assigned_team_id ? `ID ${String(caseData.assigned_team_id)}` : "—" },
+            { label: "Priorità", value: caseData.priority_rank != null ? String(caseData.priority_rank) : "—" },
+            { label: "Creazione", value: caseData.created_at ? new Date(caseData.created_at as string).toLocaleString("it-IT") : "—" },
+          ]}
+        />
+      </OperazioniCollectionPanel>
+
+      <OperazioniCollectionPanel
+        title="Percorso operatore"
+        description="Shortcut per il flusso mini-app e per tornare alla segnalazione sorgente senza passare dalla console desktop."
+        count={(sourceReportId ? 1 : 0) + (context === "miniapp" ? 1 : 0) + 1}
+      >
+        <div className="flex flex-wrap gap-3">
+          {sourceReportId ? (
+            <Link
+              href={`/operazioni/segnalazioni/${sourceReportId}${context === "miniapp" ? "?context=miniapp" : ""}`}
+              className="btn-secondary"
+            >
+              Apri segnalazione sorgente
+            </Link>
+          ) : null}
+          {context === "miniapp" ? (
+            <Link href="/operazioni/miniapp/liste" className="btn-secondary">
+              Torna a liste personali
+            </Link>
+          ) : null}
+          <Link href="/operazioni/miniapp" className="btn-secondary">
+            Apri mini-app
+          </Link>
         </div>
+      </OperazioniCollectionPanel>
 
-        {caseData.description != null && (
-          <p className="mt-4 text-sm text-gray-700">{String(caseData.description)}</p>
-        )}
-
-        <div className="mt-6 grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
-          <div>
-            <p className="text-xs uppercase tracking-widest text-gray-400">Categoria</p>
-            <p className="mt-1 font-medium text-gray-900">{String((caseData.category as Record<string, unknown>)?.name ?? "—")}</p>
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-widest text-gray-400">Gravità</p>
-            <p className="mt-1 font-medium text-gray-900">{String((caseData.severity as Record<string, unknown>)?.name ?? "—")}</p>
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-widest text-gray-400">Segnalazione</p>
-            <p className="mt-1 font-medium text-gray-900">{String((caseData.source_report as Record<string, unknown>)?.report_number ?? "—")}</p>
-          </div>
-        </div>
-      </article>
-
-      <article className="panel-card">
-        <div className="mb-4">
-          <p className="section-title">Cronologia eventi</p>
-          <p className="section-copy">Timeline completa degli eventi della pratica.</p>
-        </div>
+      <OperazioniCollectionPanel
+        title="Cronologia eventi"
+        description="Timeline completa degli eventi registrati sulla pratica."
+        count={events.length}
+      >
 
         {events.length === 0 ? (
           <p className="text-sm text-gray-500">Nessun evento registrato.</p>
@@ -141,31 +250,170 @@ function PraticaDetailContent({ token, caseId }: { token: string; caseId: string
             ))}
           </div>
         )}
-      </article>
+      </OperazioniCollectionPanel>
+
+      <OperazioniCollectionPanel
+        title="Tappe workflow"
+        description="Marcatori temporali principali per presa in carico, lavorazione, risoluzione e chiusura."
+        count={4 + attachments.length}
+      >
+        <OperazioniInfoGrid
+          items={[
+            {
+              label: "Presa in carico",
+              value: caseData.acknowledged_at ? new Date(caseData.acknowledged_at as string).toLocaleString("it-IT") : "—",
+            },
+            {
+              label: "Avvio lavorazione",
+              value: caseData.started_at ? new Date(caseData.started_at as string).toLocaleString("it-IT") : "—",
+            },
+            {
+              label: "Risoluzione",
+              value: caseData.resolved_at ? new Date(caseData.resolved_at as string).toLocaleString("it-IT") : "—",
+            },
+            {
+              label: "Chiusura",
+              value: caseData.closed_at ? new Date(caseData.closed_at as string).toLocaleString("it-IT") : "—",
+            },
+          ]}
+        />
+        {caseData.resolution_note ? (
+          <div className="mt-4 rounded-2xl border border-[#e6ebe5] bg-[#fbfcfa] p-4 text-sm text-gray-700">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#667267]">Nota di risoluzione</p>
+            <p className="mt-2 leading-6">{String(caseData.resolution_note)}</p>
+          </div>
+        ) : null}
+        {attachments.length > 0 ? (
+          <div className="mt-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#667267]">Allegati pratica</p>
+            <div className="mt-3 space-y-3">
+              {attachments.map((attachment) => (
+                <div key={String(attachment.id)} className="rounded-[24px] border border-[#e6ebe5] bg-[linear-gradient(180deg,_#ffffff,_#fbfcfa)] px-4 py-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-gray-900">{String(attachment.original_filename ?? "Allegato")}</p>
+                      <p className="mt-1 truncate text-xs leading-5 text-gray-500">
+                        {String(attachment.mime_type ?? "tipo sconosciuto")}
+                        {attachment.file_size_bytes != null ? ` · ${String(attachment.file_size_bytes)} bytes` : ""}
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-semibold text-gray-600">
+                      {String(attachment.attachment_type ?? "file")}
+                    </span>
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() =>
+                        void openAttachmentPreview(attachment)
+                      }
+                    >
+                      Anteprima
+                    </button>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      onClick={() =>
+                        void downloadAttachment(
+                          String(attachment.id),
+                          String(attachment.original_filename ?? "attachment"),
+                        ).catch((e) =>
+                          setError(e instanceof Error ? e.message : "Errore download allegato"),
+                        )
+                      }
+                    >
+                      Scarica
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </OperazioniCollectionPanel>
+
+      <OperazioniCollectionPanel
+        title="Azioni pratica"
+        description="Transizioni di stato disponibili in base alla fase corrente del workflow."
+        count={["closed", "resolved"].includes(String(caseData.status)) ? 2 : 4}
+      >
+        <label className="block">
+          <span className="label-caption">Nota operativa</span>
+          <textarea
+            className="form-control mt-2 min-h-24"
+            value={actionNote}
+            onChange={(event) => setActionNote(event.target.value)}
+            placeholder="Aggiungi una nota per assegnazione, presa in carico o chiusura"
+          />
+        </label>
+        <div className="mt-4 flex flex-wrap gap-3">
+          {String(caseData.status) === "open" ? (
+            <button type="button" className="btn-secondary" disabled={isSubmitting} onClick={() => void runCaseAction("assign")}>
+              {isSubmitting ? "Invio..." : "Assegna a me"}
+            </button>
+          ) : null}
+          {String(caseData.status) === "assigned" ? (
+            <button type="button" className="btn-secondary" disabled={isSubmitting} onClick={() => void runCaseAction("acknowledge")}>
+              {isSubmitting ? "Invio..." : "Prendi in carico"}
+            </button>
+          ) : null}
+          {["assigned", "acknowledged", "reopened"].includes(String(caseData.status)) ? (
+            <button type="button" className="btn-secondary" disabled={isSubmitting} onClick={() => void runCaseAction("start")}>
+              {isSubmitting ? "Invio..." : "Avvia lavorazione"}
+            </button>
+          ) : null}
+          {["in_progress", "reopened"].includes(String(caseData.status)) ? (
+            <button type="button" className="btn-secondary" disabled={isSubmitting} onClick={() => void runCaseAction("resolve")}>
+              {isSubmitting ? "Invio..." : "Risolvi"}
+            </button>
+          ) : null}
+          {["resolved", "in_progress"].includes(String(caseData.status)) ? (
+            <button type="button" className="btn-primary" disabled={isSubmitting} onClick={() => void runCaseAction("close")}>
+              {isSubmitting ? "Invio..." : "Chiudi pratica"}
+            </button>
+          ) : null}
+          {["closed", "resolved"].includes(String(caseData.status)) ? (
+            <button type="button" className="btn-secondary" disabled={isSubmitting} onClick={() => void runCaseAction("reopen")}>
+              {isSubmitting ? "Invio..." : "Riapri"}
+            </button>
+          ) : null}
+        </div>
+      </OperazioniCollectionPanel>
 
       <div className="flex flex-wrap gap-3">
-        <button type="button" className="btn-secondary">Assegna</button>
-        <button type="button" className="btn-secondary">Avvia lavorazione</button>
-        <button type="button" className="btn-secondary">Risolvi</button>
-        <button type="button" className="btn-primary">Chiudi pratica</button>
+        <Link href="/operazioni/pratiche" className="btn-secondary">
+          Torna alla lista pratiche
+        </Link>
+        {context === "miniapp" ? (
+          <Link href="/operazioni/miniapp/liste" className="btn-secondary">
+            Liste personali
+          </Link>
+        ) : null}
       </div>
-
-      <Link href="/operazioni/pratiche" className="btn-secondary">
-        Torna alla lista pratiche
-      </Link>
+      <OperazioniAttachmentPreviewDialog
+        open={previewState != null}
+        title={previewState?.title ?? "Anteprima allegato"}
+        url={previewState?.url ?? null}
+        mimeType={previewState?.mimeType ?? null}
+        textContent={previewState?.textContent ?? null}
+        onClose={closePreview}
+      />
     </div>
   );
 }
 
 export default function PraticaDetailPage() {
   const params = useParams<{ id: string }>();
+  const searchParams = useSearchParams();
+  const context = searchParams.get("context");
   return (
     <OperazioniModulePage
       title="Dettaglio pratica"
       description="Stato, assegnazioni e timeline della pratica."
       breadcrumb={`ID ${params.id}`}
     >
-      {({ token }) => <PraticaDetailContent token={token} caseId={params.id} />}
+      {({ currentUser }) => <PraticaDetailContent caseId={params.id} currentUserId={currentUser.id} context={context} />}
     </OperazioniModulePage>
   );
 }

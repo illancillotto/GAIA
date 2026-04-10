@@ -172,6 +172,9 @@ Serve la web app e consuma le API del backend.
 
 ### backend
 Espone API, applica auth condivisa, coordina i moduli e usa router separati per dominio.
+All'avvio esegue un bootstrap admin idempotente basato su `BOOTSTRAP_ADMIN_*`
+quando la tabella `application_users` e disponibile, cosi lo stack locale
+mantiene sempre un utente applicativo iniziale utilizzabile.
 
 Moduli logici attuali:
 - `accessi`

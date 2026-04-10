@@ -4,8 +4,14 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 
+import {
+  OperazioniBreadcrumb,
+  OperazioniCollectionPanel,
+  OperazioniDetailHero,
+  OperazioniHeroNotice,
+  OperazioniInfoGrid,
+} from "@/components/operazioni/collection-layout";
 import { OperazioniModulePage } from "@/components/operazioni/operazioni-module-page";
-import { ChevronRightIcon } from "@/components/ui/icons";
 import { getVehicle } from "@/features/operazioni/api/client";
 
 interface VehicleDetail {
@@ -41,7 +47,7 @@ const statusTone: Record<string, string> = {
   out_of_service: "bg-gray-100 text-gray-600",
 };
 
-function MezzoDetailContent({ token, vehicleId }: { token: string; vehicleId: string }) {
+function MezzoDetailContent({ vehicleId }: { vehicleId: string }) {
   const [vehicle, setVehicle] = useState<VehicleDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -76,101 +82,56 @@ function MezzoDetailContent({ token, vehicleId }: { token: string; vehicleId: st
 
   return (
     <div className="page-stack">
-      <nav className="flex items-center gap-1 text-sm text-gray-500">
-        <Link href="/operazioni" className="hover:text-[#1D4E35]">Operazioni</Link>
-        <ChevronRightIcon className="h-3 w-3" />
-        <Link href="/operazioni/mezzi" className="hover:text-[#1D4E35]">Mezzi</Link>
-        <ChevronRightIcon className="h-3 w-3" />
-        <span className="text-gray-800">{vehicle.name}</span>
-      </nav>
+      <OperazioniBreadcrumb
+        items={[
+          { label: "Operazioni", href: "/operazioni" },
+          { label: "Mezzi", href: "/operazioni/mezzi" },
+          { label: vehicle.name },
+        ]}
+      />
 
-      <article className="panel-card">
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="section-title">{vehicle.name}</p>
-            <p className="mt-1 text-sm text-gray-500">{vehicle.code}{vehicle.plate_number ? ` · ${vehicle.plate_number}` : ""}</p>
-          </div>
-          <span className={`rounded-full px-3 py-1 text-xs font-medium ${statusTone[vehicle.current_status] || "bg-gray-100 text-gray-600"}`}>
-            {statusLabels[vehicle.current_status] || vehicle.current_status}
-          </span>
-        </div>
+      <OperazioniDetailHero
+        eyebrow="Fleet detail"
+        title={vehicle.name}
+        description={`${vehicle.code}${vehicle.plate_number ? ` · ${vehicle.plate_number}` : ""}${vehicle.gps_provider_code ? ` · GPS ${vehicle.gps_provider_code}` : ""}`}
+        status={statusLabels[vehicle.current_status] || vehicle.current_status}
+        statusTone={statusTone[vehicle.current_status] || "bg-gray-100 text-gray-600"}
+      >
+        <OperazioniHeroNotice
+          title="Dotazione"
+          description={vehicle.has_gps_device ? "Il mezzo risulta dotato di dispositivo GPS." : "Il mezzo non risulta dotato di dispositivo GPS."}
+        />
+      </OperazioniDetailHero>
 
-        <div className="mt-6 grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
-          <div>
-            <p className="text-xs uppercase tracking-widest text-gray-400">Tipo</p>
-            <p className="mt-1 font-medium text-gray-900">{vehicle.vehicle_type}</p>
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-widest text-gray-400">Marca / Modello</p>
-            <p className="mt-1 font-medium text-gray-900">{[vehicle.brand, vehicle.model].filter(Boolean).join(" ") || "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-widest text-gray-400">Carburante</p>
-            <p className="mt-1 font-medium text-gray-900">{vehicle.fuel_type || "—"}</p>
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-widest text-gray-400">GPS</p>
-            <p className="mt-1 font-medium text-gray-900">{vehicle.has_gps_device ? "Sì" : "No"}</p>
-          </div>
-          <div>
-            <p className="text-xs uppercase tracking-widest text-gray-400">Ultimo aggiornamento</p>
-            <p className="mt-1 font-medium text-gray-900">{new Date(vehicle.updated_at).toLocaleDateString("it-IT")}</p>
-          </div>
-        </div>
-      </article>
+      <OperazioniCollectionPanel
+        title="Scheda mezzo"
+        description="Dati anagrafici essenziali del veicolo per consultazione rapida."
+        count={5}
+      >
+        <OperazioniInfoGrid
+          items={[
+            { label: "Tipo", value: vehicle.vehicle_type },
+            { label: "Marca / Modello", value: [vehicle.brand, vehicle.model].filter(Boolean).join(" ") || "—" },
+            { label: "Carburante", value: vehicle.fuel_type || "—" },
+            { label: "GPS", value: vehicle.has_gps_device ? "Si" : "No" },
+            { label: "Ultimo aggiornamento", value: new Date(vehicle.updated_at).toLocaleDateString("it-IT") },
+          ]}
+        />
+      </OperazioniCollectionPanel>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <article className="panel-card">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <p className="section-title">Assegnazioni</p>
-              <p className="section-copy">Storico assegnazioni del mezzo.</p>
-            </div>
-          </div>
-          <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-6 text-center">
-            <p className="text-sm font-medium text-gray-900">Assegnazioni</p>
-            <p className="mt-1 text-sm text-gray-500">Storico assegnazioni in implementazione.</p>
-          </div>
-        </article>
-
-        <article className="panel-card">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <p className="section-title">Utilizzi recenti</p>
-              <p className="section-copy">Ultime sessioni di utilizzo.</p>
-            </div>
-          </div>
-          <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-6 text-center">
-            <p className="text-sm font-medium text-gray-900">Sessioni utilizzo</p>
-            <p className="mt-1 text-sm text-gray-500">Lista utilizzi in implementazione.</p>
-          </div>
-        </article>
-
-        <article className="panel-card">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <p className="section-title">Manutenzioni</p>
-              <p className="section-copy">Storico manutenzioni programmate e completate.</p>
-            </div>
-          </div>
-          <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-6 text-center">
-            <p className="text-sm font-medium text-gray-900">Manutenzioni</p>
-            <p className="mt-1 text-sm text-gray-500">Storico manutenzioni in implementazione.</p>
-          </div>
-        </article>
-
-        <article className="panel-card">
-          <div className="mb-4 flex items-center justify-between gap-3">
-            <div>
-              <p className="section-title">Carburante</p>
-              <p className="section-copy">Storico rifornimenti registrati.</p>
-            </div>
-          </div>
-          <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 p-6 text-center">
-            <p className="text-sm font-medium text-gray-900">Rifornimenti</p>
-            <p className="mt-1 text-sm text-gray-500">Storico carburante in implementazione.</p>
-          </div>
-        </article>
+        <OperazioniCollectionPanel title="Assegnazioni" description="Storico assegnazioni del mezzo." count={0}>
+          <div className="rounded-2xl border border-dashed border-[#d8dfd8] bg-[#f8faf8] p-6 text-sm text-gray-500">Storico assegnazioni in implementazione.</div>
+        </OperazioniCollectionPanel>
+        <OperazioniCollectionPanel title="Utilizzi recenti" description="Ultime sessioni di utilizzo." count={0}>
+          <div className="rounded-2xl border border-dashed border-[#d8dfd8] bg-[#f8faf8] p-6 text-sm text-gray-500">Lista utilizzi in implementazione.</div>
+        </OperazioniCollectionPanel>
+        <OperazioniCollectionPanel title="Manutenzioni" description="Storico manutenzioni programmate e completate." count={0}>
+          <div className="rounded-2xl border border-dashed border-[#d8dfd8] bg-[#f8faf8] p-6 text-sm text-gray-500">Storico manutenzioni in implementazione.</div>
+        </OperazioniCollectionPanel>
+        <OperazioniCollectionPanel title="Carburante" description="Storico rifornimenti registrati." count={0}>
+          <div className="rounded-2xl border border-dashed border-[#d8dfd8] bg-[#f8faf8] p-6 text-sm text-gray-500">Storico carburante in implementazione.</div>
+        </OperazioniCollectionPanel>
       </div>
 
       <Link href="/operazioni/mezzi" className="btn-secondary">
@@ -188,7 +149,7 @@ export default function MezzoDetailPage() {
       description="Scheda e storico del veicolo."
       breadcrumb={`ID ${params.id}`}
     >
-      {({ token }) => <MezzoDetailContent token={token} vehicleId={params.id} />}
+      {() => <MezzoDetailContent vehicleId={params.id} />}
     </OperazioniModulePage>
   );
 }
