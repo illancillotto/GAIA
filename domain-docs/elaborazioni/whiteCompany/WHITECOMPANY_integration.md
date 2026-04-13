@@ -448,11 +448,13 @@ GET    /elaborazioni/bonifica/sync/status          ← stato ultima sync per ent
 
 - `POST /elaborazioni/bonifica/sync/run` crea un `wc_sync_job` per ogni entity richiesta
 - `GET /elaborazioni/bonifica/sync/status` legge l'ultimo job persistito per entity e restituisce `never` solo come stato derivato della response quando non esistono run precedenti
-- Entity attive su runtime: `report_types`, `reports`, `vehicles`, `refuels`, `taken_charge`, `users`
+- Entity attive su runtime: `report_types`, `reports`, `vehicles`, `refuels`, `taken_charge`, `users`, `areas`
 - `refuels` usa parsing difensivo del dettaglio `GET /vehicles/refuel/edit/{id}`: i record senza litri validi vengono saltati, non inventati
 - `users` sincronizza oggi solo gli operatori WhiteCompany non `Consorziato`, con upsert locale su tabella `wc_operator` e collegamento opzionale a `application_users` via email
+- `areas` sincronizza la lookup geografica WhiteCompany in tabella `wc_area`
 - API attiva lato operazioni: `GET /operazioni/operators`, `GET /operazioni/operators/{id}`
-- Fasi successive pianificate ma non ancora attive su runtime: `areas`, `warehouse`
+- API attiva lato operazioni: `GET /operazioni/areas`, `GET /operazioni/areas/{id}`
+- Fasi successive pianificate ma non ancora attive su runtime: `warehouse`
 
 ---
 
@@ -476,7 +478,8 @@ router.include_router(bonifica_router, prefix="/elaborazioni/bonifica-oristanese
 - [ ] Verificare in produzione l'insieme completo dei field names del dettaglio rifornimento `GET /vehicles/refuel/edit/{id}` per ridurre gli skip dei record senza litri
 - [ ] Verificare endpoint dettaglio presa in carico: `GET /vehicles/taken-charge/edit/{id}`
 - [ ] Mappare endpoint segnalazioni individuali (non solo export bulk): `GET /reports/{id}` (da verificare)
-- [ ] Estendere `POST /elaborazioni/bonifica/sync/run` alle entity restanti (`areas`, `warehouse`)
+- [ ] Estendere `POST /elaborazioni/bonifica/sync/run` alle entity restanti (`warehouse`)
+- [ ] Aggiungere il link strutturato `field_report.wc_area_id` per collegare le segnalazioni alle aree sincronizzate
 - [ ] Portare lo stato sync Bonifica nel workspace frontend `/elaborazioni/settings`
 
 ---

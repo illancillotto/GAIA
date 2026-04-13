@@ -17,6 +17,7 @@ from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.models.bonifica_oristanese import BonificaOristaneseCredential
 from app.models.wc_sync_job import WCSyncJob
 from app.modules.elaborazioni.bonifica_oristanese.apps.report_types.client import BonificaReportTypeRow
+from app.modules.elaborazioni.bonifica_oristanese.apps.areas.client import BonificaAreaRow
 from app.modules.elaborazioni.bonifica_oristanese.apps.refuels.client import BonificaRefuelRow
 from app.modules.elaborazioni.bonifica_oristanese.apps.reports.client import BonificaReportRow
 from app.modules.elaborazioni.bonifica_oristanese.apps.taken_charge.client import BonificaTakenChargeRow
@@ -24,6 +25,7 @@ from app.modules.elaborazioni.bonifica_oristanese.apps.users.client import Bonif
 from app.modules.elaborazioni.bonifica_oristanese.apps.vehicles.client import BonificaVehicleRow
 from app.modules.elaborazioni.bonifica_oristanese.models import BonificaOristaneseCredentialTestResult
 from app.modules.operazioni.models.reports import FieldReport, FieldReportCategory
+from app.modules.operazioni.models.wc_area import WCArea
 from app.modules.operazioni.models.vehicles import Vehicle, VehicleFuelLog, VehicleUsageSession
 from app.modules.operazioni.models.wc_operator import WCOperator
 from app.services.catasto_credentials import get_credential_fernet
@@ -264,6 +266,7 @@ def test_bonifica_sync_status_lists_supported_entities() -> None:
     assert payload["entities"]["refuels"]["status"] == "never"
     assert payload["entities"]["taken_charge"]["status"] == "never"
     assert payload["entities"]["users"]["status"] == "never"
+    assert payload["entities"]["areas"]["status"] == "never"
 
 
 def test_bonifica_sync_run_creates_jobs_and_imports_reports(
@@ -335,6 +338,9 @@ def test_bonifica_sync_run_creates_jobs_and_imports_reports(
     async def fake_fetch_users(self):
         return ([], 0)
 
+    async def fake_fetch_areas(self):
+        return ([], 0)
+
     monkeypatch.setattr("app.modules.elaborazioni.bonifica_oristanese.session.BonificaOristaneseSessionManager.login", fake_login)
     monkeypatch.setattr("app.modules.elaborazioni.bonifica_oristanese.session.BonificaOristaneseSessionManager.close", fake_close)
     monkeypatch.setattr(
@@ -361,6 +367,10 @@ def test_bonifica_sync_run_creates_jobs_and_imports_reports(
         "app.modules.elaborazioni.bonifica_oristanese.apps.users.client.BonificaUsersClient.fetch_users",
         fake_fetch_users,
     )
+    monkeypatch.setattr(
+        "app.modules.elaborazioni.bonifica_oristanese.apps.areas.client.BonificaAreasClient.fetch_areas",
+        fake_fetch_areas,
+    )
 
     response = client.post(
         "/elaborazioni/bonifica/sync/run",
@@ -376,11 +386,12 @@ def test_bonifica_sync_run_creates_jobs_and_imports_reports(
     assert payload["jobs"]["refuels"]["status"] == "completed"
     assert payload["jobs"]["taken_charge"]["status"] == "completed"
     assert payload["jobs"]["users"]["status"] == "completed"
+    assert payload["jobs"]["areas"]["status"] == "completed"
 
     db = TestingSessionLocal()
     try:
         jobs = db.query(WCSyncJob).all()
-        assert len(jobs) == 6
+        assert len(jobs) == 7
 
         category = db.scalar(select(FieldReportCategory).where(FieldReportCategory.wc_id == 38))
         assert category is not None
@@ -404,6 +415,7 @@ def test_bonifica_sync_run_creates_jobs_and_imports_reports(
     assert status_payload["entities"]["refuels"]["records_synced"] == 0
     assert status_payload["entities"]["taken_charge"]["records_synced"] == 0
     assert status_payload["entities"]["users"]["records_synced"] == 0
+    assert status_payload["entities"]["areas"]["records_synced"] == 0
 
 
 def test_bonifica_sync_run_imports_vehicles_and_taken_charge(
@@ -649,4 +661,87 @@ def test_bonifica_sync_run_imports_operational_users_and_exposes_api(
 
     operator_id = payload["items"][0]["id"]
     detail_response = client.get(f"/operazioni/operators/{operator_id}", headers=auth_headers())
+    assert detail_response.status_code == 200
+
+
+def test_bonifica_sync_run_imports_areas_and_exposes_api(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    create_response = client.post(
+        "/elaborazioni/bonifica/credentials",
+        headers=auth_headers(),
+        json={
+            "label": "Account sync aree",
+            "login_identifier": "utente@example.local",
+            "password": "bonifica-secret",
+            "remember_me": True,
+        },
+    )
+    assert create_response.status_code == 201
+
+    async def fake_login(self):
+        from app.modules.elaborazioni.bonifica_oristanese.session import BonificaOristaneseSession
+
+        self._session = BonificaOristaneseSession(
+            authenticated_url="https://login.bonificaoristanese.it/dashboard",
+            cookie_names=["XSRF-TOKEN", "laravel_session"],
+        )
+        return self._session
+
+    async def fake_close(self) -> None:
+        return None
+
+    async def fake_fetch_areas(self):
+        return (
+            [
+                BonificaAreaRow(
+                    wc_id=301,
+                    name="Distretto Terralba Lotto Sud",
+                    color="#00AA55",
+                    is_district=True,
+                    description="Area irrigua test",
+                    lat=__import__("decimal").Decimal("39.7488690"),
+                    lng=__import__("decimal").Decimal("8.6792700"),
+                    polygon="POLYGON((0 0,1 1,1 0,0 0))",
+                )
+            ],
+            1,
+        )
+
+    monkeypatch.setattr("app.modules.elaborazioni.bonifica_oristanese.session.BonificaOristaneseSessionManager.login", fake_login)
+    monkeypatch.setattr("app.modules.elaborazioni.bonifica_oristanese.session.BonificaOristaneseSessionManager.close", fake_close)
+    monkeypatch.setattr(
+        "app.modules.elaborazioni.bonifica_oristanese.apps.areas.client.BonificaAreasClient.fetch_areas",
+        fake_fetch_areas,
+    )
+
+    response = client.post(
+        "/elaborazioni/bonifica/sync/run",
+        headers=auth_headers(),
+        json={"entities": ["areas"]},
+    )
+    assert response.status_code == 200
+    assert response.json()["jobs"]["areas"]["status"] == "completed"
+
+    db = TestingSessionLocal()
+    try:
+        area = db.scalar(select(WCArea).where(WCArea.wc_id == 301))
+        assert area is not None
+        assert area.name == "Distretto Terralba Lotto Sud"
+        assert area.is_district is True
+
+        admin_user = db.scalar(select(ApplicationUser).where(ApplicationUser.id == 1))
+        assert admin_user is not None
+        admin_user.module_operazioni = True
+        db.commit()
+    finally:
+        db.close()
+
+    list_response = client.get("/operazioni/areas", headers=auth_headers())
+    assert list_response.status_code == 200
+    payload = list_response.json()
+    assert payload["total"] == 1
+
+    area_id = payload["items"][0]["id"]
+    detail_response = client.get(f"/operazioni/areas/{area_id}", headers=auth_headers())
     assert detail_response.status_code == 200

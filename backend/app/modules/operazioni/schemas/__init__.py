@@ -1,5 +1,9 @@
 """GAIA Operazioni Pydantic schemas."""
 
+from app.modules.operazioni.schemas.areas import (
+    WCAreaListResponse,
+    WCAreaResponse,
+)
 from app.modules.operazioni.schemas.operators import (
     WCOperatorListResponse,
     WCOperatorResponse,
@@ -41,6 +45,8 @@ __all__ = [
     "ErrorResponse",
     "OperatorProfileCreate",
     "OperatorProfileResponse",
+    "WCAreaListResponse",
+    "WCAreaResponse",
     "TeamCreate",
     "TeamMembershipCreate",
     "TeamMembershipResponse",

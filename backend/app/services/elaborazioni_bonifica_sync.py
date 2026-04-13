@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.application_user import ApplicationUser
 from app.models.wc_sync_job import WCSyncJob
+from app.modules.elaborazioni.bonifica_oristanese.apps.areas.client import BonificaAreasClient
 from app.modules.elaborazioni.bonifica_oristanese.apps.registry import list_bonifica_apps
 from app.modules.elaborazioni.bonifica_oristanese.apps.report_types.client import BonificaReportTypesClient
 from app.modules.elaborazioni.bonifica_oristanese.apps.refuels.client import BonificaRefuelsClient
@@ -26,6 +27,7 @@ from app.modules.elaborazioni.bonifica_oristanese.models import (
 )
 from app.modules.elaborazioni.bonifica_oristanese.session import BonificaOristaneseSessionManager
 from app.modules.operazioni.services.sync_report_types import sync_white_report_types
+from app.modules.operazioni.services.sync_areas import sync_white_areas
 from app.modules.operazioni.services.sync_operators import sync_white_operators
 from app.modules.operazioni.services.sync_vehicles import (
     sync_white_refuels,
@@ -39,7 +41,7 @@ from app.services.elaborazioni_bonifica_oristanese import (
     pick_credential,
 )
 
-SUPPORTED_SYNC_ENTITIES = ("report_types", "reports", "vehicles", "refuels", "taken_charge", "users")
+SUPPORTED_SYNC_ENTITIES = ("report_types", "reports", "vehicles", "refuels", "taken_charge", "users", "areas")
 DATE_AWARE_SYNC_ENTITIES = {"reports", "refuels", "taken_charge", "warehouse_requests"}
 
 
@@ -141,6 +143,7 @@ async def run_bonifica_sync(
     try:
         session = await manager.login()
         mark_credential_used(db, credential.id, authenticated_url=session.authenticated_url)
+        areas_client = BonificaAreasClient(manager)
         report_types_client = BonificaReportTypesClient(manager)
         reports_client = BonificaReportsClient(manager)
         vehicles_client = BonificaVehiclesClient(manager)
@@ -228,6 +231,15 @@ async def run_bonifica_sync(
                 elif entity == "users":
                     rows, _ = await users_client.fetch_users()
                     sync_result = sync_white_operators(db=db, rows=rows)
+                    result = _SyncExecutionResult(
+                        synced=sync_result.synced,
+                        skipped=sync_result.skipped,
+                        errors=len(sync_result.errors),
+                        error_detail="\n".join(sync_result.errors[:20]) if sync_result.errors else None,
+                    )
+                elif entity == "areas":
+                    rows, _ = await areas_client.fetch_areas()
+                    sync_result = sync_white_areas(db=db, rows=rows)
                     result = _SyncExecutionResult(
                         synced=sync_result.synced,
                         skipped=sync_result.skipped,

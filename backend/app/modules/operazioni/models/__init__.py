@@ -38,6 +38,8 @@ from app.modules.operazioni.models.vehicles import (
     VehicleOdometerReading,
     VehicleUsageSession,
 )
+from app.modules.operazioni.models.wc_area import WCArea
+from app.modules.operazioni.models.wc_operator import WCOperator
 
 __all__ = [
     "ActivityApproval",
@@ -68,4 +70,6 @@ __all__ = [
     "VehicleMaintenanceType",
     "VehicleOdometerReading",
     "VehicleUsageSession",
+    "WCArea",
+    "WCOperator",
 ]
