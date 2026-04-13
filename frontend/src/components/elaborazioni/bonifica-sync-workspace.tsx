@@ -193,6 +193,21 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
     return { percent, finished, total: targetEntityKeys.length, runningKeys };
   }, [runStartedAt, syncStatus, targetEntityKeys]);
 
+  const activeJobsCount = useMemo(() => {
+    if (!syncStatus) return 0;
+    return Object.values(syncStatus.entities).filter((item) => item.status === "running").length;
+  }, [syncStatus]);
+
+  const failedJobsCount = useMemo(() => {
+    if (!syncStatus) return 0;
+    return Object.values(syncStatus.entities).filter((item) => item.status === "failed").length;
+  }, [syncStatus]);
+
+  const completedJobsCount = useMemo(() => {
+    if (!syncStatus) return 0;
+    return Object.values(syncStatus.entities).filter((item) => item.status === "completed").length;
+  }, [syncStatus]);
+
   function appendLog(message: string, tone: SyncLogEntry["tone"] = "info"): void {
     const entryAt = new Date().toISOString();
     setSyncLog((current) => [
@@ -365,21 +380,6 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
       setRunning(false);
     }
   }
-
-  const activeJobsCount = useMemo(() => {
-    if (!syncStatus) return 0;
-    return Object.values(syncStatus.entities).filter((item) => item.status === "running").length;
-  }, [syncStatus]);
-
-  const failedJobsCount = useMemo(() => {
-    if (!syncStatus) return 0;
-    return Object.values(syncStatus.entities).filter((item) => item.status === "failed").length;
-  }, [syncStatus]);
-
-  const completedJobsCount = useMemo(() => {
-    if (!syncStatus) return 0;
-    return Object.values(syncStatus.entities).filter((item) => item.status === "completed").length;
-  }, [syncStatus]);
 
   const content = (
     <>
