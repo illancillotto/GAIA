@@ -15,6 +15,7 @@ from app.modules.elaborazioni.bonifica_oristanese.apps.report_types.client impor
 from app.modules.elaborazioni.bonifica_oristanese.apps.refuels.client import BonificaRefuelsClient
 from app.modules.elaborazioni.bonifica_oristanese.apps.reports.client import BonificaReportsClient
 from app.modules.elaborazioni.bonifica_oristanese.apps.taken_charge.client import BonificaTakenChargeClient
+from app.modules.elaborazioni.bonifica_oristanese.apps.users.client import BonificaUsersClient
 from app.modules.elaborazioni.bonifica_oristanese.apps.vehicles.client import BonificaVehiclesClient
 from app.modules.elaborazioni.bonifica_oristanese.models import (
     BonificaSyncEntityStatus,
@@ -25,6 +26,7 @@ from app.modules.elaborazioni.bonifica_oristanese.models import (
 )
 from app.modules.elaborazioni.bonifica_oristanese.session import BonificaOristaneseSessionManager
 from app.modules.operazioni.services.sync_report_types import sync_white_report_types
+from app.modules.operazioni.services.sync_operators import sync_white_operators
 from app.modules.operazioni.services.sync_vehicles import (
     sync_white_refuels,
     sync_white_taken_charge,
@@ -37,7 +39,7 @@ from app.services.elaborazioni_bonifica_oristanese import (
     pick_credential,
 )
 
-SUPPORTED_SYNC_ENTITIES = ("report_types", "reports", "vehicles", "refuels", "taken_charge")
+SUPPORTED_SYNC_ENTITIES = ("report_types", "reports", "vehicles", "refuels", "taken_charge", "users")
 DATE_AWARE_SYNC_ENTITIES = {"reports", "refuels", "taken_charge", "warehouse_requests"}
 
 
@@ -144,6 +146,7 @@ async def run_bonifica_sync(
         vehicles_client = BonificaVehiclesClient(manager)
         refuels_client = BonificaRefuelsClient(manager)
         taken_charge_client = BonificaTakenChargeClient(manager)
+        users_client = BonificaUsersClient(manager)
 
         for entity in entities:
             job = db.get(WCSyncJob, jobs[entity].id)
@@ -219,6 +222,15 @@ async def run_bonifica_sync(
                     result = _SyncExecutionResult(
                         synced=sync_result.usage_sessions_synced,
                         skipped=sync_result.usage_sessions_skipped,
+                        errors=len(sync_result.errors),
+                        error_detail="\n".join(sync_result.errors[:20]) if sync_result.errors else None,
+                    )
+                elif entity == "users":
+                    rows, _ = await users_client.fetch_users()
+                    sync_result = sync_white_operators(db=db, rows=rows)
+                    result = _SyncExecutionResult(
+                        synced=sync_result.synced,
+                        skipped=sync_result.skipped,
                         errors=len(sync_result.errors),
                         error_detail="\n".join(sync_result.errors[:20]) if sync_result.errors else None,
                     )

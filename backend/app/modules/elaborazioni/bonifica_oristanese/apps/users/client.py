@@ -1,0 +1,93 @@
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from app.modules.elaborazioni.bonifica_oristanese.apps.client import BonificaDatatableClient
+from app.modules.elaborazioni.bonifica_oristanese.apps.registry import get_bonifica_app
+from app.modules.elaborazioni.bonifica_oristanese.parsers import (
+    clean_html_text,
+    extract_href_id,
+    parse_form_fields,
+)
+from app.modules.elaborazioni.bonifica_oristanese.session import BonificaOristaneseSessionManager
+
+
+USERS_APP = get_bonifica_app("users")
+
+
+def _field_text(fields: dict[str, str | list[str] | bool], *keys: str) -> str | None:
+    for key in keys:
+        value = fields.get(key)
+        if isinstance(value, list):
+            if value:
+                cleaned = clean_html_text(value[0])
+                if cleaned:
+                    return cleaned
+            continue
+        if isinstance(value, bool) or value is None:
+            continue
+        cleaned = clean_html_text(value)
+        if cleaned:
+            return cleaned
+    return None
+
+
+@dataclass(frozen=True)
+class BonificaUserRow:
+    wc_id: int
+    username: str | None
+    email: str | None
+    user_type: str | None
+    business_name: str | None
+    first_name: str | None
+    last_name: str | None
+    tax: str | None
+    enabled: bool
+    role: str | None
+
+
+class BonificaUsersClient(BonificaDatatableClient):
+    def __init__(self, session_manager: BonificaOristaneseSessionManager) -> None:
+        super().__init__(session_manager)
+
+    async def fetch_users(self) -> tuple[list[BonificaUserRow], int]:
+        rows, total = await self.fetch_all_datatable_rows(
+            USERS_APP.list_path,
+            columns_count=USERS_APP.columns_count,
+            page_size=250,
+            extra_params={
+                "filter_role": "",
+                "filter_enabled": "",
+            },
+        )
+
+        parsed: list[BonificaUserRow] = []
+        for row in rows:
+            if not isinstance(row, list) or len(row) < 5:
+                continue
+            wc_id = extract_href_id(row[4], "/users/")
+            if wc_id is None:
+                continue
+
+            html = await self.fetch_detail_html(USERS_APP.detail_path_template.format(id=wc_id))
+            fields = parse_form_fields(html)
+            parsed.append(
+                BonificaUserRow(
+                    wc_id=wc_id,
+                    username=_field_text(fields, "username"),
+                    email=_field_text(fields, "email"),
+                    user_type=_field_text(fields, "user_type", "type"),
+                    business_name=_field_text(fields, "business_name"),
+                    first_name=_field_text(fields, "first_name"),
+                    last_name=_field_text(fields, "last_name"),
+                    tax=_field_text(fields, "tax"),
+                    enabled=bool(fields.get("enabled")),
+                    role=_field_text(fields, "roles", "role") or clean_html_text(row[1]) or None,
+                )
+            )
+
+        return [
+            row
+            for row in parsed
+            if (row.role or "").strip().lower() != "consorziato"
+        ], total

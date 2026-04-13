@@ -20,10 +20,12 @@ from app.modules.elaborazioni.bonifica_oristanese.apps.report_types.client impor
 from app.modules.elaborazioni.bonifica_oristanese.apps.refuels.client import BonificaRefuelRow
 from app.modules.elaborazioni.bonifica_oristanese.apps.reports.client import BonificaReportRow
 from app.modules.elaborazioni.bonifica_oristanese.apps.taken_charge.client import BonificaTakenChargeRow
+from app.modules.elaborazioni.bonifica_oristanese.apps.users.client import BonificaUserRow
 from app.modules.elaborazioni.bonifica_oristanese.apps.vehicles.client import BonificaVehicleRow
 from app.modules.elaborazioni.bonifica_oristanese.models import BonificaOristaneseCredentialTestResult
 from app.modules.operazioni.models.reports import FieldReport, FieldReportCategory
 from app.modules.operazioni.models.vehicles import Vehicle, VehicleFuelLog, VehicleUsageSession
+from app.modules.operazioni.models.wc_operator import WCOperator
 from app.services.catasto_credentials import get_credential_fernet
 
 
@@ -261,6 +263,7 @@ def test_bonifica_sync_status_lists_supported_entities() -> None:
     assert payload["entities"]["vehicles"]["status"] == "never"
     assert payload["entities"]["refuels"]["status"] == "never"
     assert payload["entities"]["taken_charge"]["status"] == "never"
+    assert payload["entities"]["users"]["status"] == "never"
 
 
 def test_bonifica_sync_run_creates_jobs_and_imports_reports(
@@ -329,6 +332,9 @@ def test_bonifica_sync_run_creates_jobs_and_imports_reports(
         assert date_to is not None
         return ([], 0)
 
+    async def fake_fetch_users(self):
+        return ([], 0)
+
     monkeypatch.setattr("app.modules.elaborazioni.bonifica_oristanese.session.BonificaOristaneseSessionManager.login", fake_login)
     monkeypatch.setattr("app.modules.elaborazioni.bonifica_oristanese.session.BonificaOristaneseSessionManager.close", fake_close)
     monkeypatch.setattr(
@@ -351,6 +357,10 @@ def test_bonifica_sync_run_creates_jobs_and_imports_reports(
         "app.modules.elaborazioni.bonifica_oristanese.apps.taken_charge.client.BonificaTakenChargeClient.fetch_taken_charge",
         fake_fetch_taken_charge,
     )
+    monkeypatch.setattr(
+        "app.modules.elaborazioni.bonifica_oristanese.apps.users.client.BonificaUsersClient.fetch_users",
+        fake_fetch_users,
+    )
 
     response = client.post(
         "/elaborazioni/bonifica/sync/run",
@@ -365,11 +375,12 @@ def test_bonifica_sync_run_creates_jobs_and_imports_reports(
     assert payload["jobs"]["vehicles"]["status"] == "completed"
     assert payload["jobs"]["refuels"]["status"] == "completed"
     assert payload["jobs"]["taken_charge"]["status"] == "completed"
+    assert payload["jobs"]["users"]["status"] == "completed"
 
     db = TestingSessionLocal()
     try:
         jobs = db.query(WCSyncJob).all()
-        assert len(jobs) == 5
+        assert len(jobs) == 6
 
         category = db.scalar(select(FieldReportCategory).where(FieldReportCategory.wc_id == 38))
         assert category is not None
@@ -392,6 +403,7 @@ def test_bonifica_sync_run_creates_jobs_and_imports_reports(
     assert status_payload["entities"]["vehicles"]["records_synced"] == 0
     assert status_payload["entities"]["refuels"]["records_synced"] == 0
     assert status_payload["entities"]["taken_charge"]["records_synced"] == 0
+    assert status_payload["entities"]["users"]["records_synced"] == 0
 
 
 def test_bonifica_sync_run_imports_vehicles_and_taken_charge(
@@ -538,3 +550,103 @@ def test_bonifica_sync_run_imports_vehicles_and_taken_charge(
         assert skipped_fuel_log is None
     finally:
         db.close()
+
+
+def test_bonifica_sync_run_imports_operational_users_and_exposes_api(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    create_response = client.post(
+        "/elaborazioni/bonifica/credentials",
+        headers=auth_headers(),
+        json={
+            "label": "Account sync operatori",
+            "login_identifier": "utente@example.local",
+            "password": "bonifica-secret",
+            "remember_me": True,
+        },
+    )
+    assert create_response.status_code == 201
+
+    async def fake_login(self):
+        from app.modules.elaborazioni.bonifica_oristanese.session import BonificaOristaneseSession
+
+        self._session = BonificaOristaneseSession(
+            authenticated_url="https://login.bonificaoristanese.it/dashboard",
+            cookie_names=["XSRF-TOKEN", "laravel_session"],
+        )
+        return self._session
+
+    async def fake_close(self) -> None:
+        return None
+
+    async def fake_fetch_users(self):
+        return (
+            [
+                BonificaUserRow(
+                    wc_id=901,
+                    username="mrossi",
+                    email="elaborazioni@example.local",
+                    user_type="private",
+                    business_name=None,
+                    first_name="Mario",
+                    last_name="Rossi",
+                    tax="RSSMRA80A01H501U",
+                    enabled=True,
+                    role="Admin",
+                ),
+                BonificaUserRow(
+                    wc_id=902,
+                    username="consorziato.demo",
+                    email="consorziato@example.local",
+                    user_type="company",
+                    business_name="Azienda Demo",
+                    first_name=None,
+                    last_name=None,
+                    tax="12345678901",
+                    enabled=True,
+                    role="Consorziato",
+                ),
+            ],
+            2,
+        )
+
+    monkeypatch.setattr("app.modules.elaborazioni.bonifica_oristanese.session.BonificaOristaneseSessionManager.login", fake_login)
+    monkeypatch.setattr("app.modules.elaborazioni.bonifica_oristanese.session.BonificaOristaneseSessionManager.close", fake_close)
+    monkeypatch.setattr(
+        "app.modules.elaborazioni.bonifica_oristanese.apps.users.client.BonificaUsersClient.fetch_users",
+        fake_fetch_users,
+    )
+
+    response = client.post(
+        "/elaborazioni/bonifica/sync/run",
+        headers=auth_headers(),
+        json={"entities": ["users"]},
+    )
+    assert response.status_code == 200
+    assert response.json()["jobs"]["users"]["status"] == "completed"
+
+    db = TestingSessionLocal()
+    try:
+        operator = db.scalar(select(WCOperator).where(WCOperator.wc_id == 901))
+        assert operator is not None
+        assert operator.email == "elaborazioni@example.local"
+        assert operator.gaia_user_id == 1
+
+        consorziato = db.scalar(select(WCOperator).where(WCOperator.wc_id == 902))
+        assert consorziato is None
+
+        admin_user = db.scalar(select(ApplicationUser).where(ApplicationUser.id == 1))
+        assert admin_user is not None
+        admin_user.module_operazioni = True
+        db.commit()
+    finally:
+        db.close()
+
+    list_response = client.get("/operazioni/operators", headers=auth_headers())
+    assert list_response.status_code == 200
+    payload = list_response.json()
+    assert payload["total"] == 1
+
+    operator_id = payload["items"][0]["id"]
+    detail_response = client.get(f"/operazioni/operators/{operator_id}", headers=auth_headers())
+    assert detail_response.status_code == 200

@@ -18,7 +18,7 @@ La pagina `/elaborazioni` usa una struttura a sezioni stabili:
 - colonna `Agenzia delle Entrate (SISTER)` per credenziali, visure, batch, documenti e CAPTCHA
 - colonna `Capacitas` per pool account e monitor del servizio
 - provider `Bonifica Oristanese` gestito nello stesso workspace `Credenziali`, con CRUD account e test autenticazione Laravel
-- il provider `Bonifica Oristanese` espone anche `POST /elaborazioni/bonifica/sync/run` e `GET /elaborazioni/bonifica/sync/status`; sul runtime attuale sono abilitate le entity `report_types`, `reports`, `vehicles`, `refuels` e `taken_charge`
+- il provider `Bonifica Oristanese` espone anche `POST /elaborazioni/bonifica/sync/run` e `GET /elaborazioni/bonifica/sync/status`; sul runtime attuale sono abilitate le entity `report_types`, `reports`, `vehicles`, `refuels`, `taken_charge` e `users` (solo ruoli operativi)
 - spazio riservato all'aggiunta futura di altri provider/processi senza rimescolare i flussi esistenti
 - i workspace rapidi della dashboard si aprono in modale, con fallback a pagina completa quando serve approfondire o condividere il link
 - anche i punti di uscita frequenti nei workspace interni (`archivio batch/documenti`, `Capacitas`) riusano il pattern modale per ridurre i salti di pagina

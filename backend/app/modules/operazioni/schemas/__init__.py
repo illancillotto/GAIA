@@ -1,5 +1,9 @@
 """GAIA Operazioni Pydantic schemas."""
 
+from app.modules.operazioni.schemas.operators import (
+    WCOperatorListResponse,
+    WCOperatorResponse,
+)
 from app.modules.operazioni.schemas.vehicles import (
     ApiResponse,
     ErrorResponse,
@@ -41,6 +45,8 @@ __all__ = [
     "TeamMembershipCreate",
     "TeamMembershipResponse",
     "TeamResponse",
+    "WCOperatorListResponse",
+    "WCOperatorResponse",
     "VehicleAssignmentClose",
     "VehicleAssignmentCreate",
     "VehicleAssignmentResponse",
