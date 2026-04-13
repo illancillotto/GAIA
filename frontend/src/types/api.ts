@@ -202,6 +202,44 @@ export type NetworkScanTriggerResponse = {
   alerts_created: number;
 };
 
+export type BonificaUserStaging = {
+  id: string;
+  wc_id: number;
+  username: string | null;
+  email: string | null;
+  user_type: string | null;
+  business_name: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  tax: string | null;
+  phone: string | null;
+  mobile: string | null;
+  role: string | null;
+  enabled: boolean;
+  wc_synced_at: string | null;
+  review_status: string;
+  matched_subject_id: string | null;
+  matched_subject_display_name: string | null;
+  mismatch_fields: Record<string, unknown> | null;
+  reviewed_by: number | null;
+  reviewed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type BonificaUserStagingListResponse = {
+  items: BonificaUserStaging[];
+  total: number;
+  page: number;
+  page_size: number;
+};
+
+export type BonificaUserStagingBulkApproveResponse = {
+  approved: number;
+  skipped: number;
+  errors: string[];
+};
+
 export type NetworkScanDevice = {
   id: number;
   scan_id: number;

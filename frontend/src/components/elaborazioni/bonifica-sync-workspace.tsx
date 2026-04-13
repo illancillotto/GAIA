@@ -120,6 +120,7 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
   const [selectedEntities, setSelectedEntities] = useState<string[]>([]);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [runStartedAt, setRunStartedAt] = useState<string | null>(null);
 
   const admin = isAdminUser(currentUser);
   const entityStatusByKey = syncStatus?.entities ?? {};
@@ -153,6 +154,34 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
     return [...keys, ...extra];
   }, [availableEntityKeys]);
 
+  const defaultEntityKeys = useMemo(() => ENTITY_DEFINITIONS.map((entity) => entity.key), []);
+  const targetEntityKeys = useMemo(
+    () => (selectedEntities.length > 0 ? selectedEntities : defaultEntityKeys),
+    [defaultEntityKeys, selectedEntities],
+  );
+
+  const progress = useMemo(() => {
+    if (!syncStatus) {
+      return { percent: 0, finished: 0, total: targetEntityKeys.length, runningKeys: [] as string[] };
+    }
+    const startedAfter = runStartedAt ? Date.parse(runStartedAt) : null;
+    const statuses = syncStatus.entities ?? {};
+    const runningKeys = targetEntityKeys.filter((key) => statuses[key]?.status === "running");
+    const finishedKeys = targetEntityKeys.filter((key) => {
+      const status = statuses[key];
+      if (!status) return false;
+      if (startedAfter != null) {
+        const startedAt = status.last_started_at ? Date.parse(status.last_started_at) : null;
+        if (startedAt == null || Number.isNaN(startedAt) || startedAt < startedAfter) return false;
+      }
+      return status.status === "completed" || status.status === "failed";
+    });
+    const total = targetEntityKeys.length || 1;
+    const finished = finishedKeys.length;
+    const percent = Math.min(100, Math.round((finished / total) * 100));
+    return { percent, finished, total: targetEntityKeys.length, runningKeys };
+  }, [runStartedAt, syncStatus, targetEntityKeys]);
+
   async function loadAll({ silent = false }: { silent?: boolean } = {}): Promise<void> {
     const token = getStoredAccessToken();
     if (!token) return;
@@ -183,6 +212,19 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
     void loadAll();
   }, []);
 
+  useEffect(() => {
+    if (!admin) return;
+    const activeJobs = syncStatus ? Object.values(syncStatus.entities ?? {}).filter((item) => item.status === "running").length : 0;
+    if (!runStartedAt && activeJobs === 0) return;
+    if (activeJobs === 0 && !running) return;
+
+    const intervalId = window.setInterval(() => {
+      void loadAll({ silent: true });
+    }, 3000);
+
+    return () => window.clearInterval(intervalId);
+  }, [admin, runStartedAt, running, syncStatus]);
+
   async function handleRefresh(): Promise<void> {
     setRefreshing(true);
     setRunMessage(null);
@@ -200,6 +242,14 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
       }
       return [...current, key];
     });
+  }
+
+  function selectAllEntities(): void {
+    setSelectedEntities(defaultEntityKeys);
+  }
+
+  function clearEntitySelection(): void {
+    setSelectedEntities([]);
   }
 
   async function handleRunSync(): Promise<void> {
@@ -227,6 +277,7 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
         .map(([entity, job]) => `${entity}: ${job.status}`)
         .join(" · ");
       setRunMessage(jobSummary || "Sync avviata.");
+      setRunStartedAt(new Date().toISOString());
       await loadAll({ silent: true });
     } catch (runError) {
       setError(runError instanceof Error ? runError.message : "Errore avvio sync Bonifica");
@@ -295,6 +346,22 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
           description="La sync richiede ruolo admin/super_admin. Per entity date-aware puoi indicare date_from/date_to (YYYY-MM-DD)."
         />
         <div className="space-y-6 p-6">
+          {runStartedAt ? (
+            <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="text-sm text-gray-700">
+                  Progress: <span className="font-semibold">{progress.finished}</span> / {progress.total}
+                  {progress.runningKeys.length > 0 ? (
+                    <span className="ml-2 text-gray-500">· in corso: {progress.runningKeys.join(", ")}</span>
+                  ) : null}
+                </div>
+                <div className="text-xs text-gray-500">{progress.percent}%</div>
+              </div>
+              <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-white">
+                <div className="h-full rounded-full bg-[#1D4E35]" style={{ width: `${progress.percent}%` }} />
+              </div>
+            </div>
+          ) : null}
           {!admin ? (
             <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
               Questa console e disponibile solo per utenti con ruolo <span className="font-semibold">admin</span> o{" "}
@@ -332,6 +399,14 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
           <div className="grid gap-3 lg:grid-cols-2">
             <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
               <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">Entity</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button className="btn-secondary" type="button" disabled={!admin || running} onClick={selectAllEntities}>
+                  Seleziona tutte
+                </button>
+                <button className="btn-secondary" type="button" disabled={!admin || running} onClick={clearEntitySelection}>
+                  Pulisci
+                </button>
+              </div>
               <div className="mt-3 space-y-2">
                 {ENTITY_DEFINITIONS.map((entity) => (
                   <label key={entity.key} className="flex items-start gap-3 rounded-xl border border-white bg-white/80 px-3 py-2.5">

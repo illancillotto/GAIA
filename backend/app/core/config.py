@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -9,10 +9,7 @@ class Settings(BaseSettings):
     app_version: str = "0.1.0"
     app_env: str = "development"
 
-    database_url: str = Field(
-        default="postgresql+psycopg://naap_app:change_me@postgres:5432/naap",
-        alias="DATABASE_URL",
-    )
+    database_url: str = Field(alias="DATABASE_URL")
 
     backend_host: str = Field(default="0.0.0.0", alias="BACKEND_HOST")
     backend_port: int = Field(default=8000, alias="BACKEND_PORT")
@@ -49,7 +46,15 @@ class Settings(BaseSettings):
         default=30,
         alias="WC_SYNC_DEFAULT_DAYS",
     )
-    jwt_secret_key: str = Field(default="change_this_secret", alias="JWT_SECRET_KEY")
+    wc_sync_request_delay_ms: int = Field(
+        default=200,
+        alias="WC_SYNC_REQUEST_DELAY_MS",
+    )
+    wc_sync_detail_delay_ms: int = Field(
+        default=100,
+        alias="WC_SYNC_DETAIL_DELAY_MS",
+    )
+    jwt_secret_key: str = Field(alias="JWT_SECRET_KEY")
     jwt_expire_minutes: int = Field(default=60, alias="JWT_EXPIRE_MINUTES")
     jwt_algorithm: str = "HS256"
     nas_host: str = Field(default="nas.internal.local", alias="NAS_HOST")
@@ -140,6 +145,23 @@ class Settings(BaseSettings):
         case_sensitive=False,
         extra="ignore",
     )
+
+    @model_validator(mode="after")
+    def _validate_required_secrets(self) -> "Settings":
+        if not self.database_url.strip():
+            raise ValueError("DATABASE_URL must be set (it cannot be empty).")
+        if "change_me" in self.database_url:
+            raise ValueError(
+                "DATABASE_URL contains a placeholder (change_me). Update your .env with the real DB password."
+            )
+
+        if not self.jwt_secret_key.strip():
+            raise ValueError("JWT_SECRET_KEY must be set (it cannot be empty).")
+        if self.jwt_secret_key in {"change_this_secret", "change_me"}:
+            raise ValueError(
+                "JWT_SECRET_KEY contains a placeholder. Generate a strong random secret and set it in .env."
+            )
+        return self
 
 
 @lru_cache

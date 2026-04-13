@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 import httpx
 
+from app.core.config import settings
 from app.modules.elaborazioni.bonifica_oristanese.session import BonificaOristaneseSessionManager
 from app.modules.shared.datatable_helpers import build_datatable_params
 
@@ -71,9 +73,13 @@ class BonificaDatatableClient:
                 break
             start += page_size
             draw += 1
+            if settings.wc_sync_request_delay_ms > 0:
+                await asyncio.sleep(settings.wc_sync_request_delay_ms / 1000.0)
 
         return rows, total
 
     async def fetch_detail_html(self, path: str) -> str:
+        if settings.wc_sync_detail_delay_ms > 0:
+            await asyncio.sleep(settings.wc_sync_detail_delay_ms / 1000.0)
         response = await self.session_manager.fetch_page(path)
         return response.text

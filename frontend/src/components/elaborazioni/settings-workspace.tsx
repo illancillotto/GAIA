@@ -6,7 +6,6 @@ import { ProtectedPage } from "@/components/app/protected-page";
 import {
   AlertTriangleIcon,
   CheckIcon,
-  ChevronRightIcon,
   LockIcon,
   RefreshIcon,
   SearchIcon,
@@ -196,6 +195,76 @@ type CapacitasTestDialogState = {
   diagnosis: string | null;
 };
 
+type ConfirmDeleteDialogState = {
+  open: boolean;
+  kind: "sister" | "whitecompany" | "capacitas";
+  credentialId: string | number | null;
+  label: string | null;
+  busy: boolean;
+  error: string | null;
+};
+
+function ConfirmDeleteDialog({
+  state,
+  onCancel,
+  onConfirm,
+}: {
+  state: ConfirmDeleteDialogState;
+  onCancel: () => void;
+  onConfirm: () => void;
+}) {
+  if (!state.open) {
+    return null;
+  }
+
+  const subject =
+    state.kind === "sister"
+      ? "credenziale SISTER"
+      : state.kind === "whitecompany"
+        ? "credenziale WhiteCompany"
+        : "credenziale Capacitas";
+
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/45 px-4 py-6 backdrop-blur-sm">
+      <div className="w-full max-w-xl overflow-hidden rounded-[28px] border border-gray-200 bg-white shadow-2xl">
+        <div className="border-b border-gray-100 px-6 py-5">
+          <p className="text-lg font-semibold text-gray-900">Conferma eliminazione</p>
+          <p className="mt-2 text-sm leading-6 text-gray-600">
+            Stai per eliminare una {subject}
+            {state.label ? (
+              <>
+                {" "}
+                (<span className="font-semibold text-gray-900">{state.label}</span>)
+              </>
+            ) : null}
+            . Questa operazione non e reversibile.
+          </p>
+        </div>
+
+        {state.error ? (
+          <div className="px-6 pt-5">
+            <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">{state.error}</div>
+          </div>
+        ) : null}
+
+        <div className="flex flex-wrap justify-end gap-3 px-6 py-5">
+          <button className="btn-secondary" disabled={state.busy} onClick={onCancel} type="button">
+            Annulla
+          </button>
+          <button
+            className="rounded-2xl bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+            disabled={state.busy}
+            onClick={onConfirm}
+            type="button"
+          >
+            {state.busy ? "Elimino..." : "Elimina"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function CapacitasTestDialog({
   state,
   onClose,
@@ -272,9 +341,6 @@ function CapacitasTestDialog({
 }
 
 export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?: boolean }) {
-  const [sisterExpanded, setSisterExpanded] = useState(true);
-  const [bonificaExpanded, setBonificaExpanded] = useState(true);
-  const [capacitasExpanded, setCapacitasExpanded] = useState(true);
   const [activeTab, setActiveTab] = useState<"sister" | "whitecompany" | "capacitas">("sister");
   const [credentialStatus, setCredentialStatus] = useState<ElaborazioneCredentialStatus | null>(null);
   const [formState, setFormState] = useState(DEFAULT_SISTER_FORM);
@@ -314,6 +380,14 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
   const [bonificaTestingId, setBonificaTestingId] = useState<number | null>(null);
   const [bonificaStatusMessage, setBonificaStatusMessage] = useState<string | null>(null);
   const [bonificaError, setBonificaError] = useState<string | null>(null);
+  const [confirmDeleteDialog, setConfirmDeleteDialog] = useState<ConfirmDeleteDialogState>({
+    open: false,
+    kind: "sister",
+    credentialId: null,
+    label: null,
+    busy: false,
+    error: null,
+  });
 
   useEffect(() => {
     void Promise.all([loadCredentials(), loadBonificaCredentials(), loadCapacitasCredentials()]);
@@ -506,23 +580,68 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
     }
   }
 
-  async function handleDelete(): Promise<void> {
+  async function deleteSisterCredentialById(
+    credentialId: string,
+    label: string | null,
+    options: { resetIfSelected: boolean },
+  ): Promise<void> {
     const token = getStoredAccessToken();
-    if (!token || !formState.id) return;
+    if (!token) return;
 
     setBusy(true);
     try {
-      await deleteElaborazioneCredential(token, formState.id);
+      await deleteElaborazioneCredential(token, credentialId);
       await loadCredentials();
-      resetSisterForm();
-      setStatusMessage("Credenziale SISTER rimossa.");
+      if (options.resetIfSelected) {
+        resetSisterForm();
+      }
+      setStatusMessage(label ? `Credenziale ${label} rimossa.` : "Credenziale SISTER rimossa.");
       setError(null);
       setTestResult(null);
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "Errore eliminazione credenziali");
       setStatusMessage(null);
+      throw deleteError;
     } finally {
       setBusy(false);
+    }
+  }
+
+  function openConfirmDelete(payload: { kind: ConfirmDeleteDialogState["kind"]; credentialId: string | number; label?: string | null }): void {
+    setConfirmDeleteDialog({
+      open: true,
+      kind: payload.kind,
+      credentialId: payload.credentialId,
+      label: payload.label ?? null,
+      busy: false,
+      error: null,
+    });
+  }
+
+  function closeConfirmDelete(): void {
+    setConfirmDeleteDialog((current) => ({ ...current, open: false, busy: false, error: null }));
+  }
+
+  async function confirmDelete(): Promise<void> {
+    const { kind, credentialId, label } = confirmDeleteDialog;
+    if (!credentialId) return;
+
+    setConfirmDeleteDialog((current) => ({ ...current, busy: true, error: null }));
+    try {
+      if (kind === "sister" && typeof credentialId === "string") {
+        await deleteSisterCredentialById(credentialId, label, { resetIfSelected: formState.id === credentialId });
+      } else if (kind === "whitecompany" && typeof credentialId === "number") {
+        await handleDeleteBonifica(credentialId);
+      } else if (kind === "capacitas" && typeof credentialId === "number") {
+        await handleDeleteCapacitas(credentialId);
+      }
+      closeConfirmDelete();
+    } catch (deleteError) {
+      setConfirmDeleteDialog((current) => ({
+        ...current,
+        busy: false,
+        error: deleteError instanceof Error ? deleteError.message : "Errore eliminazione credenziale",
+      }));
     }
   }
 
@@ -969,6 +1088,7 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
           }))
         }
       />
+      <ConfirmDeleteDialog state={confirmDeleteDialog} onCancel={closeConfirmDelete} onConfirm={() => void confirmDelete()} />
 
       <section className={`overflow-hidden rounded-[28px] border border-[#d8dfd3] bg-[radial-gradient(circle_at_top_left,_rgba(212,231,220,0.95),_rgba(248,246,238,0.92)_55%,_rgba(255,255,255,0.98)_100%)] shadow-panel ${embedded ? "p-5" : "p-6"}`}>
         <div className={`grid xl:grid-cols-[1.15fr,0.85fr] ${embedded ? "gap-4" : "gap-6"}`}>
@@ -1057,55 +1177,42 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
         </div>
       </section>
 
-      {embedded ? (
-        <div className="flex flex-wrap gap-2 rounded-[22px] border border-[#d9dfd6] bg-white p-2 shadow-panel">
-          <button
-            className={`rounded-2xl px-4 py-2 text-sm font-semibold transition ${
-              activeTab === "sister" ? "bg-[#1D4E35] text-white" : "bg-gray-50 text-gray-700 hover:bg-gray-100"
-            }`}
-            onClick={() => setActiveTab("sister")}
-            type="button"
-          >
-            SISTER
-          </button>
-          <button
-            className={`rounded-2xl px-4 py-2 text-sm font-semibold transition ${
-              activeTab === "whitecompany" ? "bg-[#1D4E35] text-white" : "bg-gray-50 text-gray-700 hover:bg-gray-100"
-            }`}
-            onClick={() => setActiveTab("whitecompany")}
-            type="button"
-          >
-            WhiteCompany
-          </button>
-          <button
-            className={`rounded-2xl px-4 py-2 text-sm font-semibold transition ${
-              activeTab === "capacitas" ? "bg-[#1D4E35] text-white" : "bg-gray-50 text-gray-700 hover:bg-gray-100"
-            }`}
-            onClick={() => setActiveTab("capacitas")}
-            type="button"
-          >
-            Capacitas
-          </button>
-        </div>
-      ) : null}
+      <div
+        className={`flex flex-wrap rounded-[22px] border border-[#d9dfd6] bg-white shadow-panel ${
+          embedded ? "gap-2 p-2" : "gap-2.5 p-2.5"
+        }`}
+      >
+        <button
+          className={`rounded-2xl px-4 py-2 text-sm font-semibold transition ${
+            activeTab === "sister" ? "bg-[#1D4E35] text-white" : "bg-gray-50 text-gray-700 hover:bg-gray-100"
+          }`}
+          onClick={() => setActiveTab("sister")}
+          type="button"
+        >
+          SISTER
+        </button>
+        <button
+          className={`rounded-2xl px-4 py-2 text-sm font-semibold transition ${
+            activeTab === "whitecompany" ? "bg-[#1D4E35] text-white" : "bg-gray-50 text-gray-700 hover:bg-gray-100"
+          }`}
+          onClick={() => setActiveTab("whitecompany")}
+          type="button"
+        >
+          WhiteCompany
+        </button>
+        <button
+          className={`rounded-2xl px-4 py-2 text-sm font-semibold transition ${
+            activeTab === "capacitas" ? "bg-[#1D4E35] text-white" : "bg-gray-50 text-gray-700 hover:bg-gray-100"
+          }`}
+          onClick={() => setActiveTab("capacitas")}
+          type="button"
+        >
+          Capacitas
+        </button>
+      </div>
 
       <section className="space-y-4">
-        {!embedded ? (
-          <button
-            aria-expanded={sisterExpanded}
-            className="flex w-full items-center justify-between rounded-[22px] border border-[#d9dfd6] bg-white px-5 py-4 text-left shadow-panel transition hover:border-[#c8d8ce]"
-            onClick={() => setSisterExpanded((current) => !current)}
-            type="button"
-          >
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#1D4E35]">Sezione</p>
-              <p className="mt-1 text-base font-semibold text-gray-900">SISTER</p>
-            </div>
-            <ChevronRightIcon className={`h-5 w-5 text-gray-500 transition-transform ${sisterExpanded ? "rotate-90" : ""}`} />
-          </button>
-        ) : null}
-
-        {(embedded ? activeTab === "sister" : sisterExpanded) ? (
+        {activeTab === "sister" ? (
           <section className={`grid ${embedded ? "gap-4 xl:grid-cols-1" : "gap-6 xl:grid-cols-[1.3fr,0.7fr]"}`}>
             <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
               <div className={`border-b border-[#edf1eb] bg-[linear-gradient(135deg,_rgba(29,78,53,0.06),_rgba(255,255,255,0.92))] ${embedded ? "px-4 py-3" : "px-6 py-5"}`}>
@@ -1230,7 +1337,11 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                     <button
                       className="btn-secondary"
                       disabled={busy || !formState.id}
-                      onClick={() => void handleDelete()}
+                      onClick={() =>
+                        formState.id
+                          ? openConfirmDelete({ kind: "sister", credentialId: formState.id, label: formState.label || "SISTER" })
+                          : undefined
+                      }
                       type="button"
                     >
                       Elimina
@@ -1339,26 +1450,13 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                                     <button
                                       className="text-red-600 transition hover:text-red-700"
                                       disabled={busy}
-                                      onClick={async () => {
-                                        const token = getStoredAccessToken();
-                                        if (!token) return;
-                                        setBusy(true);
-                                        try {
-                                          await deleteElaborazioneCredential(token, credential.id);
-                                          await loadCredentials();
-                                          if (formState.id === credential.id) {
-                                            resetSisterForm();
-                                          }
-                                          setStatusMessage(`Credenziale ${credential.label} rimossa.`);
-                                          setError(null);
-                                          setTestResult(null);
-                                        } catch (deleteError) {
-                                          setError(deleteError instanceof Error ? deleteError.message : "Errore eliminazione credenziale");
-                                          setStatusMessage(null);
-                                        } finally {
-                                          setBusy(false);
-                                        }
-                                      }}
+                                      onClick={() =>
+                                        openConfirmDelete({
+                                          kind: "sister",
+                                          credentialId: credential.id,
+                                          label: credential.label,
+                                        })
+                                      }
                                       type="button"
                                     >
                                       Elimina
@@ -1479,22 +1577,7 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
       </section>
 
       <section className="space-y-4">
-        {!embedded ? (
-          <button
-            aria-expanded={bonificaExpanded}
-            className="flex w-full items-center justify-between rounded-[22px] border border-[#d9dfd6] bg-white px-5 py-4 text-left shadow-panel transition hover:border-[#c8d8ce]"
-            onClick={() => setBonificaExpanded((current) => !current)}
-            type="button"
-          >
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#1D4E35]">Sezione</p>
-              <p className="mt-1 text-base font-semibold text-gray-900">Bonifica Oristanese</p>
-            </div>
-            <ChevronRightIcon className={`h-5 w-5 text-gray-500 transition-transform ${bonificaExpanded ? "rotate-90" : ""}`} />
-          </button>
-        ) : null}
-
-        {(embedded ? activeTab === "whitecompany" : bonificaExpanded) ? (
+        {activeTab === "whitecompany" ? (
           <>
             <section className={`grid gap-6 ${embedded ? "xl:grid-cols-1" : "xl:grid-cols-[0.95fr,1.05fr]"}`}>
               <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
@@ -1719,7 +1802,13 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                               <button
                                 className="text-red-600 transition hover:text-red-700 disabled:cursor-not-allowed disabled:text-red-200"
                                 disabled={bonificaBusy}
-                                onClick={() => void handleDeleteBonifica(credential.id)}
+                                onClick={() =>
+                                  openConfirmDelete({
+                                    kind: "whitecompany",
+                                    credentialId: credential.id,
+                                    label: credential.label,
+                                  })
+                                }
                                 type="button"
                               >
                                 Elimina
@@ -1738,22 +1827,7 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
       </section>
 
       <section className="space-y-4">
-        {!embedded ? (
-          <button
-            aria-expanded={capacitasExpanded}
-            className="flex w-full items-center justify-between rounded-[22px] border border-[#d9dfd6] bg-white px-5 py-4 text-left shadow-panel transition hover:border-[#c8d8ce]"
-            onClick={() => setCapacitasExpanded((current) => !current)}
-            type="button"
-          >
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#3056d3]">Sezione</p>
-              <p className="mt-1 text-base font-semibold text-gray-900">Capacitas</p>
-            </div>
-            <ChevronRightIcon className={`h-5 w-5 text-gray-500 transition-transform ${capacitasExpanded ? "rotate-90" : ""}`} />
-          </button>
-        ) : null}
-
-        {(embedded ? activeTab === "capacitas" : capacitasExpanded) ? (
+        {activeTab === "capacitas" ? (
           <>
             <section className={`grid gap-6 ${embedded ? "xl:grid-cols-1" : "xl:grid-cols-[0.95fr,1.05fr]"}`}>
               <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
@@ -1811,7 +1885,7 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                       />
                     </label>
                     <label className="space-y-2">
-                      <span className="label-caption">Fascia da</span>
+                      <span className="label-caption">Fascia dalle ore</span>
                       <input
                         className="form-control"
                         max={23}
@@ -1827,7 +1901,7 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                       />
                     </label>
                     <label className="space-y-2">
-                      <span className="label-caption">Fascia a</span>
+                      <span className="label-caption">Fascia alle ore</span>
                       <input
                         className="form-control"
                         max={23}
@@ -2004,7 +2078,13 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                               <button
                                 className="text-red-600 transition hover:text-red-700 disabled:cursor-not-allowed disabled:text-red-200"
                                 disabled={capacitasBusy}
-                                onClick={() => void handleDeleteCapacitas(credential.id)}
+                                onClick={() =>
+                                  openConfirmDelete({
+                                    kind: "capacitas",
+                                    credentialId: credential.id,
+                                    label: credential.label,
+                                  })
+                                }
                                 type="button"
                               >
                                 Elimina

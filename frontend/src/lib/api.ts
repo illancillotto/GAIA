@@ -43,6 +43,9 @@ import type {
   BonificaSyncRunRequest,
   BonificaSyncRunResponse,
   BonificaSyncStatusResponse,
+  BonificaUserStaging,
+  BonificaUserStagingBulkApproveResponse,
+  BonificaUserStagingListResponse,
   CurrentUser,
   DashboardSummary,
   EffectivePermission,
@@ -1247,6 +1250,61 @@ export async function runBonificaSync(token: string, payload: BonificaSyncRunReq
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(payload),
+  });
+}
+
+export async function getUtenzeBonificaStaging(
+  token: string,
+  params: { page?: number; page_size?: number } = {},
+): Promise<BonificaUserStagingListResponse> {
+  const search = new URLSearchParams();
+  if (params.page != null) search.set("page", String(params.page));
+  if (params.page_size != null) search.set("page_size", String(params.page_size));
+  const suffix = search.toString();
+
+  return request<BonificaUserStagingListResponse>(`/utenze/bonifica-staging${suffix ? `?${suffix}` : ""}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getUtenzeBonificaStagingItem(token: string, stagingId: string): Promise<BonificaUserStaging> {
+  return request<BonificaUserStaging>(`/utenze/bonifica-staging/${stagingId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function approveUtenzeBonificaStagingItem(token: string, stagingId: string): Promise<BonificaUserStaging> {
+  return request<BonificaUserStaging>(`/utenze/bonifica-staging/${stagingId}/approve`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function rejectUtenzeBonificaStagingItem(token: string, stagingId: string): Promise<BonificaUserStaging> {
+  return request<BonificaUserStaging>(`/utenze/bonifica-staging/${stagingId}/reject`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function bulkApproveUtenzeBonificaStaging(
+  token: string,
+  ids: string[],
+): Promise<BonificaUserStagingBulkApproveResponse> {
+  return request<BonificaUserStagingBulkApproveResponse>("/utenze/bonifica-staging/bulk-approve", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ ids }),
   });
 }
 
