@@ -448,8 +448,9 @@ GET    /elaborazioni/bonifica/sync/status          ← stato ultima sync per ent
 
 - `POST /elaborazioni/bonifica/sync/run` crea un `wc_sync_job` per ogni entity richiesta
 - `GET /elaborazioni/bonifica/sync/status` legge l'ultimo job persistito per entity e restituisce `never` solo come stato derivato della response quando non esistono run precedenti
-- Fase 1 attiva: `report_types`, `reports`
-- Fasi successive pianificate ma non ancora attive su runtime: `vehicles`, `refuels`, `taken-charge`, `users`, `areas`, `warehouse`
+- Entity attive su runtime: `report_types`, `reports`, `vehicles`, `refuels`, `taken_charge`
+- `refuels` usa parsing difensivo del dettaglio `GET /vehicles/refuel/edit/{id}`: i record senza litri validi vengono saltati, non inventati
+- Fasi successive pianificate ma non ancora attive su runtime: `users`, `areas`, `warehouse`
 
 ---
 
@@ -470,10 +471,10 @@ router.include_router(bonifica_router, prefix="/elaborazioni/bonifica-oristanese
 - [ ] Verificare durata sessione Laravel (controllare `SESSION_LIFETIME` in `.env` del sito)
 - [ ] Verificare se `/areas/datatable` restituisce le stesse aree di `/areas/organizational-charts/list` (sembrano entità diverse: aree geografiche vs aree org)
 - [ ] Implementare `bonifica_user_staging` + logica mismatch con `ana_subjects`
-- [ ] Verificare endpoint dettaglio rifornimento singolo: `GET /vehicles/refuel/edit/{id}`
+- [ ] Verificare in produzione l'insieme completo dei field names del dettaglio rifornimento `GET /vehicles/refuel/edit/{id}` per ridurre gli skip dei record senza litri
 - [ ] Verificare endpoint dettaglio presa in carico: `GET /vehicles/taken-charge/edit/{id}`
 - [ ] Mappare endpoint segnalazioni individuali (non solo export bulk): `GET /reports/{id}` (da verificare)
-- [ ] Estendere `POST /elaborazioni/bonifica/sync/run` alle entity Fase 3+ (`vehicles`, `refuels`, `taken-charge`, `users`, `areas`, `warehouse`)
+- [ ] Estendere `POST /elaborazioni/bonifica/sync/run` alle entity restanti (`users`, `areas`, `warehouse`)
 - [ ] Portare lo stato sync Bonifica nel workspace frontend `/elaborazioni/settings`
 
 ---

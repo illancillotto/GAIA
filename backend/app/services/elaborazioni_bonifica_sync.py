@@ -12,7 +12,10 @@ from app.models.application_user import ApplicationUser
 from app.models.wc_sync_job import WCSyncJob
 from app.modules.elaborazioni.bonifica_oristanese.apps.registry import list_bonifica_apps
 from app.modules.elaborazioni.bonifica_oristanese.apps.report_types.client import BonificaReportTypesClient
+from app.modules.elaborazioni.bonifica_oristanese.apps.refuels.client import BonificaRefuelsClient
 from app.modules.elaborazioni.bonifica_oristanese.apps.reports.client import BonificaReportsClient
+from app.modules.elaborazioni.bonifica_oristanese.apps.taken_charge.client import BonificaTakenChargeClient
+from app.modules.elaborazioni.bonifica_oristanese.apps.vehicles.client import BonificaVehiclesClient
 from app.modules.elaborazioni.bonifica_oristanese.models import (
     BonificaSyncEntityStatus,
     BonificaSyncJobStart,
@@ -22,6 +25,11 @@ from app.modules.elaborazioni.bonifica_oristanese.models import (
 )
 from app.modules.elaborazioni.bonifica_oristanese.session import BonificaOristaneseSessionManager
 from app.modules.operazioni.services.sync_report_types import sync_white_report_types
+from app.modules.operazioni.services.sync_vehicles import (
+    sync_white_refuels,
+    sync_white_taken_charge,
+    sync_white_vehicles,
+)
 from app.modules.operazioni.services.sync_white import sync_white_reports
 from app.services.elaborazioni_bonifica_oristanese import (
     mark_credential_error,
@@ -29,7 +37,7 @@ from app.services.elaborazioni_bonifica_oristanese import (
     pick_credential,
 )
 
-SUPPORTED_SYNC_ENTITIES = ("report_types", "reports")
+SUPPORTED_SYNC_ENTITIES = ("report_types", "reports", "vehicles", "refuels", "taken_charge")
 DATE_AWARE_SYNC_ENTITIES = {"reports", "refuels", "taken_charge", "warehouse_requests"}
 
 
@@ -133,6 +141,9 @@ async def run_bonifica_sync(
         mark_credential_used(db, credential.id, authenticated_url=session.authenticated_url)
         report_types_client = BonificaReportTypesClient(manager)
         reports_client = BonificaReportsClient(manager)
+        vehicles_client = BonificaVehiclesClient(manager)
+        refuels_client = BonificaRefuelsClient(manager)
+        taken_charge_client = BonificaTakenChargeClient(manager)
 
         for entity in entities:
             job = db.get(WCSyncJob, jobs[entity].id)
@@ -159,6 +170,55 @@ async def run_bonifica_sync(
                     result = _SyncExecutionResult(
                         synced=sync_result.synced,
                         skipped=sync_result.skipped,
+                        errors=len(sync_result.errors),
+                        error_detail="\n".join(sync_result.errors[:20]) if sync_result.errors else None,
+                    )
+                elif entity == "vehicles":
+                    rows, _ = await vehicles_client.fetch_vehicles()
+                    sync_result = sync_white_vehicles(
+                        db=db,
+                        current_user=current_user,
+                        rows=rows,
+                    )
+                    result = _SyncExecutionResult(
+                        synced=sync_result.vehicles_synced,
+                        skipped=sync_result.vehicles_skipped,
+                        errors=len(sync_result.errors),
+                        error_detail="\n".join(sync_result.errors[:20]) if sync_result.errors else None,
+                    )
+                elif entity == "refuels":
+                    date_from, date_to = _resolve_date_window(request, entity)
+                    assert date_from is not None and date_to is not None
+                    rows, _ = await refuels_client.fetch_refuels(
+                        date_from=date_from,
+                        date_to=date_to,
+                    )
+                    sync_result = sync_white_refuels(
+                        db=db,
+                        current_user=current_user,
+                        rows=rows,
+                    )
+                    result = _SyncExecutionResult(
+                        synced=sync_result.fuel_logs_synced,
+                        skipped=sync_result.fuel_logs_skipped,
+                        errors=len(sync_result.errors),
+                        error_detail="\n".join(sync_result.errors[:20]) if sync_result.errors else None,
+                    )
+                elif entity == "taken_charge":
+                    date_from, date_to = _resolve_date_window(request, entity)
+                    assert date_from is not None and date_to is not None
+                    rows, _ = await taken_charge_client.fetch_taken_charge(
+                        date_from=date_from,
+                        date_to=date_to,
+                    )
+                    sync_result = sync_white_taken_charge(
+                        db=db,
+                        current_user=current_user,
+                        rows=rows,
+                    )
+                    result = _SyncExecutionResult(
+                        synced=sync_result.usage_sessions_synced,
+                        skipped=sync_result.usage_sessions_skipped,
                         errors=len(sync_result.errors),
                         error_detail="\n".join(sync_result.errors[:20]) if sync_result.errors else None,
                     )
