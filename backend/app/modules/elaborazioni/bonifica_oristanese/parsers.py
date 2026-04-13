@@ -3,17 +3,29 @@ from __future__ import annotations
 from bs4 import BeautifulSoup
 
 
-def clean_html_text(value: str | None) -> str:
-    if not value:
+def _normalize_markup(value: object | None) -> str | bytes:
+    if value is None:
         return ""
-    soup = BeautifulSoup(value, "html.parser")
+    if isinstance(value, bytes):
+        return value
+    if isinstance(value, str):
+        return value
+    return str(value)
+
+
+def clean_html_text(value: object | None) -> str:
+    normalized = _normalize_markup(value)
+    if not normalized:
+        return ""
+    soup = BeautifulSoup(normalized, "html.parser")
     return " ".join(soup.get_text(" ", strip=True).split())
 
 
-def extract_href_id(value: str | None, marker: str) -> int | None:
-    if not value:
+def extract_href_id(value: object | None, marker: str) -> int | None:
+    normalized = _normalize_markup(value)
+    if not normalized:
         return None
-    soup = BeautifulSoup(value, "html.parser")
+    soup = BeautifulSoup(normalized, "html.parser")
     for link in soup.find_all("a", href=True):
         href = link["href"]
         if marker not in href:
@@ -24,8 +36,8 @@ def extract_href_id(value: str | None, marker: str) -> int | None:
     return None
 
 
-def parse_form_fields(html: str) -> dict[str, str | list[str] | bool]:
-    soup = BeautifulSoup(html, "html.parser")
+def parse_form_fields(html: object) -> dict[str, str | list[str] | bool]:
+    soup = BeautifulSoup(_normalize_markup(html), "html.parser")
     result: dict[str, str | list[str] | bool] = {}
 
     for field in soup.find_all(["input", "select", "textarea"]):

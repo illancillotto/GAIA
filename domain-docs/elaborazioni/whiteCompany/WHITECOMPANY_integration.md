@@ -492,6 +492,7 @@ GET    /elaborazioni/bonifica/sync/status          ← stato ultima sync per ent
 - `GET /elaborazioni/bonifica/sync/status` legge l'ultimo job persistito per entity e restituisce `never` solo come stato derivato della response quando non esistono run precedenti
 - Entity attive su runtime: `report_types`, `reports`, `vehicles`, `refuels`, `taken_charge`, `users`, `areas`, `warehouse_requests`, `org_charts`, `consorziati`
 - `refuels` usa parsing difensivo del dettaglio `GET /vehicles/refuel/edit/{id}`: prima prova i field name noti del form, poi applica fallback label-based (`label`, `th/td`) per ridurre gli skip; i record senza litri validi vengono comunque saltati, non inventati
+- il parser comune `clean_html_text()` ora normalizza anche valori numerici/non-stringa provenienti dai DataTables White prima di passarli a BeautifulSoup, evitando errori runtime del tipo `Incoming markup is of an invalid type`
 - `users` sincronizza oggi solo gli operatori WhiteCompany non `Consorziato`, con upsert locale su tabella `wc_operator` e collegamento opzionale a `application_users` via email
 - `areas` sincronizza la lookup geografica WhiteCompany in tabella `wc_area`
 - `warehouse_requests` sincronizza le richieste magazzino in `inventory.warehouse_request`
@@ -505,6 +506,7 @@ GET    /elaborazioni/bonifica/sync/status          ← stato ultima sync per ent
 
 - La suite pytest del provider usa default di sessione impostati in `backend/tests/conftest.py` per evitare che placeholder locali (`change_me`) in `.env` blocchino il bootstrap dell'app durante la collection
 - Questo fix copre il bootstrap test locale; non sostituisce la configurazione reale degli ambienti dev/stage/prod
+- Le eccezioni di sync Bonifica vengono loggate anche lato backend (`logger.exception`) nel servizio orchestratore, cosi i container Docker espongono trace utili per diagnosi quando una entity fallisce in produzione
 
 ---
 

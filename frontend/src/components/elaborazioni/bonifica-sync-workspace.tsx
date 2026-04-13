@@ -269,6 +269,19 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
 
     const trackedKeys = lastRunEntityKeysRef.current;
     if (trackedKeys.length === 0) {
+      if (syncLog.length === 0) {
+        const runningEntities = Object.values(syncStatus.entities ?? {}).filter((item) => item.status === "running");
+        if (runningEntities.length > 0) {
+          setSyncLog(
+            runningEntities.map((item, index) => ({
+              id: `seed-${item.entity}-${index}`,
+              at: item.last_started_at ?? new Date().toISOString(),
+              tone: "warning" as const,
+              message: `${ENTITY_DEFINITIONS.find((entity) => entity.key === item.entity)?.label ?? item.entity}: job già in esecuzione.`,
+            })),
+          );
+        }
+      }
       previousStatusesRef.current = Object.fromEntries(
         Object.entries(syncStatus.entities ?? {}).map(([key, value]) => [key, value.status]),
       );
@@ -297,7 +310,7 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
     previousStatusesRef.current = Object.fromEntries(
       Object.entries(currentStatuses).map(([key, value]) => [key, value.status]),
     );
-  }, [syncStatus]);
+  }, [syncLog.length, syncStatus]);
 
   useEffect(() => {
     if (!runStartedAt || progress.total === 0) return;

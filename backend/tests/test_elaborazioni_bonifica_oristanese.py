@@ -38,6 +38,7 @@ from app.modules.elaborazioni.bonifica_oristanese.apps.warehouse_requests.client
 )
 from app.modules.inventory.models import WarehouseRequest
 from app.modules.elaborazioni.bonifica_oristanese.models import BonificaOristaneseCredentialTestResult
+from app.modules.elaborazioni.bonifica_oristanese.parsers import clean_html_text
 from app.modules.operazioni.models.reports import FieldReport, FieldReportCategory
 from app.modules.operazioni.models.wc_area import WCArea
 from app.modules.operazioni.models.vehicles import Vehicle, VehicleFuelLog, VehicleUsageSession
@@ -149,6 +150,10 @@ def test_refuel_detail_label_fallback_extracts_liters_cost_and_station() -> None
     assert labeled["litri erogati"] == "32,50"
     assert labeled["totale euro"] == "58,40"
     assert labeled["distributore"] == "Q8 Oristano"
+
+
+def test_clean_html_text_accepts_numeric_values() -> None:
+    assert clean_html_text(39624) == "39624"
 
 
 def test_org_chart_entries_include_checked_checkbox_values() -> None:

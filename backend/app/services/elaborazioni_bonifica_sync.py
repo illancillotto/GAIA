@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
+import logging
 import uuid
 
 from sqlalchemy import select
@@ -60,6 +61,7 @@ SUPPORTED_SYNC_ENTITIES = (
     "consorziati",
 )
 DATE_AWARE_SYNC_ENTITIES = {"reports", "refuels", "taken_charge", "warehouse_requests"}
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -303,6 +305,7 @@ async def run_bonifica_sync(
                 _finalize_job(db, job, result)
                 db.commit()
             except Exception as exc:
+                logger.exception("Bonifica sync failed for entity `%s`", entity)
                 job.status = "failed"
                 job.finished_at = datetime.now(timezone.utc)
                 job.records_synced = 0
@@ -311,6 +314,7 @@ async def run_bonifica_sync(
                 job.error_detail = str(exc)
                 db.commit()
     except Exception as exc:
+        logger.exception("Bonifica sync bootstrap failed before entity execution")
         mark_credential_error(db, credential.id, str(exc))
         for entity in entities:
             job = db.get(WCSyncJob, jobs[entity].id)
