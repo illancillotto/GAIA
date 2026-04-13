@@ -82,6 +82,15 @@ type DashboardRunningOperation = {
   detail: string;
   startedAt: string | null;
   tone: "default" | "warning" | "success";
+  kind: "batch" | "bonifica";
+  bonifica?: {
+    entity: string;
+    records_synced: number | null;
+    records_skipped: number | null;
+    records_errors: number | null;
+    error_detail: string | null;
+    last_finished_at: string | null;
+  };
 };
 
 export default function ElaborazioniPage() {
@@ -233,6 +242,7 @@ export default function ElaborazioniPage() {
         detail: batch.current_operation ?? batch.status,
         startedAt: batch.started_at ?? batch.created_at,
         tone: batch.status === "processing" ? "warning" : "default",
+        kind: "batch",
       });
     }
 
@@ -245,6 +255,15 @@ export default function ElaborazioniPage() {
         detail: "Sync entity in esecuzione",
         startedAt: entity.last_started_at,
         tone: "warning",
+        kind: "bonifica",
+        bonifica: {
+          entity: entity.entity,
+          records_synced: entity.records_synced,
+          records_skipped: entity.records_skipped,
+          records_errors: entity.records_errors,
+          error_detail: entity.error_detail,
+          last_finished_at: entity.last_finished_at,
+        },
       });
     }
 
@@ -375,18 +394,20 @@ export default function ElaborazioniPage() {
           {runningOperations.length === 0 ? (
             <EmptyState icon={RefreshIcon} title="Nessuna operazione attiva" description="Al momento non risultano batch in processing o sync WhiteCompany in esecuzione." />
           ) : (
-            <div className="space-y-3">
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {runningOperations.map((operation) => (
-                <div key={operation.id} className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">{operation.area}</p>
-                      <p className="mt-1 text-sm font-medium text-gray-900">{operation.title}</p>
-                      <p className="mt-1 text-sm text-gray-600">{operation.detail}</p>
-                    </div>
-                    <div className="text-right">
+                <article
+                  key={operation.id}
+                  className="flex h-full flex-col justify-between gap-4 rounded-3xl border border-gray-100 bg-gray-50 p-4"
+                >
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">{operation.area}</p>
+                        <p className="mt-1 truncate text-sm font-medium text-gray-900">{operation.title}</p>
+                      </div>
                       <span
-                        className={`inline-flex rounded-full px-2 py-1 text-[11px] font-semibold ${
+                        className={`inline-flex shrink-0 rounded-full px-2 py-1 text-[11px] font-semibold ${
                           operation.tone === "warning"
                             ? "bg-amber-50 text-amber-700"
                             : operation.tone === "success"
@@ -396,10 +417,43 @@ export default function ElaborazioniPage() {
                       >
                         attiva
                       </span>
-                      <p className="mt-2 text-xs text-gray-500">{formatDateTime(operation.startedAt)}</p>
                     </div>
+
+                    <p className="mt-2 line-clamp-2 text-sm text-gray-600">{operation.detail}</p>
+                    <p className="mt-2 text-xs text-gray-500">Avvio: {formatDateTime(operation.startedAt)}</p>
+
+                    {operation.kind === "bonifica" && operation.bonifica ? (
+                      <div className="mt-4 grid gap-2 text-xs text-gray-600 sm:grid-cols-2">
+                        <div className="rounded-2xl bg-white px-3 py-2 ring-1 ring-gray-100">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Synced</p>
+                          <p className="mt-1 text-sm font-semibold text-emerald-700">{operation.bonifica.records_synced ?? "—"}</p>
+                        </div>
+                        <div className="rounded-2xl bg-white px-3 py-2 ring-1 ring-gray-100">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Errors</p>
+                          <p className="mt-1 text-sm font-semibold text-red-700">{operation.bonifica.records_errors ?? "—"}</p>
+                        </div>
+                        <div className="rounded-2xl bg-white px-3 py-2 ring-1 ring-gray-100">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Skipped</p>
+                          <p className="mt-1 text-sm font-semibold text-slate-700">{operation.bonifica.records_skipped ?? "—"}</p>
+                        </div>
+                        <div className="rounded-2xl bg-white px-3 py-2 ring-1 ring-gray-100">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Ultimo fine</p>
+                          <p className="mt-1 text-sm font-semibold text-gray-900">
+                            {operation.bonifica.last_finished_at ? formatDateTime(operation.bonifica.last_finished_at) : "—"}
+                          </p>
+                        </div>
+                        {operation.bonifica.error_detail ? (
+                          <div className="sm:col-span-2">
+                            <div className="rounded-2xl border border-amber-100 bg-amber-50 px-3 py-2">
+                              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700">Errore</p>
+                              <p className="mt-1 break-words text-sm text-amber-900">{operation.bonifica.error_detail}</p>
+                            </div>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
-                </div>
+                </article>
               ))}
             </div>
           )}

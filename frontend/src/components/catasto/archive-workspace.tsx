@@ -76,8 +76,9 @@ export function CatastoArchiveWorkspaceContent({
   isolatedView?: boolean;
 }) {
   const pathname = usePathname();
-  const activeView = initialView;
   const isElaborazioni = pathname.startsWith("/elaborazioni");
+  const isCatasto = pathname.startsWith("/catasto");
+  const activeView: ArchiveView = isCatasto ? "documents" : initialView;
   const [batches, setBatches] = useState<ElaborazioneBatch[]>([]);
   const [batchError, setBatchError] = useState<string | null>(null);
   const [cancelBusyId, setCancelBusyId] = useState<string | null>(null);
@@ -93,9 +94,11 @@ export function CatastoArchiveWorkspaceContent({
   const [zipBusy, setZipBusy] = useState(false);
 
   useEffect(() => {
-    void refreshBatches();
+    if (isElaborazioni) {
+      void refreshBatches();
+    }
     void loadDocuments(EMPTY_FILTERS);
-  }, []);
+  }, [isElaborazioni]);
 
   useEffect(() => {
     async function loadComuni(): Promise<void> {
@@ -304,7 +307,7 @@ export function CatastoArchiveWorkspaceContent({
   const processingCount = batches.filter((batch) => batch.status === "processing").length;
   const failedCount = batches.filter((batch) => batch.failed_items > 0 || batch.status === "failed").length;
   const sharedError = activeView === "batches" ? batchError : documentsError;
-  const documentsOnlyMode = isolatedView && activeView === "documents";
+  const documentsOnlyMode = activeView === "documents" && (isCatasto || isolatedView);
 
   const content = (
     <>
@@ -321,14 +324,14 @@ export function CatastoArchiveWorkspaceContent({
             ? "Archivio documenti catastali"
             : isElaborazioni
             ? "Monitor operativo delle elaborazioni e accesso ai documenti prodotti."
-            : "Un unico archivio per seguire la filiera Catasto: dai lotti eseguiti ai documenti prodotti."
+            : "Archivio documenti catastali"
         }
         description={
           documentsOnlyMode
             ? "Ricerca documentale dedicata: filtri, selezione multipla, ZIP e viewer PDF senza elementi legati ai batch."
             : isElaborazioni
             ? "La vista batch è il punto d'accesso canonico al runtime. I documenti restano consultabili nel dominio Catasto."
-            : "Le due viste restano distinte perché rappresentano entità diverse, ma la consultazione è concentrata in una sola pagina, con navigazione più lineare."
+            : "Consultazione documentale del modulo Catasto: filtri, download ZIP e viewer PDF."
         }
         actions={
           sharedError ? (
@@ -336,11 +339,13 @@ export function CatastoArchiveWorkspaceContent({
           ) : (
             <CatastoNoticeCard
               compact={embedded}
-              title={documentsOnlyMode ? "Archivio documenti" : "Vista unificata"}
+              title={documentsOnlyMode ? "Archivio documenti" : isElaborazioni ? "Vista batch + documenti" : "Archivio documenti"}
               description={
                 documentsOnlyMode
                   ? "Questa vista e focalizzata solo sui documenti prodotti, con apertura viewer e download inline."
-                  : "Usa Batch per monitorare lotti e retry; usa Documenti per ricerca, ZIP e apertura viewer."
+                  : isElaborazioni
+                    ? "Usa Batch per monitorare lotti e retry; usa Documenti per ricerca, ZIP e apertura viewer."
+                    : "Ricerca documentale con selezione multipla, ZIP e apertura viewer."
               }
             />
           )
@@ -352,17 +357,23 @@ export function CatastoArchiveWorkspaceContent({
             <CatastoMiniStat compact={embedded} eyebrow="Selezione ZIP" value={selectedDocumentIds.length} description="Documenti pronti per export massivo." tone={selectedDocumentIds.length > 0 ? "success" : "default"} />
             <CatastoMiniStat compact={embedded} eyebrow="Ricerca" value={documentsBusy ? "In corso" : "Pronta"} description="Stato della consultazione archivio documentale." tone={documentsBusy ? "warning" : "default"} />
           </div>
-        ) : (
+        ) : isElaborazioni ? (
           <div className="grid gap-3 sm:grid-cols-4">
             <CatastoMiniStat compact={embedded} eyebrow="Documenti" value={documents.length} description="Risultati correnti della ricerca documentale." />
             <CatastoMiniStat compact={embedded} eyebrow="Selezione ZIP" value={selectedDocumentIds.length} description="Documenti pronti per export massivo." tone={selectedDocumentIds.length > 0 ? "success" : "default"} />
             <CatastoMiniStat compact={embedded} eyebrow="Batch" value={batches.length} description={`${processingCount} in lavorazione · ${failedCount} con errori`} />
             <CatastoMiniStat compact={embedded} eyebrow="Completati" value={completedCount} description="Lotti conclusi disponibili nello storico." tone={completedCount > 0 ? "success" : "default"} />
           </div>
+        ) : (
+          <div className="grid gap-3 sm:grid-cols-3">
+            <CatastoMiniStat compact={embedded} eyebrow="Documenti" value={documents.length} description="Risultati correnti della ricerca documentale." />
+            <CatastoMiniStat compact={embedded} eyebrow="Selezione ZIP" value={selectedDocumentIds.length} description="Documenti pronti per export massivo." tone={selectedDocumentIds.length > 0 ? "success" : "default"} />
+            <CatastoMiniStat compact={embedded} eyebrow="Ricerca" value={documentsBusy ? "In corso" : "Pronta"} description="Stato della consultazione archivio documentale." tone={documentsBusy ? "warning" : "default"} />
+          </div>
         )}
       </CatastoHero>
 
-      {!isolatedView ? (
+      {!isolatedView && isElaborazioni ? (
         <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
           <CatastoPanelHeader
             badge={
@@ -416,7 +427,7 @@ export function CatastoArchiveWorkspaceContent({
                 Storico batch
               </>
             }
-            title="Monitoraggio dei lotti creati nel modulo Catasto"
+            title="Monitoraggio dei lotti creati nel modulo Elaborazioni"
             description="Apri il dettaglio per vedere progress realtime, richieste riga per riga e CAPTCHA manuali."
           />
           {batches.length === 0 ? (
@@ -614,13 +625,13 @@ export function CatastoArchiveWorkspaceContent({
 
   return (
     <ProtectedPage
-      title={isElaborazioni ? "Elaborazioni" : "Archivio"}
+      title={isElaborazioni ? "Elaborazioni" : "Archivio documenti"}
       description={
         isElaborazioni
           ? "Monitoraggio dei batch e accesso ai documenti prodotti dal runtime."
-          : "Consultazione unificata di batch e documenti del modulo Catasto."
+          : "Consultazione documentale del modulo Catasto."
       }
-      breadcrumb={isElaborazioni ? "Elaborazioni / Batch" : "Catasto / Archivio"}
+      breadcrumb={isElaborazioni ? "Elaborazioni / Batch" : "Catasto / Archivio documenti"}
     >
       {content}
     </ProtectedPage>

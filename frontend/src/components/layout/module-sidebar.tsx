@@ -90,10 +90,8 @@ export function ModuleSidebar({
       <div className="space-y-0.5 px-2 pb-3">
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Panoramica</p>
         <NavItem href="/elaborazioni" icon={GridIcon} label="Dashboard" />
-        <NavItem href="/elaborazioni/new-batch" icon={RefreshIcon} label="Elaborazioni massive Catasto" />
 
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Operazioni</p>
-        <NavItem href="/elaborazioni/batches" icon={FolderIcon} label="Elaborazioni" match="prefix" />
         <NavItem href="/elaborazioni/settings" icon={LockIcon} label="Credenziali" />
         <NavItem href="/elaborazioni/capacitas" icon={SearchIcon} label="Capacitas" match="prefix" />
       </div>
@@ -143,6 +141,9 @@ export function ModuleSidebar({
 
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Panoramica</p>
         <NavItem href="/operazioni" icon={GridIcon} label="Dashboard" />
+
+        <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Elaborazioni</p>
+        <NavItem href="/elaborazioni/new-batch" icon={RefreshIcon} label="Elaborazioni massive Catasto" />
 
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Gestione</p>
         <NavItem href="/operazioni/mezzi" icon={TruckIcon} label="Mezzi" match="prefix" />
