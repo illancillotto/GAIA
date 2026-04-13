@@ -20,6 +20,7 @@ La documentazione del progetto e distribuita principalmente in due aree:
 - `PROMPT_CODEX_permissions.md`: note operative sui permessi per Codex.
 - `.github/workflows/`: pipeline CI/CD GitHub Actions.
 - `backend/app/MONOLITH_MODULAR.md`: note architetturali sul backend monolite modulare.
+- `backend/app/modules/inventory/`: modulo backend Inventory con router, modelli, schemi e servizi applicativi.
 - `modules/README.md`: note sulla directory `modules/`.
 
 ## Documentazione per dominio
@@ -115,6 +116,7 @@ GAIA/
 │   │   ├── models/
 │   │   ├── modules/
 │   │   │   ├── elaborazioni/
+│   │   │   ├── inventory/
 │   │   │   ├── operazioni/
 │   │   │   ├── riordino/
 │   │   │   └── shared/

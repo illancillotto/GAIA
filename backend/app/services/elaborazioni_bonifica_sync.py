@@ -18,6 +18,10 @@ from app.modules.elaborazioni.bonifica_oristanese.apps.reports.client import Bon
 from app.modules.elaborazioni.bonifica_oristanese.apps.taken_charge.client import BonificaTakenChargeClient
 from app.modules.elaborazioni.bonifica_oristanese.apps.users.client import BonificaUsersClient
 from app.modules.elaborazioni.bonifica_oristanese.apps.vehicles.client import BonificaVehiclesClient
+from app.modules.elaborazioni.bonifica_oristanese.apps.warehouse_requests.client import (
+    BonificaWarehouseRequestsClient,
+)
+from app.modules.inventory.services import sync_white_warehouse_requests
 from app.modules.elaborazioni.bonifica_oristanese.models import (
     BonificaSyncEntityStatus,
     BonificaSyncJobStart,
@@ -41,7 +45,7 @@ from app.services.elaborazioni_bonifica_oristanese import (
     pick_credential,
 )
 
-SUPPORTED_SYNC_ENTITIES = ("report_types", "reports", "vehicles", "refuels", "taken_charge", "users", "areas")
+SUPPORTED_SYNC_ENTITIES = ("report_types", "reports", "vehicles", "refuels", "taken_charge", "users", "areas", "warehouse_requests")
 DATE_AWARE_SYNC_ENTITIES = {"reports", "refuels", "taken_charge", "warehouse_requests"}
 
 
@@ -150,6 +154,7 @@ async def run_bonifica_sync(
         refuels_client = BonificaRefuelsClient(manager)
         taken_charge_client = BonificaTakenChargeClient(manager)
         users_client = BonificaUsersClient(manager)
+        warehouse_requests_client = BonificaWarehouseRequestsClient(manager)
 
         for entity in entities:
             job = db.get(WCSyncJob, jobs[entity].id)
@@ -240,6 +245,20 @@ async def run_bonifica_sync(
                 elif entity == "areas":
                     rows, _ = await areas_client.fetch_areas()
                     sync_result = sync_white_areas(db=db, rows=rows)
+                    result = _SyncExecutionResult(
+                        synced=sync_result.synced,
+                        skipped=sync_result.skipped,
+                        errors=len(sync_result.errors),
+                        error_detail="\n".join(sync_result.errors[:20]) if sync_result.errors else None,
+                    )
+                elif entity == "warehouse_requests":
+                    date_from, date_to = _resolve_date_window(request, entity)
+                    assert date_from is not None and date_to is not None
+                    rows, _ = await warehouse_requests_client.fetch_warehouse_requests(
+                        date_from=date_from,
+                        date_to=date_to,
+                    )
+                    sync_result = sync_white_warehouse_requests(db=db, rows=rows)
                     result = _SyncExecutionResult(
                         synced=sync_result.synced,
                         skipped=sync_result.skipped,

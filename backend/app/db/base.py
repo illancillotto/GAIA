@@ -3,6 +3,7 @@ from app.models.application_user import ApplicationUser
 from app.models.bonifica_oristanese import BonificaOristaneseCredential
 from app.models.capacitas import CapacitasCredential
 from app.models.wc_sync_job import WCSyncJob
+from app.modules.inventory.models import WarehouseRequest
 from app.modules.operazioni.models.wc_area import WCArea
 from app.modules.operazioni.models.wc_operator import WCOperator
 from app.modules.riordino.models import (
@@ -110,6 +111,7 @@ __all__ = [
     "RoleSectionPermission",
     "Section",
     "UserSectionPermission",
+    "WarehouseRequest",
     "WCArea",
     "WCOperator",
     "WCSyncJob",

@@ -357,6 +357,19 @@ GET  /warehouse-requests/datatable
            [3]=richiesta_da, [4]=data_segnalaz, [5]=data_richiesta
 ```
 
+**Nota runtime GAIA**: il sync attuale importa queste righe nel modulo `inventory`
+come `warehouse_request` tramite l'entity `warehouse_requests` di
+`POST /elaborazioni/bonifica/sync/run`. Gli endpoint applicativi esposti sono:
+
+```
+GET  /api/inventory/warehouse-requests
+GET  /api/inventory/warehouse-requests/{id}
+```
+
+In assenza di un `wc_id` nativo nel datatable White, il runtime usa un
+identificativo deterministico derivato dal contenuto della riga per garantire
+idempotenza sugli import successivi.
+
 ---
 
 ## Endpoint di ricerca contatti (utile per filtri)

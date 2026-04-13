@@ -23,6 +23,10 @@ from app.modules.elaborazioni.bonifica_oristanese.apps.reports.client import Bon
 from app.modules.elaborazioni.bonifica_oristanese.apps.taken_charge.client import BonificaTakenChargeRow
 from app.modules.elaborazioni.bonifica_oristanese.apps.users.client import BonificaUserRow
 from app.modules.elaborazioni.bonifica_oristanese.apps.vehicles.client import BonificaVehicleRow
+from app.modules.elaborazioni.bonifica_oristanese.apps.warehouse_requests.client import (
+    BonificaWarehouseRequestRow,
+)
+from app.modules.inventory.models import WarehouseRequest
 from app.modules.elaborazioni.bonifica_oristanese.models import BonificaOristaneseCredentialTestResult
 from app.modules.operazioni.models.reports import FieldReport, FieldReportCategory
 from app.modules.operazioni.models.wc_area import WCArea
@@ -267,6 +271,7 @@ def test_bonifica_sync_status_lists_supported_entities() -> None:
     assert payload["entities"]["taken_charge"]["status"] == "never"
     assert payload["entities"]["users"]["status"] == "never"
     assert payload["entities"]["areas"]["status"] == "never"
+    assert payload["entities"]["warehouse_requests"]["status"] == "never"
 
 
 def test_bonifica_sync_run_creates_jobs_and_imports_reports(
@@ -341,6 +346,11 @@ def test_bonifica_sync_run_creates_jobs_and_imports_reports(
     async def fake_fetch_areas(self):
         return ([], 0)
 
+    async def fake_fetch_warehouse_requests(self, *, date_from, date_to):
+        assert date_from is not None
+        assert date_to is not None
+        return ([], 0)
+
     monkeypatch.setattr("app.modules.elaborazioni.bonifica_oristanese.session.BonificaOristaneseSessionManager.login", fake_login)
     monkeypatch.setattr("app.modules.elaborazioni.bonifica_oristanese.session.BonificaOristaneseSessionManager.close", fake_close)
     monkeypatch.setattr(
@@ -371,6 +381,10 @@ def test_bonifica_sync_run_creates_jobs_and_imports_reports(
         "app.modules.elaborazioni.bonifica_oristanese.apps.areas.client.BonificaAreasClient.fetch_areas",
         fake_fetch_areas,
     )
+    monkeypatch.setattr(
+        "app.modules.elaborazioni.bonifica_oristanese.apps.warehouse_requests.client.BonificaWarehouseRequestsClient.fetch_warehouse_requests",
+        fake_fetch_warehouse_requests,
+    )
 
     response = client.post(
         "/elaborazioni/bonifica/sync/run",
@@ -387,11 +401,12 @@ def test_bonifica_sync_run_creates_jobs_and_imports_reports(
     assert payload["jobs"]["taken_charge"]["status"] == "completed"
     assert payload["jobs"]["users"]["status"] == "completed"
     assert payload["jobs"]["areas"]["status"] == "completed"
+    assert payload["jobs"]["warehouse_requests"]["status"] == "completed"
 
     db = TestingSessionLocal()
     try:
         jobs = db.query(WCSyncJob).all()
-        assert len(jobs) == 7
+        assert len(jobs) == 8
 
         category = db.scalar(select(FieldReportCategory).where(FieldReportCategory.wc_id == 38))
         assert category is not None
@@ -416,6 +431,7 @@ def test_bonifica_sync_run_creates_jobs_and_imports_reports(
     assert status_payload["entities"]["taken_charge"]["records_synced"] == 0
     assert status_payload["entities"]["users"]["records_synced"] == 0
     assert status_payload["entities"]["areas"]["records_synced"] == 0
+    assert status_payload["entities"]["warehouse_requests"]["records_synced"] == 0
 
 
 def test_bonifica_sync_run_imports_vehicles_and_taken_charge(
@@ -744,4 +760,94 @@ def test_bonifica_sync_run_imports_areas_and_exposes_api(
 
     area_id = payload["items"][0]["id"]
     detail_response = client.get(f"/operazioni/areas/{area_id}", headers=auth_headers())
+    assert detail_response.status_code == 200
+
+
+def test_bonifica_sync_run_imports_warehouse_requests_and_exposes_api(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    create_response = client.post(
+        "/elaborazioni/bonifica/credentials",
+        headers=auth_headers(),
+        json={
+            "label": "Account sync magazzino",
+            "login_identifier": "utente@example.local",
+            "password": "bonifica-secret",
+            "remember_me": True,
+        },
+    )
+    assert create_response.status_code == 201
+
+    async def fake_login(self):
+        from app.modules.elaborazioni.bonifica_oristanese.session import BonificaOristaneseSession
+
+        self._session = BonificaOristaneseSession(
+            authenticated_url="https://login.bonificaoristanese.it/dashboard",
+            cookie_names=["XSRF-TOKEN", "laravel_session"],
+        )
+        return self._session
+
+    async def fake_close(self) -> None:
+        return None
+
+    async def fake_fetch_warehouse_requests(self, *, date_from, date_to):
+        assert date_from is not None
+        assert date_to is not None
+        return (
+            [
+                BonificaWarehouseRequestRow(
+                    wc_id=1101,
+                    wc_report_id=60067,
+                    report_type="Rottura condotta/Piantone (A-C)",
+                    reported_by="Stefano Biancu",
+                    requested_by="Mario Rossi",
+                    report_date=__import__("datetime").datetime(2026, 4, 8, 18, 18),
+                    request_date=__import__("datetime").datetime(2026, 4, 9, 9, 30),
+                    archived=False,
+                    status_active=True,
+                )
+            ],
+            1,
+        )
+
+    monkeypatch.setattr("app.modules.elaborazioni.bonifica_oristanese.session.BonificaOristaneseSessionManager.login", fake_login)
+    monkeypatch.setattr("app.modules.elaborazioni.bonifica_oristanese.session.BonificaOristaneseSessionManager.close", fake_close)
+    monkeypatch.setattr(
+        "app.modules.elaborazioni.bonifica_oristanese.apps.warehouse_requests.client.BonificaWarehouseRequestsClient.fetch_warehouse_requests",
+        fake_fetch_warehouse_requests,
+    )
+
+    db = TestingSessionLocal()
+    try:
+        admin_user = db.scalar(select(ApplicationUser).where(ApplicationUser.id == 1))
+        assert admin_user is not None
+        admin_user.module_inventario = True
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.post(
+        "/elaborazioni/bonifica/sync/run",
+        headers=auth_headers(),
+        json={"entities": ["warehouse_requests"]},
+    )
+    assert response.status_code == 200
+    assert response.json()["jobs"]["warehouse_requests"]["status"] == "completed"
+
+    db = TestingSessionLocal()
+    try:
+        item = db.scalar(select(WarehouseRequest).where(WarehouseRequest.wc_id == 1101))
+        assert item is not None
+        assert item.wc_report_id == 60067
+        assert item.report_type == "Rottura condotta/Piantone (A-C)"
+    finally:
+        db.close()
+
+    list_response = client.get("/api/inventory/warehouse-requests", headers=auth_headers())
+    assert list_response.status_code == 200
+    payload = list_response.json()
+    assert payload["total"] == 1
+
+    item_id = payload["items"][0]["id"]
+    detail_response = client.get(f"/api/inventory/warehouse-requests/{item_id}", headers=auth_headers())
     assert detail_response.status_code == 200
