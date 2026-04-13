@@ -38,27 +38,15 @@ const DASHBOARD_REFRESH_INTERVAL_MS = 5000;
 
 const QUICK_ACTIONS = [
   {
-    href: "/elaborazioni/settings",
-    title: "Area SISTER",
-    description: "Credenziali, accesso operativo e flussi Agenzia delle Entrate.",
-    icon: LockIcon,
-  },
-  {
     href: "/elaborazioni/bonifica",
     title: "WhiteCompany Sync",
     description: "Avvio e monitor sync WhiteCompany.",
     icon: RefreshIcon,
   },
   {
-    href: "/elaborazioni/new-batch",
-    title: "Import batch",
-    description: "Upload CSV o XLSX con preview e avvio worker.",
-    icon: FolderIcon,
-  },
-  {
     href: "/elaborazioni/new-single",
-    title: "Visura singola",
-    description: "Richiesta puntuale per immobile o soggetto.",
+    title: "Visure",
+    description: "Ingresso unico per visura singola e import batch.",
     icon: SearchIcon,
   },
   {
@@ -194,14 +182,6 @@ export default function ElaborazioniPage() {
   const quickActions = useMemo(
     () =>
       QUICK_ACTIONS.map((action) => {
-        if (action.title === "Area SISTER") {
-          return {
-            ...action,
-            description: credentialStatus?.configured
-              ? `${activeSisterCredentials.length}/${credentialStatus.credentials.length} credenziali attive · default ${credentialStatus.default_credential?.label ?? "non definito"}`
-              : "Configurazione richiesta per avviare visure e batch.",
-          };
-        }
         if (action.title === "Pool operativo dedicato") {
           return {
             ...action,
@@ -219,6 +199,14 @@ export default function ElaborazioniPage() {
               runningCount > 0
                 ? `${runningCount} entity in esecuzione · ultimo uso ${latestBonificaUsage ? formatDateTime(latestBonificaUsage) : "assente"}`
                 : `Ultimo uso ${latestBonificaUsage ? formatDateTime(latestBonificaUsage) : "assente"}`,
+          };
+        }
+        if (action.title === "Visure") {
+          return {
+            ...action,
+            description: credentialStatus?.configured
+              ? `${activeSisterCredentials.length}/${credentialStatus.credentials.length} credenziali attive · singole e batch nello stesso workspace`
+              : "Workspace unico per visure singole e import batch.",
           };
         }
         return action;
