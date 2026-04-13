@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 import logging
@@ -9,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.database import SessionLocal
 from app.models.application_user import ApplicationUser
 from app.models.wc_sync_job import WCSyncJob
 from app.modules.elaborazioni.bonifica_oristanese.apps.areas.client import BonificaAreasClient
@@ -62,6 +64,7 @@ SUPPORTED_SYNC_ENTITIES = (
 )
 DATE_AWARE_SYNC_ENTITIES = {"reports", "refuels", "taken_charge", "warehouse_requests"}
 logger = logging.getLogger(__name__)
+_background_tasks: set[asyncio.Task] = set()
 
 
 @dataclass(frozen=True)
@@ -108,11 +111,12 @@ def _create_job(
     entity: str,
     current_user: ApplicationUser,
     params_json: dict,
+    status: str = "running",
 ) -> WCSyncJob:
     job = WCSyncJob(
         id=uuid.uuid4(),
         entity=entity,
-        status="running",
+        status=status,
         triggered_by=current_user.id,
         params_json=params_json,
     )
@@ -121,81 +125,31 @@ def _create_job(
     return job
 
 
-def _finalize_job(
-    db: Session,
-    job: WCSyncJob,
-    result: _SyncExecutionResult,
+async def _run_bonifica_sync_background(
     *,
-    params_updates: dict[str, object] | None = None,
-) -> None:
-    job.status = "failed" if result.errors > 0 and result.synced == 0 else "completed"
-    job.finished_at = datetime.now(timezone.utc)
-    job.records_synced = result.synced
-    job.records_skipped = result.skipped
-    job.records_errors = result.errors
-    job.error_detail = result.error_detail
-    if params_updates:
-        job.params_json = {**(job.params_json or {}), **params_updates}
-    db.flush()
-
-
-def _expire_stale_running_jobs(db: Session) -> None:
-    cutoff = datetime.now(timezone.utc) - timedelta(minutes=settings.wc_sync_stale_job_minutes)
-    stale_jobs = db.scalars(
-        select(WCSyncJob).where(
-            WCSyncJob.status == "running",
-            WCSyncJob.finished_at.is_(None),
-            WCSyncJob.started_at < cutoff,
-        )
-    ).all()
-    if not stale_jobs:
-        return
-
-    expired_at = datetime.now(timezone.utc)
-    for job in stale_jobs:
-        stale_detail = (
-            "Job marcato come failed: rimasto in stato running oltre la soglia "
-            f"di {settings.wc_sync_stale_job_minutes} minuti."
-        )
-        job.status = "failed"
-        job.finished_at = expired_at
-        job.records_synced = job.records_synced or 0
-        job.records_skipped = job.records_skipped or 0
-        job.records_errors = max(job.records_errors or 0, 1)
-        job.error_detail = f"{job.error_detail}\n{stale_detail}".strip() if job.error_detail else stale_detail
-    db.commit()
-
-
-async def run_bonifica_sync(
-    db: Session,
-    current_user: ApplicationUser,
+    triggered_by_user_id: int,
     request: BonificaSyncRunRequest,
-) -> BonificaSyncRunResponse:
-    _expire_stale_running_jobs(db)
+    job_ids_by_entity: dict[str, str],
+) -> None:
+    db = SessionLocal()
+    manager: BonificaOristaneseSessionManager | None = None
+    credential_id: int | None = None
     entities = _resolve_entities(request)
-    jobs: dict[str, WCSyncJob] = {}
-
-    for entity in entities:
-        date_from, date_to = _resolve_date_window(request, entity)
-        jobs[entity] = _create_job(
-            db,
-            entity=entity,
-            current_user=current_user,
-            params_json={
-                "date_from": date_from.isoformat() if date_from else None,
-                "date_to": date_to.isoformat() if date_to else None,
-            },
-        )
-    db.commit()
-
-    credential, password = pick_credential(db)
-    manager = BonificaOristaneseSessionManager(
-        login_identifier=credential.login_identifier,
-        password=password,
-        remember_me=credential.remember_me,
-    )
 
     try:
+        current_user = db.get(ApplicationUser, triggered_by_user_id)
+        if current_user is None:
+            raise RuntimeError("Utente non trovato per esecuzione sync Bonifica")
+
+        credential, password = pick_credential(db)
+        credential_id = credential.id
+
+        manager = BonificaOristaneseSessionManager(
+            login_identifier=credential.login_identifier,
+            password=password,
+            remember_me=credential.remember_me,
+        )
+
         session = await manager.login()
         mark_credential_used(db, credential.id, authenticated_url=session.authenticated_url)
         areas_client = BonificaAreasClient(manager)
@@ -209,8 +163,16 @@ async def run_bonifica_sync(
         org_charts_client = BonificaOrgChartsClient(manager)
 
         for entity in entities:
-            job = db.get(WCSyncJob, jobs[entity].id)
-            assert job is not None
+            job_id = job_ids_by_entity.get(entity)
+            if not job_id:
+                continue
+            job = db.get(WCSyncJob, uuid.UUID(job_id))
+            if job is None:
+                continue
+
+            job.status = "running"
+            db.commit()
+
             try:
                 if entity == "report_types":
                     rows, total = await report_types_client.fetch_report_types()
@@ -361,9 +323,13 @@ async def run_bonifica_sync(
                 db.commit()
     except Exception as exc:
         logger.exception("Bonifica sync bootstrap failed before entity execution")
-        mark_credential_error(db, credential.id, str(exc))
+        if credential_id is not None:
+            mark_credential_error(db, credential_id, str(exc))
         for entity in entities:
-            job = db.get(WCSyncJob, jobs[entity].id)
+            job_id = job_ids_by_entity.get(entity)
+            if not job_id:
+                continue
+            job = db.get(WCSyncJob, uuid.UUID(job_id))
             if job is None:
                 continue
             job.status = "failed"
@@ -374,17 +340,95 @@ async def run_bonifica_sync(
             job.error_detail = str(exc)
         db.commit()
     finally:
-        await manager.close()
+        try:
+            if manager is not None:
+                await manager.close()
+        finally:
+            db.close()
+
+
+def _finalize_job(
+    db: Session,
+    job: WCSyncJob,
+    result: _SyncExecutionResult,
+    *,
+    params_updates: dict[str, object] | None = None,
+) -> None:
+    job.status = "failed" if result.errors > 0 and result.synced == 0 else "completed"
+    job.finished_at = datetime.now(timezone.utc)
+    job.records_synced = result.synced
+    job.records_skipped = result.skipped
+    job.records_errors = result.errors
+    job.error_detail = result.error_detail
+    if params_updates:
+        job.params_json = {**(job.params_json or {}), **params_updates}
+    db.flush()
+
+
+def _expire_stale_running_jobs(db: Session) -> None:
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=settings.wc_sync_stale_job_minutes)
+    stale_jobs = db.scalars(
+        select(WCSyncJob).where(
+            WCSyncJob.status == "running",
+            WCSyncJob.finished_at.is_(None),
+            WCSyncJob.started_at < cutoff,
+        )
+    ).all()
+    if not stale_jobs:
+        return
+
+    expired_at = datetime.now(timezone.utc)
+    for job in stale_jobs:
+        stale_detail = (
+            "Job marcato come failed: rimasto in stato running oltre la soglia "
+            f"di {settings.wc_sync_stale_job_minutes} minuti."
+        )
+        job.status = "failed"
+        job.finished_at = expired_at
+        job.records_synced = job.records_synced or 0
+        job.records_skipped = job.records_skipped or 0
+        job.records_errors = max(job.records_errors or 0, 1)
+        job.error_detail = f"{job.error_detail}\n{stale_detail}".strip() if job.error_detail else stale_detail
+    db.commit()
+
+
+async def run_bonifica_sync(
+    db: Session,
+    current_user: ApplicationUser,
+    request: BonificaSyncRunRequest,
+) -> BonificaSyncRunResponse:
+    _expire_stale_running_jobs(db)
+    entities = _resolve_entities(request)
+    jobs: dict[str, WCSyncJob] = {}
+
+    for entity in entities:
+        date_from, date_to = _resolve_date_window(request, entity)
+        jobs[entity] = _create_job(
+            db,
+            entity=entity,
+            current_user=current_user,
+            status="queued",
+            params_json={
+                "date_from": date_from.isoformat() if date_from else None,
+                "date_to": date_to.isoformat() if date_to else None,
+            },
+        )
+    db.commit()
+
+    task = asyncio.create_task(
+        _run_bonifica_sync_background(
+            triggered_by_user_id=current_user.id,
+            request=request,
+            job_ids_by_entity={entity: str(job.id) for entity, job in jobs.items()},
+        )
+    )
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
     return BonificaSyncRunResponse(
         jobs={
-            entity: BonificaSyncJobStart(
-                job_id=str(db.get(WCSyncJob, job.id).id),
-                status=db.get(WCSyncJob, job.id).status,
-                started_at=db.get(WCSyncJob, job.id).started_at,
-            )
+            entity: BonificaSyncJobStart(job_id=str(job.id), status=job.status, started_at=job.started_at)
             for entity, job in jobs.items()
-            if db.get(WCSyncJob, job.id) is not None
         }
     )
 
