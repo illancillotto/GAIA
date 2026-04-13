@@ -452,6 +452,7 @@ def get_bonifica_sync_status(db: Session) -> BonificaSyncStatusResponse:
             continue
 
         latest_by_entity[entity] = BonificaSyncEntityStatus(
+            job_id=str(latest_job.id),
             entity=entity,
             status=latest_job.status,
             last_started_at=latest_job.started_at,

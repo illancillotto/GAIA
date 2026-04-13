@@ -61,6 +61,7 @@ class BonificaSyncRunResponse(BaseModel):
 
 
 class BonificaSyncEntityStatus(BaseModel):
+    job_id: str | None = None
     entity: str
     status: str
     last_started_at: datetime | None = None

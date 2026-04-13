@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -8,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_admin_user
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
+from app.models.wc_sync_job import WCSyncJob
 from app.modules.elaborazioni.bonifica_oristanese.models import (
     BonificaOristaneseCredentialCreate,
     BonificaOristaneseCredentialOut,
@@ -112,3 +114,23 @@ def get_sync_status(
     db: Annotated[Session, Depends(get_db)],
 ) -> BonificaSyncStatusResponse:
     return get_bonifica_sync_status(db)
+
+
+@router.delete("/sync/jobs/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_sync_job(
+    job_id: str,
+    _: Annotated[ApplicationUser, Depends(require_admin_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> None:
+    try:
+        job_uuid = uuid.UUID(job_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="job_id non valido") from exc
+
+    job = db.get(WCSyncJob, job_uuid)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job sync non trovato")
+    if job.status == "running":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Impossibile cancellare un job in esecuzione")
+    db.delete(job)
+    db.commit()

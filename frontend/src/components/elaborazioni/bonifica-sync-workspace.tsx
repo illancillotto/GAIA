@@ -12,7 +12,7 @@ import {
 } from "@/components/elaborazioni/module-chrome";
 import { EmptyState } from "@/components/ui/empty-state";
 import { CheckIcon, LockIcon, RefreshIcon } from "@/components/ui/icons";
-import { getBonificaSyncStatus, getCurrentUser, listBonificaOristaneseCredentials, runBonificaSync } from "@/lib/api";
+import { deleteBonificaSyncJob, getBonificaSyncStatus, getCurrentUser, listBonificaOristaneseCredentials, runBonificaSync } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import { formatDateTime } from "@/lib/presentation";
 import type { BonificaOristaneseCredential, BonificaSyncEntityStatus, BonificaSyncStatusResponse, CurrentUser } from "@/types/api";
@@ -153,6 +153,7 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
   const [dateTo, setDateTo] = useState("");
   const [runStartedAt, setRunStartedAt] = useState<string | null>(null);
   const [syncLog, setSyncLog] = useState<SyncLogEntry[]>([]);
+  const [actionBusyKey, setActionBusyKey] = useState<string | null>(null);
   const previousStatusesRef = useRef<Record<string, string>>({});
   const lastRunEntityKeysRef = useRef<string[]>([]);
   const runCompletionLoggedRef = useRef(false);
@@ -415,6 +416,56 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
       appendLog(runError instanceof Error ? `Errore avvio sync: ${runError.message}` : "Errore avvio sync Bonifica.", "danger");
     } finally {
       setRunning(false);
+    }
+  }
+
+  async function handleRerunEntity(entityKey: string): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) return;
+    if (!admin) return;
+
+    setActionBusyKey(entityKey);
+    setError(null);
+    setRunMessage(null);
+    try {
+      const definition = ENTITY_DEFINITIONS.find((item) => item.key === entityKey);
+      const payload: Record<string, unknown> = { entities: [entityKey] };
+      if (definition?.dateAware) {
+        payload.date_from = isValidIsoDate(dateFrom) ? dateFrom : null;
+        payload.date_to = isValidIsoDate(dateTo) ? dateTo : null;
+      }
+      const response = await runBonificaSync(token, payload as never);
+      const job = response.jobs?.[entityKey];
+      appendLog(`${definition?.label ?? entityKey}: rilancio job (${job?.status ?? "ok"}).`, "info");
+      await loadAll({ silent: true });
+    } catch (runError) {
+      const message = runError instanceof Error ? runError.message : "Errore rilancio entity";
+      setError(message);
+      appendLog(`${ENTITY_DEFINITIONS.find((item) => item.key === entityKey)?.label ?? entityKey}: errore rilancio — ${message}`, "danger");
+    } finally {
+      setActionBusyKey(null);
+    }
+  }
+
+  async function handleDeleteEntityJob(entityKey: string, jobId: string | null): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) return;
+    if (!admin) return;
+    if (!jobId) return;
+
+    setActionBusyKey(entityKey);
+    setError(null);
+    setRunMessage(null);
+    try {
+      await deleteBonificaSyncJob(token, jobId);
+      appendLog(`${ENTITY_DEFINITIONS.find((item) => item.key === entityKey)?.label ?? entityKey}: job cancellato.`, "warning");
+      await loadAll({ silent: true });
+    } catch (deleteError) {
+      const message = deleteError instanceof Error ? deleteError.message : "Errore cancellazione job";
+      setError(message);
+      appendLog(`${ENTITY_DEFINITIONS.find((item) => item.key === entityKey)?.label ?? entityKey}: errore cancellazione — ${message}`, "danger");
+    } finally {
+      setActionBusyKey(null);
     }
   }
 
@@ -684,6 +735,7 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
                     <th>Skipped</th>
                     <th>Errori</th>
                     <th>Dettaglio</th>
+                    {admin ? <th>Azioni</th> : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -708,6 +760,8 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
                           ? "bg-amber-50 text-amber-700"
                           : "bg-gray-100 text-gray-700";
                     const detailPreview = renderStatusDetail(status);
+                    const busy = actionBusyKey === entityKey;
+                    const canDelete = admin && status.status !== "running" && Boolean(status.job_id);
                     return (
                       <tr key={entityKey}>
                         <td className="min-w-[14rem]">
@@ -725,6 +779,28 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
                         <td className="max-w-[42ch] truncate text-xs text-gray-500" title={detailPreview || undefined}>
                           {detailPreview || "—"}
                         </td>
+                        {admin ? (
+                          <td className="whitespace-nowrap">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <button
+                                className="text-sm font-medium text-[#1D4E35] transition hover:text-[#143726] disabled:cursor-not-allowed disabled:text-gray-300"
+                                disabled={busy || status.status === "running"}
+                                onClick={() => void handleRerunEntity(entityKey)}
+                                type="button"
+                              >
+                                {busy ? "..." : "Rilancia"}
+                              </button>
+                              <button
+                                className="text-sm font-medium text-gray-500 transition hover:text-gray-800 disabled:cursor-not-allowed disabled:text-gray-300"
+                                disabled={busy || !canDelete}
+                                onClick={() => void handleDeleteEntityJob(entityKey, status.job_id)}
+                                type="button"
+                              >
+                                Cancella
+                              </button>
+                            </div>
+                          </td>
+                        ) : null}
                       </tr>
                     );
                   })}

@@ -998,6 +998,7 @@ export type BonificaSyncRunResponse = {
 };
 
 export type BonificaSyncEntityStatus = {
+  job_id: string | null;
   entity: string;
   status: string;
   last_started_at: string | null;

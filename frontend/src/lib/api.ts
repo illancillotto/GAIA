@@ -1253,6 +1253,15 @@ export async function runBonificaSync(token: string, payload: BonificaSyncRunReq
   });
 }
 
+export async function deleteBonificaSyncJob(token: string, jobId: string): Promise<void> {
+  await request<null>(`/elaborazioni/bonifica/sync/jobs/${jobId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
 export async function getUtenzeBonificaStaging(
   token: string,
   params: { page?: number; page_size?: number } = {},
