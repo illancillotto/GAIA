@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
 
+from bs4 import BeautifulSoup
+
 from app.modules.elaborazioni.bonifica_oristanese.apps.client import BonificaDatatableClient
 from app.modules.elaborazioni.bonifica_oristanese.apps.registry import get_bonifica_app
 from app.modules.elaborazioni.bonifica_oristanese.parsers import (
@@ -72,6 +74,97 @@ def _first_text(fields: dict[str, str | list[str] | bool], candidates: tuple[str
     return None
 
 
+def _field_value_from_container(container) -> str | None:
+    for selector in ("input", "select", "textarea"):
+        field = container.find(selector)
+        if field is None:
+            continue
+        if field.name == "textarea":
+            value = field.get_text(strip=False).strip()
+            return value or None
+        if field.name == "select":
+            selected = field.find("option", selected=True)
+            if selected is not None:
+                return clean_html_text(selected.get_text()) or selected.get("value") or None
+            first_option = field.find("option")
+            if first_option is not None:
+                return clean_html_text(first_option.get_text()) or first_option.get("value") or None
+            continue
+        value = field.get("value")
+        if value:
+            return value
+        placeholder = field.get("placeholder")
+        if placeholder:
+            return placeholder
+
+    text = clean_html_text(container.get_text(" ", strip=True))
+    return text or None
+
+
+def _extract_labeled_values(html: str) -> dict[str, str]:
+    soup = BeautifulSoup(html, "html.parser")
+    result: dict[str, str] = {}
+
+    for label in soup.find_all("label"):
+        label_text = clean_html_text(label.get_text())
+        if not label_text:
+            continue
+
+        target_field = None
+        target_id = label.get("for")
+        if target_id:
+            target_field = soup.find(id=target_id)
+        if target_field is None:
+            target_field = label.find_next(["input", "select", "textarea"])
+        if target_field is None:
+            continue
+
+        value = None
+        if target_field.name == "textarea":
+            value = target_field.get_text(strip=False).strip()
+        elif target_field.name == "select":
+            selected = target_field.find("option", selected=True)
+            value = clean_html_text(selected.get_text()) if selected else ""
+        else:
+            value = target_field.get("value") or target_field.get("placeholder") or ""
+
+        value = clean_html_text(value)
+        if value:
+            result[label_text.lower()] = value
+
+    for row in soup.select("tr"):
+        header = row.find(["th", "td"])
+        cells = row.find_all(["td", "th"])
+        if len(cells) < 2 or header is None:
+            continue
+        label_text = clean_html_text(header.get_text())
+        if not label_text:
+            continue
+        value = _field_value_from_container(cells[-1])
+        if value:
+            result.setdefault(label_text.lower(), value)
+
+    return result
+
+
+def _first_decimal_from_labels(labeled_values: dict[str, str], candidates: tuple[str, ...]) -> Decimal | None:
+    for label, value in labeled_values.items():
+        if any(candidate in label for candidate in candidates):
+            parsed = _to_decimal(value)
+            if parsed is not None:
+                return parsed
+    return None
+
+
+def _first_text_from_labels(labeled_values: dict[str, str], candidates: tuple[str, ...]) -> str | None:
+    for label, value in labeled_values.items():
+        if any(candidate in label for candidate in candidates):
+            cleaned = clean_html_text(value)
+            if cleaned:
+                return cleaned
+    return None
+
+
 class BonificaRefuelsClient(BonificaDatatableClient):
     def __init__(self, session_manager: BonificaOristaneseSessionManager) -> None:
         super().__init__(session_manager)
@@ -102,6 +195,7 @@ class BonificaRefuelsClient(BonificaDatatableClient):
                 continue
             html = await self.fetch_detail_html(REFUELS_APP.detail_path_template.format(id=wc_id))
             fields = parse_form_fields(html)
+            labeled_values = _extract_labeled_values(html)
             parsed.append(
                 BonificaRefuelRow(
                     wc_id=wc_id,
@@ -123,6 +217,10 @@ class BonificaRefuelsClient(BonificaDatatableClient):
                             "vehicle[refuel][liters]",
                             "vehicle[refuel][quantity]",
                         ),
+                    )
+                    or _first_decimal_from_labels(
+                        labeled_values,
+                        ("litri", "liters", "litres", "quantita", "quantity"),
                     ),
                     total_cost=_first_decimal(
                         fields,
@@ -134,6 +232,10 @@ class BonificaRefuelsClient(BonificaDatatableClient):
                             "vehicle_refuel[total_cost]",
                             "vehicle[refuel][total_cost]",
                         ),
+                    )
+                    or _first_decimal_from_labels(
+                        labeled_values,
+                        ("totale", "total", "costo", "cost", "importo", "prezzo"),
                     ),
                     station_name=_first_text(
                         fields,
@@ -145,6 +247,10 @@ class BonificaRefuelsClient(BonificaDatatableClient):
                             "vehicle_refuel[station_name]",
                             "vehicle[refuel][station_name]",
                         ),
+                    )
+                    or _first_text_from_labels(
+                        labeled_values,
+                        ("distributore", "station", "stazione", "fornitore", "supplier"),
                     ),
                 )
             )

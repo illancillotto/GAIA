@@ -33,6 +33,8 @@ def test_settings_use_expected_defaults(monkeypatch) -> None:
         "BOOTSTRAP_ADMIN_EMAIL",
     ]:
         monkeypatch.delenv(env_name, raising=False)
+    monkeypatch.setenv("DATABASE_URL", "sqlite:///./config-defaults.db")
+    monkeypatch.setenv("JWT_SECRET_KEY", "config-defaults-secret")
     settings = Settings(_env_file=None)
 
     assert settings.project_name == "NAS Access Audit Platform"
@@ -41,7 +43,7 @@ def test_settings_use_expected_defaults(monkeypatch) -> None:
     assert settings.backend_host == "0.0.0.0"
     assert settings.backend_port == 8000
     assert settings.backend_cors_origins == "http://localhost:3000,http://localhost:8080"
-    assert settings.jwt_secret_key == "change_this_secret"
+    assert settings.jwt_secret_key == "config-defaults-secret"
     assert settings.jwt_expire_minutes == 60
     assert settings.jwt_algorithm == "HS256"
     assert settings.nas_host == "nas.internal.local"
@@ -66,7 +68,7 @@ def test_settings_use_expected_defaults(monkeypatch) -> None:
     assert settings.sync_schedule_max_cycles == 0
     assert settings.bootstrap_admin_username == "admin"
     assert settings.bootstrap_admin_email == "admin@example.local"
-    assert settings.database_url.startswith("postgresql+psycopg://")
+    assert settings.database_url == "sqlite:///./config-defaults.db"
 
 
 def test_settings_allow_environment_override(monkeypatch) -> None:

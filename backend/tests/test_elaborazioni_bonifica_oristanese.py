@@ -21,10 +21,14 @@ from app.modules.accessi.wc_org_charts import WCOrgChart, WCOrgChartEntry
 from app.modules.elaborazioni.bonifica_oristanese.apps.org_charts.client import (
     BonificaOrgChartEntryRow,
     BonificaOrgChartRow,
+    _extract_entries,
 )
 from app.modules.elaborazioni.bonifica_oristanese.apps.report_types.client import BonificaReportTypeRow
 from app.modules.elaborazioni.bonifica_oristanese.apps.areas.client import BonificaAreaRow
-from app.modules.elaborazioni.bonifica_oristanese.apps.refuels.client import BonificaRefuelRow
+from app.modules.elaborazioni.bonifica_oristanese.apps.refuels.client import (
+    BonificaRefuelRow,
+    _extract_labeled_values,
+)
 from app.modules.elaborazioni.bonifica_oristanese.apps.reports.client import BonificaReportRow
 from app.modules.elaborazioni.bonifica_oristanese.apps.taken_charge.client import BonificaTakenChargeRow
 from app.modules.elaborazioni.bonifica_oristanese.apps.users.client import BonificaUserRow
@@ -121,6 +125,53 @@ def test_bonifica_oristanese_session_extracts_csrf_and_invalid_login_message() -
     assert manager._extract_csrf_token(html) == "csrf-token-123"
     assert manager._extract_failure_message(html) == "Credenziali non valide"
     assert manager._is_login_form_present(html) is True
+
+
+def test_refuel_detail_label_fallback_extracts_liters_cost_and_station() -> None:
+    html = """
+    <form>
+      <div class="form-group">
+        <label for="litri">Litri erogati</label>
+        <input id="litri" type="text" value="32,50">
+      </div>
+      <div class="form-group">
+        <label for="totale">Totale euro</label>
+        <input id="totale" type="text" value="58,40">
+      </div>
+      <table>
+        <tr><th>Distributore</th><td>Q8 Oristano</td></tr>
+      </table>
+    </form>
+    """
+
+    labeled = _extract_labeled_values(html)
+
+    assert labeled["litri erogati"] == "32,50"
+    assert labeled["totale euro"] == "58,40"
+    assert labeled["distributore"] == "Q8 Oristano"
+
+
+def test_org_chart_entries_include_checked_checkbox_values() -> None:
+    html = """
+    <form>
+      <label for="referent-1">Mario Rossi</label>
+      <input id="referent-1" type="checkbox" name="referents[]" value="301" checked>
+      <label>
+        <input type="checkbox" name="areas[]" value="44" checked>
+        Distretto A
+      </label>
+    </form>
+    """
+
+    entries = _extract_entries(html)
+
+    assert len(entries) == 2
+    assert entries[0].wc_id == 301
+    assert entries[0].operator_wc_id == 301
+    assert entries[0].label == "Mario Rossi"
+    assert entries[1].wc_id == 44
+    assert entries[1].area_wc_id == 44
+    assert entries[1].label == "Distretto A"
 
 
 def test_bonifica_oristanese_credentials_crud_encrypts_password() -> None:

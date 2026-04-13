@@ -490,13 +490,21 @@ GET    /elaborazioni/bonifica/sync/status          ← stato ultima sync per ent
 
 - `POST /elaborazioni/bonifica/sync/run` crea un `wc_sync_job` per ogni entity richiesta
 - `GET /elaborazioni/bonifica/sync/status` legge l'ultimo job persistito per entity e restituisce `never` solo come stato derivato della response quando non esistono run precedenti
-- Entity attive su runtime: `report_types`, `reports`, `vehicles`, `refuels`, `taken_charge`, `users`, `areas`
-- `refuels` usa parsing difensivo del dettaglio `GET /vehicles/refuel/edit/{id}`: i record senza litri validi vengono saltati, non inventati
+- Entity attive su runtime: `report_types`, `reports`, `vehicles`, `refuels`, `taken_charge`, `users`, `areas`, `warehouse_requests`, `org_charts`, `consorziati`
+- `refuels` usa parsing difensivo del dettaglio `GET /vehicles/refuel/edit/{id}`: prima prova i field name noti del form, poi applica fallback label-based (`label`, `th/td`) per ridurre gli skip; i record senza litri validi vengono comunque saltati, non inventati
 - `users` sincronizza oggi solo gli operatori WhiteCompany non `Consorziato`, con upsert locale su tabella `wc_operator` e collegamento opzionale a `application_users` via email
 - `areas` sincronizza la lookup geografica WhiteCompany in tabella `wc_area`
+- `warehouse_requests` sincronizza le richieste magazzino in `inventory.warehouse_request`
+- `org_charts` sincronizza gli organigrammi White in `accessi.wc_org_chart` e `accessi.wc_org_chart_entry`
+- `consorziati` sincronizza in staging `utenze.bonifica_user_staging`, con approvazione manuale o bulk via API dedicate
 - API attiva lato operazioni: `GET /operazioni/operators`, `GET /operazioni/operators/{id}`
 - API attiva lato operazioni: `GET /operazioni/areas`, `GET /operazioni/areas/{id}`
-- Fasi successive pianificate ma non ancora attive su runtime: `warehouse`
+- API attiva lato utenze: `GET /utenze/bonifica-staging`, `GET /utenze/bonifica-staging/{id}`, `POST /utenze/bonifica-staging/{id}/approve`, `POST /utenze/bonifica-staging/{id}/reject`, `POST /utenze/bonifica-staging/bulk-approve`
+
+### Nota test/runtime locale
+
+- La suite pytest del provider usa default di sessione impostati in `backend/tests/conftest.py` per evitare che placeholder locali (`change_me`) in `.env` blocchino il bootstrap dell'app durante la collection
+- Questo fix copre il bootstrap test locale; non sostituisce la configurazione reale degli ambienti dev/stage/prod
 
 ---
 
@@ -516,13 +524,11 @@ router.include_router(bonifica_router, prefix="/elaborazioni/bonifica-oristanese
 
 - [ ] Verificare durata sessione Laravel (controllare `SESSION_LIFETIME` in `.env` del sito)
 - [ ] Verificare se `/areas/datatable` restituisce le stesse aree di `/areas/organizational-charts/list` (sembrano entità diverse: aree geografiche vs aree org)
-- [ ] Implementare `bonifica_user_staging` + logica mismatch con `ana_subjects`
 - [ ] Verificare in produzione l'insieme completo dei field names del dettaglio rifornimento `GET /vehicles/refuel/edit/{id}` per ridurre gli skip dei record senza litri
+- [ ] Verificare in produzione se i detail form organigrammi espongono anche relazioni non coperte da `select option[selected]` / checkbox checked, per estendere il parser senza introdurre falsi positivi
 - [ ] Verificare endpoint dettaglio presa in carico: `GET /vehicles/taken-charge/edit/{id}`
 - [ ] Mappare endpoint segnalazioni individuali (non solo export bulk): `GET /reports/{id}` (da verificare)
-- [ ] Estendere `POST /elaborazioni/bonifica/sync/run` alle entity restanti (`warehouse`)
 - [ ] Aggiungere il link strutturato `field_report.wc_area_id` per collegare le segnalazioni alle aree sincronizzate
-- [ ] Portare lo stato sync Bonifica nel workspace frontend `/elaborazioni/settings`
 
 ---
 

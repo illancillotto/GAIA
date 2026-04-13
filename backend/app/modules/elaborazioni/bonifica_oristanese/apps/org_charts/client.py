@@ -72,6 +72,62 @@ def _extract_entries(html: str) -> list["BonificaOrgChartEntryRow"]:
                 )
             )
 
+    for field in soup.find_all("input"):
+        field_name = (field.get("name") or "").strip()
+        if not field_name:
+            continue
+        normalized_name = field_name.lower()
+        input_type = (field.get("type") or "").lower()
+        if input_type not in {"checkbox", "radio", "hidden"}:
+            continue
+        if input_type in {"checkbox", "radio"} and not field.has_attr("checked"):
+            continue
+        if not (
+            field_name.endswith("[]")
+            or any(token in normalized_name for token in ("referent", "user", "employee", "operator", "area"))
+        ):
+            continue
+
+        wc_id = _parse_numeric(field.get("value"))
+        if wc_id is None:
+            continue
+
+        label = ""
+        field_id = field.get("id")
+        if field_id:
+            explicit_label = soup.find("label", attrs={"for": field_id})
+            if explicit_label is not None:
+                label = clean_html_text(explicit_label.get_text())
+        if not label:
+            parent_label = field.find_parent("label")
+            if parent_label is not None:
+                label = clean_html_text(parent_label.get_text())
+        if not label:
+            label = clean_html_text(field.get("data-label") or field.get("title") or "")
+        if not label:
+            continue
+
+        operator_wc_id = (
+            wc_id if any(token in normalized_name for token in ("referent", "user", "employee", "operator")) else None
+        )
+        area_wc_id = wc_id if "area" in normalized_name and "chart" not in normalized_name else None
+        role = _entry_role(field_name)
+        dedupe_key = (field_name, wc_id, label)
+        if dedupe_key in seen:
+            continue
+        seen.add(dedupe_key)
+        entries.append(
+            BonificaOrgChartEntryRow(
+                wc_id=wc_id,
+                label=label,
+                role=role,
+                operator_wc_id=operator_wc_id,
+                area_wc_id=area_wc_id,
+                source_field=field_name,
+                sort_order=len(entries),
+            )
+        )
+
     return entries
 
 
