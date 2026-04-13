@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ProtectedPage } from "@/components/app/protected-page";
 import {
@@ -85,6 +85,13 @@ const ENTITY_DEFINITIONS: Array<{
   },
 ];
 
+type SyncLogEntry = {
+  id: string;
+  at: string;
+  tone: "info" | "success" | "warning" | "danger";
+  message: string;
+};
+
 function statusTone(status: string): "default" | "success" | "warning" {
   if (status === "completed") return "success";
   if (status === "running") return "warning";
@@ -121,6 +128,10 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [runStartedAt, setRunStartedAt] = useState<string | null>(null);
+  const [syncLog, setSyncLog] = useState<SyncLogEntry[]>([]);
+  const previousStatusesRef = useRef<Record<string, string>>({});
+  const lastRunEntityKeysRef = useRef<string[]>([]);
+  const runCompletionLoggedRef = useRef(false);
 
   const admin = isAdminUser(currentUser);
   const entityStatusByKey = syncStatus?.entities ?? {};
@@ -182,6 +193,19 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
     return { percent, finished, total: targetEntityKeys.length, runningKeys };
   }, [runStartedAt, syncStatus, targetEntityKeys]);
 
+  function appendLog(message: string, tone: SyncLogEntry["tone"] = "info"): void {
+    const entryAt = new Date().toISOString();
+    setSyncLog((current) => [
+      {
+        id: `${entryAt}-${current.length}`,
+        at: entryAt,
+        tone,
+        message,
+      },
+      ...current,
+    ].slice(0, 80));
+  }
+
   async function loadAll({ silent = false }: { silent?: boolean } = {}): Promise<void> {
     const token = getStoredAccessToken();
     if (!token) return;
@@ -225,11 +249,56 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
     return () => window.clearInterval(intervalId);
   }, [admin, runStartedAt, running, syncStatus]);
 
+  useEffect(() => {
+    if (!syncStatus) return;
+
+    const trackedKeys = lastRunEntityKeysRef.current;
+    if (trackedKeys.length === 0) {
+      previousStatusesRef.current = Object.fromEntries(
+        Object.entries(syncStatus.entities ?? {}).map(([key, value]) => [key, value.status]),
+      );
+      return;
+    }
+
+    const currentStatuses = syncStatus.entities ?? {};
+    for (const key of trackedKeys) {
+      const previousStatus = previousStatusesRef.current[key];
+      const nextStatus = currentStatuses[key]?.status;
+      if (!nextStatus || previousStatus === nextStatus) continue;
+
+      const entityLabel = ENTITY_DEFINITIONS.find((item) => item.key === key)?.label ?? key;
+      if (nextStatus === "running") {
+        appendLog(`${entityLabel}: job in esecuzione.`, "warning");
+      } else if (nextStatus === "completed") {
+        const synced = currentStatuses[key]?.records_synced ?? 0;
+        const skipped = currentStatuses[key]?.records_skipped ?? 0;
+        appendLog(`${entityLabel}: completata. Synced ${synced}, skipped ${skipped}.`, "success");
+      } else if (nextStatus === "failed") {
+        const detail = currentStatuses[key]?.error_detail;
+        appendLog(`${entityLabel}: fallita${detail ? ` — ${detail}` : "."}`, "danger");
+      }
+    }
+
+    previousStatusesRef.current = Object.fromEntries(
+      Object.entries(currentStatuses).map(([key, value]) => [key, value.status]),
+    );
+  }, [syncStatus]);
+
+  useEffect(() => {
+    if (!runStartedAt || progress.total === 0) return;
+    if (progress.finished < progress.total) return;
+    if (runCompletionLoggedRef.current) return;
+    runCompletionLoggedRef.current = true;
+    appendLog(`Sync completata: ${progress.finished}/${progress.total} entity chiuse.`, failedJobsCount > 0 ? "warning" : "success");
+    lastRunEntityKeysRef.current = [];
+  }, [failedJobsCount, progress.finished, progress.total, runStartedAt]);
+
   async function handleRefresh(): Promise<void> {
     setRefreshing(true);
     setRunMessage(null);
     try {
       await loadAll({ silent: true });
+      appendLog("Stato sync aggiornato manualmente.", "info");
     } finally {
       setRefreshing(false);
     }
@@ -265,6 +334,7 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
     setRunMessage(null);
     setError(null);
     try {
+      const entitiesToRun = selectedEntities.length > 0 ? selectedEntities : defaultEntityKeys;
       const payload: Record<string, unknown> = {
         entities: selectedEntities.length > 0 ? selectedEntities : "all",
       };
@@ -277,10 +347,20 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
         .map(([entity, job]) => `${entity}: ${job.status}`)
         .join(" · ");
       setRunMessage(jobSummary || "Sync avviata.");
-      setRunStartedAt(new Date().toISOString());
+      const startedAt = new Date().toISOString();
+      setRunStartedAt(startedAt);
+      setSyncLog([]);
+      lastRunEntityKeysRef.current = entitiesToRun;
+      runCompletionLoggedRef.current = false;
+      appendLog(`Avvio sync WhiteCompany su ${entitiesToRun.length} entity.`, "info");
+      for (const [entity, job] of Object.entries(response.jobs ?? {})) {
+        const entityLabel = ENTITY_DEFINITIONS.find((item) => item.key === entity)?.label ?? entity;
+        appendLog(`${entityLabel}: job creato (${job.status}).`, job.status === "running" ? "warning" : "info");
+      }
       await loadAll({ silent: true });
     } catch (runError) {
       setError(runError instanceof Error ? runError.message : "Errore avvio sync Bonifica");
+      appendLog(runError instanceof Error ? `Errore avvio sync: ${runError.message}` : "Errore avvio sync Bonifica.", "danger");
     } finally {
       setRunning(false);
     }
@@ -347,18 +427,21 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
         />
         <div className="space-y-6 p-6">
           {runStartedAt ? (
-            <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="text-sm text-gray-700">
-                  Progress: <span className="font-semibold">{progress.finished}</span> / {progress.total}
+            <div className="rounded-2xl border border-[#cfe0d3] bg-[#f5faf6] px-4 py-4">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#5b7862]">Progress sync</p>
+                  <div className="mt-1 text-sm text-gray-700">
+                    <span className="font-semibold">{progress.finished}</span> / {progress.total} entity chiuse
+                  </div>
                   {progress.runningKeys.length > 0 ? (
-                    <span className="ml-2 text-gray-500">· in corso: {progress.runningKeys.join(", ")}</span>
+                    <p className="mt-1 text-xs text-gray-500">In corso: {progress.runningKeys.join(", ")}</p>
                   ) : null}
                 </div>
-                <div className="text-xs text-gray-500">{progress.percent}%</div>
+                <div className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-[#1D4E35] shadow-sm">{progress.percent}%</div>
               </div>
-              <div className="mt-2 h-2 w-full overflow-hidden rounded-full bg-white">
-                <div className="h-full rounded-full bg-[#1D4E35]" style={{ width: `${progress.percent}%` }} />
+              <div className="mt-3 h-3 w-full overflow-hidden rounded-full bg-white shadow-inner">
+                <div className="h-full rounded-full bg-[#1D4E35] transition-all duration-500" style={{ width: `${progress.percent}%` }} />
               </div>
             </div>
           ) : null}
@@ -499,6 +582,46 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
         <ElaborazionePanelHeader
           badge={
             <>
+              <RefreshIcon className="h-3.5 w-3.5" />
+              Log
+            </>
+          }
+          title="Log operativo"
+          description="Eventi locali della run corrente: avvio job, polling stato, completamenti e fallimenti per entity."
+        />
+        <div className="p-6">
+          {syncLog.length === 0 ? (
+            <EmptyState icon={RefreshIcon} title="Nessun log disponibile" description="Avvia una sync o aggiorna lo stato per popolare il log operativo." />
+          ) : (
+            <div className="max-h-[22rem] space-y-2 overflow-y-auto pr-2">
+              {syncLog.map((entry) => {
+                const toneClassName =
+                  entry.tone === "success"
+                    ? "border-emerald-100 bg-emerald-50 text-emerald-800"
+                    : entry.tone === "warning"
+                      ? "border-amber-100 bg-amber-50 text-amber-800"
+                      : entry.tone === "danger"
+                        ? "border-rose-100 bg-rose-50 text-rose-800"
+                        : "border-gray-100 bg-gray-50 text-gray-700";
+
+                return (
+                  <div key={entry.id} className={`rounded-2xl border px-3 py-2 ${toneClassName}`}>
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-sm">{entry.message}</p>
+                      <span className="shrink-0 text-[11px] font-medium opacity-70">{formatDateTime(entry.at)}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </article>
+
+      <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
+        <ElaborazionePanelHeader
+          badge={
+            <>
               <CheckIcon className="h-3.5 w-3.5" />
               Stato
             </>
@@ -592,4 +715,3 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
     </ProtectedPage>
   );
 }
-
