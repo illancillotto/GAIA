@@ -45,6 +45,10 @@
 - eseguito hardening esteso della piattaforma sui moduli collegati
 - corretto `network` per compatibilità schema/model su `hostname_source`
 - riallineato il bridge `sync` per mantenere compatibile il punto di monkeypatch dei test
+- introdotto staging Bonifica Oristanese `bonifica_user_staging` per i consorziati
+- aggiunto sync backend `sync_white_consorziati()` con match su `tax` verso `ana_subjects`
+- aggiunti endpoint backend `/utenze/bonifica-staging` per lista, dettaglio, approve, reject e bulk-approve
+- preservato lo stato `rejected` sui re-sync Bonifica per evitare riaperture automatiche
 
 ## Verifiche Eseguite
 

@@ -1,5 +1,6 @@
 from typing import Annotated
 import uuid
+from datetime import datetime, timezone
 from io import BytesIO, StringIO
 import csv
 import mimetypes
@@ -29,6 +30,7 @@ from app.modules.utenze.models import (
     AnagraficaPerson,
     AnagraficaSubject,
     AnagraficaSubjectStatus,
+    BonificaUserStaging,
 )
 from app.modules.utenze.schemas import (
     AnagraficaAuditLogResponse,
@@ -61,6 +63,10 @@ from app.modules.utenze.schemas import (
     AnagraficaSubjectListItemResponse,
     AnagraficaSubjectListResponse,
     AnagraficaSubjectUpdateRequest,
+    BonificaUserStagingBulkApproveRequest,
+    BonificaUserStagingBulkApproveResponse,
+    BonificaUserStagingListResponse,
+    BonificaUserStagingResponse,
 )
 from app.modules.utenze.services.import_service import (
     AnagraficaImportPreviewService,
@@ -351,6 +357,120 @@ def get_subjects(
         page=page,
         page_size=page_size,
     )
+
+
+@router.get("/bonifica-staging", response_model=BonificaUserStagingListResponse)
+def get_bonifica_staging(
+    _: Annotated[ApplicationUser, Depends(require_active_user)],
+    __: Annotated[ApplicationUser, RequireUtenzeModule],
+    db: Annotated[Session, Depends(get_db)],
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=200),
+    search: str | None = Query(default=None),
+    review_status: str | None = Query(default=None),
+) -> BonificaUserStagingListResponse:
+    query = select(BonificaUserStaging).order_by(
+        BonificaUserStaging.updated_at.desc(),
+        BonificaUserStaging.created_at.desc(),
+    )
+    if review_status:
+        query = query.where(BonificaUserStaging.review_status == review_status)
+
+    tokens = [token.strip().lower() for token in (search or "").split() if token.strip()]
+    for token in tokens:
+        term = f"%{token}%"
+        query = query.where(
+            or_(
+                func.lower(func.coalesce(BonificaUserStaging.username, "")).like(term),
+                func.lower(func.coalesce(BonificaUserStaging.email, "")).like(term),
+                func.lower(func.coalesce(BonificaUserStaging.business_name, "")).like(term),
+                func.lower(func.coalesce(BonificaUserStaging.first_name, "")).like(term),
+                func.lower(func.coalesce(BonificaUserStaging.last_name, "")).like(term),
+                func.lower(func.coalesce(BonificaUserStaging.tax, "")).like(term),
+            )
+        )
+
+    total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+    items = db.scalars(query.offset((page - 1) * page_size).limit(page_size)).all()
+    return BonificaUserStagingListResponse(
+        items=[_serialize_bonifica_staging(db, item) for item in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.post("/bonifica-staging/bulk-approve", response_model=BonificaUserStagingBulkApproveResponse)
+def bulk_approve_bonifica_staging(
+    payload: BonificaUserStagingBulkApproveRequest,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    _: Annotated[ApplicationUser, RequireUtenzeModule],
+    db: Annotated[Session, Depends(get_db)],
+) -> BonificaUserStagingBulkApproveResponse:
+    approved = 0
+    skipped = 0
+    errors: list[str] = []
+
+    for raw_id in payload.ids:
+        try:
+            staging_id = uuid.UUID(raw_id)
+        except ValueError:
+            errors.append(f"{raw_id}: invalid uuid")
+            continue
+
+        staging = db.get(BonificaUserStaging, staging_id)
+        if staging is None:
+            errors.append(f"{raw_id}: staging item not found")
+            continue
+        if staging.review_status != "new":
+            skipped += 1
+            continue
+        _approve_bonifica_staging_item(db, current_user, staging)
+        approved += 1
+
+    return BonificaUserStagingBulkApproveResponse(
+        approved=approved,
+        skipped=skipped,
+        errors=errors,
+    )
+
+
+@router.get("/bonifica-staging/{staging_id}", response_model=BonificaUserStagingResponse)
+def get_bonifica_staging_item(
+    staging_id: uuid.UUID,
+    _: Annotated[ApplicationUser, Depends(require_active_user)],
+    __: Annotated[ApplicationUser, RequireUtenzeModule],
+    db: Annotated[Session, Depends(get_db)],
+) -> BonificaUserStagingResponse:
+    staging = _require_bonifica_staging_exists(db, staging_id)
+    return _serialize_bonifica_staging(db, staging)
+
+
+@router.post("/bonifica-staging/{staging_id}/approve", response_model=BonificaUserStagingResponse)
+def approve_bonifica_staging_item(
+    staging_id: uuid.UUID,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    _: Annotated[ApplicationUser, RequireUtenzeModule],
+    db: Annotated[Session, Depends(get_db)],
+) -> BonificaUserStagingResponse:
+    staging = _require_bonifica_staging_exists(db, staging_id)
+    return _approve_bonifica_staging_item(db, current_user, staging)
+
+
+@router.post("/bonifica-staging/{staging_id}/reject", response_model=BonificaUserStagingResponse)
+def reject_bonifica_staging_item(
+    staging_id: uuid.UUID,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    _: Annotated[ApplicationUser, RequireUtenzeModule],
+    db: Annotated[Session, Depends(get_db)],
+) -> BonificaUserStagingResponse:
+    staging = _require_bonifica_staging_exists(db, staging_id)
+    staging.review_status = "rejected"
+    staging.reviewed_by = current_user.id
+    staging.reviewed_at = datetime.now(timezone.utc)
+    db.add(staging)
+    db.commit()
+    return _serialize_bonifica_staging(db, staging)
 
 
 @router.post("/subjects", response_model=AnagraficaSubjectDetailResponse, status_code=status.HTTP_201_CREATED)
@@ -1069,6 +1189,171 @@ def _create_subject_audit(
         )
     )
     db.flush()
+
+
+def _normalize_bonifica_tax(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.replace(" ", "").strip().upper()
+    return normalized or None
+
+
+def _staging_display_name(staging: BonificaUserStaging) -> str:
+    if staging.business_name:
+        return staging.business_name
+    full_name = " ".join(part for part in [staging.last_name, staging.first_name] if part).strip()
+    if full_name:
+        return full_name
+    return staging.username or f"Consorziato {staging.wc_id}"
+
+
+def _serialize_bonifica_staging(db: Session, staging: BonificaUserStaging) -> BonificaUserStagingResponse:
+    matched_subject_display_name = None
+    if staging.matched_subject_id:
+        subject = db.get(AnagraficaSubject, staging.matched_subject_id)
+        if subject is not None:
+            matched_subject_display_name = _subject_display_name(db, subject)
+    return BonificaUserStagingResponse(
+        id=str(staging.id),
+        wc_id=staging.wc_id,
+        username=staging.username,
+        email=staging.email,
+        user_type=staging.user_type,
+        business_name=staging.business_name,
+        first_name=staging.first_name,
+        last_name=staging.last_name,
+        tax=staging.tax,
+        phone=staging.phone,
+        mobile=staging.mobile,
+        role=staging.role,
+        enabled=staging.enabled,
+        wc_synced_at=staging.wc_synced_at,
+        review_status=staging.review_status,
+        matched_subject_id=str(staging.matched_subject_id) if staging.matched_subject_id else None,
+        matched_subject_display_name=matched_subject_display_name,
+        mismatch_fields=staging.mismatch_fields,
+        reviewed_by=staging.reviewed_by,
+        reviewed_at=staging.reviewed_at,
+        created_at=staging.created_at,
+        updated_at=staging.updated_at,
+    )
+
+
+def _require_bonifica_staging_exists(db: Session, staging_id: uuid.UUID) -> BonificaUserStaging:
+    staging = db.get(BonificaUserStaging, staging_id)
+    if staging is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bonifica staging item not found")
+    return staging
+
+
+def _infer_staging_subject_type(staging: BonificaUserStaging) -> str:
+    user_type = (staging.user_type or "").strip().lower()
+    if user_type == "company" or staging.business_name:
+        return "company"
+    if user_type == "private" or staging.first_name or staging.last_name:
+        return "person"
+    return "unknown"
+
+
+def _build_staging_person_payload(staging: BonificaUserStaging) -> AnagraficaPersonPayload:
+    normalized_tax = _normalize_bonifica_tax(staging.tax)
+    if normalized_tax is None:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Codice fiscale mancante nel record Bonifica")
+    if not staging.first_name or not staging.last_name:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Nome e cognome sono obbligatori per approvare un consorziato persona fisica")
+    return AnagraficaPersonPayload(
+        cognome=staging.last_name,
+        nome=staging.first_name,
+        codice_fiscale=normalized_tax,
+        email=staging.email,
+        telefono=staging.mobile or staging.phone,
+        note="Creato da staging Bonifica Oristanese",
+    )
+
+
+def _build_staging_company_payload(staging: BonificaUserStaging) -> AnagraficaCompanyPayload:
+    normalized_tax = _normalize_bonifica_tax(staging.tax)
+    if normalized_tax is None:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Partita IVA / codice fiscale mancante nel record Bonifica")
+    if not staging.business_name:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Ragione sociale mancante nel record Bonifica")
+    company_cf = None if normalized_tax.isdigit() and len(normalized_tax) == 11 else normalized_tax
+    return AnagraficaCompanyPayload(
+        ragione_sociale=staging.business_name,
+        partita_iva=normalized_tax,
+        codice_fiscale=company_cf,
+        email_pec=staging.email,
+        telefono=staging.mobile or staging.phone,
+        note="Creato da staging Bonifica Oristanese",
+    )
+
+
+def _approve_bonifica_staging_item(
+    db: Session,
+    current_user: ApplicationUser,
+    staging: BonificaUserStaging,
+) -> BonificaUserStagingResponse:
+    if staging.review_status == "rejected":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Il record è stato rifiutato manualmente")
+
+    subject_type = _infer_staging_subject_type(staging)
+    source_name_raw = _staging_display_name(staging)
+
+    if subject_type == "person":
+        person_payload = _build_staging_person_payload(staging)
+        company_payload = None
+    elif subject_type == "company":
+        person_payload = None
+        company_payload = _build_staging_company_payload(staging)
+    else:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Impossibile inferire il tipo soggetto dal record Bonifica")
+
+    if staging.review_status == "new":
+        subject = AnagraficaSubject(
+            subject_type=subject_type,
+            status=AnagraficaSubjectStatus.ACTIVE.value,
+            source_name_raw=source_name_raw,
+            requires_review=False,
+        )
+        db.add(subject)
+        db.flush()
+        _apply_subject_payload(db, subject, subject_type, person_payload, company_payload)
+        _create_subject_audit(
+            db,
+            subject.id,
+            current_user.id,
+            "bonifica_staging_approved_create",
+            {"wc_id": staging.wc_id, "review_status": staging.review_status},
+        )
+    else:
+        if staging.matched_subject_id is None:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Il record staging non è collegato a un soggetto esistente")
+        subject = _require_subject_exists(db, staging.matched_subject_id)
+        if subject.subject_type != subject_type:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Il tipo soggetto GAIA non è compatibile con il record Bonifica",
+            )
+        subject.source_name_raw = source_name_raw
+        subject.status = AnagraficaSubjectStatus.ACTIVE.value
+        subject.requires_review = False
+        _apply_subject_payload(db, subject, subject_type, person_payload, company_payload)
+        _create_subject_audit(
+            db,
+            subject.id,
+            current_user.id,
+            "bonifica_staging_approved_update",
+            {"wc_id": staging.wc_id, "review_status": staging.review_status},
+        )
+
+    staging.matched_subject_id = subject.id
+    staging.review_status = "matched"
+    staging.mismatch_fields = None
+    staging.reviewed_by = current_user.id
+    staging.reviewed_at = datetime.now(timezone.utc)
+    db.add(staging)
+    db.commit()
+    return _serialize_bonifica_staging(db, staging)
 
 
 def _build_subject_list_item(db: Session, subject: AnagraficaSubject) -> AnagraficaSubjectListItemResponse:

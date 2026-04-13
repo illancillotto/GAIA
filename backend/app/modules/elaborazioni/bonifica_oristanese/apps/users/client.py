@@ -42,6 +42,8 @@ class BonificaUserRow:
     first_name: str | None
     last_name: str | None
     tax: str | None
+    contact_phone: str | None
+    contact_mobile: str | None
     enabled: bool
     role: str | None
 
@@ -50,13 +52,18 @@ class BonificaUsersClient(BonificaDatatableClient):
     def __init__(self, session_manager: BonificaOristaneseSessionManager) -> None:
         super().__init__(session_manager)
 
-    async def fetch_users(self) -> tuple[list[BonificaUserRow], int]:
+    async def _fetch_users(
+        self,
+        *,
+        filter_role: str,
+        exclude_role: str | None = None,
+    ) -> tuple[list[BonificaUserRow], int]:
         rows, total = await self.fetch_all_datatable_rows(
             USERS_APP.list_path,
             columns_count=USERS_APP.columns_count,
             page_size=250,
             extra_params={
-                "filter_role": "",
+                "filter_role": filter_role,
                 "filter_enabled": "",
             },
         )
@@ -81,13 +88,25 @@ class BonificaUsersClient(BonificaDatatableClient):
                     first_name=_field_text(fields, "first_name"),
                     last_name=_field_text(fields, "last_name"),
                     tax=_field_text(fields, "tax"),
+                    contact_phone=_field_text(fields, "contact_phone"),
+                    contact_mobile=_field_text(fields, "contact_mobile"),
                     enabled=bool(fields.get("enabled")),
                     role=_field_text(fields, "roles", "role") or clean_html_text(row[1]) or None,
                 )
             )
 
-        return [
-            row
-            for row in parsed
-            if (row.role or "").strip().lower() != "consorziato"
-        ], total
+        if exclude_role:
+            normalized_exclude_role = exclude_role.strip().lower()
+            parsed = [
+                row
+                for row in parsed
+                if (row.role or "").strip().lower() != normalized_exclude_role
+            ]
+
+        return parsed, total
+
+    async def fetch_users(self) -> tuple[list[BonificaUserRow], int]:
+        return await self._fetch_users(filter_role="", exclude_role="consorziato")
+
+    async def fetch_consorziati(self) -> tuple[list[BonificaUserRow], int]:
+        return await self._fetch_users(filter_role="Consorziato")

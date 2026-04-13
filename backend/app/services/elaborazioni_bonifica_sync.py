@@ -23,6 +23,7 @@ from app.modules.elaborazioni.bonifica_oristanese.apps.warehouse_requests.client
 )
 from app.modules.inventory.services import sync_white_warehouse_requests
 from app.modules.accessi.sync_org_charts import sync_white_org_charts
+from app.modules.utenze.services.sync_consorziati import sync_white_consorziati
 from app.modules.elaborazioni.bonifica_oristanese.models import (
     BonificaSyncEntityStatus,
     BonificaSyncJobStart,
@@ -56,6 +57,7 @@ SUPPORTED_SYNC_ENTITIES = (
     "areas",
     "warehouse_requests",
     "org_charts",
+    "consorziati",
 )
 DATE_AWARE_SYNC_ENTITIES = {"reports", "refuels", "taken_charge", "warehouse_requests"}
 
@@ -280,6 +282,15 @@ async def run_bonifica_sync(
                 elif entity == "org_charts":
                     rows, _ = await org_charts_client.fetch_org_charts()
                     sync_result = sync_white_org_charts(db=db, rows=rows)
+                    result = _SyncExecutionResult(
+                        synced=sync_result.synced,
+                        skipped=sync_result.skipped,
+                        errors=len(sync_result.errors),
+                        error_detail="\n".join(sync_result.errors[:20]) if sync_result.errors else None,
+                    )
+                elif entity == "consorziati":
+                    rows, _ = await users_client.fetch_consorziati()
+                    sync_result = sync_white_consorziati(db=db, rows=rows)
                     result = _SyncExecutionResult(
                         synced=sync_result.synced,
                         skipped=sync_result.skipped,

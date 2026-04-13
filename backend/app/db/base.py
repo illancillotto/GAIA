@@ -33,6 +33,7 @@ from app.modules.utenze.models import (
     AnagraficaImportJobItem,
     AnagraficaPerson,
     AnagraficaSubject,
+    BonificaUserStaging,
 )
 from app.models.catasto import (
     CatastoBatch,
@@ -71,6 +72,7 @@ __all__ = [
     "AnagraficaImportJobItem",
     "AnagraficaPerson",
     "AnagraficaSubject",
+    "BonificaUserStaging",
     "Base",
     "BonificaOristaneseCredential",
     "CapacitasCredential",

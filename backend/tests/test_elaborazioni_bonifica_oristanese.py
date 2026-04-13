@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Generator
+import uuid
 
 from cryptography.fernet import Fernet
 import pytest
@@ -37,6 +38,7 @@ from app.modules.operazioni.models.reports import FieldReport, FieldReportCatego
 from app.modules.operazioni.models.wc_area import WCArea
 from app.modules.operazioni.models.vehicles import Vehicle, VehicleFuelLog, VehicleUsageSession
 from app.modules.operazioni.models.wc_operator import WCOperator
+from app.modules.utenze.models import AnagraficaCompany, AnagraficaPerson, AnagraficaSubject, BonificaUserStaging
 from app.services.catasto_credentials import get_credential_fernet
 
 
@@ -78,6 +80,9 @@ def setup_database(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, Non
             password_hash=hash_password("secret123"),
             role=ApplicationUserRole.ADMIN.value,
             is_active=True,
+            module_inventario=True,
+            module_operazioni=True,
+            module_utenze=True,
         )
     )
     db.commit()
@@ -278,6 +283,7 @@ def test_bonifica_sync_status_lists_supported_entities() -> None:
     assert payload["entities"]["areas"]["status"] == "never"
     assert payload["entities"]["warehouse_requests"]["status"] == "never"
     assert payload["entities"]["org_charts"]["status"] == "never"
+    assert payload["entities"]["consorziati"]["status"] == "never"
 
 
 def test_bonifica_sync_run_creates_jobs_and_imports_reports(
@@ -360,6 +366,9 @@ def test_bonifica_sync_run_creates_jobs_and_imports_reports(
     async def fake_fetch_org_charts(self):
         return ([], 0)
 
+    async def fake_fetch_consorziati(self):
+        return ([], 0)
+
     monkeypatch.setattr("app.modules.elaborazioni.bonifica_oristanese.session.BonificaOristaneseSessionManager.login", fake_login)
     monkeypatch.setattr("app.modules.elaborazioni.bonifica_oristanese.session.BonificaOristaneseSessionManager.close", fake_close)
     monkeypatch.setattr(
@@ -398,6 +407,10 @@ def test_bonifica_sync_run_creates_jobs_and_imports_reports(
         "app.modules.elaborazioni.bonifica_oristanese.apps.org_charts.client.BonificaOrgChartsClient.fetch_org_charts",
         fake_fetch_org_charts,
     )
+    monkeypatch.setattr(
+        "app.modules.elaborazioni.bonifica_oristanese.apps.users.client.BonificaUsersClient.fetch_consorziati",
+        fake_fetch_consorziati,
+    )
 
     response = client.post(
         "/elaborazioni/bonifica/sync/run",
@@ -416,11 +429,12 @@ def test_bonifica_sync_run_creates_jobs_and_imports_reports(
     assert payload["jobs"]["areas"]["status"] == "completed"
     assert payload["jobs"]["warehouse_requests"]["status"] == "completed"
     assert payload["jobs"]["org_charts"]["status"] == "completed"
+    assert payload["jobs"]["consorziati"]["status"] == "completed"
 
     db = TestingSessionLocal()
     try:
         jobs = db.query(WCSyncJob).all()
-        assert len(jobs) == 9
+        assert len(jobs) == 10
 
         category = db.scalar(select(FieldReportCategory).where(FieldReportCategory.wc_id == 38))
         assert category is not None
@@ -447,6 +461,7 @@ def test_bonifica_sync_run_creates_jobs_and_imports_reports(
     assert status_payload["entities"]["areas"]["records_synced"] == 0
     assert status_payload["entities"]["warehouse_requests"]["records_synced"] == 0
     assert status_payload["entities"]["org_charts"]["records_synced"] == 0
+    assert status_payload["entities"]["consorziati"]["records_synced"] == 0
 
 
 def test_bonifica_sync_run_imports_org_charts(
@@ -572,6 +587,189 @@ def test_bonifica_sync_run_imports_org_charts(
         assert entries[1].wc_area_id is not None
     finally:
         db.close()
+
+
+def test_bonifica_sync_run_imports_consorziati_and_approve_creates_subject(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    create_response = client.post(
+        "/elaborazioni/bonifica/credentials",
+        headers=auth_headers(),
+        json={
+            "label": "Account sync consorziati",
+            "login_identifier": "utente@example.local",
+            "password": "bonifica-secret",
+            "remember_me": True,
+        },
+    )
+    assert create_response.status_code == 201
+
+    async def fake_login(self):
+        from app.modules.elaborazioni.bonifica_oristanese.session import BonificaOristaneseSession
+
+        self._session = BonificaOristaneseSession(
+            authenticated_url="https://login.bonificaoristanese.it/dashboard",
+            cookie_names=["XSRF-TOKEN", "laravel_session"],
+        )
+        return self._session
+
+    async def fake_close(self) -> None:
+        return None
+
+    async def fake_fetch_consorziati(self):
+        return (
+            [
+                BonificaUserRow(
+                    wc_id=8801,
+                    username="consorziato.azienda",
+                    email="azienda@example.local",
+                    user_type="company",
+                    business_name="Azienda Agricola Demo",
+                    first_name=None,
+                    last_name=None,
+                    tax="12345678901",
+                    contact_phone="0783-123456",
+                    contact_mobile="3331234567",
+                    enabled=True,
+                    role="Consorziato",
+                )
+            ],
+            1,
+        )
+
+    monkeypatch.setattr("app.modules.elaborazioni.bonifica_oristanese.session.BonificaOristaneseSessionManager.login", fake_login)
+    monkeypatch.setattr("app.modules.elaborazioni.bonifica_oristanese.session.BonificaOristaneseSessionManager.close", fake_close)
+    monkeypatch.setattr(
+        "app.modules.elaborazioni.bonifica_oristanese.apps.users.client.BonificaUsersClient.fetch_consorziati",
+        fake_fetch_consorziati,
+    )
+
+    response = client.post(
+        "/elaborazioni/bonifica/sync/run",
+        headers=auth_headers(),
+        json={"entities": ["consorziati"]},
+    )
+    assert response.status_code == 200
+    assert response.json()["jobs"]["consorziati"]["status"] == "completed"
+
+    list_response = client.get("/utenze/bonifica-staging", headers=auth_headers())
+    assert list_response.status_code == 200
+    items = list_response.json()["items"]
+    assert len(items) == 1
+    assert items[0]["review_status"] == "new"
+
+    staging_id = items[0]["id"]
+    approve_response = client.post(
+        f"/utenze/bonifica-staging/{staging_id}/approve",
+        headers=auth_headers(),
+    )
+    assert approve_response.status_code == 200
+    assert approve_response.json()["review_status"] == "matched"
+    assert approve_response.json()["matched_subject_id"] is not None
+
+    db = TestingSessionLocal()
+    try:
+        staging = db.get(BonificaUserStaging, uuid.UUID(approve_response.json()["id"]))
+        assert staging is not None
+        assert staging.matched_subject_id is not None
+
+        subject = db.get(AnagraficaSubject, staging.matched_subject_id)
+        assert subject is not None
+        assert subject.subject_type == "company"
+
+        company = db.get(AnagraficaCompany, subject.id)
+        assert company is not None
+        assert company.ragione_sociale == "Azienda Agricola Demo"
+        assert company.partita_iva == "12345678901"
+    finally:
+        db.close()
+
+
+def test_bonifica_staging_reject_is_preserved_on_resync(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    create_response = client.post(
+        "/elaborazioni/bonifica/credentials",
+        headers=auth_headers(),
+        json={
+            "label": "Account sync consorziati reject",
+            "login_identifier": "utente@example.local",
+            "password": "bonifica-secret",
+        },
+    )
+    assert create_response.status_code == 201
+
+    async def fake_login(self):
+        from app.modules.elaborazioni.bonifica_oristanese.session import BonificaOristaneseSession
+
+        self._session = BonificaOristaneseSession(
+            authenticated_url="https://login.bonificaoristanese.it/dashboard",
+            cookie_names=["XSRF-TOKEN", "laravel_session"],
+        )
+        return self._session
+
+    async def fake_close(self) -> None:
+        return None
+
+    async def fake_fetch_consorziati(self):
+        return (
+            [
+                BonificaUserRow(
+                    wc_id=8802,
+                    username="consorziato.privato",
+                    email="privato@example.local",
+                    user_type="private",
+                    business_name=None,
+                    first_name="Luigi",
+                    last_name="Verdi",
+                    tax="VRDLGU80A01H501Z",
+                    contact_phone=None,
+                    contact_mobile="3337654321",
+                    enabled=True,
+                    role="Consorziato",
+                )
+            ],
+            1,
+        )
+
+    monkeypatch.setattr("app.modules.elaborazioni.bonifica_oristanese.session.BonificaOristaneseSessionManager.login", fake_login)
+    monkeypatch.setattr("app.modules.elaborazioni.bonifica_oristanese.session.BonificaOristaneseSessionManager.close", fake_close)
+    monkeypatch.setattr(
+        "app.modules.elaborazioni.bonifica_oristanese.apps.users.client.BonificaUsersClient.fetch_consorziati",
+        fake_fetch_consorziati,
+    )
+
+    first_sync = client.post(
+        "/elaborazioni/bonifica/sync/run",
+        headers=auth_headers(),
+        json={"entities": ["consorziati"]},
+    )
+    assert first_sync.status_code == 200
+
+    list_response = client.get("/utenze/bonifica-staging", headers=auth_headers())
+    staging_id = list_response.json()["items"][0]["id"]
+
+    reject_response = client.post(
+        f"/utenze/bonifica-staging/{staging_id}/reject",
+        headers=auth_headers(),
+    )
+    assert reject_response.status_code == 200
+    assert reject_response.json()["review_status"] == "rejected"
+
+    second_sync = client.post(
+        "/elaborazioni/bonifica/sync/run",
+        headers=auth_headers(),
+        json={"entities": ["consorziati"]},
+    )
+    assert second_sync.status_code == 200
+
+    detail_response = client.get(
+        f"/utenze/bonifica-staging/{staging_id}",
+        headers=auth_headers(),
+    )
+    assert detail_response.status_code == 200
+    assert detail_response.json()["review_status"] == "rejected"
+    assert detail_response.json()["email"] == "privato@example.local"
 
 
 def test_bonifica_sync_run_imports_vehicles_and_taken_charge(
@@ -759,6 +957,8 @@ def test_bonifica_sync_run_imports_operational_users_and_exposes_api(
                     first_name="Mario",
                     last_name="Rossi",
                     tax="RSSMRA80A01H501U",
+                    contact_phone=None,
+                    contact_mobile=None,
                     enabled=True,
                     role="Admin",
                 ),
@@ -771,6 +971,8 @@ def test_bonifica_sync_run_imports_operational_users_and_exposes_api(
                     first_name=None,
                     last_name=None,
                     tax="12345678901",
+                    contact_phone=None,
+                    contact_mobile=None,
                     enabled=True,
                     role="Consorziato",
                 ),

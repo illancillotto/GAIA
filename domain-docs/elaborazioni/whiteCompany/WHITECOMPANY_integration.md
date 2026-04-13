@@ -278,6 +278,22 @@ GET  /users/{id}
 - Se non trovato: staging in tabella separata `bonifica_user_staging` in attesa di revisione manuale
 - Non creare automaticamente soggetti in `ana_subjects` senza approvazione
 
+**Nota runtime GAIA**: il sync attuale importa i `Consorziato` nel modulo
+`utenze` tramite l'entity `consorziati` di `POST /elaborazioni/bonifica/sync/run`.
+Gli endpoint backend attivi del workflow staging sono:
+
+```
+GET  /utenze/bonifica-staging
+GET  /utenze/bonifica-staging/{id}
+POST /utenze/bonifica-staging/{id}/approve
+POST /utenze/bonifica-staging/{id}/reject
+POST /utenze/bonifica-staging/bulk-approve
+```
+
+Il runtime preserva anche il rifiuto manuale: un record con
+`review_status = rejected` continua ad aggiornare i campi White ma non viene
+riaperto automaticamente dal re-sync.
+
 ---
 
 ### AREE TERRITORIALI

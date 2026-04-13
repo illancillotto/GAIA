@@ -389,3 +389,45 @@ class AnagraficaDocumentSummaryResponse(BaseModel):
 class AnagraficaSearchResultResponse(BaseModel):
     items: list[AnagraficaSubjectListItemResponse]
     total: int
+
+
+class BonificaUserStagingResponse(BaseModel):
+    id: str
+    wc_id: int
+    username: str | None = None
+    email: str | None = None
+    user_type: str | None = None
+    business_name: str | None = None
+    first_name: str | None = None
+    last_name: str | None = None
+    tax: str | None = None
+    phone: str | None = None
+    mobile: str | None = None
+    role: str | None = None
+    enabled: bool
+    wc_synced_at: datetime | None = None
+    review_status: str
+    matched_subject_id: str | None = None
+    matched_subject_display_name: str | None = None
+    mismatch_fields: dict[str, Any] | None = None
+    reviewed_by: int | None = None
+    reviewed_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class BonificaUserStagingListResponse(BaseModel):
+    items: list[BonificaUserStagingResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+class BonificaUserStagingBulkApproveRequest(BaseModel):
+    ids: list[str]
+
+
+class BonificaUserStagingBulkApproveResponse(BaseModel):
+    approved: int
+    skipped: int
+    errors: list[str] = Field(default_factory=list)

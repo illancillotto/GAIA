@@ -258,6 +258,46 @@ class AnagraficaImportJobItem(Base):
     )
 
 
+class BonificaUserStaging(Base):
+    __tablename__ = "bonifica_user_staging"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    wc_id: Mapped[int] = mapped_column(Integer, unique=True, nullable=False, index=True)
+    username: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(200), nullable=True, index=True)
+    user_type: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    business_name: Mapped[str | None] = mapped_column(String(300), nullable=True, index=True)
+    first_name: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    last_name: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    tax: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    phone: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    mobile: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    role: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    wc_synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    review_status: Mapped[str] = mapped_column(String(20), default="new", nullable=False, index=True)
+    matched_subject_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
+        ForeignKey("ana_subjects.id"),
+        nullable=True,
+        index=True,
+    )
+    mismatch_fields: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    reviewed_by: Mapped[int | None] = mapped_column(
+        Integer,
+        ForeignKey("application_users.id"),
+        nullable=True,
+    )
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
 class AnagraficaAuditLog(Base):
     __tablename__ = "ana_audit_log"
 
