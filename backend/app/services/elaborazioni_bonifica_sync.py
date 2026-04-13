@@ -121,14 +121,49 @@ def _create_job(
     return job
 
 
-def _finalize_job(db: Session, job: WCSyncJob, result: _SyncExecutionResult) -> None:
+def _finalize_job(
+    db: Session,
+    job: WCSyncJob,
+    result: _SyncExecutionResult,
+    *,
+    params_updates: dict[str, object] | None = None,
+) -> None:
     job.status = "failed" if result.errors > 0 and result.synced == 0 else "completed"
     job.finished_at = datetime.now(timezone.utc)
     job.records_synced = result.synced
     job.records_skipped = result.skipped
     job.records_errors = result.errors
     job.error_detail = result.error_detail
+    if params_updates:
+        job.params_json = {**(job.params_json or {}), **params_updates}
     db.flush()
+
+
+def _expire_stale_running_jobs(db: Session) -> None:
+    cutoff = datetime.now(timezone.utc) - timedelta(minutes=settings.wc_sync_stale_job_minutes)
+    stale_jobs = db.scalars(
+        select(WCSyncJob).where(
+            WCSyncJob.status == "running",
+            WCSyncJob.finished_at.is_(None),
+            WCSyncJob.started_at < cutoff,
+        )
+    ).all()
+    if not stale_jobs:
+        return
+
+    expired_at = datetime.now(timezone.utc)
+    for job in stale_jobs:
+        stale_detail = (
+            "Job marcato come failed: rimasto in stato running oltre la soglia "
+            f"di {settings.wc_sync_stale_job_minutes} minuti."
+        )
+        job.status = "failed"
+        job.finished_at = expired_at
+        job.records_synced = job.records_synced or 0
+        job.records_skipped = job.records_skipped or 0
+        job.records_errors = max(job.records_errors or 0, 1)
+        job.error_detail = f"{job.error_detail}\n{stale_detail}".strip() if job.error_detail else stale_detail
+    db.commit()
 
 
 async def run_bonifica_sync(
@@ -136,6 +171,7 @@ async def run_bonifica_sync(
     current_user: ApplicationUser,
     request: BonificaSyncRunRequest,
 ) -> BonificaSyncRunResponse:
+    _expire_stale_running_jobs(db)
     entities = _resolve_entities(request)
     jobs: dict[str, WCSyncJob] = {}
 
@@ -177,7 +213,7 @@ async def run_bonifica_sync(
             assert job is not None
             try:
                 if entity == "report_types":
-                    rows, _ = await report_types_client.fetch_report_types()
+                    rows, total = await report_types_client.fetch_report_types()
                     sync_result = sync_white_report_types(db=db, rows=rows)
                     result = _SyncExecutionResult(
                         synced=sync_result.synced,
@@ -185,10 +221,11 @@ async def run_bonifica_sync(
                         errors=len(sync_result.errors),
                         error_detail="\n".join(sync_result.errors[:20]) if sync_result.errors else None,
                     )
+                    params_updates = {"source_total": total}
                 elif entity == "reports":
                     date_from, date_to = _resolve_date_window(request, entity)
                     assert date_from is not None and date_to is not None
-                    rows, _ = await reports_client.fetch_reports(date_from=date_from, date_to=date_to)
+                    rows, total = await reports_client.fetch_reports(date_from=date_from, date_to=date_to)
                     sync_result = sync_white_reports(
                         db=db,
                         current_user=current_user,
@@ -200,8 +237,9 @@ async def run_bonifica_sync(
                         errors=len(sync_result.errors),
                         error_detail="\n".join(sync_result.errors[:20]) if sync_result.errors else None,
                     )
+                    params_updates = {"source_total": total}
                 elif entity == "vehicles":
-                    rows, _ = await vehicles_client.fetch_vehicles()
+                    rows, total = await vehicles_client.fetch_vehicles()
                     sync_result = sync_white_vehicles(
                         db=db,
                         current_user=current_user,
@@ -213,10 +251,11 @@ async def run_bonifica_sync(
                         errors=len(sync_result.errors),
                         error_detail="\n".join(sync_result.errors[:20]) if sync_result.errors else None,
                     )
+                    params_updates = {"source_total": total}
                 elif entity == "refuels":
                     date_from, date_to = _resolve_date_window(request, entity)
                     assert date_from is not None and date_to is not None
-                    rows, _ = await refuels_client.fetch_refuels(
+                    rows, total = await refuels_client.fetch_refuels(
                         date_from=date_from,
                         date_to=date_to,
                     )
@@ -231,10 +270,11 @@ async def run_bonifica_sync(
                         errors=len(sync_result.errors),
                         error_detail="\n".join(sync_result.errors[:20]) if sync_result.errors else None,
                     )
+                    params_updates = {"source_total": total}
                 elif entity == "taken_charge":
                     date_from, date_to = _resolve_date_window(request, entity)
                     assert date_from is not None and date_to is not None
-                    rows, _ = await taken_charge_client.fetch_taken_charge(
+                    rows, total = await taken_charge_client.fetch_taken_charge(
                         date_from=date_from,
                         date_to=date_to,
                     )
@@ -249,8 +289,9 @@ async def run_bonifica_sync(
                         errors=len(sync_result.errors),
                         error_detail="\n".join(sync_result.errors[:20]) if sync_result.errors else None,
                     )
+                    params_updates = {"source_total": total}
                 elif entity == "users":
-                    rows, _ = await users_client.fetch_users()
+                    rows, total = await users_client.fetch_users()
                     sync_result = sync_white_operators(db=db, rows=rows)
                     result = _SyncExecutionResult(
                         synced=sync_result.synced,
@@ -258,8 +299,9 @@ async def run_bonifica_sync(
                         errors=len(sync_result.errors),
                         error_detail="\n".join(sync_result.errors[:20]) if sync_result.errors else None,
                     )
+                    params_updates = {"source_total": total}
                 elif entity == "areas":
-                    rows, _ = await areas_client.fetch_areas()
+                    rows, total = await areas_client.fetch_areas()
                     sync_result = sync_white_areas(db=db, rows=rows)
                     result = _SyncExecutionResult(
                         synced=sync_result.synced,
@@ -267,10 +309,11 @@ async def run_bonifica_sync(
                         errors=len(sync_result.errors),
                         error_detail="\n".join(sync_result.errors[:20]) if sync_result.errors else None,
                     )
+                    params_updates = {"source_total": total}
                 elif entity == "warehouse_requests":
                     date_from, date_to = _resolve_date_window(request, entity)
                     assert date_from is not None and date_to is not None
-                    rows, _ = await warehouse_requests_client.fetch_warehouse_requests(
+                    rows, total = await warehouse_requests_client.fetch_warehouse_requests(
                         date_from=date_from,
                         date_to=date_to,
                     )
@@ -281,8 +324,9 @@ async def run_bonifica_sync(
                         errors=len(sync_result.errors),
                         error_detail="\n".join(sync_result.errors[:20]) if sync_result.errors else None,
                     )
+                    params_updates = {"source_total": total}
                 elif entity == "org_charts":
-                    rows, _ = await org_charts_client.fetch_org_charts()
+                    rows, total = await org_charts_client.fetch_org_charts()
                     sync_result = sync_white_org_charts(db=db, rows=rows)
                     result = _SyncExecutionResult(
                         synced=sync_result.synced,
@@ -290,8 +334,9 @@ async def run_bonifica_sync(
                         errors=len(sync_result.errors),
                         error_detail="\n".join(sync_result.errors[:20]) if sync_result.errors else None,
                     )
+                    params_updates = {"source_total": total}
                 elif entity == "consorziati":
-                    rows, _ = await users_client.fetch_consorziati()
+                    rows, total = await users_client.fetch_consorziati()
                     sync_result = sync_white_consorziati(db=db, rows=rows)
                     result = _SyncExecutionResult(
                         synced=sync_result.synced,
@@ -299,10 +344,11 @@ async def run_bonifica_sync(
                         errors=len(sync_result.errors),
                         error_detail="\n".join(sync_result.errors[:20]) if sync_result.errors else None,
                     )
+                    params_updates = {"source_total": total}
                 else:  # pragma: no cover
                     raise RuntimeError(f"Entity `{entity}` non supportata")
 
-                _finalize_job(db, job, result)
+                _finalize_job(db, job, result, params_updates=params_updates)
                 db.commit()
             except Exception as exc:
                 logger.exception("Bonifica sync failed for entity `%s`", entity)
@@ -344,6 +390,7 @@ async def run_bonifica_sync(
 
 
 def get_bonifica_sync_status(db: Session) -> BonificaSyncStatusResponse:
+    _expire_stale_running_jobs(db)
     latest_by_entity: dict[str, BonificaSyncEntityStatus] = {}
 
     for entity in SUPPORTED_SYNC_ENTITIES:
@@ -369,6 +416,7 @@ def get_bonifica_sync_status(db: Session) -> BonificaSyncStatusResponse:
             records_skipped=latest_job.records_skipped,
             records_errors=latest_job.records_errors,
             error_detail=latest_job.error_detail,
+            params_json=latest_job.params_json,
         )
 
     return BonificaSyncStatusResponse(entities=latest_by_entity)

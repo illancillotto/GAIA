@@ -1006,6 +1006,7 @@ export type BonificaSyncEntityStatus = {
   records_skipped: number | null;
   records_errors: number | null;
   error_detail: string | null;
+  params_json: Record<string, unknown> | null;
 };
 
 export type BonificaSyncStatusResponse = {

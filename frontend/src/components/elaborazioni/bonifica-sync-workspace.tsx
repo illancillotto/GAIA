@@ -115,6 +115,30 @@ function isValidIsoDate(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
+function renderStatusDetail(status: BonificaSyncEntityStatus): string {
+  const params = status.params_json ?? {};
+  const detailParts: string[] = [];
+  const dateFrom = typeof params.date_from === "string" ? params.date_from : null;
+  const dateTo = typeof params.date_to === "string" ? params.date_to : null;
+  const sourceTotal =
+    typeof params.source_total === "number"
+      ? params.source_total
+      : typeof params.source_total === "string"
+        ? Number(params.source_total)
+        : null;
+
+  if (dateFrom || dateTo) {
+    detailParts.push(`Range ${dateFrom ?? "?"} → ${dateTo ?? "?"}`);
+  }
+  if (sourceTotal != null && Number.isFinite(sourceTotal)) {
+    detailParts.push(`Fonte White: ${sourceTotal}`);
+  }
+  if (status.error_detail) {
+    detailParts.push(status.error_detail.split("\n").slice(0, 2).join(" · "));
+  }
+  return detailParts.join(" · ");
+}
+
 export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedded?: boolean } = {}) {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [syncStatus, setSyncStatus] = useState<BonificaSyncStatusResponse | null>(null);
@@ -683,7 +707,7 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
                         : badgeTone === "warning"
                           ? "bg-amber-50 text-amber-700"
                           : "bg-gray-100 text-gray-700";
-                    const detailPreview = status.error_detail ? status.error_detail.split("\n").slice(0, 2).join(" · ") : "";
+                    const detailPreview = renderStatusDetail(status);
                     return (
                       <tr key={entityKey}>
                         <td className="min-w-[14rem]">
@@ -698,7 +722,7 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
                         <td className="text-sm text-gray-600">{status.records_synced ?? "—"}</td>
                         <td className="text-sm text-gray-600">{status.records_skipped ?? "—"}</td>
                         <td className="text-sm text-gray-600">{status.records_errors ?? "—"}</td>
-                        <td className="max-w-[34ch] truncate text-xs text-gray-500" title={status.error_detail ?? undefined}>
+                        <td className="max-w-[42ch] truncate text-xs text-gray-500" title={detailPreview || undefined}>
                           {detailPreview || "—"}
                         </td>
                       </tr>

@@ -69,6 +69,7 @@ class BonificaSyncEntityStatus(BaseModel):
     records_skipped: int | None = None
     records_errors: int | None = None
     error_detail: str | None = None
+    params_json: dict[str, object] | None = None
 
 
 class BonificaSyncStatusResponse(BaseModel):

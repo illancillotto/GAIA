@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Generator
+from datetime import datetime, timedelta, timezone
 import uuid
 
 from cryptography.fernet import Fernet
@@ -342,6 +343,30 @@ def test_bonifica_sync_status_lists_supported_entities() -> None:
     assert payload["entities"]["consorziati"]["status"] == "never"
 
 
+def test_bonifica_sync_status_expires_stale_running_jobs() -> None:
+    db = TestingSessionLocal()
+    try:
+        db.add(
+            WCSyncJob(
+                entity="vehicles",
+                status="running",
+                started_at=datetime.now(timezone.utc) - timedelta(hours=2),
+                params_json={"date_from": None, "date_to": None},
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get("/elaborazioni/bonifica/sync/status", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["entities"]["vehicles"]["status"] == "failed"
+    assert payload["entities"]["vehicles"]["records_errors"] == 1
+    assert "rimasto in stato running oltre la soglia" in payload["entities"]["vehicles"]["error_detail"]
+
+
 def test_bonifica_sync_run_creates_jobs_and_imports_reports(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -509,7 +534,9 @@ def test_bonifica_sync_run_creates_jobs_and_imports_reports(
     status_payload = status_response.json()
     assert status_payload["entities"]["reports"]["status"] == "completed"
     assert status_payload["entities"]["reports"]["records_synced"] == 1
+    assert status_payload["entities"]["reports"]["params_json"]["source_total"] == 1
     assert status_payload["entities"]["report_types"]["records_synced"] == 1
+    assert status_payload["entities"]["report_types"]["params_json"]["source_total"] == 1
     assert status_payload["entities"]["vehicles"]["records_synced"] == 0
     assert status_payload["entities"]["refuels"]["records_synced"] == 0
     assert status_payload["entities"]["taken_charge"]["records_synced"] == 0

@@ -46,17 +46,22 @@ class BonificaReportsClient(BonificaDatatableClient):
                 "enable_date_filter": 1,
                 "date_start": date_from.isoformat(),
                 "date_end": date_to.isoformat(),
-                "show_archived": 1,
-                "export_details": "detailed",
+                # White uses `show_archived=1` as archived-only dataset.
+                "show_archived": 0,
+                # `simplified` keeps one logical row per report and avoids
+                # the duplicated records exposed by the detailed export.
+                "export_details": "simplified",
             },
         )
         parsed: list[BonificaReportRow] = []
+        seen_external_codes: set[str] = set()
         for row in rows:
             if not isinstance(row, list) or len(row) < 19:
                 continue
             external_code = clean_html_text(row[0])
-            if not external_code:
+            if not external_code or external_code in seen_external_codes:
                 continue
+            seen_external_codes.add(external_code)
             parsed.append(
                 BonificaReportRow(
                     external_code=external_code,
@@ -73,4 +78,4 @@ class BonificaReportsClient(BonificaDatatableClient):
                     assigned_responsibles=clean_html_text(row[18]) or None,
                 )
             )
-        return parsed, total
+        return parsed, len(parsed)

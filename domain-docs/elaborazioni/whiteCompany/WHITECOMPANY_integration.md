@@ -489,8 +489,10 @@ GET    /elaborazioni/bonifica/sync/status          ← stato ultima sync per ent
 ### Stato implementazione endpoint sync
 
 - `POST /elaborazioni/bonifica/sync/run` crea un `wc_sync_job` per ogni entity richiesta
-- `GET /elaborazioni/bonifica/sync/status` legge l'ultimo job persistito per entity e restituisce `never` solo come stato derivato della response quando non esistono run precedenti
+- `GET /elaborazioni/bonifica/sync/status` legge l'ultimo job persistito per entity, restituisce `never` solo come stato derivato della response quando non esistono run precedenti e include il `params_json` dell'ultimo job per mostrare range e `source_total`
+- il runtime marca automaticamente come `failed` i job rimasti `running` oltre la soglia `WC_SYNC_STALE_JOB_MINUTES`, cosi il workspace non resta bloccato su esecuzioni orfane
 - Entity attive su runtime: `report_types`, `reports`, `vehicles`, `refuels`, `taken_charge`, `users`, `areas`, `warehouse_requests`, `org_charts`, `consorziati`
+- la sync `reports` usa la vista non archiviata (`show_archived=0`) e l'export `simplified`, che evita i duplicati della variante `detailed` e mantiene una riga logica per segnalazione
 - `refuels` usa parsing difensivo del dettaglio `GET /vehicles/refuel/edit/{id}`: prima prova i field name noti del form, poi applica fallback label-based (`label`, `th/td`) per ridurre gli skip; i record senza litri validi vengono comunque saltati, non inventati
 - il parser comune `clean_html_text()` ora normalizza anche valori numerici/non-stringa provenienti dai DataTables White prima di passarli a BeautifulSoup, evitando errori runtime del tipo `Incoming markup is of an invalid type`
 - `users` sincronizza oggi solo gli operatori WhiteCompany non `Consorziato`, con upsert locale su tabella `wc_operator` e collegamento opzionale a `application_users` via email
