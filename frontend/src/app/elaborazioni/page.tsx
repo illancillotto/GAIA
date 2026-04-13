@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { ProtectedPage } from "@/components/app/protected-page";
 import {
@@ -17,6 +17,7 @@ import {
   getElaborazioneBatches,
   getElaborazioneCaptchaSummary,
   getElaborazioneCredentials,
+  getBonificaSyncStatus,
   listBonificaOristaneseCredentials,
   listCapacitasCredentials,
   retryFailedElaborazioneBatch,
@@ -26,6 +27,7 @@ import { getStoredAccessToken } from "@/lib/auth";
 import { formatDateTime } from "@/lib/presentation";
 import type {
   BonificaOristaneseCredential,
+  BonificaSyncStatusResponse,
   CapacitasCredential,
   ElaborazioneBatch,
   ElaborazioneCaptchaSummary,
@@ -37,8 +39,8 @@ const DASHBOARD_REFRESH_INTERVAL_MS = 5000;
 const QUICK_ACTIONS = [
   {
     href: "/elaborazioni/settings",
-    title: "Credenziali",
-    description: "Accesso e configurazione account operativi.",
+    title: "Area SISTER",
+    description: "Credenziali, accesso operativo e flussi Agenzia delle Entrate.",
     icon: LockIcon,
   },
   {
@@ -61,8 +63,8 @@ const QUICK_ACTIONS = [
   },
   {
     href: "/elaborazioni/capacitas",
-    title: "Capacitas",
-    description: "Ricerca anagrafica e monitor pool account.",
+    title: "Pool operativo dedicato",
+    description: "Capacitas e monitor del pool account operativo.",
     icon: UsersIcon,
   },
   {
@@ -85,12 +87,22 @@ type DashboardModalState = {
   description?: string | null;
 };
 
+type DashboardRunningOperation = {
+  id: string;
+  area: string;
+  title: string;
+  detail: string;
+  startedAt: string | null;
+  tone: "default" | "warning" | "success";
+};
+
 export default function ElaborazioniPage() {
   const [batches, setBatches] = useState<ElaborazioneBatch[]>([]);
   const [credentialStatus, setCredentialStatus] = useState<ElaborazioneCredentialStatus | null>(null);
   const [captchaSummary, setCaptchaSummary] = useState<ElaborazioneCaptchaSummary | null>(null);
   const [capacitasCredentials, setCapacitasCredentials] = useState<CapacitasCredential[]>([]);
   const [bonificaCredentials, setBonificaCredentials] = useState<BonificaOristaneseCredential[]>([]);
+  const [bonificaSyncStatus, setBonificaSyncStatus] = useState<BonificaSyncStatusResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retryBusyId, setRetryBusyId] = useState<string | null>(null);
   const [modalState, setModalState] = useState<DashboardModalState | null>(null);
@@ -100,18 +112,20 @@ export default function ElaborazioniPage() {
     if (!token) return;
 
     try {
-      const [credentialsResult, batchesResult, captchaSummaryResult, capacitasResult, bonificaResult] = await Promise.all([
+      const [credentialsResult, batchesResult, captchaSummaryResult, capacitasResult, bonificaResult, bonificaSyncResult] = await Promise.all([
         getElaborazioneCredentials(token),
         getElaborazioneBatches(token),
         getElaborazioneCaptchaSummary(token),
         listCapacitasCredentials(token),
         listBonificaOristaneseCredentials(token),
+        getBonificaSyncStatus(token),
       ]);
       setCredentialStatus(credentialsResult);
       setBatches(batchesResult.slice(0, 6));
       setCaptchaSummary(captchaSummaryResult);
       setCapacitasCredentials(capacitasResult);
       setBonificaCredentials(bonificaResult);
+      setBonificaSyncStatus(bonificaSyncResult);
       setError(null);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Errore caricamento dashboard Elaborazioni");
@@ -177,6 +191,81 @@ export default function ElaborazioniPage() {
     .filter((value): value is string => Boolean(value))
     .sort()
     .at(-1);
+  const quickActions = useMemo(
+    () =>
+      QUICK_ACTIONS.map((action) => {
+        if (action.title === "Area SISTER") {
+          return {
+            ...action,
+            description: credentialStatus?.configured
+              ? `${activeSisterCredentials.length}/${credentialStatus.credentials.length} credenziali attive · default ${credentialStatus.default_credential?.label ?? "non definito"}`
+              : "Configurazione richiesta per avviare visure e batch.",
+          };
+        }
+        if (action.title === "Pool operativo dedicato") {
+          return {
+            ...action,
+            description:
+              capacitasCredentials.length > 0
+                ? `${activeCapacitasCredentials.length}/${capacitasCredentials.length} account attivi · ${capacitasWarningCount} warning`
+                : "Nessun account Capacitas configurato.",
+          };
+        }
+        if (action.title === "WhiteCompany Sync") {
+          const runningCount = Object.values(bonificaSyncStatus?.entities ?? {}).filter((item) => item.status === "running").length;
+          return {
+            ...action,
+            description:
+              runningCount > 0
+                ? `${runningCount} entity in esecuzione · ultimo uso ${latestBonificaUsage ? formatDateTime(latestBonificaUsage) : "assente"}`
+                : `Ultimo uso ${latestBonificaUsage ? formatDateTime(latestBonificaUsage) : "assente"}`,
+          };
+        }
+        return action;
+      }),
+    [
+      activeCapacitasCredentials.length,
+      activeSisterCredentials.length,
+      bonificaSyncStatus,
+      capacitasCredentials.length,
+      capacitasWarningCount,
+      credentialStatus,
+      latestBonificaUsage,
+    ],
+  );
+  const runningOperations = useMemo<DashboardRunningOperation[]>(() => {
+    const items: DashboardRunningOperation[] = [];
+
+    for (const batch of batches) {
+      if (!["pending", "processing"].includes(batch.status)) continue;
+      items.push({
+        id: `batch-${batch.id}`,
+        area: "Batch runtime",
+        title: batch.name ?? batch.id,
+        detail: batch.current_operation ?? batch.status,
+        startedAt: batch.started_at ?? batch.created_at,
+        tone: batch.status === "processing" ? "warning" : "default",
+      });
+    }
+
+    for (const [entityKey, entity] of Object.entries(bonificaSyncStatus?.entities ?? {})) {
+      if (entity.status !== "running") continue;
+      items.push({
+        id: `bonifica-${entityKey}`,
+        area: "WhiteCompany Sync",
+        title: entityKey,
+        detail: "Sync entity in esecuzione",
+        startedAt: entity.last_started_at,
+        tone: "warning",
+      });
+    }
+
+    return items.sort((left, right) => {
+      const leftTime = left.startedAt ? Date.parse(left.startedAt) : 0;
+      const rightTime = right.startedAt ? Date.parse(right.startedAt) : 0;
+      return rightTime - leftTime;
+    });
+  }, [batches, bonificaSyncStatus]);
 
   function openWorkspaceModal(href: string, title: string, description?: string): void {
     setModalState({ href, title, description });
@@ -258,7 +347,7 @@ export default function ElaborazioniPage() {
         />
         <div className="p-6">
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
-            {QUICK_ACTIONS.map((action) => {
+            {quickActions.map((action) => {
               const Icon = action.icon;
               return (
                 <button
@@ -283,201 +372,51 @@ export default function ElaborazioniPage() {
         </div>
       </article>
 
-      <div className="grid gap-6 xl:grid-cols-2">
-        <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
-          <ElaborazionePanelHeader
-            badge={
-              <>
-                <LockIcon className="h-3.5 w-3.5" />
-                Agenzia delle Entrate
-              </>
-            }
-            title="Area SISTER"
-            description="Raggruppa credenziali, visure, batch, archivio documenti e riepilogo CAPTCHA del flusso catastale."
-          />
-          <div className="space-y-5 p-6">
-            <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="label-caption">Credenziali SISTER</p>
-                  <p className="mt-2 text-sm font-medium text-gray-900">
-                    {credentialStatus?.configured ? "Configurate e pronte all'uso" : "Configurazione richiesta"}
-                  </p>
-                  <p className="mt-1 text-sm text-gray-500">
-                    {credentialStatus?.default_credential
-                      ? `${credentialStatus.default_credential.label} · ${credentialStatus.default_credential.sister_username}`
-                      : "Apri le credenziali per configurare l'accesso Agenzia delle Entrate."}
-                  </p>
-                </div>
-                <button
-                  className="btn-secondary"
-                  onClick={() =>
-                    openWorkspaceModal(
-                      "/elaborazioni/settings",
-                      "Credenziali",
-                      "Gestione accessi SISTER e account operativi senza lasciare la dashboard.",
-                    )
-                  }
-                  type="button"
-                >
-                  Apri credenziali
-                </button>
-              </div>
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-2">
-              <button
-                className="rounded-xl border border-gray-100 bg-gray-50 p-4 text-left transition hover:border-gray-200 hover:bg-white"
-                onClick={() =>
-                  openWorkspaceModal(
-                    "/elaborazioni/new-single",
-                    "Visura singola",
-                    "Avvio diretto di una richiesta per immobile o soggetto in una modale operativa.",
-                  )
-                }
-                type="button"
-              >
-                <SearchIcon className="h-5 w-5 text-[#1D4E35]" />
-                <p className="mt-3 text-sm font-medium text-gray-900">Visura singola</p>
-                <p className="mt-1 text-sm text-gray-500">Avvio diretto delle ricerche per immobile o soggetto.</p>
-              </button>
-              <button
-                className="rounded-xl border border-gray-100 bg-gray-50 p-4 text-left transition hover:border-gray-200 hover:bg-white"
-                onClick={() =>
-                  openWorkspaceModal(
-                    "/elaborazioni/new-batch",
-                    "Import batch",
-                    "Importazione lotto con preview e avvio worker senza cambiare pagina.",
-                  )
-                }
-                type="button"
-              >
-                <FolderIcon className="h-5 w-5 text-[#1D4E35]" />
-                <p className="mt-3 text-sm font-medium text-gray-900">Import batch</p>
-                <p className="mt-1 text-sm text-gray-500">Caricamento lotti e preview dei record prima dell&apos;esecuzione.</p>
-              </button>
-              <button
-                className="rounded-xl border border-gray-100 bg-gray-50 p-4 text-left transition hover:border-gray-200 hover:bg-white"
-                onClick={() =>
-                  openWorkspaceModal(
-                    "/elaborazioni/batches",
-                    "Archivio batch",
-                    "Storico lotti, esiti, report e retry direttamente dentro la dashboard.",
-                  )
-                }
-                type="button"
-              >
-                <DocumentIcon className="h-5 w-5 text-[#1D4E35]" />
-                <p className="mt-3 text-sm font-medium text-gray-900">Archivio batch</p>
-                <p className="mt-1 text-sm text-gray-500">Monitoraggio stato, retry, report e richieste CAPTCHA.</p>
-              </button>
-              <button
-                className="rounded-xl border border-gray-100 bg-gray-50 p-4 text-left transition hover:border-gray-200 hover:bg-white"
-                onClick={() =>
-                  openWorkspaceModal(
-                    "/catasto/archive?view=documents",
-                    "Archivio documenti",
-                    "Consultazione dei documenti estratti senza uscire dal cruscotto operativo.",
-                  )
-                }
-                type="button"
-              >
-                <DocumentIcon className="h-5 w-5 text-[#1D4E35]" />
-                <p className="mt-3 text-sm font-medium text-gray-900">Archivio documenti</p>
-                <p className="mt-1 text-sm text-gray-500">Consultazione dei PDF estratti dal portale catastale.</p>
-              </button>
-            </div>
-
-            <div>
-              <div className="mb-3">
-                <p className="label-caption">CAPTCHA manuali</p>
-                <p className="mt-1 text-sm text-gray-500">Esito degli inserimenti manuali richiesti durante i flussi SISTER.</p>
-              </div>
-              {(captchaSummary?.processed ?? 0) === 0 ? (
-                <EmptyState icon={SearchIcon} title="Nessun CAPTCHA elaborato" description="Non risultano ancora CAPTCHA elaborati o inserimenti registrati." />
-              ) : (
-                <div className="grid gap-3 md:grid-cols-3">
-                  <div className="rounded-lg border border-gray-100 bg-gray-50 p-4">
-                    <p className="label-caption">Elaborati</p>
-                    <p className="mt-2 text-2xl font-semibold text-gray-900">{captchaSummary?.processed ?? 0}</p>
-                  </div>
-                  <div className="rounded-lg border border-emerald-100 bg-emerald-50 p-4">
-                    <p className="label-caption text-emerald-700">Inseriti corretti</p>
-                    <p className="mt-2 text-2xl font-semibold text-emerald-800">{captchaSummary?.correct ?? 0}</p>
-                  </div>
-                  <div className="rounded-lg border border-amber-100 bg-amber-50 p-4">
-                    <p className="label-caption text-amber-700">Inseriti sbagliati</p>
-                    <p className="mt-2 text-2xl font-semibold text-amber-800">{captchaSummary?.wrong ?? 0}</p>
+      <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
+        <ElaborazionePanelHeader
+          badge={
+            <>
+              <RefreshIcon className="h-3.5 w-3.5" />
+              Operazioni in corso
+            </>
+          }
+          title="Esecuzioni attive aggregate"
+          description="Vista unica delle operazioni attualmente in lavorazione: batch runtime e sync WhiteCompany ancora aperte."
+        />
+        <div className="p-6">
+          {runningOperations.length === 0 ? (
+            <EmptyState icon={RefreshIcon} title="Nessuna operazione attiva" description="Al momento non risultano batch in processing o sync WhiteCompany in esecuzione." />
+          ) : (
+            <div className="space-y-3">
+              {runningOperations.map((operation) => (
+                <div key={operation.id} className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">{operation.area}</p>
+                      <p className="mt-1 text-sm font-medium text-gray-900">{operation.title}</p>
+                      <p className="mt-1 text-sm text-gray-600">{operation.detail}</p>
+                    </div>
+                    <div className="text-right">
+                      <span
+                        className={`inline-flex rounded-full px-2 py-1 text-[11px] font-semibold ${
+                          operation.tone === "warning"
+                            ? "bg-amber-50 text-amber-700"
+                            : operation.tone === "success"
+                              ? "bg-emerald-50 text-emerald-700"
+                              : "bg-gray-100 text-gray-700"
+                        }`}
+                      >
+                        attiva
+                      </span>
+                      <p className="mt-2 text-xs text-gray-500">{formatDateTime(operation.startedAt)}</p>
+                    </div>
                   </div>
                 </div>
-              )}
+              ))}
             </div>
-          </div>
-        </article>
-
-        <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
-          <ElaborazionePanelHeader
-            badge={
-              <>
-                <UsersIcon className="h-3.5 w-3.5" />
-                Capacitas
-              </>
-            }
-            title="Pool operativo dedicato"
-            description="Colonna separata per account, utilizzo e anomalie del servizio Capacitas. Altri servizi esterni potranno essere aggiunti con lo stesso schema."
-          />
-          <div className="space-y-5 p-6">
-            <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="label-caption">Pool Capacitas</p>
-                  <p className="mt-2 text-sm font-medium text-gray-900">
-                    {capacitasCredentials.length > 0
-                      ? `${activeCapacitasCredentials.length} account attivi su ${capacitasCredentials.length}`
-                      : "Nessun account Capacitas configurato"}
-                  </p>
-                  <p className="mt-1 text-sm text-gray-500">
-                    {latestCapacitasUsage
-                      ? `Ultimo utilizzo ${formatDateTime(latestCapacitasUsage)}`
-                      : "Nessun utilizzo registrato al momento"}
-                  </p>
-                </div>
-                <button
-                  className="btn-secondary"
-                  onClick={() =>
-                    openWorkspaceModal(
-                      "/elaborazioni/capacitas",
-                      "Capacitas",
-                      "Ricerca anagrafica e monitor operativo del pool account in una modale dedicata.",
-                    )
-                  }
-                  type="button"
-                >
-                  Apri Capacitas
-                </button>
-              </div>
-              {capacitasWarningCount > 0 ? (
-                <p className="mt-3 text-sm text-amber-700">
-                  {capacitasWarningCount} account Capacitas presentano errori recenti o richiedono verifica.
-                </p>
-              ) : null}
-            </div>
-
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-xl border border-emerald-100 bg-emerald-50 p-4">
-                <p className="label-caption text-emerald-700">Account attivi</p>
-                <p className="mt-2 text-2xl font-semibold text-emerald-800">{activeCapacitasCredentials.length}</p>
-                <p className="mt-1 text-sm text-emerald-700">Disponibili per ricerche e lavorazioni Capacitas.</p>
-              </div>
-              <div className="rounded-xl border border-amber-100 bg-amber-50 p-4">
-                <p className="label-caption text-amber-700">Warning recenti</p>
-                <p className="mt-2 text-2xl font-semibold text-amber-800">{capacitasWarningCount}</p>
-                <p className="mt-1 text-sm text-amber-700">Account da verificare prima di nuove esecuzioni.</p>
-              </div>
-            </div>
-          </div>
-        </article>
-      </div>
+          )}
+        </div>
+      </article>
 
       <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white p-0 shadow-panel">
         <ElaborazionePanelHeader
@@ -488,7 +427,7 @@ export default function ElaborazioniPage() {
             </>
           }
           title="Ultimi lotti creati dall'utente corrente"
-          description="I retry disponibili restano accessibili direttamente dalla tabella."
+          description="Sotto restano solo l'elenco batch e le azioni di retry, senza duplicare i pannelli operativi superiori."
         />
         {batches.length === 0 ? (
           <div className="p-5">
