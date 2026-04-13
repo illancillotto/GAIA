@@ -194,6 +194,19 @@ GET  /users/organizational-charts/edit/{id}
   parsing: BeautifulSoup
 ```
 
+**Nota runtime GAIA**: il sync attuale importa gli organigrammi White nell'area
+`accessi` tramite l'entity `org_charts` di `POST /elaborazioni/bonifica/sync/run`.
+Il runtime persiste:
+
+- `wc_org_chart` come lookup dei chart `area` / `user`
+- `wc_org_chart_entry` come staging delle relazioni estratte dalle option selezionate
+  nei form di dettaglio
+
+Per robustezza applicativa il match del chart usa la coppia logica
+`chart_type + wc_id`, non `wc_id` globale semplice: i due namespace White
+(`areas/organizational-charts` e `users/organizational-charts`) possono infatti
+produrre identificativi numerici sovrapposti.
+
 ---
 
 ### TIPOLOGIE DI SEGNALAZIONE

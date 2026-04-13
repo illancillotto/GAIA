@@ -16,6 +16,11 @@ from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.models.bonifica_oristanese import BonificaOristaneseCredential
 from app.models.wc_sync_job import WCSyncJob
+from app.modules.accessi.wc_org_charts import WCOrgChart, WCOrgChartEntry
+from app.modules.elaborazioni.bonifica_oristanese.apps.org_charts.client import (
+    BonificaOrgChartEntryRow,
+    BonificaOrgChartRow,
+)
 from app.modules.elaborazioni.bonifica_oristanese.apps.report_types.client import BonificaReportTypeRow
 from app.modules.elaborazioni.bonifica_oristanese.apps.areas.client import BonificaAreaRow
 from app.modules.elaborazioni.bonifica_oristanese.apps.refuels.client import BonificaRefuelRow
@@ -272,6 +277,7 @@ def test_bonifica_sync_status_lists_supported_entities() -> None:
     assert payload["entities"]["users"]["status"] == "never"
     assert payload["entities"]["areas"]["status"] == "never"
     assert payload["entities"]["warehouse_requests"]["status"] == "never"
+    assert payload["entities"]["org_charts"]["status"] == "never"
 
 
 def test_bonifica_sync_run_creates_jobs_and_imports_reports(
@@ -351,6 +357,9 @@ def test_bonifica_sync_run_creates_jobs_and_imports_reports(
         assert date_to is not None
         return ([], 0)
 
+    async def fake_fetch_org_charts(self):
+        return ([], 0)
+
     monkeypatch.setattr("app.modules.elaborazioni.bonifica_oristanese.session.BonificaOristaneseSessionManager.login", fake_login)
     monkeypatch.setattr("app.modules.elaborazioni.bonifica_oristanese.session.BonificaOristaneseSessionManager.close", fake_close)
     monkeypatch.setattr(
@@ -385,6 +394,10 @@ def test_bonifica_sync_run_creates_jobs_and_imports_reports(
         "app.modules.elaborazioni.bonifica_oristanese.apps.warehouse_requests.client.BonificaWarehouseRequestsClient.fetch_warehouse_requests",
         fake_fetch_warehouse_requests,
     )
+    monkeypatch.setattr(
+        "app.modules.elaborazioni.bonifica_oristanese.apps.org_charts.client.BonificaOrgChartsClient.fetch_org_charts",
+        fake_fetch_org_charts,
+    )
 
     response = client.post(
         "/elaborazioni/bonifica/sync/run",
@@ -402,11 +415,12 @@ def test_bonifica_sync_run_creates_jobs_and_imports_reports(
     assert payload["jobs"]["users"]["status"] == "completed"
     assert payload["jobs"]["areas"]["status"] == "completed"
     assert payload["jobs"]["warehouse_requests"]["status"] == "completed"
+    assert payload["jobs"]["org_charts"]["status"] == "completed"
 
     db = TestingSessionLocal()
     try:
         jobs = db.query(WCSyncJob).all()
-        assert len(jobs) == 8
+        assert len(jobs) == 9
 
         category = db.scalar(select(FieldReportCategory).where(FieldReportCategory.wc_id == 38))
         assert category is not None
@@ -432,6 +446,132 @@ def test_bonifica_sync_run_creates_jobs_and_imports_reports(
     assert status_payload["entities"]["users"]["records_synced"] == 0
     assert status_payload["entities"]["areas"]["records_synced"] == 0
     assert status_payload["entities"]["warehouse_requests"]["records_synced"] == 0
+    assert status_payload["entities"]["org_charts"]["records_synced"] == 0
+
+
+def test_bonifica_sync_run_imports_org_charts(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    create_response = client.post(
+        "/elaborazioni/bonifica/credentials",
+        headers=auth_headers(),
+        json={
+            "label": "Account sync organigrammi",
+            "login_identifier": "utente@example.local",
+            "password": "bonifica-secret",
+            "remember_me": True,
+        },
+    )
+    assert create_response.status_code == 201
+
+    async def fake_login(self):
+        from app.modules.elaborazioni.bonifica_oristanese.session import BonificaOristaneseSession
+
+        self._session = BonificaOristaneseSession(
+            authenticated_url="https://login.bonificaoristanese.it/dashboard",
+            cookie_names=["XSRF-TOKEN", "laravel_session"],
+        )
+        return self._session
+
+    async def fake_close(self) -> None:
+        return None
+
+    async def fake_fetch_org_charts(self):
+        return (
+            [
+                BonificaOrgChartRow(
+                    wc_id=9001,
+                    chart_type="area",
+                    name="Area Campidano",
+                    entries=[
+                        BonificaOrgChartEntryRow(
+                            wc_id=301,
+                            label="Mario Rossi",
+                            role="referents",
+                            operator_wc_id=301,
+                            area_wc_id=None,
+                            source_field="referents[]",
+                            sort_order=0,
+                        ),
+                        BonificaOrgChartEntryRow(
+                            wc_id=44,
+                            label="Distretto A",
+                            role="areas",
+                            operator_wc_id=None,
+                            area_wc_id=44,
+                            source_field="areas[]",
+                            sort_order=1,
+                        ),
+                    ],
+                )
+            ],
+            1,
+        )
+
+    db = TestingSessionLocal()
+    db.add(
+        WCOperator(
+            wc_id=301,
+            username="mrossi",
+            email="mario.rossi@example.local",
+            first_name="Mario",
+            last_name="Rossi",
+            tax="RSSMRA80A01H501Z",
+            role="Acquaiolo",
+            enabled=True,
+        )
+    )
+    db.add(
+        WCArea(
+            wc_id=44,
+            name="Distretto A",
+            color="#00AA00",
+            is_district=True,
+        )
+    )
+    db.commit()
+    db.close()
+
+    monkeypatch.setattr("app.modules.elaborazioni.bonifica_oristanese.session.BonificaOristaneseSessionManager.login", fake_login)
+    monkeypatch.setattr("app.modules.elaborazioni.bonifica_oristanese.session.BonificaOristaneseSessionManager.close", fake_close)
+    monkeypatch.setattr(
+        "app.modules.elaborazioni.bonifica_oristanese.apps.org_charts.client.BonificaOrgChartsClient.fetch_org_charts",
+        fake_fetch_org_charts,
+    )
+
+    response = client.post(
+        "/elaborazioni/bonifica/sync/run",
+        headers=auth_headers(),
+        json={"entities": ["org_charts"]},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["jobs"]["org_charts"]["status"] == "completed"
+
+    db = TestingSessionLocal()
+    try:
+        chart = db.scalar(
+            select(WCOrgChart).where(
+                WCOrgChart.chart_type == "area",
+                WCOrgChart.wc_id == 9001,
+            )
+        )
+        assert chart is not None
+        assert chart.name == "Area Campidano"
+
+        entries = db.scalars(
+            select(WCOrgChartEntry)
+            .where(WCOrgChartEntry.org_chart_id == chart.id)
+            .order_by(WCOrgChartEntry.sort_order.asc())
+        ).all()
+        assert len(entries) == 2
+        assert entries[0].label == "Mario Rossi"
+        assert entries[0].wc_operator_id is not None
+        assert entries[1].label == "Distretto A"
+        assert entries[1].wc_area_id is not None
+    finally:
+        db.close()
 
 
 def test_bonifica_sync_run_imports_vehicles_and_taken_charge(

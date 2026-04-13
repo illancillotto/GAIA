@@ -53,6 +53,8 @@ Il repository e in una fase di bootstrap avanzato: la base documentale, il backe
 - seconda migration per `application_users`
 - terza migration per il dominio audit minimo
 - quarta migration per il permission engine MVP
+- staging WhiteCompany per organigrammi in `wc_org_chart` e `wc_org_chart_entry`
+- servizio backend `sync_white_org_charts()` integrato nell'orchestratore Bonifica
 
 ### Frontend
 
