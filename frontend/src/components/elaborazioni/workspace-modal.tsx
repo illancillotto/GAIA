@@ -10,6 +10,7 @@ import { ElaborazioneBatchDetailWorkspace } from "@/components/elaborazioni/batc
 import { ElaborazioniCapacitasWorkspace } from "@/components/elaborazioni/capacitas-workspace";
 import { ElaborazioneRequestWorkspace } from "@/components/elaborazioni/request-workspace";
 import { ElaborazioniSettingsWorkspace } from "@/components/elaborazioni/settings-workspace";
+import { ElaborazioniWhiteCompanyWorkspace } from "@/components/elaborazioni/whitecompany-workspace";
 
 type ElaborazioneWorkspaceModalProps = {
   open: boolean;
@@ -128,6 +129,10 @@ function NativeWorkspaceRenderer({
 
   if (href === "/elaborazioni/settings") {
     return <ElaborazioniSettingsWorkspace embedded />;
+  }
+
+  if (href === "/elaborazioni/whitecompany") {
+    return <ElaborazioniWhiteCompanyWorkspace embedded />;
   }
 
   if (href === "/catasto/archive?view=documents") {

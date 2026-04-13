@@ -42,6 +42,12 @@ const QUICK_ACTIONS = [
     icon: LockIcon,
   },
   {
+    href: "/elaborazioni/whitecompany",
+    title: "WhiteCompany",
+    description: "Console sync, credenziali e staging consorziati.",
+    icon: RefreshIcon,
+  },
+  {
     href: "/elaborazioni/new-batch",
     title: "Import batch",
     description: "Upload CSV o XLSX con preview e avvio worker.",
@@ -221,7 +227,7 @@ export default function ElaborazioniPage() {
             hint={`${capacitasWarningCount} warning`}
           />
           <ModuleWorkspaceKpiTile
-            label="Bonifica"
+            label="WhiteCompany"
             variant="emerald"
             value={`${activeBonificaCredentials.length}/${bonificaCredentials.length}`}
             hint={`${bonificaWarningCount} warning`}

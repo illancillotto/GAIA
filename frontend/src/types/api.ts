@@ -943,6 +943,37 @@ export type BonificaOristaneseCredentialTestResult = {
   error: string | null;
 };
 
+export type BonificaSyncRunRequest = {
+  entities: "all" | string | string[];
+  date_from?: string | null;
+  date_to?: string | null;
+};
+
+export type BonificaSyncJobStart = {
+  job_id: string;
+  status: string;
+  started_at: string;
+};
+
+export type BonificaSyncRunResponse = {
+  jobs: Record<string, BonificaSyncJobStart>;
+};
+
+export type BonificaSyncEntityStatus = {
+  entity: string;
+  status: string;
+  last_started_at: string | null;
+  last_finished_at: string | null;
+  records_synced: number | null;
+  records_skipped: number | null;
+  records_errors: number | null;
+  error_detail: string | null;
+};
+
+export type BonificaSyncStatusResponse = {
+  entities: Record<string, BonificaSyncEntityStatus>;
+};
+
 export type CapacitasAnagrafica = {
   id?: string | null;
   IDXANA?: string | null;

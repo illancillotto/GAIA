@@ -40,6 +40,9 @@ import type {
   BonificaOristaneseCredentialCreateInput,
   BonificaOristaneseCredentialTestResult as BonificaOristaneseCredentialProbeResult,
   BonificaOristaneseCredentialUpdateInput,
+  BonificaSyncRunRequest,
+  BonificaSyncRunResponse,
+  BonificaSyncStatusResponse,
   CurrentUser,
   DashboardSummary,
   EffectivePermission,
@@ -1227,6 +1230,24 @@ export async function testBonificaOristaneseCredential(
       },
     },
   );
+}
+
+export async function getBonificaSyncStatus(token: string): Promise<BonificaSyncStatusResponse> {
+  return request<BonificaSyncStatusResponse>("/elaborazioni/bonifica/sync/status", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function runBonificaSync(token: string, payload: BonificaSyncRunRequest): Promise<BonificaSyncRunResponse> {
+  return request<BonificaSyncRunResponse>("/elaborazioni/bonifica/sync/run", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
 }
 
 export async function searchCapacitasInvolture(
