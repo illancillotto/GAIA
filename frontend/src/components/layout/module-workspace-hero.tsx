@@ -108,7 +108,7 @@ export function ModuleWorkspaceNoticeCard({
 }
 
 export function ModuleWorkspaceKpiRow({ children }: { children: ReactNode }) {
-  return <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">{children}</div>;
+  return <div className="flex flex-wrap gap-2">{children}</div>;
 }
 
 export function ModuleWorkspaceKpiTile({
@@ -126,7 +126,12 @@ export function ModuleWorkspaceKpiTile({
     variant === "emerald" ? "border-emerald-200/70" : variant === "amber" ? "border-amber-200/80" : "border-white/70";
 
   return (
-    <div className={cn("rounded-2xl border bg-white/80 px-4 py-3", borderClass)}>
+    <div
+      className={cn(
+        "min-w-[160px] flex-1 rounded-2xl border bg-white/80 px-4 py-3 sm:min-w-[200px]",
+        borderClass,
+      )}
+    >
       <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">{label}</p>
       <div className="mt-2 flex items-baseline justify-between gap-3">
         <p className="text-lg font-semibold text-gray-900">{value}</p>

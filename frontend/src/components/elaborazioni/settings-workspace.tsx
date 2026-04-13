@@ -275,6 +275,7 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
   const [sisterExpanded, setSisterExpanded] = useState(true);
   const [bonificaExpanded, setBonificaExpanded] = useState(true);
   const [capacitasExpanded, setCapacitasExpanded] = useState(true);
+  const [activeTab, setActiveTab] = useState<"sister" | "whitecompany" | "capacitas">("sister");
   const [credentialStatus, setCredentialStatus] = useState<ElaborazioneCredentialStatus | null>(null);
   const [formState, setFormState] = useState(DEFAULT_SISTER_FORM);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
@@ -976,18 +977,20 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
               <LockIcon className="h-3.5 w-3.5" />
               {embedded ? "Credenziali" : "Stitch-style workspace"}
             </div>
-            <h3 className={`max-w-2xl font-semibold tracking-tight text-[#183325] ${embedded ? "mt-3 text-[2rem] leading-tight" : "mt-4 text-3xl"}`}>
-              {embedded
-                ? "Console credenziali per accesso, verifica e gestione operativa."
-                : "Credenziali elaborazioni ripensate come console unica per accesso, verifica e rotazione operativa."}
+            <h3
+              className={`max-w-2xl font-semibold tracking-tight text-[#183325] ${
+                embedded ? "mt-2 text-xl leading-snug" : "mt-4 text-3xl"
+              }`}
+            >
+              {embedded ? "Credenziali" : "Credenziali elaborazioni ripensate come console unica per accesso, verifica e rotazione operativa."}
             </h3>
-            <p className={`max-w-2xl text-sm text-gray-600 ${embedded ? "mt-3 leading-6" : "mt-4 leading-7"}`}>
-              {embedded
-                ? "Canale SISTER, Bonifica e pool Capacitas nello stesso workspace, con stato operativo e controlli essenziali subito visibili."
-                : "La pagina ora separa meglio SISTER, Bonifica Oristanese e Capacitas, mette in evidenza lo stato reale del modulo e concentra i controlli frequenti nella parte alta della schermata."}
-            </p>
+            {!embedded ? (
+              <p className="mt-4 max-w-2xl text-sm leading-7 text-gray-600">
+                La pagina ora separa meglio SISTER, Bonifica Oristanese e Capacitas, mette in evidenza lo stato reale del modulo e concentra i controlli frequenti nella parte alta della schermata.
+              </p>
+            ) : null}
 
-            <div className={`${embedded ? "mt-4 grid gap-3 md:grid-cols-2" : "mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"}`}>
+            <div className={`${embedded ? "mt-4 grid gap-3 sm:grid-cols-3" : "mt-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4"}`}>
               <StatCard
                 compact={embedded}
                 eyebrow="SISTER"
@@ -1054,25 +1057,59 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
         </div>
       </section>
 
-      <section className="space-y-4">
-        <button
-          aria-expanded={sisterExpanded}
-          className="flex w-full items-center justify-between rounded-[22px] border border-[#d9dfd6] bg-white px-5 py-4 text-left shadow-panel transition hover:border-[#c8d8ce]"
-          onClick={() => setSisterExpanded((current) => !current)}
-          type="button"
-        >
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#1D4E35]">Sezione</p>
-            <p className="mt-1 text-base font-semibold text-gray-900">SISTER</p>
-          </div>
-          <ChevronRightIcon className={`h-5 w-5 text-gray-500 transition-transform ${sisterExpanded ? "rotate-90" : ""}`} />
-        </button>
+      {embedded ? (
+        <div className="flex flex-wrap gap-2 rounded-[22px] border border-[#d9dfd6] bg-white p-2 shadow-panel">
+          <button
+            className={`rounded-2xl px-4 py-2 text-sm font-semibold transition ${
+              activeTab === "sister" ? "bg-[#1D4E35] text-white" : "bg-gray-50 text-gray-700 hover:bg-gray-100"
+            }`}
+            onClick={() => setActiveTab("sister")}
+            type="button"
+          >
+            SISTER
+          </button>
+          <button
+            className={`rounded-2xl px-4 py-2 text-sm font-semibold transition ${
+              activeTab === "whitecompany" ? "bg-[#1D4E35] text-white" : "bg-gray-50 text-gray-700 hover:bg-gray-100"
+            }`}
+            onClick={() => setActiveTab("whitecompany")}
+            type="button"
+          >
+            WhiteCompany
+          </button>
+          <button
+            className={`rounded-2xl px-4 py-2 text-sm font-semibold transition ${
+              activeTab === "capacitas" ? "bg-[#1D4E35] text-white" : "bg-gray-50 text-gray-700 hover:bg-gray-100"
+            }`}
+            onClick={() => setActiveTab("capacitas")}
+            type="button"
+          >
+            Capacitas
+          </button>
+        </div>
+      ) : null}
 
-        {sisterExpanded ? (
-          <section className={`grid gap-6 ${embedded ? "xl:grid-cols-1" : "xl:grid-cols-[1.3fr,0.7fr]"}`}>
+      <section className="space-y-4">
+        {!embedded ? (
+          <button
+            aria-expanded={sisterExpanded}
+            className="flex w-full items-center justify-between rounded-[22px] border border-[#d9dfd6] bg-white px-5 py-4 text-left shadow-panel transition hover:border-[#c8d8ce]"
+            onClick={() => setSisterExpanded((current) => !current)}
+            type="button"
+          >
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#1D4E35]">Sezione</p>
+              <p className="mt-1 text-base font-semibold text-gray-900">SISTER</p>
+            </div>
+            <ChevronRightIcon className={`h-5 w-5 text-gray-500 transition-transform ${sisterExpanded ? "rotate-90" : ""}`} />
+          </button>
+        ) : null}
+
+        {(embedded ? activeTab === "sister" : sisterExpanded) ? (
+          <section className={`grid ${embedded ? "gap-4 xl:grid-cols-1" : "gap-6 xl:grid-cols-[1.3fr,0.7fr]"}`}>
             <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
-              <div className={`border-b border-[#edf1eb] bg-[linear-gradient(135deg,_rgba(29,78,53,0.06),_rgba(255,255,255,0.92))] ${embedded ? "px-5 py-4" : "px-6 py-5"}`}>
-                <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className={`border-b border-[#edf1eb] bg-[linear-gradient(135deg,_rgba(29,78,53,0.06),_rgba(255,255,255,0.92))] ${embedded ? "px-4 py-3" : "px-6 py-5"}`}>
+                <div className="flex flex-wrap items-start justify-between gap-3">
                   <div>
                     <div className={`inline-flex items-center gap-2 rounded-full bg-[#e8f2ec] font-semibold uppercase tracking-[0.2em] text-[#1D4E35] ${embedded ? "px-3 py-1 text-[10px]" : "px-3 py-1 text-[11px]"}`}>
                       <LockIcon className="h-3.5 w-3.5" />
@@ -1096,9 +1133,13 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                 </div>
               </div>
 
-              <div className={`grid gap-6 ${embedded ? "p-5 lg:grid-cols-1" : "p-6 lg:grid-cols-[1.25fr,0.75fr]"}`}>
-                <div className="space-y-5">
-                  <div className="grid gap-4 md:grid-cols-2">
+              <div className={`grid ${embedded ? "gap-4 p-4 lg:grid-cols-1" : "gap-6 p-6 lg:grid-cols-[1.25fr,0.75fr]"}`}>
+                <div className={embedded ? "space-y-4" : "space-y-5"}>
+                  <div
+                    className={`grid ${
+                      embedded ? "gap-3 md:grid-cols-2 lg:grid-cols-3" : "gap-4 md:grid-cols-2"
+                    }`}
+                  >
                     <label className="space-y-2">
                       <span className="label-caption">Label operativa</span>
                       <input
@@ -1145,7 +1186,7 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                         value={formState.codice_richiesta}
                       />
                     </label>
-                    <label className="space-y-2 md:col-span-2">
+                    <label className={`space-y-2 ${embedded ? "lg:col-span-3" : "md:col-span-2"}`}>
                       <span className="label-caption">Ufficio provinciale</span>
                       <input
                         className="form-control"
@@ -1173,7 +1214,7 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                     </label>
                   </div>
 
-                  <div className="flex flex-wrap items-center gap-3">
+                  <div className={embedded ? "flex flex-wrap items-center gap-2" : "flex flex-wrap items-center gap-3"}>
                     <button
                       className="btn-primary"
                       disabled={
@@ -1208,14 +1249,16 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                   </div>
 
                   <div className="overflow-hidden rounded-[24px] border border-[#e1e8df] bg-[#fbfcfa]">
-                    <div className="border-b border-[#edf1eb] px-4 py-3">
+                    <div className={`border-b border-[#edf1eb] ${embedded ? "px-3 py-2.5" : "px-4 py-3"}`}>
                       <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">Pool credenziali SISTER</p>
-                      <p className="mt-1 text-sm text-gray-500">
+                      <p className={`text-sm text-gray-500 ${embedded ? "mt-0.5 leading-5" : "mt-1"}`}>
                         Gestisci piu profili, scegli il predefinito del worker e modifica quello selezionato nel form.
                       </p>
                     </div>
                     {sisterCredentials.length === 0 ? (
-                      <div className="px-4 py-4 text-sm text-gray-500">Nessuna credenziale SISTER configurata.</div>
+                      <div className={`${embedded ? "px-3 py-3" : "px-4 py-4"} text-sm text-gray-500`}>
+                        Nessuna credenziale SISTER configurata.
+                      </div>
                     ) : (
                       <div className="overflow-x-auto">
                         <table className="data-table">
@@ -1397,7 +1440,7 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
               </div>
             </article>
 
-            <aside className="space-y-6">
+            {!embedded ? <aside className="space-y-6">
               <article className="rounded-[28px] border border-[#d9dfd6] bg-white p-6 shadow-panel">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">Dettagli SISTER</p>
                 <div className="mt-4 grid gap-3">
@@ -1430,26 +1473,28 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                   </p>
                 </div>
               </article>
-            </aside>
+            </aside> : null}
           </section>
         ) : null}
       </section>
 
       <section className="space-y-4">
-        <button
-          aria-expanded={bonificaExpanded}
-          className="flex w-full items-center justify-between rounded-[22px] border border-[#d9dfd6] bg-white px-5 py-4 text-left shadow-panel transition hover:border-[#c8d8ce]"
-          onClick={() => setBonificaExpanded((current) => !current)}
-          type="button"
-        >
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#1D4E35]">Sezione</p>
-            <p className="mt-1 text-base font-semibold text-gray-900">Bonifica Oristanese</p>
-          </div>
-          <ChevronRightIcon className={`h-5 w-5 text-gray-500 transition-transform ${bonificaExpanded ? "rotate-90" : ""}`} />
-        </button>
+        {!embedded ? (
+          <button
+            aria-expanded={bonificaExpanded}
+            className="flex w-full items-center justify-between rounded-[22px] border border-[#d9dfd6] bg-white px-5 py-4 text-left shadow-panel transition hover:border-[#c8d8ce]"
+            onClick={() => setBonificaExpanded((current) => !current)}
+            type="button"
+          >
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#1D4E35]">Sezione</p>
+              <p className="mt-1 text-base font-semibold text-gray-900">Bonifica Oristanese</p>
+            </div>
+            <ChevronRightIcon className={`h-5 w-5 text-gray-500 transition-transform ${bonificaExpanded ? "rotate-90" : ""}`} />
+          </button>
+        ) : null}
 
-        {bonificaExpanded ? (
+        {(embedded ? activeTab === "whitecompany" : bonificaExpanded) ? (
           <>
             <section className={`grid gap-6 ${embedded ? "xl:grid-cols-1" : "xl:grid-cols-[0.95fr,1.05fr]"}`}>
               <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
@@ -1693,20 +1738,22 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
       </section>
 
       <section className="space-y-4">
-        <button
-          aria-expanded={capacitasExpanded}
-          className="flex w-full items-center justify-between rounded-[22px] border border-[#d9dfd6] bg-white px-5 py-4 text-left shadow-panel transition hover:border-[#c8d8ce]"
-          onClick={() => setCapacitasExpanded((current) => !current)}
-          type="button"
-        >
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#3056d3]">Sezione</p>
-            <p className="mt-1 text-base font-semibold text-gray-900">Capacitas</p>
-          </div>
-          <ChevronRightIcon className={`h-5 w-5 text-gray-500 transition-transform ${capacitasExpanded ? "rotate-90" : ""}`} />
-        </button>
+        {!embedded ? (
+          <button
+            aria-expanded={capacitasExpanded}
+            className="flex w-full items-center justify-between rounded-[22px] border border-[#d9dfd6] bg-white px-5 py-4 text-left shadow-panel transition hover:border-[#c8d8ce]"
+            onClick={() => setCapacitasExpanded((current) => !current)}
+            type="button"
+          >
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#3056d3]">Sezione</p>
+              <p className="mt-1 text-base font-semibold text-gray-900">Capacitas</p>
+            </div>
+            <ChevronRightIcon className={`h-5 w-5 text-gray-500 transition-transform ${capacitasExpanded ? "rotate-90" : ""}`} />
+          </button>
+        ) : null}
 
-        {capacitasExpanded ? (
+        {(embedded ? activeTab === "capacitas" : capacitasExpanded) ? (
           <>
             <section className={`grid gap-6 ${embedded ? "xl:grid-cols-1" : "xl:grid-cols-[0.95fr,1.05fr]"}`}>
               <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">

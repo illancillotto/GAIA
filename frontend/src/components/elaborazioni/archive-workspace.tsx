@@ -328,11 +328,15 @@ export function ElaborazioneArchiveWorkspaceContent({
             Archivio
           </>
         }
-        title="Monitor operativo delle elaborazioni e accesso ai documenti prodotti."
+        title={embedded ? "Archivio" : "Monitor operativo delle elaborazioni e accesso ai documenti prodotti."}
         description={
-          batchOnlyMode
-            ? "Archivio operativo dedicato ai lotti del runtime elaborazioni: monitoraggio, retry, annullamento e accesso al dettaglio."
-            : "La vista batch è il punto d'accesso canonico al runtime. I documenti restano consultabili nel dominio catasto."
+          embedded
+            ? batchOnlyMode
+              ? "Monitor batch, retry e dettaglio."
+              : "Batch e documenti in un'unica vista."
+            : batchOnlyMode
+              ? "Archivio operativo dedicato ai lotti del runtime elaborazioni: monitoraggio, retry, annullamento e accesso al dettaglio."
+              : "La vista batch è il punto d'accesso canonico al runtime. I documenti restano consultabili nel dominio catasto."
         }
         actions={
           sharedError ? (

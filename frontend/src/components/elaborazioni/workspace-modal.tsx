@@ -8,9 +8,9 @@ import { CatastoDocumentDetailWorkspace } from "@/components/catasto/document-de
 import { ElaborazioneArchiveWorkspaceContent } from "@/components/elaborazioni/archive-workspace";
 import { ElaborazioneBatchDetailWorkspace } from "@/components/elaborazioni/batch-detail-workspace";
 import { ElaborazioniCapacitasWorkspace } from "@/components/elaborazioni/capacitas-workspace";
+import { ElaborazioniBonificaSyncWorkspace } from "@/components/elaborazioni/bonifica-sync-workspace";
 import { ElaborazioneRequestWorkspace } from "@/components/elaborazioni/request-workspace";
 import { ElaborazioniSettingsWorkspace } from "@/components/elaborazioni/settings-workspace";
-import { ElaborazioniWhiteCompanyWorkspace } from "@/components/elaborazioni/whitecompany-workspace";
 
 type ElaborazioneWorkspaceModalProps = {
   open: boolean;
@@ -61,13 +61,10 @@ export function ElaborazioneWorkspaceModal({
   return (
     <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 px-4 py-6 backdrop-blur-sm">
       <div className="flex max-h-[94vh] w-full max-w-[1400px] flex-col overflow-hidden rounded-[28px] border border-gray-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.24)]">
-        <div className="flex items-start justify-between gap-4 border-b border-gray-100 bg-white px-6 py-5">
+        <div className="flex items-center justify-between gap-4 border-b border-gray-100 bg-white px-6 py-3.5">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1D4E35]">Workspace rapido</p>
-            <h2 className="mt-2 text-2xl font-semibold text-gray-900">{title}</h2>
-            <p className="mt-1 text-sm text-gray-500">
-              {description ?? "Flusso aperto in modale per non perdere il contesto della dashboard."}
-            </p>
+            <h2 className="mt-1.5 text-lg font-semibold text-gray-900">{title}</h2>
           </div>
           <div className="flex items-center gap-3">
             <Link className="btn-secondary" href={currentHref} target="_blank" rel="noreferrer">
@@ -131,8 +128,8 @@ function NativeWorkspaceRenderer({
     return <ElaborazioniSettingsWorkspace embedded />;
   }
 
-  if (href === "/elaborazioni/whitecompany") {
-    return <ElaborazioniWhiteCompanyWorkspace embedded />;
+  if (href === "/elaborazioni/bonifica") {
+    return <ElaborazioniBonificaSyncWorkspace embedded />;
   }
 
   if (href === "/catasto/archive?view=documents") {

@@ -200,11 +200,19 @@ export function ElaborazioneRequestWorkspace({
         badge={
           <>
             <FolderIcon className="h-3.5 w-3.5" />
-            Nuova richiesta
+            Elaborazioni massive Catasto
           </>
         }
-        title="Un solo ingresso per il runtime elaborazioni: scegli se lavorare una singola richiesta o un lotto completo."
-        description="La pagina separa chiaramente i due casi d'uso ma li tiene nello stesso percorso. Prima scegli il tipo di lavoro, poi compili solo i campi rilevanti."
+        title={
+          embedded
+            ? "Elaborazioni massive Catasto"
+            : "Un solo ingresso per il runtime elaborazioni: scegli se lavorare una singola richiesta o un lotto completo."
+        }
+        description={
+          embedded
+            ? "Crea visure singole o lotti da file (CSV/XLSX), valida e avvia le elaborazioni."
+            : "La pagina separa chiaramente i due casi d'uso ma li tiene nello stesso percorso. Prima scegli il tipo di lavoro, poi compili solo i campi rilevanti."
+        }
         actions={
           mode === "single" ? (
             singleError ? (
@@ -591,9 +599,9 @@ export function ElaborazioneRequestWorkspace({
 
   return (
     <ProtectedPage
-      title="Nuova elaborazione"
-      description="Punto di ingresso operativo per batch e richieste singole."
-      breadcrumb="Elaborazioni / Nuova richiesta"
+      title="Elaborazioni massive Catasto"
+      description="Punto di ingresso operativo per visure singole e batch catasto."
+      breadcrumb="Elaborazioni / Massive Catasto"
     >
       {content}
     </ProtectedPage>

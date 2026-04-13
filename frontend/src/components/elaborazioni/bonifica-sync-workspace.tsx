@@ -108,7 +108,7 @@ function isValidIsoDate(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
-export function ElaborazioniBonificaSyncWorkspace() {
+export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedded?: boolean } = {}) {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [syncStatus, setSyncStatus] = useState<BonificaSyncStatusResponse | null>(null);
   const [bonificaCredentials, setBonificaCredentials] = useState<BonificaOristaneseCredential[]>([]);
@@ -250,29 +250,26 @@ export function ElaborazioniBonificaSyncWorkspace() {
     return Object.values(syncStatus.entities).filter((item) => item.status === "completed").length;
   }, [syncStatus]);
 
-  return (
-    <ProtectedPage
-      title="Bonifica Oristanese"
-      description="Console operativa per avviare e monitorare la sync WhiteCompany: operatori, segnalazioni, mezzi, organigrammi e consorziati."
-      breadcrumb="Elaborazioni / Bonifica"
-      requiredModule="catasto"
-    >
+  const content = (
+    <>
       <ElaborazioneHero
+        compact
         badge={
           <>
             <RefreshIcon className="h-3.5 w-3.5" />
-            Bonifica Sync
+            WhiteCompany Sync
           </>
         }
-        title="Esecuzione e monitoraggio sync WhiteCompany"
-        description="Seleziona le entity da sincronizzare, applica una finestra temporale solo dove previsto e consulta lo stato persistito del runtime."
+        title="Sync WhiteCompany"
+        description="Seleziona le entity e avvia la sync. Per entity date-aware puoi usare date_from/date_to."
         actions={
           error ? (
-            <ElaborazioneNoticeCard title="Errore" description={error} tone="danger" />
+            <ElaborazioneNoticeCard compact title="Errore" description={error} tone="danger" />
           ) : runMessage ? (
-            <ElaborazioneNoticeCard title="Sync avviata" description={runMessage} tone="success" />
+            <ElaborazioneNoticeCard compact title="Sync avviata" description={runMessage} tone="success" />
           ) : (
             <ElaborazioneNoticeCard
+              compact
               title="Split utenti"
               description="`users` sincronizza solo operatori (esclude Consorziati). `consorziati` alimenta lo staging Utenze e richiede approvazione manuale."
             />
@@ -502,6 +499,21 @@ export function ElaborazioniBonificaSyncWorkspace() {
           )}
         </div>
       </article>
+    </>
+  );
+
+  if (embedded) {
+    return <div className="space-y-6">{content}</div>;
+  }
+
+  return (
+    <ProtectedPage
+      title="Bonifica Oristanese"
+      description="Console operativa per avviare e monitorare la sync WhiteCompany: operatori, segnalazioni, mezzi, organigrammi e consorziati."
+      breadcrumb="Elaborazioni / Bonifica"
+      requiredModule="catasto"
+    >
+      {content}
     </ProtectedPage>
   );
 }

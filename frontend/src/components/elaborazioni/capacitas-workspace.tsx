@@ -118,8 +118,12 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
               Capacitas inVOLTURE
             </>
           }
-          title="Ricerca anagrafica sul portale inVOLTURE usando il pool account del modulo Elaborazioni."
-          description="La schermata mette in evidenza il pool disponibile, la credenziale effettiva selezionata e il risultato della ricerca in un layout coerente con il resto del modulo."
+          title={embedded ? "Ricerca inVOLTURE" : "Ricerca anagrafica sul portale inVOLTURE usando il pool account del modulo Elaborazioni."}
+          description={
+            embedded
+              ? "Esegui una ricerca e controlla il risultato usando il pool credenziali."
+              : "La schermata mette in evidenza il pool disponibile, la credenziale effettiva selezionata e il risultato della ricerca in un layout coerente con il resto del modulo."
+          }
           actions={
             error ? (
               <ElaborazioneNoticeCard compact={embedded} title="Errore ricerca" description={error} tone="danger" />

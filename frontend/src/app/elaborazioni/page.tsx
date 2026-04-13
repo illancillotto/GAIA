@@ -42,9 +42,9 @@ const QUICK_ACTIONS = [
     icon: LockIcon,
   },
   {
-    href: "/elaborazioni/whitecompany",
-    title: "WhiteCompany",
-    description: "Console sync, credenziali e staging consorziati.",
+    href: "/elaborazioni/bonifica",
+    title: "WhiteCompany Sync",
+    description: "Avvio e monitor sync WhiteCompany.",
     icon: RefreshIcon,
   },
   {
@@ -474,42 +474,6 @@ export default function ElaborazioniPage() {
                 <p className="mt-2 text-2xl font-semibold text-amber-800">{capacitasWarningCount}</p>
                 <p className="mt-1 text-sm text-amber-700">Account da verificare prima di nuove esecuzioni.</p>
               </div>
-            </div>
-
-            <div className="rounded-2xl border border-[#dfe7dd] bg-[#f8faf8] p-4">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="label-caption">Bonifica Oristanese</p>
-                  <p className="mt-2 text-sm font-medium text-gray-900">
-                    {bonificaCredentials.length > 0
-                      ? `${activeBonificaCredentials.length} account attivi su ${bonificaCredentials.length}`
-                      : "Nessun account Bonifica configurato"}
-                  </p>
-                  <p className="mt-1 text-sm text-gray-500">
-                    {latestBonificaUsage
-                      ? `Ultimo test o utilizzo ${formatDateTime(latestBonificaUsage)}`
-                      : "Solo gestione credenziali e test login disponibili al momento"}
-                  </p>
-                </div>
-                <button
-                  className="btn-secondary"
-                  onClick={() =>
-                    openWorkspaceModal(
-                      "/elaborazioni/settings",
-                      "Credenziali",
-                      "Gestione Bonifica Oristanese nello stesso workspace di SISTER e Capacitas.",
-                    )
-                  }
-                  type="button"
-                >
-                  Apri credenziali
-                </button>
-              </div>
-              {bonificaWarningCount > 0 ? (
-                <p className="mt-3 text-sm text-amber-700">
-                  {bonificaWarningCount} account Bonifica presentano errori recenti o richiedono verifica.
-                </p>
-              ) : null}
             </div>
           </div>
         </article>
