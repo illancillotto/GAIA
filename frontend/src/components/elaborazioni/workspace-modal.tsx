@@ -59,8 +59,8 @@ export function ElaborazioneWorkspaceModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 px-4 py-6 backdrop-blur-sm">
-      <div className="flex max-h-[94vh] w-full max-w-[1400px] flex-col overflow-hidden rounded-[28px] border border-gray-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.24)]">
+    <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/45 px-3 py-5 backdrop-blur-sm xl:px-5">
+      <div className="flex max-h-[95vh] w-full max-w-[min(1600px,98vw)] flex-col overflow-hidden rounded-[28px] border border-gray-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.24)]">
         <div className="flex items-center justify-between gap-4 border-b border-gray-100 bg-white px-6 py-3.5">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1D4E35]">Workspace rapido</p>
@@ -76,7 +76,7 @@ export function ElaborazioneWorkspaceModal({
           </div>
         </div>
 
-        <div className="relative min-h-[70vh] flex-1 overflow-y-auto bg-[#f4f7f5] px-6 py-6">
+        <div className="relative min-h-[70vh] flex-1 overflow-y-auto bg-[#f4f7f5] px-4 py-5 xl:px-5">
           <NativeWorkspaceRenderer
             href={currentHref}
             onNavigate={setCurrentHref}

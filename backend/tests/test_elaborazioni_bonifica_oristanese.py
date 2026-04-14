@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from collections.abc import Generator
 from datetime import datetime, timedelta, timezone
 import uuid
@@ -44,6 +45,7 @@ from app.modules.operazioni.models.reports import FieldReport, FieldReportCatego
 from app.modules.operazioni.models.wc_area import WCArea
 from app.modules.operazioni.models.vehicles import Vehicle, VehicleFuelLog, VehicleUsageSession
 from app.modules.operazioni.models.wc_operator import WCOperator
+from app.modules.operazioni.services.sync_vehicles import sync_white_vehicles
 from app.modules.utenze.models import AnagraficaCompany, AnagraficaPerson, AnagraficaSubject, BonificaUserStaging
 from app.services.catasto_credentials import get_credential_fernet
 
@@ -73,6 +75,7 @@ def setup_database(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, Non
     app.dependency_overrides[get_db] = override_get_db
     Base.metadata.drop_all(bind=engine)
     Base.metadata.create_all(bind=engine)
+    monkeypatch.setattr("app.services.elaborazioni_bonifica_sync.SessionLocal", TestingSessionLocal)
     generated_key = Fernet.generate_key().decode("utf-8")
     monkeypatch.setattr("app.services.catasto_credentials.settings.credential_master_key", generated_key)
     monkeypatch.setattr("app.core.config.settings.credential_master_key", generated_key)
@@ -367,6 +370,112 @@ def test_bonifica_sync_status_expires_stale_running_jobs() -> None:
     assert "rimasto in stato running oltre la soglia" in payload["entities"]["vehicles"]["error_detail"]
 
 
+def test_bonifica_sync_status_uses_longer_stale_threshold_for_user_jobs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("app.core.config.settings.wc_sync_stale_job_minutes", 30)
+    monkeypatch.setattr("app.core.config.settings.wc_sync_user_stale_job_minutes", 120)
+
+    db = TestingSessionLocal()
+    try:
+        db.add(
+            WCSyncJob(
+                entity="vehicles",
+                status="running",
+                started_at=datetime.now(timezone.utc) - timedelta(minutes=45),
+                params_json={"date_from": None, "date_to": None},
+            )
+        )
+        db.add(
+            WCSyncJob(
+                entity="users",
+                status="running",
+                started_at=datetime.now(timezone.utc) - timedelta(minutes=45),
+                params_json={"date_from": None, "date_to": None},
+            )
+        )
+        db.add(
+            WCSyncJob(
+                entity="consorziati",
+                status="running",
+                started_at=datetime.now(timezone.utc) - timedelta(minutes=45),
+                params_json={"date_from": None, "date_to": None},
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get("/elaborazioni/bonifica/sync/status", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["entities"]["vehicles"]["status"] == "failed"
+    assert payload["entities"]["users"]["status"] == "running"
+    assert payload["entities"]["consorziati"]["status"] == "running"
+
+
+def test_bonifica_users_client_fetches_detail_pages_with_controlled_concurrency(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr("app.core.config.settings.wc_sync_user_detail_concurrency", 3)
+    monkeypatch.setattr("app.core.config.settings.wc_sync_detail_delay_ms", 0)
+
+    class DummySessionManager:
+        def get_http_client(self):  # pragma: no cover - unused in this test
+            raise AssertionError("HTTP client should not be used directly in this test")
+
+    class InstrumentedUsersClient:
+        def __init__(self) -> None:
+            from app.modules.elaborazioni.bonifica_oristanese.apps.users.client import BonificaUsersClient
+
+            self.client = BonificaUsersClient(DummySessionManager())  # type: ignore[arg-type]
+            self.active_calls = 0
+            self.max_active_calls = 0
+
+        async def fetch_all_datatable_rows(self, *args, **kwargs):
+                return (
+                    [
+                    ["", "Acquaiolo", "", "", '<a href="/users/101">Scheda</a>'],
+                    ["", "Acquaiolo", "", "", '<a href="/users/102">Scheda</a>'],
+                    ["", "Acquaiolo", "", "", '<a href="/users/103">Scheda</a>'],
+                    ],
+                    3,
+                )
+
+        async def fetch_detail_html(self, path: str) -> str:
+            self.active_calls += 1
+            self.max_active_calls = max(self.max_active_calls, self.active_calls)
+            try:
+                await asyncio.sleep(0.01)
+                wc_id = path.rstrip("/").split("/")[-1]
+                return f"""
+                <form>
+                  <input name="username" value="user-{wc_id}">
+                  <input name="email" value="user-{wc_id}@example.local">
+                  <input name="first_name" value="Nome {wc_id}">
+                  <input name="last_name" value="Cognome {wc_id}">
+                  <input name="tax" value="TAX{wc_id}">
+                  <input name="contact_phone" value="070000{wc_id}">
+                  <input name="enabled" value="1">
+                </form>
+                """
+            finally:
+                self.active_calls -= 1
+
+    instrumented = InstrumentedUsersClient()
+    monkeypatch.setattr(instrumented.client, "fetch_all_datatable_rows", instrumented.fetch_all_datatable_rows)
+    monkeypatch.setattr(instrumented.client, "fetch_detail_html", instrumented.fetch_detail_html)
+
+    rows, total = asyncio.run(instrumented.client.fetch_users())
+
+    assert total == 3
+    assert len(rows) == 3
+    assert instrumented.max_active_calls == 3
+    assert rows[0].wc_id == 101
+    assert rows[2].username == "user-103"
+
+
 def test_bonifica_sync_run_creates_jobs_and_imports_reports(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -501,16 +610,16 @@ def test_bonifica_sync_run_creates_jobs_and_imports_reports(
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["jobs"]["report_types"]["status"] == "completed"
-    assert payload["jobs"]["reports"]["status"] == "completed"
-    assert payload["jobs"]["vehicles"]["status"] == "completed"
-    assert payload["jobs"]["refuels"]["status"] == "completed"
-    assert payload["jobs"]["taken_charge"]["status"] == "completed"
-    assert payload["jobs"]["users"]["status"] == "completed"
-    assert payload["jobs"]["areas"]["status"] == "completed"
-    assert payload["jobs"]["warehouse_requests"]["status"] == "completed"
-    assert payload["jobs"]["org_charts"]["status"] == "completed"
-    assert payload["jobs"]["consorziati"]["status"] == "completed"
+    assert payload["jobs"]["report_types"]["status"] == "queued"
+    assert payload["jobs"]["reports"]["status"] == "queued"
+    assert payload["jobs"]["vehicles"]["status"] == "queued"
+    assert payload["jobs"]["refuels"]["status"] == "queued"
+    assert payload["jobs"]["taken_charge"]["status"] == "queued"
+    assert payload["jobs"]["users"]["status"] == "queued"
+    assert payload["jobs"]["areas"]["status"] == "queued"
+    assert payload["jobs"]["warehouse_requests"]["status"] == "queued"
+    assert payload["jobs"]["org_charts"]["status"] == "queued"
+    assert payload["jobs"]["consorziati"]["status"] == "queued"
 
     db = TestingSessionLocal()
     try:
@@ -535,6 +644,15 @@ def test_bonifica_sync_run_creates_jobs_and_imports_reports(
     assert status_payload["entities"]["reports"]["status"] == "completed"
     assert status_payload["entities"]["reports"]["records_synced"] == 1
     assert status_payload["entities"]["reports"]["params_json"]["source_total"] == 1
+    assert status_payload["entities"]["reports"]["params_json"]["report_summary"]["entity"] == "reports"
+    assert status_payload["entities"]["reports"]["params_json"]["report_summary"]["outcome"] == "completed"
+    assert status_payload["entities"]["reports"]["params_json"]["report_summary"]["records_synced"] == 1
+    assert status_payload["entities"]["reports"]["params_json"]["report_summary"]["records_skipped"] == 0
+    assert status_payload["entities"]["reports"]["params_json"]["report_summary"]["records_errors"] == 0
+    assert status_payload["entities"]["reports"]["params_json"]["report_summary"]["source_total"] == 1
+    assert status_payload["entities"]["reports"]["params_json"]["report_summary"]["range_used"]["date_from"] is not None
+    assert status_payload["entities"]["reports"]["params_json"]["report_summary"]["range_used"]["date_to"] is not None
+    assert status_payload["entities"]["reports"]["params_json"]["report_summary"]["duration_seconds"] >= 0
     assert status_payload["entities"]["report_types"]["records_synced"] == 1
     assert status_payload["entities"]["report_types"]["params_json"]["source_total"] == 1
     assert status_payload["entities"]["vehicles"]["records_synced"] == 0
@@ -545,6 +663,145 @@ def test_bonifica_sync_run_creates_jobs_and_imports_reports(
     assert status_payload["entities"]["warehouse_requests"]["records_synced"] == 0
     assert status_payload["entities"]["org_charts"]["records_synced"] == 0
     assert status_payload["entities"]["consorziati"]["records_synced"] == 0
+
+
+def test_bonifica_sync_rerun_reuses_previous_date_window_for_reports(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    create_response = client.post(
+        "/elaborazioni/bonifica/credentials",
+        headers=auth_headers(),
+        json={
+            "label": "Account sync reports",
+            "login_identifier": "utente@example.local",
+            "password": "bonifica-secret",
+            "remember_me": True,
+        },
+    )
+    assert create_response.status_code == 201
+
+    async def fake_login(self):
+        from app.modules.elaborazioni.bonifica_oristanese.session import BonificaOristaneseSession
+
+        self._session = BonificaOristaneseSession(
+            authenticated_url="https://login.bonificaoristanese.it/dashboard",
+            cookie_names=["XSRF-TOKEN", "laravel_session"],
+        )
+        return self._session
+
+    async def fake_close(self) -> None:
+        return None
+
+    observed_windows: list[tuple[str, str]] = []
+
+    async def fake_fetch_reports(self, *, date_from, date_to):
+        observed_windows.append((date_from.isoformat(), date_to.isoformat()))
+        return ([], 0)
+
+    monkeypatch.setattr("app.modules.elaborazioni.bonifica_oristanese.session.BonificaOristaneseSessionManager.login", fake_login)
+    monkeypatch.setattr("app.modules.elaborazioni.bonifica_oristanese.session.BonificaOristaneseSessionManager.close", fake_close)
+    monkeypatch.setattr(
+        "app.modules.elaborazioni.bonifica_oristanese.apps.reports.client.BonificaReportsClient.fetch_reports",
+        fake_fetch_reports,
+    )
+
+    first_run = client.post(
+        "/elaborazioni/bonifica/sync/run",
+        headers=auth_headers(),
+        json={
+            "entities": ["reports"],
+            "date_from": "2025-01-01",
+            "date_to": "2025-04-13",
+        },
+    )
+
+    assert first_run.status_code == 200
+    assert observed_windows == [("2025-01-01", "2025-04-13")]
+
+    second_run = client.post(
+        "/elaborazioni/bonifica/sync/run",
+        headers=auth_headers(),
+        json={"entities": ["reports"]},
+    )
+
+    assert second_run.status_code == 200
+    assert observed_windows == [
+        ("2025-01-01", "2025-04-13"),
+        ("2025-01-01", "2025-04-13"),
+    ]
+
+    db = TestingSessionLocal()
+    try:
+        jobs = db.scalars(select(WCSyncJob).where(WCSyncJob.entity == "reports").order_by(WCSyncJob.started_at.asc())).all()
+        assert len(jobs) == 2
+        assert jobs[0].params_json["date_from"] == "2025-01-01"
+        assert jobs[0].params_json["date_to"] == "2025-04-13"
+        assert jobs[1].params_json["date_from"] == "2025-01-01"
+        assert jobs[1].params_json["date_to"] == "2025-04-13"
+    finally:
+        db.close()
+
+
+def test_bonifica_sync_failed_job_persists_final_report_summary(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    create_response = client.post(
+        "/elaborazioni/bonifica/credentials",
+        headers=auth_headers(),
+        json={
+            "label": "Account sync reports failed",
+            "login_identifier": "utente@example.local",
+            "password": "bonifica-secret",
+            "remember_me": True,
+        },
+    )
+    assert create_response.status_code == 201
+
+    async def fake_login(self):
+        from app.modules.elaborazioni.bonifica_oristanese.session import BonificaOristaneseSession
+
+        self._session = BonificaOristaneseSession(
+            authenticated_url="https://login.bonificaoristanese.it/dashboard",
+            cookie_names=["XSRF-TOKEN", "laravel_session"],
+        )
+        return self._session
+
+    async def fake_close(self) -> None:
+        return None
+
+    async def fake_fetch_reports(self, *, date_from, date_to):
+        raise RuntimeError("White provider timeout on reports export")
+
+    monkeypatch.setattr("app.modules.elaborazioni.bonifica_oristanese.session.BonificaOristaneseSessionManager.login", fake_login)
+    monkeypatch.setattr("app.modules.elaborazioni.bonifica_oristanese.session.BonificaOristaneseSessionManager.close", fake_close)
+    monkeypatch.setattr(
+        "app.modules.elaborazioni.bonifica_oristanese.apps.reports.client.BonificaReportsClient.fetch_reports",
+        fake_fetch_reports,
+    )
+
+    response = client.post(
+        "/elaborazioni/bonifica/sync/run",
+        headers=auth_headers(),
+        json={
+            "entities": ["reports"],
+            "date_from": "2025-01-01",
+            "date_to": "2025-04-13",
+        },
+    )
+
+    assert response.status_code == 200
+
+    status_response = client.get("/elaborazioni/bonifica/sync/status", headers=auth_headers())
+    assert status_response.status_code == 200
+    report_summary = status_response.json()["entities"]["reports"]["params_json"]["report_summary"]
+    assert status_response.json()["entities"]["reports"]["status"] == "failed"
+    assert report_summary["entity"] == "reports"
+    assert report_summary["outcome"] == "failed"
+    assert report_summary["records_synced"] == 0
+    assert report_summary["records_errors"] == 1
+    assert report_summary["range_used"]["date_from"] == "2025-01-01"
+    assert report_summary["range_used"]["date_to"] == "2025-04-13"
+    assert "White provider timeout on reports export" in report_summary["error_preview"][0]
 
 
 def test_bonifica_sync_run_imports_org_charts(
@@ -645,7 +902,7 @@ def test_bonifica_sync_run_imports_org_charts(
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["jobs"]["org_charts"]["status"] == "completed"
+    assert payload["jobs"]["org_charts"]["status"] == "queued"
 
     db = TestingSessionLocal()
     try:
@@ -733,7 +990,7 @@ def test_bonifica_sync_run_imports_consorziati_and_approve_creates_subject(
         json={"entities": ["consorziati"]},
     )
     assert response.status_code == 200
-    assert response.json()["jobs"]["consorziati"]["status"] == "completed"
+    assert response.json()["jobs"]["consorziati"]["status"] == "queued"
 
     list_response = client.get("/utenze/bonifica-staging", headers=auth_headers())
     assert list_response.status_code == 200
@@ -969,9 +1226,9 @@ def test_bonifica_sync_run_imports_vehicles_and_taken_charge(
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["jobs"]["vehicles"]["status"] == "completed"
-    assert payload["jobs"]["refuels"]["status"] == "completed"
-    assert payload["jobs"]["taken_charge"]["status"] == "completed"
+    assert payload["jobs"]["vehicles"]["status"] == "queued"
+    assert payload["jobs"]["refuels"]["status"] == "queued"
+    assert payload["jobs"]["taken_charge"]["status"] == "queued"
 
     db = TestingSessionLocal()
     try:
@@ -997,6 +1254,185 @@ def test_bonifica_sync_run_imports_vehicles_and_taken_charge(
 
         skipped_fuel_log = db.scalar(select(VehicleFuelLog).where(VehicleFuelLog.wc_id == 701))
         assert skipped_fuel_log is None
+    finally:
+        db.close()
+
+
+def test_bonifica_sync_run_requires_vehicle_base_for_vehicle_dependent_entities() -> None:
+    response = client.post(
+        "/elaborazioni/bonifica/sync/run",
+        headers=auth_headers(),
+        json={"entities": ["refuels", "taken_charge"]},
+    )
+
+    assert response.status_code == 400
+    assert "base mezzi locale" in response.json()["detail"]
+    assert "Automezzi e attrezzature" in response.json()["detail"]
+
+
+def test_sync_white_vehicles_matches_existing_vehicle_by_plate_number() -> None:
+    db = TestingSessionLocal()
+    try:
+        current_user = db.scalar(select(ApplicationUser).where(ApplicationUser.username == "elaborazioni-admin"))
+        assert current_user is not None
+
+        existing_vehicle = Vehicle(
+            code="LEGACY-VEHICLE-1",
+            wc_id=None,
+            plate_number="MOTOPOMPA_A1106054",
+            wc_vehicle_id=None,
+            name="Motopompa legacy",
+            vehicle_type="attrezzatura",
+            vehicle_type_wc="attrezzatura",
+            current_status="available",
+            is_active=True,
+            created_by_user_id=current_user.id,
+            updated_by_user_id=current_user.id,
+        )
+        db.add(existing_vehicle)
+        db.commit()
+
+        result = sync_white_vehicles(
+            db=db,
+            current_user=current_user,
+            rows=[
+                BonificaVehicleRow(
+                    wc_id=207,
+                    vehicle_code="MOTOPOMPA_A1106054",
+                    vehicle_name="MOTOPOMPA MAGAZZINO",
+                    vehicle_type_label="attrezzatura",
+                    km_start=None,
+                    km_limit=None,
+                    override_km_global=False,
+                    override_ask_km_overflow=False,
+                )
+            ],
+        )
+
+        refreshed_vehicle = db.scalar(select(Vehicle).where(Vehicle.id == existing_vehicle.id))
+        assert refreshed_vehicle is not None
+        assert result.vehicles_synced == 0
+        assert result.vehicles_skipped == 1
+        assert result.errors == []
+        assert refreshed_vehicle.wc_id == 207
+        assert refreshed_vehicle.wc_vehicle_id == "MOTOPOMPA_A1106054"
+        assert refreshed_vehicle.plate_number == "MOTOPOMPA_A1106054"
+        assert refreshed_vehicle.name == "MOTOPOMPA MAGAZZINO"
+        assert db.query(Vehicle).count() == 1
+    finally:
+        db.close()
+
+
+def test_bonifica_sync_refuels_skips_orphaned_white_detail_and_continues(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    create_response = client.post(
+        "/elaborazioni/bonifica/credentials",
+        headers=auth_headers(),
+        json={
+            "label": "Account sync refuels",
+            "login_identifier": "utente@example.local",
+            "password": "bonifica-secret",
+            "remember_me": True,
+        },
+    )
+    assert create_response.status_code == 201
+
+    async def fake_login(self):
+        from app.modules.elaborazioni.bonifica_oristanese.session import BonificaOristaneseSession
+
+        self._session = BonificaOristaneseSession(
+            authenticated_url="https://login.bonificaoristanese.it/dashboard",
+            cookie_names=["XSRF-TOKEN", "laravel_session"],
+        )
+        return self._session
+
+    async def fake_close(self) -> None:
+        return None
+
+    async def fake_fetch_vehicles(self):
+        return (
+            [
+                BonificaVehicleRow(
+                    wc_id=101,
+                    vehicle_code="ZA123AA",
+                    vehicle_name="Daily 35C",
+                    vehicle_type_label="automezzo",
+                    km_start=12000,
+                    km_limit=200000,
+                    override_km_global=False,
+                    override_ask_km_overflow=False,
+                )
+            ],
+            1,
+        )
+
+    async def fake_fetch_refuels(self, *, date_from, date_to):
+        assert date_from is not None
+        assert date_to is not None
+        return (
+            [
+                BonificaRefuelRow(
+                    wc_id=2472,
+                    vehicle_code="MOTOPOMPA_A1106052",
+                    operator_name="Mario Rossi",
+                    fueled_at_text="09/04/2026 08:00",
+                    odometer_km=0,
+                    liters=None,
+                    total_cost=None,
+                    station_name=None,
+                    source_issue="Dettaglio White non disponibile: il mezzo sorgente potrebbe essere stato cancellato.",
+                ),
+                BonificaRefuelRow(
+                    wc_id=702,
+                    vehicle_code="ZA123AA",
+                    operator_name="Mario Rossi",
+                    fueled_at_text="09/04/2026 13:00",
+                    odometer_km=12190,
+                    liters=__import__("decimal").Decimal("32.500"),
+                    total_cost=__import__("decimal").Decimal("58.40"),
+                    station_name="Q8 Oristano",
+                ),
+            ],
+            2,
+        )
+
+    monkeypatch.setattr("app.modules.elaborazioni.bonifica_oristanese.session.BonificaOristaneseSessionManager.login", fake_login)
+    monkeypatch.setattr("app.modules.elaborazioni.bonifica_oristanese.session.BonificaOristaneseSessionManager.close", fake_close)
+    monkeypatch.setattr(
+        "app.modules.elaborazioni.bonifica_oristanese.apps.vehicles.client.BonificaVehiclesClient.fetch_vehicles",
+        fake_fetch_vehicles,
+    )
+    monkeypatch.setattr(
+        "app.modules.elaborazioni.bonifica_oristanese.apps.refuels.client.BonificaRefuelsClient.fetch_refuels",
+        fake_fetch_refuels,
+    )
+
+    response = client.post(
+        "/elaborazioni/bonifica/sync/run",
+        headers=auth_headers(),
+        json={
+            "entities": ["vehicles", "refuels"],
+            "date_from": "2025-01-01",
+            "date_to": "2025-04-13",
+        },
+    )
+
+    assert response.status_code == 200
+
+    status_response = client.get("/elaborazioni/bonifica/sync/status", headers=auth_headers())
+    assert status_response.status_code == 200
+    refuels_status = status_response.json()["entities"]["refuels"]
+    assert refuels_status["status"] == "completed"
+    assert refuels_status["records_synced"] == 1
+    assert refuels_status["records_skipped"] == 1
+    assert refuels_status["records_errors"] == 0
+
+    db = TestingSessionLocal()
+    try:
+        fuel_log = db.scalar(select(VehicleFuelLog).where(VehicleFuelLog.wc_id == 702))
+        assert fuel_log is not None
+        assert db.scalar(select(VehicleFuelLog).where(VehicleFuelLog.wc_id == 2472)) is None
     finally:
         db.close()
 
@@ -1076,7 +1512,7 @@ def test_bonifica_sync_run_imports_operational_users_and_exposes_api(
         json={"entities": ["users"]},
     )
     assert response.status_code == 200
-    assert response.json()["jobs"]["users"]["status"] == "completed"
+    assert response.json()["jobs"]["users"]["status"] == "queued"
 
     db = TestingSessionLocal()
     try:
@@ -1162,7 +1598,7 @@ def test_bonifica_sync_run_imports_areas_and_exposes_api(
         json={"entities": ["areas"]},
     )
     assert response.status_code == 200
-    assert response.json()["jobs"]["areas"]["status"] == "completed"
+    assert response.json()["jobs"]["areas"]["status"] == "queued"
 
     db = TestingSessionLocal()
     try:
@@ -1257,7 +1693,7 @@ def test_bonifica_sync_run_imports_warehouse_requests_and_exposes_api(
         json={"entities": ["warehouse_requests"]},
     )
     assert response.status_code == 200
-    assert response.json()["jobs"]["warehouse_requests"]["status"] == "completed"
+    assert response.json()["jobs"]["warehouse_requests"]["status"] == "queued"
 
     db = TestingSessionLocal()
     try:

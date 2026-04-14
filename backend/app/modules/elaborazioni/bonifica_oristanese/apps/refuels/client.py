@@ -3,8 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
+import logging
 
 from bs4 import BeautifulSoup
+import httpx
 
 from app.modules.elaborazioni.bonifica_oristanese.apps.client import BonificaDatatableClient
 from app.modules.elaborazioni.bonifica_oristanese.apps.registry import get_bonifica_app
@@ -17,6 +19,7 @@ from app.modules.elaborazioni.bonifica_oristanese.session import BonificaOristan
 
 
 REFUELS_APP = get_bonifica_app("refuels")
+logger = logging.getLogger(__name__)
 
 
 def _to_int(value: str | None) -> int | None:
@@ -41,6 +44,7 @@ class BonificaRefuelRow:
     liters: Decimal | None
     total_cost: Decimal | None
     station_name: str | None
+    source_issue: str | None = None
 
 
 def _to_decimal(value: str | bool | list[str] | None) -> Decimal | None:
@@ -193,7 +197,29 @@ class BonificaRefuelsClient(BonificaDatatableClient):
             wc_id = extract_href_id(row[4], "/vehicles/refuel/edit/")
             if wc_id is None:
                 continue
-            html = await self.fetch_detail_html(REFUELS_APP.detail_path_template.format(id=wc_id))
+            try:
+                html = await self.fetch_detail_html(REFUELS_APP.detail_path_template.format(id=wc_id))
+            except httpx.HTTPError as exc:
+                logger.warning(
+                    "Bonifica refuels: skip detail fetch for wc_id=%s vehicle_code=%s because detail is unavailable: %s",
+                    wc_id,
+                    clean_html_text(row[0]) or None,
+                    exc,
+                )
+                parsed.append(
+                    BonificaRefuelRow(
+                        wc_id=wc_id,
+                        vehicle_code=clean_html_text(row[0]) or None,
+                        operator_name=clean_html_text(row[1]) or None,
+                        fueled_at_text=clean_html_text(row[2]) or None,
+                        odometer_km=_to_int(clean_html_text(row[3])),
+                        liters=None,
+                        total_cost=None,
+                        station_name=None,
+                        source_issue="Dettaglio White non disponibile: il mezzo sorgente potrebbe essere stato cancellato.",
+                    )
+                )
+                continue
             fields = parse_form_fields(html)
             labeled_values = _extract_labeled_values(html)
             parsed.append(
@@ -252,6 +278,7 @@ class BonificaRefuelsClient(BonificaDatatableClient):
                         labeled_values,
                         ("distributore", "station", "stazione", "fornitore", "supplier"),
                     ),
+                    source_issue=None,
                 )
             )
 

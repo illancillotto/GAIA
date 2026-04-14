@@ -58,6 +58,14 @@ class Settings(BaseSettings):
         default=30,
         alias="WC_SYNC_STALE_JOB_MINUTES",
     )
+    wc_sync_user_stale_job_minutes: int = Field(
+        default=120,
+        alias="WC_SYNC_USER_STALE_JOB_MINUTES",
+    )
+    wc_sync_user_detail_concurrency: int = Field(
+        default=8,
+        alias="WC_SYNC_USER_DETAIL_CONCURRENCY",
+    )
     jwt_secret_key: str = Field(alias="JWT_SECRET_KEY")
     jwt_expire_minutes: int = Field(default=60, alias="JWT_EXPIRE_MINUTES")
     jwt_algorithm: str = "HS256"

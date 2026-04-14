@@ -208,6 +208,12 @@ Stato del refactor:
 - il dettaglio batch runtime, i componenti UI di base e i workspace operativi principali sono ora implementati direttamente sotto `elaborazioni`
 - il backend non espone piu alias runtime sotto `/catasto`; le route operative canoniche sono solo sotto `/elaborazioni`
 - gli helper tecnici condivisi tra dominio `catasto` e runtime `elaborazioni` sono stati spostati in `backend/app/modules/shared/` per evitare dipendenze inverse sul dominio
+- per la sync WhiteCompany, il rilancio di una singola entity date-aware riusa il range persistito nell'ultimo `wc_sync_job` se l'utente non passa un nuovo intervallo esplicito
+- ogni `wc_sync_job` persiste anche un `report_summary` finale in `params_json` con range usato, totale sorgente, contatori, durata ed eventuale preview errori, riusato dalla UI operativa
+- `taken_charge` e `refuels` hanno una precondizione esplicita sulla base mezzi locale: se il run non include `vehicles` e non esistono mezzi gia sincronizzati, `POST /elaborazioni/bonifica/sync/run` rifiuta la richiesta con errore applicativo invece di lanciare import inevitabilmente inconsistenti
+- la sync `vehicles` e ora idempotente anche quando il mezzo esiste gia per `plate_number` o `wc_vehicle_id`: il servizio riallinea il record esistente e isola gli errori per-record con savepoint, evitando di lasciare la sessione SQLAlchemy in `PendingRollback`
+- la sync `refuels` tollera anche dettagli White orfani o non piu leggibili: se il dettaglio `GET /vehicles/refuel/edit/{id}` risponde errore HTTP perche il mezzo sorgente e stato cancellato, il record viene marcato come non importabile e contato come `skipped`, senza far fallire l'intera entity
+- le entity `users` e `consorziati` usano un fetch dettagli White in concorrenza controllata e una soglia stale dedicata (`WC_SYNC_USER_DETAIL_CONCURRENCY`, `WC_SYNC_USER_STALE_JOB_MINUTES`), per evitare falsi `failed` sui job piu voluminosi del workspace `WhiteCompany Sync`
 - refactor pianificato: `catasto` evolve verso aggregazione dati, `elaborazioni` diventa il modulo runtime per batch, CAPTCHA, worker orchestration e stato avanzamento
 
 ### postgres

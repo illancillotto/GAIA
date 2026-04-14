@@ -215,3 +215,15 @@ test("utenze detail page keeps preview modal and delete password flow", () => {
   assert.match(detailPage, /event\.stopPropagation\(\)/);
   assert.match(apiClient, /(export async function downloadAnagraficaDocumentBlob|export const downloadUtenzeDocumentBlob)/);
 });
+
+test("bonifica sync workspace exposes final import report panel", () => {
+  const bonificaWorkspace = read("src/components/elaborazioni/bonifica-sync-workspace.tsx");
+
+  assert.match(bonificaWorkspace, /Report finale importazione/);
+  assert.match(bonificaWorkspace, /report_summary/);
+  assert.match(bonificaWorkspace, /Prime anomalie/);
+  assert.match(bonificaWorkspace, /formatDurationSeconds/);
+  assert.match(bonificaWorkspace, /Esporta JSON/);
+  assert.match(bonificaWorkspace, /Esporta CSV/);
+  assert.match(bonificaWorkspace, /buildFinalReportsCsv/);
+});

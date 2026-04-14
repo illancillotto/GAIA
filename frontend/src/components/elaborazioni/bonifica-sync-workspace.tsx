@@ -11,7 +11,7 @@ import {
   ElaborazionePanelHeader,
 } from "@/components/elaborazioni/module-chrome";
 import { EmptyState } from "@/components/ui/empty-state";
-import { CheckIcon, LockIcon, RefreshIcon } from "@/components/ui/icons";
+import { CalendarIcon, CheckIcon, LockIcon, RefreshIcon } from "@/components/ui/icons";
 import { deleteBonificaSyncJob, getBonificaSyncStatus, getCurrentUser, listBonificaOristaneseCredentials, runBonificaSync } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import { formatDateTime } from "@/lib/presentation";
@@ -92,6 +92,20 @@ type SyncLogEntry = {
   message: string;
 };
 
+type EntityFinalReport = {
+  entity: string;
+  outcome: string;
+  generatedAt: string | null;
+  durationSeconds: number | null;
+  recordsSynced: number;
+  recordsSkipped: number;
+  recordsErrors: number;
+  sourceTotal: number | null;
+  dateFrom: string | null;
+  dateTo: string | null;
+  errorPreview: string[];
+};
+
 function statusTone(status: string): "default" | "success" | "warning" {
   if (status === "completed") return "success";
   if (status === "running") return "warning";
@@ -139,12 +153,183 @@ function renderStatusDetail(status: BonificaSyncEntityStatus): string {
   return detailParts.join(" · ");
 }
 
+function getSkippedTooltip(status: BonificaSyncEntityStatus): string | undefined {
+  if ((status.records_skipped ?? 0) <= 0) {
+    return undefined;
+  }
+  if (status.entity === "reports") {
+    return "Gia presenti a database";
+  }
+  return undefined;
+}
+
+function getSourceTotal(status: BonificaSyncEntityStatus): number | null {
+  const rawValue = status.params_json?.source_total;
+  const parsed =
+    typeof rawValue === "number"
+      ? rawValue
+      : typeof rawValue === "string"
+        ? Number(rawValue)
+        : null;
+  if (parsed == null || !Number.isFinite(parsed) || parsed < 0) {
+    return null;
+  }
+  return parsed;
+}
+
+function getEntityProgress(status: BonificaSyncEntityStatus): {
+  percent: number;
+  label: string;
+  indeterminate: boolean;
+} {
+  const synced = status.records_synced ?? 0;
+  const skipped = status.records_skipped ?? 0;
+  const errors = status.records_errors ?? 0;
+  const processed = synced + skipped + errors;
+  const sourceTotal = getSourceTotal(status);
+
+  if (sourceTotal != null && sourceTotal > 0) {
+    const percent = Math.max(0, Math.min(100, Math.round((processed / sourceTotal) * 100)));
+    return {
+      percent,
+      label: `${processed}/${sourceTotal}`,
+      indeterminate: false,
+    };
+  }
+
+  if (status.status === "completed") {
+    return { percent: 100, label: processed > 0 ? `${processed} processati` : "Completata", indeterminate: false };
+  }
+  if (status.status === "failed") {
+    return { percent: processed > 0 ? 100 : 0, label: processed > 0 ? `${processed} processati` : "Fallita", indeterminate: false };
+  }
+  if (status.status === "running" || status.status === "queued") {
+    return { percent: status.status === "running" ? 45 : 15, label: status.status === "running" ? "In esecuzione" : "In coda", indeterminate: true };
+  }
+  return { percent: 0, label: "N/D", indeterminate: false };
+}
+
+
+function getEntityFinalReport(status: BonificaSyncEntityStatus): EntityFinalReport | null {
+  const summary = status.params_json?.report_summary;
+  if (!summary || typeof summary !== "object") {
+    return null;
+  }
+  const summaryRecord = summary as Record<string, unknown>;
+
+  const sourceTotalRaw = "source_total" in summaryRecord ? summaryRecord.source_total : null;
+  const sourceTotal =
+    typeof sourceTotalRaw === "number"
+      ? sourceTotalRaw
+      : typeof sourceTotalRaw === "string"
+        ? Number(sourceTotalRaw)
+        : null;
+  const rangeUsedRaw = "range_used" in summaryRecord ? summaryRecord.range_used : null;
+  const rangeUsed =
+    rangeUsedRaw && typeof rangeUsedRaw === "object" ? (rangeUsedRaw as Record<string, unknown>) : null;
+  const errorPreviewRaw = "error_preview" in summaryRecord ? summaryRecord.error_preview : null;
+
+  return {
+    entity: typeof summaryRecord.entity === "string" ? summaryRecord.entity : status.entity,
+    outcome: typeof summaryRecord.outcome === "string" ? summaryRecord.outcome : status.status,
+    generatedAt: typeof summaryRecord.generated_at === "string" ? summaryRecord.generated_at : status.last_finished_at,
+    durationSeconds:
+      typeof summaryRecord.duration_seconds === "number"
+        ? summaryRecord.duration_seconds
+        : typeof summaryRecord.duration_seconds === "string"
+          ? Number(summaryRecord.duration_seconds)
+          : null,
+    recordsSynced:
+      typeof summaryRecord.records_synced === "number" ? summaryRecord.records_synced : status.records_synced ?? 0,
+    recordsSkipped:
+      typeof summaryRecord.records_skipped === "number" ? summaryRecord.records_skipped : status.records_skipped ?? 0,
+    recordsErrors:
+      typeof summaryRecord.records_errors === "number" ? summaryRecord.records_errors : status.records_errors ?? 0,
+    sourceTotal: sourceTotal != null && Number.isFinite(sourceTotal) ? sourceTotal : null,
+    dateFrom: rangeUsed && typeof rangeUsed.date_from === "string" ? rangeUsed.date_from : null,
+    dateTo: rangeUsed && typeof rangeUsed.date_to === "string" ? rangeUsed.date_to : null,
+    errorPreview: Array.isArray(errorPreviewRaw) ? errorPreviewRaw.filter((item): item is string => typeof item === "string") : [],
+  };
+}
+
+
+function formatDurationSeconds(value: number | null): string {
+  if (value == null || !Number.isFinite(value)) {
+    return "—";
+  }
+  if (value < 60) {
+    return `${Math.round(value)}s`;
+  }
+  const minutes = Math.floor(value / 60);
+  const seconds = Math.round(value % 60);
+  return seconds > 0 ? `${minutes}m ${seconds}s` : `${minutes}m`;
+}
+
+function downloadTextFile(filename: string, content: string, mimeType: string): void {
+  const blob = new Blob([content], { type: mimeType });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+function buildFinalReportsExportRows(reports: Array<{ status: BonificaSyncEntityStatus; report: EntityFinalReport }>) {
+  return reports.map(({ status, report }) => ({
+    entity: status.entity,
+    label: ENTITY_DEFINITIONS.find((item) => item.key === status.entity)?.label ?? status.entity,
+    job_id: status.job_id,
+    outcome: report.outcome,
+    generated_at: report.generatedAt,
+    duration_seconds: report.durationSeconds,
+    source_total: report.sourceTotal,
+    records_synced: report.recordsSynced,
+    records_skipped: report.recordsSkipped,
+    records_errors: report.recordsErrors,
+    date_from: report.dateFrom,
+    date_to: report.dateTo,
+    error_preview: report.errorPreview.join(" | "),
+  }));
+}
+
+function buildFinalReportsCsv(reports: Array<{ status: BonificaSyncEntityStatus; report: EntityFinalReport }>): string {
+  const rows = buildFinalReportsExportRows(reports);
+  const headers = [
+    "entity",
+    "label",
+    "job_id",
+    "outcome",
+    "generated_at",
+    "duration_seconds",
+    "source_total",
+    "records_synced",
+    "records_skipped",
+    "records_errors",
+    "date_from",
+    "date_to",
+    "error_preview",
+  ];
+  const escapeCsv = (value: unknown): string => {
+    const stringValue = value == null ? "" : String(value);
+    return `"${stringValue.replaceAll('"', '""')}"`;
+  };
+  const lines = [
+    headers.join(","),
+    ...rows.map((row) => headers.map((header) => escapeCsv(row[header as keyof typeof row])).join(",")),
+  ];
+  return lines.join("\n");
+}
+
 export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedded?: boolean } = {}) {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [syncStatus, setSyncStatus] = useState<BonificaSyncStatusResponse | null>(null);
   const [bonificaCredentials, setBonificaCredentials] = useState<BonificaOristaneseCredential[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [lastStatusRefreshAt, setLastStatusRefreshAt] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [runMessage, setRunMessage] = useState<string | null>(null);
@@ -157,9 +342,11 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
   const previousStatusesRef = useRef<Record<string, string>>({});
   const lastRunEntityKeysRef = useRef<string[]>([]);
   const runCompletionLoggedRef = useRef(false);
+  const dateFromInputRef = useRef<HTMLInputElement | null>(null);
+  const dateToInputRef = useRef<HTMLInputElement | null>(null);
 
   const admin = isAdminUser(currentUser);
-  const entityStatusByKey = syncStatus?.entities ?? {};
+  const entityStatusByKey = useMemo(() => syncStatus?.entities ?? {}, [syncStatus]);
   const availableEntityKeys = useMemo(() => normalizeEntityKeys(syncStatus), [syncStatus]);
   const selectedEntityDefinitions = useMemo(
     () => ENTITY_DEFINITIONS.filter((entity) => selectedEntities.includes(entity.key)),
@@ -232,6 +419,22 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
     if (!syncStatus) return 0;
     return Object.values(syncStatus.entities).filter((item) => item.status === "completed").length;
   }, [syncStatus]);
+  const compactTable = embedded;
+  const autoRefreshActive = admin && (activeJobsCount > 0 || running || Boolean(runStartedAt));
+  const finalReports = useMemo(() => {
+    return Object.values(entityStatusByKey)
+      .map((status) => {
+        const report = getEntityFinalReport(status);
+        if (!report) return null;
+        return { status, report };
+      })
+      .filter((item): item is { status: BonificaSyncEntityStatus; report: EntityFinalReport } => item !== null)
+      .sort((left, right) => {
+        const leftTime = left.report.generatedAt ? Date.parse(left.report.generatedAt) : 0;
+        const rightTime = right.report.generatedAt ? Date.parse(right.report.generatedAt) : 0;
+        return rightTime - leftTime;
+      });
+  }, [entityStatusByKey]);
 
   function appendLog(message: string, tone: SyncLogEntry["tone"] = "info"): void {
     const entryAt = new Date().toISOString();
@@ -262,6 +465,7 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
       setCurrentUser(user);
       setSyncStatus(status);
       setBonificaCredentials(credentials);
+      setLastStatusRefreshAt(new Date().toISOString());
       setError(null);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Errore caricamento stato sync Bonifica");
@@ -374,6 +578,17 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
     setSelectedEntities([]);
   }
 
+  function openNativeDatePicker(input: HTMLInputElement | null): void {
+    if (!input || input.disabled) return;
+    const pickerCapableInput = input as HTMLInputElement & { showPicker?: () => void };
+    if (typeof pickerCapableInput.showPicker === "function") {
+      pickerCapableInput.showPicker();
+      return;
+    }
+    input.focus();
+    input.click();
+  }
+
   async function handleRunSync(): Promise<void> {
     const token = getStoredAccessToken();
     if (!token) return;
@@ -467,6 +682,19 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
     } finally {
       setActionBusyKey(null);
     }
+  }
+
+  function handleExportFinalReportsJson(): void {
+    if (finalReports.length === 0) return;
+    const timestamp = new Date().toISOString().replaceAll(":", "-");
+    const payload = buildFinalReportsExportRows(finalReports);
+    downloadTextFile(`whitecompany-final-report-${timestamp}.json`, JSON.stringify(payload, null, 2), "application/json;charset=utf-8");
+  }
+
+  function handleExportFinalReportsCsv(): void {
+    if (finalReports.length === 0) return;
+    const timestamp = new Date().toISOString().replaceAll(":", "-");
+    downloadTextFile(`whitecompany-final-report-${timestamp}.csv`, buildFinalReportsCsv(finalReports), "text/csv;charset=utf-8");
   }
 
   const content = (
@@ -622,23 +850,49 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
                   <label className="space-y-2">
                     <span className="label-caption">Da (YYYY-MM-DD)</span>
-                    <input
-                      className="form-control"
-                      value={dateFrom}
-                      onChange={(event) => setDateFrom(event.target.value)}
-                      placeholder="2026-04-01"
-                      disabled={!admin || running || !hasDateAwareSelection}
-                    />
+                    <div className="group flex items-center rounded-2xl border border-gray-200 bg-white px-3 shadow-sm transition focus-within:border-[#1D4E35] focus-within:ring-4 focus-within:ring-[#e8f2ec]">
+                      <CalendarIcon className="h-4 w-4 shrink-0 text-gray-400 transition group-focus-within:text-[#1D4E35]" />
+                      <input
+                        ref={dateFromInputRef}
+                        className="h-11 w-full border-0 bg-transparent px-3 text-sm text-gray-800 outline-none [color-scheme:light]"
+                        type="date"
+                        value={dateFrom}
+                        onChange={(event) => setDateFrom(event.target.value)}
+                        disabled={!admin || running || !hasDateAwareSelection}
+                      />
+                      <button
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-[#1D4E35] disabled:cursor-not-allowed disabled:opacity-40"
+                        type="button"
+                        onClick={() => openNativeDatePicker(dateFromInputRef.current)}
+                        disabled={!admin || running || !hasDateAwareSelection}
+                        aria-label="Apri selettore data iniziale"
+                      >
+                        <CalendarIcon className="h-4 w-4" />
+                      </button>
+                    </div>
                   </label>
                   <label className="space-y-2">
                     <span className="label-caption">A (YYYY-MM-DD)</span>
-                    <input
-                      className="form-control"
-                      value={dateTo}
-                      onChange={(event) => setDateTo(event.target.value)}
-                      placeholder="2026-04-13"
-                      disabled={!admin || running || !hasDateAwareSelection}
-                    />
+                    <div className="group flex items-center rounded-2xl border border-gray-200 bg-white px-3 shadow-sm transition focus-within:border-[#1D4E35] focus-within:ring-4 focus-within:ring-[#e8f2ec]">
+                      <CalendarIcon className="h-4 w-4 shrink-0 text-gray-400 transition group-focus-within:text-[#1D4E35]" />
+                      <input
+                        ref={dateToInputRef}
+                        className="h-11 w-full border-0 bg-transparent px-3 text-sm text-gray-800 outline-none [color-scheme:light]"
+                        type="date"
+                        value={dateTo}
+                        onChange={(event) => setDateTo(event.target.value)}
+                        disabled={!admin || running || !hasDateAwareSelection}
+                      />
+                      <button
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-[#1D4E35] disabled:cursor-not-allowed disabled:opacity-40"
+                        type="button"
+                        onClick={() => openNativeDatePicker(dateToInputRef.current)}
+                        disabled={!admin || running || !hasDateAwareSelection}
+                        aria-label="Apri selettore data finale"
+                      >
+                        <CalendarIcon className="h-4 w-4" />
+                      </button>
+                    </div>
                   </label>
                 </div>
                 {!hasDateAwareSelection ? (
@@ -716,19 +970,33 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
           }
           title="Stato per entity"
           description="Stato derivato da `wc_sync_job`. `never` indica che non esistono run precedenti per l'entity."
+          actions={
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <div className="rounded-full border border-[#d9dfd6] bg-white px-3 py-1 text-[11px] font-medium text-gray-600">
+                {autoRefreshActive ? "Auto-refresh ogni 3s" : "Refresh manuale"}
+              </div>
+              <div className="rounded-full border border-[#d9dfd6] bg-white px-3 py-1 text-[11px] font-medium text-gray-600">
+                Ultimo aggiornamento: {lastStatusRefreshAt ? formatDateTime(lastStatusRefreshAt) : "—"}
+              </div>
+              <button className="btn-secondary" type="button" disabled={refreshing || loading} onClick={() => void handleRefresh()}>
+                {refreshing ? "Aggiorno..." : "Refresh"}
+              </button>
+            </div>
+          }
         />
-        <div className="p-6">
+        <div className={compactTable ? "p-4" : "p-6"}>
           {loading ? (
             <p className="text-sm text-gray-500">Caricamento stato sync in corso...</p>
           ) : !syncStatus ? (
             <EmptyState icon={RefreshIcon} title="Nessuno stato disponibile" description="Impossibile leggere lo stato della sync dal backend." />
           ) : (
             <div className="overflow-x-auto">
-              <table className="data-table">
+              <table className={`data-table ${compactTable ? "text-[12px]" : ""}`}>
                 <thead>
                   <tr>
                     <th>Entity</th>
                     <th>Stato</th>
+                    <th>Progress</th>
                     <th>Ultimo avvio</th>
                     <th>Ultimo termine</th>
                     <th>Synced</th>
@@ -746,7 +1014,7 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
                       return (
                         <tr key={entityKey}>
                           <td className="font-medium text-gray-900">{definition?.label ?? entityKey}</td>
-                          <td colSpan={7} className="text-sm text-gray-500">
+                          <td colSpan={admin ? 9 : 8} className="text-sm text-gray-500">
                             Stato non disponibile.
                           </td>
                         </tr>
@@ -758,32 +1026,55 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
                         ? "bg-emerald-50 text-emerald-700"
                         : badgeTone === "warning"
                           ? "bg-amber-50 text-amber-700"
-                          : "bg-gray-100 text-gray-700";
+                        : "bg-gray-100 text-gray-700";
                     const detailPreview = renderStatusDetail(status);
+                    const progressInfo = getEntityProgress(status);
                     const busy = actionBusyKey === entityKey;
                     const canDelete = admin && status.status !== "running" && Boolean(status.job_id);
                     return (
                       <tr key={entityKey}>
-                        <td className="min-w-[14rem]">
-                          <p className="font-medium text-gray-900">{definition?.label ?? entityKey}</p>
-                          <p className="mt-1 text-xs text-gray-400">{entityKey}</p>
+                        <td className={compactTable ? "min-w-[11rem]" : "min-w-[14rem]"}>
+                          <p className={`font-medium text-gray-900 ${compactTable ? "text-[12px] leading-4" : ""}`}>{definition?.label ?? entityKey}</p>
+                          <p className={`mt-1 text-gray-400 ${compactTable ? "text-[10px] leading-4" : "text-xs"}`}>{entityKey}</p>
                         </td>
                         <td>
-                          <span className={`inline-flex rounded-full px-2 py-1 text-[11px] font-semibold ${badgeClassName}`}>{status.status}</span>
+                          <span className={`inline-flex rounded-full font-semibold ${badgeClassName} ${compactTable ? "px-1.5 py-0.5 text-[10px]" : "px-2 py-1 text-[11px]"}`}>{status.status}</span>
                         </td>
-                        <td className="text-sm text-gray-600">{formatDateTime(status.last_started_at)}</td>
-                        <td className="text-sm text-gray-600">{formatDateTime(status.last_finished_at)}</td>
-                        <td className="text-sm text-gray-600">{status.records_synced ?? "—"}</td>
-                        <td className="text-sm text-gray-600">{status.records_skipped ?? "—"}</td>
-                        <td className="text-sm text-gray-600">{status.records_errors ?? "—"}</td>
-                        <td className="max-w-[42ch] truncate text-xs text-gray-500" title={detailPreview || undefined}>
+                        <td className={compactTable ? "min-w-[8.5rem]" : "min-w-[11rem]"}>
+                          <div className="space-y-1">
+                            <div className={`overflow-hidden rounded-full bg-gray-100 ${compactTable ? "h-2" : "h-2.5"}`}>
+                              <div
+                                className={`h-full rounded-full transition-all ${
+                                  status.status === "completed"
+                                    ? "bg-emerald-500"
+                                    : status.status === "failed"
+                                      ? "bg-rose-400"
+                                      : "bg-amber-400"
+                                } ${progressInfo.indeterminate ? "animate-pulse" : ""}`}
+                                style={{ width: `${Math.max(progressInfo.percent, progressInfo.indeterminate ? 12 : 0)}%` }}
+                              />
+                            </div>
+                            <p className={compactTable ? "text-[10px] text-gray-500" : "text-xs text-gray-500"}>{progressInfo.label}</p>
+                          </div>
+                        </td>
+                        <td className={compactTable ? "text-[11px] text-gray-600" : "text-sm text-gray-600"}>{formatDateTime(status.last_started_at)}</td>
+                        <td className={compactTable ? "text-[11px] text-gray-600" : "text-sm text-gray-600"}>{formatDateTime(status.last_finished_at)}</td>
+                        <td className={compactTable ? "text-[11px] text-gray-600" : "text-sm text-gray-600"}>{status.records_synced ?? "—"}</td>
+                        <td
+                          className={compactTable ? "text-[11px] text-gray-600" : "text-sm text-gray-600"}
+                          title={getSkippedTooltip(status)}
+                        >
+                          {status.records_skipped ?? "—"}
+                        </td>
+                        <td className={compactTable ? "text-[11px] text-gray-600" : "text-sm text-gray-600"}>{status.records_errors ?? "—"}</td>
+                        <td className={`${compactTable ? "max-w-[20ch] text-[10px]" : "max-w-[42ch] text-xs"} truncate text-gray-500`} title={detailPreview || undefined}>
                           {detailPreview || "—"}
                         </td>
                         {admin ? (
                           <td className="whitespace-nowrap">
-                            <div className="flex flex-wrap items-center gap-2">
+                            <div className={`flex items-center ${compactTable ? "gap-1.5" : "gap-2"}`}>
                               <button
-                                className="text-sm font-medium text-[#1D4E35] transition hover:text-[#143726] disabled:cursor-not-allowed disabled:text-gray-300"
+                                className={`font-medium text-[#1D4E35] transition hover:text-[#143726] disabled:cursor-not-allowed disabled:text-gray-300 ${compactTable ? "text-[11px]" : "text-sm"}`}
                                 disabled={busy || status.status === "running"}
                                 onClick={() => void handleRerunEntity(entityKey)}
                                 type="button"
@@ -791,7 +1082,7 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
                                 {busy ? "..." : "Rilancia"}
                               </button>
                               <button
-                                className="text-sm font-medium text-gray-500 transition hover:text-gray-800 disabled:cursor-not-allowed disabled:text-gray-300"
+                                className={`font-medium text-gray-500 transition hover:text-gray-800 disabled:cursor-not-allowed disabled:text-gray-300 ${compactTable ? "text-[11px]" : "text-sm"}`}
                                 disabled={busy || !canDelete}
                                 onClick={() => void handleDeleteEntityJob(entityKey, status.job_id)}
                                 type="button"
@@ -806,6 +1097,88 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+        </div>
+      </article>
+
+      <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
+        <ElaborazionePanelHeader
+          badge={
+            <>
+              <CheckIcon className="h-3.5 w-3.5" />
+              Report finale
+            </>
+          }
+          title="Report finale importazione"
+          description="Riepilogo persistito per gli ultimi job WhiteCompany: range, sorgente, esito, durata e preview anomalie."
+        />
+        <div className={compactTable ? "p-4" : "p-6"}>
+          {finalReports.length > 0 ? (
+            <div className="mb-4 flex flex-wrap gap-2">
+              <button className="btn-secondary" type="button" onClick={handleExportFinalReportsJson}>
+                Esporta JSON
+              </button>
+              <button className="btn-secondary" type="button" onClick={handleExportFinalReportsCsv}>
+                Esporta CSV
+              </button>
+            </div>
+          ) : null}
+          {finalReports.length === 0 ? (
+            <EmptyState icon={CheckIcon} title="Nessun report finale disponibile" description="Avvia almeno una sync per generare il riepilogo finale persistito nel job." />
+          ) : (
+            <div className={`grid ${compactTable ? "gap-3" : "gap-4"}`}>
+              {finalReports.map(({ status, report }) => {
+                const definition = ENTITY_DEFINITIONS.find((item) => item.key === status.entity);
+                const toneClassName =
+                  report.outcome === "completed"
+                    ? "border-emerald-100 bg-emerald-50/70"
+                    : "border-rose-100 bg-rose-50/70";
+                return (
+                  <div key={`report-${status.job_id ?? status.entity}`} className={`rounded-2xl border p-4 ${toneClassName}`}>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900">{definition?.label ?? report.entity}</p>
+                        <p className="mt-1 text-xs text-gray-500">{status.entity}</p>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">{report.outcome}</p>
+                        <p className="mt-1 text-xs text-gray-500">{formatDateTime(report.generatedAt)}</p>
+                      </div>
+                    </div>
+                    <div className={`mt-3 grid ${compactTable ? "gap-2 sm:grid-cols-2" : "gap-3 sm:grid-cols-4"}`}>
+                      <div className="rounded-xl border border-white/80 bg-white/80 px-3 py-2">
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-gray-400">Range</p>
+                        <p className="mt-1 text-sm text-gray-700">{report.dateFrom || report.dateTo ? `${report.dateFrom ?? "?"} → ${report.dateTo ?? "?"}` : "Non applicabile"}</p>
+                      </div>
+                      <div className="rounded-xl border border-white/80 bg-white/80 px-3 py-2">
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-gray-400">Sorgente</p>
+                        <p className="mt-1 text-sm text-gray-700">{report.sourceTotal != null ? report.sourceTotal : "—"}</p>
+                      </div>
+                      <div className="rounded-xl border border-white/80 bg-white/80 px-3 py-2">
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-gray-400">Esito</p>
+                        <p className="mt-1 text-sm text-gray-700">{`${report.recordsSynced} synced · ${report.recordsSkipped} skipped · ${report.recordsErrors} errori`}</p>
+                      </div>
+                      <div className="rounded-xl border border-white/80 bg-white/80 px-3 py-2">
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-gray-400">Durata</p>
+                        <p className="mt-1 text-sm text-gray-700">{formatDurationSeconds(report.durationSeconds)}</p>
+                      </div>
+                    </div>
+                    {report.errorPreview.length > 0 ? (
+                      <div className="mt-3 rounded-xl border border-white/80 bg-white/70 px-3 py-2">
+                        <p className="text-[11px] uppercase tracking-[0.18em] text-gray-400">Prime anomalie</p>
+                        <div className="mt-1 space-y-1">
+                          {report.errorPreview.map((line, index) => (
+                            <p key={`${status.job_id ?? status.entity}-err-${index}`} className="text-xs text-gray-600">
+                              {line}
+                            </p>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>

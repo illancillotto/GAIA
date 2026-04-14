@@ -38,16 +38,40 @@ def _to_decimal(value: int | None) -> Decimal:
     return Decimal(str(value))
 
 
-def _sync_vehicle(db: Session, row: BonificaVehicleRow, current_user: ApplicationUser) -> bool:
+def _normalized_vehicle_code(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    return normalized or None
+
+
+def _find_existing_vehicle(db: Session, row: BonificaVehicleRow) -> Vehicle | None:
     vehicle = db.scalar(select(Vehicle).where(Vehicle.wc_id == row.wc_id))
+    if vehicle is not None:
+        return vehicle
+
+    vehicle_code = _normalized_vehicle_code(row.vehicle_code)
+    if vehicle_code is None:
+        return None
+
+    vehicle = db.scalar(select(Vehicle).where(Vehicle.wc_vehicle_id == vehicle_code))
+    if vehicle is not None:
+        return vehicle
+
+    return db.scalar(select(Vehicle).where(Vehicle.plate_number == vehicle_code))
+
+
+def _sync_vehicle(db: Session, row: BonificaVehicleRow, current_user: ApplicationUser) -> bool:
+    vehicle = _find_existing_vehicle(db, row)
     created = vehicle is None
+    vehicle_code = _normalized_vehicle_code(row.vehicle_code)
 
     if vehicle is None:
         vehicle = Vehicle(
             code=_build_vehicle_code(row.wc_id),
             wc_id=row.wc_id,
-            plate_number=(row.vehicle_code[:20] if row.vehicle_code and len(row.vehicle_code) <= 20 else None),
-            wc_vehicle_id=row.vehicle_code,
+            plate_number=(vehicle_code[:20] if vehicle_code and len(vehicle_code) <= 20 else None),
+            wc_vehicle_id=vehicle_code,
             name=(row.vehicle_name or f"Mezzo White {row.wc_id}")[:150],
             vehicle_type=row.vehicle_type_label[:100],
             vehicle_type_wc=row.vehicle_type_label[:20],
@@ -62,9 +86,10 @@ def _sync_vehicle(db: Session, row: BonificaVehicleRow, current_user: Applicatio
         db.flush()
         return True
 
-    vehicle.wc_vehicle_id = row.vehicle_code
-    if row.vehicle_code and len(row.vehicle_code) <= 20:
-        vehicle.plate_number = row.vehicle_code
+    vehicle.wc_id = row.wc_id
+    vehicle.wc_vehicle_id = vehicle_code
+    if vehicle_code and len(vehicle_code) <= 20:
+        vehicle.plate_number = vehicle_code
     if row.vehicle_name:
         vehicle.name = row.vehicle_name[:150]
     vehicle.vehicle_type = row.vehicle_type_label[:100]
@@ -89,7 +114,8 @@ def sync_white_vehicles(
 
     for row in rows:
         try:
-            created = _sync_vehicle(db, row, current_user)
+            with db.begin_nested():
+                created = _sync_vehicle(db, row, current_user)
             if created:
                 vehicles_synced += 1
             else:
@@ -199,6 +225,9 @@ def sync_white_refuels(
     for row in rows:
         existing = db.scalar(select(VehicleFuelLog).where(VehicleFuelLog.wc_id == row.wc_id))
         if existing is not None:
+            fuel_logs_skipped += 1
+            continue
+        if row.source_issue:
             fuel_logs_skipped += 1
             continue
 

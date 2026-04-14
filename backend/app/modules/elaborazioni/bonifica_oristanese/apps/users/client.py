@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 
+from app.core.config import settings
 from app.modules.elaborazioni.bonifica_oristanese.apps.client import BonificaDatatableClient
 from app.modules.elaborazioni.bonifica_oristanese.apps.registry import get_bonifica_app
 from app.modules.elaborazioni.bonifica_oristanese.parsers import (
@@ -52,6 +54,30 @@ class BonificaUsersClient(BonificaDatatableClient):
     def __init__(self, session_manager: BonificaOristaneseSessionManager) -> None:
         super().__init__(session_manager)
 
+    async def _parse_user_row(self, row: object) -> BonificaUserRow | None:
+        if not isinstance(row, list) or len(row) < 5:
+            return None
+        wc_id = extract_href_id(row[4], "/users/")
+        if wc_id is None:
+            return None
+
+        html = await self.fetch_detail_html(USERS_APP.detail_path_template.format(id=wc_id))
+        fields = parse_form_fields(html)
+        return BonificaUserRow(
+            wc_id=wc_id,
+            username=_field_text(fields, "username"),
+            email=_field_text(fields, "email"),
+            user_type=_field_text(fields, "user_type", "type"),
+            business_name=_field_text(fields, "business_name"),
+            first_name=_field_text(fields, "first_name"),
+            last_name=_field_text(fields, "last_name"),
+            tax=_field_text(fields, "tax"),
+            contact_phone=_field_text(fields, "contact_phone"),
+            contact_mobile=_field_text(fields, "contact_mobile"),
+            enabled=bool(fields.get("enabled")),
+            role=_field_text(fields, "roles", "role") or clean_html_text(row[1]) or None,
+        )
+
     async def _fetch_users(
         self,
         *,
@@ -68,32 +94,18 @@ class BonificaUsersClient(BonificaDatatableClient):
             },
         )
 
-        parsed: list[BonificaUserRow] = []
-        for row in rows:
-            if not isinstance(row, list) or len(row) < 5:
-                continue
-            wc_id = extract_href_id(row[4], "/users/")
-            if wc_id is None:
-                continue
+        detail_concurrency = max(settings.wc_sync_user_detail_concurrency, 1)
+        semaphore = asyncio.Semaphore(detail_concurrency)
 
-            html = await self.fetch_detail_html(USERS_APP.detail_path_template.format(id=wc_id))
-            fields = parse_form_fields(html)
-            parsed.append(
-                BonificaUserRow(
-                    wc_id=wc_id,
-                    username=_field_text(fields, "username"),
-                    email=_field_text(fields, "email"),
-                    user_type=_field_text(fields, "user_type", "type"),
-                    business_name=_field_text(fields, "business_name"),
-                    first_name=_field_text(fields, "first_name"),
-                    last_name=_field_text(fields, "last_name"),
-                    tax=_field_text(fields, "tax"),
-                    contact_phone=_field_text(fields, "contact_phone"),
-                    contact_mobile=_field_text(fields, "contact_mobile"),
-                    enabled=bool(fields.get("enabled")),
-                    role=_field_text(fields, "roles", "role") or clean_html_text(row[1]) or None,
-                )
-            )
+        async def parse_with_limit(row: object) -> BonificaUserRow | None:
+            async with semaphore:
+                return await self._parse_user_row(row)
+
+        parsed = [
+            parsed_row
+            for parsed_row in await asyncio.gather(*(parse_with_limit(row) for row in rows))
+            if parsed_row is not None
+        ]
 
         if exclude_role:
             normalized_exclude_role = exclude_role.strip().lower()

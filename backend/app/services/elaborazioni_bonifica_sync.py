@@ -6,7 +6,7 @@ from datetime import date, datetime, timedelta, timezone
 import logging
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -44,6 +44,7 @@ from app.modules.operazioni.services.sync_vehicles import (
     sync_white_vehicles,
 )
 from app.modules.operazioni.services.sync_white import sync_white_reports
+from app.modules.operazioni.models.vehicles import Vehicle
 from app.services.elaborazioni_bonifica_oristanese import (
     mark_credential_error,
     mark_credential_used,
@@ -63,6 +64,7 @@ SUPPORTED_SYNC_ENTITIES = (
     "consorziati",
 )
 DATE_AWARE_SYNC_ENTITIES = {"reports", "refuels", "taken_charge", "warehouse_requests"}
+VEHICLE_DEPENDENT_SYNC_ENTITIES = {"refuels", "taken_charge"}
 logger = logging.getLogger(__name__)
 _background_tasks: set[asyncio.Task] = set()
 
@@ -103,6 +105,153 @@ def _resolve_date_window(request: BonificaSyncRunRequest, entity: str) -> tuple[
     end_date = request.date_to or date.today()
     start_date = request.date_from or (end_date - timedelta(days=settings.wc_sync_default_days))
     return start_date, end_date
+
+
+def _parse_optional_iso_date(raw_value: object) -> date | None:
+    if isinstance(raw_value, datetime):
+        return raw_value.date()
+    if isinstance(raw_value, date):
+        return raw_value
+    if not isinstance(raw_value, str) or not raw_value:
+        return None
+    try:
+        return date.fromisoformat(raw_value)
+    except ValueError:
+        return None
+
+
+def _is_single_entity_request(request: BonificaSyncRunRequest, entity: str) -> bool:
+    requested = request.entities
+    if isinstance(requested, str):
+        return requested == entity
+    return len(requested) == 1 and requested[0] == entity
+
+
+def _resolve_date_window_from_job(job: WCSyncJob, entity: str) -> tuple[date | None, date | None]:
+    if entity not in DATE_AWARE_SYNC_ENTITIES:
+        return None, None
+
+    params = job.params_json or {}
+    inherited_request = BonificaSyncRunRequest(
+        entities=[entity],
+        date_from=_parse_optional_iso_date(params.get("date_from")),
+        date_to=_parse_optional_iso_date(params.get("date_to")),
+    )
+    return _resolve_date_window(inherited_request, entity)
+
+
+def _resolve_job_params(
+    db: Session,
+    request: BonificaSyncRunRequest,
+    entity: str,
+) -> dict[str, object]:
+    date_from, date_to = _resolve_date_window(request, entity)
+    if (
+        entity in DATE_AWARE_SYNC_ENTITIES
+        and request.date_from is None
+        and request.date_to is None
+        and _is_single_entity_request(request, entity)
+    ):
+        latest_job = db.scalar(
+            select(WCSyncJob)
+            .where(WCSyncJob.entity == entity)
+            .order_by(WCSyncJob.started_at.desc())
+            .limit(1)
+        )
+        if latest_job is not None:
+            inherited_date_from, inherited_date_to = _resolve_date_window_from_job(latest_job, entity)
+            if inherited_date_from is not None or inherited_date_to is not None:
+                date_from, date_to = inherited_date_from, inherited_date_to
+
+    return {
+        "date_from": date_from.isoformat() if date_from else None,
+        "date_to": date_to.isoformat() if date_to else None,
+    }
+
+
+def _has_vehicle_sync_base(db: Session) -> bool:
+    return (
+        db.scalar(
+            select(Vehicle.id)
+            .where(
+                or_(
+                    Vehicle.wc_id.is_not(None),
+                    Vehicle.wc_vehicle_id.is_not(None),
+                    Vehicle.plate_number.is_not(None),
+                )
+            )
+            .limit(1)
+        )
+        is not None
+    )
+
+
+def _validate_entity_dependencies(db: Session, entities: list[str]) -> None:
+    requested_vehicle_dependents = [
+        entity for entity in entities if entity in VEHICLE_DEPENDENT_SYNC_ENTITIES
+    ]
+    if not requested_vehicle_dependents:
+        return
+    if "vehicles" in entities:
+        return
+    if _has_vehicle_sync_base(db):
+        return
+
+    raise RuntimeError(
+        "Impossibile avviare "
+        + ", ".join(requested_vehicle_dependents)
+        + " senza una base mezzi locale. "
+        "Esegui prima `vehicles` (Automezzi e attrezzature) oppure includilo nello stesso run."
+    )
+
+
+def _build_job_report_summary(
+    job: WCSyncJob,
+    *,
+    source_total: int | None = None,
+    error_detail: str | None = None,
+) -> dict[str, object]:
+    started_at = job.started_at
+    finished_at = job.finished_at or datetime.now(timezone.utc)
+    if started_at.tzinfo is None:
+        started_at = started_at.replace(tzinfo=timezone.utc)
+    if finished_at.tzinfo is None:
+        finished_at = finished_at.replace(tzinfo=timezone.utc)
+    duration_seconds = max(0.0, round((finished_at - started_at).total_seconds(), 3))
+    params = job.params_json or {}
+    effective_source_total = source_total
+    if effective_source_total is None:
+        raw_total = params.get("source_total")
+        if isinstance(raw_total, (int, float)):
+            effective_source_total = int(raw_total)
+        elif isinstance(raw_total, str) and raw_total.isdigit():
+            effective_source_total = int(raw_total)
+
+    summary: dict[str, object] = {
+        "entity": job.entity,
+        "outcome": job.status,
+        "generated_at": finished_at.isoformat(),
+        "duration_seconds": duration_seconds,
+        "records_synced": job.records_synced or 0,
+        "records_skipped": job.records_skipped or 0,
+        "records_errors": job.records_errors or 0,
+        "range_used": {
+            "date_from": params.get("date_from"),
+            "date_to": params.get("date_to"),
+        },
+        "source_total": effective_source_total,
+        "error_preview": None,
+    }
+    preview_source = error_detail or job.error_detail
+    if preview_source:
+        summary["error_preview"] = preview_source.split("\n")[:5]
+    return summary
+
+
+def _stale_job_minutes_for_entity(entity: str) -> int:
+    if entity in {"users", "consorziati"}:
+        return max(settings.wc_sync_user_stale_job_minutes, settings.wc_sync_stale_job_minutes)
+    return settings.wc_sync_stale_job_minutes
 
 
 def _create_job(
@@ -185,7 +334,7 @@ async def _run_bonifica_sync_background(
                     )
                     params_updates = {"source_total": total}
                 elif entity == "reports":
-                    date_from, date_to = _resolve_date_window(request, entity)
+                    date_from, date_to = _resolve_date_window_from_job(job, entity)
                     assert date_from is not None and date_to is not None
                     rows, total = await reports_client.fetch_reports(date_from=date_from, date_to=date_to)
                     sync_result = sync_white_reports(
@@ -215,7 +364,7 @@ async def _run_bonifica_sync_background(
                     )
                     params_updates = {"source_total": total}
                 elif entity == "refuels":
-                    date_from, date_to = _resolve_date_window(request, entity)
+                    date_from, date_to = _resolve_date_window_from_job(job, entity)
                     assert date_from is not None and date_to is not None
                     rows, total = await refuels_client.fetch_refuels(
                         date_from=date_from,
@@ -234,7 +383,7 @@ async def _run_bonifica_sync_background(
                     )
                     params_updates = {"source_total": total}
                 elif entity == "taken_charge":
-                    date_from, date_to = _resolve_date_window(request, entity)
+                    date_from, date_to = _resolve_date_window_from_job(job, entity)
                     assert date_from is not None and date_to is not None
                     rows, total = await taken_charge_client.fetch_taken_charge(
                         date_from=date_from,
@@ -273,7 +422,7 @@ async def _run_bonifica_sync_background(
                     )
                     params_updates = {"source_total": total}
                 elif entity == "warehouse_requests":
-                    date_from, date_to = _resolve_date_window(request, entity)
+                    date_from, date_to = _resolve_date_window_from_job(job, entity)
                     assert date_from is not None and date_to is not None
                     rows, total = await warehouse_requests_client.fetch_warehouse_requests(
                         date_from=date_from,
@@ -320,6 +469,10 @@ async def _run_bonifica_sync_background(
                 job.records_skipped = 0
                 job.records_errors = 1
                 job.error_detail = str(exc)
+                job.params_json = {
+                    **(job.params_json or {}),
+                    "report_summary": _build_job_report_summary(job, error_detail=str(exc)),
+                }
                 db.commit()
     except Exception as exc:
         logger.exception("Bonifica sync bootstrap failed before entity execution")
@@ -338,6 +491,10 @@ async def _run_bonifica_sync_background(
             job.records_skipped = 0
             job.records_errors = 1
             job.error_detail = str(exc)
+            job.params_json = {
+                **(job.params_json or {}),
+                "report_summary": _build_job_report_summary(job, error_detail=str(exc)),
+            }
         db.commit()
     finally:
         try:
@@ -360,28 +517,39 @@ def _finalize_job(
     job.records_skipped = result.skipped
     job.records_errors = result.errors
     job.error_detail = result.error_detail
-    if params_updates:
-        job.params_json = {**(job.params_json or {}), **params_updates}
+    merged_params = {**(job.params_json or {}), **(params_updates or {})}
+    merged_params["report_summary"] = _build_job_report_summary(
+        job,
+        source_total=params_updates.get("source_total") if params_updates else None,
+        error_detail=result.error_detail,
+    )
+    job.params_json = merged_params
     db.flush()
 
 
 def _expire_stale_running_jobs(db: Session) -> None:
-    cutoff = datetime.now(timezone.utc) - timedelta(minutes=settings.wc_sync_stale_job_minutes)
+    now = datetime.now(timezone.utc)
     stale_jobs = db.scalars(
         select(WCSyncJob).where(
             WCSyncJob.status == "running",
             WCSyncJob.finished_at.is_(None),
-            WCSyncJob.started_at < cutoff,
         )
     ).all()
     if not stale_jobs:
         return
 
-    expired_at = datetime.now(timezone.utc)
+    expired_at = now
     for job in stale_jobs:
+        stale_job_minutes = _stale_job_minutes_for_entity(job.entity)
+        cutoff = now - timedelta(minutes=stale_job_minutes)
+        started_at = job.started_at
+        if started_at.tzinfo is None:
+            started_at = started_at.replace(tzinfo=timezone.utc)
+        if started_at >= cutoff:
+            continue
         stale_detail = (
             "Job marcato come failed: rimasto in stato running oltre la soglia "
-            f"di {settings.wc_sync_stale_job_minutes} minuti."
+            f"di {stale_job_minutes} minuti."
         )
         job.status = "failed"
         job.finished_at = expired_at
@@ -389,6 +557,10 @@ def _expire_stale_running_jobs(db: Session) -> None:
         job.records_skipped = job.records_skipped or 0
         job.records_errors = max(job.records_errors or 0, 1)
         job.error_detail = f"{job.error_detail}\n{stale_detail}".strip() if job.error_detail else stale_detail
+        job.params_json = {
+            **(job.params_json or {}),
+            "report_summary": _build_job_report_summary(job, error_detail=job.error_detail),
+        }
     db.commit()
 
 
@@ -399,19 +571,17 @@ async def run_bonifica_sync(
 ) -> BonificaSyncRunResponse:
     _expire_stale_running_jobs(db)
     entities = _resolve_entities(request)
+    _validate_entity_dependencies(db, entities)
     jobs: dict[str, WCSyncJob] = {}
 
     for entity in entities:
-        date_from, date_to = _resolve_date_window(request, entity)
+        params_json = _resolve_job_params(db, request, entity)
         jobs[entity] = _create_job(
             db,
             entity=entity,
             current_user=current_user,
             status="queued",
-            params_json={
-                "date_from": date_from.isoformat() if date_from else None,
-                "date_to": date_to.isoformat() if date_to else None,
-            },
+            params_json=params_json,
         )
     db.commit()
 
