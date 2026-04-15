@@ -81,18 +81,33 @@ class BonificaUsersClient(BonificaDatatableClient):
     async def _fetch_users(
         self,
         *,
-        filter_role: str,
+        filter_roles: list[str],
         exclude_role: str | None = None,
     ) -> tuple[list[BonificaUserRow], int]:
-        rows, total = await self.fetch_all_datatable_rows(
-            USERS_APP.list_path,
-            columns_count=USERS_APP.columns_count,
-            page_size=250,
-            extra_params={
-                "filter_role": filter_role,
-                "filter_enabled": "",
-            },
-        )
+        async def fetch_rows_for_role(role_id: str) -> tuple[list[object], int]:
+            return await self.fetch_all_datatable_rows(
+                USERS_APP.list_path,
+                columns_count=USERS_APP.columns_count,
+                page_size=250,
+                extra_params={
+                    "filter_role": role_id,
+                    "filter_enabled": "",
+                },
+            )
+
+        raw_results = await asyncio.gather(*(fetch_rows_for_role(role_id) for role_id in filter_roles))
+        rows_by_wc_id: dict[int, object] = {}
+        for role_rows, _ in raw_results:
+            for row in role_rows:
+                if not isinstance(row, list) or len(row) < 5:
+                    continue
+                wc_id = extract_href_id(row[4], "/users/")
+                if wc_id is None or wc_id in rows_by_wc_id:
+                    continue
+                rows_by_wc_id[wc_id] = row
+
+        rows = list(rows_by_wc_id.values())
+        total = len(rows)
 
         detail_concurrency = max(settings.wc_sync_user_detail_concurrency, 1)
         semaphore = asyncio.Semaphore(detail_concurrency)
@@ -118,7 +133,12 @@ class BonificaUsersClient(BonificaDatatableClient):
         return parsed, total
 
     async def fetch_users(self) -> tuple[list[BonificaUserRow], int]:
-        return await self._fetch_users(filter_role="", exclude_role="consorziato")
+        return await self._fetch_users(
+            filter_roles=settings.wc_sync_users_role_id_list,
+            exclude_role="consorziato",
+        )
 
     async def fetch_consorziati(self) -> tuple[list[BonificaUserRow], int]:
-        return await self._fetch_users(filter_role="Consorziato")
+        return await self._fetch_users(
+            filter_roles=[settings.wc_sync_consorziati_role_id_value],
+        )

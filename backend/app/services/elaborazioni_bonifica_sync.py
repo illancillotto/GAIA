@@ -67,6 +67,7 @@ DATE_AWARE_SYNC_ENTITIES = {"reports", "refuels", "taken_charge", "warehouse_req
 VEHICLE_DEPENDENT_SYNC_ENTITIES = {"refuels", "taken_charge"}
 logger = logging.getLogger(__name__)
 _background_tasks: set[asyncio.Task] = set()
+_BACKEND_PROCESS_STARTED_AT = datetime.now(timezone.utc)
 
 
 @dataclass(frozen=True)
@@ -75,6 +76,34 @@ class _SyncExecutionResult:
     skipped: int
     errors: int
     error_detail: str | None = None
+
+
+def _persist_job_runtime_snapshot(
+    db: Session,
+    job: WCSyncJob,
+    *,
+    source_total: int | None = None,
+) -> None:
+    """
+    Persist minimal runtime information while the entity is still running.
+    This keeps the UI status endpoint from showing only '—' until completion.
+    """
+    updates: dict[str, object] = {}
+    if source_total is not None:
+        updates["source_total"] = int(source_total)
+    if updates:
+        job.params_json = {**(job.params_json or {}), **updates}
+
+    # Ensure counters are visible even before finalize.
+    if job.records_synced is None:
+        job.records_synced = 0
+    if job.records_skipped is None:
+        job.records_skipped = 0
+    if job.records_errors is None:
+        job.records_errors = 0
+
+    db.flush()
+    db.commit()
 
 
 def _resolve_entities(request: BonificaSyncRunRequest) -> list[str]:
@@ -351,6 +380,7 @@ async def _run_bonifica_sync_background(
             try:
                 if entity == "report_types":
                     rows, total = await report_types_client.fetch_report_types()
+                    _persist_job_runtime_snapshot(db, job, source_total=total)
                     sync_result = sync_white_report_types(db=db, rows=rows)
                     result = _SyncExecutionResult(
                         synced=sync_result.synced,
@@ -363,6 +393,7 @@ async def _run_bonifica_sync_background(
                     date_from, date_to = _resolve_date_window_from_job(job, entity)
                     assert date_from is not None and date_to is not None
                     rows, total = await reports_client.fetch_reports(date_from=date_from, date_to=date_to)
+                    _persist_job_runtime_snapshot(db, job, source_total=total)
                     sync_result = sync_white_reports(
                         db=db,
                         current_user=current_user,
@@ -377,6 +408,7 @@ async def _run_bonifica_sync_background(
                     params_updates = {"source_total": total}
                 elif entity == "vehicles":
                     rows, total = await vehicles_client.fetch_vehicles()
+                    _persist_job_runtime_snapshot(db, job, source_total=total)
                     sync_result = sync_white_vehicles(
                         db=db,
                         current_user=current_user,
@@ -398,6 +430,7 @@ async def _run_bonifica_sync_background(
                         date_from=date_from,
                         date_to=date_to,
                     )
+                    _persist_job_runtime_snapshot(db, job, source_total=total)
                     sync_result = sync_white_refuels(
                         db=db,
                         current_user=current_user,
@@ -417,6 +450,7 @@ async def _run_bonifica_sync_background(
                         date_from=date_from,
                         date_to=date_to,
                     )
+                    _persist_job_runtime_snapshot(db, job, source_total=total)
                     sync_result = sync_white_taken_charge(
                         db=db,
                         current_user=current_user,
@@ -431,6 +465,7 @@ async def _run_bonifica_sync_background(
                     params_updates = {"source_total": total}
                 elif entity == "users":
                     rows, total = await users_client.fetch_users()
+                    _persist_job_runtime_snapshot(db, job, source_total=total)
                     sync_result = sync_white_operators(db=db, rows=rows)
                     result = _SyncExecutionResult(
                         synced=sync_result.synced,
@@ -441,6 +476,7 @@ async def _run_bonifica_sync_background(
                     params_updates = {"source_total": total}
                 elif entity == "areas":
                     rows, total = await areas_client.fetch_areas()
+                    _persist_job_runtime_snapshot(db, job, source_total=total)
                     sync_result = sync_white_areas(db=db, rows=rows)
                     result = _SyncExecutionResult(
                         synced=sync_result.synced,
@@ -456,6 +492,7 @@ async def _run_bonifica_sync_background(
                         date_from=date_from,
                         date_to=date_to,
                     )
+                    _persist_job_runtime_snapshot(db, job, source_total=total)
                     sync_result = sync_white_warehouse_requests(db=db, rows=rows)
                     result = _SyncExecutionResult(
                         synced=sync_result.synced,
@@ -466,6 +503,7 @@ async def _run_bonifica_sync_background(
                     params_updates = {"source_total": total}
                 elif entity == "org_charts":
                     rows, total = await org_charts_client.fetch_org_charts()
+                    _persist_job_runtime_snapshot(db, job, source_total=total)
                     sync_result = sync_white_org_charts(db=db, rows=rows)
                     result = _SyncExecutionResult(
                         synced=sync_result.synced,
@@ -476,6 +514,7 @@ async def _run_bonifica_sync_background(
                     params_updates = {"source_total": total}
                 elif entity == "consorziati":
                     rows, total = await users_client.fetch_consorziati()
+                    _persist_job_runtime_snapshot(db, job, source_total=total)
                     sync_result = sync_white_consorziati(db=db, rows=rows)
                     result = _SyncExecutionResult(
                         synced=sync_result.synced,
@@ -568,11 +607,29 @@ def _expire_stale_running_jobs(db: Session) -> None:
 
     expired_at = now
     for job in stale_jobs:
-        stale_job_minutes = _stale_job_minutes_for_entity(job.entity)
-        cutoff = now - timedelta(minutes=stale_job_minutes)
         started_at = job.started_at
         if started_at.tzinfo is None:
             started_at = started_at.replace(tzinfo=timezone.utc)
+
+        if started_at < _BACKEND_PROCESS_STARTED_AT:
+            orphaned_detail = (
+                "Job marcato come failed: backend riavviato mentre il job era in stato running; "
+                "il task runtime originale non e piu attivo. Rilanciare dal frontend."
+            )
+            job.status = "failed"
+            job.finished_at = expired_at
+            job.records_synced = job.records_synced or 0
+            job.records_skipped = job.records_skipped or 0
+            job.records_errors = max(job.records_errors or 0, 1)
+            job.error_detail = f"{job.error_detail}\n{orphaned_detail}".strip() if job.error_detail else orphaned_detail
+            job.params_json = {
+                **(job.params_json or {}),
+                "report_summary": _build_job_report_summary(job, error_detail=job.error_detail),
+            }
+            continue
+
+        stale_job_minutes = _stale_job_minutes_for_entity(job.entity)
+        cutoff = now - timedelta(minutes=stale_job_minutes)
         if started_at >= cutoff:
             continue
         stale_detail = (

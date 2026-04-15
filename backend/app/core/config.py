@@ -47,11 +47,11 @@ class Settings(BaseSettings):
         alias="WC_SYNC_DEFAULT_DAYS",
     )
     wc_sync_request_delay_ms: int = Field(
-        default=200,
+        default=100,
         alias="WC_SYNC_REQUEST_DELAY_MS",
     )
     wc_sync_detail_delay_ms: int = Field(
-        default=100,
+        default=25,
         alias="WC_SYNC_DETAIL_DELAY_MS",
     )
     wc_sync_stale_job_minutes: int = Field(
@@ -59,12 +59,20 @@ class Settings(BaseSettings):
         alias="WC_SYNC_STALE_JOB_MINUTES",
     )
     wc_sync_user_stale_job_minutes: int = Field(
-        default=120,
+        default=360,
         alias="WC_SYNC_USER_STALE_JOB_MINUTES",
     )
     wc_sync_user_detail_concurrency: int = Field(
-        default=8,
+        default=16,
         alias="WC_SYNC_USER_DETAIL_CONCURRENCY",
+    )
+    wc_sync_users_role_ids: str = Field(
+        default="30,29,44,45,51,10,11,2,43,6,48,40,46,47,49,50,41",
+        alias="WC_SYNC_USERS_ROLE_IDS",
+    )
+    wc_sync_consorziati_role_id: str = Field(
+        default="3",
+        alias="WC_SYNC_CONSORZIATI_ROLE_ID",
     )
     jwt_secret_key: str = Field(alias="JWT_SECRET_KEY")
     jwt_expire_minutes: int = Field(default=60, alias="JWT_EXPIRE_MINUTES")
@@ -174,6 +182,19 @@ class Settings(BaseSettings):
                 "JWT_SECRET_KEY contains a placeholder. Generate a strong random secret and set it in .env."
             )
         return self
+
+    @staticmethod
+    def _parse_csv_tokens(raw_value: str) -> list[str]:
+        return [token.strip() for token in raw_value.split(",") if token.strip()]
+
+    @property
+    def wc_sync_users_role_id_list(self) -> list[str]:
+        return self._parse_csv_tokens(self.wc_sync_users_role_ids)
+
+    @property
+    def wc_sync_consorziati_role_id_value(self) -> str:
+        tokens = self._parse_csv_tokens(self.wc_sync_consorziati_role_id)
+        return tokens[0] if tokens else "3"
 
 
 @lru_cache
