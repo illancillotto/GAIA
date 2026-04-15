@@ -186,6 +186,32 @@ def _has_vehicle_sync_base(db: Session) -> bool:
     )
 
 
+def _list_vehicle_refuel_search_codes(db: Session) -> list[str]:
+    vehicles = db.scalars(
+        select(Vehicle).where(
+            or_(
+                Vehicle.wc_id.is_not(None),
+                Vehicle.wc_vehicle_id.is_not(None),
+                Vehicle.plate_number.is_not(None),
+            )
+        )
+    ).all()
+
+    search_codes: list[str] = []
+    seen: set[str] = set()
+    for vehicle in vehicles:
+        for candidate in (vehicle.wc_vehicle_id, vehicle.plate_number, vehicle.code):
+            if not candidate:
+                continue
+            normalized = candidate.strip()
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            search_codes.append(normalized)
+            break
+    return search_codes
+
+
 def _validate_entity_dependencies(db: Session, entities: list[str]) -> None:
     requested_vehicle_dependents = [
         entity for entity in entities if entity in VEHICLE_DEPENDENT_SYNC_ENTITIES
@@ -366,7 +392,9 @@ async def _run_bonifica_sync_background(
                 elif entity == "refuels":
                     date_from, date_to = _resolve_date_window_from_job(job, entity)
                     assert date_from is not None and date_to is not None
-                    rows, total = await refuels_client.fetch_refuels(
+                    vehicle_codes = _list_vehicle_refuel_search_codes(db)
+                    rows, total = await refuels_client.fetch_refuels_for_vehicle_codes(
+                        vehicle_codes=vehicle_codes,
                         date_from=date_from,
                         date_to=date_to,
                     )

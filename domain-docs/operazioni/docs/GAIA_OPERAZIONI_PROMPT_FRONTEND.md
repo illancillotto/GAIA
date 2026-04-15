@@ -152,6 +152,7 @@ Funzionalità UI:
 - dettaglio con tab secondarie
 - badge stato
 - timeline sintetica utilizzi/manutenzioni
+- CTA di import transazioni flotte `.xlsx` nella lista mezzi per alimentare i fuel log quando WhiteCompany non espone tutti i campi carburante
 
 ### 3. Attività
 Pagine richieste:

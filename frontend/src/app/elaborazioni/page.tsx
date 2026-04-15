@@ -55,18 +55,6 @@ const QUICK_ACTIONS = [
     description: "Capacitas e monitor del pool account operativo.",
     icon: UsersIcon,
   },
-  {
-    href: "/elaborazioni/batches",
-    title: "Archivio batch",
-    description: "Esiti, progress e retry dei lotti.",
-    icon: DocumentIcon,
-  },
-  {
-    href: "/catasto/archive?view=documents",
-    title: "Archivio documenti",
-    description: "Consultazione PDF e documenti acquisiti.",
-    icon: DocumentIcon,
-  },
 ] as const;
 
 type DashboardModalState = {
@@ -353,7 +341,7 @@ export default function ElaborazioniPage() {
           description="Accessi diretti ai percorsi operativi più usati. La barra resta orizzontale per mantenere leggibile la mappa del modulo."
         />
         <div className="p-6">
-          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-6">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {quickActions.map((action) => {
               const Icon = action.icon;
               return (

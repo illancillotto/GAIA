@@ -394,6 +394,34 @@ Registra rifornimento.
 ## 8.2 GET `/api/operazioni/vehicles/{vehicle_id}/fuel-logs`
 Lista rifornimenti.
 
+## 8.3 POST `/api/operazioni/vehicles/fuel-logs/import-fleet-transactions`
+Import `.xlsx` transazioni flotte per completare i rifornimenti che WhiteCompany non espone con `liters`, `total_cost` e `station_name`.
+
+### Multipart form-data
+- `file`
+
+### Matching mezzi
+- prova in ordine `plate_number`, `wc_vehicle_id`, `asset_tag`, `code`
+- usa i valori Excel `Targa`, `Identificativo`, `Veicolo`
+
+### Comportamento
+- legge il primo worksheet del file e individua automaticamente la prima riga header non vuota
+- crea `vehicle_fuel_log` con `fueled_at`, `liters`, `total_cost`, `odometer_km`, `station_name`, `notes`
+- concatena `Impianto` e `Città` in `station_name`
+- registra metadati sorgente in `notes` (`ticket`, `PAN carta`, `prodotto`, `identificativo`, `indirizzo`)
+- è idempotente sul set `vehicle_id + fueled_at + liters + total_cost + odometer_km`
+- salta le righe senza mezzo matchato o con `Data/Ora` o `Volume` non validi
+
+### Response 200
+```json
+{
+  "imported": 22,
+  "skipped": 3,
+  "errors": [],
+  "rows_read": 25
+}
+```
+
 ---
 
 # 9. Manutenzioni

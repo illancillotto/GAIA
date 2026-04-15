@@ -204,6 +204,20 @@ export async function importWhiteReports(file: File): Promise<{
   });
 }
 
+export async function importFleetTransactions(file: File): Promise<{
+  imported: number;
+  skipped: number;
+  errors: string[];
+  rows_read: number;
+}> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return fetchOperazioni("/vehicles/fuel-logs/import-fleet-transactions", {
+    method: "POST",
+    body: formData,
+  });
+}
+
 // --- Cases ---
 
 export async function getCases(params?: Record<string, string>) {

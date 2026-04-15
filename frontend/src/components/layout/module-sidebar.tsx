@@ -91,6 +91,11 @@ export function ModuleSidebar({
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Panoramica</p>
         <NavItem href="/elaborazioni" icon={GridIcon} label="Dashboard" />
 
+        <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Azioni rapide</p>
+        <NavItem href="/elaborazioni/bonifica" icon={RefreshIcon} label="WhiteCompany Sync" match="prefix" />
+        <NavItem href="/elaborazioni/new-single" icon={SearchIcon} label="Visure" match="prefix" />
+        <NavItem href="/elaborazioni/capacitas" icon={UsersIcon} label="Pool operativo" match="prefix" />
+
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Operazioni</p>
         <NavItem href="/elaborazioni/settings" icon={LockIcon} label="Credenziali" />
         <NavItem href="/elaborazioni/capacitas" icon={SearchIcon} label="Capacitas" match="prefix" />
@@ -141,9 +146,6 @@ export function ModuleSidebar({
 
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Panoramica</p>
         <NavItem href="/operazioni" icon={GridIcon} label="Dashboard" />
-
-        <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Elaborazioni</p>
-        <NavItem href="/elaborazioni/new-batch" icon={RefreshIcon} label="Elaborazioni massive Catasto" />
 
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Gestione</p>
         <NavItem href="/operazioni/mezzi" icon={TruckIcon} label="Mezzi" match="prefix" />

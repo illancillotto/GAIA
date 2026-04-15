@@ -1,5 +1,6 @@
 from collections.abc import Generator
 from datetime import datetime
+from decimal import Decimal
 from io import BytesIO
 
 from fastapi.testclient import TestClient
@@ -19,6 +20,7 @@ from app.modules.operazioni.models.reports import (
     InternalCase,
     InternalCaseEvent,
 )
+from app.modules.operazioni.models.vehicles import Vehicle, VehicleFuelLog
 from app.modules.operazioni.services.parsing import (
     parse_completion_time,
     parse_italian_datetime,
@@ -173,6 +175,94 @@ def _build_white_workbook() -> bytes:
             None,
             None,
             None,
+        ]
+    )
+    buffer = BytesIO()
+    workbook.save(buffer)
+    return buffer.getvalue()
+
+
+def _build_fleet_transactions_workbook() -> bytes:
+    workbook = Workbook()
+    worksheet = workbook.active
+    worksheet.title = "Transazioni Q8 Flotte"
+    worksheet.append([None] * 35)
+    worksheet.append(
+        [
+            "Cod. Main",
+            "Cod. fatt.",
+            "Rag. Soc.",
+            "PAN Carta",
+            "N. carta",
+            "N. ticket",
+            "Data",
+            "Ora",
+            "Prod.",
+            "Veicolo",
+            "Codice autista",
+            "Targa",
+            "Identificativo",
+            "Km",
+            "Causale",
+            "Cod. Term.",
+            "Impianto",
+            "Indirizzo",
+            "Città",
+            "Imp. intero",
+            "Imp. intero no IVA",
+            "Volume",
+            "Prezzo EUR/l",
+            "Sconto EUR/l",
+            "Prezzo Scontato",
+            "Imp. Scontato",
+            "IVA",
+            "Imp. Scontato no IVA",
+            "Stato",
+            "N. Fatt.",
+            "Centro di costo",
+            "IVA Imp. Intero",
+            "Tipo servizio",
+            "Canale",
+            "Tipo PV",
+        ]
+    )
+    worksheet.append(
+        [
+            "0020246399",
+            "0154545",
+            "CONS.BONIFICA DELL ORISTANESE",
+            "7028015454500103011",
+            "00103",
+            "00001",
+            datetime.fromisoformat("2026-03-31T16:46:34"),
+            datetime.fromisoformat("2026-03-31T16:46:34"),
+            "SUPER SENZA PB",
+            "0000",
+            None,
+            "EF661EN",
+            "CBO.087",
+            52707,
+            None,
+            "5502",
+            "6573",
+            "SS. 126 KM. 112+887",
+            "TERRALBA",
+            46.51,
+            38.12,
+            26.15,
+            1.77874,
+            0.0305,
+            1.74824,
+            45.72,
+            22,
+            37.47540984,
+            "Fatturata",
+            "PJ11326188",
+            None,
+            8.39,
+            "PREPAY",
+            "Standard",
+            "Easy",
         ]
     )
     buffer = BytesIO()
@@ -393,3 +483,77 @@ def test_reports_dashboard_filters_and_aggregates() -> None:
     assert payload["aggregates"]["total_with_events"] == 1
     assert payload["aggregates"]["total_without_events"] == 0
     assert payload["aggregates"]["by_area"][0]["area"] == "Distr_24_Arborea lotto Sud"
+
+
+def test_import_fleet_transactions_endpoint_creates_vehicle_fuel_log_and_is_idempotent() -> None:
+    headers = _auth_headers()
+    workbook_bytes = _build_fleet_transactions_workbook()
+
+    db = TestingSessionLocal()
+    user = db.scalar(select(ApplicationUser).where(ApplicationUser.username == "operazioni-white"))
+    vehicle = Vehicle(
+        code="VEH-EF661EN",
+        name="Escavatore EF661EN",
+        vehicle_type="Automezzo",
+        plate_number="EF661EN",
+        wc_vehicle_id="EF661EN",
+        asset_tag="CBO.087",
+        created_by_user_id=user.id,
+        updated_by_user_id=user.id,
+    )
+    db.add(vehicle)
+    db.commit()
+    db.refresh(vehicle)
+    db.close()
+
+    response = client.post(
+        "/operazioni/vehicles/fuel-logs/import-fleet-transactions",
+        headers=headers,
+        files={
+            "file": (
+                "transazioni-flotte.xlsx",
+                workbook_bytes,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["imported"] == 1
+    assert payload["skipped"] == 0
+    assert payload["errors"] == []
+    assert payload["rows_read"] == 1
+
+    db = TestingSessionLocal()
+    fuel_logs = db.scalars(select(VehicleFuelLog).where(VehicleFuelLog.vehicle_id == vehicle.id)).all()
+    assert len(fuel_logs) == 1
+    fuel_log = fuel_logs[0]
+    assert fuel_log.liters == Decimal("26.150")
+    assert fuel_log.total_cost == Decimal("45.72")
+    assert fuel_log.station_name == "6573 - TERRALBA"
+    assert fuel_log.odometer_km == Decimal("52707.000")
+    assert fuel_log.wc_id is None
+    assert fuel_log.notes is not None
+    assert "ticket=00001" in fuel_log.notes
+    assert "identificativo=CBO.087" in fuel_log.notes
+    db.close()
+
+    repeat_response = client.post(
+        "/operazioni/vehicles/fuel-logs/import-fleet-transactions",
+        headers=headers,
+        files={
+            "file": (
+                "transazioni-flotte.xlsx",
+                workbook_bytes,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert repeat_response.status_code == 200
+    repeat_payload = repeat_response.json()
+    assert repeat_payload["imported"] == 0
+    assert repeat_payload["skipped"] == 1
+    assert repeat_payload["errors"] == []
+    assert repeat_payload["rows_read"] == 1

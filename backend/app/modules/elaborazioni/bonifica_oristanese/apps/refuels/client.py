@@ -4,6 +4,7 @@ from dataclasses import dataclass
 from datetime import date
 from decimal import Decimal, InvalidOperation
 import logging
+from typing import Any
 
 from bs4 import BeautifulSoup
 import httpx
@@ -45,6 +46,12 @@ class BonificaRefuelRow:
     total_cost: Decimal | None
     station_name: str | None
     source_issue: str | None = None
+
+
+@dataclass(frozen=True)
+class BonificaVehicleSearchResult:
+    vehicle_filter_id: int
+    vehicle_code: str
 
 
 def _to_decimal(value: str | bool | list[str] | None) -> Decimal | None:
@@ -173,23 +180,43 @@ class BonificaRefuelsClient(BonificaDatatableClient):
     def __init__(self, session_manager: BonificaOristaneseSessionManager) -> None:
         super().__init__(session_manager)
 
-    async def fetch_refuels(
-        self,
-        *,
-        date_from: date,
-        date_to: date,
-    ) -> tuple[list[BonificaRefuelRow], int]:
-        rows, total = await self.fetch_all_datatable_rows(
-            REFUELS_APP.list_path,
-            columns_count=REFUELS_APP.columns_count,
-            page_size=250,
-            extra_params={
-                "enable_date_filter": 1,
-                "date_start": date_from.isoformat(),
-                "date_end": date_to.isoformat(),
+    async def _search_vehicle(self, vehicle_code: str) -> BonificaVehicleSearchResult | None:
+        response = await self.get_http_client().get(
+            self.session_manager.resolve_url("/vehicles/search"),
+            params={
+                "term": vehicle_code,
+                "_type": "query",
+                "q": vehicle_code,
             },
         )
+        response.raise_for_status()
+        payload = response.json()
+        results = payload.get("results") or []
+        normalized_code = clean_html_text(vehicle_code) or vehicle_code
 
+        fallback_match: dict[str, Any] | None = None
+        for item in results:
+            if not isinstance(item, dict):
+                continue
+            if item.get("isVehicle") != 1:
+                continue
+            text = clean_html_text(str(item.get("text") or ""))
+            if text and text.upper() == normalized_code.upper():
+                filter_id = item.get("id")
+                if isinstance(filter_id, int):
+                    return BonificaVehicleSearchResult(vehicle_filter_id=filter_id, vehicle_code=text)
+            if fallback_match is None:
+                fallback_match = item
+
+        if fallback_match is None:
+            return None
+        filter_id = fallback_match.get("id")
+        text = clean_html_text(str(fallback_match.get("text") or normalized_code)) or normalized_code
+        if not isinstance(filter_id, int):
+            return None
+        return BonificaVehicleSearchResult(vehicle_filter_id=filter_id, vehicle_code=text)
+
+    def _parse_refuel_list_rows(self, rows: list[object], *, source_issue: str | None) -> list[BonificaRefuelRow]:
         parsed: list[BonificaRefuelRow] = []
         for row in rows:
             if not isinstance(row, list) or len(row) < 5:
@@ -197,31 +224,6 @@ class BonificaRefuelsClient(BonificaDatatableClient):
             wc_id = extract_href_id(row[4], "/vehicles/refuel/edit/")
             if wc_id is None:
                 continue
-            try:
-                html = await self.fetch_detail_html(REFUELS_APP.detail_path_template.format(id=wc_id))
-            except httpx.HTTPError as exc:
-                logger.warning(
-                    "Bonifica refuels: skip detail fetch for wc_id=%s vehicle_code=%s because detail is unavailable: %s",
-                    wc_id,
-                    clean_html_text(row[0]) or None,
-                    exc,
-                )
-                parsed.append(
-                    BonificaRefuelRow(
-                        wc_id=wc_id,
-                        vehicle_code=clean_html_text(row[0]) or None,
-                        operator_name=clean_html_text(row[1]) or None,
-                        fueled_at_text=clean_html_text(row[2]) or None,
-                        odometer_km=_to_int(clean_html_text(row[3])),
-                        liters=None,
-                        total_cost=None,
-                        station_name=None,
-                        source_issue="Dettaglio White non disponibile: il mezzo sorgente potrebbe essere stato cancellato.",
-                    )
-                )
-                continue
-            fields = parse_form_fields(html)
-            labeled_values = _extract_labeled_values(html)
             parsed.append(
                 BonificaRefuelRow(
                     wc_id=wc_id,
@@ -229,57 +231,66 @@ class BonificaRefuelsClient(BonificaDatatableClient):
                     operator_name=clean_html_text(row[1]) or None,
                     fueled_at_text=clean_html_text(row[2]) or None,
                     odometer_km=_to_int(clean_html_text(row[3])),
-                    liters=_first_decimal(
-                        fields,
-                        (
-                            "liters",
-                            "liter",
-                            "quantity",
-                            "amount",
-                            "fuel_quantity",
-                            "refuel_liters",
-                            "vehicle_refuel[liters]",
-                            "vehicle_refuel[quantity]",
-                            "vehicle[refuel][liters]",
-                            "vehicle[refuel][quantity]",
-                        ),
-                    )
-                    or _first_decimal_from_labels(
-                        labeled_values,
-                        ("litri", "liters", "litres", "quantita", "quantity"),
-                    ),
-                    total_cost=_first_decimal(
-                        fields,
-                        (
-                            "total_cost",
-                            "cost",
-                            "amount_total",
-                            "price_total",
-                            "vehicle_refuel[total_cost]",
-                            "vehicle[refuel][total_cost]",
-                        ),
-                    )
-                    or _first_decimal_from_labels(
-                        labeled_values,
-                        ("totale", "total", "costo", "cost", "importo", "prezzo"),
-                    ),
-                    station_name=_first_text(
-                        fields,
-                        (
-                            "station_name",
-                            "station",
-                            "supplier",
-                            "distributor",
-                            "vehicle_refuel[station_name]",
-                            "vehicle[refuel][station_name]",
-                        ),
-                    )
-                    or _first_text_from_labels(
-                        labeled_values,
-                        ("distributore", "station", "stazione", "fornitore", "supplier"),
-                    ),
-                    source_issue=None,
+                    liters=None,
+                    total_cost=None,
+                    station_name=None,
+                    source_issue=source_issue,
                 )
             )
+        return parsed
+
+    async def fetch_refuels(
+        self,
+        *,
+        date_from: date,
+        date_to: date,
+    ) -> tuple[list[BonificaRefuelRow], int]:
+        raise NotImplementedError(
+            "Usare fetch_refuels_for_vehicle_codes(): la sorgente WhiteCompany richiede "
+            "filter_code[] per mezzo e la datatable globale non e una base affidabile per il sync."
+        )
+
+    async def fetch_refuels_for_vehicle_codes(
+        self,
+        *,
+        vehicle_codes: list[str],
+        date_from: date,
+        date_to: date,
+    ) -> tuple[list[BonificaRefuelRow], int]:
+        parsed: list[BonificaRefuelRow] = []
+        seen_wc_ids: set[int] = set()
+        total = 0
+        source_issue = (
+            "Datatable WhiteCompany filtrata per mezzo: disponibili solo mezzo, operatore, data e km; "
+            "litri/costo/distributore non sono esposti e il record non e importabile come fuel log completo."
+        )
+
+        for vehicle_code in vehicle_codes:
+            search_result = await self._search_vehicle(vehicle_code)
+            if search_result is None:
+                logger.warning(
+                    "Bonifica refuels: nessun mezzo White trovato per vehicle_code=%s",
+                    vehicle_code,
+                )
+                continue
+
+            rows, vehicle_total = await self.fetch_all_datatable_rows(
+                REFUELS_APP.list_path,
+                columns_count=REFUELS_APP.columns_count,
+                page_size=250,
+                extra_params={
+                    "enable_date_filter": 1,
+                    "date_start": date_from.isoformat(),
+                    "date_end": date_to.isoformat(),
+                    "filter_code[]": [search_result.vehicle_filter_id],
+                    "filter_validity": "",
+                },
+            )
+            total += vehicle_total
+            for row in self._parse_refuel_list_rows(rows, source_issue=source_issue):
+                if row.wc_id in seen_wc_ids:
+                    continue
+                seen_wc_ids.add(row.wc_id)
+                parsed.append(row)
 
         return parsed, total
