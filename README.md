@@ -7,8 +7,14 @@
 
 ## Cos'è GAIA
 
-GAIA centralizza la governance IT del Consorzio in cinque domini applicativi
+GAIA centralizza la governance IT del Consorzio in domini applicativi
 integrati, accessibili da un'unica interfaccia dopo il login.
+
+Evoluzione pianificata:
+
+- `GAIA NAS Control` e `GAIA Rete` convergeranno in un unico entrypoint frontend `GAIA CED`
+- nella prima fase la convergenza riguarda soprattutto home, sidebar, route frontend e navigazione
+- i backend `accessi` e `network` restano separati finche non verra approvata un'eventuale fase successiva
 
 ## I cinque moduli
 
@@ -22,6 +28,12 @@ Monitoraggio della rete LAN: scansione dispositivi, mappa interattiva per piano,
 snapshot storici, diff tra scansioni, dettaglio dispositivi e alert per
 dispositivi non registrati o per dispositivi conosciuti assenti dalla rete oltre soglia.
 Stato: operativo avanzato.
+
+### GAIA CED — Convergenza pianificata
+Modulo aggregatore pianificato per unificare `NAS Control` e `Rete` in un solo
+entrypoint infrastrutturale. Nella prima fase riusa frontend, backend e permessi
+esistenti dei moduli `accessi` e `network`.
+Stato: pianificato.
 
 ### GAIA Inventario — IT Inventory
 Registro centralizzato dei dispositivi IT: anagrafica, garanzie, assegnazioni,
@@ -54,6 +66,7 @@ Il frontend condiviso della piattaforma vive in `frontend/`.
 GAIA/
 ├── domain-docs/
 │   ├── accessi/docs/
+│   ├── ced/docs/
 │   ├── catasto/docs/
 │   ├── inventory/docs/
 │   ├── network/docs/
@@ -161,6 +174,10 @@ Se la variabile e vuota/non impostata, la password non viene richiesta.
 ## Documentazione
 
 - GAIA Accessi: `domain-docs/accessi/docs/`
+- GAIA CED PRD: `domain-docs/ced/docs/PRD.md`
+- GAIA CED Plan: `domain-docs/ced/docs/IMPLEMENTATION_PLAN.md`
+- GAIA CED Prompt: `domain-docs/ced/docs/CODEX_PROMPT.md`
+- GAIA CED Progress: `domain-docs/ced/docs/PROGRESS.md`
 - GAIA Utenze PRD: `domain-docs/utenze/docs/PRD_anagrafica.md`
 - GAIA Utenze Prompt: `domain-docs/utenze/docs/PROMPT_CODEX_anagrafica.md`
 - GAIA Utenze Plan: `domain-docs/utenze/docs/EXECUTION_PLAN.md`

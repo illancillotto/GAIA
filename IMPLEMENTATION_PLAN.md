@@ -258,6 +258,27 @@ Output attesi:
 
 ### DevOps
 - immagini Docker chiare e minimali
+
+---
+
+## 9. Evoluzione pianificata — GAIA CED
+
+E' pianificata un'evoluzione di piattaforma per convergere `GAIA NAS Control` e
+`GAIA Rete` in un unico entrypoint frontend `GAIA CED`.
+
+Principi guida:
+
+- prima convergenza UI/navigation
+- backend invariati nella prima fase
+- permessi esistenti `module_accessi` e `module_rete` mantenuti
+- eventuale `module_ced` rinviato a fase successiva
+
+Documentazione operativa di riferimento:
+
+- `domain-docs/ced/docs/PRD.md`
+- `domain-docs/ced/docs/IMPLEMENTATION_PLAN.md`
+- `domain-docs/ced/docs/CODEX_PROMPT.md`
+- `domain-docs/ced/docs/PROGRESS.md`
 - variabili in `.env`
 - nessun segreto hardcoded
 - healthcheck dei servizi

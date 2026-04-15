@@ -48,6 +48,13 @@ La documentazione del progetto e distribuita principalmente in due aree:
 - `domain-docs/catasto/docs/PROMPT_CLAUDE_CODE_catasto.md`
 - `domain-docs/catasto/docs/PROMPT_CLAUDE_CODE_frontend_restructure.md`
 
+### CED
+
+- `domain-docs/ced/docs/PRD.md`
+- `domain-docs/ced/docs/IMPLEMENTATION_PLAN.md`
+- `domain-docs/ced/docs/CODEX_PROMPT.md`
+- `domain-docs/ced/docs/PROGRESS.md`
+
 ### Elaborazioni
 
 - `domain-docs/elaborazioni/README.md`
@@ -132,6 +139,8 @@ GAIA/
 │   ├── accessi/
 │   │   ├── docs/
 │   │   └── frontend/
+│   ├── ced/
+│   │   └── docs/
 │   ├── catasto/
 │   │   └── docs/
 │   ├── elaborazioni/

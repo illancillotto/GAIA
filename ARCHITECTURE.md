@@ -189,6 +189,12 @@ Moduli logici attuali:
 - `elaborazioni` previsto come modulo operativo dedicato per i workflow esecutivi catastali
 - `core`
 
+Evoluzione pianificata di navigazione:
+
+- `GAIA NAS Control` e `GAIA Rete` convergeranno in un entrypoint frontend comune `GAIA CED`
+- nella prima fase `CED` sara un contenitore UI e di navigazione, non un nuovo backend dedicato
+- i backend e i permessi restano separati tra `accessi` e `network`
+
 Stato del refactor:
 - `network` gia in struttura canonica sotto `app/modules/network`
 - `accessi` gia instradato tramite route canoniche sotto `app/modules/accessi/routes`
@@ -216,6 +222,7 @@ Stato del refactor:
 - le entity `users` e `consorziati` usano un fetch dettagli White in concorrenza controllata e una soglia stale dedicata (`WC_SYNC_USER_DETAIL_CONCURRENCY`, `WC_SYNC_USER_STALE_JOB_MINUTES`), per evitare falsi `failed` sui job piu voluminosi del workspace `WhiteCompany Sync`
 - la dashboard `Operazioni` espone ora ricerca rapida live sui pannelli `mezzi`, `attivita`, `segnalazioni` e `pratiche`: dopo 3 caratteri interroga i list endpoint esistenti con `search`, mostra i primi risultati e supporta match anche sul contenuto testuale (`notes`, `text_note`, `description`, numerazioni e riferimenti principali)
 - la vista `/operazioni/mezzi` adotta ora un layout responsive dedicato: desktop con hero metriche e card del parco mezzi, mobile con lista compatta stile mini-app; il CTA di creazione resta solo visuale finche non verra cablato un vero flusso `Nuovo mezzo`
+- roadmap piattaforma: e pianificata la convergenza delle superfici frontend `nas-control` e `network` nel nuovo namespace `ced`, con target `/ced/nas/*` e `/ced/rete/*`, lasciando inizialmente invariati router backend, modelli permessi e cataloghi sezione
 - refactor pianificato: `catasto` evolve verso aggregazione dati, `elaborazioni` diventa il modulo runtime per batch, CAPTCHA, worker orchestration e stato avanzamento
 
 ### postgres

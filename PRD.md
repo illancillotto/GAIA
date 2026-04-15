@@ -35,6 +35,12 @@ Fornire un unico punto di accesso operativo per:
 - alert su dispositivi sconosciuti o assenti
 - planimetrie e storico snapshot
 
+### 3.2.1 CED (convergenza pianificata)
+
+- unificazione frontend delle superfici `NAS Control` e `Rete`
+- nuovo entrypoint `GAIA CED` per l'ambito infrastrutturale
+- mantenimento iniziale dei backend e dei permessi esistenti
+
 ### 3.3 Inventory
 
 - anagrafica centralizzata degli asset IT
@@ -107,3 +113,4 @@ Fornire un unico punto di accesso operativo per:
 3. consolidamento del dominio Utenze e dei collegamenti documentali
 4. avanzamento del dominio Inventory con correlazione ai dati Network
 5. hardening operativo, permessi applicativi e documentazione trasversale
+6. convergenza frontend `GAIA CED` per i domini infrastrutturali NAS e Rete
