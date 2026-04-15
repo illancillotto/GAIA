@@ -343,3 +343,76 @@ export async function getTeams() {
 export async function getMaintenanceTypes() {
   return fetchOperazioni("/lookups/maintenance-types");
 }
+
+// --- Operators ---
+
+export async function getOperators(params?: Record<string, string>) {
+  const qs = params ? `?${new URLSearchParams(params).toString()}` : "";
+  return fetchOperazioni(`/operators${qs}`);
+}
+
+export async function getOperator(id: string) {
+  return fetchOperazioni(`/operators/${id}`);
+}
+
+// --- Areas ---
+
+export async function getAreas(params?: Record<string, string>) {
+  const qs = params ? `?${new URLSearchParams(params).toString()}` : "";
+  return fetchOperazioni(`/areas${qs}`);
+}
+
+export async function getArea(id: string) {
+  return fetchOperazioni(`/areas/${id}`);
+}
+
+// --- Fuel cards ---
+
+export async function getFuelCards(params?: Record<string, string>) {
+  const qs = params ? `?${new URLSearchParams(params).toString()}` : "";
+  return fetchOperazioni(`/fuel-cards${qs}`);
+}
+
+export async function getFuelCardAssignments(cardId: string) {
+  return fetchOperazioni(`/fuel-cards/${cardId}/assignments`);
+}
+
+export async function importFuelCards(file: File): Promise<{
+  imported: number;
+  updated: number;
+  skipped: number;
+  assignments_created: number;
+  assignments_closed: number;
+  rows_read: number;
+  unmatched_drivers: number;
+  errors: string[];
+}> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return fetchOperazioni("/fuel-cards/import-excel", {
+    method: "POST",
+    body: formData,
+  });
+}
+
+export async function getUnmatchedFuelCards(params?: Record<string, string>) {
+  const qs = params ? `?${new URLSearchParams(params).toString()}` : "";
+  return fetchOperazioni(`/fuel-cards/unmatched${qs}`);
+}
+
+export async function assignFuelCard(
+  cardId: string,
+  data: { wc_operator_id: string; driver_raw?: string | null; note?: string | null },
+) {
+  return fetchOperazioni(`/fuel-cards/${cardId}/assign`, {
+    method: "POST",
+    body: JSON.stringify(data),
+  });
+}
+
+export async function ignoreFuelCardDriver(cardId: string, note?: string | null) {
+  const qs = note ? `?${new URLSearchParams({ note }).toString()}` : "";
+  return fetchOperazioni(`/fuel-cards/${cardId}/ignore${qs}`, {
+    method: "POST",
+  });
+}

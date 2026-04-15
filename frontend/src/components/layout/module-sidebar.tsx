@@ -139,15 +139,12 @@ export function ModuleSidebar({
   if (currentModuleKey === "operazioni") {
     return (
       <div className="space-y-0.5 px-2 pb-3">
-        <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Accesso rapido</p>
-        <NavItem href="/operazioni/miniapp" icon={TruckIcon} label="Mini-app" />
-        <NavItem href="/operazioni/storage" icon={ServerIcon} label="Storage allegati" />
-        <NavItem href="/operazioni/miniapp/bozze" icon={DocumentIcon} label="Bozze locali" />
-
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Panoramica</p>
         <NavItem href="/operazioni" icon={GridIcon} label="Dashboard" />
 
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Gestione</p>
+        <NavItem href="/operazioni/operatori" icon={UsersIcon} label="Operatori" match="prefix" />
+        <NavItem href="/operazioni/carte-carburante" icon={DocumentIcon} label="Carte carburante" match="prefix" />
         <NavItem href="/operazioni/mezzi" icon={TruckIcon} label="Mezzi" match="prefix" />
         <NavItem href="/operazioni/attivita" icon={RefreshIcon} label="Attività" match="prefix" />
         <NavItem href="/operazioni/segnalazioni/cruscotto" icon={GridIcon} label="Cruscotto segnalazioni" match="prefix" />

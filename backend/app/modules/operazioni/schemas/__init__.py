@@ -4,6 +4,12 @@ from app.modules.operazioni.schemas.areas import (
     WCAreaListResponse,
     WCAreaResponse,
 )
+from app.modules.operazioni.schemas.fuel_cards import (
+    FuelCardAssignmentResponse,
+    FuelCardImportResult,
+    FuelCardListResponse,
+    FuelCardResponse,
+)
 from app.modules.operazioni.schemas.operators import (
     WCOperatorListResponse,
     WCOperatorResponse,
@@ -47,6 +53,10 @@ __all__ = [
     "OperatorProfileResponse",
     "WCAreaListResponse",
     "WCAreaResponse",
+    "FuelCardResponse",
+    "FuelCardAssignmentResponse",
+    "FuelCardListResponse",
+    "FuelCardImportResult",
     "TeamCreate",
     "TeamMembershipCreate",
     "TeamMembershipResponse",

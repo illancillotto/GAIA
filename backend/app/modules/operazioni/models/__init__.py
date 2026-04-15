@@ -12,6 +12,7 @@ from app.modules.operazioni.models.attachments import (
     StorageQuotaAlert,
     StorageQuotaMetric,
 )
+from app.modules.operazioni.models.fuel_cards import FuelCard, FuelCardAssignmentHistory
 from app.modules.operazioni.models.gps import GpsTrackSummary
 from app.modules.operazioni.models.organizational import (
     OperatorProfile,
@@ -49,6 +50,8 @@ __all__ = [
     "FieldReportAttachment",
     "FieldReportCategory",
     "FieldReportSeverity",
+    "FuelCard",
+    "FuelCardAssignmentHistory",
     "GpsTrackSummary",
     "InternalCase",
     "InternalCaseAssignmentHistory",

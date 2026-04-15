@@ -78,6 +78,10 @@ frontend/src/app/operazioni/
   page.tsx
   dashboard/
     page.tsx
+  operatori/
+    page.tsx
+  carte-carburante/
+    page.tsx
   mezzi/
     page.tsx
     [id]/page.tsx
@@ -220,6 +224,9 @@ Usa gli endpoint definiti nel file API completo.
 
 Implementa client API/frontend service per:
 - vehicles
+- operators
+- areas
+- fuel cards (registry + import excel + assignment history)
 - assignments
 - usage sessions
 - fuel logs

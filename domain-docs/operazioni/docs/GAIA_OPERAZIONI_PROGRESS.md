@@ -33,7 +33,7 @@ Responsabile aggiornamento: GSD Autonomous
 | API Attività | DONE | Catalogo + start/stop + approvazioni |
 | API Segnalazioni/Pratiche | DONE | Report→Case automatico + workflow completo + eventi + import White + dashboard arricchito |
 | Allegati/Storage | DONE | Model + service + dashboard + quote monitoring |
-| Frontend desktop | DONE | Pagine complete: dashboard, mezzi, attività, segnalazioni, pratiche, storage + pagine dettaglio; refresh UI liste, dettagli, storage e mini-app con shell condiviso hero/KPI/filter/list + cruscotto segnalazioni con import White |
+| Frontend desktop | DONE | Pagine complete: dashboard, operatori (anagrafica + organigramma aree/utenti), carte carburante (anagrafica + import excel + passaggi driver), mezzi, attività, segnalazioni, pratiche, storage + pagine dettaglio; refresh UI liste, dettagli, storage e mini-app con shell condiviso hero/KPI/filter/list + cruscotto segnalazioni con import White |
 | Mini-app operatori | DONE | Pagina home con 3 azioni + stato connessione |
 | Offline minimo | TODO | Bozze locali IndexedDB da implementare |
 | GPS integration layer | DONE | Model GPS + track summary + adapter pattern pronto |
