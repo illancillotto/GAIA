@@ -795,7 +795,7 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
             </div>
           ) : null}
 
-          <div className="grid gap-3 lg:grid-cols-2">
+          <div className="space-y-4">
             <div className="space-y-4">
               <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">Entity</p>
@@ -905,7 +905,7 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
               </div>
             </div>
 
-            <div className="flex flex-wrap content-start gap-3">
+            <div className="flex flex-wrap gap-3 lg:justify-end">
               <button className="btn-secondary" type="button" disabled={refreshing || loading} onClick={() => void handleRefresh()}>
                 {refreshing ? "Aggiorno..." : "Aggiorna stato"}
               </button>
