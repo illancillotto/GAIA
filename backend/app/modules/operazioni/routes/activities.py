@@ -9,7 +9,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
+from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user
@@ -151,7 +151,10 @@ def list_activities(
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=100),
 ):
-    query = select(OperatorActivity)
+    query = select(OperatorActivity).join(
+        ActivityCatalog,
+        ActivityCatalog.id == OperatorActivity.activity_catalog_id,
+    )
     if operator_user_id:
         query = query.where(OperatorActivity.operator_user_id == operator_user_id)
     if team_id:
@@ -170,6 +173,18 @@ def list_activities(
         query = query.where(
             OperatorActivity.started_at <= datetime.fromisoformat(date_to)
         )
+    if search:
+        term = f"%{search.strip()}%"
+        query = query.where(
+            or_(
+                cast(OperatorActivity.id, String).ilike(term),
+                ActivityCatalog.name.ilike(term),
+                ActivityCatalog.description.ilike(term),
+                OperatorActivity.text_note.ilike(term),
+                OperatorActivity.review_note.ilike(term),
+                OperatorActivity.status.ilike(term),
+            )
+        )
 
     count_q = select(func.count()).select_from(query.subquery())
     total = db.scalar(count_q) or 0
@@ -178,6 +193,10 @@ def list_activities(
         .offset((page - 1) * page_size)
         .limit(page_size)
     ).all()
+    catalog_names = {
+        str(catalog.id): catalog.name
+        for catalog in db.scalars(select(ActivityCatalog).where(ActivityCatalog.id.in_({item.activity_catalog_id for item in items}))).all()
+    } if items else {}
     return {
         "items": [
             {
@@ -186,6 +205,8 @@ def list_activities(
                 "started_at": a.started_at,
                 "ended_at": a.ended_at,
                 "operator_user_id": a.operator_user_id,
+                "catalog_name": catalog_names.get(str(a.activity_catalog_id)),
+                "text_note": a.text_note,
             }
             for a in items
         ],

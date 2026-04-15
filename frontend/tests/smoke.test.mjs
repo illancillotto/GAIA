@@ -227,3 +227,15 @@ test("bonifica sync workspace exposes final import report panel", () => {
   assert.match(bonificaWorkspace, /Esporta CSV/);
   assert.match(bonificaWorkspace, /buildFinalReportsCsv/);
 });
+
+test("operazioni dashboard exposes quick search for vehicles, activities, reports and cases", () => {
+  const operazioniDashboard = read("src/app/operazioni/page.tsx");
+
+  assert.match(operazioniDashboard, /useDeferredValue/);
+  assert.match(operazioniDashboard, /QuickSearchInput/);
+  assert.match(operazioniDashboard, /getVehicles\(\{ search: deferredVehicleSearch, page_size: "5" \}\)/);
+  assert.match(operazioniDashboard, /getActivities\(\{ search: deferredActivitySearch, page_size: "5" \}\)/);
+  assert.match(operazioniDashboard, /getReports\(\{ search: deferredReportSearch, page_size: "5" \}\)/);
+  assert.match(operazioniDashboard, /getCases\(\{ search: deferredCaseSearch, page_size: "5" \}\)/);
+  assert.match(operazioniDashboard, /Inserisci almeno 3 caratteri/);
+});

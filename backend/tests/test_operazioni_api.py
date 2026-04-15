@@ -20,6 +20,13 @@ from app.modules.operazioni.models.activities import (
 )
 from app.modules.operazioni.models.attachments import Attachment
 from app.modules.operazioni.models.gps import GpsTrackSummary
+from app.modules.operazioni.models.reports import (
+    FieldReport,
+    FieldReportCategory,
+    FieldReportSeverity,
+    InternalCase,
+)
+from app.modules.operazioni.models.vehicles import Vehicle
 
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
@@ -211,3 +218,91 @@ def test_operazioni_module_requires_module_flag() -> None:
 
     assert response.status_code == 403
     assert response.json()["detail"] == "Module access denied"
+
+
+def test_operazioni_dashboard_quick_search_matches_content_across_entities() -> None:
+    db = TestingSessionLocal()
+
+    vehicle = Vehicle(
+        code="VH-SEARCH-001",
+        name="Motopompa reparto nord",
+        vehicle_type="attrezzatura",
+        notes="Contenuto speciale motopompa",
+        current_status="available",
+    )
+    db.add(vehicle)
+
+    catalog = ActivityCatalog(code="SEARCH-ACT", name="Ispezione canale", description="Attività di sopralluogo")
+    db.add(catalog)
+    db.flush()
+
+    activity = OperatorActivity(
+        activity_catalog_id=catalog.id,
+        operator_user_id=1,
+        started_at=datetime.fromisoformat("2026-04-14T08:00:00"),
+        status="submitted",
+        text_note="Contenuto speciale attività",
+    )
+    db.add(activity)
+
+    category = FieldReportCategory(code="SEARCH-CAT", name="Ricerca", description="Categoria ricerca")
+    severity = FieldReportSeverity(code="SEARCH-SEV", name="Media", rank_order=1)
+    db.add(category)
+    db.add(severity)
+    db.flush()
+
+    report = FieldReport(
+        report_number="REP-SEARCH-001",
+        reporter_user_id=1,
+        category_id=category.id,
+        severity_id=severity.id,
+        title="Segnalazione ricerca",
+        description="Contenuto speciale segnalazione",
+        status="submitted",
+    )
+    db.add(report)
+    db.flush()
+
+    case = InternalCase(
+        case_number="CAS-SEARCH-001",
+        source_report_id=report.id,
+        title="Pratica ricerca",
+        description="Contenuto speciale pratica",
+        status="open",
+    )
+    db.add(case)
+    db.commit()
+
+    headers = auth_headers()
+
+    vehicles_response = client.get("/operazioni/vehicles?search=speciale&page_size=5", headers=headers)
+    activities_response = client.get("/operazioni/activities?search=speciale&page_size=5", headers=headers)
+    reports_response = client.get("/operazioni/reports?search=speciale&page_size=5", headers=headers)
+    cases_response = client.get("/operazioni/cases?search=speciale&page_size=5", headers=headers)
+
+    assert vehicles_response.status_code == 200
+    assert activities_response.status_code == 200
+    assert reports_response.status_code == 200
+    assert cases_response.status_code == 200
+
+    vehicles_payload = vehicles_response.json()
+    activities_payload = activities_response.json()
+    reports_payload = reports_response.json()
+    cases_payload = cases_response.json()
+
+    assert vehicles_payload["total"] == 1
+    assert vehicles_payload["items"][0]["code"] == "VH-SEARCH-001"
+
+    assert activities_payload["total"] == 1
+    assert activities_payload["items"][0]["catalog_name"] == "Ispezione canale"
+    assert activities_payload["items"][0]["text_note"] == "Contenuto speciale attività"
+
+    assert reports_payload["total"] == 1
+    assert reports_payload["items"][0]["report_number"] == "REP-SEARCH-001"
+    assert reports_payload["items"][0]["description"] == "Contenuto speciale segnalazione"
+
+    assert cases_payload["total"] == 1
+    assert cases_payload["items"][0]["case_number"] == "CAS-SEARCH-001"
+    assert cases_payload["items"][0]["description"] == "Contenuto speciale pratica"
+
+    db.close()

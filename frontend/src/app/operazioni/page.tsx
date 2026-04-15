@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useState } from "react";
 
 import {
   OperazioniCollectionPanel,
@@ -82,6 +82,72 @@ type WorkspaceModalState = {
   description: string;
 } | null;
 
+type QuickSearchState = {
+  items: Record<string, unknown>[];
+  total: number;
+  isSearching: boolean;
+  error: string | null;
+};
+
+const EMPTY_QUICK_SEARCH_STATE: QuickSearchState = {
+  items: [],
+  total: 0,
+  isSearching: false,
+  error: null,
+};
+
+function normalizeSearchTerm(value: string): string {
+  return value.trim();
+}
+
+function truncateText(value: unknown, maxLength = 64): string {
+  if (typeof value !== "string") {
+    return "";
+  }
+  const normalized = value.trim().replace(/\s+/g, " ");
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+  return `${normalized.slice(0, maxLength - 1)}…`;
+}
+
+function formatDateLabel(value: unknown): string {
+  if (typeof value !== "string") {
+    return "";
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return "";
+  }
+  return parsed.toLocaleDateString("it-IT");
+}
+
+function QuickSearchInput({
+  value,
+  onChange,
+  placeholder,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+}) {
+  return (
+    <label className="mb-4 block">
+      <span className="sr-only">Ricerca rapida</span>
+      <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+        <SearchIcon className="h-4 w-4 text-gray-400" />
+        <input
+          type="search"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+          className="w-full border-0 bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400"
+        />
+      </div>
+    </label>
+  );
+}
+
 function DashboardContent() {
   const [workspaceModal, setWorkspaceModal] = useState<WorkspaceModalState>(null);
   const [vehicles, setVehicles] = useState<Record<string, unknown>[]>([]);
@@ -91,6 +157,20 @@ function DashboardContent() {
   const [totals, setTotals] = useState({ vehicles: 0, activities: 0, reports: 0, cases: 0 });
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [searchTerms, setSearchTerms] = useState({
+    vehicles: "",
+    activities: "",
+    reports: "",
+    cases: "",
+  });
+  const [vehicleSearch, setVehicleSearch] = useState<QuickSearchState>(EMPTY_QUICK_SEARCH_STATE);
+  const [activitySearch, setActivitySearch] = useState<QuickSearchState>(EMPTY_QUICK_SEARCH_STATE);
+  const [reportSearch, setReportSearch] = useState<QuickSearchState>(EMPTY_QUICK_SEARCH_STATE);
+  const [caseSearch, setCaseSearch] = useState<QuickSearchState>(EMPTY_QUICK_SEARCH_STATE);
+  const deferredVehicleSearch = useDeferredValue(normalizeSearchTerm(searchTerms.vehicles));
+  const deferredActivitySearch = useDeferredValue(normalizeSearchTerm(searchTerms.activities));
+  const deferredReportSearch = useDeferredValue(normalizeSearchTerm(searchTerms.reports));
+  const deferredCaseSearch = useDeferredValue(normalizeSearchTerm(searchTerms.cases));
 
   function listTotal(payload: { items?: unknown[]; total?: number }): number {
     if (typeof payload.total === "number") {
@@ -128,6 +208,162 @@ function DashboardContent() {
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  useEffect(() => {
+    if (deferredVehicleSearch.length === 0) {
+      setVehicleSearch(EMPTY_QUICK_SEARCH_STATE);
+      return;
+    }
+    if (deferredVehicleSearch.length < 3) {
+      setVehicleSearch(EMPTY_QUICK_SEARCH_STATE);
+      return;
+    }
+    let cancelled = false;
+    setVehicleSearch((current) => ({ ...current, isSearching: true, error: null }));
+    void getVehicles({ search: deferredVehicleSearch, page_size: "5" })
+      .then((payload) => {
+        if (cancelled) {
+          return;
+        }
+        setVehicleSearch({
+          items: payload.items ?? [],
+          total: listTotal(payload),
+          isSearching: false,
+          error: null,
+        });
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+        setVehicleSearch({
+          items: [],
+          total: 0,
+          isSearching: false,
+          error: error instanceof Error ? error.message : "Errore ricerca mezzi",
+        });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [deferredVehicleSearch]);
+
+  useEffect(() => {
+    if (deferredActivitySearch.length === 0) {
+      setActivitySearch(EMPTY_QUICK_SEARCH_STATE);
+      return;
+    }
+    if (deferredActivitySearch.length < 3) {
+      setActivitySearch(EMPTY_QUICK_SEARCH_STATE);
+      return;
+    }
+    let cancelled = false;
+    setActivitySearch((current) => ({ ...current, isSearching: true, error: null }));
+    void getActivities({ search: deferredActivitySearch, page_size: "5" })
+      .then((payload) => {
+        if (cancelled) {
+          return;
+        }
+        setActivitySearch({
+          items: payload.items ?? [],
+          total: listTotal(payload),
+          isSearching: false,
+          error: null,
+        });
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+        setActivitySearch({
+          items: [],
+          total: 0,
+          isSearching: false,
+          error: error instanceof Error ? error.message : "Errore ricerca attività",
+        });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [deferredActivitySearch]);
+
+  useEffect(() => {
+    if (deferredReportSearch.length === 0) {
+      setReportSearch(EMPTY_QUICK_SEARCH_STATE);
+      return;
+    }
+    if (deferredReportSearch.length < 3) {
+      setReportSearch(EMPTY_QUICK_SEARCH_STATE);
+      return;
+    }
+    let cancelled = false;
+    setReportSearch((current) => ({ ...current, isSearching: true, error: null }));
+    void getReports({ search: deferredReportSearch, page_size: "5" })
+      .then((payload) => {
+        if (cancelled) {
+          return;
+        }
+        setReportSearch({
+          items: payload.items ?? [],
+          total: listTotal(payload),
+          isSearching: false,
+          error: null,
+        });
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+        setReportSearch({
+          items: [],
+          total: 0,
+          isSearching: false,
+          error: error instanceof Error ? error.message : "Errore ricerca segnalazioni",
+        });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [deferredReportSearch]);
+
+  useEffect(() => {
+    if (deferredCaseSearch.length === 0) {
+      setCaseSearch(EMPTY_QUICK_SEARCH_STATE);
+      return;
+    }
+    if (deferredCaseSearch.length < 3) {
+      setCaseSearch(EMPTY_QUICK_SEARCH_STATE);
+      return;
+    }
+    let cancelled = false;
+    setCaseSearch((current) => ({ ...current, isSearching: true, error: null }));
+    void getCases({ search: deferredCaseSearch, page_size: "5" })
+      .then((payload) => {
+        if (cancelled) {
+          return;
+        }
+        setCaseSearch({
+          items: payload.items ?? [],
+          total: listTotal(payload),
+          isSearching: false,
+          error: null,
+        });
+      })
+      .catch((error) => {
+        if (cancelled) {
+          return;
+        }
+        setCaseSearch({
+          items: [],
+          total: 0,
+          isSearching: false,
+          error: error instanceof Error ? error.message : "Errore ricerca pratiche",
+        });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [deferredCaseSearch]);
 
   return (
     <div className="page-stack">
@@ -256,36 +492,90 @@ function DashboardContent() {
           <OperazioniCollectionPanel
             title="Mezzi recenti"
             description="Clic sulla scheda per la lista completa; clic su una riga per il dettaglio."
-            count={vehicles.length}
+            count={deferredVehicleSearch.length >= 3 ? vehicleSearch.total : vehicles.length}
           >
-            {isLoading ? (
-              <p className="text-sm text-gray-500">Caricamento mezzi in corso.</p>
-            ) : vehicles.length === 0 ? (
+            <QuickSearchInput
+              value={searchTerms.vehicles}
+              onChange={(value) => setSearchTerms((current) => ({ ...current, vehicles: value }))}
+              placeholder="Cerca per nome, codice, targa o note"
+            />
+            {vehicleSearch.error ? (
+              <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{vehicleSearch.error}</div>
+            ) : normalizeSearchTerm(searchTerms.vehicles).length === 0 ? (
+              isLoading ? (
+                <p className="text-sm text-gray-500">Caricamento mezzi in corso.</p>
+              ) : vehicles.length === 0 ? (
+                <EmptyState
+                  icon={TruckIcon}
+                  title="Nessun mezzo registrato"
+                  description="Nessun veicolo corrisponde ai filtri correnti."
+                />
+              ) : (
+                <div className="max-h-[28rem] overflow-y-auto pr-1">
+                  <OperazioniList>
+                    {vehicles.map((vehicle) => (
+                      <OperazioniListLink
+                        key={String(vehicle.id)}
+                        onClick={() => {
+                          setWorkspaceModal({
+                            href: `/operazioni/mezzi/${String(vehicle.id)}`,
+                            title: String(vehicle.name),
+                            description: `Scheda veicolo · ${String(vehicle.code ?? vehicle.id)}${vehicle.plate_number ? ` · ${vehicle.plate_number}` : ""}`,
+                          });
+                        }}
+                        title={String(vehicle.name)}
+                        meta={`${String(vehicle.code ?? "")}${vehicle.plate_number ? ` · ${vehicle.plate_number}` : ""}${truncateText(vehicle.notes) ? ` · ${truncateText(vehicle.notes)}` : ""}`}
+                        status={vehicleStatusLabels[String(vehicle.current_status)] || String(vehicle.current_status)}
+                        statusTone={vehicleStatusTone[String(vehicle.current_status)] || "bg-gray-100 text-gray-600"}
+                      />
+                    ))}
+                  </OperazioniList>
+                </div>
+              )
+            ) : normalizeSearchTerm(searchTerms.vehicles).length < 3 ? (
               <EmptyState
-                icon={TruckIcon}
-                title="Nessun mezzo registrato"
-                description="Nessun veicolo corrisponde ai filtri correnti."
+                icon={SearchIcon}
+                title="Inserisci almeno 3 caratteri"
+                description="Appena raggiungi 3 caratteri compariranno i primi mezzi corrispondenti."
+              />
+            ) : vehicleSearch.isSearching ? (
+              <p className="text-sm text-gray-500">Ricerca mezzi in corso per “{normalizeSearchTerm(searchTerms.vehicles)}”.</p>
+            ) : vehicleSearch.items.length === 0 ? (
+              <EmptyState
+                icon={SearchIcon}
+                title="Nessun mezzo trovato"
+                description={`Nessun mezzo trovato per “${normalizeSearchTerm(searchTerms.vehicles)}”.`}
               />
             ) : (
-              <div className="max-h-[28rem] overflow-y-auto pr-1">
-                <OperazioniList>
-                  {vehicles.map((vehicle) => (
-                    <OperazioniListLink
-                      key={String(vehicle.id)}
-                      onClick={() => {
-                        setWorkspaceModal({
-                          href: `/operazioni/mezzi/${String(vehicle.id)}`,
-                          title: String(vehicle.name),
-                          description: `Scheda veicolo · ${String(vehicle.code ?? vehicle.id)}${vehicle.plate_number ? ` · ${vehicle.plate_number}` : ""}`,
-                        });
-                      }}
-                      title={String(vehicle.name)}
-                      meta={`${String(vehicle.code ?? "")}${vehicle.plate_number ? ` · ${vehicle.plate_number}` : ""}`}
-                      status={vehicleStatusLabels[String(vehicle.current_status)] || String(vehicle.current_status)}
-                      statusTone={vehicleStatusTone[String(vehicle.current_status)] || "bg-gray-100 text-gray-600"}
-                    />
-                  ))}
-                </OperazioniList>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm text-gray-500">
+                    {vehicleSearch.total} risultati per <span className="font-medium text-gray-800">“{normalizeSearchTerm(searchTerms.vehicles)}”</span>
+                  </p>
+                  {vehicleSearch.total > vehicleSearch.items.length ? (
+                    <p className="text-xs text-gray-400">Mostrati i primi {vehicleSearch.items.length}</p>
+                  ) : null}
+                </div>
+                <div className="max-h-[28rem] overflow-y-auto pr-1">
+                  <OperazioniList>
+                    {vehicleSearch.items.map((vehicle) => (
+                      <OperazioniListLink
+                        key={String(vehicle.id)}
+                        onClick={() => {
+                          setWorkspaceModal({
+                            href: `/operazioni/mezzi/${String(vehicle.id)}`,
+                            title: String(vehicle.name),
+                            description: `Scheda veicolo · ${String(vehicle.code ?? vehicle.id)}${vehicle.plate_number ? ` · ${vehicle.plate_number}` : ""}`,
+                          });
+                        }}
+                        title={String(vehicle.name)}
+                        meta={`${String(vehicle.code ?? "")}${vehicle.plate_number ? ` · ${vehicle.plate_number}` : ""}${truncateText(vehicle.notes) ? ` · ${truncateText(vehicle.notes)}` : ""}`}
+                        status={vehicleStatusLabels[String(vehicle.current_status)] || String(vehicle.current_status)}
+                        statusTone={vehicleStatusTone[String(vehicle.current_status)] || "bg-gray-100 text-gray-600"}
+                      />
+                    ))}
+                  </OperazioniList>
+                </div>
               </div>
             )}
           </OperazioniCollectionPanel>
@@ -316,36 +606,90 @@ function DashboardContent() {
           <OperazioniCollectionPanel
             title="Attività recenti"
             description="Clic sulla scheda per la lista completa; clic su una riga per il dettaglio."
-            count={activities.length}
+            count={deferredActivitySearch.length >= 3 ? activitySearch.total : activities.length}
           >
-            {isLoading ? (
-              <p className="text-sm text-gray-500">Caricamento attività in corso.</p>
-            ) : activities.length === 0 ? (
+            <QuickSearchInput
+              value={searchTerms.activities}
+              onChange={(value) => setSearchTerms((current) => ({ ...current, activities: value }))}
+              placeholder="Cerca per catalogo, note o contenuto attività"
+            />
+            {activitySearch.error ? (
+              <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{activitySearch.error}</div>
+            ) : normalizeSearchTerm(searchTerms.activities).length === 0 ? (
+              isLoading ? (
+                <p className="text-sm text-gray-500">Caricamento attività in corso.</p>
+              ) : activities.length === 0 ? (
+                <EmptyState
+                  icon={RefreshIcon}
+                  title="Nessuna attività registrata"
+                  description="Nessuna attività corrisponde ai filtri correnti."
+                />
+              ) : (
+                <div className="max-h-[28rem] overflow-y-auto pr-1">
+                  <OperazioniList>
+                    {activities.map((activity) => (
+                      <OperazioniListLink
+                        key={String(activity.id)}
+                        onClick={() => {
+                          setWorkspaceModal({
+                            href: `/operazioni/attivita/${String(activity.id)}`,
+                            title: String(activity.catalog_name ?? `Attività ${String(activity.id).substring(0, 8)}…`),
+                            description: "Dettaglio attività operatore in modale.",
+                          });
+                        }}
+                        title={String(activity.catalog_name ?? `Attività ${String(activity.id).substring(0, 8)}…`)}
+                        meta={`Operatore ID ${String(activity.operator_user_id ?? "—")}${formatDateLabel(activity.started_at) ? ` · ${formatDateLabel(activity.started_at)}` : ""}${truncateText(activity.text_note) ? ` · ${truncateText(activity.text_note)}` : ""}`}
+                        status={activityStatusLabels[String(activity.status)] || String(activity.status)}
+                        statusTone={activityStatusTone[String(activity.status)] || "bg-gray-100 text-gray-600"}
+                      />
+                    ))}
+                  </OperazioniList>
+                </div>
+              )
+            ) : normalizeSearchTerm(searchTerms.activities).length < 3 ? (
               <EmptyState
-                icon={RefreshIcon}
-                title="Nessuna attività registrata"
-                description="Nessuna attività corrisponde ai filtri correnti."
+                icon={SearchIcon}
+                title="Inserisci almeno 3 caratteri"
+                description="Appena raggiungi 3 caratteri compariranno le prime attività corrispondenti."
+              />
+            ) : activitySearch.isSearching ? (
+              <p className="text-sm text-gray-500">Ricerca attività in corso per “{normalizeSearchTerm(searchTerms.activities)}”.</p>
+            ) : activitySearch.items.length === 0 ? (
+              <EmptyState
+                icon={SearchIcon}
+                title="Nessuna attività trovata"
+                description={`Nessuna attività trovata per “${normalizeSearchTerm(searchTerms.activities)}”.`}
               />
             ) : (
-              <div className="max-h-[28rem] overflow-y-auto pr-1">
-                <OperazioniList>
-                  {activities.map((activity) => (
-                    <OperazioniListLink
-                      key={String(activity.id)}
-                      onClick={() => {
-                        setWorkspaceModal({
-                          href: `/operazioni/attivita/${String(activity.id)}`,
-                          title: `Attività ${String(activity.id).substring(0, 8)}…`,
-                          description: "Dettaglio attività operatore in modale.",
-                        });
-                      }}
-                      title={`Attività ${String(activity.id).substring(0, 8)}…`}
-                      meta={`Operatore ID ${String(activity.operator_user_id ?? "—")}${activity.started_at ? ` · ${new Date(activity.started_at as string).toLocaleDateString("it-IT")}` : ""}`}
-                      status={activityStatusLabels[String(activity.status)] || String(activity.status)}
-                      statusTone={activityStatusTone[String(activity.status)] || "bg-gray-100 text-gray-600"}
-                    />
-                  ))}
-                </OperazioniList>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm text-gray-500">
+                    {activitySearch.total} risultati per <span className="font-medium text-gray-800">“{normalizeSearchTerm(searchTerms.activities)}”</span>
+                  </p>
+                  {activitySearch.total > activitySearch.items.length ? (
+                    <p className="text-xs text-gray-400">Mostrati i primi {activitySearch.items.length}</p>
+                  ) : null}
+                </div>
+                <div className="max-h-[28rem] overflow-y-auto pr-1">
+                  <OperazioniList>
+                    {activitySearch.items.map((activity) => (
+                      <OperazioniListLink
+                        key={String(activity.id)}
+                        onClick={() => {
+                          setWorkspaceModal({
+                            href: `/operazioni/attivita/${String(activity.id)}`,
+                            title: String(activity.catalog_name ?? `Attività ${String(activity.id).substring(0, 8)}…`),
+                            description: "Dettaglio attività operatore in modale.",
+                          });
+                        }}
+                        title={String(activity.catalog_name ?? `Attività ${String(activity.id).substring(0, 8)}…`)}
+                        meta={`Operatore ID ${String(activity.operator_user_id ?? "—")}${formatDateLabel(activity.started_at) ? ` · ${formatDateLabel(activity.started_at)}` : ""}${truncateText(activity.text_note) ? ` · ${truncateText(activity.text_note)}` : ""}`}
+                        status={activityStatusLabels[String(activity.status)] || String(activity.status)}
+                        statusTone={activityStatusTone[String(activity.status)] || "bg-gray-100 text-gray-600"}
+                      />
+                    ))}
+                  </OperazioniList>
+                </div>
               </div>
             )}
           </OperazioniCollectionPanel>
@@ -376,38 +720,94 @@ function DashboardContent() {
           <OperazioniCollectionPanel
             title="Segnalazioni recenti"
             description="Clic sulla scheda per la lista completa; clic su una riga per il dettaglio."
-            count={reports.length}
+            count={deferredReportSearch.length >= 3 ? reportSearch.total : reports.length}
           >
-            {isLoading ? (
-              <p className="text-sm text-gray-500">Caricamento segnalazioni in corso.</p>
-            ) : reports.length === 0 ? (
+            <QuickSearchInput
+              value={searchTerms.reports}
+              onChange={(value) => setSearchTerms((current) => ({ ...current, reports: value }))}
+              placeholder="Cerca per numero, titolo, descrizione o contenuto"
+            />
+            {reportSearch.error ? (
+              <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{reportSearch.error}</div>
+            ) : normalizeSearchTerm(searchTerms.reports).length === 0 ? (
+              isLoading ? (
+                <p className="text-sm text-gray-500">Caricamento segnalazioni in corso.</p>
+              ) : reports.length === 0 ? (
+                <EmptyState
+                  icon={AlertTriangleIcon}
+                  title="Nessuna segnalazione"
+                  description="Non risultano segnalazioni registrate."
+                />
+              ) : (
+                <div className="max-h-[28rem] overflow-y-auto pr-1">
+                  <OperazioniList>
+                    {reports.map((report) => (
+                      <OperazioniListLink
+                        key={String(report.id)}
+                        onClick={() => {
+                          setWorkspaceModal({
+                            href: `/operazioni/segnalazioni/${String(report.id)}`,
+                            title: String(report.title ?? "Segnalazione"),
+                            description: report.report_number
+                              ? `Segnalazione ${String(report.report_number)}`
+                              : "Dettaglio segnalazione in modale.",
+                          });
+                        }}
+                        title={String(report.title ?? "Senza titolo")}
+                        meta={`${String(report.report_number ?? "")}${formatDateLabel(report.created_at) ? ` · ${formatDateLabel(report.created_at)}` : ""}${truncateText(report.description) ? ` · ${truncateText(report.description)}` : ""}`}
+                        status={report.internal_case_id ? "Con pratica" : "Senza pratica"}
+                        statusTone={report.internal_case_id ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}
+                      />
+                    ))}
+                  </OperazioniList>
+                </div>
+              )
+            ) : normalizeSearchTerm(searchTerms.reports).length < 3 ? (
               <EmptyState
-                icon={AlertTriangleIcon}
-                title="Nessuna segnalazione"
-                description="Non risultano segnalazioni registrate."
+                icon={SearchIcon}
+                title="Inserisci almeno 3 caratteri"
+                description="Appena raggiungi 3 caratteri compariranno le prime segnalazioni corrispondenti."
+              />
+            ) : reportSearch.isSearching ? (
+              <p className="text-sm text-gray-500">Ricerca segnalazioni in corso per “{normalizeSearchTerm(searchTerms.reports)}”.</p>
+            ) : reportSearch.items.length === 0 ? (
+              <EmptyState
+                icon={SearchIcon}
+                title="Nessuna segnalazione trovata"
+                description={`Nessuna segnalazione trovata per “${normalizeSearchTerm(searchTerms.reports)}”.`}
               />
             ) : (
-              <div className="max-h-[28rem] overflow-y-auto pr-1">
-                <OperazioniList>
-                  {reports.map((report) => (
-                    <OperazioniListLink
-                      key={String(report.id)}
-                      onClick={() => {
-                        setWorkspaceModal({
-                          href: `/operazioni/segnalazioni/${String(report.id)}`,
-                          title: String(report.title ?? "Segnalazione"),
-                          description: report.report_number
-                            ? `Segnalazione ${String(report.report_number)}`
-                            : "Dettaglio segnalazione in modale.",
-                        });
-                      }}
-                      title={String(report.title ?? "Senza titolo")}
-                      meta={`${String(report.report_number ?? "")}${report.created_at ? ` · ${new Date(report.created_at as string).toLocaleDateString("it-IT")}` : ""}`}
-                      status={report.internal_case_id ? "Con pratica" : "Senza pratica"}
-                      statusTone={report.internal_case_id ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}
-                    />
-                  ))}
-                </OperazioniList>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm text-gray-500">
+                    {reportSearch.total} risultati per <span className="font-medium text-gray-800">“{normalizeSearchTerm(searchTerms.reports)}”</span>
+                  </p>
+                  {reportSearch.total > reportSearch.items.length ? (
+                    <p className="text-xs text-gray-400">Mostrati i primi {reportSearch.items.length}</p>
+                  ) : null}
+                </div>
+                <div className="max-h-[28rem] overflow-y-auto pr-1">
+                  <OperazioniList>
+                    {reportSearch.items.map((report) => (
+                      <OperazioniListLink
+                        key={String(report.id)}
+                        onClick={() => {
+                          setWorkspaceModal({
+                            href: `/operazioni/segnalazioni/${String(report.id)}`,
+                            title: String(report.title ?? "Segnalazione"),
+                            description: report.report_number
+                              ? `Segnalazione ${String(report.report_number)}`
+                              : "Dettaglio segnalazione in modale.",
+                          });
+                        }}
+                        title={String(report.title ?? "Senza titolo")}
+                        meta={`${String(report.report_number ?? "")}${formatDateLabel(report.created_at) ? ` · ${formatDateLabel(report.created_at)}` : ""}${truncateText(report.description) ? ` · ${truncateText(report.description)}` : ""}`}
+                        status={report.internal_case_id ? "Con pratica" : "Senza pratica"}
+                        statusTone={report.internal_case_id ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}
+                      />
+                    ))}
+                  </OperazioniList>
+                </div>
               </div>
             )}
           </OperazioniCollectionPanel>
@@ -438,38 +838,94 @@ function DashboardContent() {
           <OperazioniCollectionPanel
             title="Pratiche recenti"
             description="Clic sulla scheda per la lista completa; clic su una riga per il dettaglio."
-            count={cases.length}
+            count={deferredCaseSearch.length >= 3 ? caseSearch.total : cases.length}
           >
-            {isLoading ? (
-              <p className="text-sm text-gray-500">Caricamento pratiche in corso.</p>
-            ) : cases.length === 0 ? (
+            <QuickSearchInput
+              value={searchTerms.cases}
+              onChange={(value) => setSearchTerms((current) => ({ ...current, cases: value }))}
+              placeholder="Cerca per numero, titolo, descrizione o note"
+            />
+            {caseSearch.error ? (
+              <div className="rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">{caseSearch.error}</div>
+            ) : normalizeSearchTerm(searchTerms.cases).length === 0 ? (
+              isLoading ? (
+                <p className="text-sm text-gray-500">Caricamento pratiche in corso.</p>
+              ) : cases.length === 0 ? (
+                <EmptyState
+                  icon={DocumentIcon}
+                  title="Nessuna pratica"
+                  description="Non risultano pratiche registrate."
+                />
+              ) : (
+                <div className="max-h-[28rem] overflow-y-auto pr-1">
+                  <OperazioniList>
+                    {cases.map((caseItem) => (
+                      <OperazioniListLink
+                        key={String(caseItem.id)}
+                        onClick={() => {
+                          setWorkspaceModal({
+                            href: `/operazioni/pratiche/${String(caseItem.id)}`,
+                            title: String(caseItem.title ?? "Pratica"),
+                            description: caseItem.case_number
+                              ? `Pratica ${String(caseItem.case_number)}`
+                              : "Dettaglio pratica in modale.",
+                          });
+                        }}
+                        title={String(caseItem.title ?? "Senza titolo")}
+                        meta={`${String(caseItem.case_number ?? "")}${formatDateLabel(caseItem.created_at) ? ` · ${formatDateLabel(caseItem.created_at)}` : ""}${truncateText(caseItem.description) ? ` · ${truncateText(caseItem.description)}` : ""}`}
+                        status={caseStatusLabels[String(caseItem.status)] || String(caseItem.status)}
+                        statusTone={caseStatusTone[String(caseItem.status)] || "bg-gray-100 text-gray-600"}
+                      />
+                    ))}
+                  </OperazioniList>
+                </div>
+              )
+            ) : normalizeSearchTerm(searchTerms.cases).length < 3 ? (
               <EmptyState
-                icon={DocumentIcon}
-                title="Nessuna pratica"
-                description="Non risultano pratiche registrate."
+                icon={SearchIcon}
+                title="Inserisci almeno 3 caratteri"
+                description="Appena raggiungi 3 caratteri compariranno le prime pratiche corrispondenti."
+              />
+            ) : caseSearch.isSearching ? (
+              <p className="text-sm text-gray-500">Ricerca pratiche in corso per “{normalizeSearchTerm(searchTerms.cases)}”.</p>
+            ) : caseSearch.items.length === 0 ? (
+              <EmptyState
+                icon={SearchIcon}
+                title="Nessuna pratica trovata"
+                description={`Nessuna pratica trovata per “${normalizeSearchTerm(searchTerms.cases)}”.`}
               />
             ) : (
-              <div className="max-h-[28rem] overflow-y-auto pr-1">
-                <OperazioniList>
-                  {cases.map((caseItem) => (
-                    <OperazioniListLink
-                      key={String(caseItem.id)}
-                      onClick={() => {
-                        setWorkspaceModal({
-                          href: `/operazioni/pratiche/${String(caseItem.id)}`,
-                          title: String(caseItem.title ?? "Pratica"),
-                          description: caseItem.case_number
-                            ? `Pratica ${String(caseItem.case_number)}`
-                            : "Dettaglio pratica in modale.",
-                        });
-                      }}
-                      title={String(caseItem.title ?? "Senza titolo")}
-                      meta={`${String(caseItem.case_number ?? "")}${caseItem.created_at ? ` · ${new Date(caseItem.created_at as string).toLocaleDateString("it-IT")}` : ""}`}
-                      status={caseStatusLabels[String(caseItem.status)] || String(caseItem.status)}
-                      statusTone={caseStatusTone[String(caseItem.status)] || "bg-gray-100 text-gray-600"}
-                    />
-                  ))}
-                </OperazioniList>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm text-gray-500">
+                    {caseSearch.total} risultati per <span className="font-medium text-gray-800">“{normalizeSearchTerm(searchTerms.cases)}”</span>
+                  </p>
+                  {caseSearch.total > caseSearch.items.length ? (
+                    <p className="text-xs text-gray-400">Mostrati i primi {caseSearch.items.length}</p>
+                  ) : null}
+                </div>
+                <div className="max-h-[28rem] overflow-y-auto pr-1">
+                  <OperazioniList>
+                    {caseSearch.items.map((caseItem) => (
+                      <OperazioniListLink
+                        key={String(caseItem.id)}
+                        onClick={() => {
+                          setWorkspaceModal({
+                            href: `/operazioni/pratiche/${String(caseItem.id)}`,
+                            title: String(caseItem.title ?? "Pratica"),
+                            description: caseItem.case_number
+                              ? `Pratica ${String(caseItem.case_number)}`
+                              : "Dettaglio pratica in modale.",
+                          });
+                        }}
+                        title={String(caseItem.title ?? "Senza titolo")}
+                        meta={`${String(caseItem.case_number ?? "")}${formatDateLabel(caseItem.created_at) ? ` · ${formatDateLabel(caseItem.created_at)}` : ""}${truncateText(caseItem.description) ? ` · ${truncateText(caseItem.description)}` : ""}`}
+                        status={caseStatusLabels[String(caseItem.status)] || String(caseItem.status)}
+                        statusTone={caseStatusTone[String(caseItem.status)] || "bg-gray-100 text-gray-600"}
+                      />
+                    ))}
+                  </OperazioniList>
+                </div>
               </div>
             )}
           </OperazioniCollectionPanel>

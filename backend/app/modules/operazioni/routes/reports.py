@@ -8,7 +8,7 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user
@@ -41,6 +41,7 @@ def list_reports(
     date_from: str | None = None,
     date_to: str | None = None,
     has_case: bool | None = None,
+    search: str | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(25, ge=1, le=100),
 ):
@@ -64,6 +65,19 @@ def list_reports(
             query = query.where(FieldReport.internal_case_id.isnot(None))
         else:
             query = query.where(FieldReport.internal_case_id.is_(None))
+    if search:
+        term = f"%{search.strip()}%"
+        query = query.where(
+            or_(
+                FieldReport.report_number.ilike(term),
+                FieldReport.external_code.ilike(term),
+                FieldReport.title.ilike(term),
+                FieldReport.description.ilike(term),
+                FieldReport.reporter_name.ilike(term),
+                FieldReport.assigned_responsibles.ilike(term),
+                FieldReport.area_code.ilike(term),
+            )
+        )
 
     count_q = select(func.count()).select_from(query.subquery())
     total = db.scalar(count_q) or 0
@@ -79,6 +93,7 @@ def list_reports(
                 "external_code": r.external_code,
                 "report_number": r.report_number,
                 "title": r.title,
+                "description": r.description,
                 "status": r.status,
                 "created_at": r.created_at,
                 "internal_case_id": str(r.internal_case_id) if r.internal_case_id else None,
@@ -449,6 +464,16 @@ def list_cases(
         )
     if date_to:
         query = query.where(InternalCase.created_at <= datetime.fromisoformat(date_to))
+    if search:
+        term = f"%{search.strip()}%"
+        query = query.where(
+            or_(
+                InternalCase.case_number.ilike(term),
+                InternalCase.title.ilike(term),
+                InternalCase.description.ilike(term),
+                InternalCase.resolution_note.ilike(term),
+            )
+        )
 
     count_q = select(func.count()).select_from(query.subquery())
     total = db.scalar(count_q) or 0
@@ -463,6 +488,7 @@ def list_cases(
                 "id": str(c.id),
                 "case_number": c.case_number,
                 "title": c.title,
+                "description": c.description,
                 "status": c.status,
                 "created_at": c.created_at,
             }

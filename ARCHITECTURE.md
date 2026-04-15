@@ -214,6 +214,8 @@ Stato del refactor:
 - la sync `vehicles` e ora idempotente anche quando il mezzo esiste gia per `plate_number` o `wc_vehicle_id`: il servizio riallinea il record esistente e isola gli errori per-record con savepoint, evitando di lasciare la sessione SQLAlchemy in `PendingRollback`
 - la sync `refuels` tollera anche dettagli White orfani o non piu leggibili: se il dettaglio `GET /vehicles/refuel/edit/{id}` risponde errore HTTP perche il mezzo sorgente e stato cancellato, il record viene marcato come non importabile e contato come `skipped`, senza far fallire l'intera entity
 - le entity `users` e `consorziati` usano un fetch dettagli White in concorrenza controllata e una soglia stale dedicata (`WC_SYNC_USER_DETAIL_CONCURRENCY`, `WC_SYNC_USER_STALE_JOB_MINUTES`), per evitare falsi `failed` sui job piu voluminosi del workspace `WhiteCompany Sync`
+- la dashboard `Operazioni` espone ora ricerca rapida live sui pannelli `mezzi`, `attivita`, `segnalazioni` e `pratiche`: dopo 3 caratteri interroga i list endpoint esistenti con `search`, mostra i primi risultati e supporta match anche sul contenuto testuale (`notes`, `text_note`, `description`, numerazioni e riferimenti principali)
+- la vista `/operazioni/mezzi` adotta ora un layout responsive dedicato: desktop con hero metriche e card del parco mezzi, mobile con lista compatta stile mini-app; il CTA di creazione resta solo visuale finche non verra cablato un vero flusso `Nuovo mezzo`
 - refactor pianificato: `catasto` evolve verso aggregazione dati, `elaborazioni` diventa il modulo runtime per batch, CAPTCHA, worker orchestration e stato avanzamento
 
 ### postgres

@@ -45,6 +45,9 @@ def list_vehicles(
             (Vehicle.name.ilike(like))
             | (Vehicle.code.ilike(like))
             | (Vehicle.plate_number.ilike(like))
+            | (Vehicle.brand.ilike(like))
+            | (Vehicle.model.ilike(like))
+            | (Vehicle.notes.ilike(like))
         )
 
     count_query = select(func.count()).select_from(query.subquery())

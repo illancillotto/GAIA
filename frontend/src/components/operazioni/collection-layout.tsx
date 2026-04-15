@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
+import type { MouseEvent, ReactNode } from "react";
 
 import { cn } from "@/lib/cn";
 
@@ -170,6 +170,10 @@ export function OperazioniListLink({
 }) {
   const className =
     "group grid w-full gap-3 rounded-[24px] border border-[#e6ebe5] bg-[linear-gradient(180deg,_#ffffff,_#fbfcfa)] px-4 py-4 text-left transition hover:-translate-y-0.5 hover:border-[#c9d6cd] hover:shadow-sm md:grid-cols-[minmax(0,1fr),auto]";
+  function handleClick(event: MouseEvent<HTMLElement>): void {
+    event.stopPropagation();
+    onClick?.();
+  }
   const content = (
     <>
       <div className="min-w-0">
@@ -186,7 +190,13 @@ export function OperazioniListLink({
 
   if (href) {
     return (
-      <Link href={href} className={className}>
+      <Link
+        href={href}
+        className={className}
+        onClick={(event) => {
+          event.stopPropagation();
+        }}
+      >
         {content}
       </Link>
     );
@@ -197,7 +207,7 @@ export function OperazioniListLink({
   }
 
   return (
-    <button type="button" className={className} onClick={onClick}>
+    <button type="button" className={className} onClick={handleClick}>
       {content}
     </button>
   );

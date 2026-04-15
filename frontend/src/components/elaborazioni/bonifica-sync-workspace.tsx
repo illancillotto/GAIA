@@ -796,51 +796,55 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
           ) : null}
 
           <div className="grid gap-3 lg:grid-cols-2">
-            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">Entity</p>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button className="btn-secondary" type="button" disabled={!admin || running} onClick={selectAllEntities}>
-                  Seleziona tutte
-                </button>
-                <button className="btn-secondary" type="button" disabled={!admin || running} onClick={clearEntitySelection}>
-                  Pulisci
-                </button>
-              </div>
-              <div className="mt-3 space-y-2">
-                {ENTITY_DEFINITIONS.map((entity) => (
-                  <label key={entity.key} className="flex items-start gap-3 rounded-xl border border-white bg-white/80 px-3 py-2.5">
-                    <input
-                      type="checkbox"
-                      className="mt-1 h-4 w-4 accent-[#1D4E35]"
-                      checked={selectedEntities.includes(entity.key)}
-                      onChange={() => toggleEntity(entity.key)}
-                      disabled={!admin || running}
-                    />
-                    <span className="min-w-0">
-                      <span className="block text-sm font-medium text-gray-900">{entity.label}</span>
-                      <span className="mt-1 block text-xs text-gray-500">{entity.description}</span>
-                      {entity.key === "consorziati" ? (
-                        <span className="mt-2 block text-xs">
-                          <Link href="/utenze/bonifica-staging" className="font-medium text-[#1D4E35] hover:text-[#143726]" target="_blank">
-                            Apri staging consorziati
-                          </Link>
+            <div className="space-y-4">
+              <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">Entity</p>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button className="btn-secondary" type="button" disabled={!admin || running} onClick={selectAllEntities}>
+                    Seleziona tutte
+                  </button>
+                  <button className="btn-secondary" type="button" disabled={!admin || running} onClick={clearEntitySelection}>
+                    Pulisci
+                  </button>
+                </div>
+                <div className="mt-3 grid gap-2 md:grid-cols-2">
+                  {ENTITY_DEFINITIONS.map((entity) => (
+                    <label key={entity.key} className="flex items-start gap-3 rounded-xl border border-white bg-white/80 px-3 py-2.5">
+                      <input
+                        type="checkbox"
+                        className="mt-1 h-4 w-4 accent-[#1D4E35]"
+                        checked={selectedEntities.includes(entity.key)}
+                        onChange={() => toggleEntity(entity.key)}
+                        disabled={!admin || running}
+                      />
+                      <span className="min-w-0">
+                        <span className="block text-sm font-medium text-gray-900">{entity.label}</span>
+                        <span className="mt-1 block text-xs text-gray-500">{entity.description}</span>
+                        {entity.key === "consorziati" ? (
+                          <span className="mt-2 block text-xs">
+                            <Link
+                              href="/utenze/bonifica-staging"
+                              className="font-medium text-[#1D4E35] hover:text-[#143726]"
+                              target="_blank"
+                            >
+                              Apri staging consorziati
+                            </Link>
+                          </span>
+                        ) : null}
+                      </span>
+                      {entity.dateAware ? (
+                        <span className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">
+                          Date
                         </span>
                       ) : null}
-                    </span>
-                    {entity.dateAware ? (
-                      <span className="ml-auto inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-50 px-2 py-1 text-[11px] font-semibold text-amber-700">
-                        Date
-                      </span>
-                    ) : null}
-                  </label>
-                ))}
+                    </label>
+                  ))}
+                </div>
+                <p className="mt-3 text-xs text-gray-500">
+                  Se non selezioni nulla, verra usato <span className="font-semibold">entities=all</span>.
+                </p>
               </div>
-              <p className="mt-3 text-xs text-gray-500">
-                Se non selezioni nulla, verra usato <span className="font-semibold">entities=all</span>.
-              </p>
-            </div>
 
-            <div className="space-y-4">
               <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">Finestra temporale</p>
                 <p className="mt-2 text-sm text-gray-600">
@@ -896,25 +900,23 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
                   </label>
                 </div>
                 {!hasDateAwareSelection ? (
-                  <p className="mt-3 text-xs text-gray-500">
-                    Seleziona almeno una entity date-aware per abilitare i campi data.
-                  </p>
+                  <p className="mt-3 text-xs text-gray-500">Seleziona almeno una entity date-aware per abilitare i campi data.</p>
                 ) : null}
               </div>
+            </div>
 
-              <div className="flex flex-wrap gap-3">
-                <button className="btn-secondary" type="button" disabled={refreshing || loading} onClick={() => void handleRefresh()}>
-                  {refreshing ? "Aggiorno..." : "Aggiorna stato"}
-                </button>
-                <button
-                  className="btn-primary"
-                  type="button"
-                  disabled={!admin || running || loading || !hasActiveBonificaCredential}
-                  onClick={() => void handleRunSync()}
-                >
-                  {running ? "Sync in corso..." : "Avvia sync"}
-                </button>
-              </div>
+            <div className="flex flex-wrap content-start gap-3">
+              <button className="btn-secondary" type="button" disabled={refreshing || loading} onClick={() => void handleRefresh()}>
+                {refreshing ? "Aggiorno..." : "Aggiorna stato"}
+              </button>
+              <button
+                className="btn-primary"
+                type="button"
+                disabled={!admin || running || loading || !hasActiveBonificaCredential}
+                onClick={() => void handleRunSync()}
+              >
+                {running ? "Sync in corso..." : "Avvia sync"}
+              </button>
             </div>
           </div>
         </div>
