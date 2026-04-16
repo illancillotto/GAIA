@@ -47,7 +47,9 @@ export function Sidebar({
                       ? "operazioni"
                       : pathname.startsWith("/riordino")
                         ? "riordino"
-                      : "nas_control";
+                        : pathname.startsWith("/ruolo")
+                          ? "ruolo"
+                        : "nas_control";
 
   const currentModuleLabel =
     currentModuleKey === "gaia"
@@ -66,9 +68,11 @@ export function Sidebar({
                   ? "Inventario"
                   : currentModuleKey === "operazioni"
                     ? "Operazioni"
-                    : currentModuleKey === "riordino"
-                      ? "Riordino"
-                    : "NAS Control";
+                      : currentModuleKey === "riordino"
+                        ? "Riordino"
+                        : currentModuleKey === "ruolo"
+                          ? "Ruolo"
+                        : "NAS Control";
   const canManageGaiaUsers =
     (currentUser.role === "admin" || currentUser.role === "super_admin")
     && currentUser.enabled_modules.includes("accessi");

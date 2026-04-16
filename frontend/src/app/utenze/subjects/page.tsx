@@ -8,6 +8,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { UtenzeModulePage } from "@/components/utenze/utenze-module-page";
 import { DataTable } from "@/components/table/data-table";
 import { TableFilters } from "@/components/table/table-filters";
+import { RuoloAvvisiSection } from "@/components/ruolo/ruolo-avvisi-section";
 import { createUtenzeSubject, downloadUtenzeDocumentBlob, downloadUtenzeExportBlob, getUtenzeSubject, getUtenzeSubjects, importUtenzeSubjectsCsv } from "@/lib/api";
 import { formatDateTime } from "@/lib/presentation";
 import type { UtenzeCsvImportResult, UtenzeDocument, UtenzeSubjectCreateInput, UtenzeSubjectDetail, UtenzeSubjectListItem } from "@/types/api";
@@ -988,6 +989,10 @@ function SubjectsContent({ token }: { token: string }) {
                     </div>
                   )}
                 </section>
+
+                {selectedSubjectId && token ? (
+                  <RuoloAvvisiSection subjectId={selectedSubjectId} token={token} />
+                ) : null}
               </div>
             ) : null}
           </div>

@@ -10,7 +10,7 @@ except ImportError:
     class StrEnum(str, Enum):
         pass
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, LargeBinary, String, Text, UniqueConstraint, Uuid, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, LargeBinary, Numeric, String, Text, UniqueConstraint, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -269,3 +269,32 @@ class CatastoComune(Base):
     nome: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     codice_sister: Mapped[str] = mapped_column(String(255), nullable=False)
     ufficio: Mapped[str] = mapped_column(String(255), default="ORISTANO Territorio", nullable=False)
+
+
+class CatastoParcel(Base):
+    """Registro storico delle particelle catastali con supporto temporale."""
+    __tablename__ = "catasto_parcels"
+    __table_args__ = (
+        UniqueConstraint(
+            "comune_codice", "foglio", "particella", "subalterno", "valid_from",
+            name="uq_catasto_parcels_key_from",
+        ),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    comune_codice: Mapped[str] = mapped_column(String(10), nullable=False)
+    comune_nome: Mapped[str] = mapped_column(String(100), nullable=False)
+    foglio: Mapped[str] = mapped_column(String(10), nullable=False)
+    particella: Mapped[str] = mapped_column(String(20), nullable=False)
+    subalterno: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    sup_catastale_are: Mapped[float | None] = mapped_column(Numeric(10, 4), nullable=True)
+    sup_catastale_ha: Mapped[float | None] = mapped_column(Numeric(10, 4), nullable=True)
+    valid_from: Mapped[int] = mapped_column(Integer, nullable=False)
+    valid_to: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    source: Mapped[str] = mapped_column(String(30), nullable=False, default="ruolo_import")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )

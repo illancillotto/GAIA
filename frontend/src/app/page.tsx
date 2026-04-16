@@ -25,7 +25,7 @@ import type {
 } from "@/types/api";
 
 type ModuleStatus = "active" | "warming" | "coming";
-type ModuleId = "accessi" | "rete" | "inventario" | "catasto" | "elaborazioni" | "utenze" | "operazioni" | "riordino";
+type ModuleId = "accessi" | "rete" | "inventario" | "catasto" | "elaborazioni" | "utenze" | "operazioni" | "riordino" | "ruolo";
 
 type HomeModule = {
   id: ModuleId;
@@ -167,6 +167,18 @@ const allModules: HomeModule[] = [
     statusLabel: "In sviluppo",
     icon: "description",
     enabledKeys: ["riordino"],
+  },
+  {
+    id: "ruolo",
+    title: "GAIA Ruolo",
+    eyebrow: "Ruolo consortile",
+    description:
+      "Import e consultazione degli avvisi del ruolo consortile (Capacitas). Collegamento soggetti, statistiche per comune e anno tributario.",
+    href: "/ruolo",
+    status: "warming",
+    statusLabel: "In sviluppo",
+    icon: "receipt_long",
+    enabledKeys: ["ruolo"],
   },
 ];
 

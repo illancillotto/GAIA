@@ -26,7 +26,8 @@ type ModuleSidebarProps = {
     | "utenze"
     | "gaia"
     | "operazioni"
-    | "riordino";
+    | "riordino"
+    | "ruolo";
   reviewBadge?: number;
   userBadge?: number;
   grantedSectionKeys?: string[];
@@ -91,14 +92,13 @@ export function ModuleSidebar({
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Panoramica</p>
         <NavItem href="/elaborazioni" icon={GridIcon} label="Dashboard" />
 
-        <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Azioni rapide</p>
+        <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Operazioni</p>
         <NavItem href="/elaborazioni/bonifica" icon={RefreshIcon} label="WhiteCompany Sync" match="prefix" />
         <NavItem href="/elaborazioni/new-single" icon={SearchIcon} label="Visure" match="prefix" />
-        <NavItem href="/elaborazioni/capacitas" icon={UsersIcon} label="Pool operativo" match="prefix" />
-
-        <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Operazioni</p>
-        <NavItem href="/elaborazioni/settings" icon={LockIcon} label="Credenziali" />
         <NavItem href="/elaborazioni/capacitas" icon={SearchIcon} label="Capacitas" match="prefix" />
+
+        <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Configurazioni</p>
+        <NavItem href="/elaborazioni/settings" icon={LockIcon} label="Credenziali" />
       </div>
     );
   }
@@ -163,6 +163,22 @@ export function ModuleSidebar({
 
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Gestione</p>
         <NavItem href="/riordino/configurazione" icon={LockIcon} label="Configurazione" match="prefix" />
+      </div>
+    );
+  }
+
+  if (currentModuleKey === "ruolo") {
+    return (
+      <div className="space-y-0.5 px-2 pb-3">
+        <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Panoramica</p>
+        <NavItem href="/ruolo" icon={GridIcon} label="Dashboard" />
+
+        <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Dati</p>
+        <NavItem href="/ruolo/avvisi" icon={DocumentIcon} label="Avvisi" match="prefix" />
+        <NavItem href="/ruolo/stats" icon={SearchIcon} label="Statistiche" match="prefix" />
+
+        <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Gestione</p>
+        <NavItem href="/ruolo/import" icon={RefreshIcon} label="Import Ruolo" match="prefix" />
       </div>
     );
   }

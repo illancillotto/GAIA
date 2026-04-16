@@ -14,6 +14,7 @@ const modules = [
   { name: "GAIA Utenze", icon: "badge", status: "In sviluppo", active: false },
   { name: "GAIA Operazioni", icon: "local_shipping", status: "In sviluppo", active: false },
   { name: "GAIA Riordino", icon: "description", status: "In sviluppo", active: false },
+  { name: "GAIA Ruolo", icon: "receipt_long", status: "In sviluppo", active: false },
   { name: "GAIA Elaborazioni", icon: "sync_alt", status: "In sviluppo", active: false },
   { name: "GAIA Catasto", icon: "account_balance", status: "Non avviato", active: false },
   { name: "GAIA Inventario", icon: "inventory_2", status: "Non avviato", active: false },

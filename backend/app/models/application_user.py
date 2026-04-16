@@ -48,6 +48,7 @@ class ApplicationUser(Base):
         Boolean, default=False, nullable=False
     )
     module_riordino: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    module_ruolo: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -67,7 +68,7 @@ class ApplicationUser(Base):
     @property
     def enabled_modules(self) -> list[str]:
         if self.is_super_admin:
-            return ["accessi", "rete", "inventario", "catasto", "utenze", "operazioni", "riordino"]
+            return ["accessi", "rete", "inventario", "catasto", "utenze", "operazioni", "riordino", "ruolo"]
 
         modules: list[str] = []
         if self.module_accessi:
@@ -84,4 +85,6 @@ class ApplicationUser(Base):
             modules.append("operazioni")
         if self.module_riordino:
             modules.append("riordino")
+        if self.module_ruolo:
+            modules.append("ruolo")
         return modules

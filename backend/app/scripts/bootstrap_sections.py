@@ -46,6 +46,10 @@ DEFAULT_SECTIONS = [
     ("riordino.notifications", "Notifiche Riordino", "riordino", "viewer"),
     ("riordino.export", "Export Riordino", "riordino", "reviewer"),
     ("riordino.config", "Configurazione Riordino", "riordino", "admin"),
+    ("ruolo.dashboard", "Ruolo — Dashboard", "ruolo", "viewer"),
+    ("ruolo.avvisi", "Ruolo — Avvisi", "ruolo", "viewer"),
+    ("ruolo.import", "Ruolo — Import", "ruolo", "admin"),
+    ("ruolo.stats", "Ruolo — Statistiche", "ruolo", "viewer"),
 ]
 
 

@@ -26,4 +26,5 @@ class CurrentUserResponse(BaseModel):
     module_utenze: bool
     module_operazioni: bool
     module_riordino: bool
+    module_ruolo: bool
     enabled_modules: list[str]
