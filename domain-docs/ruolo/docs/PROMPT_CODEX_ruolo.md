@@ -123,7 +123,7 @@ Le righe N4 contengono i totali per tributo a livello di avviso:
 2024 0985  1.679.520  36,40  (L. 70.480 )
 OPERE DI BONIFICA (UTENZA 024000002)
 ```
-- `1.679.520` = superficie catastale totale considerata (mq)
+- `1.679.520` = campo sconosciuto — significato non determinato, conservare as-is in `n4_campo_sconosciuto`
 - `36,40` = importo totale tributo 0985 sull'intero avviso (Euro)
 - `(L. 70.480 )` = controvalore in Lire (conservare come dato storico)
 - `UTENZA 024000002` = codice utenza consortile → salvare sull'avviso
@@ -186,7 +186,7 @@ Corrisponde a una "Partita CNC" nel file sorgente.
 | `importo_totale_0985` | Numeric(12,2) NULL | totale ISTITUZIONALE sull'avviso |
 | `importo_totale_0668` | Numeric(12,2) NULL | totale IRRIGAZIONE sull'avviso |
 | `importo_totale_euro` | Numeric(12,2) NULL | somma dei tre tributi |
-| `sup_catastale_totale` | Numeric(12,4) NULL | da riga N4 (in mq oppure ettari — verificare unità nel file) |
+| `n4_campo_sconosciuto` | VARCHAR(30) NULL | terzo campo riga N4 (es. `1.679.520`) — significato non determinato, conservare as-is |
 | `created_at` | TIMESTAMPTZ | |
 | `updated_at` | TIMESTAMPTZ | |
 
@@ -230,7 +230,8 @@ Non sovrascrive né sostituisce i dati catastali aggiornati.
 | `foglio` | VARCHAR(10) NOT NULL | |
 | `particella` | VARCHAR(20) NOT NULL | es. `361` o `41` |
 | `subalterno` | VARCHAR(10) NULL | es. `A`, `C`, numerico |
-| `sup_catastale_mq` | Numeric(12,4) NULL | SUP.CATA. (verificare se ha o no punto decimale, es. `1.455` = 1455 mq o 1,455 ha) |
+| `sup_catastale_are` | Numeric(10,4) NULL | SUP.CATA. in are (1 ara = 100 mq = 0,01 ha) — confermato |
+| `sup_catastale_ha` | Numeric(10,4) NULL | ettari derivati (are / 100), calcolati all'import |
 | `sup_irrigata_ha` | Numeric(10,4) NULL | SUP.IRR. |
 | `coltura` | VARCHAR(50) NULL | COLT. se presente |
 | `importo_manut` | Numeric(10,2) NULL | MANUT. (0648) |
@@ -262,7 +263,8 @@ e ne vengono creati di nuovi.
 | `foglio` | VARCHAR(10) NOT NULL | |
 | `particella` | VARCHAR(20) NOT NULL | |
 | `subalterno` | VARCHAR(10) NULL | |
-| `sup_catastale_mq` | Numeric(12,4) NULL | da ultimo import noto |
+| `sup_catastale_are` | Numeric(10,4) NULL | in are (unità confermata) |
+| `sup_catastale_ha` | Numeric(10,4) NULL | ettari derivati (are / 100) |
 | `valid_from` | Integer NOT NULL | anno tributario da cui il record è valido |
 | `valid_to` | Integer NULL | anno tributario fino a cui è valido (NULL = ancora attivo) |
 | `source` | VARCHAR(30) | `ruolo_import` / `sister` / `capacitas` |
@@ -348,12 +350,11 @@ def parse_ruolo_file(raw_text: str) -> list[PartitaCNC]:
 (`6,05` → `6.05`). Convertire sempre prima del cast a float/Decimal.
 
 **Separatore migliaia**: il punto viene usato come separatore migliaia nei numeri grandi
-(`1.455` → 1455 mq). Distinguere dal separatore decimale dal contesto di colonna.
+(`1.455` → 1455). Rimuovere i punti migliaia prima del cast a Decimal.
 
-**Superfici**: verificare nell'implementazione reale se `SUP.CATA.` è in mq o ha.
-Dal sample: `1.455` e `63` come valori — probabile siano in are (centinaio di mq) o mq.
-Da verificare con dominio prima di committare la colonna. Usare un campo `VARCHAR`
-come fallback e note nel codice.
+**Superfici**: `SUP.CATA.` è in **are** (unità confermata). `1.455` = 1455 are = 14,55 ha.
+Convertire rimuovendo il punto migliaia, poi dividere per 100 per ottenere ettari.
+Salvare entrambe le colonne: `sup_catastale_are` (valore letto) e `sup_catastale_ha` (are / 100).
 
 **Riga N4**: le righe N4 sono la sezione di totali. Appaiono FUORI dai blocchi NP,
 dopo la LEGENDA. Pattern:
@@ -618,3 +619,6 @@ Pattern: seguire `frontend/src/lib/api/anagrafica.ts` o analogo esistente.
   Gestirla come nullable senza lanciare errore se assente.
 - Priorità FK tipo discipline: `application_users.id` è **Integer**, `ana_subjects.id` è **UUID**.
   Verificare sempre prima di definire colonne FK.
+- Il campo `n4_campo_sconosciuto` (terzo valore numerico nella riga N4, es. `1.679.520`)
+  ha significato non determinato nel dominio attuale. Conservarlo as-is come VARCHAR(30).
+  Non tentare di interpretarlo come superficie, rendita o importo.
