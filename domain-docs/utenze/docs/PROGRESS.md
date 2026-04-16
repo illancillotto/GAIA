@@ -49,6 +49,8 @@
 - aggiunto sync backend `sync_white_consorziati()` con match su `tax` verso `ana_subjects`
 - aggiunti endpoint backend `/utenze/bonifica-staging` per lista, dettaglio, approve, reject e bulk-approve
 - preservato lo stato `rejected` sui re-sync Bonifica per evitare riaperture automatiche
+- rinominata la UX staging da `approva` a `importa in anagrafica` per rendere esplicito il passaggio verso `ana_subjects`
+- tracciata l'origine WhiteCompany sui soggetti importati con `ana_subjects.source_system=whitecompany` e `ana_subjects.source_external_id=<wc_id>`
 
 ## Verifiche Eseguite
 

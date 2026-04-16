@@ -33,6 +33,7 @@ from app.modules.operazioni.models.vehicles import (
     Vehicle,
     VehicleAssignment,
     VehicleDocument,
+    WCRefuelEvent,
     VehicleFuelLog,
     VehicleMaintenance,
     VehicleMaintenanceType,
@@ -73,6 +74,7 @@ __all__ = [
     "VehicleMaintenanceType",
     "VehicleOdometerReading",
     "VehicleUsageSession",
+    "WCRefuelEvent",
     "WCArea",
     "WCOperator",
 ]

@@ -242,6 +242,9 @@ function MezziContent() {
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
+          <Link href="/operazioni/mezzi/rifornimenti-white" className="btn-secondary">
+            Eventi White rifornimenti
+          </Link>
           <button className="btn-primary" type="button" onClick={() => setIsImportModalOpen(true)}>
             Importa transazioni flotte
           </button>

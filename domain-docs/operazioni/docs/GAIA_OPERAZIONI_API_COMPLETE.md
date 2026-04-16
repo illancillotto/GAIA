@@ -406,6 +406,8 @@ Import `.xlsx` transazioni flotte per completare i rifornimenti che WhiteCompany
 
 ### Comportamento
 - legge il primo worksheet del file e individua automaticamente la prima riga header non vuota
+- usa `Identificativo` del file Q8 per risalire a `fuel_card.codice` e alla relativa cronologia `fuel_card_assignment_history`
+- prova a riconciliare un `wc_refuel_event` aperto sullo stesso mezzo e in finestra temporale compatibile; quando il match riesce, collega evento White, carta carburante e fuel log
 - crea `vehicle_fuel_log` con `fueled_at`, `liters`, `total_cost`, `odometer_km`, `station_name`, `notes`
 - concatena `Impianto` e `Città` in `station_name`
 - registra metadati sorgente in `notes` (`ticket`, `PAN carta`, `prodotto`, `identificativo`, `indirizzo`)
@@ -418,9 +420,24 @@ Import `.xlsx` transazioni flotte per completare i rifornimenti che WhiteCompany
   "imported": 22,
   "skipped": 3,
   "errors": [],
-  "rows_read": 25
+  "rows_read": 25,
+  "matched_white_refuels": 19
 }
 ```
+
+## 8.4 GET `/api/operazioni/vehicles/refuel-events`
+Lista paginata degli eventi rifornimento WhiteCompany salvati in staging tecnico.
+
+### Query params
+- `matched=true|false`
+- `search`
+- `page`
+- `page_size`
+
+### Comportamento
+- restituisce eventi WhiteCompany già riconciliati o ancora aperti
+- supporta ricerca per `vehicle_code`, `operator_name` e `wc_id`
+- espone anche `vehicle_display_name`, `operator_display_name` e `fuel_card_code` quando i riferimenti locali sono stati risolti
 
 ---
 

@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
+import re
+import uuid
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -13,7 +15,8 @@ from app.modules.elaborazioni.bonifica_oristanese.apps.taken_charge.client impor
     BonificaTakenChargeRow,
 )
 from app.modules.elaborazioni.bonifica_oristanese.apps.vehicles.client import BonificaVehicleRow
-from app.modules.operazioni.models.vehicles import Vehicle, VehicleFuelLog, VehicleUsageSession
+from app.modules.operazioni.models.vehicles import Vehicle, VehicleFuelLog, VehicleUsageSession, WCRefuelEvent
+from app.modules.operazioni.models.wc_operator import WCOperator
 from app.modules.operazioni.services.parsing import parse_italian_datetime
 
 
@@ -43,6 +46,64 @@ def _normalized_vehicle_code(value: str | None) -> str | None:
         return None
     normalized = value.strip()
     return normalized or None
+
+
+def _normalize_operator_key(value: str | None) -> str | None:
+    if value is None:
+        return None
+    compact = re.sub(r"[^A-Z0-9]+", "", value.upper())
+    return compact or None
+
+
+def _build_operator_lookup(db: Session) -> dict[str, WCOperator]:
+    operators = db.scalars(select(WCOperator)).all()
+    lookup: dict[str, WCOperator] = {}
+    for operator in operators:
+        for candidate in (
+            " ".join(part for part in [operator.last_name, operator.first_name] if part),
+            " ".join(part for part in [operator.first_name, operator.last_name] if part),
+            operator.username,
+            operator.email,
+        ):
+            key = _normalize_operator_key(candidate)
+            if key and key not in lookup:
+                lookup[key] = operator
+    return lookup
+
+
+def _resolve_operator_id(operator_name: str | None, operator_lookup: dict[str, WCOperator]) -> uuid.UUID | None:
+    key = _normalize_operator_key(operator_name)
+    if key is None:
+        return None
+    operator = operator_lookup.get(key)
+    return operator.id if operator is not None else None
+
+
+def _upsert_wc_refuel_event(
+    db: Session,
+    *,
+    row: BonificaRefuelRow,
+    vehicle_id,
+    fueled_at: datetime,
+    source_issue: str | None,
+    wc_operator_id,
+) -> tuple[WCRefuelEvent, bool]:
+    event = db.scalar(select(WCRefuelEvent).where(WCRefuelEvent.wc_id == row.wc_id))
+    created = event is None
+    if event is None:
+        event = WCRefuelEvent(wc_id=row.wc_id, fueled_at=fueled_at)
+        db.add(event)
+
+    event.vehicle_id = vehicle_id
+    event.wc_operator_id = wc_operator_id
+    event.vehicle_code = row.vehicle_code
+    event.operator_name = row.operator_name
+    event.fueled_at = fueled_at
+    event.odometer_km = Decimal(str(row.odometer_km)) if row.odometer_km is not None else None
+    event.source_issue = source_issue
+    event.wc_synced_at = datetime.now(timezone.utc)
+    db.flush()
+    return event, created
 
 
 def _find_existing_vehicle(db: Session, row: BonificaVehicleRow) -> Vehicle | None:
@@ -221,29 +282,47 @@ def sync_white_refuels(
     usage_sessions_synced = 0
     usage_sessions_skipped = 0
     errors: list[str] = []
+    operator_lookup = _build_operator_lookup(db)
 
     for row in rows:
         existing = db.scalar(select(VehicleFuelLog).where(VehicleFuelLog.wc_id == row.wc_id))
         if existing is not None:
-            fuel_logs_skipped += 1
-            continue
-        if row.source_issue:
+            event = db.scalar(select(WCRefuelEvent).where(WCRefuelEvent.wc_id == row.wc_id))
+            if event is not None and event.matched_fuel_log_id != existing.id:
+                event.matched_fuel_log_id = existing.id
+                event.matched_at = datetime.now(timezone.utc)
+                event.wc_synced_at = event.wc_synced_at or datetime.now(timezone.utc)
+                db.flush()
             fuel_logs_skipped += 1
             continue
 
         vehicle = db.scalar(select(Vehicle).where(Vehicle.wc_vehicle_id == row.vehicle_code))
         if vehicle is None:
             vehicle = db.scalar(select(Vehicle).where(Vehicle.plate_number == row.vehicle_code))
-        if vehicle is None:
-            errors.append(f"refuel:{row.wc_id}: vehicle `{row.vehicle_code}` non trovato")
-            continue
 
         fueled_at = parse_italian_datetime(row.fueled_at_text)
         if fueled_at is None:
             errors.append(f"refuel:{row.wc_id}: data rifornimento non valida")
             continue
-        if row.liters is None or row.liters <= 0:
-            fuel_logs_skipped += 1
+        wc_operator_id = _resolve_operator_id(row.operator_name, operator_lookup)
+
+        if row.source_issue or row.liters is None or row.liters <= 0:
+            source_issue = row.source_issue
+            if source_issue is None and (row.liters is None or row.liters <= 0):
+                source_issue = "Dettaglio White senza litri/costo/distributore: evento salvato per riconciliazione con carte carburante."
+            _upsert_wc_refuel_event(
+                db,
+                row=row,
+                vehicle_id=vehicle.id if vehicle is not None else None,
+                fueled_at=fueled_at,
+                source_issue=source_issue,
+                wc_operator_id=wc_operator_id,
+            )
+            fuel_logs_synced += 1
+            continue
+
+        if vehicle is None:
+            errors.append(f"refuel:{row.wc_id}: vehicle `{row.vehicle_code}` non trovato")
             continue
 
         fuel_log = VehicleFuelLog(
@@ -261,6 +340,17 @@ def sync_white_refuels(
             notes="Sync automatico White Company da registro rifornimenti",
         )
         db.add(fuel_log)
+        db.flush()
+        event, _ = _upsert_wc_refuel_event(
+            db,
+            row=row,
+            vehicle_id=vehicle.id,
+            fueled_at=fueled_at,
+            source_issue=None,
+            wc_operator_id=wc_operator_id,
+        )
+        event.matched_fuel_log_id = fuel_log.id
+        event.matched_at = datetime.now(timezone.utc)
         fuel_logs_synced += 1
 
     db.commit()

@@ -1403,6 +1403,14 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
               <dd className="mt-1 text-sm text-gray-800">{formatDateTime(subject.imported_at)}</dd>
             </div>
             <div>
+              <dt className="label-caption">Sorgente</dt>
+              <dd className="mt-1 text-sm text-gray-800">{subject.source_system}</dd>
+            </div>
+            <div>
+              <dt className="label-caption">ID esterno sorgente</dt>
+              <dd className="mt-1 text-sm text-gray-800">{subject.source_external_id || "—"}</dd>
+            </div>
+            <div>
               <dt className="label-caption">Aggiornato il</dt>
               <dd className="mt-1 text-sm text-gray-800">{formatDateTime(subject.updated_at)}</dd>
             </div>

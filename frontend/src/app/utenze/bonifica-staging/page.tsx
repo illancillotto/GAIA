@@ -22,7 +22,7 @@ export default function UtenzeBonificaStagingPage() {
   return (
     <UtenzeModulePage
       title="Staging consorziati"
-      description="Elenco consorziati importati da WhiteCompany in staging, con approvazione verso Utenze."
+      description="Elenco consorziati importati da WhiteCompany in staging, con import esplicito verso Utenze."
       breadcrumb="Utenze / Staging consorziati"
     >
       {({ token }) => <BonificaStagingWorkspace token={token} />}
@@ -101,7 +101,7 @@ function BonificaStagingWorkspace({ token }: { token: string }) {
             disabled={approving || selectedIds.length === 0}
           >
             <CheckIcon className="mr-2 inline h-4 w-4" />
-            {approving ? "Approvo..." : `Approva (${selectedIds.length})`}
+            {approving ? "Import in corso..." : `Importa in anagrafica (${selectedIds.length})`}
           </button>
         </div>
       </div>
@@ -191,4 +191,3 @@ function BonificaStagingWorkspace({ token }: { token: string }) {
     </section>
   );
 }
-

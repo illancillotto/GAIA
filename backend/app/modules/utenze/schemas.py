@@ -307,6 +307,8 @@ class AnagraficaSubjectListItemResponse(BaseModel):
     id: str
     subject_type: str
     status: str
+    source_system: str
+    source_external_id: str | None = None
     source_name_raw: str
     display_name: str
     codice_fiscale: str | None = None
@@ -331,6 +333,8 @@ class AnagraficaSubjectDetailResponse(BaseModel):
     id: str
     subject_type: str
     status: str
+    source_system: str
+    source_external_id: str | None = None
     source_name_raw: str
     nas_folder_path: str | None = None
     nas_folder_letter: str | None = None

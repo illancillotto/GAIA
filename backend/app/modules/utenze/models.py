@@ -80,6 +80,8 @@ class AnagraficaSubject(Base):
         nullable=False,
         index=True,
     )
+    source_system: Mapped[str] = mapped_column(String(32), default="gaia", nullable=False, index=True)
+    source_external_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     source_name_raw: Mapped[str] = mapped_column(String(512), nullable=False)
     nas_folder_path: Mapped[str | None] = mapped_column(String(1024), nullable=True)
     nas_folder_letter: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)

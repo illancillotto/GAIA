@@ -456,6 +456,8 @@ export type AnagraficaSubjectListItem = {
   id: string;
   subject_type: string;
   status: string;
+  source_system: string;
+  source_external_id: string | null;
   source_name_raw: string;
   display_name: string;
   codice_fiscale: string | null;
@@ -484,6 +486,8 @@ export type AnagraficaSubjectDetail = {
   id: string;
   subject_type: string;
   status: string;
+  source_system: string;
+  source_external_id: string | null;
   source_name_raw: string;
   nas_folder_path: string | null;
   nas_folder_letter: string | null;

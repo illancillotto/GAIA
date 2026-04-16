@@ -249,6 +249,43 @@ class VehicleFuelLog(Base):
     )
 
 
+class WCRefuelEvent(Base):
+    __tablename__ = "wc_refuel_event"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    wc_id: Mapped[int] = mapped_column(Integer, nullable=False, unique=True, index=True)
+    vehicle_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("vehicle.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    wc_operator_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("wc_operator.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    matched_fuel_log_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("vehicle_fuel_log.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    matched_fuel_card_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("fuel_card.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    vehicle_code: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True)
+    operator_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    fueled_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    odometer_km: Mapped[Decimal | None] = mapped_column(Numeric(12, 3), nullable=True)
+    source_issue: Mapped[str | None] = mapped_column(Text, nullable=True)
+    matched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    wc_synced_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
 class VehicleMaintenanceType(Base):
     __tablename__ = "vehicle_maintenance_type"
 

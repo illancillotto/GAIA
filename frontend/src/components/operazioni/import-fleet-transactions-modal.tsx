@@ -14,6 +14,7 @@ type ImportResult = {
   skipped: number;
   errors: string[];
   rows_read: number;
+  matched_white_refuels?: number;
 };
 
 export function ImportFleetTransactionsModal({
@@ -129,6 +130,9 @@ export function ImportFleetTransactionsModal({
                   <p className="mt-2 text-2xl font-semibold text-[#183325]">{result.rows_read}</p>
                 </div>
               </div>
+              <p className="mt-4 text-sm text-gray-600">
+                Match con eventi WhiteCompany: <span className="font-semibold text-gray-900">{result.matched_white_refuels ?? 0}</span>
+              </p>
               {result.errors.length > 0 ? (
                 <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                   Errori: {result.errors.join(" · ")}

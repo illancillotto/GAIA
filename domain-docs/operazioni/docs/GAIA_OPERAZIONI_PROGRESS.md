@@ -161,6 +161,7 @@ Responsabile aggiornamento: GSD Autonomous
 - Nuova vista `/operazioni/segnalazioni/cruscotto` con KPI, filtri avanzati, righe espandibili, timeline eventi e modale di import
 - Storico assegnazioni tracciato in InternalCaseAssignmentHistory
 - Le viste elenco `mezzi`, `attivita`, `segnalazioni` e `pratiche` usano ora un pattern frontend condiviso piu denso e leggibile, con hero operativo, metriche, toolbar filtri e righe lista ibride card/tabella
+- La sezione `mezzi` espone anche la vista `/operazioni/mezzi/rifornimenti-white`, alimentata da `GET /api/operazioni/vehicles/refuel-events`, per verificare gli eventi WhiteCompany ancora da riconciliare con l'import Excel Q8
 - Anche dashboard e pagine dettaglio principali sono state riallineate allo stesso linguaggio visivo tramite componenti condivisi per breadcrumb, hero stato e pannelli informativi
 - La pagina `storage` e ora collegata agli endpoint reali di metriche/alert/ricalcolo quota, mentre `miniapp` e `miniapp/bozze` usano lo stesso linguaggio visuale del modulo
 - Le azioni della scheda pratica non sono piu placeholder statici: usano i route reali `assign`, `acknowledge`, `start`, `resolve`, `close`, `reopen`
@@ -170,6 +171,7 @@ Responsabile aggiornamento: GSD Autonomous
 - I dettagli `attivita`, `segnalazioni` e `pratiche` riconoscono ora il contesto `miniapp` e aggiungono scorciatoie di rientro verso workset personale e azioni successive del workflow
 - Gli endpoint `get_activity`, `get_report` e `get_case` espongono ora metadati più ricchi, usati dal frontend per sostituire i placeholder con timing, contesto operativo, riferimenti sorgente e stato revisione
 - Sono disponibili anche endpoint di supporto per `activity attachments`, `report attachments`, `case attachments` e `activity gps summary`, già consumati dalle schede dettaglio
+- L'import `Transazioni flotte` restituisce ora anche `matched_white_refuels` per evidenziare quanti rifornimenti White sono stati chiusi dal file Excel
 
 ### Blocchi
 - Nessuno

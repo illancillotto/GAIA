@@ -188,7 +188,7 @@ Fallback:        Non classificato — richiede revisione manuale
 
 | Tabella | Descrizione |
 |---------|-------------|
-| `ana_subjects` | Anagrafica soggetti: `id, subject_type, status, nas_folder_path, nas_folder_letter, imported_at, created_at, updated_at` |
+| `ana_subjects` | Anagrafica soggetti: `id, subject_type, status, source_system, source_external_id, nas_folder_path, nas_folder_letter, imported_at, created_at, updated_at` |
 | `ana_persons` | Dati persona fisica: `subject_id, cognome, nome, codice_fiscale, data_nascita, comune_nascita, indirizzo, comune_residenza, cap, email, telefono, note` |
 | `ana_companies` | Dati persona giuridica: `subject_id, ragione_sociale, partita_iva, codice_fiscale, forma_giuridica, sede_legale, comune_sede, cap, email_pec, telefono, note` |
 | `ana_documents` | Documenti: `id, subject_id, doc_type, filename, nas_path, file_size_bytes, file_modified_at, classification_source, storage_type, local_path, uploaded_at, notes` |

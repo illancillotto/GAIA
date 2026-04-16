@@ -13,6 +13,7 @@ from app.core.database import Base, get_db
 from app.core.security import hash_password
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
+from app.modules.operazioni.models.fuel_cards import FuelCard, FuelCardAssignmentHistory
 from app.modules.operazioni.models.reports import (
     FieldReport,
     FieldReportCategory,
@@ -20,7 +21,8 @@ from app.modules.operazioni.models.reports import (
     InternalCase,
     InternalCaseEvent,
 )
-from app.modules.operazioni.models.vehicles import Vehicle, VehicleFuelLog
+from app.modules.operazioni.models.vehicles import Vehicle, VehicleFuelLog, WCRefuelEvent
+from app.modules.operazioni.models.wc_operator import WCOperator
 from app.modules.operazioni.services.parsing import (
     parse_completion_time,
     parse_italian_datetime,
@@ -557,3 +559,102 @@ def test_import_fleet_transactions_endpoint_creates_vehicle_fuel_log_and_is_idem
     assert repeat_payload["skipped"] == 1
     assert repeat_payload["errors"] == []
     assert repeat_payload["rows_read"] == 1
+
+
+def test_import_fleet_transactions_matches_white_refuel_event_via_fuel_card_assignment() -> None:
+    headers = _auth_headers()
+    workbook_bytes = _build_fleet_transactions_workbook()
+
+    db = TestingSessionLocal()
+    user = db.scalar(select(ApplicationUser).where(ApplicationUser.username == "operazioni-white"))
+    operator = WCOperator(
+        wc_id=44,
+        username="franco.piras",
+        first_name="Franco",
+        last_name="Piras",
+        enabled=True,
+    )
+    vehicle = Vehicle(
+        code="VEH-EF661EN",
+        name="Escavatore EF661EN",
+        vehicle_type="Automezzo",
+        plate_number="EF661EN",
+        wc_vehicle_id="EF661EN",
+        asset_tag="CBO.087",
+        created_by_user_id=user.id,
+        updated_by_user_id=user.id,
+    )
+    db.add_all([operator, vehicle])
+    db.commit()
+    db.refresh(operator)
+    db.refresh(vehicle)
+    operator_id = operator.id
+    vehicle_id = vehicle.id
+
+    fuel_card = FuelCard(
+        codice="CBO.087",
+        pan="7028015454500103011",
+        is_blocked=False,
+        current_wc_operator_id=operator_id,
+        current_driver_raw="Piras Franco",
+    )
+    db.add(fuel_card)
+    db.commit()
+    db.refresh(fuel_card)
+    fuel_card_id = fuel_card.id
+
+    db.add(
+            FuelCardAssignmentHistory(
+                fuel_card_id=fuel_card.id,
+                wc_operator_id=operator_id,
+                driver_raw="Piras Franco",
+                start_at=datetime.fromisoformat("2026-03-01T00:00:00"),
+            end_at=None,
+            changed_by_user_id=user.id,
+            source="manual",
+            note="Assegnazione test",
+        )
+    )
+    db.add(
+        WCRefuelEvent(
+            wc_id=5561,
+            vehicle_id=vehicle_id,
+            wc_operator_id=operator_id,
+            vehicle_code="EF661EN",
+            operator_name="Franco Piras",
+            fueled_at=datetime.fromisoformat("2026-03-31T16:46:00"),
+            odometer_km=Decimal("52707.000"),
+            source_issue="Evento WhiteCompany salvato per riconciliazione con carte carburante.",
+            wc_synced_at=datetime.fromisoformat("2026-04-16T10:37:00"),
+        )
+    )
+    db.commit()
+    db.close()
+
+    response = client.post(
+        "/operazioni/vehicles/fuel-logs/import-fleet-transactions",
+        headers=headers,
+        files={
+            "file": (
+                "transazioni-flotte.xlsx",
+                workbook_bytes,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["imported"] == 1
+    assert payload["matched_white_refuels"] == 1
+
+    db = TestingSessionLocal()
+    fuel_log = db.scalar(select(VehicleFuelLog).where(VehicleFuelLog.vehicle_id == vehicle_id))
+    assert fuel_log is not None
+    assert fuel_log.wc_id == 5561
+    assert fuel_log.operator_name == "Franco Piras"
+    event = db.scalar(select(WCRefuelEvent).where(WCRefuelEvent.wc_id == 5561))
+    assert event is not None
+    assert event.matched_fuel_log_id == fuel_log.id
+    assert event.matched_fuel_card_id == fuel_card_id
+    db.close()

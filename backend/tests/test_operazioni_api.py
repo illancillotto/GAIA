@@ -26,7 +26,7 @@ from app.modules.operazioni.models.reports import (
     FieldReportSeverity,
     InternalCase,
 )
-from app.modules.operazioni.models.vehicles import Vehicle
+from app.modules.operazioni.models.vehicles import Vehicle, WCRefuelEvent
 
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
@@ -304,5 +304,54 @@ def test_operazioni_dashboard_quick_search_matches_content_across_entities() -> 
     assert cases_payload["total"] == 1
     assert cases_payload["items"][0]["case_number"] == "CAS-SEARCH-001"
     assert cases_payload["items"][0]["description"] == "Contenuto speciale pratica"
+
+    db.close()
+
+
+def test_list_wc_refuel_events_returns_unmatched_items_with_search() -> None:
+    db = TestingSessionLocal()
+
+    vehicle = Vehicle(
+        code="VH-WHITE-001",
+        name="Escavatore bonifica",
+        vehicle_type="equipment",
+        plate_number="GC898SX",
+        current_status="available",
+    )
+    db.add(vehicle)
+    db.flush()
+
+    unmatched = WCRefuelEvent(
+        wc_id=5561,
+        vehicle_id=vehicle.id,
+        vehicle_code="GC898SX",
+        operator_name="Franco Piras",
+        fueled_at=datetime.fromisoformat("2026-04-16T10:37:00"),
+        odometer_km=Decimal("98300"),
+        source_issue="WhiteCompany non espone litri e costo nel dettaglio.",
+    )
+    matched = WCRefuelEvent(
+        wc_id=6001,
+        vehicle_id=vehicle.id,
+        vehicle_code="GC898SX",
+        operator_name="Mario Rossi",
+        fueled_at=datetime.fromisoformat("2026-04-15T09:00:00"),
+        matched_fuel_log_id=vehicle.id,
+    )
+    db.add(unmatched)
+    db.add(matched)
+    db.commit()
+
+    response = client.get(
+        "/operazioni/vehicles/refuel-events?matched=false&search=5561",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 1
+    assert payload["items"][0]["wc_id"] == 5561
+    assert payload["items"][0]["vehicle_display_name"] == "Escavatore bonifica"
+    assert payload["items"][0]["matched_fuel_log_id"] is None
 
     db.close()

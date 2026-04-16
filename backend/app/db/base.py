@@ -7,6 +7,7 @@ from app.modules.accessi.wc_org_charts import WCOrgChart, WCOrgChartEntry
 from app.modules.inventory.models import WarehouseRequest
 from app.modules.operazioni.models.wc_area import WCArea
 from app.modules.operazioni.models.wc_operator import WCOperator
+from app.modules.operazioni.models.vehicles import WCRefuelEvent
 from app.modules.riordino.models import (
     RiordinoAppeal,
     RiordinoChecklistItem,
@@ -116,6 +117,7 @@ __all__ = [
     "UserSectionPermission",
     "WarehouseRequest",
     "WCArea",
+    "WCRefuelEvent",
     "WCOrgChart",
     "WCOrgChartEntry",
     "WCOperator",

@@ -229,6 +229,8 @@ function DashboardContent({ token }: { token: string }) {
                                 id: item.subject_id,
                                 subject_type: "unknown",
                                 status: "active",
+                                source_system: "gaia",
+                                source_external_id: null,
                                 source_name_raw: item.subject_display_name,
                                 display_name: item.subject_display_name,
                                 codice_fiscale: null,

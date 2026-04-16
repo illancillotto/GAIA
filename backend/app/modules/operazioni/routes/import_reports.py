@@ -80,4 +80,5 @@ async def import_fleet_transactions_endpoint(
         "skipped": result.skipped,
         "errors": result.errors,
         "rows_read": result.rows_read,
+        "matched_white_refuels": result.matched_white_refuels,
     }

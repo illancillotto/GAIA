@@ -220,6 +220,35 @@ class VehicleFuelLogResponse(BaseModel):
     created_at: datetime
 
 
+class WCRefuelEventResponse(BaseModel):
+    id: UUID
+    wc_id: int
+    vehicle_id: UUID | None
+    wc_operator_id: UUID | None
+    matched_fuel_log_id: UUID | None
+    matched_fuel_card_id: UUID | None
+    vehicle_code: str | None
+    operator_name: str | None
+    fueled_at: datetime
+    odometer_km: Decimal | None
+    source_issue: str | None
+    matched_at: datetime | None
+    wc_synced_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+    vehicle_display_name: str | None = None
+    operator_display_name: str | None = None
+    fuel_card_code: str | None = None
+
+
+class WCRefuelEventListResponse(BaseModel):
+    items: list[WCRefuelEventResponse]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
+
 # --- Vehicle Maintenance ---
 
 

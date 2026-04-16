@@ -157,10 +157,16 @@ function getSkippedTooltip(status: BonificaSyncEntityStatus): string | undefined
   if ((status.records_skipped ?? 0) <= 0) {
     return undefined;
   }
-  if (status.entity === "reports") {
-    return "Gia presenti a database";
-  }
-  return undefined;
+
+  const skippedTooltipByEntity: Partial<Record<string, string>> = {
+    reports: "Gia presenti a database",
+    refuels: "Gia presenti o non importabili dai dati WhiteCompany",
+    taken_charge: "Gia presenti a database",
+    users: "Gia presenti o fuori scope del job (es. consorziati)",
+    consorziati: "Gia presenti nello staging o fuori scope del job",
+  };
+
+  return skippedTooltipByEntity[status.entity] ?? "Gia presenti o gia allineati in GAIA";
 }
 
 function getSourceTotal(status: BonificaSyncEntityStatus): number | null {
@@ -718,7 +724,7 @@ export function ElaborazioniBonificaSyncWorkspace({ embedded = false }: { embedd
             <ElaborazioneNoticeCard
               compact
               title="Split utenti"
-              description="`users` sincronizza solo operatori (esclude Consorziati). `consorziati` alimenta lo staging Utenze e richiede approvazione manuale."
+              description="`users` sincronizza solo operatori (esclude Consorziati). `consorziati` alimenta lo staging Utenze e richiede import esplicito in anagrafica."
             />
           )
         }

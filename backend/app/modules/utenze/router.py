@@ -1312,8 +1312,11 @@ def _approve_bonifica_staging_item(
         subject = AnagraficaSubject(
             subject_type=subject_type,
             status=AnagraficaSubjectStatus.ACTIVE.value,
+            source_system="whitecompany",
+            source_external_id=str(staging.wc_id),
             source_name_raw=source_name_raw,
             requires_review=False,
+            imported_at=datetime.now(timezone.utc),
         )
         db.add(subject)
         db.flush()
@@ -1334,9 +1337,12 @@ def _approve_bonifica_staging_item(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Il tipo soggetto GAIA non è compatibile con il record Bonifica",
             )
+        subject.source_system = "whitecompany"
+        subject.source_external_id = str(staging.wc_id)
         subject.source_name_raw = source_name_raw
         subject.status = AnagraficaSubjectStatus.ACTIVE.value
         subject.requires_review = False
+        subject.imported_at = subject.imported_at or datetime.now(timezone.utc)
         _apply_subject_payload(db, subject, subject_type, person_payload, company_payload)
         _create_subject_audit(
             db,
@@ -1367,6 +1373,8 @@ def _build_subject_list_item(db: Session, subject: AnagraficaSubject) -> Anagraf
         id=str(subject.id),
         subject_type=subject.subject_type,
         status=subject.status,
+        source_system=subject.source_system,
+        source_external_id=subject.source_external_id,
         source_name_raw=subject.source_name_raw,
         display_name=display_name,
         codice_fiscale=codice_fiscale,
@@ -1551,6 +1559,8 @@ def _build_subject_detail(db: Session, subject_id: uuid.UUID) -> AnagraficaSubje
         id=str(subject.id),
         subject_type=subject.subject_type,
         status=subject.status,
+        source_system=subject.source_system,
+        source_external_id=subject.source_external_id,
         source_name_raw=subject.source_name_raw,
         nas_folder_path=subject.nas_folder_path,
         nas_folder_letter=subject.nas_folder_letter,

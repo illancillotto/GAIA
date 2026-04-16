@@ -140,9 +140,6 @@ def sync_white_consorziati(*, db: Session, rows: list[BonificaUserRow]) -> White
     errors: list[str] = []
 
     for row in rows:
-        if (row.role or "").strip().lower() != "consorziato":
-            skipped += 1
-            continue
         try:
             staging = db.scalar(select(BonificaUserStaging).where(BonificaUserStaging.wc_id == row.wc_id))
             subject, person, company = _match_subject(db, row)

@@ -209,6 +209,7 @@ export async function importFleetTransactions(file: File): Promise<{
   skipped: number;
   errors: string[];
   rows_read: number;
+  matched_white_refuels: number;
 }> {
   const formData = new FormData();
   formData.append("file", file);
@@ -216,6 +217,11 @@ export async function importFleetTransactions(file: File): Promise<{
     method: "POST",
     body: formData,
   });
+}
+
+export async function getWhiteRefuelEvents(params?: Record<string, string>) {
+  const qs = params ? `?${new URLSearchParams(params).toString()}` : "";
+  return fetchOperazioni(`/vehicles/refuel-events${qs}`);
 }
 
 // --- Cases ---

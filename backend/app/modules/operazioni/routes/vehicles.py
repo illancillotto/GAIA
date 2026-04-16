@@ -7,13 +7,20 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import String, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
+from app.modules.operazioni.models.fuel_cards import FuelCard
+from app.modules.operazioni.models.vehicles import WCRefuelEvent
+from app.modules.operazioni.models.wc_operator import WCOperator
+from app.modules.operazioni.models.vehicles import Vehicle as VehicleModel
 
 from app.modules.operazioni.schemas.vehicles import (
+    WCRefuelEventListResponse,
+    WCRefuelEventResponse,
     VehicleAssignmentClose,
     VehicleAssignmentCreate,
     VehicleAssignmentResponse,
@@ -65,6 +72,46 @@ def _get_current_user_id(current_user: ApplicationUser) -> int:
     return current_user.id
 
 
+def _serialize_wc_refuel_event(db: Session, item: WCRefuelEvent) -> WCRefuelEventResponse:
+    vehicle_display_name = None
+    operator_display_name = None
+    fuel_card_code = None
+
+    if item.vehicle_id is not None:
+        vehicle = db.get(VehicleModel, item.vehicle_id)
+        if vehicle is not None:
+            vehicle_display_name = vehicle.name
+    if item.wc_operator_id is not None:
+        operator = db.get(WCOperator, item.wc_operator_id)
+        if operator is not None:
+            operator_display_name = " ".join(part for part in [operator.last_name, operator.first_name] if part) or operator.username
+    if item.matched_fuel_card_id is not None:
+        fuel_card = db.get(FuelCard, item.matched_fuel_card_id)
+        if fuel_card is not None:
+            fuel_card_code = fuel_card.codice
+
+    return WCRefuelEventResponse(
+        id=item.id,
+        wc_id=item.wc_id,
+        vehicle_id=item.vehicle_id,
+        wc_operator_id=item.wc_operator_id,
+        matched_fuel_log_id=item.matched_fuel_log_id,
+        matched_fuel_card_id=item.matched_fuel_card_id,
+        vehicle_code=item.vehicle_code,
+        operator_name=item.operator_name,
+        fueled_at=item.fueled_at,
+        odometer_km=item.odometer_km,
+        source_issue=item.source_issue,
+        matched_at=item.matched_at,
+        wc_synced_at=item.wc_synced_at,
+        created_at=item.created_at,
+        updated_at=item.updated_at,
+        vehicle_display_name=vehicle_display_name,
+        operator_display_name=operator_display_name,
+        fuel_card_code=fuel_card_code,
+    )
+
+
 # --- Vehicle CRUD ---
 
 
@@ -110,6 +157,47 @@ def create_vehicle_endpoint(
     )
     db.commit()
     return vehicle
+
+
+@router.get("/refuel-events", response_model=WCRefuelEventListResponse)
+def list_wc_refuel_events_endpoint(
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+    matched: bool | None = Query(False),
+    search: str | None = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25, ge=1, le=100),
+):
+    query = select(WCRefuelEvent)
+    if matched is not None:
+        query = query.where(
+            WCRefuelEvent.matched_fuel_log_id.is_not(None)
+            if matched
+            else WCRefuelEvent.matched_fuel_log_id.is_(None)
+        )
+    if search:
+        like = f"%{search.strip()}%"
+        query = query.where(
+            or_(
+                WCRefuelEvent.vehicle_code.ilike(like),
+                WCRefuelEvent.operator_name.ilike(like),
+                func.cast(WCRefuelEvent.wc_id, String).ilike(like),
+            )
+        )
+
+    total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+    items = db.scalars(
+        query.order_by(WCRefuelEvent.fueled_at.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ).all()
+    return WCRefuelEventListResponse(
+        items=[_serialize_wc_refuel_event(db, item) for item in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+        total_pages=math.ceil(total / page_size) if page_size else 0,
+    )
 
 
 @router.get("/{vehicle_id}", response_model=VehicleResponse)

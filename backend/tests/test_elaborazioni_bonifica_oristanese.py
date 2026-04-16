@@ -43,7 +43,7 @@ from app.modules.elaborazioni.bonifica_oristanese.models import BonificaOristane
 from app.modules.elaborazioni.bonifica_oristanese.parsers import clean_html_text
 from app.modules.operazioni.models.reports import FieldReport, FieldReportCategory
 from app.modules.operazioni.models.wc_area import WCArea
-from app.modules.operazioni.models.vehicles import Vehicle, VehicleFuelLog, VehicleUsageSession
+from app.modules.operazioni.models.vehicles import Vehicle, VehicleFuelLog, VehicleUsageSession, WCRefuelEvent
 from app.modules.operazioni.models.wc_operator import WCOperator
 from app.modules.operazioni.services.sync_vehicles import sync_white_vehicles
 from app.modules.utenze.models import AnagraficaCompany, AnagraficaPerson, AnagraficaSubject, BonificaUserStaging
@@ -1126,11 +1126,99 @@ def test_bonifica_sync_run_imports_consorziati_and_approve_creates_subject(
         subject = db.get(AnagraficaSubject, staging.matched_subject_id)
         assert subject is not None
         assert subject.subject_type == "company"
+        assert subject.source_system == "whitecompany"
+        assert subject.source_external_id == "8801"
+        assert subject.imported_at is not None
 
         company = db.get(AnagraficaCompany, subject.id)
         assert company is not None
         assert company.ragione_sociale == "Azienda Agricola Demo"
         assert company.partita_iva == "12345678901"
+    finally:
+        db.close()
+
+
+def test_bonifica_sync_run_imports_consorziati_even_when_role_is_not_human_label(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    create_response = client.post(
+        "/elaborazioni/bonifica/credentials",
+        headers=auth_headers(),
+        json={
+            "label": "Account sync consorziati raw role",
+            "login_identifier": "utente@example.local",
+            "password": "bonifica-secret",
+            "remember_me": True,
+        },
+    )
+    assert create_response.status_code == 201
+
+    async def fake_login(self):
+        from app.modules.elaborazioni.bonifica_oristanese.session import BonificaOristaneseSession
+
+        self._session = BonificaOristaneseSession(
+            authenticated_url="https://login.bonificaoristanese.it/dashboard",
+            cookie_names=["XSRF-TOKEN", "laravel_session"],
+        )
+        return self._session
+
+    async def fake_close(self) -> None:
+        return None
+
+    async def fake_fetch_consorziati(self):
+        return (
+            [
+                BonificaUserRow(
+                    wc_id=8802,
+                    username="consorziato.raw-role",
+                    email="raw-role@example.local",
+                    user_type="company",
+                    business_name="Consorziato Raw Role Srl",
+                    first_name=None,
+                    last_name=None,
+                    tax="98765432109",
+                    contact_phone="0783-000000",
+                    contact_mobile="3330000000",
+                    enabled=True,
+                    role="3",
+                )
+            ],
+            1,
+        )
+
+    monkeypatch.setattr("app.modules.elaborazioni.bonifica_oristanese.session.BonificaOristaneseSessionManager.login", fake_login)
+    monkeypatch.setattr("app.modules.elaborazioni.bonifica_oristanese.session.BonificaOristaneseSessionManager.close", fake_close)
+    monkeypatch.setattr(
+        "app.modules.elaborazioni.bonifica_oristanese.apps.users.client.BonificaUsersClient.fetch_consorziati",
+        fake_fetch_consorziati,
+    )
+
+    response = client.post(
+        "/elaborazioni/bonifica/sync/run",
+        headers=auth_headers(),
+        json={"entities": ["consorziati"]},
+    )
+    assert response.status_code == 200
+    assert response.json()["jobs"]["consorziati"]["status"] == "queued"
+
+    list_response = client.get("/utenze/bonifica-staging", headers=auth_headers())
+    assert list_response.status_code == 200
+    items = list_response.json()["items"]
+    assert len(items) == 1
+    assert items[0]["wc_id"] == 8802
+    assert items[0]["review_status"] == "new"
+
+    status_response = client.get("/elaborazioni/bonifica/sync/status", headers=auth_headers())
+    assert status_response.status_code == 200
+    consorziati_status = status_response.json()["entities"]["consorziati"]
+    assert consorziati_status["records_synced"] == 1
+    assert consorziati_status["records_skipped"] == 0
+
+    db = TestingSessionLocal()
+    try:
+        staging = db.scalar(select(BonificaUserStaging).where(BonificaUserStaging.wc_id == 8802))
+        assert staging is not None
+        assert staging.review_status == "new"
     finally:
         db.close()
 
@@ -1365,6 +1453,11 @@ def test_bonifica_sync_run_imports_vehicles_and_taken_charge(
 
         skipped_fuel_log = db.scalar(select(VehicleFuelLog).where(VehicleFuelLog.wc_id == 701))
         assert skipped_fuel_log is None
+        wc_refuel_event = db.scalar(select(WCRefuelEvent).where(WCRefuelEvent.wc_id == 701))
+        assert wc_refuel_event is not None
+        assert wc_refuel_event.vehicle_id == vehicle.id
+        assert wc_refuel_event.operator_name == "Mario Rossi"
+        assert wc_refuel_event.matched_fuel_log_id is None
     finally:
         db.close()
 
@@ -1536,8 +1629,8 @@ def test_bonifica_sync_refuels_skips_orphaned_white_detail_and_continues(
     assert status_response.status_code == 200
     refuels_status = status_response.json()["entities"]["refuels"]
     assert refuels_status["status"] == "completed"
-    assert refuels_status["records_synced"] == 1
-    assert refuels_status["records_skipped"] == 1
+    assert refuels_status["records_synced"] == 2
+    assert refuels_status["records_skipped"] == 0
     assert refuels_status["records_errors"] == 0
 
     db = TestingSessionLocal()
@@ -1545,6 +1638,9 @@ def test_bonifica_sync_refuels_skips_orphaned_white_detail_and_continues(
         fuel_log = db.scalar(select(VehicleFuelLog).where(VehicleFuelLog.wc_id == 702))
         assert fuel_log is not None
         assert db.scalar(select(VehicleFuelLog).where(VehicleFuelLog.wc_id == 2472)) is None
+        staged_event = db.scalar(select(WCRefuelEvent).where(WCRefuelEvent.wc_id == 2472))
+        assert staged_event is not None
+        assert staged_event.source_issue is not None
     finally:
         db.close()
 

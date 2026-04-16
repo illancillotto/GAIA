@@ -20,7 +20,7 @@ export default function UtenzeBonificaStagingDetailPage() {
   return (
     <UtenzeModulePage
       title="Dettaglio staging consorziato"
-      description="Revisione record importato da WhiteCompany prima dell'approvazione verso Utenze."
+      description="Revisione record importato da WhiteCompany prima dell'import verso Utenze."
       breadcrumb="Utenze / Staging consorziati"
     >
       {({ token }) => <Detail token={token} stagingId={stagingId} />}
@@ -94,7 +94,7 @@ function Detail({ token, stagingId }: { token: string; stagingId: string }) {
           </button>
           <button className="btn-primary" type="button" onClick={() => void handleApprove()} disabled={busy || loading}>
             <CheckIcon className="mr-2 inline h-4 w-4" />
-            Approva
+            {item?.matched_subject_id ? "Aggiorna da WhiteCompany" : "Importa in anagrafica"}
           </button>
         </div>
       </div>
@@ -151,4 +151,3 @@ function Row({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
-
