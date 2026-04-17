@@ -107,8 +107,14 @@ export function ModuleWorkspaceNoticeCard({
   );
 }
 
-export function ModuleWorkspaceKpiRow({ children }: { children: ReactNode }) {
-  return <div className="flex flex-wrap gap-2">{children}</div>;
+export function ModuleWorkspaceKpiRow({
+  children,
+  compact = false,
+}: {
+  children: ReactNode;
+  compact?: boolean;
+}) {
+  return <div className={cn("flex flex-wrap", compact ? "gap-1.5" : "gap-2")}>{children}</div>;
 }
 
 export function ModuleWorkspaceKpiTile({
@@ -116,11 +122,13 @@ export function ModuleWorkspaceKpiTile({
   value,
   hint,
   variant = "default",
+  compact = false,
 }: {
   label: string;
   value: ReactNode;
   hint: string;
   variant?: "default" | "emerald" | "amber";
+  compact?: boolean;
 }) {
   const borderClass =
     variant === "emerald" ? "border-emerald-200/70" : variant === "amber" ? "border-amber-200/80" : "border-white/70";
@@ -128,14 +136,15 @@ export function ModuleWorkspaceKpiTile({
   return (
     <div
       className={cn(
-        "min-w-[160px] flex-1 rounded-2xl border bg-white/80 px-4 py-3 sm:min-w-[200px]",
+        "flex-1 rounded-2xl border bg-white/80",
+        compact ? "min-w-[140px] px-3 py-2.5 sm:min-w-[180px]" : "min-w-[160px] px-4 py-3 sm:min-w-[200px]",
         borderClass,
       )}
     >
       <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">{label}</p>
-      <div className="mt-2 flex items-baseline justify-between gap-3">
-        <p className="text-lg font-semibold text-gray-900">{value}</p>
-        <p className="truncate text-xs text-gray-500">{hint}</p>
+      <div className={cn("flex items-baseline justify-between", compact ? "mt-1.5 gap-2" : "mt-2 gap-3")}>
+        <p className={cn("font-semibold text-gray-900", compact ? "text-base" : "text-lg")}>{value}</p>
+        <p className={cn("truncate text-gray-500", compact ? "text-[11px]" : "text-xs")}>{hint}</p>
       </div>
     </div>
   );

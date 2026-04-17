@@ -272,7 +272,7 @@ function SubjectsContent({ token }: { token: string }) {
     };
   }, [previewUrl]);
 
-  async function openHistoryModal(e: React.MouseEvent, subjectId: string, displayName: string) {
+  const openHistoryModal = useCallback(async (e: React.MouseEvent, subjectId: string, displayName: string) => {
     e.stopPropagation();
     setHistorySubjectId(subjectId);
     setHistorySubjectName(displayName);
@@ -287,7 +287,7 @@ function SubjectsContent({ token }: { token: string }) {
     } finally {
       setIsHistoryLoading(false);
     }
-  }
+  }, [token]);
 
   const columns = useMemo<ColumnDef<UtenzeSubjectListItem>[]>(
     () => [
@@ -355,7 +355,7 @@ function SubjectsContent({ token }: { token: string }) {
         ),
       },
     ],
-    [token],
+    [openHistoryModal],
   );
 
   async function handleCreateSubject() {

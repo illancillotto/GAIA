@@ -34,6 +34,10 @@ export type RuoloImportUploadResponse = {
   existing_count: number;
 };
 
+export type RuoloImportYearDetectionResponse = {
+  detected_year: number | null;
+};
+
 // ── Avvisi ────────────────────────────────────────────────────────────────────
 
 export type RuoloAvvisoListItemResponse = {

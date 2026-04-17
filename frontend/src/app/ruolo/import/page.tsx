@@ -13,7 +13,7 @@ import { RuoloModulePage } from "@/components/ruolo/module-page";
 import { EmptyState } from "@/components/ui/empty-state";
 import { AlertTriangleIcon, CalendarIcon, DocumentIcon, FolderIcon, LockIcon, RefreshIcon } from "@/components/ui/icons";
 import { getStoredAccessToken } from "@/lib/auth";
-import { getImportJob, listImportJobs, uploadRuoloFile } from "@/lib/ruolo-api";
+import { detectRuoloImportYear, getImportJob, listImportJobs, uploadRuoloFile } from "@/lib/ruolo-api";
 import type { RuoloImportJobResponse } from "@/types/ruolo";
 
 function StatusBadge({ status }: { status: string }) {
@@ -32,8 +32,11 @@ function StatusBadge({ status }: { status: string }) {
 
 export default function RuoloImportPage() {
   const [token, setToken] = useState<string | null>(null);
+  const [isEmbedded, setIsEmbedded] = useState(false);
   const [file, setFile] = useState<File | null>(null);
-  const [anno, setAnno] = useState<number>(new Date().getFullYear());
+  const [anno, setAnno] = useState<string>("");
+  const [isDetectingYear, setIsDetectingYear] = useState(false);
+  const [yearDetectionError, setYearDetectionError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [warningMsg, setWarningMsg] = useState<string | null>(null);
@@ -43,6 +46,10 @@ export default function RuoloImportPage() {
 
   useEffect(() => {
     setToken(getStoredAccessToken());
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      setIsEmbedded(params.get("embedded") === "1");
+    }
   }, []);
 
   useEffect(() => {
@@ -77,10 +84,11 @@ export default function RuoloImportPage() {
     setUploadError(null);
     setWarningMsg(null);
     try {
-      const result = await uploadRuoloFile(token, file, anno);
+      const normalizedAnno = anno.trim() === "" ? undefined : Number(anno);
+      const result = await uploadRuoloFile(token, file, normalizedAnno);
       if (result.warning_existing) {
         setWarningMsg(
-          `Attenzione: esistono già ${result.existing_count} avvisi per l'anno ${anno}. I dati verranno aggiornati.`,
+          `Attenzione: esistono già ${result.existing_count} avvisi per l'anno ${result.anno_tributario}. I dati verranno aggiornati.`,
         );
       }
       const newJob: RuoloImportJobResponse = {
@@ -102,10 +110,37 @@ export default function RuoloImportPage() {
       setJobs((prev) => [newJob, ...prev]);
       setPollingJobId(result.job_id);
       setFile(null);
+      setAnno(String(result.anno_tributario));
+      setYearDetectionError(null);
     } catch (err: unknown) {
       setUploadError(err instanceof Error ? err.message : "Errore durante l'upload");
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function handleFileSelection(nextFile: File | null) {
+    setFile(nextFile);
+    setUploadError(null);
+    setWarningMsg(null);
+    setYearDetectionError(null);
+
+    if (!nextFile || !token) {
+      return;
+    }
+
+    setIsDetectingYear(true);
+    try {
+      const result = await detectRuoloImportYear(token, nextFile);
+      if (result.detected_year != null) {
+        setAnno(String(result.detected_year));
+      } else if (anno.trim() === "") {
+        setYearDetectionError("Anno non rilevato automaticamente dal file. Inseriscilo manualmente prima dell'import.");
+      }
+    } catch (err) {
+      setYearDetectionError(err instanceof Error ? err.message : "Errore rilevamento anno");
+    } finally {
+      setIsDetectingYear(false);
     }
   }
 
@@ -129,6 +164,7 @@ export default function RuoloImportPage() {
     >
       <div className="space-y-8">
         <ModuleWorkspaceHero
+          compact={isEmbedded}
           badge={
             <>
               <LockIcon className="h-3.5 w-3.5" />
@@ -162,25 +198,29 @@ export default function RuoloImportPage() {
             </>
           }
         >
-          <ModuleWorkspaceKpiRow>
+          <ModuleWorkspaceKpiRow compact={isEmbedded}>
             <ModuleWorkspaceKpiTile
+              compact={isEmbedded}
               label="Job registrati"
               value={jobs.length}
               hint="Cronologia import"
             />
             <ModuleWorkspaceKpiTile
+              compact={isEmbedded}
               label="In esecuzione"
               value={runningJobs.length}
               hint="Pending + running"
               variant={runningJobs.length > 0 ? "amber" : "default"}
             />
             <ModuleWorkspaceKpiTile
+              compact={isEmbedded}
               label="Completati"
               value={completedJobs.length}
               hint="Conclusi con successo"
               variant="emerald"
             />
             <ModuleWorkspaceKpiTile
+              compact={isEmbedded}
               label="Record importati"
               value={importedRecords}
               hint="Somma storico disponibile"
@@ -197,7 +237,7 @@ export default function RuoloImportPage() {
               </p>
               <p className="mt-3 text-lg font-semibold text-gray-900">Prepara un nuovo job di import.</p>
               <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600">
-                Inserisci anno tributario e file sorgente. Il sistema avvierà il job e lo aggiungerà subito alla cronologia locale con polling automatico dello stato.
+                Seleziona il file sorgente: il sistema proverà a rilevare automaticamente l&apos;anno tributario dal contenuto e avvierà il job aggiungendolo subito alla cronologia locale con polling automatico dello stato.
               </p>
             </div>
             <div className="p-6">
@@ -213,10 +253,13 @@ export default function RuoloImportPage() {
                       min={1990}
                       max={2100}
                       value={anno}
-                      onChange={(e) => setAnno(Number(e.target.value))}
+                      onChange={(e) => setAnno(e.target.value)}
                       className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-800 focus:border-[#1D4E35] focus:outline-none focus:ring-1 focus:ring-[#1D4E35]"
-                      required
+                      placeholder={isDetectingYear ? "Rilevamento..." : "Auto dal file o inserimento manuale"}
                     />
+                    <p className="mt-1 text-xs text-gray-500">
+                      {isDetectingYear ? "Rilevamento anno in corso dal file selezionato." : "Campo modificabile: se il rilevamento automatico fallisce puoi inserirlo manualmente."}
+                    </p>
                   </div>
                   <div>
                     <label className="mb-1.5 block text-sm font-medium text-gray-700" htmlFor="file">
@@ -226,12 +269,18 @@ export default function RuoloImportPage() {
                       id="file"
                       type="file"
                       accept=".dmp,.pdf,.txt"
-                      onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                      onChange={(e) => void handleFileSelection(e.target.files?.[0] ?? null)}
                       className="w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm text-gray-600 file:mr-3 file:rounded file:border-0 file:bg-[#EAF3E8] file:px-3 file:py-1 file:text-xs file:font-medium file:text-[#1D4E35]"
                       required
                     />
                   </div>
                 </div>
+
+                {yearDetectionError ? (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                    {yearDetectionError}
+                  </div>
+                ) : null}
 
                 {warningMsg ? (
                   <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-800">

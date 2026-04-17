@@ -13,6 +13,7 @@ from app.modules.ruolo.services.parser import (
     _parse_header,
     _parse_n4_blocks,
     _parse_particella_line,
+    detect_anno_tributario,
     _parse_partite_block,
     extract_text_from_content,
     parse_ruolo_file,
@@ -222,3 +223,25 @@ def test_extract_text_plain():
     content = FULL_SAMPLE.encode("utf-8")
     text = extract_text_from_content(content, filename="ruolo.dmp")
     assert "<inizio>" in text
+
+
+def test_detect_anno_tributario_from_structured_content():
+    content = FULL_SAMPLE.encode("utf-8")
+    assert detect_anno_tributario(content, filename="ruolo_ignoto.pdf") == 2024
+
+
+def test_detect_anno_tributario_from_partita_cnc_pattern():
+    content = b"<qm500>--Partita CNC 01.02021000039305--------<inizio>"
+    assert detect_anno_tributario(content, filename="ruolo_ignoto.pdf") == 2021
+
+
+def test_detect_anno_tributario_from_filename_fallback():
+    content = b"contenuto senza anno utile"
+    assert detect_anno_tributario(content, filename="RUOLO_BONIFICA_2025.dmp.pdf") == 2025
+
+
+def test_detect_anno_tributario_from_filename_r_pattern():
+    content = b"contenuto senza anno utile"
+    assert detect_anno_tributario(content, filename="R2024.14215.00002.dmp.pdf") == 2024
+    assert detect_anno_tributario(content, filename="R2022.14215.00002.dmp.pdf") == 2022
+    assert detect_anno_tributario(content, filename="R2019.irr.14215.dmp.pdf") == 2019

@@ -162,3 +162,8 @@
 
 ### 2026-04-17
 - Allineata anche l'integrazione embedded `RuoloAvvisiSection` nella scheda soggetto del dominio utenze, con visual language coerente al workspace `ruolo` e CTA operative uniformate.
+- Ridotta l'altezza della hero di `/ruolo/import` quando aperta in modale (`embedded=1`), per migliorare leggibilità e densità del workspace rapido.
+- Compattata anche la KPI row del workspace rapido `/ruolo/import` in modalità embedded, con gap e tile più bassi per aumentare spazio utile sopra il fold.
+- `/ruolo/import` ora prova a rilevare automaticamente l'anno tributario dal file selezionato (contenuto PDF/testo o filename) e consente comunque override manuale.
+- Euristica anno `ruolo` resa deterministica: priorità a filename `R2024...`, poi pattern `Partita CNC 01.02021000039305` da cui viene estratto `2021`, infine fallback testuali.
+- Aumentato il limite upload Nginx del progetto per supportare file `ruolo` fino a 128 MB senza errore `413 Request Entity Too Large`.

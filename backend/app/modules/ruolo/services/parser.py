@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import re
+from collections import Counter
 from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 
@@ -663,3 +664,61 @@ def extract_text_from_content(raw_content: bytes, filename: str = "") -> str:
         except UnicodeDecodeError:
             continue
     return raw_content.decode("latin-1", errors="replace")
+
+
+def detect_anno_tributario(raw_content: bytes, filename: str = "") -> int | None:
+    """
+    Rileva l'anno tributario dal contenuto del file o dal nome file.
+    Considera solo anni 2000-2100 per evitare falsi positivi da date anagrafiche.
+    """
+    def _valid(year: int) -> bool:
+        return 2000 <= year <= 2100
+
+    filename_match = re.search(r"\bR(20\d{2})[.\-_]", filename, flags=re.IGNORECASE)
+    if filename_match:
+        year = int(filename_match.group(1))
+        if _valid(year):
+            return year
+
+    generic_filename_years = [
+        int(match.group(1))
+        for match in re.finditer(r"(20\d{2})", filename)
+        if _valid(int(match.group(1)))
+    ]
+    if generic_filename_years:
+        return Counter(generic_filename_years).most_common(1)[0][0]
+
+    text = extract_text_from_content(raw_content, filename=filename)
+
+    cnc_years = [
+        int(match.group(1))
+        for match in re.finditer(r"Partita\s+CNC\s+\d{2}\.0(20\d{2})\d+", text, flags=re.IGNORECASE)
+        if _valid(int(match.group(1)))
+    ]
+    if cnc_years:
+        return Counter(cnc_years).most_common(1)[0][0]
+
+    structured_years: list[int] = []
+
+    for match in re.finditer(r"\b(20\d{2})\s+(?:0648|0985|0668)\b", text):
+        year = int(match.group(1))
+        if _valid(year):
+            structured_years.append(year)
+
+    for match in re.finditer(r"ANNO\s+TRIB(?:UTARIO)?\D{0,40}(20\d{2})", text, flags=re.IGNORECASE):
+        year = int(match.group(1))
+        if _valid(year):
+            structured_years.append(year)
+
+    if structured_years:
+        return Counter(structured_years).most_common(1)[0][0]
+
+    generic_text_years = [
+        int(match.group(1))
+        for match in re.finditer(r"\b(20\d{2})\b", text)
+        if _valid(int(match.group(1)))
+    ]
+    if generic_text_years:
+        return Counter(generic_text_years).most_common(1)[0][0]
+
+    return None

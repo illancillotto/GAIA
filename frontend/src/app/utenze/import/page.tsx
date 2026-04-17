@@ -58,11 +58,13 @@ function ImportContent({ token }: { token: string }) {
     void loadXlsxBatches();
   }, [loadXlsxBatches]);
 
+  const xlsxActiveBatchStatus = xlsxActiveBatch?.status;
+
   useEffect(() => {
-    if (!xlsxActiveBatch || xlsxActiveBatch.status === "completed" || xlsxActiveBatch.status === "failed") return;
+    if (!xlsxActiveBatchStatus || xlsxActiveBatchStatus === "completed" || xlsxActiveBatchStatus === "failed") return;
     const id = window.setInterval(() => void loadXlsxBatches(), 1500);
     return () => window.clearInterval(id);
-  }, [xlsxActiveBatch?.status, loadXlsxBatches]);
+  }, [xlsxActiveBatchStatus, loadXlsxBatches]);
 
   async function handleXlsxImport() {
     if (!xlsxFile) return;
@@ -234,7 +236,7 @@ function ImportContent({ token }: { token: string }) {
       <article className="panel-card">
         <div className="mb-4">
           <p className="section-title">Import anagrafica Excel</p>
-          <p className="section-copy">Carica il file .xlsx dell'anagrafica per popolare o aggiornare le utenze. Solo amministratori. Per ogni riga viene eseguito un upsert basato su Codice Fiscale / Partita IVA.</p>
+          <p className="section-copy">Carica il file .xlsx dell&apos;anagrafica per popolare o aggiornare le utenze. Solo amministratori. Per ogni riga viene eseguito un upsert basato su Codice Fiscale / Partita IVA.</p>
         </div>
         {xlsxError ? <p className="mb-3 text-sm text-red-600">{xlsxError}</p> : null}
         <div className="flex flex-wrap items-end gap-3">

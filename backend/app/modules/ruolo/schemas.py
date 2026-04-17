@@ -51,6 +51,10 @@ class RuoloImportUploadResponse(BaseModel):
     existing_count: int = 0
 
 
+class RuoloImportYearDetectionResponse(BaseModel):
+    detected_year: int | None = None
+
+
 # ---------------------------------------------------------------------------
 # Particella
 # ---------------------------------------------------------------------------

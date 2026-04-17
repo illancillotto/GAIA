@@ -5,6 +5,7 @@ import type {
   RuoloImportJobListResponse,
   RuoloImportJobResponse,
   RuoloImportUploadResponse,
+  RuoloImportYearDetectionResponse,
   RuoloStatsResponse,
   RuoloStatsComuneResponse,
 } from "@/types/ruolo";
@@ -43,12 +44,26 @@ async function ruoloRequest<T>(path: string, token: string, init?: RequestInit):
 export async function uploadRuoloFile(
   token: string,
   file: File,
-  annoTributario: number,
+  annoTributario?: number,
 ): Promise<RuoloImportUploadResponse> {
   const form = new FormData();
   form.append("file", file);
-  form.append("anno_tributario", String(annoTributario));
+  if (annoTributario != null) {
+    form.append("anno_tributario", String(annoTributario));
+  }
   return ruoloRequest<RuoloImportUploadResponse>("/ruolo/import/upload", token, {
+    method: "POST",
+    body: form,
+  });
+}
+
+export async function detectRuoloImportYear(
+  token: string,
+  file: File,
+): Promise<RuoloImportYearDetectionResponse> {
+  const form = new FormData();
+  form.append("file", file);
+  return ruoloRequest<RuoloImportYearDetectionResponse>("/ruolo/import/detect-year", token, {
     method: "POST",
     body: form,
   });

@@ -10,6 +10,7 @@ from typing import Any
 
 import openpyxl
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models.application_user import ApplicationUser
@@ -233,11 +234,25 @@ def _upsert_row(
     if is_anomaly:
         return _upsert_anomaly(db, row, row_number, current_user)
 
-    with db.begin_nested():
-        if is_person:
-            return _upsert_person(db, row, cf, current_user)
-        else:
-            return _upsert_company(db, row, cf, piva, current_user)
+    try:
+        with db.begin_nested():
+            if is_person:
+                return _upsert_person(db, row, cf, current_user)
+            else:
+                return _upsert_company(db, row, cf, piva, current_user)
+    except IntegrityError:
+        # Riga già presente (UniqueViolation): lookup forzato e aggiornamento
+        with db.begin_nested():
+            if is_person:
+                existing = _find_person_by_cf(db, cf)
+                if existing is None:
+                    raise
+                return _upsert_person(db, row, cf, current_user)
+            else:
+                existing_c = _find_company(db, cf, piva)
+                if existing_c is None:
+                    raise
+                return _upsert_company(db, row, cf, piva, current_user)
 
 
 def _upsert_person(
@@ -289,7 +304,7 @@ def _upsert_person(
             subject_id=subject.id,
             changed_by_user_id=current_user.id,
             action="xlsx_import_created",
-            diff_json={"before": None, "after": new_data, "row_number": row_number_from_cf(cf)},
+            diff_json={"before": None, "after": _json_safe(new_data)},
         ))
         db.flush()
         return "inserted"
@@ -317,7 +332,7 @@ def _upsert_person(
         subject_id=subject.id,
         changed_by_user_id=current_user.id,
         action="xlsx_import_updated",
-        diff_json={"before": old_data, "after": new_data},
+        diff_json={"before": _json_safe(old_data), "after": _json_safe(new_data)},
     ))
     db.flush()
     return "updated"
@@ -376,7 +391,7 @@ def _upsert_company(
             subject_id=subject.id,
             changed_by_user_id=current_user.id,
             action="xlsx_import_created",
-            diff_json={"before": None, "after": new_data},
+            diff_json={"before": None, "after": _json_safe(new_data)},
         ))
         db.flush()
         return "inserted"
@@ -402,7 +417,7 @@ def _upsert_company(
         subject_id=subject.id,
         changed_by_user_id=current_user.id,
         action="xlsx_import_updated",
-        diff_json={"before": old_data, "after": new_data},
+        diff_json={"before": _json_safe(old_data), "after": _json_safe(new_data)},
     ))
     db.flush()
     return "updated"
@@ -521,9 +536,18 @@ def _find_company(db: Session, cf: str | None, piva: str | None) -> AnagraficaCo
         if found:
             return found
     if cf:
+        # cerca per codice_fiscale
         found = db.scalar(
             select(AnagraficaCompany).where(
                 func.upper(func.replace(func.coalesce(AnagraficaCompany.codice_fiscale, ""), " ", "")) == cf
+            )
+        )
+        if found:
+            return found
+        # fallback: CF usato come partita_iva (P.IVA era vuota nel file)
+        found = db.scalar(
+            select(AnagraficaCompany).where(
+                func.upper(func.replace(AnagraficaCompany.partita_iva, " ", "")) == cf
             )
         )
         if found:
@@ -565,6 +589,11 @@ def _company_snapshot(c: AnagraficaCompany) -> dict[str, Any]:
 def _hash_dict(d: dict[str, Any]) -> str:
     serialized = json.dumps(d, sort_keys=True, default=str)
     return hashlib.md5(serialized.encode()).hexdigest()
+
+
+def _json_safe(d: dict[str, Any]) -> dict[str, Any]:
+    """Converte i valori non-serializzabili (date, datetime) in stringhe per diff_json."""
+    return {k: v.isoformat() if isinstance(v, (date, datetime)) else v for k, v in d.items()}
 
 
 def _build_person_note(row: dict[str, Any]) -> str | None:
