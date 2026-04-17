@@ -79,3 +79,19 @@ def test_super_admin_and_viewer_permission_resolution_sources() -> None:
     mine_viewer = client.get("/auth/my-permissions", headers={"Authorization": f"Bearer {viewer_token}"})
     assert mine_viewer.status_code == 200
     assert mine_viewer.json()["sections"][0]["source"] in {"role_default", "min_role"}
+
+
+def test_super_admin_receives_ruolo_sections_in_my_permissions() -> None:
+    create_user("root", "super_admin")
+    admin_token = login("root")
+
+    create_section_resp = client.post(
+        "/sections",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"module": "ruolo", "key": "ruolo.dashboard", "label": "Ruolo dashboard", "min_role": "viewer"},
+    )
+    assert create_section_resp.status_code == 201
+
+    mine_admin = client.get("/auth/my-permissions", headers={"Authorization": f"Bearer {admin_token}"})
+    assert mine_admin.status_code == 200
+    assert "ruolo.dashboard" in mine_admin.json()["granted_keys"]

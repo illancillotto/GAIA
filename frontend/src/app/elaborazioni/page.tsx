@@ -12,7 +12,7 @@ import { ModuleWorkspaceKpiRow, ModuleWorkspaceKpiTile } from "@/components/layo
 import { ElaborazioneOperationMessage } from "@/components/elaborazioni/operation-message";
 import { ElaborazioneWorkspaceModal } from "@/components/elaborazioni/workspace-modal";
 import { EmptyState } from "@/components/ui/empty-state";
-import { DocumentIcon, FolderIcon, LockIcon, RefreshIcon, SearchIcon, UsersIcon } from "@/components/ui/icons";
+import { FolderIcon, LockIcon, RefreshIcon, SearchIcon, UsersIcon } from "@/components/ui/icons";
 import {
   getElaborazioneBatches,
   getElaborazioneCaptchaSummary,

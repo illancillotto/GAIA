@@ -104,16 +104,19 @@
 - [x] `frontend/src/components/ruolo/module-page.tsx`
 - [x] Layout modulo `frontend/src/app/ruolo/layout.tsx`
 - [x] `/ruolo` — dashboard con stats per anno + ultimi job
-- [x] `/ruolo/import` — upload + lista job + polling automatico
-- [x] `/ruolo/avvisi` — lista con filtri URL-driven + paginazione
-- [x] `/ruolo/avvisi/[id]` — dettaglio completo con partite espandibili
-- [x] `/ruolo/stats` — statistiche per anno e per comune interattive
-- [x] Integrazione scheda soggetto `RuoloAvvisiSection`
+- [x] `/ruolo` — CTA stato vuoto apre import in modale con fallback `Apri pagina`
+- [x] `/ruolo` — dashboard riallineata al pattern UI/UX dei moduli maturi (hero workspace, KPI, action cards, pannelli)
+- [x] `/ruolo/import` — upload + lista job + polling automatico, riallineata al pattern UI/UX dei moduli maturi
+- [x] `/ruolo/avvisi` — lista con filtri URL-driven + paginazione, riallineata al pattern UI/UX dei moduli maturi
+- [x] `/ruolo/avvisi/[id]` — dettaglio completo con partite espandibili, riallineato al pattern UI/UX dei moduli maturi
+- [x] `/ruolo/stats` — statistiche per anno e per comune interattive, riallineate al pattern UI/UX dei moduli maturi
+- [x] Integrazione scheda soggetto `RuoloAvvisiSection`, riallineata al pattern UI/UX del modulo con hero compatta, mini-stat e CTA coerenti
 - [x] Nessun errore lint (`ReadLints` verde)
 
 ### M5 — Hardening
 - [x] `backend/tests/ruolo/test_parser.py` — **14 test passanti**
 - [x] Permessi `require_module("ruolo")` applicati su tutti gli endpoint
+- [x] Fix permessi admin esistenti: migration di backfill `module_ruolo` per account `admin` / `super_admin` creati prima del modulo
 - [x] Export CSV `GET /ruolo/avvisi/export` implementato
 - [ ] `backend/tests/ruolo/test_import.py` — import, idempotenza, orfani (pendente)
 - [ ] `backend/tests/ruolo/test_api.py` — endpoint principali (pendente)
@@ -156,3 +159,6 @@
 - M3 completata: bootstrap section keys, flag `module_ruolo` su ApplicationUser, router registrato.
 - M4 completata: 5 pagine frontend (`/ruolo`, `/ruolo/avvisi`, `/ruolo/avvisi/[id]`, `/ruolo/stats`, `/ruolo/import`), widget soggetto, navigazione aggiornata.
 - M5 parziale: permessi `require_module` attivi; test di integrazione API pendenti.
+
+### 2026-04-17
+- Allineata anche l'integrazione embedded `RuoloAvvisiSection` nella scheda soggetto del dominio utenze, con visual language coerente al workspace `ruolo` e CTA operative uniformate.

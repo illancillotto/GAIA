@@ -1,7 +1,6 @@
 "use client";
 
-import { type ReactNode } from "react";
-
+import { useEffect, useState, type ReactNode } from "react";
 import { ProtectedPage } from "@/components/app/protected-page";
 
 type RuoloModulePageProps = {
@@ -23,6 +22,20 @@ export function RuoloModulePage({
   requiredRoles,
   children,
 }: RuoloModulePageProps) {
+  const [isEmbedded, setIsEmbedded] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const params = new URLSearchParams(window.location.search);
+    setIsEmbedded(params.get("embedded") === "1");
+  }, []);
+
+  if (isEmbedded) {
+    return <main className="min-h-full bg-white p-4">{children}</main>;
+  }
+
   return (
     <ProtectedPage
       title={title}

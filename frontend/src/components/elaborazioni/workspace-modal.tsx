@@ -65,6 +65,7 @@ export function ElaborazioneWorkspaceModal({
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1D4E35]">Workspace rapido</p>
             <h2 className="mt-1.5 text-lg font-semibold text-gray-900">{title}</h2>
+            {description ? <p className="mt-1 text-sm text-gray-500">{description}</p> : null}
           </div>
           <div className="flex items-center gap-3">
             <Link className="btn-secondary" href={currentHref} target="_blank" rel="noreferrer">
