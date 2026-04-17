@@ -435,3 +435,30 @@ class BonificaUserStagingBulkApproveResponse(BaseModel):
     approved: int
     skipped: int
     errors: list[str] = Field(default_factory=list)
+
+
+class XlsxImportBatchResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    requested_by_user_id: int | None
+    filename: str
+    status: str
+    total_rows: int
+    processed_rows: int
+    inserted: int
+    updated: int
+    unchanged: int
+    anomalies: int
+    errors: int
+    error_log: list[Any] | None = None
+    created_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
+    updated_at: datetime
+
+
+class XlsxImportStartResponse(BaseModel):
+    batch_id: str
+    status: str
+    message: str

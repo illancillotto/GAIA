@@ -8,13 +8,16 @@ import { FolderIcon } from "@/components/ui/icons";
 import {
   getUtenzeImportJob,
   getUtenzeImportJobs,
+  getUtenzeXlsxImportBatch,
+  getUtenzeXlsxImportBatches,
+  importUtenzeSubjectsXlsx,
   previewUtenzeImport,
   resetUtenzeData,
   runUtenzeImport,
   runUtenzeImportFromSubjects,
 } from "@/lib/api";
 import { formatDateTime } from "@/lib/presentation";
-import type { UtenzeImportJob, UtenzeImportPreview, UtenzeImportRunResult, UtenzeResetResult } from "@/types/api";
+import type { UtenzeImportJob, UtenzeImportPreview, UtenzeImportRunResult, UtenzeResetResult, XlsxImportBatch } from "@/types/api";
 
 function ImportContent({ token }: { token: string }) {
   const [preview, setPreview] = useState<UtenzeImportPreview | null>(null);
@@ -30,6 +33,55 @@ function ImportContent({ token }: { token: string }) {
   const [isResetting, setIsResetting] = useState(false);
   const [isBulkImportModalOpen, setIsBulkImportModalOpen] = useState(false);
   const [activeBulkJob, setActiveBulkJob] = useState<UtenzeImportJob | null>(null);
+
+  const [xlsxFile, setXlsxFile] = useState<File | null>(null);
+  const [xlsxBatches, setXlsxBatches] = useState<XlsxImportBatch[]>([]);
+  const [xlsxActiveBatch, setXlsxActiveBatch] = useState<XlsxImportBatch | null>(null);
+  const [xlsxUploading, setXlsxUploading] = useState(false);
+  const [xlsxUploadProgress, setXlsxUploadProgress] = useState(0);
+  const [xlsxError, setXlsxError] = useState<string | null>(null);
+
+  const loadXlsxBatches = useCallback(async () => {
+    try {
+      const batches = await getUtenzeXlsxImportBatches(token);
+      setXlsxBatches(batches);
+      setXlsxActiveBatch((current) => {
+        if (!current) return batches[0] ?? null;
+        return batches.find((b) => b.id === current.id) ?? batches[0] ?? null;
+      });
+    } catch {
+      // non bloccante
+    }
+  }, [token]);
+
+  useEffect(() => {
+    void loadXlsxBatches();
+  }, [loadXlsxBatches]);
+
+  useEffect(() => {
+    if (!xlsxActiveBatch || xlsxActiveBatch.status === "completed" || xlsxActiveBatch.status === "failed") return;
+    const id = window.setInterval(() => void loadXlsxBatches(), 1500);
+    return () => window.clearInterval(id);
+  }, [xlsxActiveBatch?.status, loadXlsxBatches]);
+
+  async function handleXlsxImport() {
+    if (!xlsxFile) return;
+    setXlsxUploading(true);
+    setXlsxError(null);
+    setXlsxUploadProgress(0);
+    try {
+      const result = await importUtenzeSubjectsXlsx(token, xlsxFile, setXlsxUploadProgress);
+      const batch = await getUtenzeXlsxImportBatch(token, result.batch_id);
+      setXlsxActiveBatch(batch);
+      setXlsxFile(null);
+      await loadXlsxBatches();
+    } catch (err) {
+      setXlsxError(err instanceof Error ? err.message : "Errore import Excel");
+    } finally {
+      setXlsxUploading(false);
+      setXlsxUploadProgress(0);
+    }
+  }
 
   const loadJobs = useCallback(async () => {
     try {
@@ -171,8 +223,141 @@ function ImportContent({ token }: { token: string }) {
     }
   }
 
+  const xlsxProgress = xlsxActiveBatch
+    ? Math.round((xlsxActiveBatch.processed_rows / Math.max(xlsxActiveBatch.total_rows, 1)) * 100)
+    : 0;
+
   return (
     <div className="page-stack">
+
+      {/* ── Import anagrafica Excel ─────────────────────────────────────── */}
+      <article className="panel-card">
+        <div className="mb-4">
+          <p className="section-title">Import anagrafica Excel</p>
+          <p className="section-copy">Carica il file .xlsx dell'anagrafica per popolare o aggiornare le utenze. Solo amministratori. Per ogni riga viene eseguito un upsert basato su Codice Fiscale / Partita IVA.</p>
+        </div>
+        {xlsxError ? <p className="mb-3 text-sm text-red-600">{xlsxError}</p> : null}
+        <div className="flex flex-wrap items-end gap-3">
+          <label className="flex flex-col gap-1">
+            <span className="label-caption">File Excel (.xlsx)</span>
+            <input
+              accept=".xlsx,.xls"
+              className="form-control"
+              disabled={xlsxUploading}
+              type="file"
+              onChange={(e) => setXlsxFile(e.target.files?.[0] ?? null)}
+            />
+          </label>
+          <button
+            className="btn-primary"
+            disabled={!xlsxFile || xlsxUploading}
+            type="button"
+            onClick={() => void handleXlsxImport()}
+          >
+            {xlsxUploading ? `Upload ${xlsxUploadProgress}%...` : "Avvia import anagrafica"}
+          </button>
+        </div>
+      </article>
+
+      {/* ── Stato import Excel in corso ─────────────────────────────────── */}
+      {xlsxActiveBatch && xlsxActiveBatch.status !== "completed" && xlsxActiveBatch.status !== "failed" ? (
+        <article className="panel-card border border-sky-100 bg-sky-50/70">
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="section-title">Import Excel in corso</p>
+              <p className="section-copy">{xlsxActiveBatch.filename} · {xlsxActiveBatch.processed_rows}/{xlsxActiveBatch.total_rows} righe elaborate</p>
+            </div>
+            <span className="rounded-full bg-sky-100 px-3 py-1 text-xs font-medium text-sky-800">{xlsxActiveBatch.status}</span>
+          </div>
+          <div className="overflow-hidden rounded-full bg-white">
+            <div className="h-3 bg-sky-600 transition-all" style={{ width: `${xlsxProgress}%` }} />
+          </div>
+          <div className="mt-3 grid gap-3 sm:grid-cols-5">
+            {[
+              { label: "Avanzamento", value: `${xlsxProgress}%` },
+              { label: "Inseriti", value: xlsxActiveBatch.inserted, tone: "emerald" },
+              { label: "Aggiornati", value: xlsxActiveBatch.updated, tone: "sky" },
+              { label: "Invariati", value: xlsxActiveBatch.unchanged },
+              { label: "Anomalie", value: xlsxActiveBatch.anomalies, tone: "amber" },
+            ].map(({ label, value, tone }) => (
+              <div key={label} className="rounded-xl border border-sky-100 bg-white p-4">
+                <p className="text-xs uppercase tracking-widest text-gray-400">{label}</p>
+                <p className={`mt-2 text-2xl font-semibold ${tone === "emerald" ? "text-emerald-700" : tone === "sky" ? "text-sky-700" : tone === "amber" ? "text-amber-700" : "text-gray-900"}`}>{value}</p>
+              </div>
+            ))}
+          </div>
+        </article>
+      ) : null}
+
+      {/* ── Risultato ultimo batch Excel ────────────────────────────────── */}
+      {xlsxActiveBatch && (xlsxActiveBatch.status === "completed" || xlsxActiveBatch.status === "failed") ? (
+        <article className={`panel-card ${xlsxActiveBatch.status === "failed" ? "border border-red-100 bg-red-50/50" : ""}`}>
+          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p className="section-title">{xlsxActiveBatch.status === "completed" ? "Import Excel completato" : "Import Excel fallito"}</p>
+              <p className="section-copy">{xlsxActiveBatch.filename} · {formatDateTime(xlsxActiveBatch.completed_at ?? xlsxActiveBatch.created_at)}</p>
+            </div>
+            <span className={`rounded-full px-3 py-1 text-xs font-medium ${xlsxActiveBatch.status === "completed" ? "bg-emerald-50 text-emerald-800" : "bg-red-50 text-red-800"}`}>{xlsxActiveBatch.status}</span>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-6">
+            {[
+              { label: "Totale righe", value: xlsxActiveBatch.total_rows },
+              { label: "Inseriti", value: xlsxActiveBatch.inserted, tone: "emerald" },
+              { label: "Aggiornati", value: xlsxActiveBatch.updated, tone: "sky" },
+              { label: "Invariati", value: xlsxActiveBatch.unchanged },
+              { label: "Anomalie", value: xlsxActiveBatch.anomalies, tone: "amber" },
+              { label: "Errori", value: xlsxActiveBatch.errors, tone: "red" },
+            ].map(({ label, value, tone }) => (
+              <div key={label} className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+                <p className="text-xs uppercase tracking-widest text-gray-400">{label}</p>
+                <p className={`mt-2 text-2xl font-semibold ${tone === "emerald" ? "text-emerald-700" : tone === "sky" ? "text-sky-700" : tone === "amber" ? "text-amber-700" : tone === "red" ? "text-red-700" : "text-gray-900"}`}>{value}</p>
+              </div>
+            ))}
+          </div>
+          {xlsxActiveBatch.error_log && xlsxActiveBatch.error_log.length > 0 ? (
+            <div className="mt-4">
+              <p className="mb-2 text-sm font-medium text-gray-700">Dettaglio errori ({xlsxActiveBatch.error_log.length})</p>
+              <div className="max-h-64 overflow-y-auto space-y-1">
+                {xlsxActiveBatch.error_log.slice(0, 100).map((entry, i) => (
+                  <div key={i} className="rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-xs">
+                    <span className="font-medium text-red-700">Riga {entry.row}</span>
+                    {entry.denominazione ? <span className="ml-2 text-red-600">{entry.denominazione}</span> : null}
+                    <span className="ml-2 text-red-500">— {entry.message}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
+        </article>
+      ) : null}
+
+      {/* ── Storico import Excel ─────────────────────────────────────────── */}
+      {xlsxBatches.length > 0 ? (
+        <article className="panel-card">
+          <p className="section-title mb-3">Storico import Excel</p>
+          <div className="space-y-2">
+            {xlsxBatches.map((b) => (
+              <div
+                key={b.id}
+                className={`cursor-pointer rounded-lg border px-4 py-3 transition-colors hover:bg-gray-50 ${xlsxActiveBatch?.id === b.id ? "border-sky-200 bg-sky-50/40" : "border-gray-100"}`}
+                onClick={() => setXlsxActiveBatch(b)}
+              >
+                <div className="flex items-center justify-between gap-3">
+                  <p className="text-sm font-medium text-gray-900 truncate">{b.filename}</p>
+                  <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-medium ${b.status === "completed" ? "bg-emerald-50 text-emerald-700" : b.status === "failed" ? "bg-red-50 text-red-700" : b.status === "running" ? "bg-sky-50 text-sky-700" : "bg-gray-100 text-gray-600"}`}>
+                    {b.status}
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-gray-500">
+                  {b.total_rows} righe · +{b.inserted} inseriti · ↻{b.updated} aggiornati · ⚠{b.anomalies} anomalie · {formatDateTime(b.completed_at ?? b.created_at)}
+                </p>
+              </div>
+            ))}
+          </div>
+        </article>
+      ) : null}
+
+      {/* ── Import archivio NAS ─────────────────────────────────────────── */}
       <article className="panel-card">
         <div className="mb-4">
           <p className="section-title">Import archivio NAS</p>

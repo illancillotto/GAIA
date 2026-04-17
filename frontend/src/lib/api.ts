@@ -1,6 +1,9 @@
 import type {
   AnagraficaCsvImportResult,
   AnagraficaDocument,
+  UtenzeAuditLog,
+  XlsxImportBatch,
+  XlsxImportStartResult,
   AnagraficaDocumentSummary,
   AnagraficaImportJob,
   AnagraficaImportPreview,
@@ -622,6 +625,40 @@ export async function importAnagraficaSubjectsCsv(
 }
 
 export const importUtenzeSubjectsCsv = importAnagraficaSubjectsCsv;
+
+export async function importUtenzeSubjectsXlsx(
+  token: string,
+  file: File,
+  onProgress?: (percent: number) => void,
+): Promise<XlsxImportStartResult> {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  return requestFormDataWithUploadProgress<XlsxImportStartResult>(
+    "/utenze/subjects/import-xlsx",
+    formData,
+    token,
+    onProgress,
+  );
+}
+
+export async function getUtenzeXlsxImportBatch(token: string, batchId: string): Promise<XlsxImportBatch> {
+  return request<XlsxImportBatch>(`/utenze/xlsx-import-batches/${batchId}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function getUtenzeXlsxImportBatches(token: string): Promise<XlsxImportBatch[]> {
+  return request<XlsxImportBatch[]>("/utenze/xlsx-import-batches", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function getUtenzeSubjectAuditLog(token: string, subjectId: string): Promise<UtenzeAuditLog[]> {
+  return request<UtenzeAuditLog[]>(`/utenze/subjects/${subjectId}/audit-log`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
 
 export async function updateAnagraficaSubject(
   token: string,

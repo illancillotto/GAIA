@@ -317,3 +317,45 @@ class AnagraficaAuditLog(Base):
     action: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     diff_json: Mapped[dict | list | None] = mapped_column(JSON, nullable=True)
     changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+
+
+class AnagraficaXlsxImportBatchStatus(StrEnum):
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
+class AnagraficaXlsxImportBatch(Base):
+    __tablename__ = "ana_xlsx_import_batches"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    requested_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    filename: Mapped[str] = mapped_column(String(512), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(32),
+        default=AnagraficaXlsxImportBatchStatus.PENDING.value,
+        nullable=False,
+        index=True,
+    )
+    total_rows: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    processed_rows: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    inserted: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    updated: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    unchanged: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    anomalies: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    errors: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    error_log: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )

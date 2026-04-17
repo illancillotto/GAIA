@@ -9,9 +9,9 @@ import { UtenzeModulePage } from "@/components/utenze/utenze-module-page";
 import { DataTable } from "@/components/table/data-table";
 import { TableFilters } from "@/components/table/table-filters";
 import { RuoloAvvisiSection } from "@/components/ruolo/ruolo-avvisi-section";
-import { createUtenzeSubject, downloadUtenzeDocumentBlob, downloadUtenzeExportBlob, getUtenzeSubject, getUtenzeSubjects, importUtenzeSubjectsCsv } from "@/lib/api";
+import { createUtenzeSubject, downloadUtenzeDocumentBlob, downloadUtenzeExportBlob, getUtenzeSubject, getUtenzeSubjectAuditLog, getUtenzeSubjects, importUtenzeSubjectsCsv } from "@/lib/api";
 import { formatDateTime } from "@/lib/presentation";
-import type { UtenzeCsvImportResult, UtenzeDocument, UtenzeSubjectCreateInput, UtenzeSubjectDetail, UtenzeSubjectListItem } from "@/types/api";
+import type { UtenzeAuditLog, UtenzeCsvImportResult, UtenzeDocument, UtenzeSubjectCreateInput, UtenzeSubjectDetail, UtenzeSubjectListItem } from "@/types/api";
 
 type FilterState = {
   search: string;
@@ -121,6 +121,11 @@ function SubjectsContent({ token }: { token: string }) {
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [spreadsheetPreview, setSpreadsheetPreview] = useState<SpreadsheetPreviewSheet[]>([]);
   const [textPreview, setTextPreview] = useState<string | null>(null);
+  const [historySubjectId, setHistorySubjectId] = useState<string | null>(null);
+  const [historySubjectName, setHistorySubjectName] = useState<string>("");
+  const [historyEntries, setHistoryEntries] = useState<UtenzeAuditLog[]>([]);
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
 
   const deferredSearch = useDeferredValue(filters.search);
   const normalizedSearch = deferredSearch.trim();
@@ -267,6 +272,23 @@ function SubjectsContent({ token }: { token: string }) {
     };
   }, [previewUrl]);
 
+  async function openHistoryModal(e: React.MouseEvent, subjectId: string, displayName: string) {
+    e.stopPropagation();
+    setHistorySubjectId(subjectId);
+    setHistorySubjectName(displayName);
+    setHistoryEntries([]);
+    setHistoryError(null);
+    setIsHistoryLoading(true);
+    try {
+      const entries = await getUtenzeSubjectAuditLog(token, subjectId);
+      setHistoryEntries(entries);
+    } catch (err) {
+      setHistoryError(err instanceof Error ? err.message : "Errore caricamento storico");
+    } finally {
+      setIsHistoryLoading(false);
+    }
+  }
+
   const columns = useMemo<ColumnDef<UtenzeSubjectListItem>[]>(
     () => [
       {
@@ -304,9 +326,11 @@ function SubjectsContent({ token }: { token: string }) {
         header: "Stato",
         accessorKey: "status",
         cell: ({ row }) => (
-          <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${row.original.requires_review ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-700"}`}>
-            {row.original.requires_review ? "Review" : row.original.status}
-          </span>
+          <div className="flex items-center gap-2">
+            <span className={`rounded-full px-2 py-1 text-[11px] font-medium ${row.original.source_external_id === "ANOMALIA-999" ? "bg-red-50 text-red-700" : row.original.requires_review ? "bg-amber-50 text-amber-700" : "bg-gray-100 text-gray-700"}`}>
+              {row.original.source_external_id === "ANOMALIA-999" ? "Anomalia" : row.original.requires_review ? "Review" : row.original.status}
+            </span>
+          </div>
         ),
       },
       {
@@ -314,8 +338,24 @@ function SubjectsContent({ token }: { token: string }) {
         accessorKey: "updated_at",
         cell: ({ row }) => <span className="text-sm text-gray-700">{formatDateTime(row.original.updated_at)}</span>,
       },
+      {
+        header: "",
+        id: "history",
+        cell: ({ row }) => (
+          <button
+            className="group relative rounded p-1 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+            title="Visualizza storico modifiche"
+            type="button"
+            onClick={(e) => void openHistoryModal(e, row.original.id, row.original.display_name)}
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.75} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l2.5 2.5M12 3a9 9 0 1 0 0 18A9 9 0 0 0 12 3Z" />
+            </svg>
+          </button>
+        ),
+      },
     ],
-    [],
+    [token],
   );
 
   async function handleCreateSubject() {
@@ -749,13 +789,33 @@ function SubjectsContent({ token }: { token: string }) {
           <p className="section-copy">Ricerca server-side su nome, cognome e codice fiscale con risposta immediata da 3 caratteri.</p>
         </div>
 
-        <div className="mb-4 flex flex-wrap justify-end gap-2">
-          <button className="btn-secondary" type="button" onClick={() => void handleExport("csv")} disabled={isExportingCsv}>
-            {isExportingCsv ? "Export CSV..." : "Export CSV"}
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+          <button
+            className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors ${filters.requiresReview === "true" && filters.subjectType === "unknown" ? "bg-red-600 text-white" : "bg-red-50 text-red-700 hover:bg-red-100"}`}
+            type="button"
+            onClick={() => {
+              const isActive = filters.requiresReview === "true" && filters.subjectType === "unknown";
+              setFilters((current) => ({
+                ...current,
+                requiresReview: isActive ? "" : "true",
+                subjectType: isActive ? "" : "unknown",
+              }));
+              setPage(1);
+            }}
+          >
+            <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126ZM12 15.75h.007v.008H12v-.008Z" />
+            </svg>
+            Anomalie da completare
           </button>
-          <button className="btn-secondary" type="button" onClick={() => void handleExport("xlsx")} disabled={isExportingXlsx}>
-            {isExportingXlsx ? "Export XLSX..." : "Export XLSX"}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button className="btn-secondary" type="button" onClick={() => void handleExport("csv")} disabled={isExportingCsv}>
+              {isExportingCsv ? "Export CSV..." : "Export CSV"}
+            </button>
+            <button className="btn-secondary" type="button" onClick={() => void handleExport("xlsx")} disabled={isExportingXlsx}>
+              {isExportingXlsx ? "Export XLSX..." : "Export XLSX"}
+            </button>
+          </div>
         </div>
 
         <TableFilters>
@@ -1091,6 +1151,104 @@ function SubjectsContent({ token }: { token: string }) {
                   </div>
                 </div>
               ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* ── Modal storico modifiche ─────────────────────────────────────── */}
+      {historySubjectId ? (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/50 px-4 py-6 backdrop-blur-sm">
+          <button aria-label="Chiudi storico" className="absolute inset-0" onClick={() => setHistorySubjectId(null)} type="button" />
+          <div className="relative z-10 max-h-[calc(100vh-3rem)] w-full max-w-2xl overflow-y-auto rounded-[28px] border border-gray-200 bg-white p-6 shadow-2xl">
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <div>
+                <p className="text-xs font-medium uppercase tracking-[0.18em] text-gray-400">Storico modifiche</p>
+                <h3 className="mt-1 text-lg font-medium text-gray-900">{historySubjectName}</h3>
+              </div>
+              <button className="btn-secondary" onClick={() => setHistorySubjectId(null)} type="button">Chiudi</button>
+            </div>
+
+            {isHistoryLoading ? <p className="text-sm text-gray-500">Caricamento storico...</p> : null}
+            {historyError ? <p className="text-sm text-red-600">{historyError}</p> : null}
+            {!isHistoryLoading && !historyError && historyEntries.length === 0 ? (
+              <p className="text-sm text-gray-500">Nessuna voce di storico disponibile per questo utente.</p>
+            ) : null}
+
+            <div className="space-y-3">
+              {historyEntries.map((entry) => {
+                const diff = entry.diff_json as Record<string, unknown> | null;
+                const actionLabel: Record<string, string> = {
+                  xlsx_import_created: "Creato da import Excel",
+                  xlsx_import_updated: "Aggiornato da import Excel",
+                  xlsx_import_anomaly: "Importato come anomalia",
+                  csv_import_created: "Creato da import CSV",
+                  csv_import_updated: "Aggiornato da import CSV",
+                  manual_created: "Creato manualmente",
+                  manual_updated: "Aggiornato manualmente",
+                  bonifica_staging_approved_create: "Creato da Bonifica staging",
+                  bonifica_staging_approved_update: "Aggiornato da Bonifica staging",
+                  deactivated: "Disattivato",
+                  document_updated: "Documento aggiornato",
+                  document_deleted: "Documento eliminato",
+                };
+                const label = actionLabel[entry.action] ?? entry.action;
+                const isXlsx = entry.action.startsWith("xlsx_import");
+                const before = diff?.before as Record<string, unknown> | null | undefined;
+                const after = diff?.after as Record<string, unknown> | null | undefined;
+
+                return (
+                  <div key={entry.id} className={`rounded-xl border p-4 ${isXlsx ? "border-sky-100 bg-sky-50/40" : "border-gray-100 bg-gray-50/40"}`}>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${isXlsx ? "bg-sky-100 text-sky-800" : "bg-gray-100 text-gray-700"}`}>
+                        {label}
+                      </span>
+                      <span className="text-xs text-gray-400">{formatDateTime(entry.changed_at)}</span>
+                    </div>
+
+                    {isXlsx && before && after ? (
+                      <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+                        <div>
+                          <p className="mb-1 font-semibold text-gray-500">Prima</p>
+                          <div className="space-y-0.5 text-gray-600">
+                            {Object.entries(after).slice(0, 8).map(([key, val]) => {
+                              const oldVal = before[key];
+                              const changed = String(oldVal ?? "") !== String(val ?? "");
+                              return changed ? (
+                                <p key={key} className="line-through text-gray-400">
+                                  <span className="font-medium">{key}:</span> {String(oldVal ?? "—")}
+                                </p>
+                              ) : null;
+                            })}
+                          </div>
+                        </div>
+                        <div>
+                          <p className="mb-1 font-semibold text-gray-500">Dopo</p>
+                          <div className="space-y-0.5 text-gray-600">
+                            {Object.entries(after).slice(0, 8).map(([key, val]) => {
+                              const oldVal = before[key];
+                              const changed = String(oldVal ?? "") !== String(val ?? "");
+                              return changed ? (
+                                <p key={key} className="font-medium text-sky-700">
+                                  <span>{key}:</span> {String(val ?? "—")}
+                                </p>
+                              ) : null;
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {isXlsx && !before && after ? (
+                      <div className="mt-2 text-xs text-gray-500">
+                        {Object.entries(after).slice(0, 6).filter(([, v]) => v != null && v !== "").map(([key, val]) => (
+                          <span key={key} className="mr-2">{key}: <span className="text-gray-700">{String(val)}</span></span>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>

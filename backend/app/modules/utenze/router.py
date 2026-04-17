@@ -6,14 +6,15 @@ import csv
 import mimetypes
 from pathlib import Path
 import secrets
+import threading
 
-from fastapi import APIRouter, Depends, File, Form, Header, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Header, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse, StreamingResponse
 from openpyxl import Workbook
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_active_user, require_module
+from app.api.deps import require_active_user, require_admin_user, require_module
 from app.core.config import settings
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
@@ -30,6 +31,8 @@ from app.modules.utenze.models import (
     AnagraficaPerson,
     AnagraficaSubject,
     AnagraficaSubjectStatus,
+    AnagraficaXlsxImportBatch,
+    AnagraficaXlsxImportBatchStatus,
     BonificaUserStaging,
 )
 from app.modules.utenze.schemas import (
@@ -67,6 +70,8 @@ from app.modules.utenze.schemas import (
     BonificaUserStagingBulkApproveResponse,
     BonificaUserStagingListResponse,
     BonificaUserStagingResponse,
+    XlsxImportBatchResponse,
+    XlsxImportStartResponse,
 )
 from app.modules.utenze.services.import_service import (
     AnagraficaImportPreviewService,
@@ -78,6 +83,7 @@ from app.modules.utenze.services.import_service import (
     reset_anagrafica_data,
 )
 from app.modules.utenze.services.csv_import_service import import_subjects_from_csv
+from app.modules.utenze.services.xlsx_import_service import run_xlsx_import
 from app.services.nas_connector import NasConnectorError, get_nas_client
 
 router = APIRouter(tags=["utenze"])
@@ -546,6 +552,100 @@ async def import_subjects_csv(
             ],
         }
     )
+
+
+@router.post("/subjects/import-xlsx", response_model=XlsxImportStartResponse, status_code=status.HTTP_202_ACCEPTED)
+async def import_subjects_xlsx(
+    file: Annotated[UploadFile, File()],
+    background_tasks: BackgroundTasks,
+    current_user: Annotated[ApplicationUser, Depends(require_admin_user)],
+    __: Annotated[ApplicationUser, RequireUtenzeModule],
+    db: Annotated[Session, Depends(get_db)],
+) -> XlsxImportStartResponse:
+    filename = (file.filename or "").strip()
+    if not filename.lower().endswith((".xlsx", ".xls")):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Il file deve essere un Excel (.xlsx)")
+
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="File Excel vuoto")
+
+    batch = AnagraficaXlsxImportBatch(
+        requested_by_user_id=current_user.id,
+        filename=filename,
+        status=AnagraficaXlsxImportBatchStatus.PENDING.value,
+    )
+    db.add(batch)
+    db.commit()
+    db.refresh(batch)
+
+    batch_id = batch.id
+
+    def _run_in_thread() -> None:
+        from app.core.database import SessionLocal
+        with SessionLocal() as session:
+            run_xlsx_import(session, batch_id, file_bytes, current_user)
+
+    background_tasks.add_task(_run_in_thread)
+
+    return XlsxImportStartResponse(
+        batch_id=str(batch_id),
+        status=AnagraficaXlsxImportBatchStatus.PENDING.value,
+        message=f"Import avviato per il file '{filename}'. Usa batch_id per monitorare l'avanzamento.",
+    )
+
+
+@router.get("/xlsx-import-batches", response_model=list[XlsxImportBatchResponse])
+def get_xlsx_import_batches(
+    _: Annotated[ApplicationUser, Depends(require_active_user)],
+    __: Annotated[ApplicationUser, RequireUtenzeModule],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[XlsxImportBatchResponse]:
+    batches = db.scalars(
+        select(AnagraficaXlsxImportBatch).order_by(AnagraficaXlsxImportBatch.created_at.desc()).limit(20)
+    ).all()
+    return [_serialize_xlsx_batch(b) for b in batches]
+
+
+@router.get("/xlsx-import-batches/{batch_id}", response_model=XlsxImportBatchResponse)
+def get_xlsx_import_batch(
+    batch_id: uuid.UUID,
+    _: Annotated[ApplicationUser, Depends(require_active_user)],
+    __: Annotated[ApplicationUser, RequireUtenzeModule],
+    db: Annotated[Session, Depends(get_db)],
+) -> XlsxImportBatchResponse:
+    batch = db.get(AnagraficaXlsxImportBatch, batch_id)
+    if batch is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Batch non trovato")
+    return _serialize_xlsx_batch(batch)
+
+
+@router.get("/subjects/{subject_id}/audit-log", response_model=list[AnagraficaAuditLogResponse])
+def get_subject_audit_log(
+    subject_id: uuid.UUID,
+    _: Annotated[ApplicationUser, Depends(require_active_user)],
+    __: Annotated[ApplicationUser, RequireUtenzeModule],
+    db: Annotated[Session, Depends(get_db)],
+    limit: int = Query(default=50, ge=1, le=200),
+) -> list[AnagraficaAuditLogResponse]:
+    _require_subject_exists(db, subject_id)
+    entries = db.scalars(
+        select(AnagraficaAuditLog)
+        .where(AnagraficaAuditLog.subject_id == subject_id)
+        .order_by(AnagraficaAuditLog.changed_at.desc())
+        .limit(limit)
+    ).all()
+    return [
+        AnagraficaAuditLogResponse.model_validate({
+            "id": str(e.id),
+            "subject_id": str(e.subject_id),
+            "changed_by_user_id": e.changed_by_user_id,
+            "action": e.action,
+            "diff_json": e.diff_json,
+            "changed_at": e.changed_at,
+        })
+        for e in entries
+    ]
 
 
 @router.get("/subjects/{subject_id}", response_model=AnagraficaSubjectDetailResponse)
@@ -1471,6 +1571,27 @@ def _subject_export_row(db: Session, subject: AnagraficaSubject) -> dict[str, ob
         "imported_at": item.imported_at.isoformat() if item.imported_at else "",
         "updated_at": item.updated_at.isoformat(),
     }
+
+
+def _serialize_xlsx_batch(batch: AnagraficaXlsxImportBatch) -> XlsxImportBatchResponse:
+    return XlsxImportBatchResponse.model_validate({
+        "id": str(batch.id),
+        "requested_by_user_id": batch.requested_by_user_id,
+        "filename": batch.filename,
+        "status": batch.status,
+        "total_rows": batch.total_rows,
+        "processed_rows": batch.processed_rows,
+        "inserted": batch.inserted,
+        "updated": batch.updated,
+        "unchanged": batch.unchanged,
+        "anomalies": batch.anomalies,
+        "errors": batch.errors,
+        "error_log": batch.error_log,
+        "created_at": batch.created_at,
+        "started_at": batch.started_at,
+        "completed_at": batch.completed_at,
+        "updated_at": batch.updated_at,
+    })
 
 
 def _build_catasto_correlations(db: Session, person: AnagraficaPerson | None) -> list[AnagraficaCatastoDocumentResponse]:

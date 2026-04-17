@@ -712,6 +712,37 @@ export type AnagraficaImportJobItem = {
 
 export type UtenzeImportJobItem = AnagraficaImportJobItem;
 
+export type XlsxImportErrorEntry = {
+  row: number;
+  message: string;
+  denominazione: string;
+};
+
+export type XlsxImportBatch = {
+  id: string;
+  requested_by_user_id: number | null;
+  filename: string;
+  status: "pending" | "running" | "completed" | "failed";
+  total_rows: number;
+  processed_rows: number;
+  inserted: number;
+  updated: number;
+  unchanged: number;
+  anomalies: number;
+  errors: number;
+  error_log: XlsxImportErrorEntry[] | null;
+  created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
+  updated_at: string;
+};
+
+export type XlsxImportStartResult = {
+  batch_id: string;
+  status: string;
+  message: string;
+};
+
 export type AnagraficaSearchResult = {
   items: AnagraficaSubjectListItem[];
   total: number;
