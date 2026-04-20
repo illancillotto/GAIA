@@ -104,8 +104,17 @@ export function isAuthError(error: unknown): error is ApiError {
 }
 
 export function getApiBaseUrl(): string {
-  const value = process.env.NEXT_PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL;
-  return value.replace(/\/+$/, "");
+  const raw = process.env.NEXT_PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL;
+  const value = raw.replace(/\/+$/, "");
+
+  // In browser we require a relative base (e.g. "/api") so nginx can proxy correctly.
+  // If a previous build/runtime leaks an absolute URL (e.g. "http://localhost"),
+  // fall back to the safe default.
+  if (typeof window !== "undefined" && !value.startsWith("/")) {
+    return DEFAULT_API_BASE_URL;
+  }
+
+  return value;
 }
 
 export async function request<T>(path: string, init?: RequestInit): Promise<T> {

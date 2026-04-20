@@ -19,6 +19,7 @@ test("frontend package exposes core scripts and redesign dependencies", () => {
   assert.equal(pkg.private, true);
   assert.ok(pkg.scripts.dev);
   assert.ok(pkg.scripts.build);
+  assert.ok(pkg.scripts["build:clean"]);
   assert.ok(pkg.dependencies["@tanstack/react-table"]);
   assert.ok(pkg.dependencies["react-hook-form"]);
   assert.ok(pkg.devDependencies.tailwindcss);
@@ -36,15 +37,15 @@ test("dashboard keeps login gate and GAIA module selector copy", () => {
   const loginPage = read("src/app/login/page.tsx");
 
   assert.match(homePage, /router\.replace\("\/login"\)/);
-  assert.match(homePage, /Gestione Apparati Informativi/);
-  assert.match(homePage, /Seleziona il dominio operativo/);
+  assert.match(homePage, /GAIA NAS Control/);
+  assert.match(homePage, /GAIA Rete/);
   assert.match(homePage, /GAIA Catasto/);
-  assert.match(homePage, /Dominio in corso di sviluppo/i);
+  assert.match(homePage, /In sviluppo/);
   assert.match(homePage, /GAIA Elaborazioni/);
   assert.match(loginPage, /router\.replace\("\/"\)/);
   assert.match(loginPage, /router\.push\("\/"\)/);
   assert.match(loginPage, /GAIA Catasto/);
-  assert.match(loginPage, /home GAIA/);
+  assert.match(loginPage, /Piattaforma modulare unificata/);
 });
 
 test("layout includes app shell, sidebar and topbar", () => {
@@ -74,6 +75,7 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   const dashboardPage = read("src/app/catasto/page.tsx");
   const catastoSettingsPage = read("src/app/catasto/settings/page.tsx");
   const catastoCapacitasPage = read("src/app/catasto/capacitas/page.tsx");
+  const catastoPageWrapper = read("src/components/catasto/catasto-page.tsx");
   const elaborazioniDashboardPage = read("src/app/elaborazioni/page.tsx");
   const elaborazioniSettingsPage = read("src/app/elaborazioni/settings/page.tsx");
   const elaborazioniCapacitasPage = read("src/app/elaborazioni/capacitas/page.tsx");
@@ -84,23 +86,37 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   const batchDetailPage = read("src/app/catasto/batches/[id]/page.tsx");
   const documentsPage = read("src/app/catasto/documents/page.tsx");
   const documentDetailPage = read("src/app/catasto/documents/[id]/page.tsx");
+  const importPage = read("src/app/catasto/import/page.tsx");
+  const distrettiPage = read("src/app/catasto/distretti/page.tsx");
+  const particelleDetailPage = read("src/app/catasto/particelle/[id]/page.tsx");
+  const anomaliePage = read("src/app/catasto/anomalie/page.tsx");
 
   assert.match(dashboardPage, /GAIA Catasto/);
-  assert.match(dashboardPage, /modulo in corso di sviluppo/i);
+  assert.match(catastoPageWrapper, /ProtectedPage/);
+  assert.match(catastoPageWrapper, /CatastoPhase1Nav/);
   assert.match(catastoSettingsPage, /redirect\("\/elaborazioni\/settings"\)/);
   assert.match(catastoCapacitasPage, /redirect\("\/elaborazioni\/capacitas"\)/);
-  assert.match(elaborazioniDashboardPage, /Capacitas inVOLTURE/);
+  assert.match(elaborazioniDashboardPage, /GAIA Elaborazioni/);
   assert.match(elaborazioniDashboardPage, /\/elaborazioni\/capacitas/);
-  assert.match(elaborazioniSettingsPage, /Credenziali/);
-  assert.match(elaborazioniSettingsPage, /createCapacitasCredential/);
-  assert.match(elaborazioniSettingsPage, /updateCapacitasCredential/);
-  assert.match(elaborazioniSettingsPage, /listCapacitasCredentials/);
-  assert.match(elaborazioniCapacitasPage, /Capacitas inVOLTURE/);
-  assert.match(elaborazioniCapacitasPage, /searchCapacitasInvolture/);
-  assert.match(elaborazioniCapacitasPage, /listCapacitasCredentials/);
-  assert.match(elaborazioniCapacitasPage, /Codice fiscale/);
+  assert.match(elaborazioniSettingsPage, /ElaborazioniSettingsWorkspace/);
+  assert.match(read("src/components/elaborazioni/settings-workspace.tsx"), /createCapacitasCredential/);
+  assert.match(read("src/components/elaborazioni/settings-workspace.tsx"), /updateCapacitasCredential/);
+  assert.match(read("src/components/elaborazioni/settings-workspace.tsx"), /listCapacitasCredentials/);
+  assert.match(elaborazioniCapacitasPage, /ElaborazioniCapacitasWorkspace/);
+  assert.match(read("src/components/elaborazioni/capacitas-workspace.tsx"), /searchCapacitasInvolture/);
+  assert.match(read("src/components/elaborazioni/capacitas-workspace.tsx"), /listCapacitasCredentials/);
+  assert.match(read("src/components/elaborazioni/capacitas-workspace.tsx"), /Codice fiscale/);
   assert.match(newBatchPage, /redirect\("\/elaborazioni\/new-batch"\)/);
   assert.match(newSinglePage, /redirect\("\/elaborazioni\/new-single"\)/);
+  assert.match(importPage, /Polling ogni 2s/);
+  assert.match(importPage, /catastoUploadCapacitas/);
+  assert.match(importPage, /catastoGetImportStatus/);
+  assert.match(importPage, /catastoGetImportReport/);
+  assert.match(distrettiPage, /catastoListDistretti/);
+  assert.match(distrettiPage, /catastoGetDistrettoKpi/);
+  assert.match(anomaliePage, /catastoUpdateAnomalia/);
+  assert.match(particelleDetailPage, /catastoGetParticellaUtenze/);
+  assert.match(particelleDetailPage, /catastoGetParticellaAnomalie/);
   assert.match(requestWorkspace, /createElaborazioneBatch/);
   assert.match(requestWorkspace, /startElaborazioneBatch/);
   assert.match(requestWorkspace, /Scarica template CSV/);
@@ -113,14 +129,15 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   assert.match(batchDetailPage, /fetchElaborazioneCaptchaImageBlob/);
   assert.match(batchDetailPage, /downloadElaborazioneBatchZipBlob/);
   assert.match(read("src/app/catasto/batches/page.tsx"), /redirect\("\/elaborazioni\/batches"\)/);
-  assert.match(documentsPage, /redirect\("\/catasto\/archive\?view=documents"\)/);
+  assert.match(documentsPage, /router\.replace\("\/catasto\/archive\?view=documents"\)/);
   assert.match(archiveWorkspace, /searchCatastoDocuments/);
   assert.match(archiveWorkspace, /downloadSelectedCatastoDocumentsZipBlob/);
   assert.match(archiveWorkspace, /getCatastoComuni/);
   assert.match(archiveWorkspace, /cancelElaborazioneBatch/);
   assert.match(archiveWorkspace, /retryFailedElaborazioneBatch/);
-  assert.match(documentDetailPage, /downloadCatastoDocumentBlob/);
-  assert.match(documentDetailPage, /iframe/);
+  assert.match(documentDetailPage, /CatastoDocumentDetailWorkspace/);
+  assert.match(read("src/components/catasto/document-detail-workspace.tsx"), /downloadCatastoDocumentBlob/);
+  assert.match(read("src/components/catasto/document-detail-workspace.tsx"), /iframe/);
 });
 
 test("shared ui components exist for redesign system", () => {
