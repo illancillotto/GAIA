@@ -172,6 +172,15 @@ Quando il frontend mostra comportamenti incoerenti o il build Next fallisce su c
 
 Il comando Docker ferma temporaneamente il servizio `frontend`, esegue un build pulito in un container effimero e poi rialza il servizio.
 
+### Test frontend
+
+- smoke statici:
+  `cd frontend && npm test`
+- E2E browser sullo stack locale:
+  `cd frontend && PLAYWRIGHT_BASE_URL=http://127.0.0.1:8080 npm run test:e2e`
+
+Il test E2E corrente copre login admin e wizard import Catasto Fase 1 fino al report finale.
+
 Credenziali bootstrap locali:
 
 - username: valore di `BOOTSTRAP_ADMIN_USERNAME` in `.env`

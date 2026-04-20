@@ -168,6 +168,7 @@ GAIA/
 │   └── utenze/
 │       └── docs/
 ├── frontend/
+│   ├── playwright.config.ts
 │   ├── public/
 │   ├── scripts/
 │   ├── src/
@@ -187,6 +188,7 @@ GAIA/
 │   │   ├── types/
 │   │   └── utils/
 │   └── tests/
+│       ├── e2e/
 ├── modules/
 │   └── elaborazioni/
 │       └── worker/
