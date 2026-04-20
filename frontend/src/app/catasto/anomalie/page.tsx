@@ -4,8 +4,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 
-import { ProtectedPage } from "@/components/app/protected-page";
-import { CatastoPhase1Nav } from "@/components/catasto/phase1-nav";
+import { CatastoPage } from "@/components/catasto/catasto-page";
 import { AnomaliaStatusBadge } from "@/components/catasto/AnomaliaStatusBadge";
 import { AnomaliaStatusPill } from "@/components/catasto/AnomaliaStatusPill";
 import { DataTable } from "@/components/table/data-table";
@@ -150,15 +149,13 @@ export default function CatastoAnomaliePage() {
   );
 
   return (
-    <ProtectedPage
+    <CatastoPage
       title="Anomalie"
       description="Lista anomalie (Fase 1) con filtri principali."
       breadcrumb="Catasto / Anomalie"
       requiredModule="catasto"
     >
       <div className="page-stack">
-        <CatastoPhase1Nav />
-
         {error ? (
           <AlertBanner variant="danger" title="Errore caricamento">
             {error}
@@ -237,7 +234,6 @@ export default function CatastoAnomaliePage() {
         </article>
 
       </div>
-    </ProtectedPage>
+    </CatastoPage>
   );
 }
-

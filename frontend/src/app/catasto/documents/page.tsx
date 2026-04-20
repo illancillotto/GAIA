@@ -1,5 +1,14 @@
-import { redirect } from "next/navigation";
+"use client";
+
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 export default function CatastoDocumentsRedirectPage() {
-  redirect("/catasto/archive?view=documents");
+  const router = useRouter();
+
+  useEffect(() => {
+    router.replace("/catasto/archive?view=documents");
+  }, [router]);
+
+  return null;
 }

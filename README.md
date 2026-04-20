@@ -161,6 +161,17 @@ la documentazione di dominio fa riferimento a `domain-docs/utenze/`.
 8. Accedi all'applicazione:
    `http://localhost:8080`
 
+### Build frontend pulito
+
+Quando il frontend mostra comportamenti incoerenti o il build Next fallisce su cache stale di `.next`, usare uno di questi due percorsi:
+
+- locale dentro `frontend/`:
+  `npm run build:clean`
+- stack Docker del repository:
+  `./scripts/frontend_clean_build.sh`
+
+Il comando Docker ferma temporaneamente il servizio `frontend`, esegue un build pulito in un container effimero e poi rialza il servizio.
+
 Credenziali bootstrap locali:
 
 - username: valore di `BOOTSTRAP_ADMIN_USERNAME` in `.env`
@@ -199,6 +210,7 @@ Se la variabile e vuota/non impostata, la password non viene richiesta.
 - Database locale Docker su `postgis/postgis:16-3.4-alpine` per supportare la Fase 1 geospaziale
 - Archivio documenti con download singolo e ZIP per batch
 - Nuove API Fase 1 sotto `/catasto/import`, `/catasto/distretti`, `/catasto/particelle`, `/catasto/anomalie`
+- Wrapper frontend condiviso `CatastoPage` per le pagine Fase 1 con navigazione di dominio uniforme
 - Test connessione SISTER asincrono eseguito dal worker con feedback realtime
 - Variabili operative in `.env.example` per storage documenti/CAPTCHA e chiave Fernet condivisa
 - Selettori SISTER esterni in `modules/elaborazioni/worker/sister_selectors.json`, sovrascrivibili via `ELABORAZIONI_SISTER_SELECTORS_PATH` con fallback compatibile su `CATASTO_SISTER_SELECTORS_PATH`

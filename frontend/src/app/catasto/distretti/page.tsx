@@ -4,8 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 
-import { ProtectedPage } from "@/components/app/protected-page";
-import { CatastoPhase1Nav } from "@/components/catasto/phase1-nav";
+import { CatastoPage } from "@/components/catasto/catasto-page";
 import { DataTable } from "@/components/table/data-table";
 import { AlertBanner } from "@/components/ui/alert-banner";
 import { MetricCard } from "@/components/ui/metric-card";
@@ -119,15 +118,13 @@ export default function CatastoDistrettiPage() {
   );
 
   return (
-    <ProtectedPage
+    <CatastoPage
       title="Distretti"
       description="Lista distretti con KPI aggregati per anno campagna."
       breadcrumb="Catasto / Distretti"
       requiredModule="catasto"
     >
       <div className="page-stack">
-        <CatastoPhase1Nav />
-
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-sm text-gray-500">Anno campagna</p>
@@ -175,7 +172,6 @@ export default function CatastoDistrettiPage() {
           </div>
         </article>
       </div>
-    </ProtectedPage>
+    </CatastoPage>
   );
 }
-

@@ -2,8 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
-import { ProtectedPage } from "@/components/app/protected-page";
-import { CatastoPhase1Nav } from "@/components/catasto/phase1-nav";
+import { CatastoPage } from "@/components/catasto/catasto-page";
 import { ImportStatusBadge } from "@/components/catasto/ImportStatusBadge";
 import { AnomaliaStatusBadge } from "@/components/catasto/AnomaliaStatusBadge";
 import { AlertBanner } from "@/components/ui/alert-banner";
@@ -147,7 +146,7 @@ export default function CatastoImportPage() {
   }, [batchId, reportPage, reportTipo, step]);
 
   return (
-    <ProtectedPage
+    <CatastoPage
       title="Import"
       description="Wizard import Capacitas (Ruoli) con polling stato e report anomalie."
       breadcrumb="Catasto / Import"
@@ -155,8 +154,6 @@ export default function CatastoImportPage() {
       requiredRoles={["admin", "super_admin"]}
     >
       <div className="page-stack">
-        <CatastoPhase1Nav />
-
         {error ? (
           <AlertBanner variant="danger" title="Errore">
             {error}
@@ -396,7 +393,6 @@ export default function CatastoImportPage() {
           </div>
         ) : null}
       </div>
-    </ProtectedPage>
+    </CatastoPage>
   );
 }
-

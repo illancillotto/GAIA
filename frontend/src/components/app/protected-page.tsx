@@ -11,7 +11,7 @@ import { clearStoredAccessToken, getStoredAccessToken } from "@/lib/auth";
 import { hasSectionAccess } from "@/lib/section-access";
 import type { CurrentUser, DashboardSummary } from "@/types/api";
 
-type ProtectedPageProps = PropsWithChildren<{
+export type ProtectedPageProps = PropsWithChildren<{
   title: string;
   description: string;
   breadcrumb?: string;

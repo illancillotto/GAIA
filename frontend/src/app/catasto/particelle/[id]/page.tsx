@@ -3,8 +3,7 @@
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
-import { ProtectedPage } from "@/components/app/protected-page";
-import { CatastoPhase1Nav } from "@/components/catasto/phase1-nav";
+import { CatastoPage } from "@/components/catasto/catasto-page";
 import { AlertBanner } from "@/components/ui/alert-banner";
 import { MetricCard } from "@/components/ui/metric-card";
 import { DataTable } from "@/components/table/data-table";
@@ -167,15 +166,13 @@ export default function CatastoParticellaDetailPage() {
   const reference = item ? `Fg.${item.foglio} Part.${item.particella}${item.subalterno ? ` Sub.${item.subalterno}` : ""}` : "Particella";
 
   return (
-    <ProtectedPage
+    <CatastoPage
       title={reference}
       description="Scheda particella (Fase 1): dati catastali e storico SCD2."
       breadcrumb="Catasto / Particelle / Dettaglio"
       requiredModule="catasto"
     >
       <div className="page-stack">
-        <CatastoPhase1Nav />
-
         {error ? (
           <AlertBanner variant="danger" title="Errore caricamento">
             {error}
@@ -260,7 +257,6 @@ export default function CatastoParticellaDetailPage() {
           </div>
         </article>
       </div>
-    </ProtectedPage>
+    </CatastoPage>
   );
 }
-

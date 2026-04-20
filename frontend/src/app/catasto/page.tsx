@@ -3,8 +3,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 
-import { ProtectedPage } from "@/components/app/protected-page";
-import { CatastoPhase1Nav } from "@/components/catasto/phase1-nav";
+import { CatastoPage } from "@/components/catasto/catasto-page";
 import { KpiCard } from "@/components/catasto/KpiCard";
 import { AlertBanner } from "@/components/ui/alert-banner";
 import { RefreshIcon } from "@/components/ui/icons";
@@ -84,15 +83,13 @@ export default function CatastoDashboardPage() {
   );
 
   return (
-    <ProtectedPage
+    <CatastoPage
       title="GAIA Catasto"
       description="Dashboard Catasto Fase 1: distretti, particelle, anomalie e import Capacitas."
       breadcrumb="Catasto / Dashboard"
       requiredModule="catasto"
     >
       <div className="page-stack">
-        <CatastoPhase1Nav />
-
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="text-sm text-gray-500">Anno campagna</p>
@@ -204,6 +201,6 @@ export default function CatastoDashboardPage() {
           </div>
         </article>
       </div>
-    </ProtectedPage>
+    </CatastoPage>
   );
 }

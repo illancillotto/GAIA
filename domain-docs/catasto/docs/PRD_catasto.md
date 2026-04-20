@@ -173,13 +173,24 @@ Route `catasto` realmente utili al dominio:
 - `/catasto/archive`
 - `/catasto/documents`
 - `/catasto/documents/[id]`
+- `/catasto/import`
+- `/catasto/distretti`
+- `/catasto/distretti/[id]`
+- `/catasto/particelle`
+- `/catasto/particelle/[id]`
+- `/catasto/anomalie`
 
 Comportamento attuale:
 
-- `/catasto` e una pagina placeholder di dominio
+- le pagine Fase 1 usano un wrapper frontend condiviso con navigazione di dominio uniforme
+- `/catasto` e la dashboard Fase 1 del dominio
 - `/catasto/archive?view=documents` e la superficie principale per l'archivio
 - `/catasto/documents` reindirizza all'archivio documenti
 - `/catasto/documents/[id]` mostra il dettaglio documento
+- `/catasto/import` espone il wizard upload -> polling -> report anomalie
+- `/catasto/distretti` e `/catasto/distretti/[id]` coprono KPI e drill-down per distretto
+- `/catasto/particelle` e `/catasto/particelle/[id]` coprono lookup e dettaglio con utenze/anomalie
+- `/catasto/anomalie` espone la lista operativa con aggiornamento stato
 
 Route `catasto` mantenute per compatibilita ma non piu canoniche:
 

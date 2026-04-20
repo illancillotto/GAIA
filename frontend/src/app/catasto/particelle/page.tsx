@@ -4,8 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { ColumnDef } from "@tanstack/react-table";
 
-import { ProtectedPage } from "@/components/app/protected-page";
-import { CatastoPhase1Nav } from "@/components/catasto/phase1-nav";
+import { CatastoPage } from "@/components/catasto/catasto-page";
 import { DataTable } from "@/components/table/data-table";
 import { AlertBanner } from "@/components/ui/alert-banner";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -101,15 +100,13 @@ export default function CatastoParticellePage() {
   );
 
   return (
-    <ProtectedPage
+    <CatastoPage
       title="Particelle"
       description="Lista particelle (Fase 1) con filtri principali."
       breadcrumb="Catasto / Particelle"
       requiredModule="catasto"
     >
       <div className="page-stack">
-        <CatastoPhase1Nav />
-
         {error ? (
           <AlertBanner variant="danger" title="Errore caricamento">
             {error}
@@ -195,7 +192,6 @@ export default function CatastoParticellePage() {
           )}
         </article>
       </div>
-    </ProtectedPage>
+    </CatastoPage>
   );
 }
-
