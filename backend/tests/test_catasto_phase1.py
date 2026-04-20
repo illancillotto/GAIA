@@ -29,6 +29,7 @@ from app.modules.catasto.services.validation import (
     validate_comune,
     validate_superficie,
 )
+from tests.catasto_fixtures import build_capacitas_dataframe, build_capacitas_workbook_bytes
 
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
@@ -162,65 +163,6 @@ def seed_phase1_lookup_data(db: Session) -> None:
         )
     )
     db.commit()
-
-
-def build_capacitas_dataframe() -> pd.DataFrame:
-    return pd.DataFrame(
-        [
-            {
-                "ANNO": "2025",
-                "PVC": "95",
-                "COM": "165",
-                "CCO": "UT-001",
-                "FRA": "1",
-                "DISTRETTO": "10",
-                "Unnamed: 7": "Distretto 10",
-                "COMUNE": "Arborea",
-                "SEZIONE": "",
-                "FOGLIO": "5",
-                "PARTIC": "120",
-                "SUB": "1",
-                "SUP.CATA.": "1000",
-                "SUP.IRRIGABILE": "1000",
-                "Ind. Spese Fisse": "1.5",
-                "Imponibile s.f.": "1500",
-                "ESENTE 0648": "false",
-                "ALIQUOTA 0648": "0.1",
-                "IMPORTO 0648": "150",
-                "ALIQUOTA 0985": "0.2",
-                "IMPORTO 0985": "300",
-                "DENOMINAZIONE": "Mario Rossi",
-                "CODICE FISCALE": "Dnifse64c01l122y",
-            },
-            {
-                "ANNO": "2025",
-                "PVC": "95",
-                "COM": "999",
-                "CCO": "UT-002",
-                "FRA": "1",
-                "DISTRETTO": "10",
-                "Unnamed: 7": "Distretto 10",
-                "COMUNE": "Comune Inventato",
-                "SEZIONE": "",
-                "FOGLIO": "9",
-                "PARTIC": "999",
-                "SUB": "",
-                "SUP.CATA.": "1000",
-                "SUP.IRRIGABILE": "1200",
-                "Ind. Spese Fisse": "1.5",
-                "Imponibile s.f.": "999",
-                "ESENTE 0648": "false",
-                "ALIQUOTA 0648": "0.1",
-                "IMPORTO 0648": "1",
-                "ALIQUOTA 0985": "0.2",
-                "IMPORTO 0985": "2",
-                "DENOMINAZIONE": "Soggetto Test",
-                "CODICE FISCALE": "BADCF",
-            },
-        ]
-    )
-
-
 def test_validation_helpers_cover_expected_values() -> None:
     assert validate_codice_fiscale("FNDGPP63E11B354D") == {
         "cf_normalizzato": "FNDGPP63E11B354D",
@@ -420,6 +362,25 @@ def test_import_capacitas_excel_duplicate_and_force(monkeypatch: pytest.MonkeyPa
         assert first_batch.status == "replaced"
         assert second_batch.status == "completed"
         assert second_batch.id != first_batch.id
+    finally:
+        db.close()
+
+
+def test_import_capacitas_excel_reads_real_workbook_bytes() -> None:
+    db = TestingSessionLocal()
+    try:
+        batch = import_capacitas_excel(
+            db=db,
+            file_bytes=build_capacitas_workbook_bytes(build_capacitas_dataframe().head(1)),
+            filename="ruoli-real-workbook.xlsx",
+            created_by=1,
+        )
+        utenze = db.query(CatUtenzaIrrigua).filter(CatUtenzaIrrigua.import_batch_id == batch.id).all()
+
+        assert batch.status == "completed"
+        assert batch.righe_importate == 1
+        assert len(utenze) == 1
+        assert utenze[0].codice_fiscale == "DNIFSE64C01L122Y"
     finally:
         db.close()
 
