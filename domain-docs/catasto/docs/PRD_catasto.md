@@ -16,6 +16,8 @@ Questo PRD descrive quindi il perimetro reale di `catasto` oggi:
 - dizionario comuni catastali
 - archivio documenti catastali
 - consultazione e dettaglio dei documenti
+- anagrafica territoriale `cat_*` per distretti, particelle, utenze irrigue e anomalie
+- import Capacitas Fase 1 e basi geospaziali PostGIS
 - superfici frontend dedicate alla navigazione del patrimonio documentale
 
 ## Obiettivi di prodotto
@@ -98,6 +100,16 @@ Entita di dominio oggi rilevanti per `catasto`:
 
 - `catasto_comuni`
 - `catasto_documents`
+- `cat_import_batches`
+- `cat_schemi_contributo`
+- `cat_aliquote`
+- `cat_distretti`
+- `cat_distretto_coefficienti`
+- `cat_particelle`
+- `cat_particelle_history`
+- `cat_utenze_irrigue`
+- `cat_intestatari`
+- `cat_anomalie`
 
 Entita correlate ma governate dal runtime `elaborazioni`:
 
@@ -131,6 +143,27 @@ Note:
 - `POST /catasto/documents/download`
 - `GET /catasto/documents/{document_id}`
 - `GET /catasto/documents/{document_id}/download`
+
+### Fase 1 territoriale
+
+- `POST /catasto/import/capacitas`
+- `GET /catasto/import/history`
+- `GET /catasto/import/{batch_id}/status`
+- `GET /catasto/import/{batch_id}/report`
+- `GET /catasto/distretti/`
+- `GET /catasto/distretti/{distretto_id}`
+- `GET /catasto/distretti/{distretto_id}/kpi`
+- `GET /catasto/distretti/{distretto_id}/geojson`
+- `GET /catasto/particelle/`
+- `GET /catasto/particelle/{particella_id}`
+- `GET /catasto/particelle/{particella_id}/history`
+- `GET /catasto/anomalie/`
+
+Vincoli infrastrutturali:
+
+- la Fase 1 richiede PostgreSQL con estensione PostGIS disponibile
+- nello stack locale Docker il servizio `postgres` usa un'immagine `postgis/postgis`
+- le migration `cat_*` non sono compatibili con SQLite e vanno validate su PostgreSQL reale
 
 ## Frontend corrente
 

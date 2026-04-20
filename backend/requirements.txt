@@ -5,8 +5,10 @@ beautifulsoup4==4.13.5
 cryptography==45.0.7
 email-validator==2.3.0
 fastapi==0.118.0
+geoalchemy2>=0.14.0
 httpx==0.28.1
 json5==0.12.1
+codicefiscale>=0.9,<1.0
 openpyxl==3.1.5
 pandas==2.3.2
 paramiko==3.5.1
@@ -19,5 +21,6 @@ python-nmap==0.7.1
 python-multipart==0.0.20
 pysnmp==7.1.16
 scapy==2.6.1
+shapely>=2.0.0
 sqlalchemy==2.0.43
 uvicorn[standard]==0.37.0

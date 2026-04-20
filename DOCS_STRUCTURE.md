@@ -45,6 +45,7 @@ La documentazione del progetto e distribuita principalmente in due aree:
 - `domain-docs/catasto/README.md` non presente
 - `domain-docs/catasto/docs/README.md`
 - `domain-docs/catasto/docs/PRD_catasto.md`
+- `domain-docs/catasto/docs/GAIA_CATASTO_ARCHITECTURE_v1.md`
 - `domain-docs/catasto/docs/ELABORAZIONI_REFACTOR_PLAN.md`
 - `domain-docs/catasto/docs/SISTER_debug_runbook.md`
 - `domain-docs/catasto/docs/archive/PROMPT_CODEX_catasto.md`
@@ -125,6 +126,10 @@ GAIA/
 │   │   ├── jobs/
 │   │   ├── models/
 │   │   ├── modules/
+│   │   │   ├── catasto/
+│   │   │   │   ├── models/
+│   │   │   │   ├── routes/
+│   │   │   │   └── services/
 │   │   │   ├── elaborazioni/
 │   │   │   ├── inventory/
 │   │   │   ├── operazioni/

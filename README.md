@@ -45,6 +45,8 @@ Automazione delle visure catastali dal portale SISTER: upload batch CSV/XLSX,
 worker Playwright separato, gestione CAPTCHA, archivio PDF e download ZIP.
 Il runtime supporta sia visure per immobile sia visure per soggetto PF/PNF,
 con esiti diagnostici distinti `completed`, `failed`, `skipped`, `not_found`.
+Il dominio include anche una Fase 1 territoriale con import Capacitas,
+distretti, particelle e anomalie su base PostGIS.
 Stato: MVP in integrazione.
 
 ### GAIA Utenze — Anagrafica soggetti
@@ -80,7 +82,7 @@ GAIA/
 │       ├── inventory/
 │       └── catasto/
 ├── modules/
-│   └── catasto/
+│   └── elaborazioni/
 │       └── worker/
 ├── backend/
 │   ├── app/
@@ -194,7 +196,9 @@ Se la variabile e vuota/non impostata, la password non viene richiesta.
 - Runtime operativo backend esposto sotto `/elaborazioni`; `/catasto` resta area dominio/documenti/comuni
 - Worker dedicato `elaborazioni-worker` con Playwright e OCR CAPTCHA
 - Volume Docker `catasto-data` per PDF e immagini CAPTCHA
+- Database locale Docker su `postgis/postgis:16-3.4-alpine` per supportare la Fase 1 geospaziale
 - Archivio documenti con download singolo e ZIP per batch
+- Nuove API Fase 1 sotto `/catasto/import`, `/catasto/distretti`, `/catasto/particelle`, `/catasto/anomalie`
 - Test connessione SISTER asincrono eseguito dal worker con feedback realtime
 - Variabili operative in `.env.example` per storage documenti/CAPTCHA e chiave Fernet condivisa
 - Selettori SISTER esterni in `modules/elaborazioni/worker/sister_selectors.json`, sovrascrivibili via `ELABORAZIONI_SISTER_SELECTORS_PATH` con fallback compatibile su `CATASTO_SISTER_SELECTORS_PATH`
