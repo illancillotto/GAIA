@@ -109,6 +109,7 @@ GAIA/
 - `backend/app/modules/<modulo>/` contiene il codice backend runtime dei moduli.
 - `frontend/src/app/<modulo>/` contiene il codice frontend runtime dei moduli.
 - `modules/` non e piu il contenitore dei moduli applicativi; resta disponibile solo per asset tecnici specifici, come `modules/elaborazioni/worker/`.
+- l'account NAS `svc_naap` resta un identificatore tecnico legacy ancora valido e non va rinominato durante i refactor del naming progetto.
 
 ## Architettura backend attuale
 

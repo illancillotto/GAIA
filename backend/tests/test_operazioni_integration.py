@@ -72,7 +72,7 @@ from app.modules.operazioni.services.attachment_service import (
 def db_url():
     return os.environ.get(
         "TEST_DATABASE_URL",
-        "postgresql+psycopg://naap_app:change_me@localhost:5434/naap",
+        "postgresql+psycopg://gaia_app:change_me@localhost:5434/gaia",
     )
 
 

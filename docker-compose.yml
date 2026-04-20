@@ -1,7 +1,7 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: naap-postgres
+    container_name: gaia-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
@@ -18,7 +18,7 @@ services:
   backend:
     build:
       context: ./backend
-    container_name: naap-backend
+    container_name: gaia-backend
     restart: unless-stopped
     env_file:
       - .env
@@ -47,7 +47,7 @@ services:
   frontend:
     build:
       context: ./frontend
-    container_name: naap-frontend
+    container_name: gaia-frontend
     restart: unless-stopped
     env_file:
       - .env
@@ -68,7 +68,7 @@ services:
 
   nginx:
     image: nginx:1.29-alpine
-    container_name: naap-nginx
+    container_name: gaia-nginx
     restart: unless-stopped
     depends_on:
       frontend:

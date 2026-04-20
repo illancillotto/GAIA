@@ -37,7 +37,7 @@ def test_settings_use_expected_defaults(monkeypatch) -> None:
     monkeypatch.setenv("JWT_SECRET_KEY", "config-defaults-secret")
     settings = Settings(_env_file=None)
 
-    assert settings.project_name == "NAS Access Audit Platform"
+    assert settings.project_name == "GAIA"
     assert settings.app_version == "0.1.0"
     assert settings.app_env == "development"
     assert settings.backend_host == "0.0.0.0"
@@ -74,7 +74,7 @@ def test_settings_use_expected_defaults(monkeypatch) -> None:
 def test_settings_allow_environment_override(monkeypatch) -> None:
     monkeypatch.setenv("APP_ENV", "test")
     monkeypatch.setenv("BACKEND_PORT", "9010")
-    monkeypatch.setenv("BACKEND_CORS_ORIGINS", "http://localhost:8080,https://naap.internal")
+    monkeypatch.setenv("BACKEND_CORS_ORIGINS", "http://localhost:8080,https://gaia.internal")
     monkeypatch.setenv("DATABASE_URL", "sqlite:///./test.db")
     monkeypatch.setenv("NAS_HOST", "10.10.10.10")
     monkeypatch.setenv("NAS_TIMEOUT", "25")
@@ -94,7 +94,7 @@ def test_settings_allow_environment_override(monkeypatch) -> None:
 
     assert settings.app_env == "test"
     assert settings.backend_port == 9010
-    assert settings.backend_cors_origins == "http://localhost:8080,https://naap.internal"
+    assert settings.backend_cors_origins == "http://localhost:8080,https://gaia.internal"
     assert settings.database_url == "sqlite:///./test.db"
     assert settings.nas_host == "10.10.10.10"
     assert settings.nas_timeout == 25

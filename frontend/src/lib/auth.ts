@@ -1,4 +1,4 @@
-const ACCESS_TOKEN_KEY = "naap.access_token";
+const ACCESS_TOKEN_KEY = "gaia.access_token";
 
 export function getStoredAccessToken(): string | null {
   if (typeof window === "undefined") {

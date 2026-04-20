@@ -32,7 +32,7 @@ from runtime_policy import classify_terminal_status
 from visura_flow import ManualCaptchaDecision, VisuraFlowResult, execute_visura_flow
 
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+psycopg://naap_app:change_me@postgres:5432/naap")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+psycopg://gaia_app:change_me@postgres:5432/gaia")
 CREDENTIAL_MASTER_KEY = os.environ["CREDENTIAL_MASTER_KEY"]
 def env_value(primary: str, legacy: str, default: str) -> str:
     return os.getenv(primary, os.getenv(legacy, default))

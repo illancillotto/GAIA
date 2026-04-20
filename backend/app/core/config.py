@@ -5,7 +5,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    project_name: str = "NAS Access Audit Platform"
+    project_name: str = "GAIA"
     app_version: str = "0.1.0"
     app_env: str = "development"
 
