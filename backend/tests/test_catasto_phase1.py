@@ -29,7 +29,12 @@ from app.modules.catasto.services.validation import (
     validate_comune,
     validate_superficie,
 )
-from tests.catasto_fixtures import build_capacitas_dataframe, build_capacitas_workbook_bytes
+from tests.catasto_fixtures import (
+    build_capacitas_dataframe,
+    build_capacitas_workbook_bytes,
+    build_oristanese_territorial_capacitas_dataframe,
+    build_oristanese_territorial_capacitas_workbook_bytes,
+)
 
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
@@ -381,6 +386,26 @@ def test_import_capacitas_excel_reads_real_workbook_bytes() -> None:
         assert batch.righe_importate == 1
         assert len(utenze) == 1
         assert utenze[0].codice_fiscale == "DNIFSE64C01L122Y"
+    finally:
+        db.close()
+
+
+def test_import_capacitas_excel_accepts_realistic_oristanese_fixture() -> None:
+    df = build_oristanese_territorial_capacitas_dataframe()
+    db = TestingSessionLocal()
+    try:
+        batch = import_capacitas_excel(
+            db=db,
+            file_bytes=build_oristanese_territorial_capacitas_workbook_bytes(df),
+            filename="ruoli-oristanese-fixture.xlsx",
+            created_by=1,
+        )
+        utenze = db.query(CatUtenzaIrrigua).filter(CatUtenzaIrrigua.import_batch_id == batch.id).all()
+
+        assert batch.status == "completed"
+        assert batch.righe_importate == len(df)
+        assert len(utenze) == len(df)
+        assert {u.cod_comune_istat for u in utenze if u.cod_comune_istat is not None}.issuperset({165, 200, 212})
     finally:
         db.close()
 
