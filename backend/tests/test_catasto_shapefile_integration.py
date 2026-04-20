@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.application_user import ApplicationUser
 from app.models.catasto_phase1 import CatDistretto, CatImportBatch, CatParticella, CatParticellaHistory
+from app.modules.catasto.routes.distretti import get_distretto_geojson
 from app.modules.catasto.services.import_shapefile import finalize_shapefile_import
 
 
@@ -278,3 +279,228 @@ def test_finalize_shapefile_import_writes_history_on_changed_particella(db_sessi
             foglio=foglio,
             particella=particella,
         )
+
+
+def test_distretto_geojson_route_returns_feature_for_geometry(db_session: Session) -> None:
+    suffix = uuid4().hex[:8]
+    num_distretto = f"7{suffix[:3]}"
+    distretto_id = uuid4()
+
+    db_session.execute(text("DELETE FROM cat_distretti WHERE num_distretto = :n"), {"n": num_distretto})
+    db_session.execute(
+        text(
+            """
+            INSERT INTO cat_distretti (id, num_distretto, nome_distretto, geometry, attivo)
+            VALUES (:id, :num, :nome, ST_GeomFromText(:wkt, 4326), true)
+            """
+        ),
+        {
+            "id": str(distretto_id),
+            "num": num_distretto,
+            "nome": f"Distretto geojson {suffix}",
+            "wkt": _polygon_wkt(8.61, 39.81),
+        },
+    )
+    db_session.commit()
+
+    try:
+        payload = get_distretto_geojson(distretto_id, db_session, object())
+        assert payload["type"] == "Feature"
+        assert payload["geometry"]["type"] in {"MultiPolygon", "Polygon"}
+        assert payload["properties"]["id"] == str(distretto_id)
+        assert payload["properties"]["num_distretto"] == num_distretto
+    finally:
+        db_session.execute(text("DELETE FROM cat_distretti WHERE num_distretto = :n"), {"n": num_distretto})
+        db_session.commit()
+
+
+def test_finalize_shapefile_import_excludes_fd_distretto_from_upsert(db_session: Session) -> None:
+    suffix = uuid4().hex[:8]
+    staging_table = f"cat_particelle_staging_it_{suffix}"
+    num_distretto = "FD"
+    foglio = f"5{suffix[:2]}"
+    particella = f"6{suffix[2:5]}"
+
+    # NOTE: we deliberately avoid deleting by num_distretto='FD' because that value may
+    # exist in shared dev DBs and be referenced by `cat_utenze_irrigue`.
+    db_session.execute(text(f'DROP TABLE IF EXISTS "{staging_table}"'))  # nosec - generated local test table
+    db_session.execute(
+        text(
+            """
+            DELETE FROM cat_particelle_history
+            WHERE foglio = :foglio AND particella = :particella
+            """
+        ),
+        {"foglio": foglio, "particella": particella},
+    )
+    db_session.execute(
+        text(
+            """
+            DELETE FROM cat_particelle
+            WHERE foglio = :foglio AND particella = :particella
+            """
+        ),
+        {"foglio": foglio, "particella": particella},
+    )
+    db_session.execute(text("DELETE FROM cat_import_batches WHERE filename = :filename"), {"filename": staging_table})
+    db_session.commit()
+
+    db_session.execute(
+        text(
+            f'''
+            CREATE TABLE "{staging_table}" (
+              nume_fogl text,
+              nume_part text,
+              suba_part text,
+              cfm text,
+              supe_part text,
+              num_dist text,
+              nome_dist text,
+              wkb_geometry geometry(MULTIPOLYGON, 4326)
+            )
+            '''
+        )
+    )
+    db_session.execute(
+        text(
+            f'''
+            INSERT INTO "{staging_table}" (
+              nume_fogl, nume_part, suba_part, cfm, supe_part, num_dist, nome_dist, wkb_geometry
+            ) VALUES (
+              :foglio, :particella, '1', 'A357-FDTEST', '100.00', 'FD', 'Fuori distretto',
+              ST_GeomFromText(:wkt, 4326)
+            )
+            '''
+        ),
+        {"foglio": foglio, "particella": particella, "wkt": _polygon_wkt(8.62, 39.82)},
+    )
+    db_session.commit()
+
+    try:
+        result = finalize_shapefile_import(
+            db_session,
+            created_by=_created_by(db_session),
+            staging_table=staging_table,
+        )
+        assert result["status"] == "completed"
+
+        fd_distretto = db_session.execute(select(CatDistretto).where(CatDistretto.num_distretto == "FD")).scalar_one_or_none()
+        assert fd_distretto is None
+
+        inserted = db_session.execute(
+            select(CatParticella).where(CatParticella.foglio == foglio, CatParticella.particella == particella, CatParticella.is_current.is_(True))
+        ).scalar_one_or_none()
+        assert inserted is not None
+        assert inserted.num_distretto == "FD"
+        assert inserted.fuori_distretto is True
+    finally:
+        db_session.execute(text(f'DROP TABLE IF EXISTS "{staging_table}"'))  # nosec - generated local test table
+        db_session.execute(
+            text("DELETE FROM cat_particelle_history WHERE foglio = :foglio AND particella = :particella"),
+            {"foglio": foglio, "particella": particella},
+        )
+        db_session.execute(
+            text("DELETE FROM cat_particelle WHERE foglio = :foglio AND particella = :particella"),
+            {"foglio": foglio, "particella": particella},
+        )
+        db_session.execute(text("DELETE FROM cat_import_batches WHERE filename = :filename"), {"filename": staging_table})
+        db_session.commit()
+
+
+def test_finalize_shapefile_import_maps_cod_catastale_from_cfm_and_national_code(db_session: Session) -> None:
+    suffix = uuid4().hex[:8]
+    staging_table = f"cat_particelle_staging_it_{suffix}"
+    num_distretto = f"6{suffix[:3]}"
+    foglio = f"7{suffix[:2]}"
+    particella = f"8{suffix[2:5]}"
+
+    _cleanup_shapefile_artifacts(
+        db_session,
+        staging_table=staging_table,
+        num_distretto=num_distretto,
+        foglio=foglio,
+        particella=particella,
+    )
+
+    db_session.execute(
+        text(
+            f'''
+            CREATE TABLE "{staging_table}" (
+              nume_fogl text,
+              nume_part text,
+              suba_part text,
+              cfm text,
+              nationalca text,
+              supe_part text,
+              num_dist text,
+              nome_dist text,
+              wkb_geometry geometry(MULTIPOLYGON, 4326)
+            )
+            '''
+        )
+    )
+
+    # Row 1: mapping from CFM prefix (I791 -> 286)
+    db_session.execute(
+        text(
+            f'''
+            INSERT INTO "{staging_table}" (
+              nume_fogl, nume_part, suba_part, cfm, nationalca, supe_part, num_dist, nome_dist, wkb_geometry
+            ) VALUES (
+              :foglio, :particella, '1', 'I791-ITEST', NULL, '10.00', :num_dist, 'Distretto map 1',
+              ST_GeomFromText(:wkt1, 4326)
+            )
+            '''
+        ),
+        {"foglio": foglio, "particella": particella, "num_dist": num_distretto, "wkt1": _polygon_wkt(8.63, 39.83)},
+    )
+
+    # Row 2: mapping from national_code when cfm is missing (B314 -> 212)
+    foglio2 = f"{foglio}X"
+    particella2 = f"{particella}X"
+    db_session.execute(
+        text(
+            f'''
+            INSERT INTO "{staging_table}" (
+              nume_fogl, nume_part, suba_part, cfm, nationalca, supe_part, num_dist, nome_dist, wkb_geometry
+            ) VALUES (
+              :foglio2, :particella2, '1', NULL, 'B314TEST0001', '11.00', :num_dist, 'Distretto map 2',
+              ST_GeomFromText(:wkt2, 4326)
+            )
+            '''
+        ),
+        {"foglio2": foglio2, "particella2": particella2, "num_dist": num_distretto, "wkt2": _polygon_wkt(8.64, 39.84)},
+    )
+
+    db_session.commit()
+
+    try:
+        result = finalize_shapefile_import(
+            db_session,
+            created_by=_created_by(db_session),
+            staging_table=staging_table,
+        )
+        assert result["status"] == "completed"
+
+        inserted_1 = db_session.execute(
+            select(CatParticella).where(CatParticella.foglio == foglio, CatParticella.particella == particella, CatParticella.is_current.is_(True))
+        ).scalar_one()
+        inserted_2 = db_session.execute(
+            select(CatParticella).where(CatParticella.foglio == foglio2, CatParticella.particella == particella2, CatParticella.is_current.is_(True))
+        ).scalar_one()
+
+        assert inserted_1.cod_comune_istat == 286
+        assert inserted_2.cod_comune_istat == 212
+    finally:
+        db_session.execute(text(f'DROP TABLE IF EXISTS "{staging_table}"'))  # nosec - generated local test table
+        db_session.execute(
+            text("DELETE FROM cat_particelle WHERE foglio IN (:f1, :f2) AND particella IN (:p1, :p2)"),
+            {"f1": foglio, "f2": foglio2, "p1": particella, "p2": particella2},
+        )
+        db_session.execute(
+            text("DELETE FROM cat_particelle_history WHERE foglio IN (:f1, :f2) AND particella IN (:p1, :p2)"),
+            {"f1": foglio, "f2": foglio2, "p1": particella, "p2": particella2},
+        )
+        db_session.execute(text("DELETE FROM cat_distretti WHERE num_distretto = :n"), {"n": num_distretto})
+        db_session.execute(text("DELETE FROM cat_import_batches WHERE filename = :f"), {"f": staging_table})
+        db_session.commit()
