@@ -109,9 +109,16 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   assert.match(newBatchPage, /redirect\("\/elaborazioni\/new-batch"\)/);
   assert.match(newSinglePage, /redirect\("\/elaborazioni\/new-single"\)/);
   assert.match(importPage, /Polling ogni 2s/);
+  assert.match(importPage, /type StepKey = "upload" \| "progress" \| "report"/);
   assert.match(importPage, /catastoUploadCapacitas/);
   assert.match(importPage, /catastoGetImportStatus/);
   assert.match(importPage, /catastoGetImportReport/);
+  assert.match(importPage, /setBatchId\(result\.batch_id\)/);
+  assert.match(importPage, /setStep\("progress"\)/);
+  assert.match(importPage, /status\.status === "completed" \|\| status\.status === "failed"/);
+  assert.match(importPage, /setStep\("report"\)/);
+  assert.match(importPage, /setReportTipo\(c\.tipo\)/);
+  assert.match(importPage, /setReportPage\(1\)/);
   assert.match(distrettiPage, /catastoListDistretti/);
   assert.match(distrettiPage, /catastoGetDistrettoKpi/);
   assert.match(anomaliePage, /catastoUpdateAnomalia/);
