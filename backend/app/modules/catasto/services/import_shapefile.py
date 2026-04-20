@@ -62,6 +62,24 @@ def finalize_shapefile_import(
     db.add(batch)
     db.flush()
 
+    # Detect geometry column name in staging (usually wkb_geometry from ogr2ogr)
+    geom_col = db.execute(
+        text(
+            """
+            SELECT column_name
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = :table_name
+              AND udt_name = 'geometry'
+            ORDER BY ordinal_position
+            LIMIT 1
+            """
+        ),
+        {"table_name": staging_table},
+    ).scalar_one_or_none()
+    if not geom_col:
+        raise ValueError(f"Nessuna colonna geometry trovata nella staging: {staging_table}")
+
     # Normalizza geometria se necessario (assumiamo che ogr2ogr abbia già trasformato in 4326,
     # ma manteniamo una guardia per import "grezzo")
     if source_srid and int(source_srid) != 4326:
@@ -69,35 +87,67 @@ def finalize_shapefile_import(
             text(
                 f"""
                 UPDATE {staging_table}
-                SET geometry = ST_Transform(ST_SetSRID(geometry, :src_srid), 4326)
-                WHERE geometry IS NOT NULL
+                SET "{geom_col}" = ST_Transform(ST_SetSRID("{geom_col}", :src_srid), 4326)
+                WHERE "{geom_col}" IS NOT NULL
                 """
             ),
             {"src_srid": int(source_srid)},
         )
 
-    # Mapping colonne staging -> canonical (tollerante a naming diversi)
-    # Nota: si appoggia a COALESCE e cast per gestire shapefile con colonne diverse.
+    # Mapping colonne staging -> canonical (tollerante a naming diversi).
+    # Importante: riferirsi a colonne non esistenti in SQL causa errore anche dentro COALESCE.
+    # Per questo usiamo to_jsonb(t)->>'COL' (NULL se la chiave/colonna non esiste).
     staged_rows_cte = f"""
     WITH staged AS (
       SELECT
         -- chiave catastale
-        COALESCE("cod_comune_istat"::int, "COM"::int, "COD_COM"::int, "COD_ISTAT"::int) AS cod_comune_istat,
-        COALESCE(NULLIF(TRIM(COALESCE("foglio"::text, "FOGLIO"::text, "FOGL"::text)), ''), '') AS foglio,
-        COALESCE(NULLIF(TRIM(COALESCE("particella"::text, "PARTIC"::text, "PART"::text)), ''), '') AS particella,
-        NULLIF(TRIM(COALESCE("subalterno"::text, "SUB"::text, "SUBA_PART"::text)), '') AS subalterno,
+        (
+          CASE
+            WHEN cod_catastale = 'A357' THEN 165  -- Arborea
+            WHEN cod_catastale = 'B314' THEN 212  -- Cabras
+            WHEN cod_catastale = 'E972' THEN 283  -- Marrubiu
+            WHEN cod_catastale = 'G113' THEN 200  -- Oristano
+            WHEN cod_catastale = 'I205' THEN 239  -- Santa Giusta
+            WHEN cod_catastale = 'L122' THEN 280  -- Terralba
+            WHEN cod_catastale = 'H301' THEN 222  -- Nurachi
+            WHEN cod_catastale = 'G286' THEN 289  -- Uras
+            WHEN cod_catastale = 'I791' THEN 286  -- San Nicolo d'Arcidano
+            ELSE 0
+          END
+        ) AS cod_comune_istat,
+        regexp_replace(
+          COALESCE(NULLIF(TRIM(COALESCE(to_jsonb(t)->>'nume_fogl', to_jsonb(t)->>'FOGLIO', to_jsonb(t)->>'foglio')), ''), ''),
+          '\\.0$',
+          ''
+        ) AS foglio,
+        regexp_replace(
+          COALESCE(NULLIF(TRIM(COALESCE(to_jsonb(t)->>'nume_part', to_jsonb(t)->>'PARTIC', to_jsonb(t)->>'particella')), ''), ''),
+          '^\\.',
+          ''
+        ) AS particella,
+        NULLIF(TRIM(COALESCE(to_jsonb(t)->>'suba_part', to_jsonb(t)->>'SUBA_PART', to_jsonb(t)->>'subalterno')), '') AS subalterno,
 
         -- attributi
-        NULLIF(TRIM(COALESCE("national_code"::text, "NATIONALCA"::text, "NATIONAL_CODE"::text)), '') AS national_code,
-        NULLIF(TRIM(COALESCE("nome_comune"::text, "COMUNE"::text, "NOME_COM"::text)), '') AS nome_comune,
-        NULLIF(TRIM(COALESCE("sezione_catastale"::text, "SEZIONE"::text, "SEZI_CENS"::text)), '') AS sezione_catastale,
-        NULLIF(TRIM(COALESCE("cfm"::text, "CFM"::text)), '') AS cfm,
-        COALESCE("superficie_mq"::numeric, "SUPE_PART"::numeric, "SUP_MQ"::numeric) AS superficie_mq,
-        NULLIF(TRIM(COALESCE("num_distretto"::text, "NUM_DIST"::text)), '') AS num_distretto,
-        NULLIF(TRIM(COALESCE("nome_distretto"::text, "Nome_Dist"::text, "NOME_DIST"::text)), '') AS nome_distretto,
-        COALESCE("suppressed"::boolean, false) AS suppressed,
-        geometry
-      FROM {staging_table}
+        NULLIF(TRIM(COALESCE(to_jsonb(t)->>'nationalca', to_jsonb(t)->>'national_code', to_jsonb(t)->>'NATIONALCA')), '') AS national_code,
+        NULL AS nome_comune,
+        NULLIF(TRIM(COALESCE(to_jsonb(t)->>'sezi_cens', to_jsonb(t)->>'sezione_catastale', to_jsonb(t)->>'SEZI_CENS')), '') AS sezione_catastale,
+        NULLIF(TRIM(COALESCE(to_jsonb(t)->>'cfm', to_jsonb(t)->>'CFM')), '') AS cfm,
+        COALESCE(
+          NULLIF(NULLIF(UPPER(TRIM(to_jsonb(t)->>'supe_part')), 'NULL'), '')::numeric,
+          NULLIF(NULLIF(UPPER(TRIM(to_jsonb(t)->>'SUPE_PART')), 'NULL'), '')::numeric,
+          NULLIF(NULLIF(UPPER(TRIM(to_jsonb(t)->>'superficie_mq')), 'NULL'), '')::numeric
+        ) AS superficie_mq,
+        NULLIF(TRIM(COALESCE(to_jsonb(t)->>'num_dist', to_jsonb(t)->>'NUM_DIST', to_jsonb(t)->>'num_distretto')), '') AS num_distretto,
+        NULLIF(TRIM(COALESCE(to_jsonb(t)->>'nome_dist', to_jsonb(t)->>'Nome_Dist', to_jsonb(t)->>'nome_distretto')), '') AS nome_distretto,
+        COALESCE(NULLIF(TRIM(to_jsonb(t)->>'suppressed'), '')::boolean, false) AS suppressed,
+        t."{geom_col}" AS geometry
+      FROM {staging_table} t
+      CROSS JOIN LATERAL (
+        SELECT NULLIF(TRIM(COALESCE(
+          NULLIF(TRIM(left(split_part(COALESCE(to_jsonb(t)->>'cfm',''), '-', 1), 4)), ''),
+          NULLIF(TRIM(left(COALESCE(to_jsonb(t)->>'nationalca',''), 4)), '')
+        )), '') AS cod_catastale
+      ) c
     )
     """
 

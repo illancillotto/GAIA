@@ -3,6 +3,7 @@ set -euo pipefail
 
 SHAPEFILE="${1:?Usage: $0 <path/to/shapefile.shp>}"
 POSTGRES_HOST="${POSTGRES_HOST:-localhost}"
+POSTGRES_PORT="${POSTGRES_PORT:-5432}"
 POSTGRES_DB="${POSTGRES_DB:-gaia}"
 POSTGRES_USER="${POSTGRES_USER:-gaia}"
 GAIA_API="${GAIA_API:-http://localhost:8000}"
@@ -19,7 +20,7 @@ if [ -z "${GAIA_ADMIN_TOKEN:-}" ]; then
   exit 1
 fi
 
-PG_CONN="PG:host=$POSTGRES_HOST dbname=$POSTGRES_DB user=$POSTGRES_USER password=$POSTGRES_PASSWORD"
+PG_CONN="PG:host=$POSTGRES_HOST port=$POSTGRES_PORT dbname=$POSTGRES_DB user=$POSTGRES_USER password=$POSTGRES_PASSWORD"
 
 echo "=== GAIA Catasto — Import Shapefile ==="
 echo "File: $SHAPEFILE"

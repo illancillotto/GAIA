@@ -1,11 +1,27 @@
 cod_istat,nome_comune,cod_provincia,sigla_provincia,regione
+50,Mogoro,95,OR,Sardegna
+59,Masullas,95,OR,Sardegna
 165,Arborea,95,OR,Sardegna
-169,Cabras,95,OR,Sardegna
-172,Marrubiu,95,OR,Sardegna
-179,Nurachi,95,OR,Sardegna
-185,Oristano,95,OR,Sardegna
-195,Santa Giusta,95,OR,Sardegna
-198,Terralba,95,OR,Sardegna
-201,Uras,95,OR,Sardegna
-202,San Nicolo d'Arcidano,95,OR,Sardegna
-203,Guspini,111,SU,Sardegna
+170,Milis,95,OR,Sardegna
+173,Bauladu,95,OR,Sardegna
+176,Narbolia,95,OR,Sardegna
+179,San Vero Milis,95,OR,Sardegna
+186,Tramatza,95,OR,Sardegna
+189,Zeddiani,95,OR,Sardegna
+200,Oristano*Oristano,95,OR,Sardegna
+206,Baratili San Pietro,95,OR,Sardegna
+212,Cabras,95,OR,Sardegna
+222,Nurachi,95,OR,Sardegna
+226,Ollastra Simaxis,95,OR,Sardegna
+229,Palmas Arborea,95,OR,Sardegna
+232,Riola Sardo,95,OR,Sardegna
+239,Santa Giusta,95,OR,Sardegna
+242,Siamaggiore,95,OR,Sardegna
+249,Simaxis*Simaxis,95,OR,Sardegna
+252,Solarussa,95,OR,Sardegna
+266,Zerfaliu,95,OR,Sardegna
+280,Terralba,95,OR,Sardegna
+283,Marrubiu,95,OR,Sardegna
+286,San Nicolo Arcidano,95,OR,Sardegna
+289,Uras,95,OR,Sardegna
+743,Pabillonis,111,SU,Sardegna

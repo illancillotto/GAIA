@@ -53,7 +53,9 @@ COLUMN_MAPPING = {
     "ALIQUOTA 0985": "aliquota_0985",
     "IMPORTO 0985": "importo_0985",
     "DENOMINAZIONE": "denominazione",
+    "DENOMINAZ": "denominazione",
     "CODICE FISCALE": "codice_fiscale",
+    "CODFISC": "codice_fiscale",
 }
 
 ANOMALIA_TYPES = {
