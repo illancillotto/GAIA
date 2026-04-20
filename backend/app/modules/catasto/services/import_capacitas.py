@@ -7,15 +7,17 @@ from io import BytesIO
 from typing import Any
 
 import pandas as pd
-from sqlalchemy import select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.catasto_phase1 import (
     CatAnomalia,
+    CatAliquota,
     CatDistretto,
     CatDistrettoCoefficiente,
     CatImportBatch,
     CatParticella,
+    CatSchemaContributo,
     CatUtenzaIrrigua,
 )
 from app.modules.catasto.services.validation import (
@@ -93,6 +95,7 @@ def import_capacitas_excel(
     force: bool = False,
     batch_id: uuid.UUID | None = None,
 ) -> CatImportBatch:
+    now = datetime.now(timezone.utc)
     file_hash = hashlib.sha256(file_bytes).hexdigest()
     existing_batch = db.execute(
         select(CatImportBatch).where(CatImportBatch.hash_file == file_hash, CatImportBatch.status == "completed")
@@ -147,7 +150,7 @@ def import_capacitas_excel(
             righe_totali=len(dataframe),
             status="processing",
             created_by=created_by,
-            created_at=datetime.now(timezone.utc),
+            created_at=now,
         )
         db.add(batch)
         db.flush()
@@ -170,12 +173,23 @@ def import_capacitas_excel(
         (part.cod_comune_istat, part.foglio, part.particella, part.subalterno): part.id for part in particelle
     }
     distretti = {item.num_distretto: item for item in db.execute(select(CatDistretto)).scalars().all()}
+    schemi = {item.codice: item for item in db.execute(select(CatSchemaContributo)).scalars().all()}
 
-    utenze: list[CatUtenzaIrrigua] = []
-    anomalie_specs: list[tuple[CatUtenzaIrrigua, dict[str, Any]]] = []
+    utenze_mappings: list[dict[str, Any]] = []
+    anomalie_mappings: list[dict[str, Any]] = []
     anomalie_count = {key: 0 for key in ANOMALIA_TYPES}
     preview_anomalie: list[dict[str, Any]] = []
-    coefficienti_by_distretto: dict[tuple[str, int], float] = {}
+    coefficienti_values: dict[tuple[str, int], list[float]] = {}
+    aliquote_values: dict[tuple[str, int], set[float]] = {}
+
+    def _flush_chunks() -> None:
+        if not utenze_mappings:
+            return
+        db.bulk_insert_mappings(CatUtenzaIrrigua, utenze_mappings, render_nulls=True)
+        if anomalie_mappings:
+            db.bulk_insert_mappings(CatAnomalia, anomalie_mappings, render_nulls=True)
+        utenze_mappings.clear()
+        anomalie_mappings.clear()
 
     for row_index, row in dataframe.iterrows():
         row_get = lambda key: None if key not in dataframe.columns or pd.isna(row.get(key)) else row.get(key)
@@ -196,43 +210,51 @@ def import_capacitas_excel(
         v_648 = validate_importo_0648(row_get("importo_0648"), row_get("imponibile_sf"), row_get("aliquota_0648"))
         v_985 = validate_importo_0985(row_get("importo_0985"), row_get("imponibile_sf"), row_get("aliquota_0985"))
 
-        utenza = CatUtenzaIrrigua(
-            import_batch_id=batch.id,
-            anno_campagna=int(row_get("anno_campagna")) if row_get("anno_campagna") is not None else anno or datetime.now(timezone.utc).year,
-            cco=_clean_optional_string(row_get("cco")),
-            cod_provincia=int(row_get("cod_provincia")) if row_get("cod_provincia") is not None else None,
-            cod_comune_istat=comune_value,
-            cod_frazione=int(row_get("cod_frazione")) if row_get("cod_frazione") is not None else None,
-            num_distretto=int(row_get("num_distretto")) if row_get("num_distretto") is not None else None,
-            nome_distretto_loc=_clean_optional_string(row_get("nome_distretto_loc")),
-            nome_comune=_clean_optional_string(row_get("nome_comune")),
-            sezione_catastale=_clean_optional_string(row_get("sezione_catastale")),
-            foglio=foglio or None,
-            particella=particella_value or None,
-            subalterno=subalterno,
-            particella_id=particella_id,
-            sup_catastale_mq=row_get("sup_catastale_mq"),
-            sup_irrigabile_mq=row_get("sup_irrigabile_mq"),
-            ind_spese_fisse=row_get("ind_spese_fisse"),
-            imponibile_sf=row_get("imponibile_sf"),
-            esente_0648=_clean_bool(row_get("esente_0648")),
-            aliquota_0648=row_get("aliquota_0648"),
-            importo_0648=row_get("importo_0648"),
-            aliquota_0985=row_get("aliquota_0985"),
-            importo_0985=row_get("importo_0985"),
-            denominazione=_clean_optional_string(row_get("denominazione")),
-            codice_fiscale=cf_normalizzato if isinstance(cf_normalizzato, str) else None,
-            codice_fiscale_raw=cf_raw,
-            anomalia_superficie=not bool(v_superficie["ok"]),
-            anomalia_cf_invalido=bool(cf_result["tipo"] != "MANCANTE" and not cf_result["is_valid"]),
-            anomalia_cf_mancante=bool(cf_result["tipo"] == "MANCANTE"),
-            anomalia_comune_invalido=not bool(v_comune["is_valid"]),
-            anomalia_particella_assente=bool(particella_id is None and comune_value is not None),
-            anomalia_imponibile=not bool(v_imponibile["ok"]),
-            anomalia_importi=not bool(v_648["ok"]) or not bool(v_985["ok"]),
-            created_at=datetime.now(timezone.utc),
-        )
-        utenze.append(utenza)
+        utenza_id = uuid.uuid4()
+        utenza_anno = int(row_get("anno_campagna")) if row_get("anno_campagna") is not None else anno or now.year
+        distretto_num = int(row_get("num_distretto")) if row_get("num_distretto") is not None else None
+        ind_sf = row_get("ind_spese_fisse")
+        aliquota_0648 = row_get("aliquota_0648")
+        aliquota_0985 = row_get("aliquota_0985")
+
+        utenza_mapping = {
+            "id": utenza_id,
+            "import_batch_id": batch.id,
+            "anno_campagna": utenza_anno,
+            "cco": _clean_optional_string(row_get("cco")),
+            "cod_provincia": int(row_get("cod_provincia")) if row_get("cod_provincia") is not None else None,
+            "cod_comune_istat": comune_value,
+            "cod_frazione": int(row_get("cod_frazione")) if row_get("cod_frazione") is not None else None,
+            "num_distretto": distretto_num,
+            "nome_distretto_loc": _clean_optional_string(row_get("nome_distretto_loc")),
+            "nome_comune": _clean_optional_string(row_get("nome_comune")),
+            "sezione_catastale": _clean_optional_string(row_get("sezione_catastale")),
+            "foglio": foglio or None,
+            "particella": particella_value or None,
+            "subalterno": subalterno,
+            "particella_id": particella_id,
+            "sup_catastale_mq": row_get("sup_catastale_mq"),
+            "sup_irrigabile_mq": row_get("sup_irrigabile_mq"),
+            "ind_spese_fisse": ind_sf,
+            "imponibile_sf": row_get("imponibile_sf"),
+            "esente_0648": _clean_bool(row_get("esente_0648")),
+            "aliquota_0648": aliquota_0648,
+            "importo_0648": row_get("importo_0648"),
+            "aliquota_0985": aliquota_0985,
+            "importo_0985": row_get("importo_0985"),
+            "denominazione": _clean_optional_string(row_get("denominazione")),
+            "codice_fiscale": cf_normalizzato if isinstance(cf_normalizzato, str) else None,
+            "codice_fiscale_raw": cf_raw,
+            "anomalia_superficie": not bool(v_superficie["ok"]),
+            "anomalia_cf_invalido": bool(cf_result["tipo"] != "MANCANTE" and not cf_result["is_valid"]),
+            "anomalia_cf_mancante": bool(cf_result["tipo"] == "MANCANTE"),
+            "anomalia_comune_invalido": not bool(v_comune["is_valid"]),
+            "anomalia_particella_assente": bool(particella_id is None and comune_value is not None),
+            "anomalia_imponibile": not bool(v_imponibile["ok"]),
+            "anomalia_importi": not bool(v_648["ok"]) or not bool(v_985["ok"]),
+            "created_at": now,
+        }
+        utenze_mappings.append(utenza_mapping)
 
         for tipo, should_add, payload in (
             ("VAL-01-sup_eccede", not bool(v_superficie["ok"]), {"delta_mq": v_superficie["delta_mq"], "delta_pct": v_superficie["delta_pct"]}),
@@ -248,64 +270,114 @@ def import_capacitas_excel(
             anomalie_count[tipo] += 1
             if len(preview_anomalie) < 50:
                 preview_anomalie.append({"riga": row_index + 2, "tipo": tipo, **payload})
-            anomalie_specs.append(
-                (
-                    utenza,
-                    {
-                        "anno_campagna": utenza.anno_campagna,
-                        "tipo": tipo,
-                        "severita": "error" if tipo in {"VAL-01-sup_eccede", "VAL-02-cf_invalido"} else "warning",
-                        "descrizione": ANOMALIA_TYPES[tipo],
-                        "dati_json": payload,
-                        "status": "aperta",
-                        "created_at": datetime.now(timezone.utc),
-                        "updated_at": datetime.now(timezone.utc),
-                    },
-                )
+            anomalie_mappings.append(
+                {
+                    "id": uuid.uuid4(),
+                    "utenza_id": utenza_id,
+                    "particella_id": particella_id,
+                    "anno_campagna": utenza_anno,
+                    "tipo": tipo,
+                    "severita": "error" if tipo in {"VAL-01-sup_eccede", "VAL-02-cf_invalido"} else "warning",
+                    "descrizione": ANOMALIA_TYPES[tipo],
+                    "dati_json": payload,
+                    "status": "aperta",
+                    "created_at": now,
+                    "updated_at": now,
+                }
             )
 
-        if utenza.num_distretto is not None and utenza.ind_spese_fisse is not None and anno is not None:
-            coefficienti_by_distretto[(str(utenza.num_distretto), anno)] = float(utenza.ind_spese_fisse)
+        if distretto_num is not None and ind_sf is not None and anno is not None:
+            coefficienti_values.setdefault((str(distretto_num), anno), []).append(float(ind_sf))
+        if anno is not None:
+            if aliquota_0648 is not None:
+                aliquote_values.setdefault(("0648", anno), set()).add(float(aliquota_0648))
+            if aliquota_0985 is not None:
+                aliquote_values.setdefault(("0985", anno), set()).add(float(aliquota_0985))
 
-    db.add_all(utenze)
-    db.flush()
+        if len(utenze_mappings) >= 5000:
+            _flush_chunks()
 
-    anomalie = [
-        CatAnomalia(utenza_id=utenza.id, particella_id=utenza.particella_id, **payload)
-        for utenza, payload in anomalie_specs
-    ]
-    db.add_all(anomalie)
+    _flush_chunks()
 
-    for (num_distretto, coeff_anno), coeff_value in coefficienti_by_distretto.items():
-        distretto = distretti.get(num_distretto)
-        if distretto is None:
+    # Upsert coefficienti distretto per anno: scegliamo il valore più frequente nel file (fallback: max)
+    if anno is not None and coefficienti_values:
+        for (num_distretto, coeff_anno), values in coefficienti_values.items():
+            distretto = distretti.get(num_distretto)
+            if distretto is None:
+                continue
+            chosen: float
+            if values:
+                counts: dict[float, int] = {}
+                for v in values:
+                    counts[v] = counts.get(v, 0) + 1
+                chosen = sorted(counts.items(), key=lambda x: (-x[1], -x[0]))[0][0]
+            else:
+                continue
+
+            coefficiente = db.execute(
+                select(CatDistrettoCoefficiente).where(
+                    CatDistrettoCoefficiente.distretto_id == distretto.id,
+                    CatDistrettoCoefficiente.anno == coeff_anno,
+                )
+            ).scalar_one_or_none()
+            if coefficiente is None:
+                db.add(
+                    CatDistrettoCoefficiente(
+                        distretto_id=distretto.id,
+                        anno=coeff_anno,
+                        ind_spese_fisse=chosen,
+                    )
+                )
+            else:
+                coefficiente.ind_spese_fisse = chosen
+
+    # Upsert aliquote (0648/0985) se il file contiene un valore coerente per schema+anno
+    for (schema_codice, aliq_anno), values in aliquote_values.items():
+        if len(values) != 1:
+            # valori multipli -> non upsert automatico
             continue
-        coefficiente = db.execute(
-            select(CatDistrettoCoefficiente).where(
-                CatDistrettoCoefficiente.distretto_id == distretto.id,
-                CatDistrettoCoefficiente.anno == coeff_anno,
-            )
+        schema = schemi.get(schema_codice)
+        if schema is None:
+            continue
+        aliquota_value = list(values)[0]
+        existing = db.execute(
+            select(CatAliquota).where(CatAliquota.schema_id == schema.id, CatAliquota.anno == aliq_anno)
         ).scalar_one_or_none()
-        if coefficiente is None:
-            db.add(
-                CatDistrettoCoefficiente(
-                    distretto_id=distretto.id,
-                    anno=coeff_anno,
-                    ind_spese_fisse=coeff_value,
-                )
-            )
+        if existing is None:
+            db.add(CatAliquota(schema_id=schema.id, anno=aliq_anno, aliquota=aliquota_value))
         else:
-            coefficiente.ind_spese_fisse = coeff_value
+            existing.aliquota = aliquota_value
 
-    righe_con_anomalie = sum(1 for utenza in utenze if utenza.ha_anomalie)
-    batch.righe_importate = len(utenze)
+    batch.righe_importate = int(
+        db.execute(
+            select(func.count()).select_from(CatUtenzaIrrigua).where(CatUtenzaIrrigua.import_batch_id == batch.id)
+        ).scalar_one()
+    )
+    righe_con_anomalie = int(
+        db.execute(
+            select(func.count())
+            .select_from(CatUtenzaIrrigua)
+            .where(
+                CatUtenzaIrrigua.import_batch_id == batch.id,
+                or_(
+                    CatUtenzaIrrigua.anomalia_superficie.is_(True),
+                    CatUtenzaIrrigua.anomalia_cf_invalido.is_(True),
+                    CatUtenzaIrrigua.anomalia_cf_mancante.is_(True),
+                    CatUtenzaIrrigua.anomalia_comune_invalido.is_(True),
+                    CatUtenzaIrrigua.anomalia_particella_assente.is_(True),
+                    CatUtenzaIrrigua.anomalia_imponibile.is_(True),
+                    CatUtenzaIrrigua.anomalia_importi.is_(True),
+                ),
+            )
+        ).scalar_one()
+    )
     batch.righe_anomalie = righe_con_anomalie
     batch.status = "completed"
-    batch.completed_at = datetime.now(timezone.utc)
+    batch.completed_at = now
     batch.report_json = {
         "anno_campagna": anno,
         "righe_totali": len(dataframe),
-        "righe_importate": len(utenze),
+        "righe_importate": batch.righe_importate,
         "righe_con_anomalie": righe_con_anomalie,
         "anomalie": {key: {"count": value} for key, value in anomalie_count.items()},
         "preview_anomalie": preview_anomalie,

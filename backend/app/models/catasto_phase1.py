@@ -4,12 +4,16 @@ import uuid
 from datetime import date, datetime
 from decimal import Decimal
 
-from geoalchemy2 import Geometry
 from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import TypeDecorator
 
 from app.core.database import Base
+
+try:
+    from geoalchemy2 import Geometry  # type: ignore
+except Exception:  # pragma: no cover
+    Geometry = None  # type: ignore[misc,assignment]
 
 
 class GeometryCompat(TypeDecorator):
@@ -17,7 +21,7 @@ class GeometryCompat(TypeDecorator):
     cache_ok = True
 
     def load_dialect_impl(self, dialect):
-        if dialect.name == "postgresql":
+        if dialect.name == "postgresql" and Geometry is not None:
             return dialect.type_descriptor(Geometry("MULTIPOLYGON", srid=4326))
         return dialect.type_descriptor(Text())
 

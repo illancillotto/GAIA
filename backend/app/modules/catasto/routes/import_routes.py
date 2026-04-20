@@ -11,6 +11,7 @@ from app.core.database import SessionLocal, get_db
 from app.models.application_user import ApplicationUser
 from app.models.catasto_phase1 import CatAnomalia, CatImportBatch, CatUtenzaIrrigua
 from app.modules.catasto.services.import_capacitas import CapacitasImportDuplicateError, import_capacitas_excel
+from app.modules.catasto.services.import_shapefile import finalize_shapefile_import
 from app.schemas.catasto_phase1 import (
     CatAnomaliaListResponse,
     CatAnomaliaResponse,
@@ -120,3 +121,18 @@ def get_import_report(
 @router.get("/history", response_model=list[CatImportBatchResponse])
 def get_import_history(db: Session = Depends(get_db), _: ApplicationUser = Depends(require_active_user)) -> list[CatImportBatch]:
     return list(db.execute(select(CatImportBatch).order_by(desc(CatImportBatch.created_at)).limit(50)).scalars().all())
+
+
+@router.post("/shapefile/finalize")
+def finalize_shapefile(
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(require_admin_user),
+):
+    """
+    Finalizza import shapefile caricato in `cat_particelle_staging` via ogr2ogr.
+    Crea un batch di tipo 'shapefile' e aggiorna cat_particelle + cat_distretti.
+    """
+    try:
+        return finalize_shapefile_import(db, created_by=current_user.id)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

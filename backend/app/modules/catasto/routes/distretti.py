@@ -1,11 +1,10 @@
 from __future__ import annotations
 
+import json
 from decimal import Decimal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from geoalchemy2.shape import to_shape
-from shapely.geometry import mapping
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
@@ -92,9 +91,14 @@ def get_distretto_geojson(distretto_id: UUID, db: Session = Depends(get_db), _: 
     distretto = db.get(CatDistretto, distretto_id)
     if distretto is None or distretto.geometry is None:
         raise HTTPException(status_code=404, detail="Distretto o geometria non trovata")
+    geojson = db.execute(
+        select(func.ST_AsGeoJSON(CatDistretto.geometry)).where(CatDistretto.id == distretto_id)
+    ).scalar_one_or_none()
+    if geojson is None:
+        raise HTTPException(status_code=404, detail="Distretto o geometria non trovata")
     return {
         "type": "Feature",
-        "geometry": mapping(to_shape(distretto.geometry)),
+        "geometry": json.loads(geojson),
         "properties": {
             "id": str(distretto.id),
             "num_distretto": distretto.num_distretto,

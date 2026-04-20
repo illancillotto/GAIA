@@ -108,7 +108,7 @@ export function getApiBaseUrl(): string {
   return value.replace(/\/+$/, "");
 }
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const isFormData = typeof FormData !== "undefined" && init?.body instanceof FormData;
 
   const response = await fetch(`${getApiBaseUrl()}${path}`, {
@@ -150,7 +150,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
-async function requestBlob(path: string, init?: RequestInit): Promise<Blob> {
+export async function requestBlob(path: string, init?: RequestInit): Promise<Blob> {
   const response = await fetch(`${getApiBaseUrl()}${path}`, {
     ...init,
     cache: "no-store",
@@ -174,7 +174,7 @@ async function requestBlob(path: string, init?: RequestInit): Promise<Blob> {
   return response.blob();
 }
 
-async function requestFormDataWithUploadProgress<T>(
+export async function requestFormDataWithUploadProgress<T>(
   path: string,
   formData: FormData,
   token: string,
@@ -232,7 +232,7 @@ async function requestFormDataWithUploadProgress<T>(
   });
 }
 
-function createQueryString(params: Record<string, string | undefined>): string {
+export function createQueryString(params: Record<string, string | undefined>): string {
   const searchParams = new URLSearchParams();
 
   Object.entries(params).forEach(([key, value]) => {

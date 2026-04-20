@@ -2,10 +2,14 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import codicefiscale
 import pandas as pd
 
 _comuni_df: pd.DataFrame | None = None
+
+try:
+    import codicefiscale as _codicefiscale  # type: ignore
+except Exception:  # pragma: no cover
+    _codicefiscale = None
 
 
 def _get_comuni() -> pd.DataFrame:
@@ -28,7 +32,10 @@ def validate_codice_fiscale(cf_raw: str | None) -> dict[str, object | None]:
     cf = str(cf_raw).upper().strip()
     if len(cf) == 16:
         try:
-            is_valid = bool(codicefiscale.isvalid(cf))
+            if _codicefiscale is not None:
+                is_valid = bool(_codicefiscale.isvalid(cf))
+            else:
+                is_valid = _is_valid_cf_checksum(cf)
             return {
                 "cf_normalizzato": cf,
                 "is_valid": is_valid,
@@ -58,6 +65,90 @@ def validate_codice_fiscale(cf_raw: str | None) -> dict[str, object | None]:
         "tipo": "FORMATO_SCONOSCIUTO",
         "error_code": "FORMATO_NON_RICONOSCIUTO",
     }
+
+
+_ODD_MAP = {
+    **{str(i): v for i, v in enumerate([1, 0, 5, 7, 9, 13, 15, 17, 19, 21])},
+    "A": 1,
+    "B": 0,
+    "C": 5,
+    "D": 7,
+    "E": 9,
+    "F": 13,
+    "G": 15,
+    "H": 17,
+    "I": 19,
+    "J": 21,
+    "K": 2,
+    "L": 4,
+    "M": 18,
+    "N": 20,
+    "O": 11,
+    "P": 3,
+    "Q": 6,
+    "R": 8,
+    "S": 12,
+    "T": 14,
+    "U": 16,
+    "V": 10,
+    "W": 22,
+    "X": 25,
+    "Y": 24,
+    "Z": 23,
+}
+
+_EVEN_MAP = {
+    **{str(i): i for i in range(10)},
+    "A": 0,
+    "B": 1,
+    "C": 2,
+    "D": 3,
+    "E": 4,
+    "F": 5,
+    "G": 6,
+    "H": 7,
+    "I": 8,
+    "J": 9,
+    "K": 10,
+    "L": 11,
+    "M": 12,
+    "N": 13,
+    "O": 14,
+    "P": 15,
+    "Q": 16,
+    "R": 17,
+    "S": 18,
+    "T": 19,
+    "U": 20,
+    "V": 21,
+    "W": 22,
+    "X": 23,
+    "Y": 24,
+    "Z": 25,
+}
+
+_CHECK_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+
+
+def _is_valid_cf_checksum(cf: str) -> bool:
+    """
+    Validazione checksum CF 16 caratteri (persone fisiche).
+    Non verifica semantica (data/comune), solo check digit.
+    """
+    if len(cf) != 16:
+        return False
+    cf = cf.upper().strip()
+    if not cf.isalnum():
+        return False
+
+    total = 0
+    for i, ch in enumerate(cf[:15]):
+        if i % 2 == 0:  # posizioni 1,3,... in 1-based => odd map
+            total += _ODD_MAP.get(ch, 0)
+        else:
+            total += _EVEN_MAP.get(ch, 0)
+    expected = _CHECK_CHARS[total % 26]
+    return cf[15] == expected
 
 
 def _check_digit_piva(piva: str) -> bool:

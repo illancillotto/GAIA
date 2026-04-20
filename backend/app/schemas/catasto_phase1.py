@@ -57,6 +57,12 @@ class CatAnomaliaListResponse(BaseModel):
     page_size: int
 
 
+class CatAnomaliaUpdateInput(BaseModel):
+    status: str | None = None
+    note_operatore: str | None = None
+    assigned_to: int | None = None
+
+
 class CatParticellaResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -128,3 +134,53 @@ class CatDistrettoKpiResponse(BaseModel):
     importo_totale_0648: Decimal
     importo_totale_0985: Decimal
     superficie_irrigabile_mq: Decimal
+
+
+class CatSchemaContributoResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    codice: str
+    descrizione: str | None
+    tipo_calcolo: str
+    attivo: bool
+
+
+class CatUtenzaIrriguaResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    import_batch_id: UUID
+    anno_campagna: int
+    cco: str | None
+    cod_provincia: int | None
+    cod_comune_istat: int | None
+    cod_frazione: int | None
+    num_distretto: int | None
+    nome_distretto_loc: str | None
+    nome_comune: str | None
+    sezione_catastale: str | None
+    foglio: str | None
+    particella: str | None
+    subalterno: str | None
+    particella_id: UUID | None
+    sup_catastale_mq: Decimal | None
+    sup_irrigabile_mq: Decimal | None
+    ind_spese_fisse: Decimal | None
+    imponibile_sf: Decimal | None
+    esente_0648: bool
+    aliquota_0648: Decimal | None
+    importo_0648: Decimal | None
+    aliquota_0985: Decimal | None
+    importo_0985: Decimal | None
+    denominazione: str | None
+    codice_fiscale: str | None
+    codice_fiscale_raw: str | None
+    anomalia_superficie: bool
+    anomalia_cf_invalido: bool
+    anomalia_cf_mancante: bool
+    anomalia_comune_invalido: bool
+    anomalia_particella_assente: bool
+    anomalia_imponibile: bool
+    anomalia_importi: bool
+    created_at: datetime

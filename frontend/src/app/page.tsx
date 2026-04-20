@@ -101,10 +101,10 @@ const allModules: HomeModule[] = [
     title: "GAIA Catasto",
     eyebrow: "Dominio dati",
     description:
-      "Area non ancora avviata: nessun workspace operativo o flusso applicativo disponibile in questa fase.",
+      "Distretti, particelle, anomalie e import Capacitas (Catasto Fase 1).",
     href: "/catasto",
-    status: "coming",
-    statusLabel: "Non avviato",
+    status: "warming",
+    statusLabel: "In sviluppo",
     icon: "account_balance",
     enabledKeys: ["catasto"],
   },
@@ -481,7 +481,7 @@ export default function HomePage() {
               const card = (
                 <article
                   className={cn(
-                    "group bg-surface-container-lowest p-8 rounded-xl border border-outline-variant/15 transition-all duration-300 flex flex-col justify-between min-h-[300px] relative overflow-hidden",
+                    "group bg-surface-container-lowest p-8 rounded-xl border border-outline-variant/15 transition-all duration-300 flex h-full flex-col justify-between relative overflow-hidden",
                     isInteractive
                       ? "hover:shadow-2xl cursor-pointer"
                       : "opacity-70 cursor-default",
@@ -524,10 +524,14 @@ export default function HomePage() {
                 </article>
               );
 
-              if (!isInteractive) return <div key={mod.id}>{card}</div>;
+              if (!isInteractive) return <div key={mod.id} className="h-full">{card}</div>;
 
               return (
-                <Link key={mod.id} href={mod.href} className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30">
+                <Link
+                  key={mod.id}
+                  href={mod.href}
+                  className="block h-full rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                >
                   {card}
                 </Link>
               );
