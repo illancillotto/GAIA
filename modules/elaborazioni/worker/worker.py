@@ -34,7 +34,11 @@ from visura_flow import ManualCaptchaDecision, VisuraFlowResult, execute_visura_
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql+psycopg://naap_app:change_me@postgres:5432/naap")
 CREDENTIAL_MASTER_KEY = os.environ["CREDENTIAL_MASTER_KEY"]
-POLL_INTERVAL_SEC = int(os.getenv("CATASTO_POLL_INTERVAL_SEC", "3"))
+def env_value(primary: str, legacy: str, default: str) -> str:
+    return os.getenv(primary, os.getenv(legacy, default))
+
+
+POLL_INTERVAL_SEC = int(env_value("ELABORAZIONI_POLL_INTERVAL_SEC", "CATASTO_POLL_INTERVAL_SEC", "3"))
 CAPTCHA_MAX_OCR_ATTEMPTS = int(os.getenv("CAPTCHA_MAX_OCR_ATTEMPTS", "3"))
 CAPTCHA_MANUAL_TIMEOUT_SEC = int(os.getenv("CAPTCHA_MANUAL_TIMEOUT_SEC", "300"))
 ANTI_CAPTCHA_API_KEY = os.getenv("ANTI_CAPTCHA_API_KEY", "").strip()
@@ -42,15 +46,15 @@ ANTI_CAPTCHA_POLL_INTERVAL_SEC = int(os.getenv("ANTI_CAPTCHA_POLL_INTERVAL_SEC",
 ANTI_CAPTCHA_TIMEOUT_SEC = int(os.getenv("ANTI_CAPTCHA_TIMEOUT_SEC", "120"))
 BETWEEN_VISURE_DELAY_SEC = int(os.getenv("BETWEEN_VISURE_DELAY_SEC", "5"))
 SESSION_TIMEOUT_SEC = int(os.getenv("SESSION_TIMEOUT_SEC", "1680"))
-DOCUMENT_STORAGE_PATH = Path(os.getenv("CATASTO_DOCUMENT_STORAGE_PATH", "/data/catasto/documents"))
-CAPTCHA_STORAGE_PATH = Path(os.getenv("CATASTO_CAPTCHA_STORAGE_PATH", "/data/catasto/captcha"))
-DEBUG_ARTIFACTS_PATH = Path(os.getenv("CATASTO_DEBUG_ARTIFACTS_PATH", "/data/catasto/debug"))
-REPORT_STORAGE_PATH = Path(os.getenv("CATASTO_REPORT_STORAGE_PATH", "/data/catasto/reports"))
-HEADLESS = os.getenv("CATASTO_HEADLESS", "true").lower() != "false"
-DEBUG_BROWSER = os.getenv("CATASTO_DEBUG_BROWSER", "false").lower() == "true"
+DOCUMENT_STORAGE_PATH = Path(env_value("ELABORAZIONI_DOCUMENT_STORAGE_PATH", "CATASTO_DOCUMENT_STORAGE_PATH", "/data/catasto/documents"))
+CAPTCHA_STORAGE_PATH = Path(env_value("ELABORAZIONI_CAPTCHA_STORAGE_PATH", "CATASTO_CAPTCHA_STORAGE_PATH", "/data/catasto/captcha"))
+DEBUG_ARTIFACTS_PATH = Path(env_value("ELABORAZIONI_DEBUG_ARTIFACTS_PATH", "CATASTO_DEBUG_ARTIFACTS_PATH", "/data/catasto/debug"))
+REPORT_STORAGE_PATH = Path(env_value("ELABORAZIONI_REPORT_STORAGE_PATH", "CATASTO_REPORT_STORAGE_PATH", "/data/catasto/reports"))
+HEADLESS = env_value("ELABORAZIONI_HEADLESS", "CATASTO_HEADLESS", "true").lower() != "false"
+DEBUG_BROWSER = env_value("ELABORAZIONI_DEBUG_BROWSER", "CATASTO_DEBUG_BROWSER", "false").lower() == "true"
 
 logging.basicConfig(
-    level=os.getenv("CATASTO_LOG_LEVEL", "INFO").upper(),
+    level=env_value("ELABORAZIONI_LOG_LEVEL", "CATASTO_LOG_LEVEL", "INFO").upper(),
     format="%(asctime)s %(levelname)s %(name)s %(message)s",
 )
 logger = logging.getLogger(__name__)
@@ -84,7 +88,7 @@ class CatastoWorker:
     async def run(self) -> None:
         self._install_signal_handlers()
         self._recover_stuck_requests()
-        logger.info("Worker Catasto avviato")
+        logger.info("Worker Elaborazioni avviato")
 
         while not self.state.stop_requested:
             connection_test_id = self._next_connection_test_id()

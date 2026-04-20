@@ -108,7 +108,7 @@ GAIA/
 - `domain-docs/` contiene PRD, prompt, execution plan e progress dei domini funzionali.
 - `backend/app/modules/<modulo>/` contiene il codice backend runtime dei moduli.
 - `frontend/src/app/<modulo>/` contiene il codice frontend runtime dei moduli.
-- `modules/` non e piu il contenitore dei moduli applicativi; resta disponibile solo per asset tecnici specifici, come `modules/catasto/worker/`.
+- `modules/` non e piu il contenitore dei moduli applicativi; resta disponibile solo per asset tecnici specifici, come `modules/elaborazioni/worker/`.
 
 ## Architettura backend attuale
 
@@ -154,7 +154,7 @@ la documentazione di dominio fa riferimento a `domain-docs/utenze/`.
    Il comando inizializza il seed del dominio audit e il dizionario `catasto_comuni`.
 7. Genera e configura la chiave vault Catasto in `.env`:
    `python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"`
-   La stessa chiave deve essere condivisa tra `backend` e `catasto-worker`.
+   La stessa chiave deve essere condivisa tra `backend` e `elaborazioni-worker`.
 8. Accedi all'applicazione:
    `http://localhost:8080`
 
@@ -187,18 +187,17 @@ Se la variabile e vuota/non impostata, la password non viene richiesta.
 - GAIA Inventario PRD: `domain-docs/inventory/docs/PRD_inventory.md`
 - GAIA Inventario Prompt: `domain-docs/inventory/docs/PROMPT_CODEX_inventory.md`
 - GAIA Catasto PRD: `domain-docs/catasto/docs/PRD_catasto.md`
-- GAIA Catasto Prompt: `domain-docs/catasto/docs/PROMPT_CODEX_catasto.md`
 
 ## Catasto MVP
 
 - Runtime operativo backend esposto sotto `/elaborazioni`; `/catasto` resta area dominio/documenti/comuni
-- Worker dedicato `catasto-worker` con Playwright e OCR CAPTCHA
+- Worker dedicato `elaborazioni-worker` con Playwright e OCR CAPTCHA
 - Volume Docker `catasto-data` per PDF e immagini CAPTCHA
 - Archivio documenti con download singolo e ZIP per batch
 - Test connessione SISTER asincrono eseguito dal worker con feedback realtime
 - Variabili operative in `.env.example` per storage documenti/CAPTCHA e chiave Fernet condivisa
-- Selettori SISTER esterni in `modules/catasto/worker/sister_selectors.json`, sovrascrivibili via `CATASTO_SISTER_SELECTORS_PATH`
-- Diagnostica probe SISTER del worker con log stdout e snapshot HTML/PNG in `CATASTO_DEBUG_ARTIFACTS_PATH`
+- Selettori SISTER esterni in `modules/elaborazioni/worker/sister_selectors.json`, sovrascrivibili via `ELABORAZIONI_SISTER_SELECTORS_PATH` con fallback compatibile su `CATASTO_SISTER_SELECTORS_PATH`
+- Diagnostica probe SISTER del worker con log stdout e snapshot HTML/PNG in `ELABORAZIONI_DEBUG_ARTIFACTS_PATH`
 - Supporto ai due flussi SISTER:
   - ricerca per immobile con comune, foglio, particella e subalterno
   - ricerca per soggetto con `subject_id`, inferenza PF/PNF e richiesta `ATTUALITA`/`STORICA`

@@ -22,10 +22,10 @@ services:
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
 
-  catasto-worker:
+  elaborazioni-worker:
     command: python /app/worker/worker.py
     volumes:
-      - ./modules/catasto/worker:/app/worker
+      - ./modules/elaborazioni/worker:/app/worker
       - ./backend:/app/backend
       - catasto-data:/data/catasto
 

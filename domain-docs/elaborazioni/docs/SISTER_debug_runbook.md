@@ -9,7 +9,7 @@ Questo documento raccoglie il comportamento reale osservato del portale SISTER d
 
 Va trattato come riferimento operativo permanente per:
 
-- debug del worker `catasto-worker`
+- debug del worker `elaborazioni-worker`
 - aggiornamento dei selettori o del flusso browser
 - gestione nuovi casi del sito SISTER
 - futura automazione di altri servizi sullo stesso portale
@@ -19,26 +19,26 @@ Va trattato come riferimento operativo permanente per:
 Componenti coinvolti:
 
 - backend API: `backend`
-- worker browser: `modules/catasto/worker`
+- worker browser: `modules/elaborazioni/worker`
 - frontend Catasto: `frontend/src/app/catasto`
 
 File principali del flusso:
 
-- `modules/catasto/worker/worker.py`
-- `modules/catasto/worker/browser_session.py`
-- `modules/catasto/worker/visura_flow.py`
-- `modules/catasto/worker/sister_selectors.json`
+- `modules/elaborazioni/worker/worker.py`
+- `modules/elaborazioni/worker/browser_session.py`
+- `modules/elaborazioni/worker/visura_flow.py`
+- `modules/elaborazioni/worker/sister_selectors.json`
 
 Comando utile per rebuild worker:
 
 ```bash
-docker compose up -d --build --force-recreate catasto-worker
+docker compose up -d --build --force-recreate elaborazioni-worker
 ```
 
 Comando utile per i log:
 
 ```bash
-docker compose logs -f catasto-worker
+docker compose logs -f elaborazioni-worker
 ```
 
 ## Stato attuale del debug
@@ -53,6 +53,11 @@ Il worker oggi:
 - aspetta alcuni secondi dopo `CloseSessionsSis` prima di ritentare il login
 - usa OCR locale Tesseract per i CAPTCHA testuali
 - può fare fallback su Anti-Captcha se configurato in `.env`
+
+Naming variabili ambiente:
+
+- i nomi canonici correnti del worker usano prefisso `ELABORAZIONI_*`
+- i precedenti nomi `CATASTO_*` restano supportati come fallback di compatibilita
 
 Artifact salvati in:
 
@@ -242,8 +247,8 @@ ANTI_CAPTCHA_TIMEOUT_SEC=120
 
 Dettagli implementativi:
 
-- il fallback esterno è inserito in `modules/catasto/worker/visura_flow.py`
-- il client API è in `modules/catasto/worker/anti_captcha_client.py`
+- il fallback esterno è inserito in `modules/elaborazioni/worker/visura_flow.py`
+- il client API è in `modules/elaborazioni/worker/anti_captcha_client.py`
 - i log CAPTCHA distinguono `ocr`, `external`, `manual`
 - se Anti-Captcha fallisce o restituisce un testo non accettato da SISTER, il flusso continua comunque verso il CAPTCHA manuale
 

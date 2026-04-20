@@ -1,6 +1,6 @@
 from functools import lru_cache
 
-from pydantic import Field, model_validator
+from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,19 +20,19 @@ class Settings(BaseSettings):
     credential_master_key: str | None = Field(default=None, alias="CREDENTIAL_MASTER_KEY")
     catasto_document_storage_path: str = Field(
         default="/data/catasto/documents",
-        alias="CATASTO_DOCUMENT_STORAGE_PATH",
+        validation_alias=AliasChoices("ELABORAZIONI_DOCUMENT_STORAGE_PATH", "CATASTO_DOCUMENT_STORAGE_PATH"),
     )
     catasto_captcha_storage_path: str = Field(
         default="/data/catasto/captcha",
-        alias="CATASTO_CAPTCHA_STORAGE_PATH",
+        validation_alias=AliasChoices("ELABORAZIONI_CAPTCHA_STORAGE_PATH", "CATASTO_CAPTCHA_STORAGE_PATH"),
     )
     catasto_websocket_poll_seconds: int = Field(
         default=2,
-        alias="CATASTO_WEBSOCKET_POLL_SECONDS",
+        validation_alias=AliasChoices("ELABORAZIONI_WEBSOCKET_POLL_SECONDS", "CATASTO_WEBSOCKET_POLL_SECONDS"),
     )
     catasto_sister_probe_timeout_seconds: int = Field(
         default=15,
-        alias="CATASTO_SISTER_PROBE_TIMEOUT_SECONDS",
+        validation_alias=AliasChoices("ELABORAZIONI_SISTER_PROBE_TIMEOUT_SECONDS", "CATASTO_SISTER_PROBE_TIMEOUT_SECONDS"),
     )
     capacitas_debug_storage_path: str = Field(
         default="/data/elaborazioni/capacitas-debug",

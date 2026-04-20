@@ -45,11 +45,11 @@ La documentazione del progetto e distribuita principalmente in due aree:
 - `domain-docs/catasto/README.md` non presente
 - `domain-docs/catasto/docs/README.md`
 - `domain-docs/catasto/docs/PRD_catasto.md`
-- `domain-docs/catasto/docs/PROMPT_CODEX_catasto.md`
-- `domain-docs/catasto/docs/PROMPT_CLAUDE_CODE_catasto.md`
-- `domain-docs/catasto/docs/PROMPT_CLAUDE_CODE_frontend_restructure.md`
 - `domain-docs/catasto/docs/ELABORAZIONI_REFACTOR_PLAN.md`
 - `domain-docs/catasto/docs/SISTER_debug_runbook.md`
+- `domain-docs/catasto/docs/archive/PROMPT_CODEX_catasto.md`
+- `domain-docs/catasto/docs/archive/PROMPT_CLAUDE_CODE_catasto.md`
+- `domain-docs/catasto/docs/archive/PROMPT_CLAUDE_CODE_frontend_restructure.md`
 
 ### CED
 
@@ -181,7 +181,7 @@ GAIA/
 │   │   └── utils/
 │   └── tests/
 ├── modules/
-│   └── catasto/
+│   └── elaborazioni/
 │       └── worker/
 ├── nginx/
 ├── scripts/

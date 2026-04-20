@@ -9,4 +9,4 @@ Il codice runtime dei moduli GAIA vive in:
 
 La directory `modules/` resta riservata a componenti tecnici specializzati che non appartengono al runtime standard del monolite, ad esempio:
 
-- `modules/catasto/worker/`
+- `modules/elaborazioni/worker/`

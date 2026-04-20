@@ -1,12 +1,13 @@
 # Prompt operativo — GAIA Catasto
 
 > Stato documento
-> Documento operativo allineato alla separazione reale tra dominio `catasto` e runtime `elaborazioni` al 20 aprile 2026.
+> Documento storico archiviato.
+> Prompt del periodo di transizione tra dominio `catasto` e runtime `elaborazioni`, non piu da usare come prompt operativo corrente.
 
 > Regola strutturale vincolante
 > Il backend applicativo Catasto vive nel monolite sotto `backend/app/modules/catasto/`.
 > Il runtime operativo di credenziali, batch, richieste singole e CAPTCHA vive nel monolite sotto `backend/app/modules/elaborazioni/`.
-> Il worker resta un servizio tecnico separato sotto `modules/catasto/worker/`.
+> Il worker resta un servizio tecnico separato sotto `modules/elaborazioni/worker/`.
 > Il frontend dominio Catasto vive in `frontend/src/app/catasto/`.
 > Il frontend operativo runtime vive in `frontend/src/app/elaborazioni/`.
 
@@ -38,12 +39,12 @@ Leggi in quest'ordine:
 
 1. `README.md`
 2. `domain-docs/catasto/docs/PRD_catasto.md`
-3. `domain-docs/catasto/docs/PROMPT_CODEX_catasto.md`
+3. `domain-docs/catasto/docs/archive/PROMPT_CODEX_catasto.md`
 4. `domain-docs/elaborazioni/docs/ELABORAZIONI_REFACTOR_PLAN.md`
 5. `domain-docs/elaborazioni/docs/SISTER_debug_runbook.md`
 6. `backend/app/modules/catasto/routes.py`
 7. `backend/app/modules/elaborazioni/runtime_routes.py`
-8. `modules/catasto/worker/`
+8. `modules/elaborazioni/worker/`
 9. `frontend/src/app/catasto/`
 10. `frontend/src/app/elaborazioni/`
 
@@ -68,13 +69,13 @@ Servizi backend:
 
 Worker:
 
-- `modules/catasto/worker/worker.py`
-- `modules/catasto/worker/browser_session.py`
-- `modules/catasto/worker/visura_flow.py`
-- `modules/catasto/worker/captcha_solver.py`
-- `modules/catasto/worker/credential_vault.py`
-- `modules/catasto/worker/sister_selectors.py`
-- `modules/catasto/worker/sister_selectors.json`
+- `modules/elaborazioni/worker/worker.py`
+- `modules/elaborazioni/worker/browser_session.py`
+- `modules/elaborazioni/worker/visura_flow.py`
+- `modules/elaborazioni/worker/captcha_solver.py`
+- `modules/elaborazioni/worker/credential_vault.py`
+- `modules/elaborazioni/worker/sister_selectors.py`
+- `modules/elaborazioni/worker/sister_selectors.json`
 
 Frontend:
 
@@ -179,7 +180,7 @@ Il portale e instabile e puo cambiare markup.
 Regole:
 
 - non hardcodare selettori fuori dal sistema di configurazione esistente
-- verifica sempre `modules/catasto/worker/sister_selectors.json`
+- verifica sempre `modules/elaborazioni/worker/sister_selectors.json`
 - usa `domain-docs/elaborazioni/docs/SISTER_debug_runbook.md` per casi osservati, recovery e limiti noti
 
 ## Cosa fare quando modifichi il modulo

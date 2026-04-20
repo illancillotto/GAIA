@@ -159,7 +159,7 @@ L’applicazione gira tramite Docker Compose con questi servizi:
 - `backend`
 - `postgres`
 - `nginx`
-- `catasto-worker`
+- `elaborazioni-worker`
 - `scanner`
 - `arp-helper`
 

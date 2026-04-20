@@ -1,7 +1,8 @@
 # Prompt Codex — GAIA Catasto
 
 > Stato documento
-> Prompt operativo allineato alla separazione reale tra dominio `catasto` e runtime `elaborazioni` al 20 aprile 2026.
+> Documento storico archiviato.
+> Prompt del periodo di transizione tra dominio `catasto` e runtime `elaborazioni`, non piu da usare come prompt operativo corrente.
 
 > Regola strutturale vincolante
 > GAIA usa backend monolitico modulare, frontend condiviso e worker tecnico separato.
@@ -9,7 +10,7 @@
 > Il runtime operativo di batch, richieste, credenziali e CAPTCHA vive in `backend/app/modules/elaborazioni/`.
 > Il frontend del dominio vive in `frontend/src/app/catasto/`.
 > Il frontend operativo vive in `frontend/src/app/elaborazioni/`.
-> Il worker browser-based vive in `modules/catasto/worker/`.
+> Il worker browser-based vive in `modules/elaborazioni/worker/`.
 
 ## Contesto del progetto
 
@@ -44,7 +45,7 @@ Superfici primarie:
 - `backend/app/services/elaborazioni_batches.py`
 - `backend/app/services/elaborazioni_captcha.py`
 - `backend/app/services/elaborazioni_credentials.py`
-- `modules/catasto/worker/`
+- `modules/elaborazioni/worker/`
 - `frontend/src/app/catasto/`
 - `frontend/src/app/elaborazioni/`
 
@@ -138,11 +139,11 @@ Stato UI corrente:
 
 File primari:
 
-- `modules/catasto/worker/worker.py`
-- `modules/catasto/worker/browser_session.py`
-- `modules/catasto/worker/visura_flow.py`
-- `modules/catasto/worker/sister_selectors.py`
-- `modules/catasto/worker/sister_selectors.json`
+- `modules/elaborazioni/worker/worker.py`
+- `modules/elaborazioni/worker/browser_session.py`
+- `modules/elaborazioni/worker/visura_flow.py`
+- `modules/elaborazioni/worker/sister_selectors.py`
+- `modules/elaborazioni/worker/sister_selectors.json`
 
 Regole:
 

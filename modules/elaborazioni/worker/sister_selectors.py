@@ -61,7 +61,7 @@ def _resolve_config_path(config_path: str | Path | None) -> Path:
     if config_path is not None:
         return Path(config_path)
 
-    env_value = os.getenv("CATASTO_SISTER_SELECTORS_PATH")
+    env_value = os.getenv("ELABORAZIONI_SISTER_SELECTORS_PATH", os.getenv("CATASTO_SISTER_SELECTORS_PATH"))
     if env_value:
         return Path(env_value)
 

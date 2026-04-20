@@ -3,7 +3,7 @@
 # Prompt Codex — DevOps e Deployment NAS Access Audit
 
 > Regola piattaforma
-> Docker, Compose e deployment devono trattare GAIA come monolite modulare con servizi tecnici separati solo quando necessario: `backend`, `frontend`, `postgres`, `nginx`, `scanner`, `catasto-worker`.
+> Docker, Compose e deployment devono trattare GAIA come monolite modulare con servizi tecnici separati solo quando necessario: `backend`, `frontend`, `postgres`, `nginx`, `scanner`, `elaborazioni-worker`.
 
 Configura l'infrastruttura DevOps del progetto **NAS Access Audit Platform**.
 

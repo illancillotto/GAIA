@@ -4,5 +4,6 @@ playwright==1.40.0
 psycopg[binary]==3.2.10
 pydantic-settings==2.11.0
 pytesseract==0.3.13
+pytest==8.4.2
 python-dotenv==1.1.1
 sqlalchemy==2.0.43

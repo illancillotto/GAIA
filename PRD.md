@@ -71,7 +71,7 @@ Fornire un unico punto di accesso operativo per:
 - namespace canonici di dominio in `backend/app/modules/<modulo>/`
 - frontend unico Next.js sotto `frontend/`
 - database PostgreSQL condiviso
-- worker tecnici separati solo dove necessario, ad esempio `modules/catasto/worker/` e scanner LAN
+- worker tecnici separati solo dove necessario, ad esempio `modules/elaborazioni/worker/` e scanner LAN
 
 ## 5. Requisiti trasversali
 

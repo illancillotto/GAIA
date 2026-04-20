@@ -1,167 +1,120 @@
 # PRD — GAIA Catasto
 
 > Stato documento
-> Documento allineato alla struttura reale del repository al 20 aprile 2026.
-> Il codice runtime resta la fonte primaria in caso di divergenza:
-> `backend/app/modules/catasto/`, `backend/app/modules/elaborazioni/`, `backend/app/services/elaborazioni_*`, `frontend/src/app/catasto/`, `frontend/src/app/elaborazioni/`, `modules/catasto/worker/`.
+> Documento di dominio allineato alla struttura reale del repository al 20 aprile 2026.
+> Il codice resta la fonte primaria in caso di divergenza:
+> `backend/app/modules/catasto/`, `backend/app/services/catasto_*`, `frontend/src/app/catasto/`, `frontend/src/components/catasto/`.
 
 ## Scopo
 
-GAIA Catasto e il modulo della piattaforma GAIA che automatizza le visure catastali tramite il portale SISTER dell'Agenzia delle Entrate.
+`catasto` e il dominio GAIA dedicato a dati e documenti catastali.
 
-Nota evolutiva:
+Nel repository attuale il modulo non coincide piu con il runtime operativo delle lavorazioni massive: batch, credenziali, CAPTCHA, richieste singole e monitoraggio esecutivo sono stati spostati in `elaborazioni`.
 
-- `catasto` e in fase di riposizionamento come modulo di aggregazione dati catastali
-- i workflow operativi batch, CAPTCHA e orchestrazione esecutiva sono gia confluiti nel modulo `elaborazioni`, con residui punti di compatibilita mantenuti sotto `catasto`
-- il piano operativo del runtime e tracciato in `domain-docs/elaborazioni/docs/ELABORAZIONI_REFACTOR_PLAN.md`
+Questo PRD descrive quindi il perimetro reale di `catasto` oggi:
 
-Obiettivi operativi complessivi del dominio e del runtime:
+- dizionario comuni catastali
+- archivio documenti catastali
+- consultazione e dettaglio dei documenti
+- superfici frontend dedicate alla navigazione del patrimonio documentale
 
-- salvare e verificare in modo sicuro le credenziali SISTER
-- caricare batch CSV/XLSX di richieste visura
-- gestire visure singole con lo stesso backend applicativo
-- processare le richieste tramite worker Playwright separato
-- risolvere i CAPTCHA con OCR, fallback esterno opzionale e intervento manuale
-- archiviare i PDF scaricati e renderli ricercabili dal frontend
-- pubblicare aggiornamenti realtime su test credenziali e avanzamento batch
+## Obiettivi di prodotto
+
+Obiettivi correnti del dominio:
+
+- offrire un archivio consultabile dei documenti catastali prodotti dalle lavorazioni
+- rendere i documenti ricercabili per metadati catastali e intervallo temporale
+- permettere download singolo e download multiplo in ZIP
+- esporre un dizionario comuni riusabile dai flussi applicativi che producono o interrogano dati catastali
+- mantenere `catasto` come dominio dati separato dal runtime esecutivo
+
+Obiettivi non piu interni al dominio `catasto`:
+
+- orchestrazione batch
+- gestione credenziali SISTER
+- gestione CAPTCHA
+- monitoraggio realtime delle esecuzioni
+- richieste singole o massive come workflow operativo
+
+Queste responsabilita vivono nel dominio `elaborazioni`.
+
+## Perimetro funzionale attuale
+
+### 1. Dizionario comuni
+
+Il dominio espone una base comuni catastali usata per:
+
+- lookup applicativo
+- validazione input nei workflow a monte
+- gestione amministrativa dei comuni censiti
+
+### 2. Archivio documenti catastali
+
+Il dominio espone un archivio documentale con:
+
+- lista documenti
+- ricerca per testo libero
+- filtri per comune, foglio, particella e date
+- dettaglio documento
+- download PDF
+- download ZIP di selezioni multiple
+
+### 3. Frontend di consultazione
+
+Il frontend `catasto` oggi non e una dashboard operativa completa.
+
+Le superfici attive sono:
+
+- pagina dominio placeholder
+- archivio documenti
+- dettaglio documento
+
+Le route `catasto` che puntavano ai flussi operativi sono mantenute come redirect o compatibilita verso `elaborazioni`.
 
 ## Architettura canonica
 
 GAIA usa backend unico, frontend unico e database unico.
 
-Superfici principali del dominio e del runtime:
+Superfici canoniche del dominio `catasto`:
 
-- backend dominio Catasto: `backend/app/modules/catasto/`
-- backend runtime operativo: `backend/app/modules/elaborazioni/`
-- entrypoint router dominio: `backend/app/modules/catasto/router.py`
-- entrypoint router runtime: `backend/app/modules/elaborazioni/router.py`
-- implementazione route dominio: `backend/app/modules/catasto/routes.py`
-- implementazione route runtime: `backend/app/modules/elaborazioni/runtime_routes.py`
-- integrazioni provider dominio in definizione; il runtime `Capacitas` e ora ospitato in `backend/app/modules/elaborazioni/capacitas/`
-- modelli e schemi canonici re-export: `backend/app/modules/catasto/models.py`, `backend/app/modules/catasto/schemas.py`
-- servizi applicativi runtime: `backend/app/services/elaborazioni_batches.py`, `elaborazioni_captcha.py`, `elaborazioni_credentials.py`, oltre ai servizi dominio `catasto_comuni.py` e `catasto_documents.py`
-- frontend condiviso dominio dati: `frontend/src/app/catasto/`
-- frontend runtime operativo: `frontend/src/app/elaborazioni/`
-- worker tecnico separato: `modules/catasto/worker/`
-
-Target architetturale in corso di definizione:
-
-- `catasto` come superficie di aggregazione dati, documenti e provider
-- `elaborazioni` come superficie operativa per batch, richieste singole, CAPTCHA e avanzamento esecuzioni
-- a livello backend il confine router e gia stato introdotto: `catasto` mantiene consultazione e provider, `elaborazioni` concentra i workflow runtime
-- anche il service layer operativo e in transizione verso namespace canonici `elaborazioni_*`
-- lato frontend il namespace canonico per i flussi operativi e `frontend/src/app/elaborazioni/`
-- la pagina `frontend/src/app/catasto/page.tsx` e attualmente un placeholder minimale, mantenuto essenziale mentre il dominio e in corso di sviluppo e ridefinizione
-- la pagina `frontend/src/app/elaborazioni/page.tsx` funge da dashboard operativa per batch, richieste, CAPTCHA e credenziali
-- anche il naming applicativo del runtime sta convergendo su alias `Elaborazione*` per model, schema e tipi frontend
-- i componenti UI condivisi del runtime stanno convergendo su `frontend/src/components/elaborazioni/`, con batch detail, request workspace, archive workspace e settings gia resi concreti nel nuovo namespace
+- router backend: `backend/app/modules/catasto/router.py`
+- route backend: `backend/app/modules/catasto/routes.py`
+- modelli re-export: `backend/app/modules/catasto/models.py`
+- schemi re-export: `backend/app/modules/catasto/schemas.py`
+- servizi dominio: `backend/app/services/catasto_comuni.py`, `backend/app/services/catasto_documents.py`
+- frontend dominio: `frontend/src/app/catasto/`
+- componenti frontend dominio: `frontend/src/components/catasto/`
 
 Vincoli architetturali:
 
-- non esiste un backend Catasto separato
-- il worker Catasto non espone API applicative pubbliche
-- le migration restano nel backend unico sotto `backend/alembic/versions/`
-- i dati applicativi Catasto convivono nel database condiviso con gli altri moduli
+- `catasto` non e il runtime operativo delle visure
+- il worker `modules/elaborazioni/worker/` resta un componente tecnico condiviso ma non definisce il perimetro di questo PRD
+- il runtime operativo vive nel modulo `elaborazioni`
+- i dati del dominio `catasto` convivono nel database condiviso con gli altri moduli
 
-## Funzionalita correnti
+## Modello dati di riferimento
 
-### 1. Vault credenziali SISTER
+Entita di dominio oggi rilevanti per `catasto`:
 
-- una credenziale per utente applicativo
-- password cifrata a riposo
-- verifica asincrona della connessione SISTER tramite worker
-- feedback realtime del test credenziali via WebSocket dedicato
+- `catasto_comuni`
+- `catasto_documents`
 
-### 2. Gestione batch visure
-
-- upload file CSV/XLSX
-- validazione righe in ingresso
-- creazione batch con richieste singole correlate
-- avvio, annullamento e retry delle richieste fallite
-- dettaglio batch con stato, contatori ed eventi realtime
-
-### 3. Visura singola
-
-- creazione di una richiesta puntuale senza passare da upload batch
-- ritorno immediato del batch di una sola richiesta
-- stesso flusso worker del processing batch standard
-
-### 4. Workflow CAPTCHA
-
-- tentativi OCR locali tramite Tesseract
-- fallback opzionale ad Anti-Captcha se configurato
-- persistenza dell'immagine CAPTCHA per intervento manuale
-- endpoint API per lista pendenti, immagine, solve e skip
-
-### 5. Archivio documenti
-
-- lista documenti filtrabile
-- ricerca testuale e filtri per comune, foglio, particella e intervallo date
-- dettaglio documento
-- download PDF singolo
-- download ZIP per batch o per selezione multipla
-
-## Modello dati
-
-Entita principali del dominio:
+Entita correlate ma governate dal runtime `elaborazioni`:
 
 - `catasto_credentials`
 - `catasto_connection_tests`
 - `catasto_batches`
 - `catasto_visure_requests`
-- `catasto_documents`
 - `catasto_captcha_log`
-- `catasto_comuni`
 
-Semantica operativa:
+Regola pratica:
 
-- `catasto_credentials` contiene le credenziali SISTER cifrate a riposo
-- `catasto_connection_tests` traccia i test asincroni di connettivita e autenticazione
-- `catasto_batches` rappresenta il contenitore di richieste create da upload o da visura singola
-- `catasto_visure_requests` traccia ogni visura, il suo stato, l'operazione corrente e gli eventuali dati CAPTCHA
-- `catasto_documents` rappresenta i PDF scaricati e i metadati necessari a ricerca e download
-- `catasto_captcha_log` conserva le immagini e il metodo di risoluzione quando richiesto dal workflow
-- `catasto_comuni` e il dizionario usato per validazione input e selezione SISTER
+- se l'entita serve a consultazione, archivio o metadatazione del patrimonio catastale, resta nel perimetro di questo PRD
+- se l'entita serve a orchestration, execution o monitoraggio runtime, va documentata in `elaborazioni`
 
-## Stati operativi
+## API di dominio correnti
 
-Stati ricorrenti lato batch:
-
-- `pending`
-- `processing`
-- `completed`
-- `failed`
-- `cancelled`
-
-Stati ricorrenti lato richiesta visura:
-
-- `pending`
-- `processing`
-- `awaiting_captcha`
-- `completed`
-- `failed`
-- `skipped`
-
-Il worker puo riportare anche un `current_operation` descrittivo per rendere leggibile il punto del flusso in UI e WebSocket.
-
-## API correnti
-
-Gli endpoint di dominio restano sotto prefisso `/catasto`.
-Gli endpoint runtime operativi sono esposti sotto prefisso `/elaborazioni`.
-
-### Credenziali
-
-- `POST /elaborazioni/credentials`
-- `GET /elaborazioni/credentials`
-- `GET /elaborazioni/credentials/{credential_id}`
-- `PATCH /elaborazioni/credentials/{credential_id}`
-- `DELETE /elaborazioni/credentials`
-- `DELETE /elaborazioni/credentials/{credential_id}`
-- `POST /elaborazioni/credentials/test`
-- `GET /elaborazioni/credentials/test/{test_id}`
-- `WS /elaborazioni/ws/credentials-test/{test_id}`
-
-### Dizionario comuni
+### Comuni
 
 - `GET /catasto/comuni`
 - `POST /catasto/comuni`
@@ -169,26 +122,7 @@ Gli endpoint runtime operativi sono esposti sotto prefisso `/elaborazioni`.
 
 Note:
 
-- `POST` e `PUT` sono endpoint admin
-
-### Batch
-
-- `POST /elaborazioni/batches`
-- `GET /elaborazioni/batches`
-- `GET /elaborazioni/batches/{batch_id}`
-- `GET /elaborazioni/batches/{batch_id}/download`
-- `GET /elaborazioni/batches/{batch_id}/report.json`
-- `GET /elaborazioni/batches/{batch_id}/report.md`
-- `POST /elaborazioni/batches/{batch_id}/start`
-- `POST /elaborazioni/batches/{batch_id}/cancel`
-- `POST /elaborazioni/batches/{batch_id}/retry-failed`
-- `WS /elaborazioni/ws/{batch_id}`
-
-### Visure singole
-
-- `POST /elaborazioni/requests`
-- `GET /elaborazioni/requests/{request_id}`
-- `GET /elaborazioni/requests/{request_id}/artifacts/download`
+- `POST` e `PUT` sono endpoint amministrativi
 
 ### Documenti
 
@@ -198,142 +132,61 @@ Note:
 - `GET /catasto/documents/{document_id}`
 - `GET /catasto/documents/{document_id}/download`
 
-### CAPTCHA
-
-- `GET /elaborazioni/captcha/pending`
-- `GET /elaborazioni/captcha/summary`
-- `GET /elaborazioni/captcha/{request_id}/image`
-- `POST /elaborazioni/captcha/{request_id}/solve`
-- `POST /elaborazioni/captcha/{request_id}/skip`
-
-## Contratti realtime
-
-### WebSocket batch
-
-Path:
-
-- `/elaborazioni/ws/{batch_id}`
-
-Eventi pubblicati:
-
-- `progress`
-- `captcha_needed`
-- `visura_completed`
-- `batch_completed`
-
-Payload principali:
-
-- `progress`: stato batch, contatori, totale e operazione corrente
-- `captcha_needed`: `request_id` e `image_url`
-- `visura_completed`: `request_id` e `document_id`
-- `batch_completed`: stato finale e contatori aggregati
-
-### WebSocket test credenziali
-
-Path:
-
-- `/elaborazioni/ws/credentials-test/{test_id}`
-
-Evento pubblicato:
-
-- `credentials_test`
-
 ## Frontend corrente
 
-Route `catasto` attive:
+Route `catasto` realmente utili al dominio:
 
 - `/catasto`
+- `/catasto/archive`
+- `/catasto/documents`
+- `/catasto/documents/[id]`
+
+Comportamento attuale:
+
+- `/catasto` e una pagina placeholder di dominio
+- `/catasto/archive?view=documents` e la superficie principale per l'archivio
+- `/catasto/documents` reindirizza all'archivio documenti
+- `/catasto/documents/[id]` mostra il dettaglio documento
+
+Route `catasto` mantenute per compatibilita ma non piu canoniche:
+
+- `/catasto/new`
 - `/catasto/new-batch`
 - `/catasto/new-single`
 - `/catasto/batches`
 - `/catasto/batches/[id]`
-- `/catasto/documents`
-- `/catasto/documents/[id]`
 - `/catasto/settings`
+- `/catasto/capacitas`
 
-Route `elaborazioni` canoniche per il runtime:
+Queste route reindirizzano o riusano componenti del runtime `elaborazioni`.
 
-- `/elaborazioni`
-- `/elaborazioni/new-batch`
-- `/elaborazioni/new-single`
-- `/elaborazioni/batches`
-- `/elaborazioni/batches/[id]`
-- `/elaborazioni/settings`
-- `/elaborazioni/captcha`
-- `/elaborazioni/capacitas`
+## Integrazione con Elaborazioni
 
-Comportamenti correnti attesi:
+`catasto` dipende dal fatto che il runtime `elaborazioni` produca documenti e metadata compatibili con l'archivio.
 
-- `/catasto` e un placeholder informativo che rimanda al modulo `elaborazioni`
-- le route `catasto/new-*`, `catasto/batches*` e `catasto/settings` fungono come redirect o superficie compatibile verso `elaborazioni`
-- la dashboard operativa con metriche, batch recenti, credenziali e CAPTCHA pendenti vive in `/elaborazioni`
-- la creazione batch con upload CSV/XLSX e la creazione visura singola vivono in `/elaborazioni/new-*`
-- il dettaglio batch con progress, report e gestione CAPTCHA vive in `/elaborazioni/batches/[id]`
-- l'archivio documenti resta nel dominio `catasto` con ricerca, selezione multipla e download
+Interazioni principali:
 
-## Worker Catasto
+- `elaborazioni` usa `catasto_comuni` per lookup e validazione
+- i documenti generati dalle lavorazioni vengono esposti dal dominio `catasto`
+- il frontend operativo e in `frontend/src/app/elaborazioni/`, ma l'output documentale resta consultabile da `catasto`
 
-Runtime principale:
+Documentazione correlata:
 
-- `modules/catasto/worker/worker.py`
-- `modules/catasto/worker/browser_session.py`
-- `modules/catasto/worker/visura_flow.py`
-- `modules/catasto/worker/captcha_solver.py`
-- `modules/catasto/worker/credential_vault.py`
-- `modules/catasto/worker/sister_selectors.py`
-- `modules/catasto/worker/sister_selectors.json`
-
-Capacita correnti del worker:
-
-- recupero richieste e test connessione pendenti dal database
-- recovery di richieste o test rimasti in `processing` dopo restart
-- login SISTER con gestione informativa privacy
-- recovery limitato della sessione bloccata
-- navigazione al form visura
-- compilazione campi e scelta tipo visura
-- OCR CAPTCHA locale
-- fallback Anti-Captcha opzionale
-- download PDF e persistenza metadati
-- artifact di debug HTML/PNG sul filesystem
-
-## SISTER e selettori
-
-Fonte canonica per i selettori runtime:
-
-- `modules/catasto/worker/sister_selectors.json`
-
-Il file Python `sister_selectors.py` contiene default e caricamento configurabile via:
-
-- `CATASTO_SISTER_SELECTORS_PATH`
-
-I selettori SISTER vanno trattati come configurazione operativa instabile. Il runbook tecnico resta in:
-
+- `domain-docs/elaborazioni/docs/ELABORAZIONI_REFACTOR_PLAN.md`
 - `domain-docs/elaborazioni/docs/SISTER_debug_runbook.md`
 
-## Configurazione operativa
+## Stato attuale del modulo
 
-Variabili principali del worker:
+Il modulo `catasto` oggi non e vuoto, ma e ridotto a un perimetro di dominio piu stretto rispetto allo storico:
 
-- `DATABASE_URL`
-- `CREDENTIAL_MASTER_KEY`
-- `CATASTO_POLL_INTERVAL_SEC`
-- `CAPTCHA_MAX_OCR_ATTEMPTS`
-- `CAPTCHA_MANUAL_TIMEOUT_SEC`
-- `ANTI_CAPTCHA_API_KEY`
-- `ANTI_CAPTCHA_POLL_INTERVAL_SEC`
-- `ANTI_CAPTCHA_TIMEOUT_SEC`
-- `BETWEEN_VISURE_DELAY_SEC`
-- `SESSION_TIMEOUT_SEC`
-- `CATASTO_DOCUMENT_STORAGE_PATH`
-- `CATASTO_CAPTCHA_STORAGE_PATH`
-- `CATASTO_DEBUG_ARTIFACTS_PATH`
-- `CATASTO_HEADLESS`
-- `CATASTO_DEBUG_BROWSER`
-- `CATASTO_SISTER_SELECTORS_PATH`
+- backend attivo per comuni e documenti
+- frontend attivo per archivio e dettaglio documenti
+- dashboard principale ancora volutamente minimale
+- workflow operativi demandati a `elaborazioni`
 
 ## Regole di manutenzione documentale
 
-- se cambia la struttura del modulo, aggiornare prima questo file e poi i prompt operativi
-- se cambiano gli endpoint, verificare sempre sia `backend/app/modules/catasto/routes.py` sia `backend/app/modules/elaborazioni/runtime_routes.py`
-- se cambia il flusso SISTER, aggiornare `domain-docs/elaborazioni/docs/SISTER_debug_runbook.md` e i selettori runtime
-- se una nota e solo storica, marcarla esplicitamente come storica
+- usare questo PRD per cambi a comuni, documenti, archivio e superfici di consultazione `catasto`
+- non usare questo PRD per descrivere batch, credenziali, CAPTCHA o richieste runtime
+- per cambi ai workflow operativi aggiornare la documentazione in `domain-docs/elaborazioni/docs/`
+- se una route `catasto` esiste solo come compatibilita o redirect, dichiararlo esplicitamente nei documenti
