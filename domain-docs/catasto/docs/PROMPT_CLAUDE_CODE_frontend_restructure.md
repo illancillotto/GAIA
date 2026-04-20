@@ -4,7 +4,9 @@
 > Documento storico, mantenuto solo come nota di contesto.
 > Il refactor descritto qui e gia stato completato.
 > Per il runtime attuale del modulo Catasto fare riferimento a:
-> `frontend/src/app/catasto/`, `README.md`, `domain-docs/catasto/docs/PRD_catasto.md`.
+> `frontend/src/app/catasto/`, `frontend/src/app/elaborazioni/`, `README.md`, `domain-docs/catasto/docs/PRD_catasto.md`.
+> Non usare questo file come prompt operativo corrente.
+> Ultima verifica di coerenza documentale: 20 aprile 2026.
 
 > Regola frontend
 > Il frontend Catasto resta dentro il frontend unico GAIA. Non creare app frontend separata.
@@ -30,8 +32,10 @@ GAIA/
 │   ├── inventory/
 │   │   └── docs/
 │   └── catasto/
-│       ├── docs/
 │       └── worker/
+├── domain-docs/
+│   └── catasto/
+│       └── docs/
 ├── docker-compose.yml
 ├── docker-compose.override.yml
 └── nginx/
@@ -47,6 +51,7 @@ GAIA/
   - `frontend/src/app/network/page.tsx`
   - `frontend/src/app/inventory/page.tsx`
   - `frontend/src/app/catasto/`
+- I workflow operativi Catasto oggi convergono in `frontend/src/app/elaborazioni/`
 - La navigazione e' stata separata in:
   - `frontend/src/components/layout/platform-sidebar.tsx`
   - `frontend/src/components/layout/module-sidebar.tsx`

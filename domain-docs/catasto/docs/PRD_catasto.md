@@ -1,9 +1,9 @@
 # PRD — GAIA Catasto
 
 > Stato documento
-> Documento allineato alla struttura reale del repository al 2 aprile 2026.
+> Documento allineato alla struttura reale del repository al 20 aprile 2026.
 > Il codice runtime resta la fonte primaria in caso di divergenza:
-> `backend/app/modules/catasto/`, `app/services/catasto_*`, `frontend/src/app/catasto/`, `modules/catasto/worker/`.
+> `backend/app/modules/catasto/`, `backend/app/modules/elaborazioni/`, `backend/app/services/elaborazioni_*`, `frontend/src/app/catasto/`, `frontend/src/app/elaborazioni/`, `modules/catasto/worker/`.
 
 ## Scopo
 
@@ -12,10 +12,10 @@ GAIA Catasto e il modulo della piattaforma GAIA che automatizza le visure catast
 Nota evolutiva:
 
 - `catasto` e in fase di riposizionamento come modulo di aggregazione dati catastali
-- i workflow operativi batch, CAPTCHA e orchestrazione esecutiva sono candidati a migrare nel nuovo modulo `elaborazioni`
+- i workflow operativi batch, CAPTCHA e orchestrazione esecutiva sono gia confluiti nel modulo `elaborazioni`, con residui punti di compatibilita mantenuti sotto `catasto`
 - il piano operativo del runtime e tracciato in `domain-docs/elaborazioni/docs/ELABORAZIONI_REFACTOR_PLAN.md`
 
-Obiettivi operativi del modulo:
+Obiettivi operativi complessivi del dominio e del runtime:
 
 - salvare e verificare in modo sicuro le credenziali SISTER
 - caricare batch CSV/XLSX di richieste visura
@@ -29,11 +29,14 @@ Obiettivi operativi del modulo:
 
 GAIA usa backend unico, frontend unico e database unico.
 
-Superfici principali del modulo:
+Superfici principali del dominio e del runtime:
 
-- backend HTTP e WebSocket: `backend/app/modules/catasto/`
-- entrypoint router di modulo: `backend/app/modules/catasto/router.py`
-- implementazione route: `backend/app/modules/catasto/routes.py`
+- backend dominio Catasto: `backend/app/modules/catasto/`
+- backend runtime operativo: `backend/app/modules/elaborazioni/`
+- entrypoint router dominio: `backend/app/modules/catasto/router.py`
+- entrypoint router runtime: `backend/app/modules/elaborazioni/router.py`
+- implementazione route dominio: `backend/app/modules/catasto/routes.py`
+- implementazione route runtime: `backend/app/modules/elaborazioni/runtime_routes.py`
 - integrazioni provider dominio in definizione; il runtime `Capacitas` e ora ospitato in `backend/app/modules/elaborazioni/capacitas/`
 - modelli e schemi canonici re-export: `backend/app/modules/catasto/models.py`, `backend/app/modules/catasto/schemas.py`
 - servizi applicativi runtime: `backend/app/services/elaborazioni_batches.py`, `elaborazioni_captcha.py`, `elaborazioni_credentials.py`, oltre ai servizi dominio `catasto_comuni.py` e `catasto_documents.py`
@@ -150,7 +153,10 @@ Gli endpoint runtime operativi sono esposti sotto prefisso `/elaborazioni`.
 
 - `POST /elaborazioni/credentials`
 - `GET /elaborazioni/credentials`
+- `GET /elaborazioni/credentials/{credential_id}`
+- `PATCH /elaborazioni/credentials/{credential_id}`
 - `DELETE /elaborazioni/credentials`
+- `DELETE /elaborazioni/credentials/{credential_id}`
 - `POST /elaborazioni/credentials/test`
 - `GET /elaborazioni/credentials/test/{test_id}`
 - `WS /elaborazioni/ws/credentials-test/{test_id}`
@@ -171,6 +177,8 @@ Note:
 - `GET /elaborazioni/batches`
 - `GET /elaborazioni/batches/{batch_id}`
 - `GET /elaborazioni/batches/{batch_id}/download`
+- `GET /elaborazioni/batches/{batch_id}/report.json`
+- `GET /elaborazioni/batches/{batch_id}/report.md`
 - `POST /elaborazioni/batches/{batch_id}/start`
 - `POST /elaborazioni/batches/{batch_id}/cancel`
 - `POST /elaborazioni/batches/{batch_id}/retry-failed`
@@ -180,6 +188,7 @@ Note:
 
 - `POST /elaborazioni/requests`
 - `GET /elaborazioni/requests/{request_id}`
+- `GET /elaborazioni/requests/{request_id}/artifacts/download`
 
 ### Documenti
 
@@ -192,6 +201,7 @@ Note:
 ### CAPTCHA
 
 - `GET /elaborazioni/captcha/pending`
+- `GET /elaborazioni/captcha/summary`
 - `GET /elaborazioni/captcha/{request_id}/image`
 - `POST /elaborazioni/captcha/{request_id}/solve`
 - `POST /elaborazioni/captcha/{request_id}/skip`
@@ -230,7 +240,7 @@ Evento pubblicato:
 
 ## Frontend corrente
 
-Route attive:
+Route `catasto` attive:
 
 - `/catasto`
 - `/catasto/new-batch`
@@ -241,14 +251,25 @@ Route attive:
 - `/catasto/documents/[id]`
 - `/catasto/settings`
 
-Comportamenti attesi:
+Route `elaborazioni` canoniche per il runtime:
 
-- dashboard con metriche, batch recenti e CAPTCHA pendenti
-- pagina credenziali con salvataggio, eliminazione, test asincrono e feedback realtime
-- creazione batch con upload CSV/XLSX
-- creazione visura singola
-- dettaglio batch con progress e gestione CAPTCHA
-- archivio documenti con ricerca, selezione multipla e download
+- `/elaborazioni`
+- `/elaborazioni/new-batch`
+- `/elaborazioni/new-single`
+- `/elaborazioni/batches`
+- `/elaborazioni/batches/[id]`
+- `/elaborazioni/settings`
+- `/elaborazioni/captcha`
+- `/elaborazioni/capacitas`
+
+Comportamenti correnti attesi:
+
+- `/catasto` e un placeholder informativo che rimanda al modulo `elaborazioni`
+- le route `catasto/new-*`, `catasto/batches*` e `catasto/settings` fungono come redirect o superficie compatibile verso `elaborazioni`
+- la dashboard operativa con metriche, batch recenti, credenziali e CAPTCHA pendenti vive in `/elaborazioni`
+- la creazione batch con upload CSV/XLSX e la creazione visura singola vivono in `/elaborazioni/new-*`
+- il dettaglio batch con progress, report e gestione CAPTCHA vive in `/elaborazioni/batches/[id]`
+- l'archivio documenti resta nel dominio `catasto` con ricerca, selezione multipla e download
 
 ## Worker Catasto
 
@@ -313,6 +334,6 @@ Variabili principali del worker:
 ## Regole di manutenzione documentale
 
 - se cambia la struttura del modulo, aggiornare prima questo file e poi i prompt operativi
-- se cambiano gli endpoint, verificare sempre `backend/app/modules/catasto/routes.py`
+- se cambiano gli endpoint, verificare sempre sia `backend/app/modules/catasto/routes.py` sia `backend/app/modules/elaborazioni/runtime_routes.py`
 - se cambia il flusso SISTER, aggiornare `domain-docs/elaborazioni/docs/SISTER_debug_runbook.md` e i selettori runtime
 - se una nota e solo storica, marcarla esplicitamente come storica

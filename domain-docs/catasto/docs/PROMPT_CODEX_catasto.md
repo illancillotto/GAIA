@@ -1,27 +1,24 @@
 # Prompt Codex — GAIA Catasto
 
 > Stato documento
-> Prompt riallineato alla struttura reale del repository al 2 aprile 2026.
+> Prompt operativo allineato alla separazione reale tra dominio `catasto` e runtime `elaborazioni` al 20 aprile 2026.
 
 > Regola strutturale vincolante
 > GAIA usa backend monolitico modulare, frontend condiviso e worker tecnico separato.
 > Il codice backend del dominio Catasto vive in `backend/app/modules/catasto/`.
-> Il frontend del modulo vive in `frontend/src/app/catasto/`.
+> Il runtime operativo di batch, richieste, credenziali e CAPTCHA vive in `backend/app/modules/elaborazioni/`.
+> Il frontend del dominio vive in `frontend/src/app/catasto/`.
+> Il frontend operativo vive in `frontend/src/app/elaborazioni/`.
 > Il worker browser-based vive in `modules/catasto/worker/`.
 
 ## Contesto del progetto
 
 Stai sviluppando o modificando **GAIA Catasto**, il modulo di integrazione con i servizi dell'Agenzia delle Entrate della piattaforma **GAIA**.
 
-Il modulo oggi copre:
+Il dominio e il runtime oggi coprono:
 
-- credenziali SISTER cifrate
-- test connessione asincrono via worker
-- upload batch CSV/XLSX
-- visure singole
-- gestione CAPTCHA automatica e manuale
-- archivio PDF
-- aggiornamenti realtime tramite WebSocket
+- dominio `catasto`: comuni, documenti, consultazione e archivio PDF
+- runtime `elaborazioni`: credenziali SISTER, test connessione, upload batch CSV/XLSX, visure singole, gestione CAPTCHA e aggiornamenti realtime
 
 ## Sorgenti da trattare come canoniche
 
@@ -30,8 +27,9 @@ Ordine di priorita:
 1. codice runtime
 2. `README.md`
 3. `domain-docs/catasto/docs/PRD_catasto.md`
-4. `domain-docs/catasto/docs/SISTER_debug_runbook.md`
-5. questo prompt
+4. `domain-docs/elaborazioni/docs/ELABORAZIONI_REFACTOR_PLAN.md`
+5. `domain-docs/elaborazioni/docs/SISTER_debug_runbook.md`
+6. questo prompt
 
 Superfici primarie:
 
@@ -39,76 +37,76 @@ Superfici primarie:
 - `backend/app/modules/catasto/routes.py`
 - `backend/app/modules/catasto/models.py`
 - `backend/app/modules/catasto/schemas.py`
-- `backend/app/services/catasto_batches.py`
-- `backend/app/services/catasto_captcha.py`
+- `backend/app/modules/elaborazioni/router.py`
+- `backend/app/modules/elaborazioni/runtime_routes.py`
 - `backend/app/services/catasto_comuni.py`
-- `backend/app/services/catasto_credentials.py`
 - `backend/app/services/catasto_documents.py`
+- `backend/app/services/elaborazioni_batches.py`
+- `backend/app/services/elaborazioni_captcha.py`
+- `backend/app/services/elaborazioni_credentials.py`
 - `modules/catasto/worker/`
 - `frontend/src/app/catasto/`
+- `frontend/src/app/elaborazioni/`
 
 ## Principi architetturali
 
 - il backend resta un monolite modulare
-- `backend/app/modules/catasto/router.py` e l'entrypoint del modulo
-- `backend/app/modules/catasto/routes.py` contiene le route HTTP e WebSocket
+- `backend/app/modules/catasto/router.py` e l'entrypoint del dominio
+- `backend/app/modules/catasto/routes.py` contiene le route dominio `catasto`
+- `backend/app/modules/elaborazioni/runtime_routes.py` contiene le route runtime `elaborazioni`
 - `backend/app/modules/catasto/models.py` e `schemas.py` sono superfici canoniche del modulo, anche se oggi re-esportano definizioni condivise
-- la business logic backend del dominio Catasto oggi e distribuita nei file `backend/app/services/catasto_*`
+- la business logic backend del dominio Catasto oggi resta nei file `catasto_*` dedicati a comuni e documenti
+- la business logic backend del runtime vive nei file `backend/app/services/elaborazioni_*`
 - il worker resta un processo tecnico separato e non un backend applicativo parallelo
 - il frontend del modulo resta nel frontend condiviso
 - Alembic resta unico sotto `backend/alembic/versions/`
 
-## API attuali del modulo
+## API attuali
 
-Credenziali:
-
-- `POST /catasto/credentials`
-- `GET /catasto/credentials`
-- `DELETE /catasto/credentials`
-- `POST /catasto/credentials/test`
-- `GET /catasto/credentials/test/{test_id}`
-- `WS /catasto/ws/credentials-test/{test_id}`
-
-Comuni:
+Dominio Catasto:
 
 - `GET /catasto/comuni`
 - `POST /catasto/comuni`
 - `PUT /catasto/comuni/{comune_id}`
-
-Batch:
-
-- `POST /catasto/batches`
-- `GET /catasto/batches`
-- `GET /catasto/batches/{batch_id}`
-- `GET /catasto/batches/{batch_id}/download`
-- `POST /catasto/batches/{batch_id}/start`
-- `POST /catasto/batches/{batch_id}/cancel`
-- `POST /catasto/batches/{batch_id}/retry-failed`
-- `WS /catasto/ws/{batch_id}`
-
-Visure:
-
-- `POST /catasto/visure`
-- `GET /catasto/visure/{request_id}`
-
-Documenti:
-
 - `GET /catasto/documents`
 - `GET /catasto/documents/search`
 - `POST /catasto/documents/download`
 - `GET /catasto/documents/{document_id}`
 - `GET /catasto/documents/{document_id}/download`
 
-CAPTCHA:
+Runtime Elaborazioni:
 
-- `GET /catasto/captcha/pending`
-- `GET /catasto/captcha/{request_id}/image`
-- `POST /catasto/captcha/{request_id}/solve`
-- `POST /catasto/captcha/{request_id}/skip`
+- `POST /elaborazioni/credentials`
+- `GET /elaborazioni/credentials`
+- `GET /elaborazioni/credentials/{credential_id}`
+- `PATCH /elaborazioni/credentials/{credential_id}`
+- `DELETE /elaborazioni/credentials`
+- `DELETE /elaborazioni/credentials/{credential_id}`
+- `POST /elaborazioni/credentials/test`
+- `GET /elaborazioni/credentials/test/{test_id}`
+- `WS /elaborazioni/ws/credentials-test/{test_id}`
+- `POST /elaborazioni/batches`
+- `GET /elaborazioni/batches`
+- `GET /elaborazioni/batches/{batch_id}`
+- `GET /elaborazioni/batches/{batch_id}/download`
+- `GET /elaborazioni/batches/{batch_id}/report.json`
+- `GET /elaborazioni/batches/{batch_id}/report.md`
+- `POST /elaborazioni/batches/{batch_id}/start`
+- `POST /elaborazioni/batches/{batch_id}/cancel`
+- `POST /elaborazioni/batches/{batch_id}/retry-failed`
+- `WS /elaborazioni/ws/{batch_id}`
+- `POST /elaborazioni/requests`
+- `GET /elaborazioni/requests/{request_id}`
+- `GET /elaborazioni/requests/{request_id}/artifacts/download`
+- `GET /elaborazioni/captcha/pending`
+- `GET /elaborazioni/captcha/summary`
+- `GET /elaborazioni/captcha/{request_id}/image`
+- `POST /elaborazioni/captcha/{request_id}/solve`
+- `POST /elaborazioni/captcha/{request_id}/skip`
 
 ## Frontend attuale
 
-Route attive:
+Route `catasto` attive:
 
 - `/catasto`
 - `/catasto/new-batch`
@@ -119,12 +117,22 @@ Route attive:
 - `/catasto/documents/[id]`
 - `/catasto/settings`
 
-Obiettivo UI:
+Route `elaborazioni` canoniche:
 
-- interfaccia amministrativa sobria
-- leggibilita operativa prima dell'estetica
-- feedback chiaro su stati batch, errori e CAPTCHA
-- ricerca documentale rapida
+- `/elaborazioni`
+- `/elaborazioni/new-batch`
+- `/elaborazioni/new-single`
+- `/elaborazioni/batches`
+- `/elaborazioni/batches/[id]`
+- `/elaborazioni/settings`
+- `/elaborazioni/captcha`
+
+Stato UI corrente:
+
+- `/catasto` e un placeholder di dominio in ridefinizione
+- le route operative `catasto/new-*`, `catasto/batches*` e `catasto/settings` sono superfici compatibili o redirect verso `elaborazioni`
+- la UI operativa reale per batch, credenziali e CAPTCHA sta in `frontend/src/app/elaborazioni/`
+- la ricerca documentale rapida resta nel dominio `catasto`
 
 ## Worker e SISTER
 
@@ -148,7 +156,7 @@ Regole:
 Quando implementi o modifichi il modulo Catasto:
 
 - verifica prima i pattern reali del codice esistente
-- usa `backend/app/modules/catasto/` come superficie primaria del backend
+- usa `backend/app/modules/catasto/` per dominio e `backend/app/modules/elaborazioni/` per runtime operativo
 - integra il modulo passando da `backend/app/api/router.py`
 - mantieni separati route HTTP, schemi, modelli, servizi backend e logica worker
 - non spostare logica Playwright nel backend HTTP
