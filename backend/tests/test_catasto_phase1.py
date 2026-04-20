@@ -1,6 +1,8 @@
 from collections.abc import Generator
+from datetime import date
 
 from fastapi.testclient import TestClient
+import pandas as pd
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -11,7 +13,17 @@ from app.core.security import hash_password
 from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
-from app.models.catasto_phase1 import CatAnomalia, CatDistretto
+from app.models.catasto_phase1 import (
+    CatAnomalia,
+    CatDistretto,
+    CatImportBatch,
+    CatParticella,
+    CatParticellaHistory,
+    CatSchemaContributo,
+    CatUtenzaIrrigua,
+)
+from app.modules.catasto.routes import import_routes as import_routes_module
+from app.modules.catasto.services.import_capacitas import CapacitasImportDuplicateError, import_capacitas_excel
 from app.modules.catasto.services.validation import (
     validate_codice_fiscale,
     validate_comune,
@@ -63,6 +75,7 @@ def setup_database() -> Generator[None, None, None]:
             descrizione="CF non valido",
         )
     )
+    seed_phase1_lookup_data(db)
     db.commit()
     db.close()
 
@@ -78,6 +91,136 @@ def auth_headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+def seed_phase1_lookup_data(db: Session) -> None:
+    batch = CatImportBatch(
+        filename="seed.xlsx",
+        tipo="capacitas_ruolo",
+        anno_campagna=2025,
+        hash_file="seed-hash",
+        status="completed",
+        righe_totali=2,
+        righe_importate=2,
+        righe_anomalie=1,
+        created_by=1,
+    )
+    particella = CatParticella(
+        cod_comune_istat=165,
+        nome_comune="Arborea",
+        foglio="5",
+        particella="120",
+        subalterno="1",
+        num_distretto="10",
+        nome_distretto="Distretto 10",
+        is_current=True,
+        superficie_mq=1000,
+    )
+    db.add_all(
+        [
+            batch,
+            CatSchemaContributo(codice="0648", descrizione="Schema 0648", tipo_calcolo="fisso", attivo=True),
+            CatSchemaContributo(codice="0985", descrizione="Schema 0985", tipo_calcolo="contatori", attivo=True),
+            particella,
+        ]
+    )
+    db.flush()
+    db.add(
+        CatUtenzaIrrigua(
+            import_batch_id=batch.id,
+            anno_campagna=2025,
+            cco="UT-SEED-001",
+            cod_comune_istat=165,
+            num_distretto=10,
+            nome_comune="Arborea",
+            foglio="5",
+            particella="120",
+            subalterno="1",
+            particella_id=particella.id,
+            sup_catastale_mq=1000,
+            sup_irrigabile_mq=900,
+            imponibile_sf=1350,
+            ind_spese_fisse=1.5,
+            aliquota_0648=0.1,
+            importo_0648=135,
+            aliquota_0985=0.2,
+            importo_0985=270,
+            codice_fiscale="DNIFSE64C01L122Y",
+            codice_fiscale_raw="Dnifse64c01l122y",
+        )
+    )
+    db.add(
+        CatParticellaHistory(
+            particella_id=particella.id,
+            cod_comune_istat=165,
+            foglio="5",
+            particella="120",
+            subalterno="1",
+            superficie_mq=950,
+            num_distretto="10",
+            valid_from=date(2024, 1, 1),
+            valid_to=date(2024, 12, 31),
+            change_reason="seed-history",
+        )
+    )
+    db.commit()
+
+
+def build_capacitas_dataframe() -> pd.DataFrame:
+    return pd.DataFrame(
+        [
+            {
+                "ANNO": "2025",
+                "PVC": "95",
+                "COM": "165",
+                "CCO": "UT-001",
+                "FRA": "1",
+                "DISTRETTO": "10",
+                "Unnamed: 7": "Distretto 10",
+                "COMUNE": "Arborea",
+                "SEZIONE": "",
+                "FOGLIO": "5",
+                "PARTIC": "120",
+                "SUB": "1",
+                "SUP.CATA.": "1000",
+                "SUP.IRRIGABILE": "1000",
+                "Ind. Spese Fisse": "1.5",
+                "Imponibile s.f.": "1500",
+                "ESENTE 0648": "false",
+                "ALIQUOTA 0648": "0.1",
+                "IMPORTO 0648": "150",
+                "ALIQUOTA 0985": "0.2",
+                "IMPORTO 0985": "300",
+                "DENOMINAZIONE": "Mario Rossi",
+                "CODICE FISCALE": "Dnifse64c01l122y",
+            },
+            {
+                "ANNO": "2025",
+                "PVC": "95",
+                "COM": "999",
+                "CCO": "UT-002",
+                "FRA": "1",
+                "DISTRETTO": "10",
+                "Unnamed: 7": "Distretto 10",
+                "COMUNE": "Comune Inventato",
+                "SEZIONE": "",
+                "FOGLIO": "9",
+                "PARTIC": "999",
+                "SUB": "",
+                "SUP.CATA.": "1000",
+                "SUP.IRRIGABILE": "1200",
+                "Ind. Spese Fisse": "1.5",
+                "Imponibile s.f.": "999",
+                "ESENTE 0648": "false",
+                "ALIQUOTA 0648": "0.1",
+                "IMPORTO 0648": "1",
+                "ALIQUOTA 0985": "0.2",
+                "IMPORTO 0985": "2",
+                "DENOMINAZIONE": "Soggetto Test",
+                "CODICE FISCALE": "BADCF",
+            },
+        ]
+    )
+
+
 def test_validation_helpers_cover_expected_values() -> None:
     assert validate_codice_fiscale("FNDGPP63E11B354D") == {
         "cf_normalizzato": "FNDGPP63E11B354D",
@@ -89,6 +232,7 @@ def test_validation_helpers_cover_expected_values() -> None:
     assert validate_codice_fiscale("00588230953")["tipo"] == "PG"
     assert validate_codice_fiscale(None)["tipo"] == "MANCANTE"
     assert validate_comune(165) == {"is_valid": True, "nome_ufficiale": "Arborea"}
+    assert validate_comune(212) == {"is_valid": True, "nome_ufficiale": "Cabras"}
     assert validate_superficie(16834, 16834)["ok"] is True
     assert validate_superficie(17100, 16834)["ok"] is False
 
@@ -115,3 +259,230 @@ def test_import_capacitas_requires_authentication() -> None:
         files={"file": ("capacitas.xlsx", b"fake-content", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
     )
     assert response.status_code == 401
+
+
+def test_distretto_kpi_endpoint_returns_aggregates_for_year() -> None:
+    response = client.get("/catasto/distretti/", headers=auth_headers())
+    distretto_id = response.json()[0]["id"]
+
+    kpi_response = client.get(f"/catasto/distretti/{distretto_id}/kpi?anno=2025", headers=auth_headers())
+
+    assert kpi_response.status_code == 200
+    payload = kpi_response.json()
+    assert payload["num_distretto"] == "10"
+    assert payload["totale_particelle"] == 1
+    assert payload["totale_utenze"] == 1
+    assert payload["importo_totale_0648"] == "135.00"
+    assert payload["importo_totale_0985"] == "270.00"
+    assert payload["superficie_irrigabile_mq"] == "900.00"
+
+
+def test_particella_detail_history_utenze_and_anomalie_endpoints() -> None:
+    db = TestingSessionLocal()
+    try:
+        particella = db.query(CatParticella).filter(CatParticella.foglio == "5").one()
+        utenza = db.query(CatUtenzaIrrigua).filter(CatUtenzaIrrigua.cco == "UT-SEED-001").one()
+        particella_id = particella.id
+        db.add(
+            CatAnomalia(
+                utenza_id=utenza.id,
+                particella_id=particella.id,
+                anno_campagna=2025,
+                tipo="VAL-06-imponibile",
+                severita="warning",
+                status="aperta",
+                descrizione="Imponibile incoerente",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    detail_response = client.get(f"/catasto/particelle/{particella_id}", headers=auth_headers())
+    history_response = client.get(f"/catasto/particelle/{particella_id}/history", headers=auth_headers())
+    utenze_response = client.get(f"/catasto/particelle/{particella_id}/utenze?anno=2025", headers=auth_headers())
+    anomalie_response = client.get(f"/catasto/particelle/{particella_id}/anomalie?anno=2025", headers=auth_headers())
+
+    assert detail_response.status_code == 200
+    assert detail_response.json()["foglio"] == "5"
+    assert history_response.status_code == 200
+    assert len(history_response.json()) == 1
+    assert utenze_response.status_code == 200
+    assert len(utenze_response.json()) == 1
+    assert utenze_response.json()[0]["codice_fiscale"] == "DNIFSE64C01L122Y"
+    assert anomalie_response.status_code == 200
+    assert len(anomalie_response.json()) == 1
+    assert anomalie_response.json()[0]["tipo"] == "VAL-06-imponibile"
+
+
+def test_import_history_and_report_endpoints_return_batch_data() -> None:
+    db = TestingSessionLocal()
+    try:
+        batch = db.query(CatImportBatch).filter(CatImportBatch.hash_file == "seed-hash").one()
+        utenza = db.query(CatUtenzaIrrigua).filter(CatUtenzaIrrigua.import_batch_id == batch.id).one()
+        db.add(
+            CatAnomalia(
+                utenza_id=utenza.id,
+                anno_campagna=2025,
+                tipo="VAL-07-importi",
+                severita="warning",
+                status="aperta",
+                descrizione="Importi incoerenti",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    history_response = client.get("/catasto/import/history", headers=auth_headers())
+    assert history_response.status_code == 200
+    batch_id = history_response.json()[0]["id"]
+
+    status_response = client.get(f"/catasto/import/{batch_id}/status", headers=auth_headers())
+    report_response = client.get(f"/catasto/import/{batch_id}/report?tipo=VAL-07-importi", headers=auth_headers())
+
+    assert status_response.status_code == 200
+    assert status_response.json()["status"] == "completed"
+    assert report_response.status_code == 200
+    report_payload = report_response.json()
+    assert report_payload["total"] == 1
+    assert report_payload["items"][0]["tipo"] == "VAL-07-importi"
+
+
+def test_import_capacitas_excel_creates_batch_and_normalizes_cf(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "app.modules.catasto.services.import_capacitas.pd.read_excel",
+        lambda *args, **kwargs: {"Ruoli 2025": build_capacitas_dataframe()},
+    )
+
+    db = TestingSessionLocal()
+    try:
+        batch = import_capacitas_excel(
+            db=db,
+            file_bytes=b"fake-xlsx-content",
+            filename="ruoli-2025.xlsx",
+            created_by=1,
+        )
+
+        utenze = (
+            db.query(CatUtenzaIrrigua)
+            .filter(CatUtenzaIrrigua.import_batch_id == batch.id)
+            .order_by(CatUtenzaIrrigua.cco)
+            .all()
+        )
+        anomalie = db.query(CatAnomalia).all()
+
+        assert batch.status == "completed"
+        assert batch.righe_importate == 2
+        assert batch.righe_anomalie == 1
+        assert len(utenze) == 2
+        assert utenze[0].codice_fiscale == "DNIFSE64C01L122Y"
+        assert utenze[0].codice_fiscale_raw == "Dnifse64c01l122y"
+        assert utenze[1].anomalia_cf_invalido is True
+        assert utenze[1].anomalia_comune_invalido is True
+        assert len(anomalie) >= 4
+    finally:
+        db.close()
+
+
+def test_import_capacitas_excel_duplicate_and_force(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "app.modules.catasto.services.import_capacitas.pd.read_excel",
+        lambda *args, **kwargs: {"Ruoli 2025": build_capacitas_dataframe().head(1)},
+    )
+
+    db = TestingSessionLocal()
+    try:
+        first_batch = import_capacitas_excel(
+            db=db,
+            file_bytes=b"same-content",
+            filename="ruoli-2025.xlsx",
+            created_by=1,
+        )
+
+        with pytest.raises(CapacitasImportDuplicateError):
+            import_capacitas_excel(
+                db=db,
+                file_bytes=b"same-content",
+                filename="ruoli-2025.xlsx",
+                created_by=1,
+            )
+
+        second_batch = import_capacitas_excel(
+            db=db,
+            file_bytes=b"same-content",
+            filename="ruoli-2025.xlsx",
+            created_by=1,
+            force=True,
+        )
+
+        db.refresh(first_batch)
+        assert first_batch.status == "replaced"
+        assert second_batch.status == "completed"
+        assert second_batch.id != first_batch.id
+    finally:
+        db.close()
+
+
+def test_import_capacitas_excel_accepts_legacy_alias_columns(monkeypatch: pytest.MonkeyPatch) -> None:
+    alias_df = pd.DataFrame(
+        [
+            {
+                "ANNO": "2025",
+                "PVC": "95",
+                "COM": "165",
+                "CCO": "UT-ALIAS-001",
+                "DISTRETTO": "10",
+                "COMUNE": "Arborea",
+                "FOGLIO": "5",
+                "PARTIC": "120",
+                "SUB": "1",
+                "SUP.CATA.": "1000",
+                "SUP.IRRIGABILE": "1000",
+                "Ind. Spese Fisse": "1.5",
+                "Imponibile s.f.": "1500",
+                "ALIQUOTA 0648": "0.1",
+                "IMPORTO 0648": "150",
+                "ALIQUOTA 0985": "0.2",
+                "IMPORTO 0985": "300",
+                "DENOMINAZ": "Mario Rossi Alias",
+                "CODFISC": "Dnifse64c01l122y",
+            }
+        ]
+    )
+    monkeypatch.setattr(
+        "app.modules.catasto.services.import_capacitas.pd.read_excel",
+        lambda *args, **kwargs: {"Ruoli 2025": alias_df},
+    )
+
+    db = TestingSessionLocal()
+    try:
+        batch = import_capacitas_excel(
+            db=db,
+            file_bytes=b"alias-xlsx-content",
+            filename="ruoli-alias-2025.xlsx",
+            created_by=1,
+        )
+        utenza = db.query(CatUtenzaIrrigua).filter(CatUtenzaIrrigua.import_batch_id == batch.id).one()
+
+        assert utenza.denominazione == "Mario Rossi Alias"
+        assert utenza.codice_fiscale == "DNIFSE64C01L122Y"
+        assert utenza.codice_fiscale_raw == "Dnifse64c01l122y"
+    finally:
+        db.close()
+
+
+def test_finalize_shapefile_route_returns_service_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, int] = {}
+
+    def fake_finalize_shapefile_import(db: Session, *, created_by: int, **_: object) -> dict[str, object]:
+        captured["created_by"] = created_by
+        return {"status": "completed", "inserted_current": 3, "updated_history": 1}
+
+    monkeypatch.setattr(import_routes_module, "finalize_shapefile_import", fake_finalize_shapefile_import)
+
+    response = client.post("/catasto/import/shapefile/finalize", headers=auth_headers())
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "completed"
+    assert captured["created_by"] > 0

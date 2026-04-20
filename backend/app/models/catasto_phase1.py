@@ -134,7 +134,7 @@ class CatParticella(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    utenze: Mapped[list["CatUtenzaIrrigua"]] = relationship(back_populates="particella")
+    utenze: Mapped[list["CatUtenzaIrrigua"]] = relationship(back_populates="particella_record")
     anomalie: Mapped[list["CatAnomalia"]] = relationship(back_populates="particella")
 
     @property
@@ -203,7 +203,9 @@ class CatUtenzaIrrigua(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     batch: Mapped["CatImportBatch"] = relationship(back_populates="utenze")
-    particella: Mapped["CatParticella | None"] = relationship(back_populates="utenze")
+    # Keep the textual cadastral identifier on `particella`; use a distinct ORM
+    # relationship name to avoid shadowing the column attribute.
+    particella_record: Mapped["CatParticella | None"] = relationship(back_populates="utenze")
     anomalie: Mapped[list["CatAnomalia"]] = relationship(back_populates="utenza")
 
     @property
