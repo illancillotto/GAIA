@@ -83,6 +83,32 @@ function eventMeta(item: WhiteRefuelEventItem): string {
   return bits.join(" · ");
 }
 
+function hasOdometerAnomaly(item: WhiteRefuelEventItem): boolean {
+  return Boolean(item.source_issue && item.source_issue.includes("ANOMALIA_KM"));
+}
+
+function renderEventMeta(item: WhiteRefuelEventItem): React.ReactNode {
+  const anomaly = hasOdometerAnomaly(item);
+  const odometerText =
+    anomaly && (item.odometer_km === "0" || item.odometer_km === "0.000") ? "0000 km" : formatOdometer(item.odometer_km);
+
+  const parts: Array<React.ReactNode> = [
+    <span key="wc">{`White #${item.wc_id}`}</span>,
+    <span key="dt">{formatDateTime(item.fueled_at)}</span>,
+    <span key="odo" title={anomaly ? item.source_issue ?? undefined : undefined} className={anomaly ? "underline decoration-dotted underline-offset-2" : undefined}>
+      {odometerText}
+    </span>,
+    item.fuel_card_code ? <span key="card">{`Carta ${item.fuel_card_code}`}</span> : null,
+  ].filter(Boolean);
+
+  return parts.map((part, idx) => (
+    <span key={idx}>
+      {idx > 0 ? " · " : null}
+      {part}
+    </span>
+  ));
+}
+
 function WhiteRefuelEventCard({ item }: { item: WhiteRefuelEventItem }) {
   return (
     <div className="rounded-[24px] border border-[#e6ebe5] bg-[linear-gradient(180deg,_#ffffff,_#fbfcfa)] px-4 py-4 shadow-panel">
@@ -97,7 +123,7 @@ function WhiteRefuelEventCard({ item }: { item: WhiteRefuelEventItem }) {
             </span>
           </div>
           <p className="mt-3 text-sm font-semibold text-gray-900">{eventTitle(item)}</p>
-          <p className="mt-1 text-xs leading-5 text-gray-500">{eventMeta(item)}</p>
+          <p className="mt-1 text-xs leading-5 text-gray-500">{renderEventMeta(item)}</p>
         </div>
         <div className="rounded-2xl border border-[#e4e8e2] bg-white px-3 py-2 text-right">
           <p className="text-[11px] uppercase tracking-[0.18em] text-gray-500">Sync White</p>

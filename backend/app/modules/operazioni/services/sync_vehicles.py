@@ -55,6 +55,21 @@ def _normalize_operator_key(value: str | None) -> str | None:
     return compact or None
 
 
+def _sanitize_wc_refuel_odometer_km(odometer_km: int | None) -> tuple[Decimal | None, str | None]:
+    if odometer_km is None:
+        return None, None
+
+    # DB column is Numeric(12, 3) => max integer part is < 1e9.
+    # WhiteCompany data may contain operator mistakes / placeholder max-int values.
+    if odometer_km >= 1_000_000_000:
+        return Decimal("0"), f"ANOMALIA_KM: lettura KM non valida inserita dall'utente (valore={odometer_km})."
+
+    if odometer_km < 0:
+        return Decimal("0"), f"ANOMALIA_KM: lettura KM negativa inserita dall'utente (valore={odometer_km})."
+
+    return Decimal(str(odometer_km)), None
+
+
 def _build_operator_lookup(db: Session) -> dict[str, WCOperator]:
     operators = db.scalars(select(WCOperator)).all()
     lookup: dict[str, WCOperator] = {}
@@ -94,13 +109,18 @@ def _upsert_wc_refuel_event(
         event = WCRefuelEvent(wc_id=row.wc_id, fueled_at=fueled_at)
         db.add(event)
 
+    sanitized_odometer_km, odometer_anomaly = _sanitize_wc_refuel_odometer_km(row.odometer_km)
+    merged_source_issue = source_issue
+    if odometer_anomaly:
+        merged_source_issue = (f"{merged_source_issue} | {odometer_anomaly}" if merged_source_issue else odometer_anomaly)
+
     event.vehicle_id = vehicle_id
     event.wc_operator_id = wc_operator_id
     event.vehicle_code = row.vehicle_code
     event.operator_name = row.operator_name
     event.fueled_at = fueled_at
-    event.odometer_km = Decimal(str(row.odometer_km)) if row.odometer_km is not None else None
-    event.source_issue = source_issue
+    event.odometer_km = sanitized_odometer_km
+    event.source_issue = merged_source_issue
     event.wc_synced_at = datetime.now(timezone.utc)
     db.flush()
     return event, created
@@ -305,9 +325,13 @@ def sync_white_refuels(
             errors.append(f"refuel:{row.wc_id}: data rifornimento non valida")
             continue
         wc_operator_id = _resolve_operator_id(row.operator_name, operator_lookup)
+        sanitized_odometer_km, odometer_anomaly = _sanitize_wc_refuel_odometer_km(row.odometer_km)
+        row_source_issue = row.source_issue
+        if odometer_anomaly:
+            row_source_issue = (f"{row_source_issue} | {odometer_anomaly}" if row_source_issue else odometer_anomaly)
 
-        if row.source_issue or row.liters is None or row.liters <= 0:
-            source_issue = row.source_issue
+        if row_source_issue or row.liters is None or row.liters <= 0:
+            source_issue = row_source_issue
             if source_issue is None and (row.liters is None or row.liters <= 0):
                 source_issue = "Dettaglio White senza litri/costo/distributore: evento salvato per riconciliazione con carte carburante."
             _upsert_wc_refuel_event(
@@ -332,7 +356,7 @@ def sync_white_refuels(
             fueled_at=fueled_at,
             liters=row.liters,
             total_cost=row.total_cost,
-            odometer_km=Decimal(str(row.odometer_km)) if row.odometer_km is not None else None,
+            odometer_km=sanitized_odometer_km,
             wc_id=row.wc_id,
             operator_name=row.operator_name,
             wc_synced_at=datetime.now(timezone.utc),
