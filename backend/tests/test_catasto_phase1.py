@@ -74,6 +74,16 @@ def setup_database() -> Generator[None, None, None]:
             module_catasto=True,
         )
     )
+    db.add(
+        ApplicationUser(
+            username="catasto-reviewer",
+            email="catasto-reviewer@example.local",
+            password_hash=hash_password("secret123"),
+            role=ApplicationUserRole.REVIEWER.value,
+            is_active=True,
+            module_catasto=True,
+        )
+    )
     db.add(CatDistretto(num_distretto="10", nome_distretto="Distretto 10"))
     db.add(
         CatAnomalia(
@@ -94,7 +104,11 @@ def setup_database() -> Generator[None, None, None]:
 
 
 def auth_headers() -> dict[str, str]:
-    response = client.post("/auth/login", json={"username": "catasto-admin", "password": "secret123"})
+    return auth_headers_for("catasto-admin")
+
+
+def auth_headers_for(username: str) -> dict[str, str]:
+    response = client.post("/auth/login", json={"username": username, "password": "secret123"})
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
@@ -479,6 +493,28 @@ def test_anomalie_endpoint_patch_updates_workflow_fields() -> None:
     assert payload["status"] == "chiusa"
     assert payload["note_operatore"] == "Verifica completata"
     assert payload["assigned_to"] == 1
+
+
+def test_anomalie_endpoint_patch_requires_admin_role() -> None:
+    db = TestingSessionLocal()
+    try:
+        seed_anomalie_workflow_data(db)
+        anomalia_id = (
+            db.query(CatAnomalia)
+            .filter(CatAnomalia.tipo == "VAL-06-imponibile", CatAnomalia.status == "aperta")
+            .one()
+            .id
+        )
+    finally:
+        db.close()
+
+    response = client.patch(
+        f"/catasto/anomalie/{anomalia_id}",
+        headers=auth_headers_for("catasto-reviewer"),
+        json={"status": "chiusa"},
+    )
+
+    assert response.status_code == 403
 
 
 def test_import_capacitas_requires_authentication() -> None:

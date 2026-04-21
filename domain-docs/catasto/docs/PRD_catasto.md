@@ -194,6 +194,7 @@ Comportamento attuale:
 - `/catasto/distretti` e `/catasto/distretti/[id]` coprono KPI e drill-down per distretto
 - `/catasto/particelle` e `/catasto/particelle/[id]` coprono lookup e dettaglio con utenze/anomalie
 - `/catasto/anomalie` espone la lista operativa con aggiornamento stato
+- il workflow mutativo sulle anomalie (`PATCH`) è riservato ad admin/super_admin, mentre la consultazione resta disponibile agli utenti Catasto attivi
 
 Route `catasto` mantenute per compatibilita ma non piu canoniche:
 

@@ -154,6 +154,7 @@ export default function CatastoAnomaliePage() {
       description="Lista anomalie (Fase 1) con filtri principali."
       breadcrumb="Catasto / Anomalie"
       requiredModule="catasto"
+      requiredRoles={["admin", "super_admin"]}
     >
       <div className="page-stack">
         {error ? (

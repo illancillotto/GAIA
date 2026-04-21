@@ -7,7 +7,7 @@ from fastapi import HTTPException
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_active_user
+from app.api.deps import require_active_user, require_admin_user
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
 from app.models.catasto_phase1 import CatAnomalia, CatUtenzaIrrigua
@@ -71,7 +71,7 @@ def update_anomalia(
     anomalia_id: UUID,
     payload: CatAnomaliaUpdateInput,
     db: Session = Depends(get_db),
-    _: ApplicationUser = Depends(require_active_user),
+    _: ApplicationUser = Depends(require_admin_user),
 ):
     item = db.get(CatAnomalia, anomalia_id)
     if item is None:

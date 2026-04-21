@@ -129,6 +129,7 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   assert.match(distrettiPage, /catastoListDistretti/);
   assert.match(distrettiPage, /catastoGetDistrettoKpi/);
   assert.match(anomaliePage, /catastoUpdateAnomalia/);
+  assert.match(anomaliePage, /requiredRoles=\{\["admin", "super_admin"\]\}/);
   assert.match(particelleDetailPage, /catastoGetParticellaUtenze/);
   assert.match(particelleDetailPage, /catastoGetParticellaAnomalie/);
   assert.match(requestWorkspace, /createElaborazioneBatch/);
