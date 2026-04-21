@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, Query
 from fastapi import HTTPException
 from sqlalchemy import desc, func, select
@@ -66,7 +68,7 @@ def list_anomalie(
 
 @router.patch("/{anomalia_id}", response_model=CatAnomaliaResponse)
 def update_anomalia(
-    anomalia_id,
+    anomalia_id: UUID,
     payload: CatAnomaliaUpdateInput,
     db: Session = Depends(get_db),
     _: ApplicationUser = Depends(require_active_user),

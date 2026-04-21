@@ -287,6 +287,112 @@ def seed_additional_distretto_kpi_data(db: Session) -> None:
     db.commit()
 
 
+def seed_anomalie_workflow_data(db: Session) -> None:
+    batch_id = db.query(CatImportBatch).filter(CatImportBatch.hash_file == "seed-hash").one().id
+    particella_10 = db.query(CatParticella).filter(CatParticella.foglio == "5").one()
+
+    distretto_20 = db.query(CatDistretto).filter(CatDistretto.num_distretto == "20").one_or_none()
+    particella_20 = db.query(CatParticella).filter(CatParticella.num_distretto == "20").one_or_none()
+    if distretto_20 is None:
+        distretto_20 = CatDistretto(num_distretto="20", nome_distretto="Distretto 20")
+        db.add(distretto_20)
+    if particella_20 is None:
+        particella_20 = CatParticella(
+            cod_comune_istat=212,
+            nome_comune="Cabras",
+            foglio="9",
+            particella="401",
+            subalterno=None,
+            num_distretto="20",
+            nome_distretto="Distretto 20",
+            is_current=True,
+            superficie_mq=1800,
+        )
+        db.add(particella_20)
+    db.flush()
+
+    utenza_10 = CatUtenzaIrrigua(
+        import_batch_id=batch_id,
+        anno_campagna=2025,
+        cco="UT-ANOM-10-2025",
+        cod_comune_istat=165,
+        num_distretto=10,
+        nome_comune="Arborea",
+        foglio="5",
+        particella="120",
+        subalterno="1",
+        particella_id=particella_10.id,
+        sup_catastale_mq=1000,
+        sup_irrigabile_mq=950,
+        imponibile_sf=1425,
+        ind_spese_fisse=1.5,
+        aliquota_0648=0.1,
+        importo_0648=142.5,
+        aliquota_0985=0.2,
+        importo_0985=285,
+        codice_fiscale="RSSMRA80A01H501U",
+        codice_fiscale_raw="rssmra80a01h501u",
+    )
+    utenza_20 = CatUtenzaIrrigua(
+        import_batch_id=batch_id,
+        anno_campagna=2024,
+        cco="UT-ANOM-20-2024",
+        cod_comune_istat=212,
+        num_distretto=20,
+        nome_comune="Cabras",
+        foglio=particella_20.foglio,
+        particella=particella_20.particella,
+        subalterno=particella_20.subalterno,
+        particella_id=particella_20.id,
+        sup_catastale_mq=1800,
+        sup_irrigabile_mq=1400,
+        imponibile_sf=2100,
+        ind_spese_fisse=1.5,
+        aliquota_0648=0.1,
+        importo_0648=210,
+        aliquota_0985=0.2,
+        importo_0985=420,
+        codice_fiscale="00588230953",
+        codice_fiscale_raw="00588230953",
+    )
+    db.add_all([utenza_10, utenza_20])
+    db.flush()
+
+    db.add_all(
+        [
+            CatAnomalia(
+                utenza_id=utenza_10.id,
+                particella_id=particella_10.id,
+                anno_campagna=2025,
+                tipo="VAL-06-imponibile",
+                severita="warning",
+                status="aperta",
+                descrizione="Imponibile da verificare",
+            ),
+            CatAnomalia(
+                utenza_id=utenza_10.id,
+                particella_id=particella_10.id,
+                anno_campagna=2025,
+                tipo="VAL-07-importi",
+                severita="warning",
+                status="chiusa",
+                descrizione="Importi storicamente incoerenti",
+            ),
+            CatAnomalia(
+                utenza_id=utenza_20.id,
+                particella_id=particella_20.id,
+                anno_campagna=2024,
+                tipo="VAL-02-cf_invalido",
+                severita="error",
+                status="assegnata",
+                descrizione="CF da correggere",
+                assigned_to=1,
+            ),
+        ]
+    )
+    db.commit()
+
+
 def test_validation_helpers_cover_expected_values() -> None:
     assert validate_codice_fiscale("FNDGPP63E11B354D") == {
         "cf_normalizzato": "FNDGPP63E11B354D",
@@ -317,6 +423,60 @@ def test_anomalie_endpoint_filters_by_tipo() -> None:
     payload = response.json()
     assert payload["total"] == 1
     assert payload["items"][0]["tipo"] == "VAL-02-cf_invalido"
+
+
+def test_anomalie_endpoint_supports_combined_filters_and_pagination() -> None:
+    db = TestingSessionLocal()
+    try:
+        seed_anomalie_workflow_data(db)
+    finally:
+        db.close()
+
+    filtered = client.get(
+        "/catasto/anomalie/?status=aperta&severita=warning&anno=2025&distretto=10&page=1&page_size=1",
+        headers=auth_headers(),
+    )
+    second_page = client.get(
+        "/catasto/anomalie/?status=aperta&severita=warning&anno=2025&distretto=10&page=2&page_size=1",
+        headers=auth_headers(),
+    )
+
+    assert filtered.status_code == 200
+    payload = filtered.json()
+    assert payload["total"] == 1
+    assert payload["page"] == 1
+    assert payload["page_size"] == 1
+    assert len(payload["items"]) == 1
+    assert payload["items"][0]["tipo"] == "VAL-06-imponibile"
+
+    assert second_page.status_code == 200
+    assert second_page.json()["items"] == []
+
+
+def test_anomalie_endpoint_patch_updates_workflow_fields() -> None:
+    db = TestingSessionLocal()
+    try:
+        seed_anomalie_workflow_data(db)
+        anomalia_id = (
+            db.query(CatAnomalia)
+            .filter(CatAnomalia.tipo == "VAL-06-imponibile", CatAnomalia.status == "aperta")
+            .one()
+            .id
+        )
+    finally:
+        db.close()
+
+    response = client.patch(
+        f"/catasto/anomalie/{anomalia_id}",
+        headers=auth_headers(),
+        json={"status": "chiusa", "note_operatore": "Verifica completata", "assigned_to": 1},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "chiusa"
+    assert payload["note_operatore"] == "Verifica completata"
+    assert payload["assigned_to"] == 1
 
 
 def test_import_capacitas_requires_authentication() -> None:
