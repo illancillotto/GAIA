@@ -21,6 +21,7 @@
     "react-dom": "18.3.1",
     "react-draggable": "4.4.6",
     "react-hook-form": "^7.56.1",
+    "recharts": "^3.8.1",
     "tailwind-merge": "2.5.2",
     "xlsx": "^0.18.5"
   },

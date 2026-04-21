@@ -69,9 +69,21 @@ def require_section(section_key: str):
 
 RequireAdmin = Depends(require_role("super_admin", "admin"))
 RequireSuperAdmin = Depends(require_role("super_admin"))
+RequireAccessiAdmin = Depends(require_role("super_admin", "admin"))
 
 
 def require_admin_user(
     current_user: Annotated[ApplicationUser, Depends(require_role("super_admin", "admin"))],
 ) -> ApplicationUser:
     return current_user
+
+
+def require_not_operator(
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+) -> ApplicationUser:
+    if current_user.role == "operator":
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Operators cannot access this resource")
+    return current_user
+
+
+RequireNotOperator = Depends(require_not_operator)

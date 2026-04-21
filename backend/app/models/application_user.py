@@ -20,6 +20,7 @@ class ApplicationUserRole(StrEnum):
     ADMIN = "admin"
     REVIEWER = "reviewer"
     VIEWER = "viewer"
+    OPERATOR = "operator"
 
 
 class ApplicationUser(Base):

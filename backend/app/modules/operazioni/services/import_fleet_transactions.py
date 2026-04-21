@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.models.application_user import ApplicationUser
 from app.modules.operazioni.models.fuel_cards import FuelCard, FuelCardAssignmentHistory
-from app.modules.operazioni.models.vehicles import Vehicle, VehicleFuelLog, WCRefuelEvent
+from app.modules.operazioni.models.vehicles import Vehicle, VehicleAssignment, VehicleFuelLog, WCRefuelEvent
 from app.modules.operazioni.models.wc_operator import WCOperator
 
 
@@ -148,9 +148,10 @@ def _build_fuel_card_lookup(db: Session) -> dict[str, FuelCard]:
     cards = db.scalars(select(FuelCard)).all()
     lookup: dict[str, FuelCard] = {}
     for card in cards:
-        key = _normalize_lookup_key(card.codice)
-        if key and key not in lookup:
-            lookup[key] = card
+        for candidate in (card.codice, card.sigla, card.cod):
+            key = _normalize_lookup_key(candidate)
+            if key and key not in lookup:
+                lookup[key] = card
     return lookup
 
 
@@ -252,6 +253,115 @@ def _resolve_matching_wc_refuel_event(
     return best[3] if best is not None else None
 
 
+def _match_vehicle_via_fuel_card(
+    db: Session,
+    *,
+    row: dict[str, Any],
+    fuel_card_lookup: dict[str, FuelCard],
+    fueled_at: datetime,
+    vehicle_lookup: dict[str, Vehicle],
+) -> tuple[Vehicle | None, str | None]:
+    """Returns (vehicle, failure_reason). failure_reason is None on success."""
+    fuel_card = _resolve_fuel_card(row, fuel_card_lookup)
+    if fuel_card is None:
+        return None, f"tessera non trovata per Identificativo={_normalize_text(row.get('Identificativo')) or '-'}"
+
+    assignment = db.scalar(
+        select(FuelCardAssignmentHistory)
+        .where(FuelCardAssignmentHistory.fuel_card_id == fuel_card.id)
+        .where(FuelCardAssignmentHistory.start_at <= fueled_at)
+        .where(
+            (FuelCardAssignmentHistory.end_at.is_(None))
+            | (FuelCardAssignmentHistory.end_at > fueled_at)
+        )
+        .order_by(FuelCardAssignmentHistory.start_at.desc())
+    )
+    wc_operator_id = assignment.wc_operator_id if assignment is not None else fuel_card.current_wc_operator_id
+    if wc_operator_id is None:
+        return None, f"tessera {_normalize_text(row.get('Identificativo')) or '-'} senza operatore assegnato alla data"
+
+    wc_operator = db.scalar(select(WCOperator).where(WCOperator.id == wc_operator_id))
+    if wc_operator is None:
+        return None, f"operatore WC {wc_operator_id} non trovato"
+    if wc_operator.gaia_user_id is None:
+        op_name = " ".join(p for p in [wc_operator.last_name, wc_operator.first_name] if p) or wc_operator.username or str(wc_operator_id)
+        return None, f"operatore WC '{op_name}' non collegato a utente GAIA"
+
+    vehicle_assignment = db.scalar(
+        select(VehicleAssignment)
+        .where(VehicleAssignment.operator_user_id == wc_operator.gaia_user_id)
+        .where(VehicleAssignment.start_at <= fueled_at)
+        .where(
+            (VehicleAssignment.end_at.is_(None))
+            | (VehicleAssignment.end_at > fueled_at)
+        )
+        .order_by(VehicleAssignment.start_at.desc())
+    )
+    if vehicle_assignment is not None:
+        vehicle_id = vehicle_assignment.vehicle_id
+        vehicle = next((v for v in vehicle_lookup.values() if v.id == vehicle_id), None)
+        if vehicle is None:
+            return None, f"mezzo {vehicle_id} non trovato nel catalogo"
+        return vehicle, None
+
+    # Fallback: find vehicle via WCRefuelEvent for this operator
+    from datetime import timedelta
+    fueled_naive = fueled_at.replace(tzinfo=None)
+
+    def _vehicle_from_wc_event(event: WCRefuelEvent) -> Vehicle | None:
+        if event.vehicle_id is not None:
+            return next((v for v in vehicle_lookup.values() if v.id == event.vehicle_id), None)
+        return vehicle_lookup.get(_normalize_lookup_key(event.vehicle_code)) if event.vehicle_code else None
+
+    def _closest_with_vehicle(events: list[WCRefuelEvent]) -> Vehicle | None:
+        by_proximity = sorted(events, key=lambda e: abs((e.fueled_at.replace(tzinfo=None) - fueled_naive).total_seconds()))
+        for ev in by_proximity:
+            v = _vehicle_from_wc_event(ev)
+            if v is not None:
+                return v
+        return None
+
+    # Tier 1: by wc_operator_id within ±60 days
+    nearby = db.scalars(
+        select(WCRefuelEvent)
+        .where(WCRefuelEvent.wc_operator_id == wc_operator_id)
+        .where(WCRefuelEvent.fueled_at >= fueled_naive - timedelta(days=60))
+        .where(WCRefuelEvent.fueled_at <= fueled_naive + timedelta(days=60))
+        .limit(20)
+    ).all()
+    vehicle = _closest_with_vehicle(nearby)
+    if vehicle is not None:
+        return vehicle, None
+
+    # Tier 2: by wc_operator_id at any date (most useful when data predates/postdates window)
+    any_events = db.scalars(
+        select(WCRefuelEvent)
+        .where(WCRefuelEvent.wc_operator_id == wc_operator_id)
+        .order_by(WCRefuelEvent.fueled_at.desc())
+        .limit(10)
+    ).all()
+    vehicle = _closest_with_vehicle(any_events)
+    if vehicle is not None:
+        return vehicle, None
+
+    # Tier 3: by operator_name match (for events where wc_operator_id was not resolved at sync time)
+    op_name_raw = " ".join(p for p in [wc_operator.last_name, wc_operator.first_name] if p)
+    if op_name_raw:
+        name_events = db.scalars(
+            select(WCRefuelEvent)
+            .where(WCRefuelEvent.wc_operator_id.is_(None))
+            .where(WCRefuelEvent.operator_name.ilike(f"%{wc_operator.last_name}%"))
+            .order_by(WCRefuelEvent.fueled_at.desc())
+            .limit(10)
+        ).all()
+        vehicle = _closest_with_vehicle(name_events)
+        if vehicle is not None:
+            return vehicle, None
+
+    op_name = op_name_raw or wc_operator.username or str(wc_operator_id)
+    return None, f"nessun mezzo assegnato all'operatore '{op_name}' alla data del rifornimento"
+
+
 def _match_vehicle(row: dict[str, Any], vehicle_lookup: dict[str, Vehicle]) -> Vehicle | None:
     for candidate in (
         row.get("Targa"),
@@ -314,12 +424,24 @@ def import_fleet_transactions(
         vehicle = _match_vehicle(row, vehicle_lookup)
         fuel_card = _resolve_fuel_card(row, fuel_card_lookup)
 
+        fallback_reason: str | None = None
+        if vehicle is None and fueled_at is not None:
+            vehicle, fallback_reason = _match_vehicle_via_fuel_card(
+                db,
+                row=row,
+                fuel_card_lookup=fuel_card_lookup,
+                fueled_at=fueled_at,
+                vehicle_lookup=vehicle_lookup,
+            )
+
         if vehicle is None:
             skipped += 1
-            errors.append(
-                f"riga:{index}: mezzo non trovato per Targa={_normalize_text(row.get('Targa')) or '-'} "
-                f"Identificativo={_normalize_text(row.get('Identificativo')) or '-'}"
-            )
+            targa = _normalize_text(row.get("Targa")) or "-"
+            ident = _normalize_text(row.get("Identificativo")) or "-"
+            if fallback_reason:
+                errors.append(f"riga:{index}: mezzo non trovato (Targa={targa} · {fallback_reason})")
+            else:
+                errors.append(f"riga:{index}: mezzo non trovato per Targa={targa} Identificativo={ident}")
             continue
         if fueled_at is None:
             skipped += 1

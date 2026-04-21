@@ -8,9 +8,9 @@ import { CatastoPage } from "@/components/catasto/catasto-page";
 import { DataTable } from "@/components/table/data-table";
 import { AlertBanner } from "@/components/ui/alert-banner";
 import { MetricCard } from "@/components/ui/metric-card";
-import { catastoGetDistrettoKpi, catastoListDistretti } from "@/lib/api/catasto";
+import { catastoGetDistrettoKpi, catastoGetImportHistory, catastoListDistretti } from "@/lib/api/catasto";
 import { getStoredAccessToken } from "@/lib/auth";
-import type { CatDistretto, CatDistrettoKpi } from "@/types/catasto";
+import type { CatDistretto, CatDistrettoKpi, CatImportBatch } from "@/types/catasto";
 
 function formatEuro(value: string | number): string {
   const amount = typeof value === "number" ? value : Number(value);
@@ -27,6 +27,14 @@ function currentYear(): number {
   return new Date().getFullYear();
 }
 
+function getLatestImportedAnno(history: CatImportBatch[]): number | null {
+  const candidates = history
+    .filter((b) => b.status === "completed" && typeof b.anno_campagna === "number")
+    .map((b) => b.anno_campagna as number);
+  if (candidates.length === 0) return null;
+  return Math.max(...candidates);
+}
+
 type DistrettoRow = CatDistretto & { kpi: CatDistrettoKpi | null };
 
 export default function CatastoDistrettiPage() {
@@ -35,6 +43,7 @@ export default function CatastoDistrettiPage() {
   const [rows, setRows] = useState<DistrettoRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [annoNotice, setAnnoNotice] = useState<string | null>(null);
 
   useEffect(() => {
     async function load(): Promise<void> {
@@ -43,7 +52,28 @@ export default function CatastoDistrettiPage() {
 
       setIsLoading(true);
       try {
-        const distretti = await catastoListDistretti(token);
+        const [distretti, importHistory] = await Promise.all([
+          catastoListDistretti(token),
+          catastoGetImportHistory(token),
+        ]);
+
+        const latestImportedAnno = getLatestImportedAnno(importHistory);
+        const nowYear = currentYear();
+        if (latestImportedAnno != null && latestImportedAnno !== anno) {
+          setAnno(latestImportedAnno);
+          setAnnoNotice(
+            latestImportedAnno < nowYear
+              ? `L'anno corrente (${nowYear}) non risulta ancora caricato. Mostro i dati dell'anno ${latestImportedAnno}.`
+              : null,
+          );
+          return;
+        }
+        if (latestImportedAnno != null && latestImportedAnno < nowYear) {
+          setAnnoNotice(`L'anno corrente (${nowYear}) non risulta ancora caricato. Mostro i dati dell'anno ${latestImportedAnno}.`);
+        } else {
+          setAnnoNotice(null);
+        }
+
         const kpis = await Promise.all(
           distretti.map(async (d) => {
             try {
@@ -141,6 +171,12 @@ export default function CatastoDistrettiPage() {
         {loadError ? (
           <AlertBanner variant="danger" title="Errore caricamento">
             {loadError}
+          </AlertBanner>
+        ) : null}
+
+        {annoNotice ? (
+          <AlertBanner variant="warning" title="Anno campagna">
+            {annoNotice}
           </AlertBanner>
         ) : null}
 

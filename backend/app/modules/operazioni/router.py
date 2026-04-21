@@ -8,11 +8,16 @@ from app.modules.operazioni.routes.areas import router as areas_router
 from app.modules.operazioni.routes.dashboard import router as dashboard_router
 from app.modules.operazioni.routes.fuel_cards import router as fuel_cards_router
 from app.modules.operazioni.routes.import_reports import router as import_reports_router
+from app.modules.operazioni.routes.operator_invitations import (
+    public_router as operator_invitations_public_router,
+    router as operator_invitations_router,
+)
 from app.modules.operazioni.routes.operators import router as operators_router
 from app.modules.operazioni.routes.reports_dashboard import (
     router as reports_dashboard_router,
 )
 from app.modules.operazioni.routes.reports import router as reports_router
+from app.modules.operazioni.routes.analytics import router as analytics_router
 from app.modules.operazioni.routes.vehicles import router as vehicles_router
 
 router = APIRouter(
@@ -29,7 +34,9 @@ router.include_router(reports_dashboard_router)
 router.include_router(import_reports_router)
 router.include_router(reports_router)
 router.include_router(operators_router)
+router.include_router(operator_invitations_router)
 router.include_router(dashboard_router)
+router.include_router(analytics_router)
 
 
 @router.get("")

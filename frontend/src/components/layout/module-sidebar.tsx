@@ -2,6 +2,7 @@
 
 import {
   AlertTriangleIcon,
+  CalendarIcon,
   CheckIcon,
   DocumentIcon,
   FolderIcon,
@@ -148,6 +149,9 @@ export function ModuleSidebar({
       <div className="space-y-0.5 px-2 pb-3">
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Panoramica</p>
         <NavItem href="/operazioni" icon={GridIcon} label="Dashboard" />
+
+        <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Analisi</p>
+        <NavItem href="/operazioni/analisi" icon={CalendarIcon} label="Analisi operazioni" match="prefix" />
 
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Gestione</p>
         <NavItem href="/operazioni/operatori" icon={UsersIcon} label="Operatori" match="prefix" />

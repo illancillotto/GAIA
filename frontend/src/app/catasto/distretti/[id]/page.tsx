@@ -11,9 +11,15 @@ import { DataTable } from "@/components/table/data-table";
 import type { ColumnDef } from "@tanstack/react-table";
 import { AnomaliaStatusBadge } from "@/components/catasto/AnomaliaStatusBadge";
 import { AnomaliaStatusPill } from "@/components/catasto/AnomaliaStatusPill";
-import { catastoGetDistretto, catastoGetDistrettoKpi, catastoListAnomalie, catastoListParticelle } from "@/lib/api/catasto";
+import {
+  catastoGetDistretto,
+  catastoGetDistrettoKpi,
+  catastoGetImportHistory,
+  catastoListAnomalie,
+  catastoListParticelle,
+} from "@/lib/api/catasto";
 import { getStoredAccessToken } from "@/lib/auth";
-import type { CatAnomalia, CatDistretto, CatDistrettoKpi, CatParticella } from "@/types/catasto";
+import type { CatAnomalia, CatDistretto, CatDistrettoKpi, CatImportBatch, CatParticella } from "@/types/catasto";
 
 function formatEuro(value: string | number): string {
   const amount = typeof value === "number" ? value : Number(value);
@@ -30,6 +36,14 @@ function currentYear(): number {
   return new Date().getFullYear();
 }
 
+function getLatestImportedAnno(history: CatImportBatch[]): number | null {
+  const candidates = history
+    .filter((b) => b.status === "completed" && typeof b.anno_campagna === "number")
+    .map((b) => b.anno_campagna as number);
+  if (candidates.length === 0) return null;
+  return Math.max(...candidates);
+}
+
 type TabKey = "particelle" | "anomalie";
 
 export default function CatastoDistrettoDetailPage() {
@@ -44,6 +58,7 @@ export default function CatastoDistrettoDetailPage() {
   const [anomalie, setAnomalie] = useState<CatAnomalia[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [annoNotice, setAnnoNotice] = useState<string | null>(null);
 
   useEffect(() => {
     async function load(): Promise<void> {
@@ -52,6 +67,24 @@ export default function CatastoDistrettoDetailPage() {
 
       setIsLoading(true);
       try {
+        const importHistory = await catastoGetImportHistory(token);
+        const latestImportedAnno = getLatestImportedAnno(importHistory);
+        const nowYear = currentYear();
+        if (latestImportedAnno != null && latestImportedAnno !== anno) {
+          setAnno(latestImportedAnno);
+          setAnnoNotice(
+            latestImportedAnno < nowYear
+              ? `L'anno corrente (${nowYear}) non risulta ancora caricato. Mostro i dati dell'anno ${latestImportedAnno}.`
+              : null,
+          );
+          return;
+        }
+        if (latestImportedAnno != null && latestImportedAnno < nowYear) {
+          setAnnoNotice(`L'anno corrente (${nowYear}) non risulta ancora caricato. Mostro i dati dell'anno ${latestImportedAnno}.`);
+        } else {
+          setAnnoNotice(null);
+        }
+
         const [d, k] = await Promise.all([
           catastoGetDistretto(token, distrettoId),
           catastoGetDistrettoKpi(token, distrettoId, anno),
@@ -147,6 +180,12 @@ export default function CatastoDistrettoDetailPage() {
         {loadError ? (
           <AlertBanner variant="danger" title="Errore caricamento">
             {loadError}
+          </AlertBanner>
+        ) : null}
+
+        {annoNotice ? (
+          <AlertBanner variant="warning" title="Anno campagna">
+            {annoNotice}
           </AlertBanner>
         ) : null}
 

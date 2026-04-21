@@ -1,5 +1,6 @@
 from app.core.database import Base
 from app.models.application_user import ApplicationUser
+from app.models.operator_invitation import OperatorInvitation
 from app.models.bonifica_oristanese import BonificaOristaneseCredential
 from app.models.capacitas import CapacitasCredential
 from app.models.wc_sync_job import WCSyncJob
@@ -89,6 +90,7 @@ __all__ = [
     "EffectivePermission",
     "FloorPlan",
     "NasGroup",
+    "OperatorInvitation",
     "NasUser",
     "NetworkAlert",
     "NetworkDevice",

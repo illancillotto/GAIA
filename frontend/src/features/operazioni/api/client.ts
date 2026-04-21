@@ -361,6 +361,69 @@ export async function getOperator(id: string) {
   return fetchOperazioni(`/operators/${id}`);
 }
 
+export async function getUnlinkedOperators() {
+  return fetchOperazioni("/operators/unlinked");
+}
+
+export async function getGaiaUsersForLinking(search?: string) {
+  const qs = search ? `?${new URLSearchParams({ search }).toString()}` : "";
+  return fetchOperazioni(`/operators/gaia-users${qs}`);
+}
+
+export async function autoLinkGaiaOperators(): Promise<{ linked: number; already_linked: number; skipped: number }> {
+  return fetchOperazioni("/operators/auto-link-gaia", { method: "POST" });
+}
+
+export async function linkGaiaUser(operatorId: string, gaiaUserId: number): Promise<unknown> {
+  return fetchOperazioni(`/operators/${operatorId}/link-gaia`, {
+    method: "POST",
+    body: JSON.stringify({ gaia_user_id: gaiaUserId }),
+  });
+}
+
+export async function unlinkGaiaUser(operatorId: string): Promise<unknown> {
+  return fetchOperazioni(`/operators/${operatorId}/unlink-gaia`, { method: "POST" });
+}
+
+export async function inviteOperator(wcOperatorId: string): Promise<{
+  token: string;
+  expires_at: string;
+  activation_url_path: string;
+  already_activated: boolean;
+}> {
+  return fetchOperazioni(`/operators/${wcOperatorId}/invite`, { method: "POST" });
+}
+
+export async function getInvitationStatus(wcOperatorId: string): Promise<{
+  has_pending: boolean;
+  has_activated: boolean;
+  token: string | null;
+  expires_at: string | null;
+  activated_at: string | null;
+  gaia_user_id: number | null;
+}> {
+  return fetchOperazioni(`/operators/${wcOperatorId}/invitation-status`);
+}
+
+export interface BulkImportedOperator {
+  wc_operator_id: string;
+  full_name: string;
+  username: string;
+  temp_password: string;
+  skipped: boolean;
+  skip_reason: string | null;
+}
+
+export interface BulkImportResult {
+  created: number;
+  skipped: number;
+  operators: BulkImportedOperator[];
+}
+
+export async function bulkImportOperatorsAsGaiaUsers(): Promise<BulkImportResult> {
+  return fetchOperazioni("/operators/bulk-import-gaia", { method: "POST" });
+}
+
 // --- Areas ---
 
 export async function getAreas(params?: Record<string, string>) {
@@ -421,4 +484,41 @@ export async function ignoreFuelCardDriver(cardId: string, note?: string | null)
   return fetchOperazioni(`/fuel-cards/${cardId}/ignore${qs}`, {
     method: "POST",
   });
+}
+
+// ─── Analytics ───────────────────────────────────────────────────────────────
+
+export interface AnalyticsParams {
+  from_date?: string;
+  to_date?: string;
+  granularity?: "day" | "week" | "month";
+}
+
+export async function getAnalyticsAvailablePeriods() {
+  return fetchOperazioni(`/analytics/available-periods`);
+}
+
+export async function getAnalyticsSummary(params?: Omit<AnalyticsParams, "granularity">) {
+  const qs = params ? `?${new URLSearchParams(params as Record<string, string>).toString()}` : "";
+  return fetchOperazioni(`/analytics/summary${qs}`);
+}
+
+export async function getAnalyticsFuel(params?: AnalyticsParams) {
+  const qs = params ? `?${new URLSearchParams(params as Record<string, string>).toString()}` : "";
+  return fetchOperazioni(`/analytics/fuel${qs}`);
+}
+
+export async function getAnalyticsKm(params?: AnalyticsParams) {
+  const qs = params ? `?${new URLSearchParams(params as Record<string, string>).toString()}` : "";
+  return fetchOperazioni(`/analytics/km${qs}`);
+}
+
+export async function getAnalyticsWorkHours(params?: AnalyticsParams) {
+  const qs = params ? `?${new URLSearchParams(params as Record<string, string>).toString()}` : "";
+  return fetchOperazioni(`/analytics/work-hours${qs}`);
+}
+
+export async function getAnalyticsAnomalies(params?: AnalyticsParams & { type?: string }) {
+  const qs = params ? `?${new URLSearchParams(params as Record<string, string>).toString()}` : "";
+  return fetchOperazioni(`/analytics/anomalies${qs}`);
 }

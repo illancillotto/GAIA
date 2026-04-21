@@ -14,7 +14,16 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { MetricCard } from "@/components/ui/metric-card";
 import { UsersIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
-import { getAreas, getOperators } from "@/features/operazioni/api/client";
+import {
+  autoLinkGaiaOperators,
+  bulkImportOperatorsAsGaiaUsers,
+  getAreas,
+  getOperators,
+  getUnlinkedOperators,
+  inviteOperator,
+  type BulkImportedOperator,
+  type BulkImportResult,
+} from "@/features/operazioni/api/client";
 
 type OperatorItem = {
   id: string;
@@ -30,6 +39,25 @@ type OperatorItem = {
   wc_synced_at: string | null;
   created_at: string;
   updated_at: string;
+};
+
+type GaiaUserMin = {
+  id: number;
+  username: string;
+  email: string;
+  is_active: boolean;
+};
+
+type UnlinkedOperatorItem = {
+  id: string;
+  wc_id: number;
+  username: string | null;
+  email: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  role: string | null;
+  enabled: boolean;
+  suggested_gaia_user: GaiaUserMin | null;
 };
 
 type AreaItem = {
@@ -174,6 +202,275 @@ function MobileOperatorCard({ operator }: { operator: OperatorItem }) {
   );
 }
 
+const PREVIEW_COUNT = 6;
+
+function CredentialsTable({ operators, onClose }: { operators: BulkImportedOperator[]; onClose: () => void }) {
+  const [copied, setCopied] = useState(false);
+  const created = operators.filter((op) => !op.skipped);
+
+  const copyAll = useCallback(() => {
+    const rows = created.map((op) => `${op.full_name}\t${op.username}\t${op.temp_password}`).join("\n");
+    const header = "Nome\tUsername\tPassword temporanea\n";
+    void navigator.clipboard.writeText(header + rows).then(() => {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    });
+  }, [created]);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-gray-900">
+            {created.length} account creati
+            {operators.length - created.length > 0 && (
+              <span className="ml-2 text-xs font-normal text-gray-500">
+                ({operators.length - created.length} saltati — nome/username mancanti)
+              </span>
+            )}
+          </p>
+          <p className="mt-0.5 text-xs text-gray-500">
+            Copia la tabella e distribuisci le credenziali agli operatori. Le password temporanee devono essere cambiate al primo accesso.
+          </p>
+        </div>
+        <div className="flex gap-2">
+          <button
+            onClick={copyAll}
+            className="rounded-full border border-[#1D4E35] bg-[#1D4E35] px-4 py-2 text-xs font-semibold text-white transition hover:bg-[#163d2a]"
+          >
+            {copied ? "Copiato!" : "Copia tutto"}
+          </button>
+          <button
+            onClick={onClose}
+            className="rounded-full border border-gray-200 bg-white px-4 py-2 text-xs font-semibold text-gray-700 transition hover:bg-gray-50"
+          >
+            Chiudi
+          </button>
+        </div>
+      </div>
+
+      <div className="overflow-x-auto rounded-[16px] border border-[#e6ebe5]">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-[#e6ebe5] bg-[#f9faf8]">
+              <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Nome</th>
+              <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Username</th>
+              <th className="px-4 py-2.5 text-left text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Password temporanea</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#f0f3ef]">
+            {created.map((op) => (
+              <tr key={op.wc_operator_id} className="bg-white hover:bg-[#f9faf8]">
+                <td className="px-4 py-2.5 text-gray-900">{op.full_name}</td>
+                <td className="px-4 py-2.5 font-mono text-[13px] text-gray-700">{op.username}</td>
+                <td className="px-4 py-2.5 font-mono text-[13px] text-emerald-700">{op.temp_password}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function RiconciliazioneGaia() {
+  const [unlinked, setUnlinked] = useState<UnlinkedOperatorItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [autoLinkStatus, setAutoLinkStatus] = useState<string | null>(null);
+  const [invitingId, setInvitingId] = useState<string | null>(null);
+  const [inviteLinks, setInviteLinks] = useState<Record<string, string>>({});
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [bulkImporting, setBulkImporting] = useState(false);
+  const [bulkResult, setBulkResult] = useState<BulkImportResult | null>(null);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const data = await getUnlinkedOperators() as { items: UnlinkedOperatorItem[]; total: number };
+      setUnlinked(data.items ?? []);
+    } catch {
+      // ignore
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => { void load(); }, [load]);
+
+  const handleAutoLink = useCallback(async () => {
+    setAutoLinkStatus("In corso...");
+    try {
+      const result = await autoLinkGaiaOperators();
+      setAutoLinkStatus(`Collegati ${result.linked}, non abbinabili: ${result.skipped}.`);
+      void load();
+    } catch (error) {
+      setAutoLinkStatus(error instanceof Error ? error.message : "Errore");
+    }
+  }, [load]);
+
+  const handleBulkImport = useCallback(async () => {
+    setBulkImporting(true);
+    setBulkError(null);
+    try {
+      const result = await bulkImportOperatorsAsGaiaUsers();
+      setBulkResult(result);
+      void load();
+    } catch (error) {
+      setBulkError(error instanceof Error ? error.message : "Errore durante l'importazione");
+    } finally {
+      setBulkImporting(false);
+    }
+  }, [load]);
+
+  const handleInvite = useCallback(async (operatorId: string) => {
+    setInvitingId(operatorId);
+    try {
+      const result = await inviteOperator(operatorId);
+      const url = `${window.location.origin}${result.activation_url_path}`;
+      setInviteLinks((prev) => ({ ...prev, [operatorId]: url }));
+    } catch {
+      // ignore
+    } finally {
+      setInvitingId(null);
+    }
+  }, []);
+
+  const handleCopy = useCallback((operatorId: string, url: string) => {
+    void navigator.clipboard.writeText(url).then(() => {
+      setCopiedId(operatorId);
+      window.setTimeout(() => setCopiedId(null), 2000);
+    });
+  }, []);
+
+  if (isLoading) return null;
+  if (unlinked.length === 0 && !bulkResult) return null;
+
+  const preview = unlinked.slice(0, PREVIEW_COUNT);
+
+  return (
+    <OperazioniCollectionPanel
+      title="Riconciliazione GAIA"
+      description={
+        bulkResult
+          ? `Importazione completata: ${bulkResult.created} account creati.`
+          : `${unlinked.length} operatori WC senza account GAIA.`
+      }
+      count={bulkResult ? bulkResult.created : unlinked.length}
+    >
+      {bulkResult ? (
+        <CredentialsTable
+          operators={bulkResult.operators}
+          onClose={() => { setBulkResult(null); void load(); }}
+        />
+      ) : (
+        <>
+          {/* primary CTA */}
+          <div className="rounded-[20px] border border-amber-200 bg-gradient-to-br from-amber-50 to-white p-4">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold text-gray-900">
+                  Importa tutti gli operatori come utenti GAIA
+                </p>
+                <p className="mt-1 text-xs text-gray-600">
+                  Crea un account con ruolo <span className="font-mono font-semibold">operator</span> per ognuno dei {unlinked.length} operatori WC non collegati.
+                  Verranno generate password temporanee che potrai distribuire manualmente.
+                </p>
+              </div>
+              <button
+                disabled={bulkImporting}
+                onClick={() => void handleBulkImport()}
+                className="shrink-0 rounded-full bg-[#1D4E35] px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-[#163d2a] disabled:opacity-50"
+              >
+                {bulkImporting ? "Importazione in corso..." : `Importa tutti (${unlinked.length})`}
+              </button>
+            </div>
+            {bulkError && (
+              <p className="mt-3 rounded-[10px] border border-rose-100 bg-rose-50 px-3 py-2 text-xs text-rose-700">{bulkError}</p>
+            )}
+          </div>
+
+          {/* secondary actions */}
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <button
+              onClick={() => void handleAutoLink()}
+              className="rounded-full border border-gray-300 bg-white px-4 py-2 text-xs font-semibold text-gray-700 transition hover:bg-gray-50"
+            >
+              Auto-collega per email / username
+            </button>
+            {autoLinkStatus && (
+              <span className="text-sm text-gray-600">{autoLinkStatus}</span>
+            )}
+          </div>
+
+          {/* preview cards */}
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+            {preview.map((op) => {
+              const name = [op.last_name, op.first_name].filter(Boolean).join(" ") || op.username || `WC ${op.wc_id}`;
+              const initials = name.split(/\s+/).filter(Boolean).map((p) => p[0]).join("").slice(0, 2).toUpperCase();
+              const inviteUrl = inviteLinks[op.id];
+              return (
+                <div
+                  key={op.id}
+                  className="flex flex-col gap-3 overflow-hidden rounded-[24px] border border-amber-100 bg-gradient-to-br from-amber-50 via-white to-white p-4 shadow-sm"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[14px] border border-amber-200 bg-white text-sm font-semibold text-amber-700 shadow-sm">
+                      {initials}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-[0.9rem] font-semibold text-gray-900">{name}</p>
+                      <p className="truncate text-xs text-gray-500">{op.role ?? "—"} · WC {op.wc_id}</p>
+                    </div>
+                    <span className={cn(
+                      "ml-auto shrink-0 rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide",
+                      op.enabled ? "bg-emerald-50 text-emerald-700" : "bg-gray-100 text-gray-500"
+                    )}>
+                      {op.enabled ? "Attivo" : "Off"}
+                    </span>
+                  </div>
+
+                  {op.email && <p className="truncate text-xs text-gray-500">{op.email}</p>}
+
+                  {inviteUrl ? (
+                    <div className="space-y-1.5">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-emerald-700">Link di attivazione</p>
+                      <div className="flex items-center gap-2 rounded-[10px] border border-emerald-100 bg-emerald-50 px-2.5 py-2">
+                        <p className="min-w-0 flex-1 truncate text-[11px] text-emerald-800 font-mono">{inviteUrl}</p>
+                        <button
+                          onClick={() => handleCopy(op.id, inviteUrl)}
+                          className="shrink-0 rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-[10px] font-semibold text-emerald-700 transition hover:bg-emerald-100"
+                        >
+                          {copiedId === op.id ? "Copiato!" : "Copia"}
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-gray-400">Condividi questo link con l&apos;operatore. Scade in 7 giorni.</p>
+                    </div>
+                  ) : (
+                    <button
+                      disabled={invitingId === op.id}
+                      onClick={() => void handleInvite(op.id)}
+                      className="w-full rounded-full border border-amber-300 bg-amber-50 py-2 text-xs font-semibold text-amber-800 transition hover:bg-amber-100 disabled:opacity-50"
+                    >
+                      {invitingId === op.id ? "Generazione link..." : "Genera link di attivazione"}
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {unlinked.length > PREVIEW_COUNT && (
+            <p className="mt-3 text-xs text-gray-400">
+              Anteprima dei primi {PREVIEW_COUNT} su {unlinked.length}. Usa &quot;Importa tutti&quot; per creare account per tutti gli operatori in una volta sola.
+            </p>
+          )}
+        </>
+      )}
+    </OperazioniCollectionPanel>
+  );
+}
+
 function normalizeSearch(value: string): string {
   return value.trim();
 }
@@ -305,6 +602,8 @@ function OperatoriContent() {
         <MetricCard label="Disabilitati" value={metrics.disabledCount} sub="non attivi" />
         <MetricCard label="Ruoli" value={metrics.roleCount} sub="raggruppamenti" variant="info" />
       </OperazioniMetricStrip>
+
+      <RiconciliazioneGaia />
 
       <OperazioniCollectionPanel
         title="Operatori"
