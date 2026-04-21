@@ -32,6 +32,8 @@ from app.modules.catasto.services.validation import (
 from tests.catasto_fixtures import (
     build_capacitas_dataframe,
     build_capacitas_workbook_bytes,
+    build_oristanese_dirty_capacitas_dataframe,
+    build_oristanese_dirty_capacitas_workbook_bytes,
     build_oristanese_territorial_capacitas_dataframe,
     build_oristanese_territorial_capacitas_workbook_bytes,
 )
@@ -781,6 +783,34 @@ def test_import_capacitas_excel_accepts_realistic_oristanese_fixture() -> None:
         assert batch.righe_importate == len(df)
         assert len(utenze) == len(df)
         assert {u.cod_comune_istat for u in utenze if u.cod_comune_istat is not None}.issuperset({165, 200, 212})
+    finally:
+        db.close()
+
+
+def test_import_capacitas_excel_accepts_dirty_oristanese_workbook_fixture() -> None:
+    df = build_oristanese_dirty_capacitas_dataframe()
+    db = TestingSessionLocal()
+    try:
+        batch = import_capacitas_excel(
+            db=db,
+            file_bytes=build_oristanese_dirty_capacitas_workbook_bytes(df),
+            filename="ruoli-oristanese-dirty-fixture.xlsx",
+            created_by=1,
+        )
+        utenze = db.query(CatUtenzaIrrigua).filter(CatUtenzaIrrigua.import_batch_id == batch.id).all()
+        anomalie = db.query(CatAnomalia).filter(CatAnomalia.utenza_id.isnot(None)).all()
+
+        assert batch.status == "completed"
+        assert batch.righe_importate == len(df)
+        assert len(utenze) == len(df)
+        assert batch.righe_anomalie >= 3
+        assert {u.cod_comune_istat for u in utenze if u.cod_comune_istat is not None}.issuperset({165, 212, 222, 239, 280, 283})
+        assert any(u.codice_fiscale == "DNIFSE64C01L122Y" for u in utenze)
+        assert any(u.anomalia_cf_mancante for u in utenze)
+        assert any(u.anomalia_cf_invalido for u in utenze)
+        assert any(u.anomalia_comune_invalido for u in utenze)
+        assert any(a.tipo == "VAL-04-comune_invalido" for a in anomalie)
+        assert any(a.tipo == "VAL-03-cf_mancante" for a in anomalie)
     finally:
         db.close()
 
