@@ -600,6 +600,43 @@ def test_particella_detail_history_utenze_and_anomalie_endpoints() -> None:
     assert anomalie_response.json()[0]["tipo"] == "VAL-06-imponibile"
 
 
+def test_particelle_endpoint_supports_combined_lookup_filters() -> None:
+    db = TestingSessionLocal()
+    try:
+        seed_anomalie_workflow_data(db)
+    finally:
+        db.close()
+
+    response = client.get(
+        "/catasto/particelle/?comune=165&foglio=5&particella=120&distretto=10&anno=2025&cf=RSSMRA80A01H501U&ha_anomalie=true",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 1
+    assert payload[0]["cod_comune_istat"] == 165
+    assert payload[0]["foglio"] == "5"
+    assert payload[0]["particella"] == "120"
+    assert payload[0]["num_distretto"] == "10"
+
+
+def test_particelle_endpoint_returns_empty_when_combined_filters_conflict() -> None:
+    db = TestingSessionLocal()
+    try:
+        seed_anomalie_workflow_data(db)
+    finally:
+        db.close()
+
+    response = client.get(
+        "/catasto/particelle/?comune=165&foglio=5&particella=120&distretto=10&anno=2025&cf=RSSMRA80A01H501U&ha_anomalie=false",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
 def test_import_history_and_report_endpoints_return_batch_data() -> None:
     db = TestingSessionLocal()
     try:
