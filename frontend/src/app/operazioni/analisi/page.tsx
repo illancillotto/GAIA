@@ -11,7 +11,6 @@ import { OperazioniModulePage } from "@/components/operazioni/operazioni-module-
 import { MetricCard } from "@/components/ui/metric-card";
 import {
   AlertTriangleIcon,
-  GridIcon,
   TruckIcon,
   UsersIcon,
 } from "@/components/ui/icons";
@@ -45,7 +44,7 @@ interface Summary {
   total_fuel_cost: number; total_work_hours: number; active_sessions: number;
   anomaly_count: number; avg_consumption_l_per_100km: number | null;
 }
-interface FuelData { time_series: TimeSeriesPoint[]; cost_series: TimeSeriesPoint[]; top_vehicles: FuelTopItem[]; top_operators: FuelTopItem[]; total_liters: number; total_cost: number; avg_liters_per_refuel: number }
+interface FuelData { time_series: TimeSeriesPoint[]; cost_series: TimeSeriesPoint[]; top_vehicles: FuelTopItem[]; top_operators: FuelTopItem[]; total_liters: number; total_cost: number; avg_liters_per_refuel: number; storno_count?: number; storno_liters?: number; storno_cost?: number }
 interface KmData { time_series: TimeSeriesPoint[]; top_vehicles: KmTopItem[]; top_operators: KmTopItem[]; total_km: number; avg_km_per_session: number }
 interface WorkHoursData { time_series: TimeSeriesPoint[]; top_operators: WorkHoursOperatorItem[]; by_team: WorkHoursTeamItem[]; by_category: WorkHoursCategoryItem[]; total_hours: number; avg_hours_per_operator: number }
 interface AnomaliesData { items: AnomalyItem[]; total: number; by_type: Record<string, number>; by_severity: Record<string, number> }
@@ -139,14 +138,15 @@ function CarburantePanel({ params }: { params: { from_date?: string; to_date?: s
   const [data, setData] = useState<FuelData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { from_date, to_date, granularity } = params;
 
   useEffect(() => {
     setLoading(true);
-    getAnalyticsFuel(params)
+    getAnalyticsFuel({ from_date, to_date, granularity })
       .then(setData)
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [params.from_date, params.to_date, params.granularity]);
+  }, [from_date, to_date, granularity]);
 
   if (loading) return <div className="grid gap-4 md:grid-cols-2"><LoadingCard /><LoadingCard /></div>;
   if (error || !data) return <p className="text-sm text-rose-600">{error ?? "Errore caricamento"}</p>;
@@ -154,10 +154,30 @@ function CarburantePanel({ params }: { params: { from_date?: string; to_date?: s
   return (
     <div className="space-y-4">
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <MetricCard label="Litri totali" value={`${data.total_liters.toLocaleString("it-IT")} L`} sub="Nel periodo selezionato" />
-        <MetricCard label="Costo totale" value={`€ ${data.total_cost.toLocaleString("it-IT", { minimumFractionDigits: 2 })}`} sub="Spesa carburante" variant="info" />
-        <MetricCard label="Media per rifornimento" value={`${data.avg_liters_per_refuel} L`} sub="Litri medi a rifornimento" />
+        <MetricCard label="Litri netti" value={`${data.total_liters.toLocaleString("it-IT")} L`} sub="Rifornimenti − storni" />
+        <MetricCard label="Costo netto" value={`€ ${data.total_cost.toLocaleString("it-IT", { minimumFractionDigits: 2 })}`} sub="Spesa carburante netta" variant="info" />
+        <MetricCard label="Media per rifornimento" value={`${data.avg_liters_per_refuel} L`} sub="Litri medi (solo positivi)" />
       </div>
+
+      {(data.storno_count ?? 0) > 0 && (
+        <div className="grid gap-4 md:grid-cols-3">
+          <div className="rounded-[20px] border border-amber-200 bg-amber-50 px-4 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-700">Storni</p>
+            <p className="mt-1.5 text-2xl font-semibold text-amber-900">{data.storno_count}</p>
+            <p className="mt-0.5 text-xs text-amber-700">transazioni di rettifica</p>
+          </div>
+          <div className="rounded-[20px] border border-amber-200 bg-amber-50 px-4 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-700">Litri stornati</p>
+            <p className="mt-1.5 text-2xl font-semibold text-amber-900">{(data.storno_liters ?? 0).toLocaleString("it-IT")} L</p>
+            <p className="mt-0.5 text-xs text-amber-700">volume rettificato</p>
+          </div>
+          <div className="rounded-[20px] border border-amber-200 bg-amber-50 px-4 py-3">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-amber-700">Costo stornato</p>
+            <p className="mt-1.5 text-2xl font-semibold text-amber-900">€ {(data.storno_cost ?? 0).toLocaleString("it-IT", { minimumFractionDigits: 2 })}</p>
+            <p className="mt-0.5 text-xs text-amber-700">importo rettificato</p>
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-2">
         <SectionCard title="Consumi carburante (litri)">
@@ -226,14 +246,15 @@ function KmPanel({ params }: { params: { from_date?: string; to_date?: string; g
   const [data, setData] = useState<KmData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { from_date, to_date, granularity } = params;
 
   useEffect(() => {
     setLoading(true);
-    getAnalyticsKm(params)
+    getAnalyticsKm({ from_date, to_date, granularity })
       .then(setData)
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [params.from_date, params.to_date, params.granularity]);
+  }, [from_date, to_date, granularity]);
 
   if (loading) return <div className="grid gap-4 md:grid-cols-2"><LoadingCard /><LoadingCard /></div>;
   if (error || !data) return <p className="text-sm text-rose-600">{error ?? "Errore caricamento"}</p>;
@@ -292,14 +313,15 @@ function OrePanel({ params }: { params: { from_date?: string; to_date?: string; 
   const [data, setData] = useState<WorkHoursData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { from_date, to_date, granularity } = params;
 
   useEffect(() => {
     setLoading(true);
-    getAnalyticsWorkHours(params)
+    getAnalyticsWorkHours({ from_date, to_date, granularity })
       .then(setData)
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [params.from_date, params.to_date, params.granularity]);
+  }, [from_date, to_date, granularity]);
 
   if (loading) return <div className="grid gap-4 md:grid-cols-2"><LoadingCard /><LoadingCard /></div>;
   if (error || !data) return <p className="text-sm text-rose-600">{error ?? "Errore caricamento"}</p>;
@@ -382,14 +404,15 @@ function AnomaliePanel({ params }: { params: { from_date?: string; to_date?: str
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState("");
+  const { from_date, to_date } = params;
 
   const load = useCallback((filter: string) => {
     setLoading(true);
-    getAnalyticsAnomalies({ ...params, ...(filter ? { type: filter } : {}) })
+    getAnalyticsAnomalies({ from_date, to_date, ...(filter ? { type: filter } : {}) })
       .then(setData)
       .catch((e: Error) => setError(e.message))
       .finally(() => setLoading(false));
-  }, [params.from_date, params.to_date]);
+  }, [from_date, to_date]);
 
   useEffect(() => { load(typeFilter); }, [load, typeFilter]);
 

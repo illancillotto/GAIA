@@ -371,9 +371,16 @@ def fuel_analytics(
             refuel_count=count_by_key[fkey],
         ))
 
+    positive_logs = [l for l in logs if (l.liters or 0) > 0]
+    storno_logs = [l for l in logs if (l.liters or 0) < 0]
+
     total_liters = sum(float(l.liters or 0) for l in logs)
     total_cost = sum(float(l.total_cost or 0) for l in logs)
-    avg_per_refuel = round(total_liters / len(logs), 2) if logs else 0
+    avg_per_refuel = round(sum(float(l.liters or 0) for l in positive_logs) / len(positive_logs), 2) if positive_logs else 0
+
+    storno_count = len(storno_logs)
+    storno_liters = sum(float(l.liters or 0) for l in storno_logs)
+    storno_cost = sum(float(l.total_cost or 0) for l in storno_logs)
 
     return FuelAnalytics(
         time_series=time_series,
@@ -383,6 +390,9 @@ def fuel_analytics(
         total_liters=round(total_liters, 2),
         total_cost=round(total_cost, 2),
         avg_liters_per_refuel=avg_per_refuel,
+        storno_count=storno_count,
+        storno_liters=round(storno_liters, 2),
+        storno_cost=round(storno_cost, 2),
     )
 
 

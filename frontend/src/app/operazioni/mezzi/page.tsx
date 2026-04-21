@@ -245,6 +245,9 @@ function MezziContent() {
           <Link href="/operazioni/mezzi/rifornimenti-white" className="btn-secondary">
             Eventi White rifornimenti
           </Link>
+          <Link href="/operazioni/mezzi/transazioni-non-risolte" className="btn-secondary">
+            Transazioni non risolte
+          </Link>
           <button className="btn-primary" type="button" onClick={() => setIsImportModalOpen(true)}>
             Importa transazioni flotte
           </button>

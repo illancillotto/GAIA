@@ -93,6 +93,28 @@ export async function getVehicle(id: string) {
   return fetchOperazioni(`/vehicles/${id}`);
 }
 
+export interface VehicleFuelLogItem {
+  id: string;
+  vehicle_id: string;
+  usage_session_id: string | null;
+  recorded_by_user_id: number;
+  fueled_at: string;
+  liters: string;
+  total_cost: string | null;
+  odometer_km: string | null;
+  station_name: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
+export async function getVehicleFuelLogs(
+  vehicleId: string,
+  params?: Record<string, string>,
+): Promise<{ items: VehicleFuelLogItem[]; total: number; page: number; page_size: number; total_pages: number }> {
+  const qs = params ? `?${new URLSearchParams(params).toString()}` : "";
+  return fetchOperazioni(`/vehicles/${vehicleId}/fuel-logs${qs}`);
+}
+
 export async function createVehicle(data: Record<string, unknown>) {
   return fetchOperazioni("/vehicles", {
     method: "POST",
@@ -204,12 +226,41 @@ export async function importWhiteReports(file: File): Promise<{
   });
 }
 
+export interface UnresolvedRow {
+  db_id: string | null;
+  row_index: number;
+  reason_type: "no_card_operator" | "no_vehicle";
+  reason_detail: string;
+  targa: string | null;
+  identificativo: string | null;
+  fueled_at_iso: string | null;
+  liters: string | null;
+  total_cost: string | null;
+  odometer_km: string | null;
+  operator_name: string | null;
+  wc_operator_id: string | null;
+  card_code: string | null;
+  station_name: string | null;
+  notes_extra: string | null;
+}
+
+export interface PersistedUnresolvedRow extends UnresolvedRow {
+  id: string;
+  import_ref: string;
+  status: "pending" | "resolved" | "skipped";
+  resolved_vehicle_id: string | null;
+  resolved_at: string | null;
+  created_at: string;
+}
+
 export async function importFleetTransactions(file: File): Promise<{
   imported: number;
   skipped: number;
   errors: string[];
   rows_read: number;
+  import_ref: string;
   matched_white_refuels: number;
+  unresolved: UnresolvedRow[];
 }> {
   const formData = new FormData();
   formData.append("file", file);
@@ -217,6 +268,52 @@ export async function importFleetTransactions(file: File): Promise<{
     method: "POST",
     body: formData,
   });
+}
+
+export interface ResolvedTransactionPayload {
+  vehicle_id: string;
+  fueled_at_iso: string;
+  liters: string;
+  total_cost: string | null;
+  odometer_km: string | null;
+  card_code: string | null;
+  station_name: string | null;
+  notes_extra: string | null;
+  unresolved_id: string | null;
+}
+
+export async function resolveFleetTransactions(
+  resolutions: ResolvedTransactionPayload[],
+): Promise<{ imported: number; skipped: number; errors: string[] }> {
+  return fetchOperazioni("/vehicles/fuel-logs/resolve-fleet-transactions", {
+    method: "POST",
+    body: JSON.stringify(resolutions),
+  });
+}
+
+export async function skipUnresolvedTransaction(id: string): Promise<void> {
+  await fetchOperazioni(`/vehicles/fuel-logs/unresolved-transactions/${id}/skip`, {
+    method: "POST",
+  });
+}
+
+export async function getUnresolvedTransactions(params?: {
+  status_filter?: string;
+  page?: number;
+  page_size?: number;
+}): Promise<{
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+  items: PersistedUnresolvedRow[];
+}> {
+  const p = new URLSearchParams();
+  if (params?.status_filter) p.set("status_filter", params.status_filter);
+  if (params?.page) p.set("page", String(params.page));
+  if (params?.page_size) p.set("page_size", String(params.page_size));
+  const qs = p.toString() ? `?${p.toString()}` : "";
+  return fetchOperazioni(`/vehicles/fuel-logs/unresolved-transactions${qs}`);
 }
 
 export async function getWhiteRefuelEvents(params?: Record<string, string>) {

@@ -348,6 +348,41 @@ class VehicleMaintenance(Base):
     )
 
 
+class FleetUnresolvedTransaction(Base):
+    __tablename__ = "fleet_unresolved_transaction"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    import_ref: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="pending", index=True)
+    row_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    reason_type: Mapped[str] = mapped_column(String(50), nullable=False)
+    reason_detail: Mapped[str] = mapped_column(Text, nullable=False)
+    targa: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    identificativo: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    fueled_at_iso: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    liters: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    total_cost: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    odometer_km: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    operator_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    wc_operator_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    card_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    station_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    notes_extra: Mapped[str | None] = mapped_column(Text, nullable=True)
+    resolved_vehicle_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("vehicle.id"), nullable=True
+    )
+    resolved_by_user_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("application_users.id"), nullable=True
+    )
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    created_by_user_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("application_users.id"), nullable=True
+    )
+
+
 class VehicleDocument(Base):
     __tablename__ = "vehicle_document"
 

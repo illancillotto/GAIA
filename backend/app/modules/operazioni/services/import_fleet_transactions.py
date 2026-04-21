@@ -14,10 +14,40 @@ from openpyxl import load_workbook
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+import uuid as _uuid_mod
+
 from app.models.application_user import ApplicationUser
 from app.modules.operazioni.models.fuel_cards import FuelCard, FuelCardAssignmentHistory
-from app.modules.operazioni.models.vehicles import Vehicle, VehicleAssignment, VehicleFuelLog, WCRefuelEvent
+from app.modules.operazioni.models.vehicles import FleetUnresolvedTransaction, Vehicle, VehicleAssignment, VehicleFuelLog, WCRefuelEvent
 from app.modules.operazioni.models.wc_operator import WCOperator
+
+
+@dataclass
+class UnresolvedRow:
+    row_index: int
+    reason_type: str          # "no_card_operator" | "no_vehicle"
+    reason_detail: str
+    targa: str | None
+    identificativo: str | None
+    fueled_at_iso: str | None
+    liters: str | None
+    total_cost: str | None
+    odometer_km: str | None
+    operator_name: str | None
+    wc_operator_id: str | None
+    card_code: str | None
+    station_name: str | None
+    notes_extra: str | None
+    db_id: str | None = None  # set after DB persist
+
+
+@dataclass
+class _FallbackResult:
+    vehicle: Vehicle | None
+    reason_type: str | None       # None on success
+    reason_detail: str | None
+    operator_name: str | None
+    wc_operator_id: str | None
 
 
 @dataclass
@@ -26,7 +56,13 @@ class FleetTransactionsImportResult:
     skipped: int
     errors: list[str]
     rows_read: int
+    import_ref: str = ""
     matched_white_refuels: int = 0
+    unresolved: list[UnresolvedRow] = None  # type: ignore[assignment]
+
+    def __post_init__(self) -> None:
+        if self.unresolved is None:
+            self.unresolved = []
 
 
 def _normalize_header(value: Any) -> str:
@@ -260,11 +296,12 @@ def _match_vehicle_via_fuel_card(
     fuel_card_lookup: dict[str, FuelCard],
     fueled_at: datetime,
     vehicle_lookup: dict[str, Vehicle],
-) -> tuple[Vehicle | None, str | None]:
-    """Returns (vehicle, failure_reason). failure_reason is None on success."""
+) -> _FallbackResult:
+    ident_raw = _normalize_text(row.get("Identificativo")) or "-"
+
     fuel_card = _resolve_fuel_card(row, fuel_card_lookup)
     if fuel_card is None:
-        return None, f"tessera non trovata per Identificativo={_normalize_text(row.get('Identificativo')) or '-'}"
+        return _FallbackResult(None, "no_card_operator", f"tessera non trovata per Identificativo={ident_raw}", None, None)
 
     assignment = db.scalar(
         select(FuelCardAssignmentHistory)
@@ -278,14 +315,16 @@ def _match_vehicle_via_fuel_card(
     )
     wc_operator_id = assignment.wc_operator_id if assignment is not None else fuel_card.current_wc_operator_id
     if wc_operator_id is None:
-        return None, f"tessera {_normalize_text(row.get('Identificativo')) or '-'} senza operatore assegnato alla data"
+        return _FallbackResult(None, "no_card_operator", f"tessera {ident_raw} senza operatore assegnato alla data", None, None)
 
     wc_operator = db.scalar(select(WCOperator).where(WCOperator.id == wc_operator_id))
     if wc_operator is None:
-        return None, f"operatore WC {wc_operator_id} non trovato"
+        return _FallbackResult(None, "no_card_operator", f"operatore WC {wc_operator_id} non trovato", None, str(wc_operator_id))
+
+    op_name = " ".join(p for p in [wc_operator.last_name, wc_operator.first_name] if p) or wc_operator.username or str(wc_operator_id)
+
     if wc_operator.gaia_user_id is None:
-        op_name = " ".join(p for p in [wc_operator.last_name, wc_operator.first_name] if p) or wc_operator.username or str(wc_operator_id)
-        return None, f"operatore WC '{op_name}' non collegato a utente GAIA"
+        return _FallbackResult(None, "no_vehicle", f"operatore WC '{op_name}' non collegato a utente GAIA", op_name, str(wc_operator_id))
 
     vehicle_assignment = db.scalar(
         select(VehicleAssignment)
@@ -298,11 +337,10 @@ def _match_vehicle_via_fuel_card(
         .order_by(VehicleAssignment.start_at.desc())
     )
     if vehicle_assignment is not None:
-        vehicle_id = vehicle_assignment.vehicle_id
-        vehicle = next((v for v in vehicle_lookup.values() if v.id == vehicle_id), None)
+        vehicle = next((v for v in vehicle_lookup.values() if v.id == vehicle_assignment.vehicle_id), None)
         if vehicle is None:
-            return None, f"mezzo {vehicle_id} non trovato nel catalogo"
-        return vehicle, None
+            return _FallbackResult(None, "no_vehicle", f"mezzo {vehicle_assignment.vehicle_id} non trovato nel catalogo", op_name, str(wc_operator_id))
+        return _FallbackResult(vehicle, None, None, op_name, str(wc_operator_id))
 
     # Fallback: find vehicle via WCRefuelEvent for this operator
     from datetime import timedelta
@@ -321,45 +359,27 @@ def _match_vehicle_via_fuel_card(
                 return v
         return None
 
-    # Tier 1: by wc_operator_id within ±60 days
-    nearby = db.scalars(
+    for query in (
         select(WCRefuelEvent)
         .where(WCRefuelEvent.wc_operator_id == wc_operator_id)
         .where(WCRefuelEvent.fueled_at >= fueled_naive - timedelta(days=60))
         .where(WCRefuelEvent.fueled_at <= fueled_naive + timedelta(days=60))
-        .limit(20)
-    ).all()
-    vehicle = _closest_with_vehicle(nearby)
-    if vehicle is not None:
-        return vehicle, None
-
-    # Tier 2: by wc_operator_id at any date (most useful when data predates/postdates window)
-    any_events = db.scalars(
+        .limit(20),
         select(WCRefuelEvent)
         .where(WCRefuelEvent.wc_operator_id == wc_operator_id)
         .order_by(WCRefuelEvent.fueled_at.desc())
-        .limit(10)
-    ).all()
-    vehicle = _closest_with_vehicle(any_events)
-    if vehicle is not None:
-        return vehicle, None
-
-    # Tier 3: by operator_name match (for events where wc_operator_id was not resolved at sync time)
-    op_name_raw = " ".join(p for p in [wc_operator.last_name, wc_operator.first_name] if p)
-    if op_name_raw:
-        name_events = db.scalars(
-            select(WCRefuelEvent)
-            .where(WCRefuelEvent.wc_operator_id.is_(None))
-            .where(WCRefuelEvent.operator_name.ilike(f"%{wc_operator.last_name}%"))
-            .order_by(WCRefuelEvent.fueled_at.desc())
-            .limit(10)
-        ).all()
-        vehicle = _closest_with_vehicle(name_events)
+        .limit(10),
+        select(WCRefuelEvent)
+        .where(WCRefuelEvent.wc_operator_id.is_(None))
+        .where(WCRefuelEvent.operator_name.ilike(f"%{wc_operator.last_name}%"))
+        .order_by(WCRefuelEvent.fueled_at.desc())
+        .limit(10),
+    ):
+        vehicle = _closest_with_vehicle(db.scalars(query).all())
         if vehicle is not None:
-            return vehicle, None
+            return _FallbackResult(vehicle, None, None, op_name, str(wc_operator_id))
 
-    op_name = op_name_raw or wc_operator.username or str(wc_operator_id)
-    return None, f"nessun mezzo assegnato all'operatore '{op_name}' alla data del rifornimento"
+    return _FallbackResult(None, "no_vehicle", f"nessun mezzo assegnato all'operatore '{op_name}' alla data del rifornimento", op_name, str(wc_operator_id))
 
 
 def _match_vehicle(row: dict[str, Any], vehicle_lookup: dict[str, Vehicle]) -> Vehicle | None:
@@ -400,6 +420,22 @@ def _find_existing_fuel_log(
     return None
 
 
+def _build_station_name(row: dict[str, Any]) -> str | None:
+    parts = [_normalize_text(row.get("Impianto")), _normalize_text(row.get("Città"))]
+    return " - ".join(p for p in parts if p) or None
+
+
+def _build_notes_extra(row: dict[str, Any]) -> str:
+    return (
+        "Import automatico transazioni flotte"
+        f" | ticket={_normalize_text(row.get('N. ticket')) or '-'}"
+        f" | pan={_normalize_text(row.get('PAN Carta')) or '-'}"
+        f" | prodotto={_normalize_text(row.get('Prod.')) or '-'}"
+        f" | identificativo={_normalize_text(row.get('Identificativo')) or '-'}"
+        f" | indirizzo={_normalize_text(row.get('Indirizzo')) or '-'}"
+    )
+
+
 def import_fleet_transactions(
     *,
     db: Session,
@@ -410,10 +446,12 @@ def import_fleet_transactions(
     vehicle_lookup = _build_vehicle_lookup(db)
     fuel_card_lookup = _build_fuel_card_lookup(db)
     operator_lookup = _build_operator_lookup(db)
+    import_ref = str(_uuid_mod.uuid4())
     imported = 0
     skipped = 0
     matched_white_refuels = 0
     errors: list[str] = []
+    unresolved: list[UnresolvedRow] = []
 
     for index, row in enumerate(rows, start=1):
         fueled_at = _parse_datetime(row.get("Data"), row.get("Ora"))
@@ -424,32 +462,47 @@ def import_fleet_transactions(
         vehicle = _match_vehicle(row, vehicle_lookup)
         fuel_card = _resolve_fuel_card(row, fuel_card_lookup)
 
-        fallback_reason: str | None = None
+        fallback: _FallbackResult | None = None
         if vehicle is None and fueled_at is not None:
-            vehicle, fallback_reason = _match_vehicle_via_fuel_card(
+            fallback = _match_vehicle_via_fuel_card(
                 db,
                 row=row,
                 fuel_card_lookup=fuel_card_lookup,
                 fueled_at=fueled_at,
                 vehicle_lookup=vehicle_lookup,
             )
+            vehicle = fallback.vehicle
+
+        if fueled_at is None:
+            skipped += 1
+            errors.append(f"riga:{index}: data/ora transazione non valida")
+            continue
+        if liters is None:
+            skipped += 1
+            continue
 
         if vehicle is None:
             skipped += 1
             targa = _normalize_text(row.get("Targa")) or "-"
             ident = _normalize_text(row.get("Identificativo")) or "-"
-            if fallback_reason:
-                errors.append(f"riga:{index}: mezzo non trovato (Targa={targa} · {fallback_reason})")
-            else:
-                errors.append(f"riga:{index}: mezzo non trovato per Targa={targa} Identificativo={ident}")
-            continue
-        if fueled_at is None:
-            skipped += 1
-            errors.append(f"riga:{index}: data/ora transazione non valida")
-            continue
-        if liters is None or liters <= 0:
-            skipped += 1
-            errors.append(f"riga:{index}: volume non valido")
+            reason_type = fallback.reason_type if fallback else "no_vehicle"
+            reason_detail = fallback.reason_detail if fallback else f"mezzo non trovato per Targa={targa}"
+            unresolved.append(UnresolvedRow(
+                row_index=index,
+                reason_type=reason_type or "no_vehicle",
+                reason_detail=reason_detail or "",
+                targa=targa,
+                identificativo=ident,
+                fueled_at_iso=fueled_at.isoformat(),
+                liters=str(liters),
+                total_cost=str(total_cost) if total_cost is not None else None,
+                odometer_km=str(odometer_km) if odometer_km is not None else None,
+                operator_name=fallback.operator_name if fallback else None,
+                wc_operator_id=fallback.wc_operator_id if fallback else None,
+                card_code=ident,
+                station_name=_build_station_name(row),
+                notes_extra=_build_notes_extra(row),
+            ))
             continue
 
         existing = _find_existing_fuel_log(
@@ -477,19 +530,8 @@ def import_fleet_transactions(
             operator_lookup=operator_lookup,
         )
 
-        station_name_parts = [
-            _normalize_text(row.get("Impianto")),
-            _normalize_text(row.get("Città")),
-        ]
-        station_name = " - ".join(part for part in station_name_parts if part) or None
-        notes = (
-            "Import automatico transazioni flotte"
-            f" | ticket={_normalize_text(row.get('N. ticket')) or '-'}"
-            f" | pan={_normalize_text(row.get('PAN Carta')) or '-'}"
-            f" | prodotto={_normalize_text(row.get('Prod.')) or '-'}"
-            f" | identificativo={_normalize_text(row.get('Identificativo')) or '-'}"
-            f" | indirizzo={_normalize_text(row.get('Indirizzo')) or '-'}"
-        )
+        station_name = _build_station_name(row)
+        notes = _build_notes_extra(row)
 
         fuel_log = VehicleFuelLog(
             vehicle_id=vehicle.id,
@@ -514,11 +556,152 @@ def import_fleet_transactions(
             matched_white_refuels += 1
         imported += 1
 
+    # Persist unresolved rows to DB
+    for u in unresolved:
+        db_row = FleetUnresolvedTransaction(
+            import_ref=import_ref,
+            status="pending",
+            row_index=u.row_index,
+            reason_type=u.reason_type,
+            reason_detail=u.reason_detail,
+            targa=u.targa,
+            identificativo=u.identificativo,
+            fueled_at_iso=u.fueled_at_iso,
+            liters=u.liters,
+            total_cost=u.total_cost,
+            odometer_km=u.odometer_km,
+            operator_name=u.operator_name,
+            wc_operator_id=u.wc_operator_id,
+            card_code=u.card_code,
+            station_name=u.station_name,
+            notes_extra=u.notes_extra,
+            created_by_user_id=current_user.id,
+        )
+        db.add(db_row)
+        db.flush()
+        u.db_id = str(db_row.id)
+
     db.commit()
     return FleetTransactionsImportResult(
         imported=imported,
         skipped=skipped,
         errors=errors[:100],
         rows_read=len(rows),
+        import_ref=import_ref,
         matched_white_refuels=matched_white_refuels,
+        unresolved=unresolved,
     )
+
+
+@dataclass
+class ResolvedTransaction:
+    vehicle_id: UUID
+    fueled_at_iso: str
+    liters: str
+    total_cost: str | None
+    odometer_km: str | None
+    card_code: str | None
+    station_name: str | None
+    notes_extra: str | None
+    unresolved_id: str | None = None  # DB id of the FleetUnresolvedTransaction row
+
+
+@dataclass
+class ResolveFleetResult:
+    imported: int
+    skipped: int
+    errors: list[str]
+
+
+def resolve_fleet_transactions(
+    *,
+    db: Session,
+    current_user: ApplicationUser,
+    resolutions: list[ResolvedTransaction],
+) -> ResolveFleetResult:
+    imported = 0
+    skipped = 0
+    errors: list[str] = []
+
+    for res in resolutions:
+        vehicle = db.get(Vehicle, res.vehicle_id)
+        if vehicle is None:
+            skipped += 1
+            errors.append(f"mezzo {res.vehicle_id} non trovato")
+            continue
+
+        try:
+            fueled_at = datetime.fromisoformat(res.fueled_at_iso)
+        except ValueError:
+            skipped += 1
+            errors.append(f"data non valida: {res.fueled_at_iso}")
+            continue
+
+        liters = _to_decimal(res.liters)
+        total_cost = _to_decimal(res.total_cost) if res.total_cost else None
+        odometer_km = _to_decimal(res.odometer_km) if res.odometer_km else None
+        if liters is None or liters <= 0:
+            skipped += 1
+            errors.append(f"volume non valido per riga con mezzo {res.vehicle_id}")
+            continue
+
+        existing = _find_existing_fuel_log(
+            db,
+            vehicle_id=vehicle.id,
+            fueled_at=fueled_at,
+            liters=liters,
+            total_cost=total_cost,
+            odometer_km=odometer_km,
+        )
+        if existing is not None:
+            skipped += 1
+            continue
+
+        notes = res.notes_extra or "Import manuale transazioni flotte (risolto da wizard)"
+        fuel_log = VehicleFuelLog(
+            vehicle_id=vehicle.id,
+            usage_session_id=None,
+            recorded_by_user_id=current_user.id,
+            fueled_at=fueled_at,
+            liters=liters,
+            total_cost=total_cost,
+            odometer_km=odometer_km,
+            station_name=res.station_name[:150] if res.station_name else None,
+            notes=notes[:1000],
+        )
+        db.add(fuel_log)
+
+        if res.unresolved_id:
+            try:
+                db_row = db.get(FleetUnresolvedTransaction, _uuid_mod.UUID(res.unresolved_id))
+                if db_row is not None:
+                    db_row.status = "resolved"
+                    db_row.resolved_vehicle_id = vehicle.id
+                    db_row.resolved_by_user_id = current_user.id
+                    db_row.resolved_at = datetime.now(UTC)
+            except (ValueError, Exception):
+                pass
+
+        imported += 1
+
+    db.commit()
+    return ResolveFleetResult(imported=imported, skipped=skipped, errors=errors)
+
+
+def skip_unresolved_transaction(
+    *,
+    db: Session,
+    current_user: ApplicationUser,
+    unresolved_id: str,
+) -> bool:
+    try:
+        db_row = db.get(FleetUnresolvedTransaction, _uuid_mod.UUID(unresolved_id))
+    except ValueError:
+        return False
+    if db_row is None:
+        return False
+    db_row.status = "skipped"
+    db_row.resolved_by_user_id = current_user.id
+    db_row.resolved_at = datetime.now(UTC)
+    db.commit()
+    return True

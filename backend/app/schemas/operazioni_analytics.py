@@ -43,6 +43,9 @@ class FuelAnalytics(BaseModel):
     total_liters: float
     total_cost: float
     avg_liters_per_refuel: float
+    storno_count: int = 0
+    storno_liters: float = 0.0
+    storno_cost: float = 0.0
 
 
 # --- Km Analytics ---
