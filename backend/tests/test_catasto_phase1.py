@@ -168,6 +168,125 @@ def seed_phase1_lookup_data(db: Session) -> None:
         )
     )
     db.commit()
+
+
+def seed_additional_distretto_kpi_data(db: Session) -> None:
+    batch_id = db.query(CatImportBatch).filter(CatImportBatch.hash_file == "seed-hash").one().id
+    distretto_20 = CatDistretto(num_distretto="20", nome_distretto="Distretto 20")
+    particella_20 = CatParticella(
+        cod_comune_istat=212,
+        nome_comune="Cabras",
+        foglio="8",
+        particella="321",
+        subalterno=None,
+        num_distretto="20",
+        nome_distretto="Distretto 20",
+        is_current=True,
+        superficie_mq=2500,
+    )
+    db.add_all([distretto_20, particella_20])
+    db.flush()
+
+    particella_10 = db.query(CatParticella).filter(CatParticella.foglio == "5").one()
+
+    db.add_all(
+        [
+            CatUtenzaIrrigua(
+                import_batch_id=batch_id,
+                anno_campagna=2024,
+                cco="UT-SEED-010-2024",
+                cod_comune_istat=165,
+                num_distretto=10,
+                nome_comune="Arborea",
+                foglio="5",
+                particella="120",
+                subalterno="1",
+                particella_id=particella_10.id,
+                sup_catastale_mq=1000,
+                sup_irrigabile_mq=700,
+                imponibile_sf=980,
+                ind_spese_fisse=1.4,
+                aliquota_0648=0.1,
+                importo_0648=98,
+                aliquota_0985=0.15,
+                importo_0985=147,
+                codice_fiscale="FNDGPP63E11B354D",
+                codice_fiscale_raw="FNDGPP63E11B354D",
+            ),
+            CatUtenzaIrrigua(
+                import_batch_id=batch_id,
+                anno_campagna=2025,
+                cco="UT-SEED-020-2025-A",
+                cod_comune_istat=212,
+                num_distretto=20,
+                nome_comune="Cabras",
+                foglio="8",
+                particella="321",
+                subalterno=None,
+                particella_id=particella_20.id,
+                sup_catastale_mq=2500,
+                sup_irrigabile_mq=1200,
+                imponibile_sf=1800,
+                ind_spese_fisse=1.5,
+                aliquota_0648=0.1,
+                importo_0648=180,
+                aliquota_0985=0.2,
+                importo_0985=360,
+                codice_fiscale="00588230953",
+                codice_fiscale_raw="00588230953",
+            ),
+            CatUtenzaIrrigua(
+                import_batch_id=batch_id,
+                anno_campagna=2025,
+                cco="UT-SEED-020-2025-B",
+                cod_comune_istat=212,
+                num_distretto=20,
+                nome_comune="Cabras",
+                foglio="8",
+                particella="321",
+                subalterno=None,
+                particella_id=particella_20.id,
+                sup_catastale_mq=2500,
+                sup_irrigabile_mq=800,
+                imponibile_sf=1200,
+                ind_spese_fisse=1.5,
+                aliquota_0648=0.1,
+                importo_0648=120,
+                aliquota_0985=0.2,
+                importo_0985=240,
+                codice_fiscale="RSSMRA80A01H501U",
+                codice_fiscale_raw="RSSMRA80A01H501U",
+            ),
+        ]
+    )
+    db.flush()
+
+    utenze_20 = db.query(CatUtenzaIrrigua).filter(CatUtenzaIrrigua.num_distretto == 20).all()
+    db.add_all(
+        [
+            CatAnomalia(
+                utenza_id=utenze_20[0].id,
+                particella_id=particella_20.id,
+                anno_campagna=2025,
+                tipo="VAL-01-sup_eccede",
+                severita="warning",
+                status="aperta",
+                descrizione="Superficie incoerente",
+            ),
+            CatAnomalia(
+                utenza_id=utenze_20[1].id,
+                particella_id=particella_20.id,
+                anno_campagna=2025,
+                tipo="VAL-02-cf_invalido",
+                severita="error",
+                status="aperta",
+                descrizione="CF incoerente",
+            ),
+        ]
+    )
+    db.commit()
+
+
 def test_validation_helpers_cover_expected_values() -> None:
     assert validate_codice_fiscale("FNDGPP63E11B354D") == {
         "cf_normalizzato": "FNDGPP63E11B354D",
@@ -222,6 +341,65 @@ def test_distretto_kpi_endpoint_returns_aggregates_for_year() -> None:
     assert payload["importo_totale_0648"] == "135.00"
     assert payload["importo_totale_0985"] == "270.00"
     assert payload["superficie_irrigabile_mq"] == "900.00"
+
+
+def test_distretto_kpi_endpoint_filters_multi_year_data() -> None:
+    db = TestingSessionLocal()
+    try:
+        seed_additional_distretto_kpi_data(db)
+    finally:
+        db.close()
+
+    response = client.get("/catasto/distretti/", headers=auth_headers())
+    distretti = {item["num_distretto"]: item["id"] for item in response.json()}
+
+    yearly_2025 = client.get(f"/catasto/distretti/{distretti['10']}/kpi?anno=2025", headers=auth_headers())
+    yearly_2024 = client.get(f"/catasto/distretti/{distretti['10']}/kpi?anno=2024", headers=auth_headers())
+    all_years = client.get(f"/catasto/distretti/{distretti['10']}/kpi", headers=auth_headers())
+
+    assert yearly_2025.status_code == 200
+    assert yearly_2025.json()["totale_utenze"] == 1
+    assert yearly_2025.json()["importo_totale_0648"] == "135.00"
+    assert yearly_2025.json()["importo_totale_0985"] == "270.00"
+    assert yearly_2025.json()["superficie_irrigabile_mq"] == "900.00"
+
+    assert yearly_2024.status_code == 200
+    assert yearly_2024.json()["totale_utenze"] == 1
+    assert yearly_2024.json()["importo_totale_0648"] == "98.00"
+    assert yearly_2024.json()["importo_totale_0985"] == "147.00"
+    assert yearly_2024.json()["superficie_irrigabile_mq"] == "700.00"
+
+    assert all_years.status_code == 200
+    assert all_years.json()["totale_utenze"] == 2
+    assert all_years.json()["importo_totale_0648"] == "233.00"
+    assert all_years.json()["importo_totale_0985"] == "417.00"
+    assert all_years.json()["superficie_irrigabile_mq"] == "1600.00"
+
+
+def test_distretto_kpi_endpoint_keeps_aggregates_isolated_per_distretto() -> None:
+    db = TestingSessionLocal()
+    try:
+        seed_additional_distretto_kpi_data(db)
+    finally:
+        db.close()
+
+    response = client.get("/catasto/distretti/", headers=auth_headers())
+    payload = response.json()
+    assert len(payload) == 2
+    distretti = {item["num_distretto"]: item["id"] for item in payload}
+
+    kpi_response = client.get(f"/catasto/distretti/{distretti['20']}/kpi?anno=2025", headers=auth_headers())
+
+    assert kpi_response.status_code == 200
+    kpi = kpi_response.json()
+    assert kpi["num_distretto"] == "20"
+    assert kpi["totale_particelle"] == 1
+    assert kpi["totale_utenze"] == 2
+    assert kpi["totale_anomalie"] == 2
+    assert kpi["anomalie_error"] == 1
+    assert kpi["importo_totale_0648"] == "300.00"
+    assert kpi["importo_totale_0985"] == "600.00"
+    assert kpi["superficie_irrigabile_mq"] == "2000.00"
 
 
 def test_particella_detail_history_utenze_and_anomalie_endpoints() -> None:
