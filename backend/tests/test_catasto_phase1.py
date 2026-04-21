@@ -709,6 +709,60 @@ def test_import_history_and_report_endpoints_return_batch_data() -> None:
     assert report_payload["items"][0]["tipo"] == "VAL-07-importi"
 
 
+def test_import_history_endpoint_supports_status_and_limit_filters() -> None:
+    db = TestingSessionLocal()
+    try:
+        completed_batch = db.query(CatImportBatch).filter(CatImportBatch.hash_file == "seed-hash").one()
+        db.add(
+            CatImportBatch(
+                filename="failed-import.xlsx",
+                tipo="capacitas_ruolo",
+                anno_campagna=2025,
+                hash_file="failed-hash",
+                status="failed",
+                righe_totali=10,
+                righe_importate=0,
+                righe_anomalie=0,
+                created_by=1,
+                errore="Workbook non valido",
+            )
+        )
+        db.add(
+            CatImportBatch(
+                filename="shapefile-import",
+                tipo="shapefile",
+                anno_campagna=None,
+                hash_file="shape-hash",
+                status="completed",
+                righe_totali=2,
+                righe_importate=2,
+                righe_anomalie=0,
+                created_by=1,
+            )
+        )
+        db.commit()
+        completed_batch_id = str(completed_batch.id)
+    finally:
+        db.close()
+
+    failed_only = client.get("/catasto/import/history?status=failed&limit=1", headers=auth_headers())
+    completed_capacitas = client.get(
+        "/catasto/import/history?status=completed&tipo=capacitas_ruolo&limit=5",
+        headers=auth_headers(),
+    )
+
+    assert failed_only.status_code == 200
+    failed_payload = failed_only.json()
+    assert len(failed_payload) == 1
+    assert failed_payload[0]["status"] == "failed"
+
+    assert completed_capacitas.status_code == 200
+    completed_payload = completed_capacitas.json()
+    assert len(completed_payload) == 1
+    assert completed_payload[0]["id"] == completed_batch_id
+    assert completed_payload[0]["tipo"] == "capacitas_ruolo"
+
+
 def test_import_capacitas_excel_creates_batch_and_normalizes_cf(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "app.modules.catasto.services.import_capacitas.pd.read_excel",

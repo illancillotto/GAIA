@@ -55,6 +55,8 @@ export default function CatastoImportPage() {
   const [batchId, setBatchId] = useState<UUID | null>(null);
   const [batch, setBatch] = useState<CatImportBatch | null>(null);
   const [history, setHistory] = useState<CatImportBatch[]>([]);
+  const [historyStatus, setHistoryStatus] = useState<string>("");
+  const [historyLimit, setHistoryLimit] = useState<number>(5);
   const [reportTipo, setReportTipo] = useState<string>("");
   const [reportPage, setReportPage] = useState(1);
   const [report, setReport] = useState<CatAnomaliaListResponse | null>(null);
@@ -169,15 +171,19 @@ export default function CatastoImportPage() {
       const token = getStoredAccessToken();
       if (!token) return;
       try {
-        const batches = await catastoGetImportHistory(token);
-        setHistory(batches.slice(0, 5));
+        const batches = await catastoGetImportHistory(token, {
+          status: historyStatus || undefined,
+          tipo: "capacitas_ruolo",
+          limit: historyLimit,
+        });
+        setHistory(batches);
       } catch {
         // keep history panel best-effort; primary error surface stays on active flow
       }
     }
 
     void loadHistory();
-  }, []);
+  }, [historyLimit, historyStatus]);
 
   useEffect(() => {
     async function loadReport(): Promise<void> {
@@ -254,6 +260,27 @@ export default function CatastoImportPage() {
               <p className="mt-1 text-sm text-gray-500">Ultimi batch Capacitas eseguiti dal modulo Catasto.</p>
             </div>
             <p className="text-sm text-gray-500">{history.length} batch</p>
+          </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <label className="text-sm font-medium text-gray-700">
+              Stato
+              <select className="form-control mt-1" value={historyStatus} onChange={(e) => setHistoryStatus(e.target.value)}>
+                <option value="">Tutti</option>
+                <option value="processing">Processing</option>
+                <option value="completed">Completed</option>
+                <option value="failed">Failed</option>
+                <option value="replaced">Replaced</option>
+              </select>
+            </label>
+            <label className="text-sm font-medium text-gray-700">
+              Limite
+              <select className="form-control mt-1" value={String(historyLimit)} onChange={(e) => setHistoryLimit(Number(e.target.value))}>
+                <option value="5">5</option>
+                <option value="10">10</option>
+                <option value="20">20</option>
+              </select>
+            </label>
           </div>
 
           {history.length === 0 ? (

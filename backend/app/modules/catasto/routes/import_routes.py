@@ -119,8 +119,19 @@ def get_import_report(
 
 
 @router.get("/history", response_model=list[CatImportBatchResponse])
-def get_import_history(db: Session = Depends(get_db), _: ApplicationUser = Depends(require_active_user)) -> list[CatImportBatch]:
-    return list(db.execute(select(CatImportBatch).order_by(desc(CatImportBatch.created_at)).limit(50)).scalars().all())
+def get_import_history(
+    status_filter: str | None = Query(None, alias="status"),
+    tipo: str | None = Query(None),
+    limit: int = Query(50, ge=1, le=100),
+    db: Session = Depends(get_db),
+    _: ApplicationUser = Depends(require_active_user),
+) -> list[CatImportBatch]:
+    query = select(CatImportBatch).order_by(desc(CatImportBatch.created_at))
+    if status_filter:
+        query = query.where(CatImportBatch.status == status_filter)
+    if tipo:
+        query = query.where(CatImportBatch.tipo == tipo)
+    return list(db.execute(query.limit(limit)).scalars().all())
 
 
 @router.post("/shapefile/finalize")

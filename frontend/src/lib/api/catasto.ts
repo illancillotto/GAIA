@@ -41,8 +41,16 @@ export async function catastoGetImportStatus(token: string, batchId: UUID): Prom
   });
 }
 
-export async function catastoGetImportHistory(token: string): Promise<CatImportBatch[]> {
-  return request<CatImportBatch[]>("/catasto/import/history", {
+export async function catastoGetImportHistory(
+  token: string,
+  params?: { status?: string; tipo?: string; limit?: number },
+): Promise<CatImportBatch[]> {
+  const query = createQueryString({
+    status: params?.status || undefined,
+    tipo: params?.tipo || undefined,
+    limit: params?.limit != null ? String(params.limit) : undefined,
+  });
+  return request<CatImportBatch[]>("/catasto/import/history" + query, {
     headers: authHeaders(token),
   });
 }
@@ -195,4 +203,3 @@ export async function catastoListSchemi(token: string): Promise<CatSchemaContrib
     headers: authHeaders(token),
   });
 }
-

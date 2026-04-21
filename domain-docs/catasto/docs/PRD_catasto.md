@@ -190,7 +190,7 @@ Comportamento attuale:
 - `/catasto/import` espone il wizard upload -> polling -> report anomalie
 - il wizard import gestisce sia il completamento positivo sia il fallimento del batch con esposizione dell'errore applicativo
 - il report import espone anche una sintesi batch da `report_json` con anno campagna, righe, distretti e comuni rilevati
-- la pagina import espone anche uno storico dei batch recenti con stato, contatori e riapertura del report
+- la pagina import espone anche uno storico dei batch recenti con filtro per stato, limite risultati, contatori e riapertura del report
 - il segmento frontend `/catasto` monta la navigation shell di dominio nel layout dedicato, non nel singolo wrapper pagina
 - `/catasto/distretti` e `/catasto/distretti/[id]` coprono KPI e drill-down per distretto
 - `/catasto/particelle` e `/catasto/particelle/[id]` coprono lookup e dettaglio con utenze/anomalie
