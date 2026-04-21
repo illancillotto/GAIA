@@ -86,6 +86,7 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   const batchDetailPage = read("src/app/catasto/batches/[id]/page.tsx");
   const documentsPage = read("src/app/catasto/documents/page.tsx");
   const documentDetailPage = read("src/app/catasto/documents/[id]/page.tsx");
+  const catastoLayout = read("src/app/catasto/layout.tsx");
   const importPage = read("src/app/catasto/import/page.tsx");
   const distrettiPage = read("src/app/catasto/distretti/page.tsx");
   const particelleDetailPage = read("src/app/catasto/particelle/[id]/page.tsx");
@@ -93,7 +94,8 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
 
   assert.match(dashboardPage, /GAIA Catasto/);
   assert.match(catastoPageWrapper, /ProtectedPage/);
-  assert.match(catastoPageWrapper, /CatastoPhase1Nav/);
+  assert.doesNotMatch(catastoPageWrapper, /CatastoPhase1Nav/);
+  assert.match(catastoLayout, /CatastoPhase1Nav/);
   assert.match(catastoSettingsPage, /redirect\("\/elaborazioni\/settings"\)/);
   assert.match(catastoCapacitasPage, /redirect\("\/elaborazioni\/capacitas"\)/);
   assert.match(elaborazioniDashboardPage, /GAIA Elaborazioni/);

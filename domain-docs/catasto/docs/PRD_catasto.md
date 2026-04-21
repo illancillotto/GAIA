@@ -189,6 +189,7 @@ Comportamento attuale:
 - `/catasto/documents/[id]` mostra il dettaglio documento
 - `/catasto/import` espone il wizard upload -> polling -> report anomalie
 - il wizard import gestisce sia il completamento positivo sia il fallimento del batch con esposizione dell'errore applicativo
+- il segmento frontend `/catasto` monta la navigation shell di dominio nel layout dedicato, non nel singolo wrapper pagina
 - `/catasto/distretti` e `/catasto/distretti/[id]` coprono KPI e drill-down per distretto
 - `/catasto/particelle` e `/catasto/particelle/[id]` coprono lookup e dettaglio con utenze/anomalie
 - `/catasto/anomalie` espone la lista operativa con aggiornamento stato
