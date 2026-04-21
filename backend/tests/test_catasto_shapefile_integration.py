@@ -314,6 +314,36 @@ def test_distretto_geojson_route_returns_feature_for_geometry(db_session: Sessio
         db_session.commit()
 
 
+def test_distretto_geojson_route_returns_404_when_geometry_is_missing(db_session: Session) -> None:
+    suffix = uuid4().hex[:8]
+    num_distretto = f"5{suffix[:3]}"
+    distretto_id = uuid4()
+
+    db_session.execute(text("DELETE FROM cat_distretti WHERE num_distretto = :n"), {"n": num_distretto})
+    db_session.execute(
+        text(
+            """
+            INSERT INTO cat_distretti (id, num_distretto, nome_distretto, geometry, attivo)
+            VALUES (:id, :num, :nome, NULL, true)
+            """
+        ),
+        {
+            "id": str(distretto_id),
+            "num": num_distretto,
+            "nome": f"Distretto senza geometria {suffix}",
+        },
+    )
+    db_session.commit()
+
+    try:
+        with pytest.raises(Exception) as exc_info:
+            get_distretto_geojson(distretto_id, db_session, object())
+        assert "geometria" in str(exc_info.value).lower()
+    finally:
+        db_session.execute(text("DELETE FROM cat_distretti WHERE num_distretto = :n"), {"n": num_distretto})
+        db_session.commit()
+
+
 def test_finalize_shapefile_import_excludes_fd_distretto_from_upsert(db_session: Session) -> None:
     suffix = uuid4().hex[:8]
     staging_table = f"cat_particelle_staging_it_{suffix}"
@@ -504,3 +534,113 @@ def test_finalize_shapefile_import_maps_cod_catastale_from_cfm_and_national_code
         db_session.execute(text("DELETE FROM cat_distretti WHERE num_distretto = :n"), {"n": num_distretto})
         db_session.execute(text("DELETE FROM cat_import_batches WHERE filename = :f"), {"f": staging_table})
         db_session.commit()
+
+
+def test_finalize_shapefile_import_writes_history_when_only_geometry_changes(db_session: Session) -> None:
+    suffix = uuid4().hex[:8]
+    staging_table = f"cat_particelle_staging_it_{suffix}"
+    num_distretto = f"4{suffix[:3]}"
+    foglio = f"9{suffix[:2]}"
+    particella = f"7{suffix[2:5]}"
+
+    _cleanup_shapefile_artifacts(
+        db_session,
+        staging_table=staging_table,
+        num_distretto=num_distretto,
+        foglio=foglio,
+        particella=particella,
+    )
+
+    existing = CatParticella(
+        national_code="A357TESTGEO1",
+        cod_comune_istat=165,
+        nome_comune="Arborea",
+        foglio=foglio,
+        particella=particella,
+        subalterno="1",
+        cfm="A357-GEO",
+        superficie_mq=1111,
+        num_distretto=num_distretto,
+        nome_distretto="Distretto geometry only",
+        source_type="seed",
+        valid_from=date(2024, 1, 1),
+        is_current=True,
+        suppressed=False,
+        geometry=f"SRID=4326;{_polygon_wkt(8.66, 39.86)}",
+    )
+    db_session.add(existing)
+    db_session.commit()
+    existing_id = existing.id
+
+    db_session.execute(
+        text(
+            f'''
+            CREATE TABLE "{staging_table}" (
+              nume_fogl text,
+              nume_part text,
+              suba_part text,
+              cfm text,
+              supe_part text,
+              num_dist text,
+              nome_dist text,
+              wkb_geometry geometry(MULTIPOLYGON, 4326)
+            )
+            '''
+        )
+    )
+    db_session.execute(
+        text(
+            f'''
+            INSERT INTO "{staging_table}" (
+              nume_fogl, nume_part, suba_part, cfm, supe_part, num_dist, nome_dist, wkb_geometry
+            ) VALUES (
+              :foglio, :particella, '1', 'A357-GEO', '1111.00', :num_distretto, 'Distretto geometry only',
+              ST_GeomFromText(:wkt, 4326)
+            )
+            '''
+        ),
+        {
+            "foglio": foglio,
+            "particella": particella,
+            "num_distretto": num_distretto,
+            "wkt": _polygon_wkt(8.68, 39.88),
+        },
+    )
+    db_session.commit()
+
+    try:
+        result = finalize_shapefile_import(
+            db_session,
+            created_by=_created_by(db_session),
+            staging_table=staging_table,
+        )
+
+        db_session.refresh(existing)
+        current_rows = db_session.execute(
+            select(CatParticella).where(
+                CatParticella.cod_comune_istat == 165,
+                CatParticella.foglio == foglio,
+                CatParticella.particella == particella,
+                CatParticella.is_current.is_(True),
+            )
+        ).scalars().all()
+        history_rows = db_session.execute(
+            select(CatParticellaHistory).where(CatParticellaHistory.particella_id == existing_id)
+        ).scalars().all()
+
+        assert result["status"] == "completed"
+        assert existing.is_current is False
+        assert len(current_rows) == 1
+        assert current_rows[0].id != existing_id
+        assert current_rows[0].cfm == "A357-GEO"
+        assert str(current_rows[0].superficie_mq) == "1111.00"
+        assert len(history_rows) == 1
+        assert history_rows[0].change_reason == "import_shapefile"
+    finally:
+        _cleanup_shapefile_artifacts(
+            db_session,
+            staging_table=staging_table,
+            num_distretto=num_distretto,
+            foglio=foglio,
+            particella=particella,
+        )
