@@ -124,6 +124,9 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   assert.match(importPage, /Sintesi batch/);
   assert.match(importPage, /Distretti rilevati/);
   assert.match(importPage, /Comuni rilevati/);
+  assert.match(importPage, /Storico import recenti/);
+  assert.match(importPage, /catastoGetImportHistory/);
+  assert.match(importPage, /Apri report/);
   assert.match(importPage, /setReportTipo\(c\.tipo\)/);
   assert.match(importPage, /setReportPage\(1\)/);
   assert.match(distrettiPage, /catastoListDistretti/);

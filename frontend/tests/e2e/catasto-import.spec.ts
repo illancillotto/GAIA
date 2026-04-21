@@ -69,6 +69,30 @@ test("admin completes catasto import wizard through report step", async ({ page 
 test("catasto import wizard shows empty report state when batch has no anomalies", async ({ page }) => {
   await loginAsAdmin(page);
 
+  await page.route("**/api/catasto/import/history", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([
+        {
+          id: "00000000-0000-0000-0000-000000000110",
+          filename: "capacitas-history.xlsx",
+          tipo: "capacitas_ruolo",
+          anno_campagna: 2025,
+          hash_file: "mock-history",
+          righe_totali: 12,
+          righe_importate: 12,
+          righe_anomalie: 2,
+          status: "completed",
+          report_json: null,
+          errore: null,
+          created_at: "2026-04-21T09:45:00Z",
+          completed_at: "2026-04-21T09:46:00Z",
+          created_by: 1,
+        },
+      ]),
+    });
+  });
   await page.route("**/api/catasto/import/capacitas**", async (route) => {
     await route.fulfill({
       status: 202,
@@ -116,6 +140,8 @@ test("catasto import wizard shows empty report state when batch has no anomalies
   });
 
   await page.goto("/catasto/import");
+  await expect(page.getByText("Storico import recenti")).toBeVisible();
+  await expect(page.getByText("capacitas-history.xlsx")).toBeVisible();
   await page.getByLabel("File Excel").setInputFiles({
     name: "capacitas-empty.xlsx",
     mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

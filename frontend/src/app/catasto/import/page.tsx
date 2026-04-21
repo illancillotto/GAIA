@@ -9,6 +9,7 @@ import { AlertBanner } from "@/components/ui/alert-banner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { RefreshIcon, DocumentIcon, SearchIcon } from "@/components/ui/icons";
 import {
+  catastoGetImportHistory,
   catastoGetImportReport,
   catastoGetImportStatus,
   catastoUploadCapacitas,
@@ -35,6 +36,16 @@ function safeStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.length > 0) : [];
 }
 
+function formatDateTime(value: string | null): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("it-IT", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(date);
+}
+
 export default function CatastoImportPage() {
   const [step, setStep] = useState<StepKey>("upload");
   const [file, setFile] = useState<File | null>(null);
@@ -43,6 +54,7 @@ export default function CatastoImportPage() {
 
   const [batchId, setBatchId] = useState<UUID | null>(null);
   const [batch, setBatch] = useState<CatImportBatch | null>(null);
+  const [history, setHistory] = useState<CatImportBatch[]>([]);
   const [reportTipo, setReportTipo] = useState<string>("");
   const [reportPage, setReportPage] = useState(1);
   const [report, setReport] = useState<CatAnomaliaListResponse | null>(null);
@@ -106,6 +118,10 @@ export default function CatastoImportPage() {
         onProgress: (p) => setUploadProgress(p),
       });
       setBatchId(result.batch_id);
+      setBatch(null);
+      setReport(null);
+      setReportTipo("");
+      setReportPage(1);
       setStep("progress");
     } catch (e) {
       setError(e instanceof Error ? e.message : "Errore upload");
@@ -149,6 +165,21 @@ export default function CatastoImportPage() {
   }, [batchId, step]);
 
   useEffect(() => {
+    async function loadHistory(): Promise<void> {
+      const token = getStoredAccessToken();
+      if (!token) return;
+      try {
+        const batches = await catastoGetImportHistory(token);
+        setHistory(batches.slice(0, 5));
+      } catch {
+        // keep history panel best-effort; primary error surface stays on active flow
+      }
+    }
+
+    void loadHistory();
+  }, []);
+
+  useEffect(() => {
     async function loadReport(): Promise<void> {
       const token = getStoredAccessToken();
       if (!token) return;
@@ -168,6 +199,15 @@ export default function CatastoImportPage() {
 
     void loadReport();
   }, [batchId, reportPage, reportTipo, step]);
+
+  async function reopenBatch(selectedBatch: CatImportBatch): Promise<void> {
+    setBatchId(selectedBatch.id);
+    setBatch(selectedBatch);
+    setReport(null);
+    setReportTipo("");
+    setReportPage(1);
+    setStep("report");
+  }
 
   return (
     <CatastoPage
@@ -206,6 +246,59 @@ export default function CatastoImportPage() {
             <p className="mt-1 text-sm text-gray-500">Contatori e lista anomalie.</p>
           </article>
         </div>
+
+        <article className="panel-card">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-gray-900">Storico import recenti</p>
+              <p className="mt-1 text-sm text-gray-500">Ultimi batch Capacitas eseguiti dal modulo Catasto.</p>
+            </div>
+            <p className="text-sm text-gray-500">{history.length} batch</p>
+          </div>
+
+          {history.length === 0 ? (
+            <div className="mt-4">
+              <EmptyState icon={SearchIcon} title="Nessuno storico disponibile" description="Non risultano import recenti per il modulo Catasto." />
+            </div>
+          ) : (
+            <div className="mt-4 overflow-x-auto">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Creato</th>
+                    <th>File</th>
+                    <th>Stato</th>
+                    <th>Importate</th>
+                    <th>Anomalie</th>
+                    <th>Azioni</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.map((item) => (
+                    <tr key={item.id}>
+                      <td className="text-sm text-gray-600">{formatDateTime(item.created_at)}</td>
+                      <td className="text-sm font-medium text-gray-900">{item.filename}</td>
+                      <td>
+                        <ImportStatusBadge status={item.status} />
+                      </td>
+                      <td className="text-sm text-gray-600">{item.righe_importate}</td>
+                      <td className="text-sm text-gray-600">{item.righe_anomalie}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          onClick={() => void reopenBatch(item)}
+                        >
+                          Apri report
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </article>
 
         {step === "upload" ? (
           <article className="panel-card">
