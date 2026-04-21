@@ -35,8 +35,8 @@ def load_comuni_reference() -> pd.DataFrame:
     )
 
 
-def get_comune_by_legacy_code(codice: int | None) -> dict[str, object] | None:
-    """Restituisce il comune a partire dal codice legacy Capacitas/Catasto."""
+def get_comune_by_capacitas_code(codice: int | None) -> dict[str, object] | None:
+    """Restituisce il comune a partire dal codice numerico sorgente di Capacitas."""
     if codice is None:
         return None
     comuni = load_comuni_reference()
@@ -46,8 +46,8 @@ def get_comune_by_legacy_code(codice: int | None) -> dict[str, object] | None:
     return match.iloc[0].to_dict()
 
 
-def get_legacy_code_by_catastale() -> dict[str, int]:
-    """Mapping `codice catastale comune` -> `codice legacy Catasto/Capacitas`."""
+def get_capacitas_code_by_catastale() -> dict[str, int]:
+    """Mapping `codice catastale comune` -> `codice comune Capacitas`."""
     comuni = load_comuni_reference()
     return {str(row["codice_catastale"]).strip().upper(): int(row["cod_istat"]) for _, row in comuni.iterrows()}
 
@@ -59,3 +59,8 @@ def get_official_name_by_catastale() -> dict[str, str]:
         str(row["codice_catastale"]).strip().upper(): str(row["nome_comune"]).strip()
         for _, row in comuni.iterrows()
     }
+
+
+def get_catastale_by_capacitas_code() -> dict[int, str]:
+    comuni = load_comuni_reference()
+    return {int(row["cod_istat"]): str(row["codice_catastale"]).strip().upper() for _, row in comuni.iterrows()}

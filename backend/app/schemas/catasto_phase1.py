@@ -76,9 +76,11 @@ class CatAnomaliaUpdateInput(BaseModel):
 class CatParticellaResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
+    comune_id: UUID | None
     id: UUID
     national_code: str | None
-    cod_comune_legacy: int
+    cod_comune_capacitas: int
+    codice_catastale: str | None
     nome_comune: str | None
     sezione_catastale: str | None
     foglio: str
@@ -106,8 +108,10 @@ class CatParticellaHistoryResponse(BaseModel):
 
     history_id: UUID
     particella_id: UUID
+    comune_id: UUID | None
     national_code: str | None
-    cod_comune_legacy: int
+    cod_comune_capacitas: int
+    codice_catastale: str | None
     foglio: str
     particella: str
     subalterno: str | None
@@ -163,8 +167,9 @@ class CatUtenzaIrriguaResponse(BaseModel):
     import_batch_id: UUID
     anno_campagna: int
     cco: str | None
+    comune_id: UUID | None
     cod_provincia: int | None
-    cod_comune_legacy: int | None
+    cod_comune_capacitas: int | None
     cod_frazione: int | None
     num_distretto: int | None
     nome_distretto_loc: str | None
@@ -228,8 +233,10 @@ class CatAnagraficaUtenzaSummary(BaseModel):
 
 class CatAnagraficaMatch(BaseModel):
     particella_id: UUID
+    comune_id: UUID | None = None
     comune: str | None = None
-    cod_comune_legacy: int | None = None
+    cod_comune_capacitas: int | None = None
+    codice_catastale: str | None = None
     foglio: str
     particella: str
     subalterno: str | None = None

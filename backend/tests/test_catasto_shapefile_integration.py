@@ -154,7 +154,7 @@ def test_finalize_shapefile_import_inserts_current_particelle_and_distretti(db_s
         assert batch.righe_importate == 1
         assert batch.report_json["records_inserted_current"] == 1
         assert len(inserted) == 1
-        assert inserted[0].cod_comune_legacy == 165
+        assert inserted[0].cod_comune_capacitas == 165
         assert inserted[0].foglio == foglio
         assert inserted[0].particella == particella
         assert inserted[0].num_distretto == num_distretto
@@ -187,7 +187,8 @@ def test_finalize_shapefile_import_writes_history_on_changed_particella(db_sessi
 
     existing = CatParticella(
         national_code="A357TEST0001",
-        cod_comune_legacy=165,
+        cod_comune_capacitas=165,
+        codice_catastale="A357",
         nome_comune="Arborea",
         foglio=foglio,
         particella=particella,
@@ -251,7 +252,7 @@ def test_finalize_shapefile_import_writes_history_on_changed_particella(db_sessi
         db_session.refresh(existing)
         current_rows = db_session.execute(
             select(CatParticella).where(
-                CatParticella.cod_comune_legacy == 165,
+                CatParticella.cod_comune_capacitas == 165,
                 CatParticella.foglio == foglio,
                 CatParticella.particella == particella,
                 CatParticella.is_current.is_(True),
@@ -539,11 +540,11 @@ def test_finalize_shapefile_import_maps_cod_catastale_from_reference_dataset(db_
             select(CatParticella).where(CatParticella.foglio == foglio3, CatParticella.particella == particella3, CatParticella.is_current.is_(True))
         ).scalar_one()
 
-        assert inserted_1.cod_comune_legacy == 286
+        assert inserted_1.cod_comune_capacitas == 286
         assert inserted_1.nome_comune == "San Nicolo d'Arcidano"
-        assert inserted_2.cod_comune_legacy == 212
+        assert inserted_2.cod_comune_capacitas == 212
         assert inserted_2.nome_comune == "Cabras"
-        assert inserted_3.cod_comune_legacy == 232
+        assert inserted_3.cod_comune_capacitas == 232
         assert inserted_3.nome_comune == "Riola Sardo"
     finally:
         db_session.execute(text(f'DROP TABLE IF EXISTS "{staging_table}"'))  # nosec - generated local test table
@@ -577,7 +578,8 @@ def test_finalize_shapefile_import_writes_history_when_only_geometry_changes(db_
 
     existing = CatParticella(
         national_code="A357TESTGEO1",
-        cod_comune_legacy=165,
+        cod_comune_capacitas=165,
+        codice_catastale="A357",
         nome_comune="Arborea",
         foglio=foglio,
         particella=particella,
@@ -642,7 +644,7 @@ def test_finalize_shapefile_import_writes_history_when_only_geometry_changes(db_
         db_session.refresh(existing)
         current_rows = db_session.execute(
             select(CatParticella).where(
-                CatParticella.cod_comune_legacy == 165,
+                CatParticella.cod_comune_capacitas == 165,
                 CatParticella.foglio == foglio,
                 CatParticella.particella == particella,
                 CatParticella.is_current.is_(True),

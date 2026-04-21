@@ -122,8 +122,8 @@ export default function CatastoDistrettoDetailPage() {
         accessorKey: "nome_comune",
         cell: ({ row }) => (
           <div>
-            <p className="text-sm font-medium text-gray-900">{row.original.nome_comune ?? row.original.cod_comune_legacy}</p>
-            <p className="text-xs text-gray-400">Codice legacy {row.original.cod_comune_legacy}</p>
+            <p className="text-sm font-medium text-gray-900">{row.original.nome_comune ?? row.original.cod_comune_capacitas}</p>
+            <p className="text-xs text-gray-400">Codice Capacitas {row.original.cod_comune_capacitas}</p>
           </div>
         ),
       },

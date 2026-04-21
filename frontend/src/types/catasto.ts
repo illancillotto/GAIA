@@ -62,9 +62,11 @@ export type CatAnomaliaListResponse = {
 };
 
 export type CatParticella = {
+  comune_id: UUID | null;
   id: UUID;
   national_code: string | null;
-  cod_comune_legacy: number;
+  cod_comune_capacitas: number;
+  codice_catastale: string | null;
   nome_comune: string | null;
   sezione_catastale: string | null;
   foglio: string;
@@ -90,8 +92,10 @@ export type CatParticellaDetail = CatParticella & {
 export type CatParticellaHistory = {
   history_id: UUID;
   particella_id: UUID;
+  comune_id: UUID | null;
   national_code: string | null;
-  cod_comune_legacy: number;
+  cod_comune_capacitas: number;
+  codice_catastale: string | null;
   foglio: string;
   particella: string;
   subalterno: string | null;
@@ -141,8 +145,9 @@ export type CatUtenzaIrrigua = {
   import_batch_id: UUID;
   anno_campagna: number;
   cco: string | null;
+  comune_id: UUID | null;
   cod_provincia: number | null;
-  cod_comune_legacy: number | null;
+  cod_comune_capacitas: number | null;
   cod_frazione: number | null;
   num_distretto: number | null;
   nome_distretto_loc: string | null;
@@ -210,8 +215,10 @@ export type CatAnagraficaUtenzaSummary = {
 
 export type CatAnagraficaMatch = {
   particella_id: UUID;
+  comune_id: UUID | null;
   comune: string | null;
-  cod_comune_legacy: number | null;
+  cod_comune_capacitas: number | null;
+  codice_catastale: string | null;
   foglio: string;
   particella: string;
   subalterno: string | null;

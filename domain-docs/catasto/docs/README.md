@@ -36,9 +36,10 @@ Usare questo indice per capire rapidamente quali file sono:
 
 - Per modifiche a comuni o documenti catastali, partire dal PRD operativo di questa cartella.
 - Per il mapping comuni di Catasto, usare sempre il dataset `backend/app/modules/catasto/data/comuni_istat.csv` come sorgente di verita del dominio.
-- Non assumere che `cod_comune_istat` nel codice Catasto coincida con il codice comune numerico ufficiale ISTAT moderno: oggi e un codice legacy compatibile con Capacitas.
+- Non assumere che `cod_comune_capacitas` nel codice Catasto coincida con il codice comune numerico ufficiale ISTAT moderno: e il codice numerico sorgente scambiato da Capacitas.
 - Se serve il codice ufficiale, leggerlo esplicitamente dalle colonne dedicate del dataset di riferimento e non ricostruirlo via `CASE` hardcoded.
-- Nel layer applicativo e API usare il naming `cod_comune_legacy`; il nome fisico `cod_comune_istat` puo ancora comparire nel database o in SQL legacy finche non viene eseguita una migration dedicata.
+- La tabella di riferimento `cat_comuni` e la sorgente canonica per i comuni del dominio: contiene `codice_catastale`, `cod_comune_capacitas`, codici ufficiali e metadata amministrativi.
+- Nelle tabelle operative preferire `comune_id` come riferimento stabile; mantenere `cod_comune_capacitas` e `codice_catastale` solo come codici sorgente o di tracciabilita quando servono.
 - Per modifiche a batch, credenziali, CAPTCHA, richieste singole o avanzamento runtime, verificare sempre anche `domain-docs/elaborazioni/docs/`.
 - Non usare i documenti storici come sorgente primaria per implementazioni nuove.
 - Se un file viene mantenuto solo per compatibilita, segnalarlo esplicitamente nel blocco iniziale del documento.

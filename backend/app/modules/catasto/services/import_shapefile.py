@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.models.catasto_phase1 import CatImportBatch
 from app.modules.catasto.services.comuni_reference import (
-    get_legacy_code_by_catastale,
+    get_capacitas_code_by_catastale,
     get_official_name_by_catastale,
 )
 
@@ -29,20 +29,20 @@ def finalize_shapefile_import(
     Finalizza l'import shapefile caricato via ogr2ogr in `cat_particelle_staging`.
 
     Operazioni:
-    - SCD Type 2 verso `cat_particelle` (chiave: cod_comune_istat,foglio,particella,subalterno)
+    - SCD Type 2 verso `cat_particelle` (chiave operativa: cod_comune_capacitas,foglio,particella,subalterno)
     - Inserisce storico in `cat_particelle_history` per record cambiati
     - Deriva e upserta `cat_distretti` via ST_Union sulle particelle correnti
     - Crea `cat_import_batches` con tipo='shapefile' e report_json con conteggi
 
     Nota importante:
-    - `cod_comune_istat` nel modello Catasto e un codice legacy compatibile con
-      Capacitas, non il codice comune numerico ufficiale ISTAT moderno
+    - `cod_comune_capacitas` nel modello Catasto e il codice sorgente Capacitas,
+      non il codice comune numerico ufficiale ISTAT moderno
     - il mapping da `codice catastale` a questo codice deve sempre passare dal
       dataset di riferimento `comuni_istat.csv`, mai da CASE hardcoded nel SQL
     """
     batch_id = uuid4()
     now = datetime.now(timezone.utc)
-    codice_by_catastale = get_legacy_code_by_catastale()
+    codice_by_catastale = get_capacitas_code_by_catastale()
     nome_by_catastale = get_official_name_by_catastale()
     mapping_rows_sql = ",\n        ".join(
         f"('{codice_catastale}', {codice}, '{_escape_sql_string(nome_by_catastale[codice_catastale])}')"
@@ -124,11 +124,13 @@ def finalize_shapefile_import(
       SELECT *
       FROM (VALUES
         {mapping_rows_sql}
-      ) AS m(codice_catastale, cod_comune_istat, nome_comune)
+      ) AS m(codice_catastale, cod_comune_capacitas, nome_comune)
     ),
     staged AS (
       SELECT
-        COALESCE(m.cod_comune_istat, 0) AS cod_comune_istat,
+        c.cod_catastale AS codice_catastale,
+        cc.id AS comune_id,
+        COALESCE(m.cod_comune_capacitas, 0) AS cod_comune_capacitas,
         regexp_replace(
           COALESCE(NULLIF(TRIM(COALESCE(to_jsonb(t)->>'nume_fogl', to_jsonb(t)->>'FOGLIO', to_jsonb(t)->>'foglio')), ''), ''),
           '\\.0$',
@@ -164,6 +166,8 @@ def finalize_shapefile_import(
       ) c
       LEFT JOIN mapping m
         ON m.codice_catastale = c.cod_catastale
+      LEFT JOIN cat_comuni cc
+        ON cc.codice_catastale = c.cod_catastale
     )
     """
 
@@ -178,7 +182,7 @@ def finalize_shapefile_import(
               FROM cat_particelle p
               JOIN staged s
                 ON p.is_current = true
-               AND p.cod_comune_istat = s.cod_comune_istat
+               AND p.cod_comune_capacitas = s.cod_comune_capacitas
                AND p.foglio = s.foglio
                AND p.particella = s.particella
                AND (p.subalterno IS NOT DISTINCT FROM s.subalterno)
@@ -199,8 +203,10 @@ def finalize_shapefile_import(
             INSERT INTO cat_particelle_history (
               history_id,
               particella_id,
+              comune_id,
               national_code,
-              cod_comune_istat,
+              cod_comune_capacitas,
+              codice_catastale,
               foglio,
               particella,
               subalterno,
@@ -215,8 +221,10 @@ def finalize_shapefile_import(
             SELECT
               gen_random_uuid(),
               c.id,
+              c.comune_id,
               c.national_code,
-              c.cod_comune_istat,
+              c.cod_comune_capacitas,
+              c.codice_catastale,
               c.foglio,
               c.particella,
               c.subalterno,
@@ -245,7 +253,7 @@ def finalize_shapefile_import(
             FROM staged s
             WHERE
               p.is_current = true
-              AND p.cod_comune_istat = s.cod_comune_istat
+              AND p.cod_comune_capacitas = s.cod_comune_capacitas
               AND p.foglio = s.foglio
               AND p.particella = s.particella
               AND (p.subalterno IS NOT DISTINCT FROM s.subalterno)
@@ -274,8 +282,10 @@ def finalize_shapefile_import(
             + """
             INSERT INTO cat_particelle (
               id,
+              comune_id,
               national_code,
-              cod_comune_istat,
+              cod_comune_capacitas,
+              codice_catastale,
               nome_comune,
               sezione_catastale,
               foglio,
@@ -297,8 +307,10 @@ def finalize_shapefile_import(
             )
             SELECT
               gen_random_uuid(),
+              s.comune_id,
               s.national_code,
-              s.cod_comune_istat,
+              s.cod_comune_capacitas,
+              s.codice_catastale,
               s.nome_comune,
               s.sezione_catastale,
               s.foglio,
@@ -320,7 +332,7 @@ def finalize_shapefile_import(
             FROM staged s
             LEFT JOIN cat_particelle p
               ON p.is_current = true
-             AND p.cod_comune_istat = s.cod_comune_istat
+             AND p.cod_comune_capacitas = s.cod_comune_capacitas
              AND p.foglio = s.foglio
              AND p.particella = s.particella
              AND (p.subalterno IS NOT DISTINCT FROM s.subalterno)

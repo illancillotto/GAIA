@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import pandas as pd
-from app.modules.catasto.services.comuni_reference import get_comune_by_legacy_code, load_comuni_reference
+from app.modules.catasto.services.comuni_reference import get_comune_by_capacitas_code, load_comuni_reference
 
 _comuni_df: pd.DataFrame | None = None
 
@@ -173,7 +173,7 @@ def validate_comune(cod_istat: int | None) -> dict[str, object | None]:
     if cod_istat is None:
         return {"is_valid": False, "nome_ufficiale": None}
 
-    match = get_comune_by_legacy_code(int(cod_istat))
+    match = get_comune_by_capacitas_code(int(cod_istat))
     if match is None:
         return {"is_valid": False, "nome_ufficiale": None}
     return {"is_valid": True, "nome_ufficiale": str(match["nome_comune"])}

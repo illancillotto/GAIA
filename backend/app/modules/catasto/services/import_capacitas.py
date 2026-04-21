@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.models.catasto_phase1 import (
     CatAnomalia,
     CatAliquota,
+    CatComune,
     CatDistretto,
     CatDistrettoCoefficiente,
     CatImportBatch,
@@ -33,7 +34,7 @@ from app.modules.catasto.services.validation import (
 COLUMN_MAPPING = {
     "ANNO": "anno_campagna",
     "PVC": "cod_provincia",
-    "COM": "cod_comune_legacy",
+    "COM": "cod_comune_capacitas",
     "CCO": "cco",
     "FRA": "cod_frazione",
     "DISTRETTO": "num_distretto",
@@ -62,7 +63,7 @@ ANOMALIA_TYPES = {
     "VAL-01-sup_eccede": "Sup. irrigabile eccede catastale",
     "VAL-02-cf_invalido": "Codice fiscale non valido",
     "VAL-03-cf_mancante": "Codice fiscale mancante",
-    "VAL-04-comune_invalido": "Codice comune legacy non valido",
+    "VAL-04-comune_invalido": "Codice comune Capacitas non valido",
     "VAL-05-particella_assente": "Particella assente in anagrafica",
     "VAL-06-imponibile": "Imponibile incoerente",
     "VAL-07-importi": "Importi incoerenti",
@@ -123,7 +124,7 @@ def import_capacitas_excel(
         if column in dataframe.columns:
             dataframe[column] = dataframe[column].apply(_clean_optional_string)
 
-    for column in ("anno_campagna", "cod_provincia", "cod_comune_legacy", "cod_frazione", "num_distretto"):
+    for column in ("anno_campagna", "cod_provincia", "cod_comune_capacitas", "cod_frazione", "num_distretto"):
         if column in dataframe.columns:
             dataframe[column] = pd.to_numeric(dataframe[column], errors="coerce")
 
@@ -165,14 +166,21 @@ def import_capacitas_excel(
         batch.status = "processing"
         batch.errore = None
 
-    comuni = [int(value) for value in dataframe.get("cod_comune_legacy", pd.Series(dtype=float)).dropna().unique().tolist()]
+    comuni = [int(value) for value in dataframe.get("cod_comune_capacitas", pd.Series(dtype=float)).dropna().unique().tolist()]
+    comuni_rows = (
+        db.execute(select(CatComune).where(CatComune.cod_comune_capacitas.in_(comuni))).scalars().all()
+        if comuni
+        else []
+    )
+    comuni_by_capacitas = {item.cod_comune_capacitas: item for item in comuni_rows}
     particelle = (
-        db.execute(select(CatParticella).where(CatParticella.cod_comune_legacy.in_(comuni), CatParticella.is_current.is_(True))).scalars().all()
+        db.execute(select(CatParticella).where(CatParticella.cod_comune_capacitas.in_(comuni), CatParticella.is_current.is_(True))).scalars().all()
         if comuni
         else []
     )
     particelle_idx = {
-        (part.cod_comune_legacy, part.foglio, part.particella, part.subalterno): part.id for part in particelle
+        ((part.comune_id, part.foglio, part.particella, part.subalterno) if part.comune_id else (part.cod_comune_capacitas, part.foglio, part.particella, part.subalterno)): part.id
+        for part in particelle
     }
     distretti = {item.num_distretto: item for item in db.execute(select(CatDistretto)).scalars().all()}
     schemi = {item.codice: item for item in db.execute(select(CatSchemaContributo)).scalars().all()}
@@ -198,12 +206,13 @@ def import_capacitas_excel(
         cf_raw = _clean_optional_string(row_get("codice_fiscale"))
         cf_result = validate_codice_fiscale(cf_raw)
         cf_normalizzato = cf_result["cf_normalizzato"]
-        comune_value = int(row_get("cod_comune_legacy")) if row_get("cod_comune_legacy") is not None else None
+        comune_value = int(row_get("cod_comune_capacitas")) if row_get("cod_comune_capacitas") is not None else None
+        comune_ref = comuni_by_capacitas.get(comune_value) if comune_value is not None else None
         foglio = str(row_get("foglio") or "")
         particella_value = str(row_get("particella") or "")
         subalterno = _clean_optional_string(row_get("subalterno"))
 
-        lookup_key = (comune_value, foglio, particella_value, subalterno)
+        lookup_key = (comune_ref.id, foglio, particella_value, subalterno) if comune_ref is not None else (comune_value, foglio, particella_value, subalterno)
         particella_id = particelle_idx.get(lookup_key) if comune_value is not None else None
 
         v_superficie = validate_superficie(row_get("sup_irrigabile_mq"), row_get("sup_catastale_mq"))
@@ -224,8 +233,9 @@ def import_capacitas_excel(
             "import_batch_id": batch.id,
             "anno_campagna": utenza_anno,
             "cco": _clean_optional_string(row_get("cco")),
+            "comune_id": comune_ref.id if comune_ref is not None else None,
             "cod_provincia": int(row_get("cod_provincia")) if row_get("cod_provincia") is not None else None,
-            "cod_comune_legacy": comune_value,
+            "cod_comune_capacitas": comune_value,
             "cod_frazione": int(row_get("cod_frazione")) if row_get("cod_frazione") is not None else None,
             "num_distretto": distretto_num,
             "nome_distretto_loc": _clean_optional_string(row_get("nome_distretto_loc")),

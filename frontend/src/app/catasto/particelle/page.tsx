@@ -66,8 +66,8 @@ export default function CatastoParticellePage() {
         accessorKey: "nome_comune",
         cell: ({ row }) => (
           <div>
-            <p className="text-sm font-medium text-gray-900">{row.original.nome_comune ?? row.original.cod_comune_legacy}</p>
-            <p className="text-xs text-gray-400">Codice legacy {row.original.cod_comune_legacy}</p>
+            <p className="text-sm font-medium text-gray-900">{row.original.nome_comune ?? row.original.cod_comune_capacitas}</p>
+            <p className="text-xs text-gray-400">Codice Capacitas {row.original.cod_comune_capacitas}</p>
           </div>
         ),
       },
@@ -124,7 +124,7 @@ export default function CatastoParticellePage() {
           <div className="mt-4">
             <TableFilters>
               <label className="text-sm font-medium text-gray-700">
-                Comune (cod. legacy)
+                Comune (cod. Capacitas)
                 <input
                   className="form-control mt-1"
                   inputMode="numeric"
