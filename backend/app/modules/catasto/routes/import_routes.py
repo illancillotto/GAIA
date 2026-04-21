@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile, status
-from sqlalchemy import desc, func, select
+from sqlalchemy import case, desc, func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user, require_admin_user
@@ -17,6 +17,7 @@ from app.schemas.catasto_phase1 import (
     CatAnomaliaResponse,
     CatImportBatchResponse,
     CatImportStartResponse,
+    CatImportSummaryResponse,
 )
 
 router = APIRouter(prefix="/catasto/import", tags=["catasto-import"])
@@ -132,6 +133,36 @@ def get_import_history(
     if tipo:
         query = query.where(CatImportBatch.tipo == tipo)
     return list(db.execute(query.limit(limit)).scalars().all())
+
+
+@router.get("/summary", response_model=CatImportSummaryResponse)
+def get_import_summary(
+    tipo: str | None = Query(None),
+    db: Session = Depends(get_db),
+    _: ApplicationUser = Depends(require_active_user),
+) -> CatImportSummaryResponse:
+    filters = [CatImportBatch.tipo == tipo] if tipo else []
+
+    counts = db.execute(
+        select(
+            func.count(),
+            func.coalesce(func.sum(case((CatImportBatch.status == "processing", 1), else_=0)), 0),
+            func.coalesce(func.sum(case((CatImportBatch.status == "completed", 1), else_=0)), 0),
+            func.coalesce(func.sum(case((CatImportBatch.status == "failed", 1), else_=0)), 0),
+            func.coalesce(func.sum(case((CatImportBatch.status == "replaced", 1), else_=0)), 0),
+            func.max(CatImportBatch.completed_at),
+        ).where(*filters)
+    ).one()
+
+    return CatImportSummaryResponse(
+        tipo=tipo,
+        totale_batch=int(counts[0] or 0),
+        processing_batch=int(counts[1] or 0),
+        completed_batch=int(counts[2] or 0),
+        failed_batch=int(counts[3] or 0),
+        replaced_batch=int(counts[4] or 0),
+        ultimo_completed_at=counts[5],
+    )
 
 
 @router.post("/shapefile/finalize")

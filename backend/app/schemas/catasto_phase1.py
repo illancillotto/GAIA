@@ -31,6 +31,16 @@ class CatImportStartResponse(BaseModel):
     status: str
 
 
+class CatImportSummaryResponse(BaseModel):
+    tipo: str | None
+    totale_batch: int
+    processing_batch: int
+    completed_batch: int
+    failed_batch: int
+    replaced_batch: int
+    ultimo_completed_at: datetime | None
+
+
 class CatAnomaliaResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

@@ -6,6 +6,7 @@ import type {
   CatDistrettoKpi,
   CatImportBatch,
   CatImportStartResponse,
+  CatImportSummary,
   CatParticella,
   CatParticellaDetail,
   CatParticellaHistory,
@@ -51,6 +52,18 @@ export async function catastoGetImportHistory(
     limit: params?.limit != null ? String(params.limit) : undefined,
   });
   return request<CatImportBatch[]>("/catasto/import/history" + query, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function catastoGetImportSummary(
+  token: string,
+  params?: { tipo?: string },
+): Promise<CatImportSummary> {
+  const query = createQueryString({
+    tipo: params?.tipo || undefined,
+  });
+  return request<CatImportSummary>("/catasto/import/summary" + query, {
     headers: authHeaders(token),
   });
 }

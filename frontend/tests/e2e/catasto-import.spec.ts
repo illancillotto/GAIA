@@ -69,6 +69,21 @@ test("admin completes catasto import wizard through report step", async ({ page 
 test("catasto import wizard shows empty report state when batch has no anomalies", async ({ page }) => {
   await loginAsAdmin(page);
 
+  await page.route("**/api/catasto/import/summary**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        tipo: "capacitas_ruolo",
+        totale_batch: 8,
+        processing_batch: 1,
+        completed_batch: 6,
+        failed_batch: 1,
+        replaced_batch: 0,
+        ultimo_completed_at: "2026-04-21T09:46:00Z",
+      }),
+    });
+  });
   await page.route("**/api/catasto/import/history**", async (route) => {
     const status = new URL(route.request().url()).searchParams.get("status");
     await route.fulfill({
@@ -145,6 +160,9 @@ test("catasto import wizard shows empty report state when batch has no anomalies
   });
 
   await page.goto("/catasto/import");
+  await expect(page.getByText("Audit import")).toBeVisible();
+  await expect(page.getByText("Batch totali")).toBeVisible();
+  await expect(page.getByText("Ultimo completato")).toBeVisible();
   await expect(page.getByText("Storico import recenti")).toBeVisible();
   await expect(page.getByText("capacitas-history.xlsx")).toBeVisible();
   await page.getByLabel("Stato").selectOption("failed");

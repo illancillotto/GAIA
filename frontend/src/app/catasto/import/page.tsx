@@ -12,10 +12,11 @@ import {
   catastoGetImportHistory,
   catastoGetImportReport,
   catastoGetImportStatus,
+  catastoGetImportSummary,
   catastoUploadCapacitas,
 } from "@/lib/api/catasto";
 import { getStoredAccessToken } from "@/lib/auth";
-import type { CatAnomaliaListResponse, CatImportBatch, UUID } from "@/types/catasto";
+import type { CatAnomaliaListResponse, CatImportBatch, CatImportSummary, UUID } from "@/types/catasto";
 
 type StepKey = "upload" | "progress" | "report";
 
@@ -55,6 +56,7 @@ export default function CatastoImportPage() {
   const [batchId, setBatchId] = useState<UUID | null>(null);
   const [batch, setBatch] = useState<CatImportBatch | null>(null);
   const [history, setHistory] = useState<CatImportBatch[]>([]);
+  const [summary, setSummary] = useState<CatImportSummary | null>(null);
   const [historyStatus, setHistoryStatus] = useState<string>("");
   const [historyLimit, setHistoryLimit] = useState<number>(5);
   const [reportTipo, setReportTipo] = useState<string>("");
@@ -167,6 +169,21 @@ export default function CatastoImportPage() {
   }, [batchId, step]);
 
   useEffect(() => {
+    async function loadSummary(): Promise<void> {
+      const token = getStoredAccessToken();
+      if (!token) return;
+      try {
+        const payload = await catastoGetImportSummary(token, { tipo: "capacitas_ruolo" });
+        setSummary(payload);
+      } catch {
+        // best-effort summary
+      }
+    }
+
+    void loadSummary();
+  }, []);
+
+  useEffect(() => {
     async function loadHistory(): Promise<void> {
       const token = getStoredAccessToken();
       if (!token) return;
@@ -252,6 +269,46 @@ export default function CatastoImportPage() {
             <p className="mt-1 text-sm text-gray-500">Contatori e lista anomalie.</p>
           </article>
         </div>
+
+        <article className="panel-card">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-gray-900">Audit import</p>
+              <p className="mt-1 text-sm text-gray-500">Snapshot operativo dei batch Capacitas registrati.</p>
+            </div>
+          </div>
+
+          {!summary ? (
+            <div className="mt-4">
+              <EmptyState icon={SearchIcon} title="Audit non disponibile" description="Il backend non ha restituito un riepilogo dei batch import." />
+            </div>
+          ) : (
+            <>
+              <div className="mt-4 grid gap-3 md:grid-cols-4">
+                <div className="rounded-xl border border-gray-100 bg-white p-4">
+                  <p className="text-xs uppercase tracking-wide text-gray-400">Batch totali</p>
+                  <p className="mt-1 text-lg font-semibold text-gray-900">{summary.totale_batch}</p>
+                </div>
+                <div className="rounded-xl border border-gray-100 bg-white p-4">
+                  <p className="text-xs uppercase tracking-wide text-gray-400">Processing</p>
+                  <p className="mt-1 text-lg font-semibold text-gray-900">{summary.processing_batch}</p>
+                </div>
+                <div className="rounded-xl border border-gray-100 bg-white p-4">
+                  <p className="text-xs uppercase tracking-wide text-gray-400">Completed</p>
+                  <p className="mt-1 text-lg font-semibold text-gray-900">{summary.completed_batch}</p>
+                </div>
+                <div className="rounded-xl border border-gray-100 bg-white p-4">
+                  <p className="text-xs uppercase tracking-wide text-gray-400">Failed</p>
+                  <p className="mt-1 text-lg font-semibold text-gray-900">{summary.failed_batch}</p>
+                </div>
+              </div>
+              <div className="mt-4 rounded-xl border border-gray-100 bg-white p-4">
+                <p className="text-xs uppercase tracking-wide text-gray-400">Ultimo completato</p>
+                <p className="mt-1 text-sm font-medium text-gray-900">{formatDateTime(summary.ultimo_completed_at)}</p>
+              </div>
+            </>
+          )}
+        </article>
 
         <article className="panel-card">
           <div className="flex items-start justify-between gap-4">

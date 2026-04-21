@@ -24,6 +24,16 @@ export type CatImportStartResponse = {
   status: string;
 };
 
+export type CatImportSummary = {
+  tipo: string | null;
+  totale_batch: number;
+  processing_batch: number;
+  completed_batch: number;
+  failed_batch: number;
+  replaced_batch: number;
+  ultimo_completed_at: string | null;
+};
+
 export type CatAnomaliaSeverita = "error" | "warning" | "info";
 export type CatAnomaliaStatus = "aperta" | "chiusa" | "ignora" | string;
 
@@ -169,4 +179,3 @@ export type GeoJSONFeature = {
   geometry: unknown;
   properties: Record<string, unknown>;
 };
-

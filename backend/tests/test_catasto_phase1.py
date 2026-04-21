@@ -1,5 +1,5 @@
 from collections.abc import Generator
-from datetime import date
+from datetime import date, datetime, timezone
 
 from fastapi.testclient import TestClient
 import pandas as pd
@@ -761,6 +761,66 @@ def test_import_history_endpoint_supports_status_and_limit_filters() -> None:
     assert len(completed_payload) == 1
     assert completed_payload[0]["id"] == completed_batch_id
     assert completed_payload[0]["tipo"] == "capacitas_ruolo"
+
+
+def test_import_summary_endpoint_returns_status_counters() -> None:
+    db = TestingSessionLocal()
+    try:
+        completed_batch = db.query(CatImportBatch).filter(CatImportBatch.hash_file == "seed-hash").one()
+        completed_batch.completed_at = datetime.now(timezone.utc)
+        db.add_all(
+            [
+                CatImportBatch(
+                    filename="processing-import.xlsx",
+                    tipo="capacitas_ruolo",
+                    anno_campagna=2025,
+                    hash_file="processing-hash",
+                    status="processing",
+                    righe_totali=10,
+                    righe_importate=0,
+                    righe_anomalie=0,
+                    created_by=1,
+                ),
+                CatImportBatch(
+                    filename="failed-import.xlsx",
+                    tipo="capacitas_ruolo",
+                    anno_campagna=2025,
+                    hash_file="failed-summary-hash",
+                    status="failed",
+                    righe_totali=10,
+                    righe_importate=0,
+                    righe_anomalie=0,
+                    created_by=1,
+                    errore="Workbook non valido",
+                ),
+                CatImportBatch(
+                    filename="replaced-import.xlsx",
+                    tipo="capacitas_ruolo",
+                    anno_campagna=2024,
+                    hash_file="replaced-summary-hash",
+                    status="replaced",
+                    righe_totali=8,
+                    righe_importate=8,
+                    righe_anomalie=1,
+                    created_by=1,
+                ),
+            ]
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get("/catasto/import/summary?tipo=capacitas_ruolo", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["tipo"] == "capacitas_ruolo"
+    assert payload["totale_batch"] >= 4
+    assert payload["processing_batch"] == 1
+    assert payload["completed_batch"] >= 1
+    assert payload["failed_batch"] == 1
+    assert payload["replaced_batch"] == 1
+    assert payload["ultimo_completed_at"] is not None
 
 
 def test_import_capacitas_excel_creates_batch_and_normalizes_cf(monkeypatch: pytest.MonkeyPatch) -> None:
