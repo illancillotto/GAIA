@@ -49,6 +49,10 @@ export default function CatastoImportPage() {
   const pollTimer = useRef<number | null>(null);
 
   const reportJson = batch?.report_json ?? null;
+  const batchFailureMessage =
+    batch?.status === "failed"
+      ? batch.errore ?? "Il batch di import e terminato in errore."
+      : null;
   const previewAnomalie = useMemo<PreviewAnomalia[]>(() => {
     if (!reportJson || typeof reportJson !== "object") return [];
     const value = (reportJson as Record<string, unknown>)["preview_anomalie"];
@@ -157,6 +161,11 @@ export default function CatastoImportPage() {
         {error ? (
           <AlertBanner variant="danger" title="Errore">
             {error}
+          </AlertBanner>
+        ) : null}
+        {batchFailureMessage ? (
+          <AlertBanner variant="danger" title="Import fallito">
+            {batchFailureMessage}
           </AlertBanner>
         ) : null}
 

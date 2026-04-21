@@ -188,6 +188,7 @@ Comportamento attuale:
 - `/catasto/documents` reindirizza all'archivio documenti
 - `/catasto/documents/[id]` mostra il dettaglio documento
 - `/catasto/import` espone il wizard upload -> polling -> report anomalie
+- il wizard import gestisce sia il completamento positivo sia il fallimento del batch con esposizione dell'errore applicativo
 - `/catasto/distretti` e `/catasto/distretti/[id]` coprono KPI e drill-down per distretto
 - `/catasto/particelle` e `/catasto/particelle/[id]` coprono lookup e dettaglio con utenze/anomalie
 - `/catasto/anomalie` espone la lista operativa con aggiornamento stato
