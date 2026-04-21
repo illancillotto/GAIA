@@ -96,7 +96,7 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   assert.match(dashboardPage, /GAIA Catasto/);
   assert.match(catastoPageWrapper, /ProtectedPage/);
   assert.doesNotMatch(catastoPageWrapper, /CatastoPhase1Nav/);
-  assert.match(catastoLayout, /CatastoPhase1Nav/);
+  assert.doesNotMatch(catastoLayout, /CatastoPhase1Nav/);
   assert.match(catastoSettingsPage, /redirect\("\/elaborazioni\/settings"\)/);
   assert.match(catastoCapacitasPage, /redirect\("\/elaborazioni\/capacitas"\)/);
   assert.match(elaborazioniDashboardPage, /GAIA Elaborazioni/);

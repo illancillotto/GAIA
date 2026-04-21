@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import {
@@ -38,6 +38,87 @@ type HomeModule = {
   icon: string;
   enabledKeys: string[];
 };
+
+type SearchRoute = {
+  label: string;
+  href: string;
+  moduleKey?: string;
+  requiredSection?: string;
+  requiredRoles?: string[];
+  keywords?: string[];
+};
+
+const menuSearchRoutes: SearchRoute[] = [
+  // NAS / Accessi
+  { label: "NAS Control · Dashboard", href: "/nas-control", moduleKey: "accessi", keywords: ["nas", "accessi"] },
+  { label: "NAS Control · Sincronizzazione", href: "/nas-control/sync", moduleKey: "accessi", keywords: ["sync", "sincronizzazione"] },
+  { label: "NAS Control · Utenti", href: "/nas-control/users", moduleKey: "accessi", requiredSection: "accessi.users", keywords: ["utenti", "users"] },
+  { label: "NAS Control · Gruppi", href: "/nas-control/groups", moduleKey: "accessi", keywords: ["gruppi", "groups"] },
+  { label: "NAS Control · Cartelle condivise", href: "/nas-control/shares", moduleKey: "accessi", keywords: ["shares", "cartelle"] },
+  { label: "NAS Control · Permessi effettivi", href: "/nas-control/effective-permissions", moduleKey: "accessi", keywords: ["permessi", "effective"] },
+  { label: "NAS Control · Review NAS", href: "/nas-control/reviews", moduleKey: "accessi", keywords: ["review", "validazione"] },
+  { label: "NAS Control · Report", href: "/nas-control/reports", moduleKey: "accessi", keywords: ["report"] },
+
+  // Elaborazioni
+  { label: "Elaborazioni · Dashboard", href: "/elaborazioni", moduleKey: "elaborazioni", keywords: ["batch"] },
+  { label: "Elaborazioni · WhiteCompany Sync", href: "/elaborazioni/bonifica", moduleKey: "elaborazioni", keywords: ["white", "bonifica", "sync"] },
+  { label: "Elaborazioni · Visure", href: "/elaborazioni/new-single", moduleKey: "elaborazioni", keywords: ["visure"] },
+  { label: "Elaborazioni · Capacitas", href: "/elaborazioni/capacitas", moduleKey: "elaborazioni", keywords: ["capacitas"] },
+  { label: "Elaborazioni · Credenziali", href: "/elaborazioni/settings", moduleKey: "elaborazioni", keywords: ["credenziali", "settings"] },
+
+  // Catasto
+  { label: "Catasto · Dashboard", href: "/catasto", moduleKey: "catasto" },
+  { label: "Catasto · Distretti", href: "/catasto/distretti", moduleKey: "catasto", keywords: ["distretti"] },
+  { label: "Catasto · Particelle", href: "/catasto/particelle", moduleKey: "catasto", keywords: ["mappali", "terreni"] },
+  { label: "Catasto · Anomalie", href: "/catasto/anomalie", moduleKey: "catasto", keywords: ["errori"] },
+  { label: "Catasto · Import", href: "/catasto/import", moduleKey: "catasto", keywords: ["caricamento"] },
+  { label: "Catasto · Archivio documenti", href: "/catasto/archive", moduleKey: "catasto", keywords: ["documenti"] },
+  { label: "Catasto · Credenziali", href: "/catasto/settings", moduleKey: "catasto", keywords: ["credenziali", "settings"] },
+
+  // Network (rete)
+  { label: "Rete · Dashboard", href: "/network", moduleKey: "rete" },
+  { label: "Rete · Dispositivi", href: "/network/devices", moduleKey: "rete", keywords: ["switch", "ap", "devices"] },
+  { label: "Rete · Planimetria", href: "/network/floor-plan", moduleKey: "rete", keywords: ["mappa", "planimetria"] },
+  { label: "Rete · Alert", href: "/network/alerts", moduleKey: "rete", keywords: ["allarmi"] },
+  { label: "Rete · Scansioni", href: "/network/scans", moduleKey: "rete", keywords: ["scan", "scansioni"] },
+
+  // Utenze / Anagrafica
+  { label: "Utenze · Dashboard", href: "/utenze", moduleKey: "utenze" },
+  { label: "Utenze · Soggetti", href: "/utenze/subjects", moduleKey: "utenze", keywords: ["anagrafica", "subjects"] },
+  { label: "Utenze · Import archivio", href: "/utenze/import", moduleKey: "utenze", keywords: ["import"] },
+
+  // Operazioni
+  { label: "Operazioni · Dashboard", href: "/operazioni", moduleKey: "operazioni" },
+  { label: "Operazioni · Analisi operazioni", href: "/operazioni/analisi", moduleKey: "operazioni", keywords: ["analisi"] },
+  { label: "Operazioni · Operatori", href: "/operazioni/operatori", moduleKey: "operazioni" },
+  { label: "Operazioni · Carte carburante", href: "/operazioni/carte-carburante", moduleKey: "operazioni", keywords: ["fuel", "carburante"] },
+  { label: "Operazioni · Mezzi", href: "/operazioni/mezzi", moduleKey: "operazioni", keywords: ["veicoli", "automezzi"] },
+  { label: "Operazioni · Attività", href: "/operazioni/attivita", moduleKey: "operazioni" },
+  { label: "Operazioni · Cruscotto segnalazioni", href: "/operazioni/segnalazioni/cruscotto", moduleKey: "operazioni", keywords: ["cruscotto"] },
+  { label: "Operazioni · Segnalazioni", href: "/operazioni/segnalazioni", moduleKey: "operazioni" },
+  { label: "Operazioni · Pratiche", href: "/operazioni/pratiche", moduleKey: "operazioni" },
+
+  // Riordino
+  { label: "Riordino · Dashboard", href: "/riordino", moduleKey: "riordino" },
+  { label: "Riordino · Pratiche", href: "/riordino/pratiche", moduleKey: "riordino" },
+  { label: "Riordino · Configurazione", href: "/riordino/configurazione", moduleKey: "riordino", keywords: ["settings"] },
+
+  // Ruolo
+  { label: "Ruolo · Dashboard", href: "/ruolo", moduleKey: "ruolo" },
+  { label: "Ruolo · Avvisi", href: "/ruolo/avvisi", moduleKey: "ruolo" },
+  { label: "Ruolo · Statistiche", href: "/ruolo/stats", moduleKey: "ruolo", keywords: ["analytics"] },
+  { label: "Ruolo · Import Ruolo", href: "/ruolo/import", moduleKey: "ruolo", keywords: ["import"] },
+
+  // Admin GAIA users (include section check)
+  {
+    label: "Amministrazione · Utenti GAIA",
+    href: "/gaia/users",
+    moduleKey: "accessi",
+    requiredSection: "accessi.users",
+    requiredRoles: ["admin", "super_admin"],
+    keywords: ["admin", "utenti", "gaia"],
+  },
+];
 
 const emptySummary: DashboardSummary = {
   nas_users: 0,
@@ -214,6 +295,9 @@ export default function HomePage() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [grantedSectionKeys, setGrantedSectionKeys] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const searchBoxRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     async function loadHome() {
@@ -283,15 +367,62 @@ export default function HomePage() {
     return <HomePageSkeleton loadError={loadError} />;
   }
 
+  const user = currentUser;
+
   const canManageGaiaUsers =
-    (currentUser.role === "admin" || currentUser.role === "super_admin")
-    && currentUser.enabled_modules.includes("accessi")
+    (user.role === "admin" || user.role === "super_admin")
+    && user.enabled_modules.includes("accessi")
     && hasSectionAccess(grantedSectionKeys, "accessi.users");
+
+  const isAdmin = user.role === "admin" || user.role === "super_admin";
 
   const visibleModules = allModules.filter((mod) => {
     if (mod.status === "coming") return true;
-    return mod.enabledKeys.some((key) => currentUser.enabled_modules.includes(key));
+    return mod.enabledKeys.some((key) => user.enabled_modules.includes(key));
   });
+
+  const searchResults = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return [];
+
+    const enabledModuleSet = new Set(user.enabled_modules);
+
+    function isRouteAllowed(route: SearchRoute): boolean {
+      if (route.requiredRoles && !route.requiredRoles.includes(user.role)) return false;
+      if (route.requiredSection && !hasSectionAccess(grantedSectionKeys, route.requiredSection)) return false;
+      if (!route.moduleKey) return true;
+      if (isAdmin) return true;
+      return enabledModuleSet.has(route.moduleKey);
+    }
+
+    function scoreRoute(route: SearchRoute): number {
+      const haystack = [route.label, ...(route.keywords ?? [])].join(" ").toLowerCase();
+      if (haystack === query) return 100;
+      if (route.label.toLowerCase().startsWith(query)) return 80;
+      if (haystack.includes(query)) return 60;
+      return 0;
+    }
+
+    return menuSearchRoutes
+      .filter(isRouteAllowed)
+      .map((route) => ({ route, score: scoreRoute(route) }))
+      .filter((item) => item.score > 0)
+      .sort((a, b) => b.score - a.score || a.route.label.localeCompare(b.route.label))
+      .slice(0, 10)
+      .map((item) => item.route);
+  }, [user.enabled_modules, user.role, grantedSectionKeys, isAdmin, searchQuery]);
+
+  useEffect(() => {
+    function handleDocumentClick(event: MouseEvent) {
+      const target = event.target as Node | null;
+      if (!target) return;
+      if (searchBoxRef.current && !searchBoxRef.current.contains(target)) {
+        setIsSearchOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleDocumentClick);
+    return () => document.removeEventListener("mousedown", handleDocumentClick);
+  }, []);
 
   const platformStats = [
     {
@@ -365,7 +496,7 @@ export default function HomePage() {
 
           <div className="flex items-center gap-4">
             {/* Search (lg+) */}
-            <div className="relative hidden lg:block">
+            <div className="relative hidden lg:block" ref={searchBoxRef}>
               <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-outline text-sm pointer-events-none">
                 search
               </span>
@@ -373,8 +504,46 @@ export default function HomePage() {
                 className="bg-surface-container-high border-none rounded-lg pl-10 pr-4 py-2 text-sm focus:ring-1 focus:ring-primary w-56 transition-all outline-none"
                 placeholder="Ricerca globale…"
                 type="text"
-                readOnly
+                value={searchQuery}
+                onChange={(event) => {
+                  setSearchQuery(event.target.value);
+                  setIsSearchOpen(true);
+                }}
+                onFocus={() => setIsSearchOpen(true)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    setIsSearchOpen(false);
+                  }
+                  if (event.key === "Enter" && searchResults[0]) {
+                    setIsSearchOpen(false);
+                    router.push(searchResults[0].href);
+                  }
+                }}
               />
+              {isSearchOpen && searchQuery.trim() ? (
+                <div className="absolute right-0 mt-2 w-[420px] max-w-[80vw] overflow-hidden rounded-xl border border-surface-container bg-white shadow-lg">
+                  {searchResults.length === 0 ? (
+                    <div className="px-4 py-3 text-sm text-outline">Nessun risultato disponibile per i permessi correnti.</div>
+                  ) : (
+                    <ul className="max-h-[320px] overflow-auto py-2">
+                      {searchResults.map((item) => (
+                        <li key={item.href}>
+                          <button
+                            type="button"
+                            className="w-full px-4 py-2 text-left text-sm text-gray-900 hover:bg-surface-container-low"
+                            onClick={() => {
+                              setIsSearchOpen(false);
+                              router.push(item.href);
+                            }}
+                          >
+                            {item.label}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ) : null}
             </div>
 
             {/* User + logout */}
