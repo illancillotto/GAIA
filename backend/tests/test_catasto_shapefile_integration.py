@@ -154,7 +154,7 @@ def test_finalize_shapefile_import_inserts_current_particelle_and_distretti(db_s
         assert batch.righe_importate == 1
         assert batch.report_json["records_inserted_current"] == 1
         assert len(inserted) == 1
-        assert inserted[0].cod_comune_istat == 165
+        assert inserted[0].cod_comune_legacy == 165
         assert inserted[0].foglio == foglio
         assert inserted[0].particella == particella
         assert inserted[0].num_distretto == num_distretto
@@ -187,7 +187,7 @@ def test_finalize_shapefile_import_writes_history_on_changed_particella(db_sessi
 
     existing = CatParticella(
         national_code="A357TEST0001",
-        cod_comune_istat=165,
+        cod_comune_legacy=165,
         nome_comune="Arborea",
         foglio=foglio,
         particella=particella,
@@ -251,7 +251,7 @@ def test_finalize_shapefile_import_writes_history_on_changed_particella(db_sessi
         db_session.refresh(existing)
         current_rows = db_session.execute(
             select(CatParticella).where(
-                CatParticella.cod_comune_istat == 165,
+                CatParticella.cod_comune_legacy == 165,
                 CatParticella.foglio == foglio,
                 CatParticella.particella == particella,
                 CatParticella.is_current.is_(True),
@@ -437,7 +437,7 @@ def test_finalize_shapefile_import_excludes_fd_distretto_from_upsert(db_session:
         db_session.commit()
 
 
-def test_finalize_shapefile_import_maps_cod_catastale_from_cfm_and_national_code(db_session: Session) -> None:
+def test_finalize_shapefile_import_maps_cod_catastale_from_reference_dataset(db_session: Session) -> None:
     suffix = uuid4().hex[:8]
     staging_table = f"cat_particelle_staging_it_{suffix}"
     num_distretto = f"6{suffix[:3]}"
@@ -470,14 +470,14 @@ def test_finalize_shapefile_import_maps_cod_catastale_from_cfm_and_national_code
         )
     )
 
-    # Row 1: mapping from CFM prefix (I791 -> 286)
+    # Row 1: mapping from CFM prefix (A368 -> 286 / San Nicolo d'Arcidano)
     db_session.execute(
         text(
             f'''
             INSERT INTO "{staging_table}" (
               nume_fogl, nume_part, suba_part, cfm, nationalca, supe_part, num_dist, nome_dist, wkb_geometry
             ) VALUES (
-              :foglio, :particella, '1', 'I791-ITEST', NULL, '10.00', :num_dist, 'Distretto map 1',
+              :foglio, :particella, '1', 'A368-ITEST', NULL, '10.00', :num_dist, 'Distretto map 1',
               ST_GeomFromText(:wkt1, 4326)
             )
             '''
@@ -502,6 +502,23 @@ def test_finalize_shapefile_import_maps_cod_catastale_from_cfm_and_national_code
         {"foglio2": foglio2, "particella2": particella2, "num_dist": num_distretto, "wkt2": _polygon_wkt(8.64, 39.84)},
     )
 
+    # Row 3: mapping from CFM prefix (H301 -> 232 / Riola Sardo)
+    foglio3 = f"{foglio}Y"
+    particella3 = f"{particella}Y"
+    db_session.execute(
+        text(
+            f'''
+            INSERT INTO "{staging_table}" (
+              nume_fogl, nume_part, suba_part, cfm, nationalca, supe_part, num_dist, nome_dist, wkb_geometry
+            ) VALUES (
+              :foglio3, :particella3, '1', 'H301-ITEST', NULL, '12.00', :num_dist, 'Distretto map 3',
+              ST_GeomFromText(:wkt3, 4326)
+            )
+            '''
+        ),
+        {"foglio3": foglio3, "particella3": particella3, "num_dist": num_distretto, "wkt3": _polygon_wkt(8.65, 39.85)},
+    )
+
     db_session.commit()
 
     try:
@@ -518,18 +535,25 @@ def test_finalize_shapefile_import_maps_cod_catastale_from_cfm_and_national_code
         inserted_2 = db_session.execute(
             select(CatParticella).where(CatParticella.foglio == foglio2, CatParticella.particella == particella2, CatParticella.is_current.is_(True))
         ).scalar_one()
+        inserted_3 = db_session.execute(
+            select(CatParticella).where(CatParticella.foglio == foglio3, CatParticella.particella == particella3, CatParticella.is_current.is_(True))
+        ).scalar_one()
 
-        assert inserted_1.cod_comune_istat == 286
-        assert inserted_2.cod_comune_istat == 212
+        assert inserted_1.cod_comune_legacy == 286
+        assert inserted_1.nome_comune == "San Nicolo d'Arcidano"
+        assert inserted_2.cod_comune_legacy == 212
+        assert inserted_2.nome_comune == "Cabras"
+        assert inserted_3.cod_comune_legacy == 232
+        assert inserted_3.nome_comune == "Riola Sardo"
     finally:
         db_session.execute(text(f'DROP TABLE IF EXISTS "{staging_table}"'))  # nosec - generated local test table
         db_session.execute(
-            text("DELETE FROM cat_particelle WHERE foglio IN (:f1, :f2) AND particella IN (:p1, :p2)"),
-            {"f1": foglio, "f2": foglio2, "p1": particella, "p2": particella2},
+            text("DELETE FROM cat_particelle WHERE foglio IN (:f1, :f2, :f3) AND particella IN (:p1, :p2, :p3)"),
+            {"f1": foglio, "f2": foglio2, "f3": foglio3, "p1": particella, "p2": particella2, "p3": particella3},
         )
         db_session.execute(
-            text("DELETE FROM cat_particelle_history WHERE foglio IN (:f1, :f2) AND particella IN (:p1, :p2)"),
-            {"f1": foglio, "f2": foglio2, "p1": particella, "p2": particella2},
+            text("DELETE FROM cat_particelle_history WHERE foglio IN (:f1, :f2, :f3) AND particella IN (:p1, :p2, :p3)"),
+            {"f1": foglio, "f2": foglio2, "f3": foglio3, "p1": particella, "p2": particella2, "p3": particella3},
         )
         db_session.execute(text("DELETE FROM cat_distretti WHERE num_distretto = :n"), {"n": num_distretto})
         db_session.execute(text("DELETE FROM cat_import_batches WHERE filename = :f"), {"f": staging_table})
@@ -553,7 +577,7 @@ def test_finalize_shapefile_import_writes_history_when_only_geometry_changes(db_
 
     existing = CatParticella(
         national_code="A357TESTGEO1",
-        cod_comune_istat=165,
+        cod_comune_legacy=165,
         nome_comune="Arborea",
         foglio=foglio,
         particella=particella,
@@ -618,7 +642,7 @@ def test_finalize_shapefile_import_writes_history_when_only_geometry_changes(db_
         db_session.refresh(existing)
         current_rows = db_session.execute(
             select(CatParticella).where(
-                CatParticella.cod_comune_istat == 165,
+                CatParticella.cod_comune_legacy == 165,
                 CatParticella.foglio == foglio,
                 CatParticella.particella == particella,
                 CatParticella.is_current.is_(True),

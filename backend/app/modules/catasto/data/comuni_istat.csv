@@ -1,27 +1,27 @@
-cod_istat,nome_comune,cod_provincia,sigla_provincia,regione
-50,Mogoro,95,OR,Sardegna
-59,Masullas,95,OR,Sardegna
-165,Arborea,95,OR,Sardegna
-170,Milis,95,OR,Sardegna
-173,Bauladu,95,OR,Sardegna
-176,Narbolia,95,OR,Sardegna
-179,San Vero Milis,95,OR,Sardegna
-186,Tramatza,95,OR,Sardegna
-189,Zeddiani,95,OR,Sardegna
-200,Oristano*Oristano,95,OR,Sardegna
-206,Baratili San Pietro,95,OR,Sardegna
-212,Cabras,95,OR,Sardegna
-222,Nurachi,95,OR,Sardegna
-226,Ollastra Simaxis,95,OR,Sardegna
-229,Palmas Arborea,95,OR,Sardegna
-232,Riola Sardo,95,OR,Sardegna
-239,Santa Giusta,95,OR,Sardegna
-242,Siamaggiore,95,OR,Sardegna
-249,Simaxis*Simaxis,95,OR,Sardegna
-252,Solarussa,95,OR,Sardegna
-266,Zerfaliu,95,OR,Sardegna
-280,Terralba,95,OR,Sardegna
-283,Marrubiu,95,OR,Sardegna
-286,San Nicolo Arcidano,95,OR,Sardegna
-289,Uras,95,OR,Sardegna
-743,Pabillonis,111,SU,Sardegna
+cod_istat,nome_comune,codice_catastale,codice_comune_formato_numerico,codice_comune_numerico_2017_2025,nome_comune_legacy,cod_provincia,sigla_provincia,regione
+50,Mogoro,F272,115035,95029,Mogoro,95,OR,Sardegna
+59,Masullas,F050,115031,95026,Masullas,95,OR,Sardegna
+165,Arborea,A357,115006,95006,Arborea,95,OR,Sardegna
+170,Milis,F208,115032,95027,Milis,95,OR,Sardegna
+173,Bauladu,A721,115013,95013,Bauladu,95,OR,Sardegna
+176,Narbolia,F840,115038,95031,Narbolia,95,OR,Sardegna
+179,San Vero Milis,I384,115055,95050,San Vero Milis,95,OR,Sardegna
+186,Tramatza,L321,115077,95066,Tramatza,95,OR,Sardegna
+189,Zeddiani,M153,115086,95074,Zeddiani,95,OR,Sardegna
+200,Oristano,G113,115045,95038,Oristano*Oristano,95,OR,Sardegna
+206,Baratili San Pietro,A621,115011,95011,Baratili San Pietro,95,OR,Sardegna
+212,Cabras,B314,115019,95018,Cabras,95,OR,Sardegna
+222,Nurachi,F980,115042,95035,Nurachi,95,OR,Sardegna
+226,Ollastra,G043,115044,95037,Ollastra Simaxis,95,OR,Sardegna
+229,Palmas Arborea,G286,115046,95039,Palmas Arborea,95,OR,Sardegna
+232,Riola Sardo,H301,115050,95043,Riola Sardo,95,OR,Sardegna
+239,Santa Giusta,I205,115056,95047,Santa Giusta,95,OR,Sardegna
+242,Siamaggiore,I717,115063,95056,Siamaggiore,95,OR,Sardegna
+249,Simaxis,I743,115067,95059,Simaxis*Simaxis,95,OR,Sardegna
+252,Solarussa,I791,115071,95062,Solarussa,95,OR,Sardegna
+266,Zerfaliu,M168,115087,95075,Zerfaliu,95,OR,Sardegna
+280,Terralba,L122,115075,95065,Terralba,95,OR,Sardegna
+283,Marrubiu,E972,115030,95025,Marrubiu,95,OR,Sardegna
+286,San Nicolo d'Arcidano,A368,115054,95046,San Nicolo Arcidano,95,OR,Sardegna
+289,Uras,L496,115080,95069,Uras,95,OR,Sardegna
+743,Pabillonis,G207,117011,111052,Pabillonis,111,SU,Sardegna

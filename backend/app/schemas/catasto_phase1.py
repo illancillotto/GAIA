@@ -78,7 +78,7 @@ class CatParticellaResponse(BaseModel):
 
     id: UUID
     national_code: str | None
-    cod_comune_istat: int
+    cod_comune_legacy: int
     nome_comune: str | None
     sezione_catastale: str | None
     foglio: str
@@ -107,7 +107,7 @@ class CatParticellaHistoryResponse(BaseModel):
     history_id: UUID
     particella_id: UUID
     national_code: str | None
-    cod_comune_istat: int
+    cod_comune_legacy: int
     foglio: str
     particella: str
     subalterno: str | None
@@ -164,7 +164,7 @@ class CatUtenzaIrriguaResponse(BaseModel):
     anno_campagna: int
     cco: str | None
     cod_provincia: int | None
-    cod_comune_istat: int | None
+    cod_comune_legacy: int | None
     cod_frazione: int | None
     num_distretto: int | None
     nome_distretto_loc: str | None
@@ -194,3 +194,81 @@ class CatUtenzaIrriguaResponse(BaseModel):
     anomalia_imponibile: bool
     anomalia_importi: bool
     created_at: datetime
+
+
+class CatIntestatarioResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    codice_fiscale: str
+    denominazione: str | None
+    tipo: str | None
+    cognome: str | None
+    nome: str | None
+    data_nascita: date | None
+    luogo_nascita: str | None
+    ragione_sociale: str | None
+    source: str | None
+    last_verified_at: datetime | None
+    deceduto: bool | None
+
+
+class CatAnagraficaUtenzaSummary(BaseModel):
+    id: UUID
+    cco: str | None = None
+    anno_campagna: int | None = None
+    stato: str | None = None
+    num_distretto: int | None = None
+    nome_distretto: str | None = None
+    sup_irrigabile_mq: Decimal | None = None
+    denominazione: str | None = None
+    codice_fiscale: str | None = None
+    ha_anomalie: bool | None = None
+
+
+class CatAnagraficaMatch(BaseModel):
+    particella_id: UUID
+    comune: str | None = None
+    cod_comune_legacy: int | None = None
+    foglio: str
+    particella: str
+    subalterno: str | None = None
+    num_distretto: str | None = None
+    nome_distretto: str | None = None
+    superficie_mq: Decimal | None = None
+
+    utenza_latest: CatAnagraficaUtenzaSummary | None = None
+    intestatari: list[CatIntestatarioResponse] = []
+    anomalie_count: int = 0
+    anomalie_top: list[dict] = []
+
+
+class CatAnagraficaSearchResponse(BaseModel):
+    matches: list[CatAnagraficaMatch]
+
+
+class CatAnagraficaBulkSearchRow(BaseModel):
+    row_index: int
+    comune: str | None = None
+    foglio: str | None = None
+    particella: str | None = None
+
+
+class CatAnagraficaBulkSearchRequest(BaseModel):
+    rows: list[CatAnagraficaBulkSearchRow]
+
+
+class CatAnagraficaBulkSearchRowResult(BaseModel):
+    row_index: int
+    comune_input: str | None = None
+    foglio_input: str | None = None
+    particella_input: str | None = None
+    esito: str
+    message: str
+    particella_id: UUID | None = None
+    match: CatAnagraficaMatch | None = None
+    matches_count: int | None = None
+
+
+class CatAnagraficaBulkSearchResponse(BaseModel):
+    results: list[CatAnagraficaBulkSearchRowResult]

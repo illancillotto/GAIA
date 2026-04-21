@@ -8,6 +8,14 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.models.catasto_phase1 import CatImportBatch
+from app.modules.catasto.services.comuni_reference import (
+    get_legacy_code_by_catastale,
+    get_official_name_by_catastale,
+)
+
+
+def _escape_sql_string(value: str) -> str:
+    return value.replace("'", "''")
 
 
 def finalize_shapefile_import(
@@ -25,9 +33,21 @@ def finalize_shapefile_import(
     - Inserisce storico in `cat_particelle_history` per record cambiati
     - Deriva e upserta `cat_distretti` via ST_Union sulle particelle correnti
     - Crea `cat_import_batches` con tipo='shapefile' e report_json con conteggi
+
+    Nota importante:
+    - `cod_comune_istat` nel modello Catasto e un codice legacy compatibile con
+      Capacitas, non il codice comune numerico ufficiale ISTAT moderno
+    - il mapping da `codice catastale` a questo codice deve sempre passare dal
+      dataset di riferimento `comuni_istat.csv`, mai da CASE hardcoded nel SQL
     """
     batch_id = uuid4()
     now = datetime.now(timezone.utc)
+    codice_by_catastale = get_legacy_code_by_catastale()
+    nome_by_catastale = get_official_name_by_catastale()
+    mapping_rows_sql = ",\n        ".join(
+        f"('{codice_catastale}', {codice}, '{_escape_sql_string(nome_by_catastale[codice_catastale])}')"
+        for codice_catastale, codice in sorted(codice_by_catastale.items())
+    )
 
     # Pre-check: staging deve esistere
     exists = db.execute(
@@ -97,24 +117,18 @@ def finalize_shapefile_import(
     # Mapping colonne staging -> canonical (tollerante a naming diversi).
     # Importante: riferirsi a colonne non esistenti in SQL causa errore anche dentro COALESCE.
     # Per questo usiamo to_jsonb(t)->>'COL' (NULL se la chiave/colonna non esiste).
+    # Il mapping comuni viene materializzato dal dataset di riferimento del dominio
+    # per evitare divergenze tra shapefile, Capacitas e anagrafica ufficiale.
     staged_rows_cte = f"""
-    WITH staged AS (
+    WITH mapping AS (
+      SELECT *
+      FROM (VALUES
+        {mapping_rows_sql}
+      ) AS m(codice_catastale, cod_comune_istat, nome_comune)
+    ),
+    staged AS (
       SELECT
-        -- chiave catastale
-        (
-          CASE
-            WHEN cod_catastale = 'A357' THEN 165  -- Arborea
-            WHEN cod_catastale = 'B314' THEN 212  -- Cabras
-            WHEN cod_catastale = 'E972' THEN 283  -- Marrubiu
-            WHEN cod_catastale = 'G113' THEN 200  -- Oristano
-            WHEN cod_catastale = 'I205' THEN 239  -- Santa Giusta
-            WHEN cod_catastale = 'L122' THEN 280  -- Terralba
-            WHEN cod_catastale = 'H301' THEN 222  -- Nurachi
-            WHEN cod_catastale = 'G286' THEN 289  -- Uras
-            WHEN cod_catastale = 'I791' THEN 286  -- San Nicolo d'Arcidano
-            ELSE 0
-          END
-        ) AS cod_comune_istat,
+        COALESCE(m.cod_comune_istat, 0) AS cod_comune_istat,
         regexp_replace(
           COALESCE(NULLIF(TRIM(COALESCE(to_jsonb(t)->>'nume_fogl', to_jsonb(t)->>'FOGLIO', to_jsonb(t)->>'foglio')), ''), ''),
           '\\.0$',
@@ -129,7 +143,7 @@ def finalize_shapefile_import(
 
         -- attributi
         NULLIF(TRIM(COALESCE(to_jsonb(t)->>'nationalca', to_jsonb(t)->>'national_code', to_jsonb(t)->>'NATIONALCA')), '') AS national_code,
-        NULL AS nome_comune,
+        m.nome_comune AS nome_comune,
         NULLIF(TRIM(COALESCE(to_jsonb(t)->>'sezi_cens', to_jsonb(t)->>'sezione_catastale', to_jsonb(t)->>'SEZI_CENS')), '') AS sezione_catastale,
         NULLIF(TRIM(COALESCE(to_jsonb(t)->>'cfm', to_jsonb(t)->>'CFM')), '') AS cfm,
         COALESCE(
@@ -148,6 +162,8 @@ def finalize_shapefile_import(
           NULLIF(TRIM(left(COALESCE(to_jsonb(t)->>'nationalca',''), 4)), '')
         )), '') AS cod_catastale
       ) c
+      LEFT JOIN mapping m
+        ON m.codice_catastale = c.cod_catastale
     )
     """
 
@@ -382,4 +398,3 @@ def finalize_shapefile_import(
         "status": batch.status,
         "report": batch.report_json,
     }
-

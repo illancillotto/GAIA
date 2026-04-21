@@ -112,7 +112,7 @@ class CatParticella(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     national_code: Mapped[str | None] = mapped_column(String(25), nullable=True)
-    cod_comune_istat: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    cod_comune_legacy: Mapped[int] = mapped_column("cod_comune_istat", Integer, nullable=False, index=True)
     nome_comune: Mapped[str | None] = mapped_column(String(100), nullable=True)
     sezione_catastale: Mapped[str | None] = mapped_column(String(10), nullable=True)
     foglio: Mapped[str] = mapped_column(String(10), nullable=False)
@@ -141,6 +141,14 @@ class CatParticella(Base):
     def fuori_distretto(self) -> bool:
         return self.num_distretto == "FD"
 
+    @property
+    def cod_comune_istat(self) -> int:
+        return self.cod_comune_legacy
+
+    @cod_comune_istat.setter
+    def cod_comune_istat(self, value: int) -> None:
+        self.cod_comune_legacy = value
+
 
 class CatParticellaHistory(Base):
     __tablename__ = "cat_particelle_history"
@@ -148,7 +156,7 @@ class CatParticellaHistory(Base):
     history_id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     particella_id: Mapped[uuid.UUID] = mapped_column(Uuid, nullable=False, index=True)
     national_code: Mapped[str | None] = mapped_column(String(25), nullable=True)
-    cod_comune_istat: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    cod_comune_legacy: Mapped[int] = mapped_column("cod_comune_istat", Integer, nullable=False, index=True)
     foglio: Mapped[str] = mapped_column(String(10), nullable=False)
     particella: Mapped[str] = mapped_column(String(20), nullable=False)
     subalterno: Mapped[str | None] = mapped_column(String(10), nullable=True)
@@ -159,6 +167,14 @@ class CatParticellaHistory(Base):
     valid_to: Mapped[date] = mapped_column(Date, nullable=False)
     changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     change_reason: Mapped[str | None] = mapped_column(String(50), nullable=True)
+
+    @property
+    def cod_comune_istat(self) -> int:
+        return self.cod_comune_legacy
+
+    @cod_comune_istat.setter
+    def cod_comune_istat(self, value: int) -> None:
+        self.cod_comune_legacy = value
 
 
 class CatUtenzaIrrigua(Base):
@@ -171,7 +187,7 @@ class CatUtenzaIrrigua(Base):
     anno_campagna: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     cco: Mapped[str | None] = mapped_column(String(20), nullable=True)
     cod_provincia: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    cod_comune_istat: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    cod_comune_legacy: Mapped[int | None] = mapped_column("cod_comune_istat", Integer, nullable=True, index=True)
     cod_frazione: Mapped[int | None] = mapped_column(Integer, nullable=True)
     num_distretto: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     nome_distretto_loc: Mapped[str | None] = mapped_column(String(200), nullable=True)
@@ -221,6 +237,14 @@ class CatUtenzaIrrigua(Base):
                 self.anomalia_importi,
             ]
         )
+
+    @property
+    def cod_comune_istat(self) -> int | None:
+        return self.cod_comune_legacy
+
+    @cod_comune_istat.setter
+    def cod_comune_istat(self, value: int | None) -> None:
+        self.cod_comune_legacy = value
 
 
 class CatIntestatario(Base):

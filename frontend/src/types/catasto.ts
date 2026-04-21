@@ -64,7 +64,7 @@ export type CatAnomaliaListResponse = {
 export type CatParticella = {
   id: UUID;
   national_code: string | null;
-  cod_comune_istat: number;
+  cod_comune_legacy: number;
   nome_comune: string | null;
   sezione_catastale: string | null;
   foglio: string;
@@ -91,7 +91,7 @@ export type CatParticellaHistory = {
   history_id: UUID;
   particella_id: UUID;
   national_code: string | null;
-  cod_comune_istat: number;
+  cod_comune_legacy: number;
   foglio: string;
   particella: string;
   subalterno: string | null;
@@ -142,7 +142,7 @@ export type CatUtenzaIrrigua = {
   anno_campagna: number;
   cco: string | null;
   cod_provincia: number | null;
-  cod_comune_istat: number | null;
+  cod_comune_legacy: number | null;
   cod_frazione: number | null;
   num_distretto: number | null;
   nome_distretto_loc: string | null;
@@ -178,4 +178,79 @@ export type GeoJSONFeature = {
   type: "Feature";
   geometry: unknown;
   properties: Record<string, unknown>;
+};
+
+export type CatIntestatario = {
+  id: UUID;
+  codice_fiscale: string;
+  denominazione: string | null;
+  tipo: string | null;
+  cognome: string | null;
+  nome: string | null;
+  data_nascita: string | null;
+  luogo_nascita: string | null;
+  ragione_sociale: string | null;
+  source: string | null;
+  last_verified_at: string | null;
+  deceduto: boolean | null;
+};
+
+export type CatAnagraficaUtenzaSummary = {
+  id: UUID;
+  cco: string | null;
+  anno_campagna: number | null;
+  stato: string | null;
+  num_distretto: number | null;
+  nome_distretto: string | null;
+  sup_irrigabile_mq: string | null;
+  denominazione: string | null;
+  codice_fiscale: string | null;
+  ha_anomalie: boolean | null;
+};
+
+export type CatAnagraficaMatch = {
+  particella_id: UUID;
+  comune: string | null;
+  cod_comune_legacy: number | null;
+  foglio: string;
+  particella: string;
+  subalterno: string | null;
+  num_distretto: string | null;
+  nome_distretto: string | null;
+  superficie_mq: string | null;
+  utenza_latest: CatAnagraficaUtenzaSummary | null;
+  intestatari: CatIntestatario[];
+  anomalie_count: number;
+  anomalie_top: { tipo: string; count: number }[];
+};
+
+export type CatAnagraficaSearchResponse = {
+  matches: CatAnagraficaMatch[];
+};
+
+export type CatAnagraficaBulkRowInput = {
+  row_index: number;
+  comune?: string | null;
+  foglio?: string | null;
+  particella?: string | null;
+};
+
+export type CatAnagraficaBulkSearchRequest = {
+  rows: CatAnagraficaBulkRowInput[];
+};
+
+export type CatAnagraficaBulkRowResult = {
+  row_index: number;
+  comune_input: string | null;
+  foglio_input: string | null;
+  particella_input: string | null;
+  esito: "FOUND" | "NOT_FOUND" | "MULTIPLE_MATCHES" | "INVALID_ROW" | "ERROR" | string;
+  message: string;
+  particella_id: UUID | null;
+  match: CatAnagraficaMatch | null;
+  matches_count: number | null;
+};
+
+export type CatAnagraficaBulkSearchResponse = {
+  results: CatAnagraficaBulkRowResult[];
 };

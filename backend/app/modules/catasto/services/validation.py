@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 import pandas as pd
+from app.modules.catasto.services.comuni_reference import get_comune_by_legacy_code, load_comuni_reference
 
 _comuni_df: pd.DataFrame | None = None
 
@@ -15,8 +14,7 @@ except Exception:  # pragma: no cover
 def _get_comuni() -> pd.DataFrame:
     global _comuni_df
     if _comuni_df is None:
-        csv_path = Path(__file__).resolve().parent.parent / "data" / "comuni_istat.csv"
-        _comuni_df = pd.read_csv(csv_path, dtype={"cod_istat": int})
+        _comuni_df = load_comuni_reference()
     return _comuni_df
 
 
@@ -164,14 +162,21 @@ def _check_digit_piva(piva: str) -> bool:
 
 
 def validate_comune(cod_istat: int | None) -> dict[str, object | None]:
+    """
+    Valida il codice comune legacy usato oggi da Catasto/Capacitas.
+
+    Il parametro si chiama ancora `cod_istat` per compatibilita con il modello
+    attuale, ma semanticamente non rappresenta il codice comune numerico
+    ufficiale ISTAT moderno. Il controllo delega al dataset di riferimento del
+    dominio, che conserva sia il codice legacy sia gli identificativi ufficiali.
+    """
     if cod_istat is None:
         return {"is_valid": False, "nome_ufficiale": None}
 
-    comuni = _get_comuni()
-    match = comuni[comuni["cod_istat"] == int(cod_istat)]
-    if match.empty:
+    match = get_comune_by_legacy_code(int(cod_istat))
+    if match is None:
         return {"is_valid": False, "nome_ufficiale": None}
-    return {"is_valid": True, "nome_ufficiale": match.iloc[0]["nome_comune"]}
+    return {"is_valid": True, "nome_ufficiale": str(match["nome_comune"])}
 
 
 def validate_superficie(

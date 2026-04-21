@@ -33,7 +33,7 @@ from app.modules.catasto.services.validation import (
 COLUMN_MAPPING = {
     "ANNO": "anno_campagna",
     "PVC": "cod_provincia",
-    "COM": "cod_comune_istat",
+    "COM": "cod_comune_legacy",
     "CCO": "cco",
     "FRA": "cod_frazione",
     "DISTRETTO": "num_distretto",
@@ -62,7 +62,7 @@ ANOMALIA_TYPES = {
     "VAL-01-sup_eccede": "Sup. irrigabile eccede catastale",
     "VAL-02-cf_invalido": "Codice fiscale non valido",
     "VAL-03-cf_mancante": "Codice fiscale mancante",
-    "VAL-04-comune_invalido": "Comune ISTAT non valido",
+    "VAL-04-comune_invalido": "Codice comune legacy non valido",
     "VAL-05-particella_assente": "Particella assente in anagrafica",
     "VAL-06-imponibile": "Imponibile incoerente",
     "VAL-07-importi": "Importi incoerenti",
@@ -123,7 +123,7 @@ def import_capacitas_excel(
         if column in dataframe.columns:
             dataframe[column] = dataframe[column].apply(_clean_optional_string)
 
-    for column in ("anno_campagna", "cod_provincia", "cod_comune_istat", "cod_frazione", "num_distretto"):
+    for column in ("anno_campagna", "cod_provincia", "cod_comune_legacy", "cod_frazione", "num_distretto"):
         if column in dataframe.columns:
             dataframe[column] = pd.to_numeric(dataframe[column], errors="coerce")
 
@@ -165,14 +165,14 @@ def import_capacitas_excel(
         batch.status = "processing"
         batch.errore = None
 
-    comuni = [int(value) for value in dataframe.get("cod_comune_istat", pd.Series(dtype=float)).dropna().unique().tolist()]
+    comuni = [int(value) for value in dataframe.get("cod_comune_legacy", pd.Series(dtype=float)).dropna().unique().tolist()]
     particelle = (
-        db.execute(select(CatParticella).where(CatParticella.cod_comune_istat.in_(comuni), CatParticella.is_current.is_(True))).scalars().all()
+        db.execute(select(CatParticella).where(CatParticella.cod_comune_legacy.in_(comuni), CatParticella.is_current.is_(True))).scalars().all()
         if comuni
         else []
     )
     particelle_idx = {
-        (part.cod_comune_istat, part.foglio, part.particella, part.subalterno): part.id for part in particelle
+        (part.cod_comune_legacy, part.foglio, part.particella, part.subalterno): part.id for part in particelle
     }
     distretti = {item.num_distretto: item for item in db.execute(select(CatDistretto)).scalars().all()}
     schemi = {item.codice: item for item in db.execute(select(CatSchemaContributo)).scalars().all()}
@@ -198,7 +198,7 @@ def import_capacitas_excel(
         cf_raw = _clean_optional_string(row_get("codice_fiscale"))
         cf_result = validate_codice_fiscale(cf_raw)
         cf_normalizzato = cf_result["cf_normalizzato"]
-        comune_value = int(row_get("cod_comune_istat")) if row_get("cod_comune_istat") is not None else None
+        comune_value = int(row_get("cod_comune_legacy")) if row_get("cod_comune_legacy") is not None else None
         foglio = str(row_get("foglio") or "")
         particella_value = str(row_get("particella") or "")
         subalterno = _clean_optional_string(row_get("subalterno"))
@@ -225,7 +225,7 @@ def import_capacitas_excel(
             "anno_campagna": utenza_anno,
             "cco": _clean_optional_string(row_get("cco")),
             "cod_provincia": int(row_get("cod_provincia")) if row_get("cod_provincia") is not None else None,
-            "cod_comune_istat": comune_value,
+            "cod_comune_legacy": comune_value,
             "cod_frazione": int(row_get("cod_frazione")) if row_get("cod_frazione") is not None else None,
             "num_distretto": distretto_num,
             "nome_distretto_loc": _clean_optional_string(row_get("nome_distretto_loc")),

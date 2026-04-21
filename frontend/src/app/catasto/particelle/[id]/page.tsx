@@ -192,7 +192,7 @@ export default function CatastoParticellaDetailPage() {
                 <div className="min-w-0">
                   <p className="text-lg font-semibold text-gray-900">{reference}</p>
                   <p className="mt-1 text-sm text-gray-500">
-                    Comune: <span className="font-medium text-gray-800">{item.nome_comune ?? item.cod_comune_istat}</span> · Distretto:{" "}
+                    Comune: <span className="font-medium text-gray-800">{item.nome_comune ?? item.cod_comune_legacy}</span> · Distretto:{" "}
                     <span className="font-medium text-gray-800">{item.num_distretto ?? "—"}</span>
                     {item.fuori_distretto ? <span className="ml-2 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">Fuori distretto</span> : null}
                   </p>

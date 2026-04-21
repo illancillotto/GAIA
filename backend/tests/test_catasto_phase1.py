@@ -24,6 +24,7 @@ from app.models.catasto_phase1 import (
 )
 from app.modules.catasto.routes import import_routes as import_routes_module
 from app.modules.catasto.services.import_capacitas import CapacitasImportDuplicateError, import_capacitas_excel
+from app.modules.catasto.services.comuni_reference import load_comuni_reference
 from app.modules.catasto.services.validation import (
     validate_codice_fiscale,
     validate_comune,
@@ -126,7 +127,7 @@ def seed_phase1_lookup_data(db: Session) -> None:
         created_by=1,
     )
     particella = CatParticella(
-        cod_comune_istat=165,
+        cod_comune_legacy=165,
         nome_comune="Arborea",
         foglio="5",
         particella="120",
@@ -150,7 +151,7 @@ def seed_phase1_lookup_data(db: Session) -> None:
             import_batch_id=batch.id,
             anno_campagna=2025,
             cco="UT-SEED-001",
-            cod_comune_istat=165,
+            cod_comune_legacy=165,
             num_distretto=10,
             nome_comune="Arborea",
             foglio="5",
@@ -172,7 +173,7 @@ def seed_phase1_lookup_data(db: Session) -> None:
     db.add(
         CatParticellaHistory(
             particella_id=particella.id,
-            cod_comune_istat=165,
+            cod_comune_legacy=165,
             foglio="5",
             particella="120",
             subalterno="1",
@@ -190,7 +191,7 @@ def seed_additional_distretto_kpi_data(db: Session) -> None:
     batch_id = db.query(CatImportBatch).filter(CatImportBatch.hash_file == "seed-hash").one().id
     distretto_20 = CatDistretto(num_distretto="20", nome_distretto="Distretto 20")
     particella_20 = CatParticella(
-        cod_comune_istat=212,
+        cod_comune_legacy=212,
         nome_comune="Cabras",
         foglio="8",
         particella="321",
@@ -211,7 +212,7 @@ def seed_additional_distretto_kpi_data(db: Session) -> None:
                 import_batch_id=batch_id,
                 anno_campagna=2024,
                 cco="UT-SEED-010-2024",
-                cod_comune_istat=165,
+                cod_comune_legacy=165,
                 num_distretto=10,
                 nome_comune="Arborea",
                 foglio="5",
@@ -233,7 +234,7 @@ def seed_additional_distretto_kpi_data(db: Session) -> None:
                 import_batch_id=batch_id,
                 anno_campagna=2025,
                 cco="UT-SEED-020-2025-A",
-                cod_comune_istat=212,
+                cod_comune_legacy=212,
                 num_distretto=20,
                 nome_comune="Cabras",
                 foglio="8",
@@ -255,7 +256,7 @@ def seed_additional_distretto_kpi_data(db: Session) -> None:
                 import_batch_id=batch_id,
                 anno_campagna=2025,
                 cco="UT-SEED-020-2025-B",
-                cod_comune_istat=212,
+                cod_comune_legacy=212,
                 num_distretto=20,
                 nome_comune="Cabras",
                 foglio="8",
@@ -314,7 +315,7 @@ def seed_anomalie_workflow_data(db: Session) -> None:
         db.add(distretto_20)
     if particella_20 is None:
         particella_20 = CatParticella(
-            cod_comune_istat=212,
+            cod_comune_legacy=212,
             nome_comune="Cabras",
             foglio="9",
             particella="401",
@@ -331,7 +332,7 @@ def seed_anomalie_workflow_data(db: Session) -> None:
         import_batch_id=batch_id,
         anno_campagna=2025,
         cco="UT-ANOM-10-2025",
-        cod_comune_istat=165,
+        cod_comune_legacy=165,
         num_distretto=10,
         nome_comune="Arborea",
         foglio="5",
@@ -353,7 +354,7 @@ def seed_anomalie_workflow_data(db: Session) -> None:
         import_batch_id=batch_id,
         anno_campagna=2024,
         cco="UT-ANOM-20-2024",
-        cod_comune_istat=212,
+        cod_comune_legacy=212,
         num_distretto=20,
         nome_comune="Cabras",
         foglio=particella_20.foglio,
@@ -421,8 +422,48 @@ def test_validation_helpers_cover_expected_values() -> None:
     assert validate_codice_fiscale(None)["tipo"] == "MANCANTE"
     assert validate_comune(165) == {"is_valid": True, "nome_ufficiale": "Arborea"}
     assert validate_comune(212) == {"is_valid": True, "nome_ufficiale": "Cabras"}
+    assert validate_comune(232) == {"is_valid": True, "nome_ufficiale": "Riola Sardo"}
+    assert validate_comune(286) == {"is_valid": True, "nome_ufficiale": "San Nicolo d'Arcidano"}
     assert validate_superficie(16834, 16834)["ok"] is True
     assert validate_superficie(17100, 16834)["ok"] is False
+
+
+def test_comuni_reference_dataset_covers_capacitas_legacy_codes() -> None:
+    comuni = load_comuni_reference()
+    assert sorted(comuni["cod_istat"].tolist()) == [
+        50,
+        59,
+        165,
+        170,
+        173,
+        176,
+        179,
+        186,
+        189,
+        200,
+        206,
+        212,
+        222,
+        226,
+        229,
+        232,
+        239,
+        242,
+        249,
+        252,
+        266,
+        280,
+        283,
+        286,
+        289,
+        743,
+    ]
+    by_catastale = {row["codice_catastale"]: row["cod_istat"] for _, row in comuni.iterrows()}
+    assert by_catastale["A357"] == 165
+    assert by_catastale["H301"] == 232
+    assert by_catastale["G286"] == 229
+    assert by_catastale["I791"] == 252
+    assert by_catastale["A368"] == 286
 
 
 def test_distretti_endpoint_returns_seeded_items() -> None:
@@ -653,7 +694,7 @@ def test_particelle_endpoint_supports_combined_lookup_filters() -> None:
     assert response.status_code == 200
     payload = response.json()
     assert len(payload) == 1
-    assert payload[0]["cod_comune_istat"] == 165
+    assert payload[0]["cod_comune_legacy"] == 165
     assert payload[0]["foglio"] == "5"
     assert payload[0]["particella"] == "120"
     assert payload[0]["num_distretto"] == "10"
@@ -932,7 +973,7 @@ def test_import_capacitas_excel_accepts_realistic_oristanese_fixture() -> None:
         assert batch.status == "completed"
         assert batch.righe_importate == len(df)
         assert len(utenze) == len(df)
-        assert {u.cod_comune_istat for u in utenze if u.cod_comune_istat is not None}.issuperset({165, 200, 212})
+        assert {u.cod_comune_legacy for u in utenze if u.cod_comune_legacy is not None}.issuperset({165, 200, 212})
     finally:
         db.close()
 
@@ -954,7 +995,7 @@ def test_import_capacitas_excel_accepts_dirty_oristanese_workbook_fixture() -> N
         assert batch.righe_importate == len(df)
         assert len(utenze) == len(df)
         assert batch.righe_anomalie >= 3
-        assert {u.cod_comune_istat for u in utenze if u.cod_comune_istat is not None}.issuperset({165, 212, 222, 239, 280, 283})
+        assert {u.cod_comune_legacy for u in utenze if u.cod_comune_legacy is not None}.issuperset({165, 212, 222, 239, 280, 283})
         assert any(u.codice_fiscale == "DNIFSE64C01L122Y" for u in utenze)
         assert any(u.anomalia_cf_mancante for u in utenze)
         assert any(u.anomalia_cf_invalido for u in utenze)

@@ -35,6 +35,10 @@ Usare questo indice per capire rapidamente quali file sono:
 ## Regole pratiche
 
 - Per modifiche a comuni o documenti catastali, partire dal PRD operativo di questa cartella.
+- Per il mapping comuni di Catasto, usare sempre il dataset `backend/app/modules/catasto/data/comuni_istat.csv` come sorgente di verita del dominio.
+- Non assumere che `cod_comune_istat` nel codice Catasto coincida con il codice comune numerico ufficiale ISTAT moderno: oggi e un codice legacy compatibile con Capacitas.
+- Se serve il codice ufficiale, leggerlo esplicitamente dalle colonne dedicate del dataset di riferimento e non ricostruirlo via `CASE` hardcoded.
+- Nel layer applicativo e API usare il naming `cod_comune_legacy`; il nome fisico `cod_comune_istat` puo ancora comparire nel database o in SQL legacy finche non viene eseguita una migration dedicata.
 - Per modifiche a batch, credenziali, CAPTCHA, richieste singole o avanzamento runtime, verificare sempre anche `domain-docs/elaborazioni/docs/`.
 - Non usare i documenti storici come sorgente primaria per implementazioni nuove.
 - Se un file viene mantenuto solo per compatibilita, segnalarlo esplicitamente nel blocco iniziale del documento.

@@ -111,6 +111,15 @@ Entita di dominio oggi rilevanti per `catasto`:
 - `cat_intestatari`
 - `cat_anomalie`
 
+Nota di integrazione territoriale:
+
+- il campo applicativo `cod_comune_istat` usato oggi nei flussi Catasto/Capacitas continua a contenere il codice numerico legacy scambiato da Capacitas
+- il mapping da `codice catastale comune` dello shapefile a questo codice legacy non deve essere hardcoded nel service, ma derivato dal dataset di riferimento del dominio
+- il dataset di riferimento locale mantiene anche il `codice catastale` e il `codice comune ufficiale` per evitare derive semantiche tra naming storico e anagrafica amministrativa reale
+- il valore `0` non va trattato come codice comune valido: indica un mapping mancante e va considerato anomalia tecnica o dato incompleto
+- prima di aggiungere nuovi comuni o nuove sorgenti shapefile, aggiornare il dataset di riferimento e i test di integrazione, non il SQL inline
+- nel layer applicativo corrente il naming corretto e `cod_comune_legacy`; il nome fisico storico `cod_comune_istat` puo sopravvivere temporaneamente nel database per compatibilita
+
 Entita correlate ma governate dal runtime `elaborazioni`:
 
 - `catasto_credentials`
@@ -123,6 +132,30 @@ Regola pratica:
 
 - se l'entita serve a consultazione, archivio o metadatazione del patrimonio catastale, resta nel perimetro di questo PRD
 - se l'entita serve a orchestration, execution o monitoraggio runtime, va documentata in `elaborazioni`
+
+### Dataset comuni di riferimento
+
+Il dominio Catasto usa un dataset applicativo locale:
+
+- `backend/app/modules/catasto/data/comuni_istat.csv`
+
+Questo dataset contiene per ogni comune:
+
+- `cod_istat`
+  codice legacy usato oggi da Catasto/Capacitas nei join applicativi
+- `codice_catastale`
+  codice catastale alfabetico del comune, usato tipicamente negli shapefile
+- `codice_comune_formato_numerico`
+  codice comune ufficiale numerico
+- `codice_comune_numerico_2017_2025`
+  variante numerica ufficiale ISTAT/Province usata negli estratti amministrativi recenti
+
+Vincoli:
+
+- non usare `codice_comune_formato_numerico` al posto di `cod_istat` senza un refactor esplicito di schema e join
+- non duplicare il mapping in costanti Python o `CASE` SQL
+- tutte le validazioni e i mapping shapefile devono dipendere dallo stesso dataset
+- nelle response API e nel frontend preferire `cod_comune_legacy` per evitare l'equivoco con il codice ISTAT ufficiale
 
 ## API di dominio correnti
 

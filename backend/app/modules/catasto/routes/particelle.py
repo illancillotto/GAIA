@@ -35,10 +35,10 @@ def list_particelle(
     limit: int = Query(100, ge=1, le=500),
 ) -> list[CatParticella]:
     query = select(CatParticella).where(CatParticella.is_current.is_(True)).order_by(
-        CatParticella.cod_comune_istat, CatParticella.foglio, CatParticella.particella
+        CatParticella.cod_comune_legacy, CatParticella.foglio, CatParticella.particella
     )
     if comune is not None:
-        query = query.where(CatParticella.cod_comune_istat == comune)
+        query = query.where(CatParticella.cod_comune_legacy == comune)
     if foglio:
         query = query.where(CatParticella.foglio == foglio)
     if particella:
