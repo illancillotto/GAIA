@@ -107,6 +107,11 @@ export function getApiBaseUrl(): string {
   const raw = process.env.NEXT_PUBLIC_API_BASE_URL ?? DEFAULT_API_BASE_URL;
   const value = raw.replace(/\/+$/, "");
 
+  // Always keep a non-empty base URL.
+  if (!value) {
+    return DEFAULT_API_BASE_URL;
+  }
+
   // In browser we require a relative base (e.g. "/api") so nginx can proxy correctly.
   // If a previous build/runtime leaks an absolute URL (e.g. "http://localhost"),
   // fall back to the safe default.
