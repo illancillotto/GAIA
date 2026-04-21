@@ -31,6 +31,10 @@ function safeString(value: unknown): string {
   return typeof value === "string" ? value : "";
 }
 
+function safeStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.length > 0) : [];
+}
+
 export default function CatastoImportPage() {
   const [step, setStep] = useState<StepKey>("upload");
   const [file, setFile] = useState<File | null>(null);
@@ -70,6 +74,22 @@ export default function CatastoImportPage() {
         return { tipo, count };
       })
       .sort((a, b) => b.count - a.count);
+  }, [reportJson]);
+  const reportSummary = useMemo(() => {
+    if (!reportJson || typeof reportJson !== "object") return null;
+    const payload = reportJson as Record<string, unknown>;
+    return {
+      annoCampagna: safeNumber(payload["anno_campagna"]) || null,
+      righeTotali: safeNumber(payload["righe_totali"]),
+      righeImportate: safeNumber(payload["righe_importate"]),
+      righeConAnomalie: safeNumber(payload["righe_con_anomalie"]),
+      distrettiRilevati: safeStringArray(payload["distretti_rilevati"]).length
+        ? safeStringArray(payload["distretti_rilevati"])
+        : Array.isArray(payload["distretti_rilevati"])
+          ? (payload["distretti_rilevati"] as unknown[]).map((item) => String(item))
+          : [],
+      comuniRilevati: safeStringArray(payload["comuni_rilevati"]),
+    };
   }, [reportJson]);
 
   async function startUpload(): Promise<void> {
@@ -260,6 +280,58 @@ export default function CatastoImportPage() {
 
         {step === "report" ? (
           <div className="grid gap-6 xl:grid-cols-2">
+            <article className="panel-card xl:col-span-2">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-sm font-medium text-gray-900">Sintesi batch</p>
+                  <p className="mt-1 text-sm text-gray-500">Metadati principali estratti da `report_json`.</p>
+                </div>
+                {batch ? <ImportStatusBadge status={batch.status} /> : null}
+              </div>
+
+              {!reportSummary ? (
+                <div className="mt-4">
+                  <EmptyState icon={SearchIcon} title="Sintesi non disponibile" description="Il backend non ha prodotto metadati di riepilogo per questo batch." />
+                </div>
+              ) : (
+                <>
+                  <div className="mt-4 grid gap-3 md:grid-cols-4">
+                    <div className="rounded-xl border border-gray-100 bg-white p-4">
+                      <p className="text-xs uppercase tracking-wide text-gray-400">Anno campagna</p>
+                      <p className="mt-1 text-lg font-semibold text-gray-900">{reportSummary.annoCampagna ?? "—"}</p>
+                    </div>
+                    <div className="rounded-xl border border-gray-100 bg-white p-4">
+                      <p className="text-xs uppercase tracking-wide text-gray-400">Righe totali</p>
+                      <p className="mt-1 text-lg font-semibold text-gray-900">{reportSummary.righeTotali}</p>
+                    </div>
+                    <div className="rounded-xl border border-gray-100 bg-white p-4">
+                      <p className="text-xs uppercase tracking-wide text-gray-400">Righe importate</p>
+                      <p className="mt-1 text-lg font-semibold text-gray-900">{reportSummary.righeImportate}</p>
+                    </div>
+                    <div className="rounded-xl border border-gray-100 bg-white p-4">
+                      <p className="text-xs uppercase tracking-wide text-gray-400">Con anomalie</p>
+                      <p className="mt-1 text-lg font-semibold text-gray-900">{reportSummary.righeConAnomalie}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <div className="rounded-xl border border-gray-100 bg-white p-4">
+                      <p className="text-xs uppercase tracking-wide text-gray-400">Distretti rilevati</p>
+                      <p className="mt-2 text-sm text-gray-700">
+                        {reportSummary.distrettiRilevati.length ? reportSummary.distrettiRilevati.join(", ") : "—"}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-gray-100 bg-white p-4">
+                      <p className="text-xs uppercase tracking-wide text-gray-400">Comuni rilevati</p>
+                      <p className="mt-2 text-sm text-gray-700">
+                        {reportSummary.comuniRilevati.length ? reportSummary.comuniRilevati.join(", ") : "—"}
+                      </p>
+                    </div>
+                  </div>
+                </>
+              )}
+            </article>
+
             <article className="panel-card">
               <div className="flex items-start justify-between gap-4">
                 <div>

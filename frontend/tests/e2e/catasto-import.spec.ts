@@ -97,6 +97,8 @@ test("catasto import wizard shows empty report state when batch has no anomalies
           righe_con_anomalie: 0,
           anomalie: {},
           preview_anomalie: [],
+          distretti_rilevati: [10],
+          comuni_rilevati: ["Arborea"],
         },
         errore: null,
         created_at: "2026-04-21T10:00:00Z",
@@ -121,6 +123,9 @@ test("catasto import wizard shows empty report state when batch has no anomalies
   });
   await page.getByRole("button", { name: "Avvia import" }).click();
 
+  await expect(page.getByText("Sintesi batch")).toBeVisible();
+  await expect(page.getByText("Anno campagna")).toBeVisible();
+  await expect(page.getByText("Arborea")).toBeVisible();
   await expect(page.getByText("Contatori anomalie", { exact: true })).toBeVisible();
   await expect(page.getByText("Nessun contatore disponibile")).toBeVisible();
   await expect(page.getByText("Nessuna preview")).toBeVisible();
