@@ -88,6 +88,7 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   const documentDetailPage = read("src/app/catasto/documents/[id]/page.tsx");
   const catastoLayout = read("src/app/catasto/layout.tsx");
   const importPage = read("src/app/catasto/import/page.tsx");
+  const importDetailPage = read("src/app/catasto/import/[id]/page.tsx");
   const distrettiPage = read("src/app/catasto/distretti/page.tsx");
   const particelleDetailPage = read("src/app/catasto/particelle/[id]/page.tsx");
   const anomaliePage = read("src/app/catasto/anomalie/page.tsx");
@@ -130,6 +131,10 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   assert.match(importPage, /Ultimo completato/);
   assert.match(importPage, /catastoGetImportHistory/);
   assert.match(importPage, /Apri report/);
+  assert.match(importPage, /Dettaglio/);
+  assert.match(importDetailPage, /Dettaglio import/);
+  assert.match(importDetailPage, /catastoGetImportStatus/);
+  assert.match(importDetailPage, /catastoGetImportReport/);
   assert.match(importPage, /historyStatus/);
   assert.match(importPage, /historyLimit/);
   assert.match(importPage, /setReportTipo\(c\.tipo\)/);

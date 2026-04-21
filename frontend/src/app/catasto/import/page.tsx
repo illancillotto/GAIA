@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { CatastoPage } from "@/components/catasto/catasto-page";
@@ -368,13 +369,18 @@ export default function CatastoImportPage() {
                       <td className="text-sm text-gray-600">{item.righe_importate}</td>
                       <td className="text-sm text-gray-600">{item.righe_anomalie}</td>
                       <td>
-                        <button
-                          type="button"
-                          className="btn-secondary"
-                          onClick={() => void reopenBatch(item)}
-                        >
-                          Apri report
-                        </button>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            onClick={() => void reopenBatch(item)}
+                          >
+                            Apri report
+                          </button>
+                          <Link className="btn-secondary" href={`/catasto/import/${item.id}`}>
+                            Dettaglio
+                          </Link>
+                        </div>
                       </td>
                     </tr>
                   ))}
