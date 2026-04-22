@@ -363,32 +363,18 @@ export default function HomePage() {
     router.replace("/login");
   }
 
-  if (isCheckingSession || !currentUser) {
-    return <HomePageSkeleton loadError={loadError} />;
-  }
-
-  const user = currentUser;
-
-  const canManageGaiaUsers =
-    (user.role === "admin" || user.role === "super_admin")
-    && user.enabled_modules.includes("accessi")
-    && hasSectionAccess(grantedSectionKeys, "accessi.users");
-
-  const isAdmin = user.role === "admin" || user.role === "super_admin";
-
-  const visibleModules = allModules.filter((mod) => {
-    if (mod.status === "coming") return true;
-    return mod.enabledKeys.some((key) => user.enabled_modules.includes(key));
-  });
-
   const searchResults = useMemo(() => {
+    const user = currentUser;
+    if (!user) return [];
     const query = searchQuery.trim().toLowerCase();
     if (!query) return [];
 
+    const userRole = user.role;
     const enabledModuleSet = new Set(user.enabled_modules);
+    const isAdmin = userRole === "admin" || userRole === "super_admin";
 
     function isRouteAllowed(route: SearchRoute): boolean {
-      if (route.requiredRoles && !route.requiredRoles.includes(user.role)) return false;
+      if (route.requiredRoles && !route.requiredRoles.includes(userRole)) return false;
       if (route.requiredSection && !hasSectionAccess(grantedSectionKeys, route.requiredSection)) return false;
       if (!route.moduleKey) return true;
       if (isAdmin) return true;
@@ -410,7 +396,7 @@ export default function HomePage() {
       .sort((a, b) => b.score - a.score || a.route.label.localeCompare(b.route.label))
       .slice(0, 10)
       .map((item) => item.route);
-  }, [user.enabled_modules, user.role, grantedSectionKeys, isAdmin, searchQuery]);
+  }, [currentUser, grantedSectionKeys, searchQuery]);
 
   useEffect(() => {
     function handleDocumentClick(event: MouseEvent) {
@@ -423,6 +409,22 @@ export default function HomePage() {
     document.addEventListener("mousedown", handleDocumentClick);
     return () => document.removeEventListener("mousedown", handleDocumentClick);
   }, []);
+
+  if (isCheckingSession || !currentUser) {
+    return <HomePageSkeleton loadError={loadError} />;
+  }
+
+  const user = currentUser;
+
+  const canManageGaiaUsers =
+    (user.role === "admin" || user.role === "super_admin")
+    && user.enabled_modules.includes("accessi")
+    && hasSectionAccess(grantedSectionKeys, "accessi.users");
+
+  const visibleModules = allModules.filter((mod) => {
+    if (mod.status === "coming") return true;
+    return mod.enabledKeys.some((key) => user.enabled_modules.includes(key));
+  });
 
   const platformStats = [
     {

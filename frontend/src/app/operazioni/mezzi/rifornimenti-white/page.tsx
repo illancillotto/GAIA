@@ -73,16 +73,6 @@ function eventTitle(item: WhiteRefuelEventItem): string {
   return `${vehicle} · ${operator}`;
 }
 
-function eventMeta(item: WhiteRefuelEventItem): string {
-  const bits = [
-    `White #${item.wc_id}`,
-    formatDateTime(item.fueled_at),
-    formatOdometer(item.odometer_km),
-    item.fuel_card_code ? `Carta ${item.fuel_card_code}` : null,
-  ].filter(Boolean);
-  return bits.join(" · ");
-}
-
 function hasOdometerAnomaly(item: WhiteRefuelEventItem): boolean {
   return Boolean(item.source_issue && item.source_issue.includes("ANOMALIA_KM"));
 }
