@@ -434,6 +434,52 @@ def test_km_excludes_open_sessions() -> None:
     assert response.json()["total_km"] == 0.0
 
 
+def test_km_longest_and_shortest_session_are_returned() -> None:
+    db = TestingSessionLocal()
+    vehicle = _make_vehicle(db, "KMEXT01")
+    user = _make_user(db, "driver-km-extremes")
+
+    base = datetime(2026, 3, 10, 8, 0)
+
+    # Short: 30 min
+    s1 = VehicleUsageSession(
+        vehicle_id=vehicle.id,
+        started_by_user_id=user.id,
+        actual_driver_user_id=user.id,
+        started_at=base,
+        ended_at=base + timedelta(minutes=30),
+        start_odometer_km=Decimal("1000"),
+        end_odometer_km=Decimal("1010"),
+        status="closed",
+    )
+    # Long: 3h 15m
+    s2 = VehicleUsageSession(
+        vehicle_id=vehicle.id,
+        started_by_user_id=user.id,
+        actual_driver_user_id=user.id,
+        started_at=base + timedelta(days=1),
+        ended_at=base + timedelta(days=1, hours=3, minutes=15),
+        start_odometer_km=Decimal("1010"),
+        end_odometer_km=Decimal("1100"),
+        status="closed",
+    )
+    db.add_all([s1, s2])
+    db.commit()
+    db.close()
+
+    response = client.get(
+        "/operazioni/analytics/km",
+        params={"from_date": "2026-03-01", "to_date": "2026-03-31"},
+        headers=_auth_headers(),
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["longest_session"]["duration_minutes"] == 195
+    assert data["shortest_session"]["duration_minutes"] == 30
+    assert data["longest_session"]["vehicle_label"] == "KMEXT01"
+    assert data["shortest_session"]["vehicle_label"] == "KMEXT01"
+
+
 # ─── /analytics/work-hours ────────────────────────────────────────────────────
 
 def test_work_hours_aggregates_declared_minutes() -> None:

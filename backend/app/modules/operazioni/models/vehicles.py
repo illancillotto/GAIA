@@ -229,6 +229,9 @@ class VehicleFuelLog(Base):
     total_cost: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
     odometer_km: Mapped[Decimal | None] = mapped_column(Numeric(12, 3), nullable=True)
     wc_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    wc_operator_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid, ForeignKey("wc_operator.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     operator_name: Mapped[str | None] = mapped_column(String(200), nullable=True)
     wc_synced_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True

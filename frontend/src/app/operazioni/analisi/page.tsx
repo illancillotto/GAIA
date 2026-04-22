@@ -5,7 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import {
   BarChart, Bar, LineChart, Line,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  ResponsiveContainer, PieChart, Pie, Cell,
+  ResponsiveContainer, PieChart, Pie,
 } from "recharts";
 
 import { OperazioniModulePage } from "@/components/operazioni/operazioni-module-page";
@@ -35,8 +35,26 @@ interface AvailablePeriods { years: number[]; quarters: QuarterPeriod[]; months:
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface TimeSeriesPoint { period: string; value: number }
-interface FuelTopItem { id: string; label: string; total_liters: number; total_cost: number; refuel_count: number; [key: string]: unknown }
-interface KmTopItem { id: string; label: string; total_km: number; session_count: number; [key: string]: unknown }
+interface FuelStationUsageItem { station_name: string; refuel_count: number; total_liters: number; total_cost: number }
+interface FuelRelatedUsageItem { id: string; label: string; refuel_count: number; total_liters: number; total_cost: number; avg_price_per_liter?: number | null; avg_refuel_cost?: number | null; avg_liters_per_refuel?: number | null; [key: string]: unknown }
+interface FuelTopItem {
+  id: string;
+  label: string;
+  total_liters: number;
+  total_cost: number;
+  refuel_count: number;
+  total_km?: number | null;
+  avg_consumption_l_per_100km?: number | null;
+  consumption_coefficient?: number | null;
+  consumption_judgement?: string | null;
+  avg_price_per_liter?: number | null;
+  avg_refuel_cost?: number | null;
+  avg_liters_per_refuel?: number | null;
+  top_stations?: FuelStationUsageItem[];
+  related?: FuelRelatedUsageItem[];
+  [key: string]: unknown
+}
+interface KmTopItem { id: string; label: string; total_km: number; session_count: number; avg_km_per_session?: number | null; [key: string]: unknown }
 interface WorkHoursOperatorItem { operator_id: string; operator_name: string; total_hours: number; activity_count: number; [key: string]: unknown }
 interface WorkHoursTeamItem { team_id: string; team_name: string; total_hours: number; operator_count: number; [key: string]: unknown }
 interface WorkHoursCategoryItem { category: string; total_hours: number; activity_count: number; [key: string]: unknown }
@@ -48,7 +66,16 @@ interface Summary {
   anomaly_count: number; avg_consumption_l_per_100km: number | null;
 }
 interface FuelData { time_series: TimeSeriesPoint[]; cost_series: TimeSeriesPoint[]; top_vehicles: FuelTopItem[]; top_operators: FuelTopItem[]; total_liters: number; total_cost: number; avg_liters_per_refuel: number; storno_count?: number; storno_liters?: number; storno_cost?: number }
-interface KmData { time_series: TimeSeriesPoint[]; top_vehicles: KmTopItem[]; top_operators: KmTopItem[]; total_km: number; avg_km_per_session: number }
+interface KmSessionExtremeItem { session_id: string; vehicle_label: string; operator_label?: string | null; started_at: string; ended_at: string; duration_minutes: number; km: number }
+interface KmData {
+  time_series: TimeSeriesPoint[];
+  top_vehicles: KmTopItem[];
+  top_operators: KmTopItem[];
+  total_km: number;
+  avg_km_per_session: number;
+  longest_session?: KmSessionExtremeItem | null;
+  shortest_session?: KmSessionExtremeItem | null;
+}
 interface WorkHoursData { time_series: TimeSeriesPoint[]; top_operators: WorkHoursOperatorItem[]; by_team: WorkHoursTeamItem[]; by_category: WorkHoursCategoryItem[]; total_hours: number; avg_hours_per_operator: number }
 interface AnomaliesData { items: AnomalyItem[]; total: number; by_type: Record<string, number>; by_severity: Record<string, number> }
 
@@ -75,7 +102,7 @@ const SEVERITY_LABEL: Record<string, string> = { high: "Alta", medium: "Media", 
 
 function anomalyDetailChips(item: AnomalyItem): { label: string; value: string; href?: string }[] {
   const d = item.details as Record<string, unknown>;
-  const chips: { label: string; value: string }[] = [];
+  const chips: { label: string; value: string; href?: string }[] = [];
   switch (item.type) {
     case "orphan_session":
       if (d.hours_open != null) chips.push({ label: "Aperta da", value: `${Number(d.hours_open).toFixed(0)}h` });
@@ -122,6 +149,38 @@ function SectionCard({ title, children }: { title: string; children: React.React
   return (
     <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
       <h3 className="mb-4 text-sm font-semibold text-gray-800">{title}</h3>
+      {children}
+    </div>
+  );
+}
+
+function SectionCardHeader({
+  title,
+  actions,
+}: {
+  title: string;
+  actions?: React.ReactNode;
+}) {
+  return (
+    <div className="mb-4 flex items-center justify-between gap-3">
+      <h3 className="text-sm font-semibold text-gray-800">{title}</h3>
+      {actions ? <div className="shrink-0">{actions}</div> : null}
+    </div>
+  );
+}
+
+function SectionShell({
+  title,
+  actions,
+  children,
+}: {
+  title: string;
+  actions?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
+      <SectionCardHeader title={title} actions={actions} />
       {children}
     </div>
   );
@@ -289,13 +348,25 @@ function FuelOperatorsTable({
           <tr className="border-b border-gray-100">
             <th className="pb-2 text-left text-xs font-medium text-gray-500">Operatore</th>
             <th className="pb-2 text-right text-xs font-medium text-gray-500">Litri</th>
+            <th className="pb-2 text-right text-xs font-medium text-gray-500">Km</th>
+            <th className="pb-2 text-right text-xs font-medium text-gray-500">L/100km</th>
+            <th className="pb-2 text-right text-xs font-medium text-gray-500">Consumo</th>
             <th className="pb-2 text-right text-xs font-medium text-gray-500">Costo</th>
+            <th className="pb-2 text-right text-xs font-medium text-gray-500">€/L</th>
+            <th className="pb-2 text-right text-xs font-medium text-gray-500">€ medio</th>
+            <th className="pb-2 text-right text-xs font-medium text-gray-500">L medi</th>
             <th className="pb-2 text-right text-xs font-medium text-gray-500">Riforn.</th>
           </tr>
         </thead>
         <tbody>
           {rows.map((row, i) => {
             const isUnknown = row.id === "unknown";
+            const price = row.avg_price_per_liter ?? null;
+            const avgCost = row.avg_refuel_cost ?? null;
+            const avgLiters = row.avg_liters_per_refuel ?? null;
+            const km = (row.total_km as number | null | undefined) ?? null;
+            const cons = (row.avg_consumption_l_per_100km as number | null | undefined) ?? null;
+            const judge = (row.consumption_judgement as string | null | undefined) ?? null;
             return (
               <tr key={i} className="border-b border-gray-50 last:border-0">
                 <td className="py-2 text-gray-700">
@@ -317,7 +388,33 @@ function FuelOperatorsTable({
                   {Number(row.total_liters).toLocaleString("it-IT")} L
                 </td>
                 <td className="py-2 text-right tabular-nums text-gray-700">
+                  {km !== null ? `${Number(km).toLocaleString("it-IT")} km` : "—"}
+                </td>
+                <td className="py-2 text-right tabular-nums text-gray-700">
+                  {cons !== null ? `${Number(cons).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+                </td>
+                <td className="py-2 text-right text-xs">
+                  {judge ? (
+                    <span className={`rounded-full px-2 py-0.5 font-medium ${
+                      judge === "OK" ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                      : judge === "Alto" ? "bg-amber-50 text-amber-700 border border-amber-200"
+                      : "bg-rose-50 text-rose-700 border border-rose-200"
+                    }`}>
+                      {judge}
+                    </span>
+                  ) : "—"}
+                </td>
+                <td className="py-2 text-right tabular-nums text-gray-700">
                   € {Number(row.total_cost).toLocaleString("it-IT", { minimumFractionDigits: 2 })}
+                </td>
+                <td className="py-2 text-right tabular-nums text-gray-700">
+                  {price !== null ? `€ ${Number(price).toLocaleString("it-IT", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}` : "—"}
+                </td>
+                <td className="py-2 text-right tabular-nums text-gray-700">
+                  {avgCost !== null ? `€ ${Number(avgCost).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
+                </td>
+                <td className="py-2 text-right tabular-nums text-gray-700">
+                  {avgLiters !== null ? `${Number(avgLiters).toLocaleString("it-IT", { maximumFractionDigits: 2 })} L` : "—"}
                 </td>
                 <td className="py-2 text-right tabular-nums text-gray-700">
                   {String(row.refuel_count)}
@@ -338,6 +435,8 @@ function CarburantePanel({ params }: { params: { from_date?: string; to_date?: s
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showUnresolved, setShowUnresolved] = useState(false);
+  const [showAllStations, setShowAllStations] = useState(false);
+  const [showAllRelations, setShowAllRelations] = useState(false);
   const { from_date, to_date, granularity } = params;
 
   useEffect(() => {
@@ -420,15 +519,117 @@ function CarburantePanel({ params }: { params: { from_date?: string; to_date?: s
             columns={[
               { key: "label", label: "Targa / Mezzo" },
               { key: "total_liters", label: "Litri", align: "right", format: (v) => `${Number(v).toLocaleString("it-IT")} L` },
+              { key: "total_km", label: "Km", align: "right", format: (v) => (v == null ? "—" : `${Number(v).toLocaleString("it-IT")} km`) },
+              { key: "avg_consumption_l_per_100km", label: "L/100km", align: "right", format: (v) => (v == null ? "—" : `${Number(v).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`) },
+              { key: "consumption_judgement", label: "Consumo", align: "right", format: (v) => (v == null ? "—" : String(v)) },
               { key: "total_cost", label: "Costo", align: "right", format: (v) => `€ ${Number(v).toLocaleString("it-IT", { minimumFractionDigits: 2 })}` },
+              { key: "avg_price_per_liter", label: "€/L", align: "right", format: (v) => (v == null ? "—" : `€ ${Number(v).toLocaleString("it-IT", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`) },
+              { key: "avg_refuel_cost", label: "€ medio", align: "right", format: (v) => (v == null ? "—" : `€ ${Number(v).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`) },
+              { key: "avg_liters_per_refuel", label: "L medi", align: "right", format: (v) => (v == null ? "—" : `${Number(v).toLocaleString("it-IT", { maximumFractionDigits: 2 })} L`) },
               { key: "refuel_count", label: "Riforn.", align: "right" },
             ]}
           />
+          {data.top_vehicles.some((v) => v.total_km == null) && (
+            <p className="mt-2 text-xs text-gray-400">
+              I mezzi con «—» km non hanno sessioni di utilizzo chiuse nel periodo selezionato.
+            </p>
+          )}
         </SectionCard>
 
         <SectionCard title="Top operatori per consumo">
           <FuelOperatorsTable rows={data.top_operators} onResolveClick={() => setShowUnresolved(true)} />
+          {data.top_operators.some((o) => o.total_km == null) && (
+            <p className="mt-2 text-xs text-gray-400">
+              Gli operatori con «—» km non hanno sessioni di utilizzo abbinate nel periodo selezionato.
+            </p>
+          )}
         </SectionCard>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <SectionShell
+          title="Stazioni di servizio più usate"
+          actions={(
+            <button
+              onClick={() => setShowAllStations((s) => !s)}
+              className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200"
+            >
+              {showAllStations ? "Mostra meno" : "Mostra tutti"}
+            </button>
+          )}
+        >
+          <TopTable
+            rows={(showAllStations ? data.top_vehicles : data.top_vehicles.slice(0, 5)).flatMap((v) =>
+              (v.top_stations ?? []).map((s) => ({
+                vehicle: v.label,
+                station: s.station_name,
+                refuel_count: s.refuel_count,
+                total_liters: s.total_liters,
+                total_cost: s.total_cost,
+              }))
+            )}
+            columns={[
+              { key: "vehicle", label: "Mezzo" },
+              { key: "station", label: "Stazione" },
+              { key: "total_liters", label: "Litri", align: "right", format: (v) => `${Number(v).toLocaleString("it-IT")} L` },
+              { key: "total_cost", label: "Costo", align: "right", format: (v) => `€ ${Number(v).toLocaleString("it-IT", { minimumFractionDigits: 2 })}` },
+              { key: "refuel_count", label: "Riforn.", align: "right" },
+            ]}
+          />
+          <p className="mt-2 text-xs text-gray-400">
+            Mostra le stazioni più usate per ciascun mezzo (top mezzi nel periodo selezionato).
+          </p>
+        </SectionShell>
+
+        <SectionShell
+          title="Relazioni uso (operatore → mezzi)"
+          actions={(
+            <button
+              onClick={() => setShowAllRelations((s) => !s)}
+              className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200"
+            >
+              {showAllRelations ? "Mostra meno" : "Mostra tutti"}
+            </button>
+          )}
+        >
+          <div className="space-y-3">
+            {(showAllRelations ? data.top_operators : data.top_operators.slice(0, 5)).map((op) => (
+              <details key={op.id} className="group rounded-xl border border-gray-100 bg-gray-50">
+                <summary className="flex cursor-pointer items-center justify-between gap-3 px-3 py-2 text-sm">
+                  <div className="min-w-0">
+                    <p className="truncate font-semibold text-gray-800">{op.label}</p>
+                    <p className="mt-0.5 text-xs text-gray-500">
+                      {Number(op.total_liters).toLocaleString("it-IT")} L · € {Number(op.total_cost).toLocaleString("it-IT", { minimumFractionDigits: 2 })} · {op.refuel_count} riforn.
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-gray-600 border border-gray-200">
+                    {(op.related?.length ?? 0) || 0} mezzi
+                  </span>
+                </summary>
+                <div className="px-3 pb-3">
+                  {(op.related?.length ?? 0) === 0 ? (
+                    <p className="mt-1 text-xs text-gray-400">Nessun mezzo associabile nel periodo.</p>
+                  ) : (
+                    <TopTable
+                      rows={(op.related ?? [])}
+                      columns={[
+                        { key: "label", label: "Mezzo" },
+                        { key: "total_liters", label: "Litri", align: "right", format: (v) => `${Number(v).toLocaleString("it-IT")} L` },
+                        { key: "total_cost", label: "Costo", align: "right", format: (v) => `€ ${Number(v).toLocaleString("it-IT", { minimumFractionDigits: 2 })}` },
+                        { key: "avg_price_per_liter", label: "€/L", align: "right", format: (v) => (v == null ? "—" : `€ ${Number(v).toLocaleString("it-IT", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`) },
+                        { key: "avg_liters_per_refuel", label: "L medi", align: "right", format: (v) => (v == null ? "—" : `${Number(v).toLocaleString("it-IT", { maximumFractionDigits: 2 })} L`) },
+                        { key: "refuel_count", label: "Riforn.", align: "right" },
+                      ]}
+                    />
+                  )}
+                </div>
+              </details>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-gray-400">
+            Clicca su un operatore per espandere il dettaglio dei mezzi e consumi nel periodo selezionato.
+          </p>
+        </SectionShell>
       </div>
 
       {showUnresolved && <UnresolvedTransactionsModal onClose={() => setShowUnresolved(false)} />}
@@ -453,11 +654,47 @@ function KmPanel({ params }: { params: { from_date?: string; to_date?: string; g
   if (loading) return <div className="grid gap-4 md:grid-cols-2"><LoadingCard /><LoadingCard /></div>;
   if (error || !data) return <p className="text-sm text-rose-600">{error ?? "Errore caricamento"}</p>;
 
+  function fmtDuration(min: number) {
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    if (h <= 0) return `${m} min`;
+    if (m === 0) return `${h} h`;
+    return `${h} h ${m} min`;
+  }
+
   return (
     <div className="space-y-4">
       <div className="grid gap-4 md:grid-cols-2">
         <MetricCard label="Km totali" value={`${data.total_km.toLocaleString("it-IT")} km`} sub="Nel periodo selezionato" />
         <MetricCard label="Media per sessione" value={`${data.avg_km_per_session} km`} sub="Km medi per uscita" variant="info" />
+      </div>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <SectionCard title="Sessione più lunga">
+          {!data.longest_session ? (
+            <p className="py-6 text-center text-sm text-gray-400">Nessun dato disponibile</p>
+          ) : (
+            <div className="space-y-1 text-sm text-gray-700">
+              <p><span className="text-gray-400">Mezzo</span> {data.longest_session.vehicle_label}</p>
+              <p><span className="text-gray-400">Operatore</span> {data.longest_session.operator_label ?? "—"}</p>
+              <p><span className="text-gray-400">Durata</span> {fmtDuration(data.longest_session.duration_minutes)}</p>
+              <p><span className="text-gray-400">Km</span> {Number(data.longest_session.km).toLocaleString("it-IT")} km</p>
+            </div>
+          )}
+        </SectionCard>
+
+        <SectionCard title="Sessione più corta">
+          {!data.shortest_session ? (
+            <p className="py-6 text-center text-sm text-gray-400">Nessun dato disponibile</p>
+          ) : (
+            <div className="space-y-1 text-sm text-gray-700">
+              <p><span className="text-gray-400">Mezzo</span> {data.shortest_session.vehicle_label}</p>
+              <p><span className="text-gray-400">Operatore</span> {data.shortest_session.operator_label ?? "—"}</p>
+              <p><span className="text-gray-400">Durata</span> {fmtDuration(data.shortest_session.duration_minutes)}</p>
+              <p><span className="text-gray-400">Km</span> {Number(data.shortest_session.km).toLocaleString("it-IT")} km</p>
+            </div>
+          )}
+        </SectionCard>
       </div>
 
       <SectionCard title="Chilometri percorsi per periodo">
@@ -483,6 +720,7 @@ function KmPanel({ params }: { params: { from_date?: string; to_date?: string; g
             columns={[
               { key: "label", label: "Targa / Mezzo" },
               { key: "total_km", label: "Km", align: "right", format: (v) => `${Number(v).toLocaleString("it-IT")} km` },
+              { key: "avg_km_per_session", label: "Km/sessione", align: "right", format: (v) => (v == null ? "—" : `${Number(v).toLocaleString("it-IT")} km`) },
               { key: "session_count", label: "Sessioni", align: "right" },
             ]}
           />
@@ -494,6 +732,7 @@ function KmPanel({ params }: { params: { from_date?: string; to_date?: string; g
             columns={[
               { key: "label", label: "Operatore" },
               { key: "total_km", label: "Km", align: "right", format: (v) => `${Number(v).toLocaleString("it-IT")} km` },
+              { key: "avg_km_per_session", label: "Km/sessione", align: "right", format: (v) => (v == null ? "—" : `${Number(v).toLocaleString("it-IT")} km`) },
               { key: "session_count", label: "Sessioni", align: "right" },
             ]}
           />
@@ -550,11 +789,14 @@ function OrePanel({ params }: { params: { from_date?: string; to_date?: string; 
           ) : (
             <ResponsiveContainer width="100%" height={220}>
               <PieChart>
-                <Pie data={data.by_category} dataKey="total_hours" nameKey="category" cx="50%" cy="50%" outerRadius={80} label={(entry) => `${String(entry.name ?? "")} ${((entry.percent ?? 0) * 100).toFixed(0)}%`} labelLine={false}>
-                  {data.by_category.map((_, i) => (
-                    <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />
-                  ))}
-                </Pie>
+                <Pie
+                  data={data.by_category.map((item, i) => ({ ...item, fill: CHART_COLORS[i % CHART_COLORS.length] }))}
+                  dataKey="total_hours"
+                  nameKey="category"
+                  cx="50%" cy="50%" outerRadius={80}
+                  label={(entry) => `${String(entry.name ?? "")} ${((entry.percent ?? 0) * 100).toFixed(0)}%`}
+                  labelLine={false}
+                />
                 <Tooltip formatter={(v: unknown) => [`${v} h`, "Ore"]} />
               </PieChart>
             </ResponsiveContainer>
@@ -634,9 +876,12 @@ function AnomaliePanel({ params }: { params: { from_date?: string; to_date?: str
           ) : (
             <ResponsiveContainer width="100%" height={180}>
               <PieChart>
-                <Pie data={sevData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={70}>
-                  {sevData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
-                </Pie>
+                <Pie
+                  data={sevData.map((d) => ({ ...d, fill: d.color }))}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%" cy="50%" outerRadius={70}
+                />
                 <Tooltip />
                 <Legend />
               </PieChart>

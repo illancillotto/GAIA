@@ -309,6 +309,42 @@ Responsabile aggiornamento: GSD Autonomous
 
 ## 5. Change log operativo
 
+### 2026-04-22
+
+#### Analytics — risoluzione km operatori e qualità dato fuel log
+
+**Problema**: la pagina `/operazioni/analisi` mostrava "0 km" (poi "—") per tutti i veicoli e operatori nelle tabelle "Top veicoli per consumo" e "Top operatori per consumo", rendendo inutilizzabili i coefficienti di consumo.
+
+**Root cause**: le sessioni di utilizzo sincronizzate da WC non popolano `actual_driver_user_id` — usano solo il campo testuale `operator_name`. L'endpoint analytics cercava i km tramite `WCOperator.gaia_user_id → km_by_gaia_user`, che era sempre vuoto per queste sessioni.
+
+**Fix applicati**:
+
+1. **Nuovo campo `wc_operator_id` su `vehicle_fuel_log`** (migration `20260422_0056`):
+   - Aggiunto UUID FK `wc_operator.id` con `SET NULL` e indice.
+   - Backfill SQL da `wc_refuel_event.wc_operator_id`: 2293/3314 log aggiornati.
+   - `import_fleet_transactions.py` ora popola il campo alla creazione (da matched WC event o da `FuelCardAssignmentHistory` attiva).
+
+2. **Rewrite operatore in `analytics.py` — endpoint `/analytics/fuel`**:
+   - Raggruppamento log per chiave UUID (`wc_operator_id`) con fallback a stringa (`operator_name`) per i log non ancora backfillati.
+   - `_op_km(fkey)`: risoluzione km per UUID con doppio path — prima `gaia_user_id → km_by_gaia_user`, poi fallback su varianti nome WCOperator (`first_name last_name`, `last_name first_name`, `username`) contro `km_by_op_name` (sessioni WC-sync).
+   - **Dedup consolidation**: se un operatore ha sia log con `wc_operator_id` impostato sia log orfani con solo `operator_name`, le due chiavi vengono fuse nella chiave UUID prima del sort top-10, evitando duplicati nel ranking.
+   - `total_km=None` (invece di `0.0`) per veicoli/operatori senza sessioni nel periodo — il frontend mostra "—" con nota esplicativa.
+
+3. **Frontend `analisi/page.tsx`**:
+   - Rimosso `Cell` deprecato da recharts; `fill` passato inline nei dati dei grafici a torta.
+   - Note contestuali sotto le tabelle quando esistono righe con `total_km == null`.
+
+**Architettura km per operatore** (logica risolutiva):
+```
+fuel_log.wc_operator_id
+  └─→ WCOperator.gaia_user_id → km_by_gaia_user[gaia_id]   (sessioni GAIA-native)
+  └─→ WCOperator.first_name/last_name → km_by_op_name[name] (sessioni WC-sync)
+fuel_log.operator_name (legacy)
+  └─→ km_by_op_name[operator_name]
+```
+
+---
+
 ### 2026-04-05
 - Implementato modulo Operazioni completo:
   - 3 migration Alembic applicate con successo (28 tabelle create su PostgreSQL)

@@ -547,6 +547,11 @@ def import_fleet_transactions(
         station_name = _build_station_name(row)
         notes = _build_notes_extra(row)
 
+        resolved_wc_operator_id = (
+            matched_event.wc_operator_id
+            if matched_event is not None and matched_event.wc_operator_id is not None
+            else assigned_operator_id
+        )
         fuel_log = VehicleFuelLog(
             vehicle_id=vehicle.id,
             usage_session_id=None,
@@ -556,6 +561,7 @@ def import_fleet_transactions(
             total_cost=total_cost,
             odometer_km=odometer_km,
             wc_id=matched_event.wc_id if matched_event is not None else None,
+            wc_operator_id=resolved_wc_operator_id,
             operator_name=(
                 matched_event.operator_name
                 if matched_event is not None

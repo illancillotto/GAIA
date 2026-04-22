@@ -332,6 +332,9 @@ Rifornimenti e consumi.
 | vehicle_id | UUID | FK NOT NULL | |
 | usage_session_id | UUID | FK NULL | opzionale |
 | recorded_by_user_id | UUID | FK -> application_user(id) NOT NULL | |
+| wc_id | VARCHAR | NULL | ID evento WC originale |
+| wc_operator_id | UUID | FK -> wc_operator(id) SET NULL, NULL | operatore WC che ha effettuato il rifornimento (migration 0056) |
+| operator_name | VARCHAR | NULL | nome operatore testuale (legacy, usato da sessioni WC-sync senza actual_driver_user_id) |
 | fueled_at | TIMESTAMPTZ | NOT NULL | |
 | liters | NUMERIC(10,3) | NOT NULL | |
 | total_cost | NUMERIC(12,2) | NULL | |
@@ -349,6 +352,15 @@ Vincoli:
 Indici:
 - `idx_vehicle_fuel_log_vehicle_id`
 - `idx_vehicle_fuel_log_fueled_at`
+- `ix_vehicle_fuel_log_wc_operator_id` (migration 0056)
+
+### Risoluzione operatore nei fuel log
+
+Il campo `wc_operator_id` è il punto di riferimento primario per identificare chi ha effettuato il rifornimento:
+
+1. **Creazione**: popolato da `import_fleet_transactions.py` prendendo `matched_event.wc_operator_id` (se l'evento WC è stato abbinato) oppure `assigned_operator_id` dalla `FuelCardAssignmentHistory` attiva al momento del rifornimento.
+2. **Backfill** (migration 0056): 2293 dei 3314 log storici sono stati backfillati propagando `wc_operator_id` dai `wc_refuel_event` già abbinati.
+3. **Fallback**: i log senza `wc_operator_id` mantengono `operator_name` (stringa) come identificativo legacy.
 
 ## 6.6 `vehicle_maintenance_type`
 Lookup tipi manutenzione.

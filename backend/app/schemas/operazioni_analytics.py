@@ -27,12 +27,39 @@ class AnalyticsSummary(BaseModel):
 
 # --- Fuel Analytics ---
 
+class FuelStationUsageItem(BaseModel):
+    station_name: str
+    refuel_count: int
+    total_liters: float
+    total_cost: float
+
+
+class FuelRelatedUsageItem(BaseModel):
+    id: str
+    label: str
+    refuel_count: int
+    total_liters: float
+    total_cost: float
+    avg_price_per_liter: float | None = None
+    avg_refuel_cost: float | None = None
+    avg_liters_per_refuel: float | None = None
+
+
 class FuelTopItem(BaseModel):
     id: str
     label: str           # vehicle plate or operator name
     total_liters: float
     total_cost: float
     refuel_count: int
+    total_km: float | None = None
+    avg_consumption_l_per_100km: float | None = None
+    consumption_coefficient: float | None = None
+    consumption_judgement: str | None = None
+    avg_price_per_liter: float | None = None
+    avg_refuel_cost: float | None = None
+    avg_liters_per_refuel: float | None = None
+    top_stations: list[FuelStationUsageItem] = []
+    related: list[FuelRelatedUsageItem] = []
 
 
 class FuelAnalytics(BaseModel):
@@ -55,6 +82,17 @@ class KmTopItem(BaseModel):
     label: str
     total_km: float
     session_count: int
+    avg_km_per_session: float | None = None
+
+
+class KmSessionExtremeItem(BaseModel):
+    session_id: str
+    vehicle_label: str
+    operator_label: str | None = None
+    started_at: str
+    ended_at: str
+    duration_minutes: int
+    km: float
 
 
 class KmAnalytics(BaseModel):
@@ -63,6 +101,8 @@ class KmAnalytics(BaseModel):
     top_operators: list[KmTopItem]
     total_km: float
     avg_km_per_session: float
+    longest_session: KmSessionExtremeItem | None = None
+    shortest_session: KmSessionExtremeItem | None = None
 
 
 # --- Work Hours Analytics ---

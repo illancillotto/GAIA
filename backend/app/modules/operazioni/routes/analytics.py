@@ -29,8 +29,11 @@ from app.schemas.operazioni_analytics import (
     AnomaliesResponse,
     AnomalyItem,
     FuelAnalytics,
+    FuelRelatedUsageItem,
+    FuelStationUsageItem,
     FuelTopItem,
     KmAnalytics,
+    KmSessionExtremeItem,
     KmTopItem,
     TimeSeriesPoint,
     WorkHoursAnalytics,
@@ -193,7 +196,7 @@ def analytics_summary(
         select(OperatorActivity).where(
             OperatorActivity.started_at >= dt_from,
             OperatorActivity.started_at <= dt_to,
-            OperatorActivity.status.in_(["submitted", "reviewed", "in_progress"]),
+            OperatorActivity.status.in_(["submitted", "under_review", "approved"]),
         )
     ).all()
     total_minutes = sum(
@@ -269,13 +272,125 @@ def fuel_analytics(
         )
     ).all()
 
+    sessions = db.scalars(
+        select(VehicleUsageSession).where(
+            VehicleUsageSession.started_at >= dt_from,
+            VehicleUsageSession.started_at <= dt_to,
+            VehicleUsageSession.status != "open",
+        )
+    ).all()
+
+    def _safe_float(x) -> float:
+        try:
+            return float(x or 0)
+        except Exception:  # pragma: no cover - defensive
+            return 0.0
+
+    def _avg(values: list[float]) -> float | None:
+        if not values:
+            return None
+        return sum(values) / len(values)
+
+    def _metrics_for_logs(items: list[VehicleFuelLog]) -> tuple[float | None, float | None, float | None]:
+        positive = [l for l in items if _safe_float(l.liters) > 0]
+        pos_liters = [_safe_float(l.liters) for l in positive if _safe_float(l.liters) > 0]
+        pos_costs = [_safe_float(l.total_cost) for l in positive if l.total_cost is not None]
+
+        total_l = sum(pos_liters)
+        total_c = sum(pos_costs)
+
+        avg_price = (total_c / total_l) if total_l > 0 else None
+        avg_refuel_cost = _avg(pos_costs)
+        avg_liters = _avg(pos_liters)
+        return avg_price, avg_refuel_cost, avg_liters
+
+    def _top_stations_for_logs(items: list[VehicleFuelLog], limit: int = 5) -> list[FuelStationUsageItem]:
+        grouped: dict[str, list[VehicleFuelLog]] = defaultdict(list)
+        for l in items:
+            name = (l.station_name or "").strip() or "Non specificata"
+            grouped[name].append(l)
+
+        def _score(st: str) -> tuple[float, int]:
+            ls = grouped[st]
+            return sum(_safe_float(x.liters) for x in ls), len(ls)
+
+        stations = sorted(grouped.keys(), key=_score, reverse=True)[:limit]
+        out: list[FuelStationUsageItem] = []
+        for st in stations:
+            ls = grouped[st]
+            out.append(FuelStationUsageItem(
+                station_name=st,
+                refuel_count=len(ls),
+                total_liters=round(sum(_safe_float(x.liters) for x in ls), 2),
+                total_cost=round(sum(_safe_float(x.total_cost) for x in ls), 2),
+            ))
+        return out
+
+    def _session_km(s: VehicleUsageSession) -> float:
+        if s.route_distance_km:
+            return float(s.route_distance_km)
+        if s.end_odometer_km is not None and s.start_odometer_km is not None:
+            diff = float(s.end_odometer_km) - float(s.start_odometer_km)
+            return max(0.0, diff)
+        return 0.0
+
+    km_by_vehicle_from_sessions: dict = defaultdict(float)
+    for s in sessions:
+        if s.vehicle_id:
+            km_by_vehicle_from_sessions[s.vehicle_id] += _session_km(s)
+
+    # km per GAIA user (actual_driver_user_id) and per session operator_name (legacy fallback)
+    km_by_gaia_user: dict[int, float] = defaultdict(float)
+    km_by_gaia_user_vehicle: dict[int, dict] = defaultdict(lambda: defaultdict(float))
+    km_by_op_name: dict[str, float] = defaultdict(float)
+    km_by_op_name_vehicle: dict[str, dict] = defaultdict(lambda: defaultdict(float))
+    for s in sessions:
+        km = _session_km(s)
+        if not s.vehicle_id:
+            continue
+        if s.actual_driver_user_id:
+            km_by_gaia_user[s.actual_driver_user_id] += km
+            km_by_gaia_user_vehicle[s.actual_driver_user_id][s.vehicle_id] += km
+        elif s.operator_name:
+            km_by_op_name[s.operator_name] += km
+            km_by_op_name_vehicle[s.operator_name][s.vehicle_id] += km
+
+    def _target_consumption_l_per_100km(v: Vehicle | None) -> float | None:
+        if v is None:
+            return None
+        vt = (getattr(v, "vehicle_type", None) or "").lower()
+        if not vt:
+            vt = (getattr(v, "vehicle_type_wc", None) or "").lower()
+        if not vt:
+            return None
+
+        # Conservative defaults (can be tuned with real data)
+        if any(k in vt for k in ["auto", "berlina", "utilitaria"]):
+            return 7.5
+        if any(k in vt for k in ["furg", "van", "ducato", "daily"]):
+            return 11.5
+        if any(k in vt for k in ["autocarro", "camion", "truck"]):
+            return 26.0
+        if any(k in vt for k in ["trattore", "trattor", "escavat", "terna"]):
+            return 15.0
+        return None
+
+    def _judgement_from_coeff(coeff: float | None) -> str | None:
+        if coeff is None:
+            return None
+        if coeff <= 1.10:
+            return "OK"
+        if coeff <= 1.30:
+            return "Alto"
+        return "Molto alto"
+
     # Time series
     liters_by_period: dict[str, float] = defaultdict(float)
     cost_by_period: dict[str, float] = defaultdict(float)
     for log in logs:
         key = _period_key(log.fueled_at, granularity)
-        liters_by_period[key] += float(log.liters or 0)
-        cost_by_period[key] += float(log.total_cost or 0)
+        liters_by_period[key] += _safe_float(log.liters)
+        cost_by_period[key] += _safe_float(log.total_cost)
 
     sorted_periods = sorted(set(liters_by_period) | set(cost_by_period))
     time_series = [
@@ -297,11 +412,13 @@ def fuel_analytics(
     liters_by_vehicle: dict = defaultdict(float)
     cost_by_vehicle: dict = defaultdict(float)
     count_by_vehicle: dict = defaultdict(int)
+    logs_by_vehicle: dict = defaultdict(list)
     for log in logs:
         if log.vehicle_id:
-            liters_by_vehicle[log.vehicle_id] += float(log.liters or 0)
-            cost_by_vehicle[log.vehicle_id] += float(log.total_cost or 0)
+            liters_by_vehicle[log.vehicle_id] += _safe_float(log.liters)
+            cost_by_vehicle[log.vehicle_id] += _safe_float(log.total_cost)
             count_by_vehicle[log.vehicle_id] += 1
+            logs_by_vehicle[log.vehicle_id].append(log)
 
     top_vehicles = sorted(liters_by_vehicle, key=liters_by_vehicle.__getitem__, reverse=True)[:10]
     top_vehicles_out = [
@@ -313,49 +430,271 @@ def fuel_analytics(
             total_liters=round(liters_by_vehicle[vid], 2),
             total_cost=round(cost_by_vehicle[vid], 2),
             refuel_count=count_by_vehicle[vid],
+            total_km=round(km_by_vehicle_from_sessions[vid], 1) if vid in km_by_vehicle_from_sessions else None,
+            avg_consumption_l_per_100km=(
+                round(
+                    (
+                        sum(max(0.0, _safe_float(l.liters)) for l in logs_by_vehicle[vid])
+                        / km_by_vehicle_from_sessions[vid]
+                        * 100
+                    ),
+                    2,
+                )
+                if km_by_vehicle_from_sessions.get(vid, 0.0) > 0
+                and sum(max(0.0, _safe_float(l.liters)) for l in logs_by_vehicle[vid]) > 0
+                else None
+            ),
+            consumption_coefficient=(
+                (
+                    (
+                        (
+                            (
+                                sum(max(0.0, _safe_float(l.liters)) for l in logs_by_vehicle[vid])
+                                / km_by_vehicle_from_sessions[vid]
+                                * 100
+                            )
+                            / _target_consumption_l_per_100km(vehicles_map.get(vid))
+                        )
+                    )
+                    if km_by_vehicle_from_sessions.get(vid, 0.0) > 0
+                    and _target_consumption_l_per_100km(vehicles_map.get(vid)) is not None
+                    and sum(max(0.0, _safe_float(l.liters)) for l in logs_by_vehicle[vid]) > 0
+                    else None
+                )
+            ),
+            consumption_judgement=None,
+            avg_price_per_liter=(
+                (lambda m: round(m, 4) if m is not None else None)(_metrics_for_logs(logs_by_vehicle[vid])[0])
+            ),
+            avg_refuel_cost=(
+                (lambda m: round(m, 2) if m is not None else None)(_metrics_for_logs(logs_by_vehicle[vid])[1])
+            ),
+            avg_liters_per_refuel=(
+                (lambda m: round(m, 2) if m is not None else None)(_metrics_for_logs(logs_by_vehicle[vid])[2])
+            ),
+            top_stations=_top_stations_for_logs(logs_by_vehicle[vid], limit=5),
+            related=[],
         )
         for vid in top_vehicles
     ]
 
-    # Top operators — use operator_name (the person who actually refuelled).
-    # recorded_by_user_id is whoever entered the record in GAIA (often an admin
-    # doing a bulk import) and is NOT the operator, so we never use it here.
-    # Logs without operator_name are grouped under a sentinel "Non identificato".
-    _NO_OPERATOR = "__no_operator__"
-    wc_fuel_names = {log.operator_name for log in logs if log.operator_name}
-    wc_fuel_label_map: dict[str, str] = {}
-    if wc_fuel_names:
-        for wc_op in db.scalars(
-            select(WCOperator).where(WCOperator.username.in_(wc_fuel_names))
-        ).all():
-            display = f"{wc_op.first_name or ''} {wc_op.last_name or ''}".strip() or wc_op.username
-            wc_fuel_label_map[wc_op.username] = display
+    # fill judgement (needs coefficient computed)
+    for item in top_vehicles_out:
+        item.consumption_judgement = _judgement_from_coeff(item.consumption_coefficient)
+        if item.consumption_coefficient is not None:
+            item.consumption_coefficient = round(float(item.consumption_coefficient), 3)
 
-    liters_by_key: dict[str, float] = defaultdict(float)
-    cost_by_key: dict[str, float] = defaultdict(float)
-    count_by_key: dict[str, int] = defaultdict(int)
+    # Top operators — primary key is wc_operator_id (UUID); falls back to
+    # operator_name string for logs not yet associated to a WCOperator.
+    import uuid as _uuid
+
+    _NO_OPERATOR = "__no_operator__"
+
+    # Load WCOperators referenced by logs in this period
+    wc_op_ids_in_logs = {log.wc_operator_id for log in logs if log.wc_operator_id}
+    wc_ops_map: dict[_uuid.UUID, WCOperator] = {}
+    if wc_op_ids_in_logs:
+        for wco in db.scalars(select(WCOperator).where(WCOperator.id.in_(wc_op_ids_in_logs))).all():
+            wc_ops_map[wco.id] = wco
+
+    # Group fuel logs: UUID key for identified operators, string key for legacy fallback
+    liters_by_key: dict = defaultdict(float)
+    cost_by_key: dict = defaultdict(float)
+    count_by_key: dict = defaultdict(int)
+    logs_by_key: dict = defaultdict(list)
     for log in logs:
-        fkey = log.operator_name if log.operator_name else _NO_OPERATOR
-        liters_by_key[fkey] += float(log.liters or 0)
-        cost_by_key[fkey] += float(log.total_cost or 0)
+        if log.wc_operator_id is not None:
+            fkey = log.wc_operator_id
+        elif log.operator_name:
+            fkey = log.operator_name
+        else:
+            fkey = _NO_OPERATOR
+        liters_by_key[fkey] += _safe_float(log.liters)
+        cost_by_key[fkey] += _safe_float(log.total_cost)
         count_by_key[fkey] += 1
+        logs_by_key[fkey].append(log)
+
+    # Consolidation: ~30% of logs may lack wc_operator_id (not yet backfilled or
+    # unmatched WC events). When the same operator already has a UUID key in
+    # liters_by_key, merge the orphan string key into the UUID key so the operator
+    # appears only once in the top-10.
+    _name_to_uuid: dict[str, _uuid.UUID] = {}
+    for _uid, _wco in wc_ops_map.items():
+        if _uid not in liters_by_key:
+            continue
+        for _variant in [
+            f"{_wco.first_name or ''} {_wco.last_name or ''}".strip(),
+            f"{_wco.last_name or ''} {_wco.first_name or ''}".strip(),
+            _wco.username or "",
+        ]:
+            if _variant:
+                _name_to_uuid[_variant] = _uid
+
+    for _str_key in list(liters_by_key.keys()):
+        if not isinstance(_str_key, str) or _str_key == _NO_OPERATOR:
+            continue
+        _target_uid = _name_to_uuid.get(_str_key)
+        if _target_uid is None:
+            continue
+        liters_by_key[_target_uid] += liters_by_key.pop(_str_key)
+        cost_by_key[_target_uid] += cost_by_key.pop(_str_key)
+        count_by_key[_target_uid] += count_by_key.pop(_str_key)
+        logs_by_key[_target_uid].extend(logs_by_key.pop(_str_key))
+
+    def _op_display(fkey) -> tuple[str, str]:
+        """Returns (id_str, label) for a fuel-operator key."""
+        if fkey == _NO_OPERATOR:
+            return "unknown", "Non identificato"
+        if isinstance(fkey, _uuid.UUID):
+            wco = wc_ops_map.get(fkey)
+            if wco:
+                label = f"{wco.first_name or ''} {wco.last_name or ''}".strip() or wco.username or str(fkey)
+                return f"wc:{fkey}", label
+            return f"wc:{fkey}", str(fkey)
+        return f"name:{fkey}", fkey  # legacy string key
+
+    def _op_km(fkey) -> tuple[float, dict]:
+        """Returns (total_km, {vehicle_id: km}) for an operator key."""
+        if isinstance(fkey, _uuid.UUID):
+            wco = wc_ops_map.get(fkey)
+            if wco and wco.gaia_user_id:
+                gid = int(wco.gaia_user_id)
+                km = km_by_gaia_user.get(gid, 0.0)
+                if km > 0:
+                    return km, dict(km_by_gaia_user_vehicle.get(gid, {}))
+            # WC-synced sessions store operator_name text rather than actual_driver_user_id.
+            # Try matching WCOperator display name variants against session operator_name strings.
+            if wco:
+                for name_variant in [
+                    f"{wco.first_name or ''} {wco.last_name or ''}".strip(),
+                    f"{wco.last_name or ''} {wco.first_name or ''}".strip(),
+                    wco.username or "",
+                ]:
+                    if name_variant and name_variant in km_by_op_name:
+                        return km_by_op_name[name_variant], dict(km_by_op_name_vehicle[name_variant])
+        # Legacy string key: match by session operator_name
+        if isinstance(fkey, str) and fkey != _NO_OPERATOR:
+            return km_by_op_name.get(fkey, 0.0), dict(km_by_op_name_vehicle.get(fkey, {}))
+        return 0.0, {}
 
     top_fuel_keys = sorted(liters_by_key, key=liters_by_key.__getitem__, reverse=True)[:10]
     top_operators_out = []
     for fkey in top_fuel_keys:
-        if fkey == _NO_OPERATOR:
-            flabel = "Non identificato"
-            fid = "unknown"
-        else:
-            flabel = wc_fuel_label_map.get(fkey, fkey)
-            fid = f"wc:{fkey}"
+        fid, flabel = _op_display(fkey)
+        avg_price, avg_refuel_cost, avg_liters = _metrics_for_logs(logs_by_key[fkey])
+
+        op_km, op_km_by_vehicle = _op_km(fkey)
+        has_km = op_km > 0
+        op_liters = sum(max(0.0, _safe_float(l.liters)) for l in logs_by_key[fkey])
+        op_consumption = round(op_liters / op_km * 100, 2) if has_km and op_liters > 0 else None
+
+        # Weighted consumption target across vehicles used (km-weighted)
+        target_weighted = None
+        if has_km and op_km_by_vehicle:
+            num = den = 0.0
+            for vid, kmv in op_km_by_vehicle.items():
+                t = _target_consumption_l_per_100km(vehicles_map.get(vid))
+                if t is None or kmv <= 0:
+                    continue
+                num += float(kmv) * float(t)
+                den += float(kmv)
+            if den > 0:
+                target_weighted = num / den
+
+        op_coeff = (
+            op_consumption / target_weighted
+            if op_consumption is not None and target_weighted and target_weighted > 0
+            else None
+        )
+        op_judge = _judgement_from_coeff(op_coeff)
+
+        # Related vehicles: top vehicles refuelled by this operator
+        rel_by_vehicle: dict[str, list[VehicleFuelLog]] = defaultdict(list)
+        for l in logs_by_key[fkey]:
+            if l.vehicle_id:
+                rel_by_vehicle[str(l.vehicle_id)].append(l)
+
+        related_items: list[FuelRelatedUsageItem] = []
+        if rel_by_vehicle:
+            rel_vids = {_uuid.UUID(k) for k in rel_by_vehicle if k}
+            rel_vmap: dict[str, Vehicle] = {}
+            if rel_vids:
+                for v in db.scalars(select(Vehicle).where(Vehicle.id.in_(rel_vids))).all():
+                    rel_vmap[str(v.id)] = v
+
+            def _rel_score(vid: str) -> float:
+                return sum(_safe_float(x.liters) for x in rel_by_vehicle[vid])
+
+            for vid in sorted(rel_by_vehicle.keys(), key=_rel_score, reverse=True)[:5]:
+                ls = rel_by_vehicle[vid]
+                rp, rc, rl = _metrics_for_logs(ls)
+                v = rel_vmap.get(vid)
+                related_items.append(FuelRelatedUsageItem(
+                    id=vid,
+                    label=getattr(v, "plate_number", None) or getattr(v, "name", None) or vid,
+                    refuel_count=len(ls),
+                    total_liters=round(sum(_safe_float(x.liters) for x in ls), 2),
+                    total_cost=round(sum(_safe_float(x.total_cost) for x in ls), 2),
+                    avg_price_per_liter=round(rp, 4) if rp is not None else None,
+                    avg_refuel_cost=round(rc, 2) if rc is not None else None,
+                    avg_liters_per_refuel=round(rl, 2) if rl is not None else None,
+                ))
+
         top_operators_out.append(FuelTopItem(
             id=fid,
             label=flabel,
             total_liters=round(liters_by_key[fkey], 2),
             total_cost=round(cost_by_key[fkey], 2),
             refuel_count=count_by_key[fkey],
+            total_km=round(op_km, 1) if has_km else None,
+            avg_consumption_l_per_100km=op_consumption,
+            consumption_coefficient=round(op_coeff, 3) if op_coeff is not None else None,
+            consumption_judgement=op_judge,
+            avg_price_per_liter=round(avg_price, 4) if avg_price is not None else None,
+            avg_refuel_cost=round(avg_refuel_cost, 2) if avg_refuel_cost is not None else None,
+            avg_liters_per_refuel=round(avg_liters, 2) if avg_liters is not None else None,
+            top_stations=_top_stations_for_logs(logs_by_key[fkey], limit=5),
+            related=related_items,
         ))
+
+    # related for vehicles: top operators for that vehicle (by liters)
+    for item in top_vehicles_out:
+        try:
+            vid = _uuid.UUID(item.id)
+        except Exception:
+            continue
+        vlogs = logs_by_vehicle.get(vid, [])
+        if not vlogs:
+            continue
+        rel_by_op: dict = defaultdict(list)
+        for l in vlogs:
+            if l.wc_operator_id is not None:
+                rkey = l.wc_operator_id
+            elif l.operator_name:
+                rkey = l.operator_name
+            else:
+                rkey = _NO_OPERATOR
+            rel_by_op[rkey].append(l)
+
+        def _rel_score_op(k) -> float:
+            return sum(_safe_float(x.liters) for x in rel_by_op[k])
+
+        related_ops: list[FuelRelatedUsageItem] = []
+        for k in sorted(rel_by_op.keys(), key=_rel_score_op, reverse=True)[:5]:
+            ls = rel_by_op[k]
+            rp, rc, rl = _metrics_for_logs(ls)
+            rid, rlabel = _op_display(k)
+            related_ops.append(FuelRelatedUsageItem(
+                id=rid,
+                label=rlabel,
+                refuel_count=len(ls),
+                total_liters=round(sum(_safe_float(x.liters) for x in ls), 2),
+                total_cost=round(sum(_safe_float(x.total_cost) for x in ls), 2),
+                avg_price_per_liter=round(rp, 4) if rp is not None else None,
+                avg_refuel_cost=round(rc, 2) if rc is not None else None,
+                avg_liters_per_refuel=round(rl, 2) if rl is not None else None,
+            ))
+        item.related = related_ops
 
     positive_logs = [l for l in logs if (l.liters or 0) > 0]
     storno_logs = [l for l in logs if (l.liters or 0) < 0]
@@ -448,6 +787,11 @@ def km_analytics(
                   or str(vid),
             total_km=round(km_by_vehicle[vid], 1),
             session_count=count_by_vehicle[vid],
+            avg_km_per_session=(
+                round(km_by_vehicle[vid] / count_by_vehicle[vid], 1)
+                if count_by_vehicle[vid] > 0
+                else None
+            ),
         )
         for vid in top_v
     ]
@@ -504,10 +848,63 @@ def km_analytics(
             label=label,
             total_km=round(km_by_key[key], 1),
             session_count=count_by_key[key],
+            avg_km_per_session=(
+                round(km_by_key[key] / count_by_key[key], 1)
+                if count_by_key[key] > 0
+                else None
+            ),
         ))
 
     total_km = sum(_session_km(s) for s in sessions)
     avg_km = round(total_km / len(sessions), 1) if sessions else 0
+
+    def _operator_label_for_session(s: VehicleUsageSession) -> str | None:
+        if s.actual_driver_user_id:
+            return _user_display_name(users_map.get(s.actual_driver_user_id))
+        if s.operator_name:
+            return wc_label_map.get(s.operator_name, s.operator_name)
+        return None
+
+    def _vehicle_label_for_session(s: VehicleUsageSession) -> str:
+        v = vehicles_map.get(s.vehicle_id)
+        return getattr(v, "plate_number", None) or getattr(v, "name", None) or str(s.vehicle_id)
+
+    def _duration_minutes(s: VehicleUsageSession) -> int | None:
+        if not s.ended_at:
+            return None
+        try:
+            delta = (s.ended_at - s.started_at).total_seconds()
+        except Exception:  # pragma: no cover - defensive
+            return None
+        if delta < 0:
+            return None
+        return int(round(delta / 60))
+
+    duration_candidates = [
+        (s, _duration_minutes(s))
+        for s in sessions
+    ]
+    duration_candidates = [(s, m) for (s, m) in duration_candidates if m is not None]
+
+    longest_item = None
+    shortest_item = None
+    if duration_candidates:
+        longest_sess, longest_min = max(duration_candidates, key=lambda t: t[1])
+        shortest_sess, shortest_min = min(duration_candidates, key=lambda t: t[1])
+
+        def _to_extreme(s: VehicleUsageSession, minutes: int) -> KmSessionExtremeItem:
+            return KmSessionExtremeItem(
+                session_id=str(s.id),
+                vehicle_label=_vehicle_label_for_session(s),
+                operator_label=_operator_label_for_session(s),
+                started_at=s.started_at.isoformat(),
+                ended_at=s.ended_at.isoformat() if s.ended_at else s.started_at.isoformat(),
+                duration_minutes=minutes,
+                km=round(_session_km(s), 1),
+            )
+
+        longest_item = _to_extreme(longest_sess, longest_min)
+        shortest_item = _to_extreme(shortest_sess, shortest_min)
 
     return KmAnalytics(
         time_series=time_series,
@@ -515,6 +912,8 @@ def km_analytics(
         top_operators=top_operators_out,
         total_km=round(total_km, 1),
         avg_km_per_session=avg_km,
+        longest_session=longest_item,
+        shortest_session=shortest_item,
     )
 
 
@@ -538,7 +937,7 @@ def work_hours_analytics(
         select(OperatorActivity).where(
             OperatorActivity.started_at >= dt_from,
             OperatorActivity.started_at <= dt_to,
-            OperatorActivity.status.in_(["submitted", "reviewed", "in_progress"]),
+            OperatorActivity.status.in_(["submitted", "under_review", "approved"]),
         )
     ).all()
 
