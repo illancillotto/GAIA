@@ -317,21 +317,12 @@ def fuel_analytics(
         for vid in top_vehicles
     ]
 
-    # Top operators — prefer recorded_by_user_id; for WC-imported logs without
-    # a linked user, fall back to operator_name matched via WCOperator.
-    linked_fuel_user_ids = {log.recorded_by_user_id for log in logs if log.recorded_by_user_id}
-    users_map: dict = {}
-    if linked_fuel_user_ids:
-        for u in db.scalars(
-            select(ApplicationUser).where(ApplicationUser.id.in_(linked_fuel_user_ids))
-        ).all():
-            users_map[u.id] = u
-
-    wc_fuel_names = {
-        log.operator_name
-        for log in logs
-        if not log.recorded_by_user_id and log.operator_name
-    }
+    # Top operators — use operator_name (the person who actually refuelled).
+    # recorded_by_user_id is whoever entered the record in GAIA (often an admin
+    # doing a bulk import) and is NOT the operator, so we never use it here.
+    # Logs without operator_name are grouped under a sentinel "Non identificato".
+    _NO_OPERATOR = "__no_operator__"
+    wc_fuel_names = {log.operator_name for log in logs if log.operator_name}
     wc_fuel_label_map: dict[str, str] = {}
     if wc_fuel_names:
         for wc_op in db.scalars(
@@ -340,16 +331,11 @@ def fuel_analytics(
             display = f"{wc_op.first_name or ''} {wc_op.last_name or ''}".strip() or wc_op.username
             wc_fuel_label_map[wc_op.username] = display
 
-    liters_by_key: dict[str | int, float] = defaultdict(float)
-    cost_by_key: dict[str | int, float] = defaultdict(float)
-    count_by_key: dict[str | int, int] = defaultdict(int)
+    liters_by_key: dict[str, float] = defaultdict(float)
+    cost_by_key: dict[str, float] = defaultdict(float)
+    count_by_key: dict[str, int] = defaultdict(int)
     for log in logs:
-        if log.recorded_by_user_id:
-            fkey: str | int = log.recorded_by_user_id
-        elif log.operator_name:
-            fkey = log.operator_name
-        else:
-            continue
+        fkey = log.operator_name if log.operator_name else _NO_OPERATOR
         liters_by_key[fkey] += float(log.liters or 0)
         cost_by_key[fkey] += float(log.total_cost or 0)
         count_by_key[fkey] += 1
@@ -357,9 +343,9 @@ def fuel_analytics(
     top_fuel_keys = sorted(liters_by_key, key=liters_by_key.__getitem__, reverse=True)[:10]
     top_operators_out = []
     for fkey in top_fuel_keys:
-        if isinstance(fkey, int):
-            flabel = _user_display_name(users_map.get(fkey))
-            fid = str(fkey)
+        if fkey == _NO_OPERATOR:
+            flabel = "Non identificato"
+            fid = "unknown"
         else:
             flabel = wc_fuel_label_map.get(fkey, fkey)
             fid = f"wc:{fkey}"
@@ -681,7 +667,8 @@ def anomalies_analytics(
 
     # 1. Orphan sessions: open for > 24h
     if not anomaly_type or anomaly_type == "orphan_session":
-        cutoff = datetime.now() - timedelta(hours=24)
+        now_utc = datetime.now(tz=timezone.utc)
+        cutoff = now_utc - timedelta(hours=24)
         orphan_sessions = db.scalars(
             select(VehicleUsageSession).where(
                 VehicleUsageSession.status == "open",
@@ -698,7 +685,8 @@ def anomalies_analytics(
 
         for s in orphan_sessions:
             v = vehicles_map.get(s.vehicle_id)
-            hours_open = (datetime.now() - s.started_at).total_seconds() / 3600
+            started = s.started_at if s.started_at.tzinfo else s.started_at.replace(tzinfo=timezone.utc)
+            hours_open = (now_utc - started).total_seconds() / 3600
             anomalies.append(AnomalyItem(
                 id=f"orphan_{s.id}",
                 type="orphan_session",
@@ -707,7 +695,7 @@ def anomalies_analytics(
                 entity_id=str(s.id),
                 entity_label=getattr(v, "plate_number", None) or str(s.vehicle_id),
                 detected_at=s.started_at.isoformat(),
-                details={"hours_open": round(hours_open, 1), "vehicle_id": str(s.vehicle_id)},
+                details={"hours_open": round(hours_open, 1), "vehicle_id": str(s.vehicle_id), "wc_id": s.wc_id},
             ))
 
     # 2. Driver mismatch: actual_driver != assigned operator in the period

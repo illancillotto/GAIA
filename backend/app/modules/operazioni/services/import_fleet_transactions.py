@@ -314,8 +314,22 @@ def _match_vehicle_via_fuel_card(
         .order_by(FuelCardAssignmentHistory.start_at.desc())
     )
     wc_operator_id = assignment.wc_operator_id if assignment is not None else fuel_card.current_wc_operator_id
+
+    # Last-resort: take the most recent assignment regardless of date.
+    # This handles cards whose GAIA assignment was registered after the
+    # transactions in the file (all assignments created on the same import date).
     if wc_operator_id is None:
-        return _FallbackResult(None, "no_card_operator", f"tessera {ident_raw} senza operatore assegnato alla data", None, None)
+        latest_assignment = db.scalar(
+            select(FuelCardAssignmentHistory)
+            .where(FuelCardAssignmentHistory.fuel_card_id == fuel_card.id)
+            .where(FuelCardAssignmentHistory.wc_operator_id.isnot(None))
+            .order_by(FuelCardAssignmentHistory.start_at.desc())
+        )
+        if latest_assignment is not None:
+            wc_operator_id = latest_assignment.wc_operator_id
+
+    if wc_operator_id is None:
+        return _FallbackResult(None, "no_card_operator", f"tessera {ident_raw} senza operatore assegnato", None, None)
 
     wc_operator = db.scalar(select(WCOperator).where(WCOperator.id == wc_operator_id))
     if wc_operator is None:
@@ -542,7 +556,11 @@ def import_fleet_transactions(
             total_cost=total_cost,
             odometer_km=odometer_km,
             wc_id=matched_event.wc_id if matched_event is not None else None,
-            operator_name=matched_event.operator_name if matched_event is not None else None,
+            operator_name=(
+                matched_event.operator_name
+                if matched_event is not None
+                else (fallback.operator_name if fallback is not None else None)
+            ),
             wc_synced_at=matched_event.wc_synced_at if matched_event is not None else None,
             station_name=station_name[:150] if station_name else None,
             notes=notes[:1000],
@@ -556,8 +574,23 @@ def import_fleet_transactions(
             matched_white_refuels += 1
         imported += 1
 
-    # Persist unresolved rows to DB
+    # Persist unresolved rows to DB — skip if an identical pending row already exists
+    existing_unresolved_keys: set[tuple[str | None, str | None, str | None]] = set()
+    existing_pending = db.scalars(
+        select(FleetUnresolvedTransaction).where(FleetUnresolvedTransaction.status == "pending")
+    ).all()
+    for ex in existing_pending:
+        existing_unresolved_keys.add((ex.card_code, ex.fueled_at_iso, ex.liters))
+
     for u in unresolved:
+        dedup_key = (u.card_code, u.fueled_at_iso, u.liters)
+        if dedup_key in existing_unresolved_keys:
+            u.db_id = next(
+                (str(ex.id) for ex in existing_pending if (ex.card_code, ex.fueled_at_iso, ex.liters) == dedup_key),
+                None,
+            )
+            continue
+        existing_unresolved_keys.add(dedup_key)
         db_row = FleetUnresolvedTransaction(
             import_ref=import_ref,
             status="pending",

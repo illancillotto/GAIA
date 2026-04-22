@@ -9,7 +9,9 @@ import {
 import { OperazioniModulePage } from "@/components/operazioni/operazioni-module-page";
 import {
   type PersistedUnresolvedRow,
+  type UnresolvedAnomalies,
   getUnresolvedTransactions,
+  getUnresolvedAnomalies,
   skipUnresolvedTransaction,
 } from "@/features/operazioni/api/client";
 import { cn } from "@/lib/cn";
@@ -137,6 +139,160 @@ function ResolveModal({
   );
 }
 
+// ─── Anomalie panel ────────────────────────────────────────────────────────
+
+function fmtL(n: number) { return `${n.toLocaleString("it-IT", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} L`; }
+function fmtEur(n: number) { return `€ ${n.toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`; }
+
+function AnomaliePanel() {
+  const [data, setData] = useState<UnresolvedAnomalies | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [expanded, setExpanded] = useState<string | null>("high_volume");
+
+  useEffect(() => {
+    getUnresolvedAnomalies({ liters_threshold: 150, same_day_min: 3 })
+      .then(setData).catch(() => null).finally(() => setLoading(false));
+  }, []);
+
+  if (loading) return <div className="h-24 animate-pulse rounded-2xl border border-[#e4e8e2] bg-white" />;
+  if (!data) return null;
+
+  const hasAny = data.high_volume.length > 0 || data.same_day_multiple.length > 0 || data.no_operator_cards.length > 0;
+  if (!hasAny) return null;
+
+  type Section = { id: string; label: string; count: number; severity: "high" | "medium" | "low"; content: React.ReactNode };
+
+  const sections: Section[] = [
+    {
+      id: "high_volume",
+      label: "Volumi anomali",
+      count: data.high_volume.length,
+      severity: "high",
+      content: (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-[#e6ebe5] bg-[#f9faf8]">
+                {["Tessera", "Targa", "Operatore", "Data", "Litri", "Costo", "Stazione"].map(h => (
+                  <th key={h} className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-gray-500">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#f0f3ef]">
+              {data.high_volume.map(r => (
+                <tr key={r.id} className="bg-white hover:bg-rose-50">
+                  <td className="px-3 py-2 font-mono text-gray-700">{r.card_code ?? "—"}</td>
+                  <td className="px-3 py-2 font-mono text-gray-500">{r.targa ?? "—"}</td>
+                  <td className="px-3 py-2 text-gray-700">{r.operator_name ?? <span className="italic text-gray-400">N/D</span>}</td>
+                  <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{r.fueled_at_iso?.slice(0, 16) ?? "—"}</td>
+                  <td className="px-3 py-2 font-mono font-semibold text-rose-700">{fmtL(r.liters)}</td>
+                  <td className="px-3 py-2 font-mono text-gray-700">{fmtEur(r.total_cost)}</td>
+                  <td className="px-3 py-2 max-w-[180px] truncate text-gray-400">{r.station_name ?? "—"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ),
+    },
+    {
+      id: "same_day",
+      label: "Stessa tessera, stesso giorno",
+      count: data.same_day_multiple.length,
+      severity: "medium",
+      content: (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-[#e6ebe5] bg-[#f9faf8]">
+                {["Tessera", "Operatore", "Giorno", "N rifornimenti", "Litri totali"].map(h => (
+                  <th key={h} className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-gray-500">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#f0f3ef]">
+              {data.same_day_multiple.map((r, i) => (
+                <tr key={i} className="bg-white hover:bg-amber-50">
+                  <td className="px-3 py-2 font-mono text-gray-700">{r.card_code ?? "—"}</td>
+                  <td className="px-3 py-2 text-gray-700">{r.operator_name ?? <span className="italic text-gray-400">N/D</span>}</td>
+                  <td className="px-3 py-2 text-gray-500 whitespace-nowrap">{r.day}</td>
+                  <td className="px-3 py-2 text-center font-semibold text-amber-700">{r.count}</td>
+                  <td className="px-3 py-2 font-mono font-semibold text-gray-900">{fmtL(r.tot_liters)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ),
+    },
+    {
+      id: "no_operator",
+      label: "Tessere senza operatore",
+      count: data.no_operator_cards.length,
+      severity: "low",
+      content: (
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs">
+            <thead>
+              <tr className="border-b border-[#e6ebe5] bg-[#f9faf8]">
+                {["Tessera", "N transazioni", "Litri totali"].map(h => (
+                  <th key={h} className="px-3 py-2 text-left text-[10px] font-semibold uppercase tracking-[0.15em] text-gray-500">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-[#f0f3ef]">
+              {data.no_operator_cards.map((r, i) => (
+                <tr key={i} className="bg-white hover:bg-sky-50">
+                  <td className="px-3 py-2 font-mono text-gray-700">{r.card_code ?? "—"}</td>
+                  <td className="px-3 py-2 text-gray-700">{r.count}</td>
+                  <td className="px-3 py-2 font-mono text-gray-700">{fmtL(r.tot_liters)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ),
+    },
+  ];
+
+  const sevBg: Record<string, string> = { high: "bg-rose-50 border-rose-200", medium: "bg-amber-50 border-amber-200", low: "bg-sky-50 border-sky-200" };
+  const sevText: Record<string, string> = { high: "text-rose-700", medium: "text-amber-700", low: "text-sky-700" };
+  const sevBadge: Record<string, string> = { high: "bg-rose-100 text-rose-700", medium: "bg-amber-100 text-amber-700", low: "bg-sky-100 text-sky-700" };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-400">Anomalie rilevate</span>
+        <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold text-rose-700">
+          {data.high_volume.length + data.same_day_multiple.length + data.no_operator_cards.length}
+        </span>
+      </div>
+
+      {sections.filter(s => s.count > 0).map(s => (
+        <div key={s.id} className={cn("rounded-2xl border", sevBg[s.severity])}>
+          <button
+            onClick={() => setExpanded(expanded === s.id ? null : s.id)}
+            className="flex w-full items-center justify-between px-4 py-3"
+          >
+            <div className="flex items-center gap-2">
+              <span className={cn("text-sm font-semibold", sevText[s.severity])}>{s.label}</span>
+              <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold", sevBadge[s.severity])}>{s.count}</span>
+            </div>
+            <svg className={cn("h-4 w-4 transition-transform", sevText[s.severity], expanded === s.id && "rotate-180")} viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+            </svg>
+          </button>
+          {expanded === s.id && (
+            <div className="border-t border-current border-opacity-10 px-1 pb-2">
+              {s.content}
+            </div>
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── Status badge ──────────────────────────────────────────────────────────
 
 const statusTone: Record<string, string> = {
@@ -200,6 +356,8 @@ function TransazioniNonRisolteContent() {
           { label: "Transazioni non risolte" },
         ]}
       />
+
+      <AnomaliePanel />
 
       <OperazioniCollectionPanel
         title="Transazioni non risolte"

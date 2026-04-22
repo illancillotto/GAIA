@@ -152,6 +152,94 @@ def resolve_fleet_transactions_endpoint(
     return {"imported": result.imported, "skipped": result.skipped, "errors": result.errors}
 
 
+@router.get("/vehicles/fuel-logs/unresolved-transactions/anomalies", response_model=dict)
+def unresolved_anomalies(
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+    liters_threshold: float = 150.0,
+    same_day_min: int = 3,
+):
+    from sqlalchemy import text
+
+    # 1. High single-refuel volume
+    high_vol = db.execute(text("""
+        SELECT id::text, card_code, targa, operator_name, fueled_at_iso,
+               liters::numeric, total_cost::numeric, station_name
+        FROM fleet_unresolved_transaction
+        WHERE status = 'pending' AND liters::numeric > :threshold
+        ORDER BY liters::numeric DESC
+        LIMIT 50
+    """), {"threshold": liters_threshold}).all()
+
+    # 2. Same card + same calendar day, multiple positive transactions
+    same_day = db.execute(text("""
+        SELECT card_code,
+               fueled_at_iso::date AS day,
+               COUNT(*) AS n,
+               SUM(liters::numeric) AS tot_liters,
+               MAX(operator_name) AS operator_name
+        FROM fleet_unresolved_transaction
+        WHERE status = 'pending' AND liters::numeric > 0
+        GROUP BY card_code, fueled_at_iso::date
+        HAVING COUNT(*) >= :min_count
+        ORDER BY n DESC
+        LIMIT 30
+    """), {"min_count": same_day_min}).all()
+
+    # 3. Top operators by total volume in unresolved (possible systematic issue)
+    top_ops = db.execute(text("""
+        SELECT operator_name, COUNT(*) AS n,
+               SUM(liters::numeric) AS tot_liters,
+               SUM(total_cost::numeric) AS tot_cost
+        FROM fleet_unresolved_transaction
+        WHERE status = 'pending' AND liters::numeric > 0
+        GROUP BY operator_name
+        ORDER BY SUM(liters::numeric) DESC
+        LIMIT 15
+    """)).all()
+
+    # 4. Cards with no operator at all
+    no_op_cards = db.execute(text("""
+        SELECT card_code, COUNT(*) AS n,
+               SUM(liters::numeric) AS tot_liters
+        FROM fleet_unresolved_transaction
+        WHERE status = 'pending' AND operator_name IS NULL AND liters::numeric > 0
+        GROUP BY card_code
+        ORDER BY n DESC
+        LIMIT 15
+    """)).all()
+
+    return {
+        "high_volume": [
+            {
+                "id": r[0], "card_code": r[1], "targa": r[2], "operator_name": r[3],
+                "fueled_at_iso": r[4], "liters": float(r[5] or 0),
+                "total_cost": float(r[6] or 0), "station_name": r[7],
+            }
+            for r in high_vol
+        ],
+        "same_day_multiple": [
+            {
+                "card_code": r[0], "day": str(r[1]), "count": r[2],
+                "tot_liters": float(r[3] or 0), "operator_name": r[4],
+            }
+            for r in same_day
+        ],
+        "top_operators": [
+            {
+                "operator_name": r[0] or "Non identificato",
+                "count": r[1], "tot_liters": float(r[2] or 0), "tot_cost": float(r[3] or 0),
+            }
+            for r in top_ops
+        ],
+        "no_operator_cards": [
+            {"card_code": r[0], "count": r[1], "tot_liters": float(r[2] or 0)}
+            for r in no_op_cards
+        ],
+        "thresholds": {"liters_threshold": liters_threshold, "same_day_min": same_day_min},
+    }
+
+
 @router.post("/vehicles/fuel-logs/unresolved-transactions/{unresolved_id}/skip", response_model=dict)
 def skip_unresolved_transaction_endpoint(
     unresolved_id: str,

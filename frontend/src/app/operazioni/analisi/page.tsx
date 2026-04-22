@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import {
   BarChart, Bar, LineChart, Line,
@@ -21,6 +22,8 @@ import {
   getAnalyticsWorkHours,
   getAnalyticsAnomalies,
   getAnalyticsAvailablePeriods,
+  getUnresolvedTransactions,
+  type PersistedUnresolvedRow,
 } from "@/features/operazioni/api/client";
 
 // ─── Period types ─────────────────────────────────────────────────────────────
@@ -69,6 +72,47 @@ const SEVERITY_BADGE: Record<string, string> = {
   low: "bg-sky-100 text-sky-700 border border-sky-200",
 };
 const SEVERITY_LABEL: Record<string, string> = { high: "Alta", medium: "Media", low: "Bassa" };
+
+function anomalyDetailChips(item: AnomalyItem): { label: string; value: string; href?: string }[] {
+  const d = item.details as Record<string, unknown>;
+  const chips: { label: string; value: string }[] = [];
+  switch (item.type) {
+    case "orphan_session":
+      if (d.hours_open != null) chips.push({ label: "Aperta da", value: `${Number(d.hours_open).toFixed(0)}h` });
+      if (d.wc_id != null) chips.push({ label: "WC", value: String(d.wc_id), href: `https://login.bonificaoristanese.it/vehicles/taken-charge/edit/${d.wc_id}` });
+      break;
+    case "driver_mismatch":
+      if (d.actual_driver) chips.push({ label: "Guidatore", value: String(d.actual_driver) });
+      break;
+    case "excessive_fuel":
+      if (d.liters != null) chips.push({ label: "Litri", value: `${Number(d.liters).toLocaleString("it-IT", { maximumFractionDigits: 1 })} L` });
+      if (d.cost != null) chips.push({ label: "Costo", value: `€ ${Number(d.cost).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` });
+      if (d.station) chips.push({ label: "Stazione", value: String(d.station) });
+      break;
+    case "unmatched_refuel":
+      if (d.operator) chips.push({ label: "Operatore", value: String(d.operator) });
+      if (d.wc_id != null) chips.push({ label: "ID WC", value: String(d.wc_id) });
+      break;
+    case "hours_discrepancy":
+      if (d.declared_min != null) chips.push({ label: "Dichiarate", value: `${Math.round(Number(d.declared_min) / 60 * 10) / 10}h` });
+      if (d.calculated_min != null) chips.push({ label: "Calcolate", value: `${Math.round(Number(d.calculated_min) / 60 * 10) / 10}h` });
+      if (d.diff_min != null) chips.push({ label: "Scarto", value: `${d.diff_min} min` });
+      break;
+    case "inactive_vehicle":
+      if (d.vehicle_code) chips.push({ label: "Codice", value: String(d.vehicle_code) });
+      if (d.liters != null) chips.push({ label: "Litri", value: `${Number(d.liters).toLocaleString("it-IT", { maximumFractionDigits: 1 })} L` });
+      break;
+    case "inactive_operator":
+      if (d.vehicle) chips.push({ label: "Mezzo", value: String(d.vehicle) });
+      if (d.liters != null) chips.push({ label: "Litri", value: `${Number(d.liters).toLocaleString("it-IT", { maximumFractionDigits: 1 })} L` });
+      break;
+    case "orphan_fuel_card":
+      if (d.operator) chips.push({ label: "Operatore", value: String(d.operator) });
+      if (Array.isArray(d.reasons) && d.reasons.length > 0) chips.push({ label: "Motivo", value: (d.reasons as string[]).join(", ") });
+      break;
+  }
+  return chips;
+}
 
 type Tab = "carburante" | "km" | "ore" | "anomalie";
 
@@ -132,12 +176,168 @@ function LoadingCard() {
   );
 }
 
+// ─── Unresolved transactions modal ────────────────────────────────────────────
+
+function UnresolvedTransactionsModal({ onClose }: { onClose: () => void }) {
+  const [items, setItems] = useState<PersistedUnresolvedRow[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getUnresolvedTransactions({ status_filter: "pending", page: 1, page_size: 10 })
+      .then((d) => { setItems(d.items); setTotal(d.total); })
+      .catch(() => null)
+      .finally(() => setLoading(false));
+  }, []);
+
+  function fmtDate(iso: string | null) {
+    if (!iso) return "—";
+    return new Date(iso).toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" });
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
+      <div className="flex w-full max-w-2xl flex-col rounded-[20px] bg-white shadow-xl" style={{ maxHeight: "80vh" }}>
+        <div className="flex items-center justify-between border-b border-[#e8ede7] px-6 py-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Carburante</p>
+            <p className="mt-0.5 text-sm font-semibold text-gray-900">
+              Transazioni non identificate
+              {total > 0 && (
+                <span className="ml-2 rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-700">
+                  {total} in attesa
+                </span>
+              )}
+            </p>
+          </div>
+          <button onClick={onClose} className="rounded-full p-1 text-gray-400 hover:bg-gray-100 hover:text-gray-600">
+            <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" /></svg>
+          </button>
+        </div>
+
+        <div className="overflow-y-auto px-6 py-4">
+          {loading ? (
+            <p className="py-4 text-center text-sm text-gray-500">Caricamento...</p>
+          ) : items.length === 0 ? (
+            <div className="rounded-2xl border border-dashed border-[#d8dfd8] bg-[#f8faf8] p-6 text-center text-sm text-gray-500">
+              Nessuna transazione in attesa.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <p className="mb-3 text-xs text-gray-500">
+                Queste righe sono state importate ma non è stato possibile identificare l&apos;operatore automaticamente.
+                {total > 10 && ` Mostrate le prime 10 di ${total}.`}
+              </p>
+              <div className="overflow-x-auto rounded-[16px] border border-[#e6ebe5]">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-[#e6ebe5] bg-[#f9faf8]">
+                      {["Targa", "Data", "Litri", "Motivo"].map((h) => (
+                        <th key={h} className="px-3 py-2.5 text-left text-[10px] font-semibold uppercase tracking-[0.18em] text-gray-500">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#f0f3ef]">
+                    {items.map((row) => (
+                      <tr key={row.id} className="bg-white hover:bg-[#f9faf8]">
+                        <td className="px-3 py-2 font-mono text-xs text-gray-700">{row.targa ?? "—"}</td>
+                        <td className="px-3 py-2 text-xs text-gray-500 whitespace-nowrap">{fmtDate(row.fueled_at_iso)}</td>
+                        <td className="px-3 py-2 font-mono text-xs text-gray-900">{row.liters ? `${row.liters} L` : "—"}</td>
+                        <td className="px-3 py-2 max-w-[200px]">
+                          <p className="truncate text-xs text-gray-400">{row.reason_detail}</p>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between border-t border-[#e8ede7] px-6 py-4">
+          <button onClick={onClose} className="btn-secondary text-sm">Chiudi</button>
+          <Link
+            href="/operazioni/mezzi/transazioni-non-risolte"
+            onClick={onClose}
+            className="btn-primary text-sm"
+          >
+            Vai alla coda di revisione →
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Fuel operators table (with "Non identificato" special row) ────────────────
+
+function FuelOperatorsTable({
+  rows,
+  onResolveClick,
+}: {
+  rows: FuelTopItem[];
+  onResolveClick: () => void;
+}) {
+  if (rows.length === 0) {
+    return <p className="py-4 text-center text-sm text-gray-400">Nessun dato disponibile</p>;
+  }
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm">
+        <thead>
+          <tr className="border-b border-gray-100">
+            <th className="pb-2 text-left text-xs font-medium text-gray-500">Operatore</th>
+            <th className="pb-2 text-right text-xs font-medium text-gray-500">Litri</th>
+            <th className="pb-2 text-right text-xs font-medium text-gray-500">Costo</th>
+            <th className="pb-2 text-right text-xs font-medium text-gray-500">Riforn.</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => {
+            const isUnknown = row.id === "unknown";
+            return (
+              <tr key={i} className="border-b border-gray-50 last:border-0">
+                <td className="py-2 text-gray-700">
+                  {isUnknown ? (
+                    <span className="inline-flex flex-wrap items-baseline gap-1.5">
+                      <span className="text-gray-400 italic">Non identificato</span>
+                      <button
+                        onClick={onResolveClick}
+                        className="text-[11px] text-amber-600 underline underline-offset-2 hover:text-amber-800"
+                      >
+                        (risolvi anomalie)
+                      </button>
+                    </span>
+                  ) : (
+                    row.label
+                  )}
+                </td>
+                <td className="py-2 text-right tabular-nums text-gray-700">
+                  {Number(row.total_liters).toLocaleString("it-IT")} L
+                </td>
+                <td className="py-2 text-right tabular-nums text-gray-700">
+                  € {Number(row.total_cost).toLocaleString("it-IT", { minimumFractionDigits: 2 })}
+                </td>
+                <td className="py-2 text-right tabular-nums text-gray-700">
+                  {String(row.refuel_count)}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 // ─── Tab panels ───────────────────────────────────────────────────────────────
 
 function CarburantePanel({ params }: { params: { from_date?: string; to_date?: string; granularity: "day" | "week" | "month" } }) {
   const [data, setData] = useState<FuelData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showUnresolved, setShowUnresolved] = useState(false);
   const { from_date, to_date, granularity } = params;
 
   useEffect(() => {
@@ -227,17 +427,11 @@ function CarburantePanel({ params }: { params: { from_date?: string; to_date?: s
         </SectionCard>
 
         <SectionCard title="Top operatori per consumo">
-          <TopTable
-            rows={data.top_operators}
-            columns={[
-              { key: "label", label: "Operatore" },
-              { key: "total_liters", label: "Litri", align: "right", format: (v) => `${Number(v).toLocaleString("it-IT")} L` },
-              { key: "total_cost", label: "Costo", align: "right", format: (v) => `€ ${Number(v).toLocaleString("it-IT", { minimumFractionDigits: 2 })}` },
-              { key: "refuel_count", label: "Riforn.", align: "right" },
-            ]}
-          />
+          <FuelOperatorsTable rows={data.top_operators} onResolveClick={() => setShowUnresolved(true)} />
         </SectionCard>
       </div>
+
+      {showUnresolved && <UnresolvedTransactionsModal onClose={() => setShowUnresolved(false)} />}
     </div>
   );
 }
@@ -489,24 +683,50 @@ function AnomaliePanel({ params }: { params: { from_date?: string; to_date?: str
           </div>
         ) : (
           <div className="space-y-2">
-            {data.items.map((item) => (
-              <div key={item.id} className="flex items-start gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3">
-                <AlertTriangleIcon className={`mt-0.5 h-4 w-4 shrink-0 ${item.severity === "high" ? "text-rose-500" : item.severity === "medium" ? "text-amber-500" : "text-sky-500"}`} />
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-sm font-medium text-gray-800">{item.description}</span>
-                    <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SEVERITY_BADGE[item.severity] ?? ""}`}>
-                      {SEVERITY_LABEL[item.severity] ?? item.severity}
-                    </span>
+            {data.items.map((item) => {
+              const chips = anomalyDetailChips(item);
+              return (
+                <div key={item.id} className="flex items-start gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3">
+                  <AlertTriangleIcon className={`mt-0.5 h-4 w-4 shrink-0 ${item.severity === "high" ? "text-rose-500" : item.severity === "medium" ? "text-amber-500" : "text-sky-500"}`} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-medium text-gray-800">{item.description}</span>
+                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${SEVERITY_BADGE[item.severity] ?? ""}`}>
+                        {SEVERITY_LABEL[item.severity] ?? item.severity}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-xs text-gray-500">
+                      {ANOMALY_LABELS[item.type] ?? item.type}
+                      {item.entity_label ? ` · ${item.entity_label}` : ""}
+                      {" · "}{new Date(item.detected_at).toLocaleDateString("it-IT")}
+                    </p>
+                    {chips.length > 0 && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {chips.map((chip) =>
+                          chip.href ? (
+                            <a
+                              key={chip.label}
+                              href={chip.href}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 rounded-md border border-sky-200 bg-sky-50 px-2 py-0.5 text-[11px] text-sky-700 hover:bg-sky-100"
+                            >
+                              <span className="font-medium text-sky-400">{chip.label}</span>
+                              {chip.value} ↗
+                            </a>
+                          ) : (
+                            <span key={chip.label} className="inline-flex items-center gap-1 rounded-md border border-gray-200 bg-white px-2 py-0.5 text-[11px] text-gray-600">
+                              <span className="font-medium text-gray-400">{chip.label}</span>
+                              {chip.value}
+                            </span>
+                          )
+                        )}
+                      </div>
+                    )}
                   </div>
-                  <p className="mt-0.5 text-xs text-gray-500">
-                    {ANOMALY_LABELS[item.type] ?? item.type}
-                    {item.entity_label ? ` · ${item.entity_label}` : ""}
-                    {" · "}{new Date(item.detected_at).toLocaleDateString("it-IT")}
-                  </p>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </SectionCard>

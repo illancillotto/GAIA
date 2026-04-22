@@ -81,6 +81,13 @@ function compactLabel(vehicle: VehicleItem): string {
   return parts.join(" · ");
 }
 
+const vehicleTypeImage: Record<string, string> = {
+  auto: "/vehicles/auto.jpg",
+  truck: "/vehicles/truck.jpg",
+  van: "/vehicles/van.jpg",
+  equipment: "/vehicles/equipment.jpg",
+};
+
 function vehicleVisualTone(vehicle: VehicleItem): string {
   if (vehicle.current_status === "maintenance") return "from-rose-50 via-white to-white";
   if (vehicle.current_status === "in_use") return "from-amber-50 via-white to-white";
@@ -95,46 +102,42 @@ function DesktopVehicleCard({ vehicle }: { vehicle: VehicleItem }) {
       href={`/operazioni/mezzi/${vehicle.id}`}
       className="group overflow-hidden rounded-[28px] border border-[#e6ebe5] bg-white shadow-panel transition hover:-translate-y-1 hover:border-[#c9d6cd] hover:shadow-lg"
     >
-      <div className={cn("relative h-44 overflow-hidden bg-gradient-to-br", vehicleVisualTone(vehicle))}>
-        <div className="absolute inset-x-0 top-0 flex items-center justify-between p-4">
-          <div className="flex h-14 w-14 items-center justify-center rounded-[20px] border border-white/80 bg-white/90 text-lg font-semibold text-[#1D4E35] shadow-sm">
+      <div className="relative h-28 overflow-hidden bg-gray-200">
+        {vehicleTypeImage[vehicle.vehicle_type] && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={vehicleTypeImage[vehicle.vehicle_type]}
+            alt=""
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        )}
+        <div className="absolute inset-0 bg-black/30" />
+        <div className="absolute inset-x-0 top-0 flex items-center justify-between p-3">
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/30 bg-black/30 text-sm font-semibold text-white shadow-sm backdrop-blur-sm">
             {initialsForVehicle(vehicle)}
           </div>
-          <span className={cn("rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]", statusTone[vehicle.current_status] ?? "bg-gray-100 text-gray-600")}>
+          <span className={cn("rounded-full px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.18em]", statusTone[vehicle.current_status] ?? "bg-gray-100 text-gray-600")}>
             {titleCaseStatus(vehicle.current_status)}
           </span>
         </div>
-        <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black/5 to-transparent" />
       </div>
-      <div className="px-5 pb-5 pt-4">
-        <div className="flex items-start justify-between gap-3">
+      <div className="px-4 pb-4 pt-3">
+        <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="truncate text-[1.05rem] font-semibold uppercase tracking-tight text-gray-900">{vehicle.name}</p>
-            <p className="mt-1 text-sm text-gray-600">
+            <p className="truncate text-sm font-semibold uppercase tracking-tight text-gray-900">{vehicle.name}</p>
+            <p className="mt-0.5 truncate text-xs text-gray-500">
               {[vehicle.brand, vehicle.model, vehicleTypeLabel(vehicle.vehicle_type)].filter(Boolean).join(" · ") || vehicleTypeLabel(vehicle.vehicle_type)}
             </p>
           </div>
-          <span className="text-lg text-gray-300 transition group-hover:text-[#1D4E35]">⋮</span>
+          <ChevronRightIcon className="mt-0.5 h-4 w-4 shrink-0 text-gray-300 transition group-hover:text-[#1D4E35]" />
         </div>
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <span className="inline-flex rounded-full border border-[#e2e6e1] bg-[#f6f7f4] px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#5d695f]">
+        <div className="mt-3 flex flex-wrap items-center gap-1.5">
+          <span className="inline-flex rounded-full border border-[#e2e6e1] bg-[#f6f7f4] px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-[0.15em] text-[#5d695f]">
             {compactLabel(vehicle) || "Senza riferimenti"}
           </span>
-          <span className="inline-flex rounded-full border border-[#e2e6e1] bg-white px-3 py-1 text-xs font-semibold text-gray-700">
+          <span className="inline-flex rounded-full border border-[#e2e6e1] bg-white px-2.5 py-0.5 text-[10px] font-semibold text-gray-600">
             {vehicle.has_gps_device ? "GPS" : "No GPS"}
           </span>
-        </div>
-        <div className="mt-5 border-t border-dashed border-[#edf1eb] pt-4">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#667267]">Dettagli operativi</p>
-          <div className="mt-3 flex items-center justify-between gap-3 text-sm text-gray-600">
-            <div>
-              <p className="font-medium text-gray-900">{vehicle.has_gps_device ? "GPS attivo" : "GPS non presente"}</p>
-              <p className="mt-1 text-xs text-gray-500">{vehicle.is_active ? "Mezzo visibile in flotta" : "Mezzo disattivato"}</p>
-            </div>
-            <div className="flex h-10 w-10 items-center justify-center rounded-full border border-[#e6ebe5] bg-white text-[#1D4E35]">
-              <ChevronRightIcon className="h-4 w-4" />
-            </div>
-          </div>
         </div>
       </div>
     </Link>
@@ -289,7 +292,7 @@ function MezziContent() {
             <EmptyState icon={TruckIcon} title="Nessun mezzo trovato" description="Non risultano veicoli con i filtri correnti." />
           ) : (
             <>
-              <div className="hidden gap-5 lg:grid xl:grid-cols-3">
+              <div className="hidden gap-4 lg:grid lg:grid-cols-3 xl:grid-cols-4">
                 {vehicles.map((vehicle) => (
                   <DesktopVehicleCard key={vehicle.id} vehicle={vehicle} />
                 ))}

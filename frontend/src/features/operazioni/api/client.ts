@@ -316,6 +316,22 @@ export async function getUnresolvedTransactions(params?: {
   return fetchOperazioni(`/vehicles/fuel-logs/unresolved-transactions${qs}`);
 }
 
+export interface UnresolvedAnomalies {
+  high_volume: { id: string; card_code: string | null; targa: string | null; operator_name: string | null; fueled_at_iso: string | null; liters: number; total_cost: number; station_name: string | null }[];
+  same_day_multiple: { card_code: string | null; day: string; count: number; tot_liters: number; operator_name: string | null }[];
+  top_operators: { operator_name: string; count: number; tot_liters: number; tot_cost: number }[];
+  no_operator_cards: { card_code: string | null; count: number; tot_liters: number }[];
+  thresholds: { liters_threshold: number; same_day_min: number };
+}
+
+export async function getUnresolvedAnomalies(params?: { liters_threshold?: number; same_day_min?: number }): Promise<UnresolvedAnomalies> {
+  const p = new URLSearchParams();
+  if (params?.liters_threshold) p.set("liters_threshold", String(params.liters_threshold));
+  if (params?.same_day_min) p.set("same_day_min", String(params.same_day_min));
+  const qs = p.toString() ? `?${p.toString()}` : "";
+  return fetchOperazioni(`/vehicles/fuel-logs/unresolved-transactions/anomalies${qs}`);
+}
+
 export async function getWhiteRefuelEvents(params?: Record<string, string>) {
   const qs = params ? `?${new URLSearchParams(params).toString()}` : "";
   return fetchOperazioni(`/vehicles/refuel-events${qs}`);

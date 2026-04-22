@@ -403,7 +403,12 @@ function WizardStep({
       <div className="border-t border-gray-100 px-6 py-4">
         {error && <p className="mb-3 rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
         <div className="flex items-center justify-between gap-3">
-          <button className="btn-secondary" onClick={onBack} disabled={submitting}>← Indietro</button>
+          <div className="flex gap-2">
+            <button className="btn-secondary" onClick={onBack} disabled={submitting}>← Indietro</button>
+            <button className="btn-secondary" onClick={() => onDone(0)} disabled={submitting}>
+              Risolvi più tardi
+            </button>
+          </div>
           <button
             className="btn-primary"
             onClick={() => void handleSubmit()}
