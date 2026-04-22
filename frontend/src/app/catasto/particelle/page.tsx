@@ -22,8 +22,9 @@ function formatHaFromMq(value: string | number): string {
 
 export default function CatastoParticellePage() {
   const router = useRouter();
-  const [filters, setFilters] = useState<{ comune: string; foglio: string; particella: string; distretto: string }>({
+  const [filters, setFilters] = useState<{ comune: string; codiceCatastale: string; foglio: string; particella: string; distretto: string }>({
     comune: "",
+    codiceCatastale: "",
     foglio: "",
     particella: "",
     distretto: "",
@@ -45,6 +46,7 @@ export default function CatastoParticellePage() {
     try {
       const data = await catastoListParticelle(token, {
         comune: filters.comune ? Number(filters.comune) : undefined,
+        codiceCatastale: filters.codiceCatastale || undefined,
         foglio: filters.foglio || undefined,
         particella: filters.particella || undefined,
         distretto: filters.distretto || undefined,
@@ -134,6 +136,15 @@ export default function CatastoParticellePage() {
                 />
               </label>
               <label className="text-sm font-medium text-gray-700">
+                Codice catastale comune
+                <input
+                  className="form-control mt-1"
+                  placeholder="Es. A357"
+                  value={filters.codiceCatastale}
+                  onChange={(e) => setFilters((c) => ({ ...c, codiceCatastale: e.target.value.toUpperCase() }))}
+                />
+              </label>
+              <label className="text-sm font-medium text-gray-700">
                 Foglio
                 <input
                   className="form-control mt-1"
@@ -172,7 +183,7 @@ export default function CatastoParticellePage() {
               type="button"
               disabled={busy}
               onClick={() => {
-                setFilters({ comune: "", foglio: "", particella: "", distretto: "" });
+                setFilters({ comune: "", codiceCatastale: "", foglio: "", particella: "", distretto: "" });
                 void applyFilters();
               }}
             >

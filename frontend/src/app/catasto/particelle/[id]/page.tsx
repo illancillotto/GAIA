@@ -51,6 +51,26 @@ export default function CatastoParticellaDetailPage() {
           catastoGetParticellaUtenze(token, particellaId, { anno }),
           catastoGetParticellaAnomalie(token, particellaId, { anno }),
         ]);
+
+        // Se l'anno corrente non ha dati, prova a selezionare automaticamente
+        // l'ultimo anno precedente che abbia almeno un record.
+        const currentYear = new Date().getFullYear();
+        if (anno === currentYear && u.length === 0 && a.length === 0) {
+          const [uAll, aAll] = await Promise.all([
+            catastoGetParticellaUtenze(token, particellaId),
+            catastoGetParticellaAnomalie(token, particellaId),
+          ]);
+          const fallbackYear = Math.max(
+            ...(uAll.map((x) => x.anno_campagna).filter((x): x is number => typeof x === "number" && Number.isFinite(x)) || []),
+            ...(aAll.map((x) => x.anno_campagna).filter((x): x is number => typeof x === "number" && Number.isFinite(x)) || []),
+            -Infinity,
+          );
+          if (Number.isFinite(fallbackYear) && fallbackYear !== anno) {
+            setAnno(fallbackYear);
+            return;
+          }
+        }
+
         setItem(p);
         setHistory(h);
         setUtenze(u);

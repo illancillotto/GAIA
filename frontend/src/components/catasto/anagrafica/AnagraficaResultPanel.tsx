@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
+import { useState } from "react";
 
 import { EmptyState } from "@/components/ui/empty-state";
 import { FolderIcon, SearchIcon } from "@/components/ui/icons";
 import type { CatAnagraficaMatch } from "@/types/catasto";
+import { ParticellaDetailDialog } from "@/components/catasto/anagrafica/ParticellaDetailDialog";
 
 function formatHaFromMq(value: string | number | null | undefined): string {
   if (value == null) return "—";
@@ -24,6 +26,8 @@ export function AnagraficaResultPanel({
   error: string | null;
   searchedKey: { comune?: string; foglio?: string; particella?: string } | null;
 }) {
+  const [selected, setSelected] = useState<CatAnagraficaMatch | null>(null);
+
   if (error) {
     return (
       <div className="rounded-xl border border-red-100 bg-red-50 p-4 text-sm text-red-800">
@@ -53,6 +57,7 @@ export function AnagraficaResultPanel({
 
   return (
     <div className="space-y-3">
+      <ParticellaDetailDialog open={selected != null} match={selected} onClose={() => setSelected(null)} />
       {matches.length > 1 ? (
         <div className="rounded-xl border border-amber-100 bg-amber-50 p-4 text-sm text-amber-800">
           Trovati <span className="font-semibold">{matches.length}</span> match. Se possibile, specifica il comune per restringere.
@@ -67,7 +72,13 @@ export function AnagraficaResultPanel({
           <article key={m.particella_id} className="panel-card">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div className="min-w-0">
-                <p className="text-sm font-semibold text-gray-900">{ref}</p>
+                <button
+                  type="button"
+                  className="text-left text-sm font-semibold text-gray-900 underline decoration-transparent underline-offset-4 hover:decoration-gray-400"
+                  onClick={() => setSelected(m)}
+                >
+                  {ref}
+                </button>
                 <p className="mt-1 text-sm text-gray-500">
                   Comune: <span className="font-medium text-gray-800">{m.comune ?? "—"}</span>{" "}
                   <span className="text-gray-400">·</span> Codice Capacitas: <span className="font-medium text-gray-800">{m.cod_comune_capacitas ?? "—"}</span>{" "}
@@ -75,10 +86,15 @@ export function AnagraficaResultPanel({
                 </p>
               </div>
 
-              <Link className="btn-secondary" href={`/catasto/particelle/${m.particella_id}`}>
-                <FolderIcon className="h-4 w-4" />
-                Apri particella
-              </Link>
+              <div className="flex flex-wrap items-center gap-2">
+                <button type="button" className="btn-secondary" onClick={() => setSelected(m)}>
+                  Dettagli
+                </button>
+                <Link className="btn-secondary" href={`/catasto/particelle/${m.particella_id}`}>
+                  <FolderIcon className="h-4 w-4" />
+                  Apri particella
+                </Link>
+              </div>
             </div>
 
             <div className="mt-4 grid gap-3 md:grid-cols-3">

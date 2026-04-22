@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+import json
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import desc, exists, select
+from sqlalchemy import desc, exists, func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user
@@ -26,6 +27,7 @@ def list_particelle(
     db: Session = Depends(get_db),
     _: ApplicationUser = Depends(require_active_user),
     comune: int | None = Query(None),
+    codice_catastale: str | None = Query(None, description="Codice catastale comune (es. A357)."),
     foglio: str | None = Query(None),
     particella: str | None = Query(None),
     distretto: str | None = Query(None),
@@ -39,6 +41,8 @@ def list_particelle(
     )
     if comune is not None:
         query = query.where(CatParticella.cod_comune_capacitas == comune)
+    if codice_catastale:
+        query = query.where(CatParticella.codice_catastale == codice_catastale.strip().upper())
     if foglio:
         query = query.where(CatParticella.foglio == foglio)
     if particella:
@@ -73,6 +77,42 @@ def get_particella(particella_id: UUID, db: Session = Depends(get_db), _: Applic
     payload = CatParticellaDetailResponse.model_validate(item)
     payload.fuori_distretto = item.fuori_distretto
     return payload
+
+
+@router.get("/{particella_id}/geojson")
+def get_particella_geojson(
+    particella_id: UUID,
+    db: Session = Depends(get_db),
+    _: ApplicationUser = Depends(require_active_user),
+) -> dict:
+    item = db.get(CatParticella, particella_id)
+    if item is None or item.geometry is None:
+        raise HTTPException(status_code=404, detail="Particella o geometria non trovata")
+
+    geojson = db.execute(select(func.ST_AsGeoJSON(CatParticella.geometry)).where(CatParticella.id == particella_id)).scalar_one_or_none()
+    geom_type = db.execute(select(func.ST_GeometryType(CatParticella.geometry)).where(CatParticella.id == particella_id)).scalar_one_or_none()
+    centroid = db.execute(select(func.ST_AsGeoJSON(func.ST_Centroid(CatParticella.geometry))).where(CatParticella.id == particella_id)).scalar_one_or_none()
+
+    if geojson is None:
+        raise HTTPException(status_code=404, detail="Particella o geometria non trovata")
+
+    return {
+        "type": "Feature",
+        "geometry": json.loads(geojson),
+        "properties": {
+            "id": str(item.id),
+            "foglio": item.foglio,
+            "particella": item.particella,
+            "subalterno": item.subalterno,
+            "cod_comune_capacitas": item.cod_comune_capacitas,
+            "nome_comune": item.nome_comune,
+            "num_distretto": item.num_distretto,
+            "nome_distretto": item.nome_distretto,
+            "source_type": item.source_type,
+            "geometry_type": geom_type,
+            "centroid": json.loads(centroid) if centroid else None,
+        },
+    }
 
 
 @router.get("/{particella_id}/history", response_model=list[CatParticellaHistoryResponse])

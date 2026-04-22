@@ -116,6 +116,7 @@ export async function catastoListParticelle(
   token: string,
   filters?: {
     comune?: number;
+    codiceCatastale?: string;
     foglio?: string;
     particella?: string;
     distretto?: string;
@@ -127,6 +128,7 @@ export async function catastoListParticelle(
 ): Promise<CatParticella[]> {
   const query = new URLSearchParams();
   if (filters?.comune != null) query.set("comune", String(filters.comune));
+  if (filters?.codiceCatastale) query.set("codice_catastale", filters.codiceCatastale);
   if (filters?.foglio) query.set("foglio", filters.foglio);
   if (filters?.particella) query.set("particella", filters.particella);
   if (filters?.distretto) query.set("distretto", filters.distretto);
@@ -143,6 +145,12 @@ export async function catastoListParticelle(
 
 export async function catastoGetParticella(token: string, id: UUID): Promise<CatParticellaDetail> {
   return request<CatParticellaDetail>(`/catasto/particelle/${id}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function catastoGetParticellaGeojson(token: string, id: UUID): Promise<GeoJSONFeature> {
+  return request<GeoJSONFeature>(`/catasto/particelle/${id}/geojson`, {
     headers: authHeaders(token),
   });
 }

@@ -68,6 +68,57 @@ test("admin executes catasto anagrafica single search", async ({ page }) => {
     });
   });
 
+  await page.route("**/api/catasto/particelle/00000000-0000-0000-0000-000000000501", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        comune_id: "00000000-0000-0000-0000-000000000601",
+        id: "00000000-0000-0000-0000-000000000501",
+        national_code: null,
+        cod_comune_capacitas: 165,
+        codice_catastale: "A357",
+        nome_comune: "Arborea",
+        sezione_catastale: null,
+        foglio: "5",
+        particella: "120",
+        subalterno: "1",
+        cfm: null,
+        superficie_mq: "1000.00",
+        num_distretto: "10",
+        nome_distretto: "Distretto 10",
+        source_type: "shapefile",
+        valid_from: "2026-01-01",
+        valid_to: null,
+        is_current: true,
+        suppressed: false,
+        created_at: "2026-01-01T00:00:00Z",
+        updated_at: "2026-01-01T00:00:00Z",
+        fuori_distretto: false,
+      }),
+    });
+  });
+
+  await page.route("**/api/catasto/particelle/00000000-0000-0000-0000-000000000501/utenze", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([]),
+    });
+  });
+
+  await page.route("**/api/catasto/particelle/00000000-0000-0000-0000-000000000501/geojson", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        type: "Feature",
+        geometry: { type: "Polygon", coordinates: [] },
+        properties: { geometry_type: "ST_Polygon", centroid: { type: "Point", coordinates: [8.0, 39.0] } },
+      }),
+    });
+  });
+
   await page.goto("/catasto/ricerca-anagrafica");
   await expect(page.getByRole("heading", { name: "Ricerca anagrafica" }).first()).toBeVisible();
 
@@ -80,6 +131,12 @@ test("admin executes catasto anagrafica single search", async ({ page }) => {
   await expect(page.getByText("Fenu Denise", { exact: true })).toBeVisible();
   await expect(page.getByText("ID utenza:")).toBeVisible();
   await expect(page.getByRole("link", { name: "Apri particella" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Dettagli" }).click();
+  await expect(page.getByRole("dialog", { name: /Dettaglio Fg\.5 Part\.120 Sub\.1/ })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Visualizza su mappa" })).toBeVisible();
+  await page.getByRole("button", { name: "Chiudi" }).click();
+  await expect(page.getByRole("dialog", { name: /Dettaglio Fg\.5 Part\.120 Sub\.1/ })).toBeHidden();
 });
 
 test("admin executes catasto anagrafica bulk search", async ({ page }) => {
