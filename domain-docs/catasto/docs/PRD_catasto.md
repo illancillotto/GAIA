@@ -18,6 +18,7 @@ Questo PRD descrive quindi il perimetro reale di `catasto` oggi:
 - consultazione e dettaglio dei documenti
 - anagrafica territoriale `cat_*` per distretti, particelle, utenze irrigue e anomalie
 - import Capacitas Fase 1 e basi geospaziali PostGIS
+- ricerca anagrafica da riferimenti catastali, singola e massiva
 - superfici frontend dedicate alla navigazione del patrimonio documentale
 
 ## Obiettivi di prodotto
@@ -192,6 +193,17 @@ Note:
 - `GET /catasto/particelle/{particella_id}/history`
 - `GET /catasto/anomalie/`
 
+### Fase 4 anagrafica
+
+- `GET /catasto/anagrafica/search`
+- `POST /catasto/anagrafica/bulk-search`
+
+Note:
+
+- la ricerca singola parte da `comune`, `foglio`, `particella`
+- la ricerca massiva accetta file `.xlsx` o `.csv` lato frontend e normalizza il payload verso il backend
+- il match restituisce dati catastali, ultima utenza, intestatari disponibili e top anomalie
+
 Vincoli infrastrutturali:
 
 - la Fase 1 richiede PostgreSQL con estensione PostGIS disponibile
@@ -212,6 +224,7 @@ Route `catasto` realmente utili al dominio:
 - `/catasto/particelle`
 - `/catasto/particelle/[id]`
 - `/catasto/anomalie`
+- `/catasto/ricerca-anagrafica`
 
 Comportamento attuale:
 
@@ -230,6 +243,7 @@ Comportamento attuale:
 - `/catasto/distretti` e `/catasto/distretti/[id]` coprono KPI e drill-down per distretto
 - `/catasto/particelle` e `/catasto/particelle/[id]` coprono lookup e dettaglio con utenze/anomalie
 - `/catasto/anomalie` espone la lista operativa con aggiornamento stato
+- `/catasto/ricerca-anagrafica` espone ricerca singola e bulk da riferimenti catastali con preview dei match
 - il workflow mutativo sulle anomalie (`PATCH`) è riservato ad admin/super_admin, mentre la consultazione resta disponibile agli utenti Catasto attivi
 
 Route `catasto` mantenute per compatibilita ma non piu canoniche:

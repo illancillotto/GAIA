@@ -2,6 +2,9 @@ import { createQueryString, request, requestFormDataWithUploadProgress } from "@
 import type {
   CatAnomaliaListResponse,
   CatAnomalia,
+  CatAnagraficaBulkSearchRequest,
+  CatAnagraficaBulkSearchResponse,
+  CatAnagraficaSearchResponse,
   CatDistretto,
   CatDistrettoKpi,
   CatImportBatch,
@@ -214,5 +217,29 @@ export async function catastoGetParticellaAnomalie(
 export async function catastoListSchemi(token: string): Promise<CatSchemaContributo[]> {
   return request<CatSchemaContributo[]>("/catasto/schemi", {
     headers: authHeaders(token),
+  });
+}
+
+export async function catastoSearchAnagrafica(
+  token: string,
+  params: { comune?: string; foglio: string; particella: string },
+): Promise<CatAnagraficaSearchResponse> {
+  const query = new URLSearchParams();
+  if (params.comune) query.set("comune", params.comune);
+  query.set("foglio", params.foglio);
+  query.set("particella", params.particella);
+  return request<CatAnagraficaSearchResponse>(`/catasto/anagrafica/search?${query.toString()}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function catastoBulkSearchAnagrafica(
+  token: string,
+  payload: CatAnagraficaBulkSearchRequest,
+): Promise<CatAnagraficaBulkSearchResponse> {
+  return request<CatAnagraficaBulkSearchResponse>("/catasto/anagrafica/bulk-search", {
+    method: "POST",
+    headers: { ...authHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
   });
 }

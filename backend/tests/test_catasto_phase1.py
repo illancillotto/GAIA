@@ -18,6 +18,7 @@ from app.models.catasto_phase1 import (
     CatComune,
     CatDistretto,
     CatImportBatch,
+    CatIntestatario,
     CatParticella,
     CatParticellaHistory,
     CatSchemaContributo,
@@ -196,6 +197,16 @@ def seed_phase1_lookup_data(db: Session) -> None:
             importo_0985=270,
             codice_fiscale="DNIFSE64C01L122Y",
             codice_fiscale_raw="Dnifse64c01l122y",
+        )
+    )
+    db.add(
+        CatIntestatario(
+            codice_fiscale="DNIFSE64C01L122Y",
+            denominazione="Fenu Denise",
+            tipo="PF",
+            cognome="Fenu",
+            nome="Denise",
+            source="capacitas",
         )
     )
     db.add(
@@ -752,6 +763,44 @@ def test_particelle_endpoint_returns_empty_when_combined_filters_conflict() -> N
 
     assert response.status_code == 200
     assert response.json() == []
+
+
+def test_search_anagrafica_returns_match_with_utenza_and_intestatario() -> None:
+    response = client.get(
+        "/catasto/anagrafica/search?comune=165&foglio=5&particella=120",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload["matches"]) == 1
+    match = payload["matches"][0]
+    assert match["cod_comune_capacitas"] == 165
+    assert match["codice_catastale"] == "A357"
+    assert match["utenza_latest"]["cco"] == "UT-SEED-001"
+    assert len(match["intestatari"]) == 1
+    assert match["intestatari"][0]["codice_fiscale"] == "DNIFSE64C01L122Y"
+
+
+def test_bulk_search_anagrafica_returns_mixed_row_outcomes() -> None:
+    response = client.post(
+        "/catasto/anagrafica/bulk-search",
+        headers=auth_headers(),
+        json={
+            "rows": [
+                {"row_index": 2, "comune": "165", "foglio": "5", "particella": "120"},
+                {"row_index": 3, "comune": "999", "foglio": "5", "particella": "120"},
+                {"row_index": 4, "comune": None, "foglio": None, "particella": "120"},
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["results"]
+    assert payload[0]["esito"] == "FOUND"
+    assert payload[0]["match"]["cod_comune_capacitas"] == 165
+    assert payload[1]["esito"] == "NOT_FOUND"
+    assert payload[2]["esito"] == "INVALID_ROW"
 
 
 def test_import_history_and_report_endpoints_return_batch_data() -> None:

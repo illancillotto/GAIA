@@ -14,7 +14,7 @@ Usare questo indice per capire rapidamente quali file sono:
 
 - `PRD_catasto.md`
   Documento di riferimento per perimetro, architettura, API e stato corrente del dominio `catasto`.
-  Include anche la Fase 1 territoriale `cat_*` con requisito PostGIS.
+  Include anche la Fase 1 territoriale `cat_*`, la ricerca anagrafica di Fase 4 e il requisito PostGIS.
 
 ## Documenti storici
 
