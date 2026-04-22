@@ -14,7 +14,7 @@ Usare questo indice per capire rapidamente quali file sono:
 
 - `PRD_catasto.md`
   Documento di riferimento per perimetro, architettura, API e stato corrente del dominio `catasto`.
-  Include anche la Fase 1 territoriale `cat_*`, la ricerca anagrafica di Fase 4 e il requisito PostGIS.
+  Include anche la Fase 1 territoriale `cat_*`, la ricerca anagrafica fino a Fase 5 e il requisito PostGIS.
 
 ## Documenti storici
 
@@ -35,6 +35,7 @@ Usare questo indice per capire rapidamente quali file sono:
 ## Regole pratiche
 
 - Per modifiche a comuni o documenti catastali, partire dal PRD operativo di questa cartella.
+- Il perimetro oggi chiuso arriva fino alla Fase 5 del dominio Catasto corrente: prima di aprire nuove tranche, verificare il file di avanzamento in `progress/2026-04-22_catasto_phase_progress.md`.
 - Per il mapping comuni di Catasto, usare sempre il dataset `backend/app/modules/catasto/data/comuni_istat.csv` come sorgente di verita del dominio.
 - Non assumere che `cod_comune_capacitas` nel codice Catasto coincida con il codice comune numerico ufficiale ISTAT moderno: e il codice numerico sorgente scambiato da Capacitas.
 - Se serve il codice ufficiale, leggerlo esplicitamente dalle colonne dedicate del dataset di riferimento e non ricostruirlo via `CASE` hardcoded.

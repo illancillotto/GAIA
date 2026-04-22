@@ -1,7 +1,7 @@
 # PRD — GAIA Catasto
 
 > Stato documento
-> Documento di dominio allineato alla struttura reale del repository al 20 aprile 2026.
+> Documento di dominio allineato alla struttura reale del repository al 22 aprile 2026.
 > Il codice resta la fonte primaria in caso di divergenza:
 > `backend/app/modules/catasto/`, `backend/app/services/catasto_*`, `frontend/src/app/catasto/`, `frontend/src/components/catasto/`.
 
@@ -19,6 +19,7 @@ Questo PRD descrive quindi il perimetro reale di `catasto` oggi:
 - anagrafica territoriale `cat_*` per distretti, particelle, utenze irrigue e anomalie
 - import Capacitas Fase 1 e basi geospaziali PostGIS
 - ricerca anagrafica da riferimenti catastali, singola e massiva
+- workflow anagrafica e lookup massivo chiusi fino a Fase 5 sul perimetro corrente
 - superfici frontend dedicate alla navigazione del patrimonio documentale
 
 ## Obiettivi di prodotto
@@ -203,6 +204,7 @@ Note:
 - la ricerca singola parte da `comune`, `foglio`, `particella`
 - la ricerca massiva accetta file `.xlsx` o `.csv` lato frontend e normalizza il payload verso il backend
 - il match restituisce dati catastali, ultima utenza, intestatari disponibili e top anomalie
+- la vista risultati anagrafica espone anche `CCO` e `denominazione` dell'ultima utenza quando disponibili
 
 Vincoli infrastrutturali:
 
@@ -244,7 +246,30 @@ Comportamento attuale:
 - `/catasto/particelle` e `/catasto/particelle/[id]` coprono lookup e dettaglio con utenze/anomalie
 - `/catasto/anomalie` espone la lista operativa con aggiornamento stato
 - `/catasto/ricerca-anagrafica` espone ricerca singola e bulk da riferimenti catastali con preview dei match
+- `/catasto/ricerca-anagrafica` include export CSV/XLSX dell'elaborazione massiva
 - il workflow mutativo sulle anomalie (`PATCH`) è riservato ad admin/super_admin, mentre la consultazione resta disponibile agli utenti Catasto attivi
+- il flusso anagrafica e coperto anche da E2E browser dedicato oltre che da test backend e smoke frontend
+
+## Stato fasi
+
+Stato sintetico del modulo `catasto` sul perimetro oggi presente nel repository:
+
+- Fase 1
+  completata: import Capacitas, distretti, particelle, anomalie, wizard import e basi geospaziali PostGIS
+- Fase 2
+  completata sul perimetro attuale: hardening tecnico, integrazione shapefile/PostGIS, fixture workbook e smoke frontend
+- Fase 3
+  completata sul perimetro attuale: audit import, summary batch, dettaglio batch e permessi piu stretti sul workflow anomalie
+- Fase 4
+  completata: ricerca anagrafica singola e massiva con router backend, pagina frontend e test backend dedicati
+- Fase 5
+  completata sul perimetro corrente: E2E browser della ricerca anagrafica, affinamento stati UI, accessibilita input file e chiusura del workflow anagrafica end-to-end
+
+Backlog residuo oltre la Fase 5 attuale:
+
+- osservabilita piu ricca del dominio Catasto/Anagrafica
+- eventuale reporting massivo piu strutturato
+- ulteriori fixture territoriali e casi edge se il dominio si espande oltre il perimetro oggi modellato
 
 Route `catasto` mantenute per compatibilita ma non piu canoniche:
 

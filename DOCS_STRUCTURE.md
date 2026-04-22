@@ -193,6 +193,7 @@ GAIA/
 │   └── elaborazioni/
 │       └── worker/
 ├── nginx/
+├── progress/
 ├── scripts/
 ├── AGENTS.md
 ├── ARCHITECTURE.md
@@ -212,3 +213,4 @@ GAIA/
 - La documentazione architetturale generale e concentrata in root e in `backend/app/MONOLITH_MODULAR.md`.
 - Il dominio anagrafico usa `domain-docs/utenze/` come posizione canonica della documentazione.
 - Nel runtime possono coesistere superfici `anagrafica` e `utenze` per compatibilita applicativa.
+- La directory `progress/` contiene file di avanzamento tecnico puntuali per tranche di lavoro e non sostituisce PRD, README o documentazione di dominio.

@@ -46,8 +46,9 @@ worker Playwright separato, gestione CAPTCHA, archivio PDF e download ZIP.
 Il runtime supporta sia visure per immobile sia visure per soggetto PF/PNF,
 con esiti diagnostici distinti `completed`, `failed`, `skipped`, `not_found`.
 Il dominio include anche una Fase 1 territoriale con import Capacitas,
-distretti, particelle e anomalie su base PostGIS.
-Stato: MVP in integrazione.
+distretti, particelle, anomalie, storico import, ricerca anagrafica singola/massiva
+e dettaglio batch su base PostGIS.
+Stato: operativo avanzato sul perimetro corrente, con hardening backend/frontend e copertura E2E dei flussi principali Catasto.
 
 ### GAIA Utenze — Anagrafica soggetti
 Registro centralizzato dei soggetti del Consorzio, con import da archivio NAS,
@@ -179,7 +180,10 @@ Il comando Docker ferma temporaneamente il servizio `frontend`, esegue un build 
 - E2E browser sullo stack locale:
   `cd frontend && PLAYWRIGHT_BASE_URL=http://127.0.0.1:8080 npm run test:e2e`
 
-Il test E2E corrente copre login admin e wizard import Catasto Fase 1 fino al report finale.
+I test E2E correnti coprono:
+
+- login admin e wizard import Catasto Fase 1 fino al report finale
+- ricerca anagrafica Catasto singola e massiva
 
 Credenziali bootstrap locali:
 
@@ -210,6 +214,7 @@ Se la variabile e vuota/non impostata, la password non viene richiesta.
 - GAIA Inventario PRD: `domain-docs/inventory/docs/PRD_inventory.md`
 - GAIA Inventario Prompt: `domain-docs/inventory/docs/PROMPT_CODEX_inventory.md`
 - GAIA Catasto PRD: `domain-docs/catasto/docs/PRD_catasto.md`
+- Avanzamento tranche Catasto 2026-04-22: `progress/2026-04-22_catasto_phase_progress.md`
 
 ## Catasto MVP
 
