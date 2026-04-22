@@ -353,6 +353,7 @@ export function AnagraficaBulkPanel() {
           <input
             type="file"
             accept=".xlsx,.csv"
+            aria-label="File ricerca anagrafica"
             disabled={busy}
             onChange={(e) => {
               const file = e.target.files?.[0] ?? null;

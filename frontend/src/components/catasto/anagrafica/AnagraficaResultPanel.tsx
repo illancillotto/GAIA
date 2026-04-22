@@ -125,6 +125,12 @@ export function AnagraficaResultPanel({
                         <span className="text-gray-500">ID utenza:</span> {utenza.id}
                       </p>
                       <p>
+                        <span className="text-gray-500">CCO:</span> {utenza.cco ?? "—"}
+                      </p>
+                      <p>
+                        <span className="text-gray-500">Denominazione:</span> {utenza.denominazione ?? "—"}
+                      </p>
+                      <p>
                         <span className="text-gray-500">Anno:</span> {utenza.anno_campagna ?? "—"}
                       </p>
                       <p>

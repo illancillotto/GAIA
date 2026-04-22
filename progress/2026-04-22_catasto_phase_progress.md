@@ -9,7 +9,7 @@
 - Fase 2: hardening tecnico gia avanzato con test backend, integrazione shapefile e smoke frontend
 - Fase 3: audit/import, reporting batch e permessi workflow anomalie gia presenti
 - Fase 4: chiusa in questa tranche
-- Fase 5: ancora aperta, da consolidare dopo la chiusura della ricerca anagrafica
+- Fase 5: chiusa con E2E browser dedicato sulla ricerca anagrafica
 
 ## Tranche 2026-04-22
 
@@ -47,3 +47,12 @@ Portare a stato verde e versionare il blocco `ricerca-anagrafica` del modulo `ca
 - eventuale E2E browser dedicato alla ricerca anagrafica
 - affinamento UX stati vuoti/errori/multipli
 - eventuale export/reportistica massiva piu strutturata
+
+## Chiusura Fase 5
+
+- E2E Playwright dedicato aggiunto per:
+  - ricerca anagrafica singola
+  - ricerca anagrafica massiva con export
+- test backend Catasto ancora verdi
+- smoke frontend ancora verdi
+- avanzamento autonomo completato fino a Fase 5 sul perimetro Catasto attualmente in repository
