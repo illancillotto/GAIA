@@ -5,13 +5,34 @@ from urllib.parse import quote
 
 from app.modules.elaborazioni.capacitas.apps import get_capacitas_app
 from app.modules.elaborazioni.capacitas.decoder import decode_response
-from app.modules.elaborazioni.capacitas.models import CapacitasAnagrafica, CapacitasSearchResult
+from app.modules.elaborazioni.capacitas.models import (
+    CapacitasAnagrafica,
+    CapacitasLookupOption,
+    CapacitasSearchResult,
+    CapacitasTerreniSearchRequest,
+    CapacitasTerreniSearchResult,
+    CapacitasTerrenoCertificato,
+    CapacitasTerrenoDetail,
+)
 from app.modules.elaborazioni.capacitas.session import CapacitasSessionManager
+from app.modules.elaborazioni.capacitas.apps.involture.parsers import (
+    parse_certificato_html,
+    parse_lookup_options,
+    parse_terreni_search_result,
+    parse_terreno_detail_html,
+)
 
 logger = logging.getLogger(__name__)
 
 INVOLTURE_APP = get_capacitas_app("involture")
 AJAX_RICERCA_URL = f"{INVOLTURE_APP.base_url}/pages/ajax/ajaxRicerca.aspx"
+AJAX_FRAZIONI_URL = f"{INVOLTURE_APP.base_url}/pages/ajax/ajaxFrazioni.aspx"
+AJAX_SEZIONI_URL = f"{INVOLTURE_APP.base_url}/pages/ajax/ajaxSezioni.aspx"
+AJAX_FOGLI_URL = f"{INVOLTURE_APP.base_url}/pages/ajax/ajaxFogli.aspx"
+AJAX_GRID_URL = f"{INVOLTURE_APP.base_url}/pages/ajax/ajaxGrid.aspx"
+RICERCA_TERRENI_URL = f"{INVOLTURE_APP.base_url}/pages/ricercaTerreni.aspx"
+CERTIFICATO_URL = f"{INVOLTURE_APP.base_url}/pages/rptCertificato.aspx"
+DETTAGLIO_TERRENO_URL = f"{INVOLTURE_APP.base_url}/pages/dettaglioTerreno.aspx"
 
 _AJAX_HEADERS = {
     "Accept": "*/*",
@@ -57,6 +78,106 @@ class InVoltureClient:
 
     async def search_by_cco(self, cco: str, fra: str = "", ccs: str = "") -> CapacitasSearchResult:
         return await self.search_anagrafica(f"{cco}~{fra}~{ccs}", tipo=3)
+
+    async def search_frazioni(self, query: str) -> list[CapacitasLookupOption]:
+        return await self._lookup(
+            AJAX_FRAZIONI_URL,
+            payload={"op": "get_frazioni", "filter": quote(query, safe="")},
+        )
+
+    async def load_sezioni(self, frazione_id: str) -> list[CapacitasLookupOption]:
+        return await self._lookup(
+            AJAX_SEZIONI_URL,
+            payload={"op": "sez_t", "fra": quote(frazione_id, safe="")},
+        )
+
+    async def load_fogli(self, frazione_id: str, sezione: str = "") -> list[CapacitasLookupOption]:
+        return await self._lookup(
+            AJAX_FOGLI_URL,
+            payload={"op": "fog_t", "fra": quote(frazione_id, safe=""), "sez": quote(sezione, safe="")},
+        )
+
+    async def search_terreni(self, request: CapacitasTerreniSearchRequest) -> CapacitasTerreniSearchResult:
+        http = self._manager.get_http_client()
+        token = self._manager.get_token()
+        response = await http.post(
+            AJAX_GRID_URL,
+            data={
+                "op": "get-data-source",
+                "modulo": quote("terreni_ricerca", safe=""),
+                "salva": "true",
+                "frazione": quote(request.frazione_id, safe=""),
+                "sezione": quote(request.sezione, safe=""),
+                "foglio": quote(request.foglio, safe=""),
+                "mappale": quote(request.particella, safe=""),
+                "sub": quote(request.sub, safe=""),
+                "qualita": quote(request.qualita, safe=""),
+                "caratura": quote(request.caratura, safe=""),
+                "caraturaVal": quote(request.caratura_val, safe=""),
+                "inEssere": "true" if request.in_essere else "false",
+                "inDomIrr": "true" if request.in_dom_irr else "false",
+                "limitaRisultati": "true" if request.limita_risultati else "false",
+            },
+            headers={**_AJAX_HEADERS, "Referer": f"{RICERCA_TERRENI_URL}?token={token}&app=involture&tenant="},
+        )
+        response.raise_for_status()
+        return parse_terreni_search_result(response.text)
+
+    async def fetch_certificato(
+        self,
+        *,
+        cco: str,
+        com: str,
+        pvc: str,
+        fra: str,
+        ccs: str,
+        bc: str = "HomRicTer",
+    ) -> CapacitasTerrenoCertificato:
+        http = self._manager.get_http_client()
+        token = self._manager.get_token()
+        response = await http.get(
+            CERTIFICATO_URL,
+            params={
+                "CCO": cco,
+                "COM": com,
+                "PVC": pvc,
+                "FRA": fra,
+                "CCS": ccs,
+                "BC": bc,
+                "token": token,
+                "app": "involture",
+                "tenant": "",
+            },
+        )
+        response.raise_for_status()
+        return parse_certificato_html(response.text)
+
+    async def fetch_terreno_detail(self, *, external_row_id: str, bc: str = "HomRicTer") -> CapacitasTerrenoDetail:
+        http = self._manager.get_http_client()
+        token = self._manager.get_token()
+        response = await http.get(
+            DETTAGLIO_TERRENO_URL,
+            params={
+                "BC": bc,
+                "ID": external_row_id,
+                "token": token,
+                "app": "involture",
+                "tenant": "",
+            },
+        )
+        response.raise_for_status()
+        return parse_terreno_detail_html(response.text)
+
+    async def _lookup(self, url: str, payload: dict[str, str]) -> list[CapacitasLookupOption]:
+        http = self._manager.get_http_client()
+        token = self._manager.get_token()
+        response = await http.post(
+            url,
+            data=payload,
+            headers={**_AJAX_HEADERS, "Referer": f"{RICERCA_TERRENI_URL}?token={token}&app=involture&tenant="},
+        )
+        response.raise_for_status()
+        return parse_lookup_options(response.text)
 
 
 def _parse_search_result(data: dict | list | str) -> CapacitasSearchResult:

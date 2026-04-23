@@ -1094,6 +1094,110 @@ export type CapacitasSearchResult = {
   rows: CapacitasAnagrafica[];
 };
 
+export type CapacitasLookupOption = {
+  id: string;
+  display: string;
+};
+
+export type CapacitasTerrenoRow = {
+  ID?: string | null;
+  PVC?: string | null;
+  COM?: string | null;
+  CCO?: string | null;
+  FRA?: string | null;
+  CCS?: string | null;
+  Stato?: string | null;
+  Ta_ext?: string | null;
+  Tipo?: string | null;
+  Superficie?: string | null;
+  Sez?: string | null;
+  Foglio?: string | null;
+  Partic?: string | null;
+  Sub?: string | null;
+  BacDescr?: string | null;
+  Anno?: string | null;
+  Voltura?: string | null;
+  Opcode?: string | null;
+  DataReg?: string | null;
+  Belfiore?: string | null;
+  NEW_CCO?: string | null;
+  NEW_FRA?: string | null;
+  NEW_CCS?: string | null;
+  row_visual_state?: string | null;
+};
+
+export type CapacitasTerreniSearchInput = {
+  frazione_id: string;
+  sezione?: string;
+  foglio?: string;
+  particella?: string;
+  sub?: string;
+  qualita?: string;
+  caratura?: string;
+  caratura_val?: string;
+  in_essere?: boolean;
+  in_dom_irr?: boolean;
+  limita_risultati?: boolean;
+  credential_id?: number | null;
+};
+
+export type CapacitasTerreniSearchResult = {
+  total: number;
+  rows: CapacitasTerrenoRow[];
+};
+
+export type CapacitasTerreniBatchItemInput = CapacitasTerreniSearchInput & {
+  label?: string | null;
+  fetch_certificati?: boolean;
+  fetch_details?: boolean;
+};
+
+export type CapacitasTerreniJobCreateInput = {
+  items: CapacitasTerreniBatchItemInput[];
+  continue_on_error?: boolean;
+  credential_id?: number | null;
+};
+
+export type CapacitasTerreniBatchItemResult = {
+  label?: string | null;
+  search_key: string;
+  ok: boolean;
+  total_rows: number;
+  imported_rows: number;
+  imported_certificati: number;
+  imported_details: number;
+  linked_units: number;
+  linked_occupancies: number;
+  error?: string | null;
+};
+
+export type CapacitasTerreniBatchResult = {
+  items: CapacitasTerreniBatchItemResult[];
+  processed_items: number;
+  failed_items: number;
+  total_rows: number;
+  imported_rows: number;
+  imported_certificati: number;
+  imported_details: number;
+  linked_units: number;
+  linked_occupancies: number;
+};
+
+export type CapacitasTerreniJob = {
+  id: number;
+  credential_id: number | null;
+  requested_by_user_id: number | null;
+  status: string;
+  mode: string;
+  payload_json: Record<string, unknown> | unknown[] | null;
+  result_json: CapacitasTerreniBatchResult | Record<string, unknown> | unknown[] | null;
+  error_detail: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type CatastoSingleVisuraPayload = {
   search_mode?: "immobile" | "soggetto";
   comune?: string;

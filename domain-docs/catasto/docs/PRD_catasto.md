@@ -17,9 +17,11 @@ Questo PRD descrive quindi il perimetro reale di `catasto` oggi:
 - archivio documenti catastali
 - consultazione e dettaglio dei documenti
 - anagrafica territoriale `cat_*` per distretti, particelle, utenze irrigue e anomalie
+- distinzione esplicita tra catasto catastale ufficiale e catasto consortile operativo
 - import Capacitas Fase 1 e basi geospaziali PostGIS
 - ricerca anagrafica da riferimenti catastali, singola e massiva
 - workflow anagrafica e lookup massivo chiusi fino a Fase 5 sul perimetro corrente
+- dettaglio particella arricchito con vista del catasto consortile e storico occupazioni
 - superfici frontend dedicate alla navigazione del patrimonio documentale
 
 ## Obiettivi di prodotto
@@ -113,6 +115,13 @@ Entita di dominio oggi rilevanti per `catasto`:
 - `cat_intestatari`
 - `cat_anomalie`
 
+Distinzione semantica obbligatoria:
+
+- `cat_particelle` e `cat_particelle_history` rappresentano la particella catastale ufficiale proveniente da shapefile / servizi Agenzia Entrate-Territorio
+- `cat_utenze_irrigue` rappresenta oggi una fotografia annuale del ruolo Capacitas 0648/0985 e identifica chi paga / usa realmente l'acqua in una specifica annualita
+- il dominio non deve piu trattare `cat_utenze_irrigue` come semplice “appendice del ruolo”: il file Capacitas contiene gia il primo livello del catasto consortile reale
+- il catasto consortile reale e distinto dal catasto catastale: una particella catastale puo essere utilizzata da un soggetto diverso dal proprietario, puo essere gestita in affitto verbale, mezzadria, divisione familiare o suddivisa in piu porzioni irrigue operative
+
 Nota di integrazione territoriale:
 
 - il campo applicativo `cod_comune_capacitas` usato oggi nei flussi Catasto/Capacitas contiene il codice numerico sorgente scambiato da Capacitas
@@ -123,6 +132,27 @@ Nota di integrazione territoriale:
 - la tabella `cat_comuni` e la sorgente canonica per l'anagrafica comuni; `cat_particelle`, `cat_particelle_history` e `cat_utenze_irrigue` referenziano il comune tramite `comune_id`
 - nelle particelle territoriali `superficie_mq` mantiene il significato di superficie catastale sorgente; la superficie derivata dai poligoni viene salvata separatamente in `superficie_grafica_mq`
 - `superficie_grafica_mq` viene ricalcolata da PostGIS sulla geometria normalizzata in `EPSG:4326` tramite trasformazione metrica a `EPSG:3003`, cosi da evitare ambiguita tra dato amministrativo e dato GIS
+- nel catasto consortile derivato da `Capacitas Terreni`, GAIA puo correggere il comune canonico nei casi storici noti `Arborea/Terralba`, mantenendo comunque il comune sorgente Capacitas come dato tracciato e consultabile
+
+### Catasto consortile operativo
+
+Per il Consorzio la realta operativa non coincide sempre con la sola intestazione catastale.
+
+Casi da supportare:
+
+- proprietario catastale diverso dal soggetto che paga l'annualita consortile
+- affitto verbale o formale
+- divisione di fatto tra fratelli, parenti, aziende o soci
+- mezzadria / utilizzo condiviso
+- particella catastale suddivisa in piu porzioni irrigue reali con una o piu bocchette / utenze
+- variazioni storiche dell'utilizzatore reale per anno o per voltura
+
+Conseguenza di modello:
+
+- `cat_particelle` resta il layer catastale ufficiale
+- va introdotto un layer dati ulteriore per il catasto consortile reale, collegato ma non sovrapposto alla particella catastale
+- il file `R2025-090-IRR_Particelle_0648_0985_260416.xlsx` e da considerare sorgente primaria annuale del catasto consortile lato ruolo/acqua, non solo import contabile
+- il recupero arricchito da Capacitas sezione Terreni deve integrare storico, titoli, porzioni irrigue, eventi di voltura e dati di riordino fondiario
 
 Entita correlate ma governate dal runtime `elaborazioni`:
 
@@ -216,6 +246,25 @@ Vincoli infrastrutturali:
 - nello stack locale Docker il servizio `postgres` usa un'immagine `postgis/postgis`
 - le migration `cat_*` non sono compatibili con SQLite e vanno validate su PostgreSQL reale
 
+## Evoluzione pianificata
+
+Linea di evoluzione approvata per il dominio:
+
+1. mantenere `cat_particelle` come anagrafica catastale ufficiale immutata nel suo significato
+2. introdurre entita dedicate al catasto consortile reale e alle sue porzioni irrigue
+3. usare il file Capacitas 0648/0985 come seed annuale del rapporto tra particella catastale e utilizzatore reale
+4. aggiungere in `elaborazioni/capacitas` un recupero automatico dalla sezione Terreni di inVOLTURE per acquisire:
+   - storico righe per foglio/particella
+   - schede `rptCertificato`
+   - dettaglio terreno `dettaglioTerreno`
+   - dati di riordino (`R.F.`, `Maglia`, `Lotto`)
+   - segnali di porzione irrigua e operazioni di frazionamento/affitto/voltura
+5. consolidare questi dati in un modello storico consultabile lato Catasto/Consorzio
+
+Riferimento tecnico dedicato:
+
+- `domain-docs/catasto/docs/CATASTO_CONSORTILE.md`
+
 ## Frontend corrente
 
 Route `catasto` realmente utili al dominio:
@@ -248,6 +297,7 @@ Comportamento attuale:
 - il segmento frontend `/catasto` monta la navigation shell di dominio nel layout dedicato, non nel singolo wrapper pagina
 - `/catasto/distretti` e `/catasto/distretti/[id]` coprono KPI e drill-down per distretto
 - dalla dashboard `/catasto` il click su un distretto apre un workspace rapido in modale; da li i dettagli particella restano embedded senza sidebar completa e con navigazione indietro interna
+- la modale di dettaglio particella usata dalla ricerca anagrafica espone anche il blocco di catasto consortile per consultazione rapida
 - `/catasto/particelle` e `/catasto/particelle/[id]` coprono lookup e dettaglio con utenze/anomalie
 - `/catasto/anomalie` espone la lista operativa con aggiornamento stato
 - `/catasto/ricerca-anagrafica` espone ricerca singola e bulk da riferimenti catastali con preview dei match

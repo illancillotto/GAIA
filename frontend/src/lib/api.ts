@@ -37,8 +37,13 @@ import type {
   CapacitasCredentialCreateInput,
   CapacitasCredentialTestResult as CapacitasCredentialProbeResult,
   CapacitasCredentialUpdateInput,
+  CapacitasLookupOption,
   CapacitasSearchInput,
   CapacitasSearchResult,
+  CapacitasTerreniJob,
+  CapacitasTerreniJobCreateInput,
+  CapacitasTerreniSearchInput,
+  CapacitasTerreniSearchResult,
   BonificaOristaneseCredential,
   BonificaOristaneseCredentialCreateInput,
   BonificaOristaneseCredentialTestResult as BonificaOristaneseCredentialProbeResult,
@@ -1378,6 +1383,99 @@ export async function searchCapacitasInvolture(
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(payload),
+  });
+}
+
+export async function searchCapacitasFrazioni(
+  token: string,
+  query: string,
+  credentialId?: number | null,
+): Promise<CapacitasLookupOption[]> {
+  const qs = createQueryString({
+    q: query,
+    credential_id: credentialId != null ? String(credentialId) : undefined,
+  });
+  return request<CapacitasLookupOption[]>(`/elaborazioni/capacitas/involture/frazioni${qs}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getCapacitasSezioni(
+  token: string,
+  frazioneId: string,
+  credentialId?: number | null,
+): Promise<CapacitasLookupOption[]> {
+  const qs = createQueryString({
+    frazione_id: frazioneId,
+    credential_id: credentialId != null ? String(credentialId) : undefined,
+  });
+  return request<CapacitasLookupOption[]>(`/elaborazioni/capacitas/involture/sezioni${qs}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getCapacitasFogli(
+  token: string,
+  frazioneId: string,
+  sezione?: string,
+  credentialId?: number | null,
+): Promise<CapacitasLookupOption[]> {
+  const qs = createQueryString({
+    frazione_id: frazioneId,
+    sezione,
+    credential_id: credentialId != null ? String(credentialId) : undefined,
+  });
+  return request<CapacitasLookupOption[]>(`/elaborazioni/capacitas/involture/fogli${qs}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function searchCapacitasTerreni(
+  token: string,
+  payload: CapacitasTerreniSearchInput,
+): Promise<CapacitasTerreniSearchResult> {
+  return request<CapacitasTerreniSearchResult>("/elaborazioni/capacitas/involture/terreni/search", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createCapacitasTerreniJob(
+  token: string,
+  payload: CapacitasTerreniJobCreateInput,
+): Promise<CapacitasTerreniJob> {
+  return request<CapacitasTerreniJob>("/elaborazioni/capacitas/involture/terreni/jobs", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function listCapacitasTerreniJobs(token: string): Promise<CapacitasTerreniJob[]> {
+  return request<CapacitasTerreniJob[]>("/elaborazioni/capacitas/involture/terreni/jobs", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function rerunCapacitasTerreniJob(token: string, jobId: number): Promise<CapacitasTerreniJob> {
+  return request<CapacitasTerreniJob>(`/elaborazioni/capacitas/involture/terreni/jobs/${jobId}/run`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
   });
 }
 

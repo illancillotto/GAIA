@@ -104,6 +104,61 @@ class CatParticellaDetailResponse(CatParticellaResponse):
     fuori_distretto: bool
 
 
+class CatConsorzioOccupancyResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    unit_id: UUID
+    segment_id: UUID | None
+    utenza_id: UUID | None
+    cco: str | None
+    fra: str | None
+    ccs: str | None
+    pvc: str | None
+    com: str | None
+    source_type: str
+    relationship_type: str
+    valid_from: date | None
+    valid_to: date | None
+    is_current: bool
+    confidence: Decimal | None
+    notes: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class CatConsorzioUnitSummaryResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    particella_id: UUID | None
+    comune_id: UUID | None
+    cod_comune_capacitas: int | None
+    source_comune_id: UUID | None
+    source_cod_comune_capacitas: int | None
+    source_codice_catastale: str | None
+    source_comune_label: str | None
+    comune_resolution_mode: str | None
+    sezione_catastale: str | None
+    foglio: str | None
+    particella: str | None
+    subalterno: str | None
+    descrizione: str | None
+    source_first_seen: date | None
+    source_last_seen: date | None
+    is_active: bool
+    created_at: datetime
+    updated_at: datetime
+    comune_label: str | None = None
+    source_comune_resolved_label: str | None = None
+    occupancies: list[CatConsorzioOccupancyResponse] = []
+
+
+class CatParticellaConsorzioResponse(BaseModel):
+    particella_id: UUID
+    units: list[CatConsorzioUnitSummaryResponse]
+
+
 class CatParticellaHistoryResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

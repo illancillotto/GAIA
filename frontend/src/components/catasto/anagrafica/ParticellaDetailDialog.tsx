@@ -2,9 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import type { CatAnagraficaMatch, CatParticellaDetail, CatUtenzaIrrigua, GeoJSONFeature } from "@/types/catasto";
+import type { CatAnagraficaMatch, CatParticellaConsorzio, CatParticellaDetail, CatUtenzaIrrigua, GeoJSONFeature } from "@/types/catasto";
 import { getStoredAccessToken } from "@/lib/auth";
-import { catastoGetParticella, catastoGetParticellaGeojson, catastoGetParticellaUtenze } from "@/lib/api/catasto";
+import { catastoGetParticella, catastoGetParticellaConsorzio, catastoGetParticellaGeojson, catastoGetParticellaUtenze } from "@/lib/api/catasto";
 
 function formatHaFromMq(value: string | number | null | undefined): string {
   if (value == null) return "—";
@@ -30,6 +30,21 @@ function extractLonLat(feature: GeoJSONFeature | null): { lon: number; lat: numb
   return { lon, lat };
 }
 
+function renderResolutionLabel(mode: string | null | undefined): string {
+  switch (mode) {
+    case "swapped_arborea_terralba":
+      return "Comune corretto da GAIA (Arborea/Terralba)";
+    case "source_match":
+      return "Comune sorgente confermato";
+    case "resolved_from_particella":
+      return "Comune risolto dalla particella GAIA";
+    case "source_only":
+      return "Solo sorgente Capacitas";
+    default:
+      return mode ?? "—";
+  }
+}
+
 export function ParticellaDetailDialog({
   open,
   match,
@@ -42,6 +57,7 @@ export function ParticellaDetailDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [particella, setParticella] = useState<CatParticellaDetail | null>(null);
+  const [consorzio, setConsorzio] = useState<CatParticellaConsorzio | null>(null);
   const [utenze, setUtenze] = useState<CatUtenzaIrrigua[]>([]);
   const [geojson, setGeojson] = useState<GeoJSONFeature | null>(null);
 
@@ -59,16 +75,19 @@ export function ParticellaDetailDialog({
       setBusy(true);
       setError(null);
       try {
-        const [p, u, g] = await Promise.all([
+        const [p, c, u, g] = await Promise.all([
           catastoGetParticella(token, currentMatch.particella_id),
+          catastoGetParticellaConsorzio(token, currentMatch.particella_id),
           catastoGetParticellaUtenze(token, currentMatch.particella_id),
           catastoGetParticellaGeojson(token, currentMatch.particella_id),
         ]);
         setParticella(p);
+        setConsorzio(c);
         setUtenze(u);
         setGeojson(g);
       } catch (e) {
         setParticella(null);
+        setConsorzio(null);
         setUtenze([]);
         setGeojson(null);
         setError(e instanceof Error ? e.message : "Errore caricamento dettagli particella");
@@ -197,6 +216,60 @@ export function ParticellaDetailDialog({
               </div>
               {!centroid && !busy ? <p className="text-xs text-gray-500">Centroid non disponibile (geometria assente o non calcolabile).</p> : null}
             </div>
+          </div>
+        </div>
+
+        <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 p-3 text-sm text-gray-700">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="font-medium text-gray-900">Catasto consortile</p>
+              <p className="mt-1 text-sm text-gray-500">Comune reale GAIA, comune sorgente Capacitas e occupazioni correnti/storiche.</p>
+            </div>
+            <p className="text-sm text-gray-500">{busy ? "Caricamento…" : `${consorzio?.units.length ?? 0} unità`}</p>
+          </div>
+          <div className="mt-3 space-y-3">
+            {busy ? (
+              <p className="text-sm text-gray-500">Caricamento…</p>
+            ) : !consorzio || consorzio.units.length === 0 ? (
+              <p className="text-sm text-gray-500">Nessun dato consortile disponibile per questa particella.</p>
+            ) : (
+              consorzio.units.map((unit) => (
+                <div key={unit.id} className="rounded-lg border border-white bg-white p-3">
+                  <div className="flex flex-wrap items-start justify-between gap-2">
+                    <div>
+                      <p className="font-medium text-gray-900">
+                        Unità {unit.foglio ?? "—"}/{unit.particella ?? "—"}{unit.subalterno ? `/${unit.subalterno}` : ""}
+                      </p>
+                      <p className="mt-1 text-sm text-gray-600">
+                        Reale: <span className="font-medium text-gray-800">{unit.comune_label ?? unit.cod_comune_capacitas ?? "—"}</span>
+                        {" · "}
+                        Sorgente: <span className="font-medium text-gray-800">{unit.source_comune_resolved_label ?? unit.source_comune_label ?? unit.source_cod_comune_capacitas ?? "—"}</span>
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-[#eef5f1] px-2.5 py-1 text-xs font-medium text-[#1D4E35]">
+                      {renderResolutionLabel(unit.comune_resolution_mode)}
+                    </span>
+                  </div>
+                  <div className="mt-2 space-y-1 text-sm text-gray-700">
+                    <p>
+                      <span className="text-gray-500">Belfiore sorgente:</span> {unit.source_codice_catastale ?? "—"}
+                    </p>
+                    <p>
+                      <span className="text-gray-500">Occupazioni:</span> {unit.occupancies.length}
+                    </p>
+                    {unit.occupancies.length > 0 ? (
+                      <p>
+                        <span className="text-gray-500">CCO:</span>{" "}
+                        {unit.occupancies
+                          .slice(0, 3)
+                          .map((occ) => occ.cco ?? "—")
+                          .join(", ")}
+                      </p>
+                    ) : null}
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         </div>
 

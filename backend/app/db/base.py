@@ -2,8 +2,16 @@ from app.core.database import Base
 from app.models.application_user import ApplicationUser
 from app.models.operator_invitation import OperatorInvitation
 from app.models.bonifica_oristanese import BonificaOristaneseCredential
-from app.models.capacitas import CapacitasCredential
+from app.models.capacitas import CapacitasCredential, CapacitasTerreniSyncJob
 from app.models.wc_sync_job import WCSyncJob
+from app.modules.catasto.models import (
+    CatCapacitasCertificato,
+    CatCapacitasTerrenoDetail,
+    CatCapacitasTerrenoRow,
+    CatConsorzioOccupancy,
+    CatConsorzioUnit,
+    CatConsorzioUnitSegment,
+)
 from app.modules.accessi.wc_org_charts import WCOrgChart, WCOrgChartEntry
 from app.modules.inventory.models import WarehouseRequest
 from app.modules.operazioni.models.wc_area import WCArea
@@ -78,6 +86,10 @@ __all__ = [
     "Base",
     "BonificaOristaneseCredential",
     "CapacitasCredential",
+    "CapacitasTerreniSyncJob",
+    "CatCapacitasCertificato",
+    "CatCapacitasTerrenoDetail",
+    "CatCapacitasTerrenoRow",
     "CatastoBatch",
     "CatastoCaptchaLog",
     "CatastoComune",
@@ -85,6 +97,9 @@ __all__ = [
     "CatastoCredential",
     "CatastoDocument",
     "CatastoVisuraRequest",
+    "CatConsorzioOccupancy",
+    "CatConsorzioUnit",
+    "CatConsorzioUnitSegment",
     "DeviceInventoryLink",
     "DevicePosition",
     "EffectivePermission",

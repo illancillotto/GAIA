@@ -4,7 +4,7 @@ import uuid
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text, Uuid, func
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text, Uuid, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import TypeDecorator
 
@@ -154,7 +154,8 @@ class CatParticella(Base):
 
     utenze: Mapped[list["CatUtenzaIrrigua"]] = relationship(back_populates="particella_record")
     anomalie: Mapped[list["CatAnomalia"]] = relationship(back_populates="particella")
-    comune: Mapped["CatComune | None"] = relationship()
+    consorzio_units: Mapped[list["CatConsorzioUnit"]] = relationship(back_populates="particella_record")
+    comune: Mapped["CatComune | None"] = relationship(foreign_keys=[comune_id])
 
     @property
     def fuori_distretto(self) -> bool:
@@ -228,7 +229,8 @@ class CatUtenzaIrrigua(Base):
     # relationship name to avoid shadowing the column attribute.
     particella_record: Mapped["CatParticella | None"] = relationship(back_populates="utenze")
     anomalie: Mapped[list["CatAnomalia"]] = relationship(back_populates="utenza")
-    comune: Mapped["CatComune | None"] = relationship()
+    occupancies: Mapped[list["CatConsorzioOccupancy"]] = relationship(back_populates="utenza_record")
+    comune: Mapped["CatComune | None"] = relationship(foreign_keys=[comune_id])
 
     @property
     def ha_anomalie(self) -> bool:
@@ -266,6 +268,193 @@ class CatIntestatario(Base):
     )
 
 
+class CatConsorzioUnit(Base):
+    __tablename__ = "cat_consorzio_units"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    particella_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cat_particelle.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    comune_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cat_comuni.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    cod_comune_capacitas: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    source_comune_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cat_comuni.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    source_cod_comune_capacitas: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    source_codice_catastale: Mapped[str | None] = mapped_column(String(4), nullable=True, index=True)
+    source_comune_label: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    comune_resolution_mode: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    sezione_catastale: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    foglio: Mapped[str | None] = mapped_column(String(10), nullable=True, index=True)
+    particella: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    subalterno: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    descrizione: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    source_first_seen: Mapped[date | None] = mapped_column(Date, nullable=True)
+    source_last_seen: Mapped[date | None] = mapped_column(Date, nullable=True)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    particella_record: Mapped["CatParticella | None"] = relationship(back_populates="consorzio_units")
+    comune: Mapped["CatComune | None"] = relationship(foreign_keys=[comune_id])
+    source_comune: Mapped["CatComune | None"] = relationship(foreign_keys=[source_comune_id])
+    segments: Mapped[list["CatConsorzioUnitSegment"]] = relationship(
+        back_populates="unit", cascade="all, delete-orphan"
+    )
+    occupancies: Mapped[list["CatConsorzioOccupancy"]] = relationship(
+        back_populates="unit", cascade="all, delete-orphan"
+    )
+    terreno_rows: Mapped[list["CatCapacitasTerrenoRow"]] = relationship(back_populates="unit")
+
+
+class CatConsorzioUnitSegment(Base):
+    __tablename__ = "cat_consorzio_unit_segments"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    unit_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("cat_consorzio_units.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    label: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    segment_type: Mapped[str] = mapped_column(String(40), default="full", nullable=False, index=True)
+    surface_declared_mq: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    surface_irrigable_mq: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    riordino_code: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
+    riordino_maglia: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    riordino_lotto: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    current_status: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    valid_from: Mapped[date | None] = mapped_column(Date, nullable=True)
+    valid_to: Mapped[date | None] = mapped_column(Date, nullable=True)
+    is_current: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    unit: Mapped["CatConsorzioUnit"] = relationship(back_populates="segments")
+    occupancies: Mapped[list["CatConsorzioOccupancy"]] = relationship(back_populates="segment")
+
+
+class CatConsorzioOccupancy(Base):
+    __tablename__ = "cat_consorzio_occupancies"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    unit_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("cat_consorzio_units.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    segment_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cat_consorzio_unit_segments.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    subject_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ana_subjects.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    utenza_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cat_utenze_irrigue.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    cco: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    fra: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    ccs: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    pvc: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    com: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    source_type: Mapped[str] = mapped_column(String(40), default="ruolo_0648_0985", nullable=False, index=True)
+    relationship_type: Mapped[str] = mapped_column(String(40), default="utilizzatore_reale", nullable=False, index=True)
+    valid_from: Mapped[date | None] = mapped_column(Date, nullable=True)
+    valid_to: Mapped[date | None] = mapped_column(Date, nullable=True)
+    is_current: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+    confidence: Mapped[Decimal | None] = mapped_column(Numeric(5, 2), nullable=True)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    unit: Mapped["CatConsorzioUnit"] = relationship(back_populates="occupancies")
+    segment: Mapped["CatConsorzioUnitSegment | None"] = relationship(back_populates="occupancies")
+    utenza_record: Mapped["CatUtenzaIrrigua | None"] = relationship(back_populates="occupancies")
+
+
+class CatCapacitasTerrenoRow(Base):
+    __tablename__ = "cat_capacitas_terreni_rows"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    unit_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cat_consorzio_units.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    search_key: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    external_row_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    cco: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    fra: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    ccs: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    pvc: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    com: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    belfiore: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    foglio: Mapped[str | None] = mapped_column(String(10), nullable=True, index=True)
+    particella: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    sub: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    anno: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    voltura: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    opcode: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    data_reg: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    superficie_mq: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    bac_descr: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    row_visual_state: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    raw_payload_json: Mapped[dict | list | None] = mapped_column(JSON, nullable=True)
+    collected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    unit: Mapped["CatConsorzioUnit | None"] = relationship(back_populates="terreno_rows")
+    detail_snapshots: Mapped[list["CatCapacitasTerrenoDetail"]] = relationship(back_populates="terreno_row")
+
+
+class CatCapacitasCertificato(Base):
+    __tablename__ = "cat_capacitas_certificati"
+    __table_args__ = (
+        UniqueConstraint("cco", "fra", "ccs", "pvc", "com", "collected_at", name="uq_cat_cap_cert_snapshot"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    cco: Mapped[str] = mapped_column(String(20), nullable=False, index=True)
+    fra: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    ccs: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    pvc: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    com: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    partita_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    utenza_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    utenza_status: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    ruolo_status: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    raw_html: Mapped[str | None] = mapped_column(Text, nullable=True)
+    parsed_json: Mapped[dict | list | None] = mapped_column(JSON, nullable=True)
+    collected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class CatCapacitasTerrenoDetail(Base):
+    __tablename__ = "cat_capacitas_terreno_details"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    terreno_row_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cat_capacitas_terreni_rows.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    external_row_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    foglio: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    particella: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    sub: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    riordino_code: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
+    riordino_maglia: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    riordino_lotto: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    irridist: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    raw_html: Mapped[str | None] = mapped_column(Text, nullable=True)
+    parsed_json: Mapped[dict | list | None] = mapped_column(JSON, nullable=True)
+    collected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    terreno_row: Mapped["CatCapacitasTerrenoRow | None"] = relationship(back_populates="detail_snapshots")
+
+
 class CatAnomalia(Base):
     __tablename__ = "cat_anomalie"
 
@@ -293,8 +482,14 @@ class CatAnomalia(Base):
 __all__ = [
     "CatAliquota",
     "CatAnomalia",
+    "CatCapacitasCertificato",
+    "CatCapacitasTerrenoDetail",
+    "CatCapacitasTerrenoRow",
     "CatDistretto",
     "CatDistrettoCoefficiente",
+    "CatConsorzioOccupancy",
+    "CatConsorzioUnit",
+    "CatConsorzioUnitSegment",
     "CatImportBatch",
     "CatIntestatario",
     "CatParticella",

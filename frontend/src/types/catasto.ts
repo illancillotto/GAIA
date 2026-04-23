@@ -90,6 +90,57 @@ export type CatParticellaDetail = CatParticella & {
   fuori_distretto: boolean;
 };
 
+export type CatConsorzioOccupancy = {
+  id: UUID;
+  unit_id: UUID;
+  segment_id: UUID | null;
+  utenza_id: UUID | null;
+  cco: string | null;
+  fra: string | null;
+  ccs: string | null;
+  pvc: string | null;
+  com: string | null;
+  source_type: string;
+  relationship_type: string;
+  valid_from: string | null;
+  valid_to: string | null;
+  is_current: boolean;
+  confidence: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CatConsorzioUnit = {
+  id: UUID;
+  particella_id: UUID | null;
+  comune_id: UUID | null;
+  cod_comune_capacitas: number | null;
+  source_comune_id: UUID | null;
+  source_cod_comune_capacitas: number | null;
+  source_codice_catastale: string | null;
+  source_comune_label: string | null;
+  comune_resolution_mode: string | null;
+  sezione_catastale: string | null;
+  foglio: string | null;
+  particella: string | null;
+  subalterno: string | null;
+  descrizione: string | null;
+  source_first_seen: string | null;
+  source_last_seen: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  comune_label: string | null;
+  source_comune_resolved_label: string | null;
+  occupancies: CatConsorzioOccupancy[];
+};
+
+export type CatParticellaConsorzio = {
+  particella_id: UUID;
+  units: CatConsorzioUnit[];
+};
+
 export type CatParticellaHistory = {
   history_id: UUID;
   particella_id: UUID;

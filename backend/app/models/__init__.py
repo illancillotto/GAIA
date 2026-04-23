@@ -27,6 +27,15 @@ from app.models.catasto import (
     CatastoVisuraRequest,
     CatastoVisuraRequestStatus,
 )
+from app.models.capacitas import CapacitasCredential, CapacitasTerreniSyncJob
+from app.modules.catasto.models import (
+    CatCapacitasCertificato,
+    CatCapacitasTerrenoDetail,
+    CatCapacitasTerrenoRow,
+    CatConsorzioOccupancy,
+    CatConsorzioUnit,
+    CatConsorzioUnitSegment,
+)
 from app.models.nas_group import NasGroup
 from app.models.nas_user import NasUser
 from app.models.effective_permission import EffectivePermission
@@ -66,6 +75,9 @@ __all__ = [
     "CatastoBatch",
     "CatastoBatchStatus",
     "CatastoCaptchaLog",
+    "CatCapacitasCertificato",
+    "CatCapacitasTerrenoDetail",
+    "CatCapacitasTerrenoRow",
     "CatastoComune",
     "CatastoConnectionTest",
     "CatastoConnectionTestStatus",
@@ -73,6 +85,11 @@ __all__ = [
     "CatastoDocument",
     "CatastoVisuraRequest",
     "CatastoVisuraRequestStatus",
+    "CatConsorzioOccupancy",
+    "CatConsorzioUnit",
+    "CatConsorzioUnitSegment",
+    "CapacitasCredential",
+    "CapacitasTerreniSyncJob",
     "EffectivePermission",
     "DeviceInventoryLink",
     "DevicePosition",

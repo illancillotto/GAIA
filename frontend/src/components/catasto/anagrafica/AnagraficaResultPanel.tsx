@@ -184,6 +184,9 @@ export function AnagraficaResultPanel({
                   </span>
                 ) : null}
               </p>
+              <p className="mt-1 text-gray-500">
+                Il dettaglio mostra anche il catasto consortile: comune reale GAIA, comune sorgente Capacitas e occupazioni.
+              </p>
             </div>
           </article>
         );

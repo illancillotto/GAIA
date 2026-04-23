@@ -11,6 +11,7 @@ import type {
   CatImportStartResponse,
   CatImportSummary,
   CatParticella,
+  CatParticellaConsorzio,
   CatParticellaDetail,
   CatParticellaHistory,
   CatSchemaContributo,
@@ -145,6 +146,12 @@ export async function catastoListParticelle(
 
 export async function catastoGetParticella(token: string, id: UUID): Promise<CatParticellaDetail> {
   return request<CatParticellaDetail>(`/catasto/particelle/${id}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function catastoGetParticellaConsorzio(token: string, id: UUID): Promise<CatParticellaConsorzio> {
+  return request<CatParticellaConsorzio>(`/catasto/particelle/${id}/consorzio`, {
     headers: authHeaders(token),
   });
 }

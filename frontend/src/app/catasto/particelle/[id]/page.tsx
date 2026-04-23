@@ -13,17 +13,33 @@ import { AnomaliaStatusPill } from "@/components/catasto/AnomaliaStatusPill";
 import {
   catastoGetParticella,
   catastoGetParticellaAnomalie,
+  catastoGetParticellaConsorzio,
   catastoGetParticellaHistory,
   catastoGetParticellaUtenze,
   catastoUpdateAnomalia,
 } from "@/lib/api/catasto";
 import { getStoredAccessToken } from "@/lib/auth";
-import type { CatAnomalia, CatParticellaDetail, CatParticellaHistory, CatUtenzaIrrigua } from "@/types/catasto";
+import type { CatAnomalia, CatParticellaConsorzio, CatParticellaDetail, CatParticellaHistory, CatUtenzaIrrigua } from "@/types/catasto";
 
 function formatHaFromMq(value: string | number): string {
   const mq = typeof value === "number" ? value : Number(value);
   const ha = (Number.isFinite(mq) ? mq : 0) / 10_000;
   return new Intl.NumberFormat("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(ha);
+}
+
+function renderResolutionLabel(mode: string | null | undefined): string {
+  switch (mode) {
+    case "swapped_arborea_terralba":
+      return "Comune corretto da GAIA (Arborea/Terralba)";
+    case "source_match":
+      return "Comune sorgente confermato";
+    case "resolved_from_particella":
+      return "Comune risolto dalla particella GAIA";
+    case "source_only":
+      return "Solo sorgente Capacitas";
+    default:
+      return mode ?? "—";
+  }
 }
 
 export default function CatastoParticellaDetailPage() {
@@ -34,6 +50,7 @@ export default function CatastoParticellaDetailPage() {
   const isEmbedded = searchParams.get("embedded") === "1";
 
   const [item, setItem] = useState<CatParticellaDetail | null>(null);
+  const [consorzio, setConsorzio] = useState<CatParticellaConsorzio | null>(null);
   const [history, setHistory] = useState<CatParticellaHistory[]>([]);
   const [anno, setAnno] = useState<number>(new Date().getFullYear());
   const [utenze, setUtenze] = useState<CatUtenzaIrrigua[]>([]);
@@ -48,8 +65,9 @@ export default function CatastoParticellaDetailPage() {
 
       setIsLoading(true);
       try {
-        const [p, h, u, a] = await Promise.all([
+        const [p, c, h, u, a] = await Promise.all([
           catastoGetParticella(token, particellaId),
+          catastoGetParticellaConsorzio(token, particellaId),
           catastoGetParticellaHistory(token, particellaId),
           catastoGetParticellaUtenze(token, particellaId, { anno }),
           catastoGetParticellaAnomalie(token, particellaId, { anno }),
@@ -75,6 +93,7 @@ export default function CatastoParticellaDetailPage() {
         }
 
         setItem(p);
+        setConsorzio(c);
         setHistory(h);
         setUtenze(u);
         setAnomalie(a);
@@ -191,6 +210,33 @@ export default function CatastoParticellaDetailPage() {
     [anno, particellaId],
   );
 
+  const consorzioOccupancyColumns = useMemo<ColumnDef<NonNullable<CatParticellaConsorzio["units"][number]["occupancies"]>[number]>[]>(
+    () => [
+      { header: "Relazione", accessorKey: "relationship_type", cell: ({ row }) => <span className="text-sm text-gray-700">{row.original.relationship_type}</span> },
+      { header: "CCO", accessorKey: "cco", cell: ({ row }) => <span className="text-sm text-gray-700">{row.original.cco ?? "—"}</span> },
+      { header: "Sorgente", accessorKey: "source_type", cell: ({ row }) => <span className="text-sm text-gray-700">{row.original.source_type}</span> },
+      {
+        header: "Periodo",
+        id: "periodo",
+        cell: ({ row }) => (
+          <span className="text-sm text-gray-700">
+            {row.original.valid_from ?? "—"} → {row.original.valid_to ?? "—"}
+          </span>
+        ),
+      },
+      {
+        header: "Stato",
+        id: "current",
+        cell: ({ row }) => (
+          <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${row.original.is_current ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
+            {row.original.is_current ? "Corrente" : "Storico"}
+          </span>
+        ),
+      },
+    ],
+    [],
+  );
+
   const reference = item ? `Fg.${item.foglio} Part.${item.particella}${item.subalterno ? ` Sub.${item.subalterno}` : ""}` : "Particella";
 
   return (
@@ -243,6 +289,72 @@ export default function CatastoParticellaDetailPage() {
                 <MetricCard label="Current" value={item.is_current ? "Sì" : "No"} variant={item.is_current ? "success" : "warning"} />
               </div>
             </>
+          )}
+        </article>
+
+        <article className="panel-card">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-gray-900">Catasto consortile</p>
+              <p className="mt-1 text-sm text-gray-500">Unità consortili derivate da Capacitas Terreni, con comune canonico GAIA, comune sorgente e occupazioni storiche.</p>
+            </div>
+            <p className="text-sm text-gray-500">{isLoading ? "Caricamento…" : `${consorzio?.units.length ?? 0} unità`}</p>
+          </div>
+
+          {isLoading && !consorzio ? (
+            <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 p-4 text-sm text-gray-500">Caricamento…</div>
+          ) : !consorzio || consorzio.units.length === 0 ? (
+            <div className="mt-4 rounded-xl border border-dashed border-gray-200 bg-gray-50 p-4 text-sm text-gray-500">
+              Nessun dato consortile ancora consolidato per questa particella.
+            </div>
+          ) : (
+            <div className="mt-4 space-y-4">
+              {consorzio.units.map((unit) => (
+                <div key={unit.id} className="rounded-2xl border border-[#e5ebe2] bg-[#fbfcfb] p-4">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold text-gray-900">
+                        Unità {unit.foglio ?? "—"}/{unit.particella ?? "—"}{unit.subalterno ? `/${unit.subalterno}` : ""}
+                      </p>
+                      <p className="mt-1 text-sm text-gray-600">
+                        Comune reale: <span className="font-medium text-gray-800">{unit.comune_label ?? unit.cod_comune_capacitas ?? "—"}</span>
+                        {" · "}
+                        Comune sorgente Capacitas:{" "}
+                        <span className="font-medium text-gray-800">
+                          {unit.source_comune_resolved_label ?? unit.source_comune_label ?? unit.source_cod_comune_capacitas ?? "—"}
+                        </span>
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <span className="rounded-full bg-[#eef5f1] px-2.5 py-1 text-xs font-medium text-[#1D4E35]">
+                        {renderResolutionLabel(unit.comune_resolution_mode)}
+                      </span>
+                      {unit.source_codice_catastale ? (
+                        <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-700">
+                          Belfiore sorgente {unit.source_codice_catastale}
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 md:grid-cols-4">
+                    <MetricCard label="Ultimo rilevamento" value={unit.source_last_seen ?? "—"} />
+                    <MetricCard label="Primo rilevamento" value={unit.source_first_seen ?? "—"} />
+                    <MetricCard label="Occupazioni" value={String(unit.occupancies.length)} />
+                    <MetricCard label="Attiva" value={unit.is_active ? "Sì" : "No"} variant={unit.is_active ? "success" : "warning"} />
+                  </div>
+
+                  <div className="mt-4">
+                    <DataTable
+                      data={unit.occupancies}
+                      columns={consorzioOccupancyColumns}
+                      initialPageSize={6}
+                      emptyTitle="Nessuna occupancy"
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </article>
 

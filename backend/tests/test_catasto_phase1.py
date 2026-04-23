@@ -1,5 +1,6 @@
 from collections.abc import Generator
 from datetime import date, datetime, timezone
+from decimal import Decimal
 
 from fastapi.testclient import TestClient
 import pandas as pd
@@ -15,7 +16,13 @@ from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.models.catasto_phase1 import (
     CatAnomalia,
+    CatCapacitasCertificato,
+    CatCapacitasTerrenoDetail,
+    CatCapacitasTerrenoRow,
     CatComune,
+    CatConsorzioOccupancy,
+    CatConsorzioUnit,
+    CatConsorzioUnitSegment,
     CatDistretto,
     CatImportBatch,
     CatIntestatario,
@@ -225,6 +232,43 @@ def seed_phase1_lookup_data(db: Session) -> None:
             valid_from=date(2024, 1, 1),
             valid_to=date(2024, 12, 31),
             change_reason="seed-history",
+        )
+    )
+    consorzio_unit = CatConsorzioUnit(
+        particella_id=particella.id,
+        comune_id=comune_arborea.id,
+        cod_comune_capacitas=165,
+        source_comune_id=comune_cabras.id,
+        source_cod_comune_capacitas=212,
+        source_codice_catastale="B314",
+        source_comune_label="Cabras",
+        comune_resolution_mode="swapped_arborea_terralba",
+        foglio="5",
+        particella="120",
+        subalterno="1",
+        descrizione="Unità consortile seed",
+        source_first_seen=date(2025, 1, 1),
+        source_last_seen=date(2025, 12, 31),
+        is_active=True,
+    )
+    db.add(consorzio_unit)
+    db.flush()
+    db.add(
+        CatConsorzioOccupancy(
+            unit_id=consorzio_unit.id,
+            utenza_id=db.query(CatUtenzaIrrigua).filter(CatUtenzaIrrigua.cco == "UT-SEED-001").one().id,
+            cco="UT-SEED-001",
+            fra="38",
+            ccs="00000",
+            pvc="097",
+            com="212",
+            source_type="capacitas_terreni",
+            relationship_type="utilizzatore_reale",
+            valid_from=date(2025, 1, 1),
+            valid_to=date(2025, 12, 31),
+            is_current=True,
+            confidence=Decimal("0.90"),
+            notes="Occupazione seed da Capacitas Terreni",
         )
     )
     db.commit()
@@ -717,6 +761,7 @@ def test_particella_detail_history_utenze_and_anomalie_endpoints() -> None:
     history_response = client.get(f"/catasto/particelle/{particella_id}/history", headers=auth_headers())
     utenze_response = client.get(f"/catasto/particelle/{particella_id}/utenze?anno=2025", headers=auth_headers())
     anomalie_response = client.get(f"/catasto/particelle/{particella_id}/anomalie?anno=2025", headers=auth_headers())
+    consorzio_response = client.get(f"/catasto/particelle/{particella_id}/consorzio", headers=auth_headers())
 
     assert detail_response.status_code == 200
     assert detail_response.json()["foglio"] == "5"
@@ -731,6 +776,13 @@ def test_particella_detail_history_utenze_and_anomalie_endpoints() -> None:
     assert anomalie_response.status_code == 200
     assert len(anomalie_response.json()) == 1
     assert anomalie_response.json()[0]["tipo"] == "VAL-06-imponibile"
+    assert consorzio_response.status_code == 200
+    consorzio_payload = consorzio_response.json()
+    assert consorzio_payload["particella_id"] == str(particella_id)
+    assert len(consorzio_payload["units"]) == 1
+    assert consorzio_payload["units"][0]["comune_resolution_mode"] == "swapped_arborea_terralba"
+    assert consorzio_payload["units"][0]["source_comune_label"] == "Cabras"
+    assert consorzio_payload["units"][0]["occupancies"][0]["cco"] == "UT-SEED-001"
 
 
 def test_particelle_endpoint_supports_combined_lookup_filters() -> None:
@@ -1166,6 +1218,185 @@ def test_import_capacitas_excel_accepts_legacy_alias_columns(monkeypatch: pytest
         assert utenza.denominazione == "Mario Rossi Alias"
         assert utenza.codice_fiscale == "DNIFSE64C01L122Y"
         assert utenza.codice_fiscale_raw == "Dnifse64c01l122y"
+    finally:
+        db.close()
+
+
+def test_catasto_consorzio_tables_are_registered_in_metadata() -> None:
+    table_names = set(Base.metadata.tables.keys())
+
+    assert "cat_consorzio_units" in table_names
+    assert "cat_consorzio_unit_segments" in table_names
+    assert "cat_consorzio_occupancies" in table_names
+    assert "cat_capacitas_terreni_rows" in table_names
+    assert "cat_capacitas_certificati" in table_names
+    assert "cat_capacitas_terreno_details" in table_names
+
+
+def test_catasto_consorzio_unit_segment_and_occupancy_can_be_persisted() -> None:
+    db = TestingSessionLocal()
+    try:
+        particella = db.query(CatParticella).filter(CatParticella.foglio == "5", CatParticella.particella == "120").one()
+        utenza = db.query(CatUtenzaIrrigua).filter(CatUtenzaIrrigua.cco == "UT-SEED-001").one()
+        comune = db.query(CatComune).filter(CatComune.cod_comune_capacitas == 165).one()
+
+        unit = CatConsorzioUnit(
+            particella_id=particella.id,
+            comune_id=comune.id,
+            cod_comune_capacitas=165,
+            sezione_catastale="A",
+            foglio="5",
+            particella="120",
+            subalterno="1",
+            descrizione="Unità consortile Arborea 5/120/1",
+            source_first_seen=date(2025, 1, 1),
+            source_last_seen=date(2025, 12, 31),
+        )
+        db.add(unit)
+        db.flush()
+
+        segment = CatConsorzioUnitSegment(
+            unit_id=unit.id,
+            label="Porzione A",
+            segment_type="porzione_irrigua",
+            surface_declared_mq=Decimal("600.00"),
+            surface_irrigable_mq=Decimal("540.00"),
+            riordino_code="R.F. 23/8099",
+            riordino_maglia="178",
+            riordino_lotto="1",
+            current_status="attiva",
+            valid_from=date(2025, 1, 1),
+        )
+        db.add(segment)
+        db.flush()
+
+        occupancy = CatConsorzioOccupancy(
+            unit_id=unit.id,
+            segment_id=segment.id,
+            utenza_id=utenza.id,
+            cco="UT-SEED-001",
+            fra="38",
+            ccs="00000",
+            pvc="097",
+            com="289",
+            source_type="capacitas_terreni",
+            relationship_type="utilizzatore_reale",
+            valid_from=date(2025, 1, 1),
+            confidence=Decimal("0.95"),
+            notes="Occupazione derivata da certificato Capacitas",
+        )
+        db.add(occupancy)
+        db.commit()
+        db.expire_all()
+
+        saved_unit = db.query(CatConsorzioUnit).filter(CatConsorzioUnit.id == unit.id).one()
+        saved_segment = db.query(CatConsorzioUnitSegment).filter(CatConsorzioUnitSegment.id == segment.id).one()
+        saved_occupancy = db.query(CatConsorzioOccupancy).filter(CatConsorzioOccupancy.id == occupancy.id).one()
+
+        assert saved_unit.particella_record is not None
+        assert saved_unit.particella_record.id == particella.id
+        assert saved_unit.occupancies[0].id == saved_occupancy.id
+        assert saved_segment.unit.id == saved_unit.id
+        assert saved_occupancy.segment is not None
+        assert saved_occupancy.segment.id == saved_segment.id
+        assert saved_occupancy.utenza_record is not None
+        assert saved_occupancy.utenza_record.id == utenza.id
+    finally:
+        db.close()
+
+
+def test_catasto_capacitas_snapshots_can_be_persisted() -> None:
+    db = TestingSessionLocal()
+    try:
+        particella = db.query(CatParticella).filter(CatParticella.foglio == "5", CatParticella.particella == "120").one()
+        comune = db.query(CatComune).filter(CatComune.cod_comune_capacitas == 165).one()
+
+        unit = CatConsorzioUnit(
+            particella_id=particella.id,
+            comune_id=comune.id,
+            cod_comune_capacitas=165,
+            foglio="5",
+            particella="120",
+            subalterno="1",
+            descrizione="Snapshot test",
+        )
+        db.add(unit)
+        db.flush()
+
+        terreno_row = CatCapacitasTerrenoRow(
+            unit_id=unit.id,
+            search_key="165|5|120|1",
+            external_row_id="row-001",
+            cco="0A1103877",
+            fra="38",
+            ccs="00000",
+            pvc="097",
+            com="289",
+            belfiore="A357",
+            foglio="5",
+            particella="120",
+            sub="1",
+            anno=2025,
+            voltura="N",
+            opcode="R",
+            data_reg="2025-04-26",
+            superficie_mq=Decimal("1000.00"),
+            bac_descr="Distretto Arborea",
+            row_visual_state="current_black",
+            raw_payload_json={"contribuente": "0A1103877", "anno": 2025},
+            collected_at=datetime(2026, 4, 23, 10, 0, tzinfo=timezone.utc),
+        )
+        db.add(terreno_row)
+
+        certificato = CatCapacitasCertificato(
+            cco="0A1103877",
+            fra="38",
+            ccs="00000",
+            pvc="097",
+            com="289",
+            partita_code="P-001",
+            utenza_code="U-001",
+            utenza_status="attiva",
+            ruolo_status="corrente",
+            raw_html="<html>certificato</html>",
+            parsed_json={"riordino": "R.F. 23/8099"},
+            collected_at=datetime(2026, 4, 23, 10, 5, tzinfo=timezone.utc),
+        )
+        db.add(certificato)
+        db.flush()
+
+        dettaglio = CatCapacitasTerrenoDetail(
+            terreno_row_id=terreno_row.id,
+            external_row_id="row-001",
+            foglio="5",
+            particella="120",
+            sub="1",
+            riordino_code="R.F. 23/8099",
+            riordino_maglia="178",
+            riordino_lotto="1",
+            irridist="10",
+            raw_html="<html>dettaglio</html>",
+            parsed_json={"porzione": "A"},
+            collected_at=datetime(2026, 4, 23, 10, 10, tzinfo=timezone.utc),
+        )
+        db.add(dettaglio)
+        db.commit()
+        db.expire_all()
+
+        saved_row = db.query(CatCapacitasTerrenoRow).filter(CatCapacitasTerrenoRow.external_row_id == "row-001").one()
+        saved_certificato = (
+            db.query(CatCapacitasCertificato).filter(CatCapacitasCertificato.cco == "0A1103877").one()
+        )
+        saved_detail = (
+            db.query(CatCapacitasTerrenoDetail).filter(CatCapacitasTerrenoDetail.external_row_id == "row-001").one()
+        )
+
+        assert saved_row.unit is not None
+        assert saved_row.unit.id == unit.id
+        assert saved_row.detail_snapshots[0].id == saved_detail.id
+        assert saved_certificato.parsed_json == {"riordino": "R.F. 23/8099"}
+        assert saved_detail.terreno_row is not None
+        assert saved_detail.terreno_row.id == saved_row.id
     finally:
         db.close()
 

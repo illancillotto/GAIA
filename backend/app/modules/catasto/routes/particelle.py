@@ -10,10 +10,20 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_active_user
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
-from app.models.catasto_phase1 import CatAnomalia, CatParticella, CatParticellaHistory, CatUtenzaIrrigua
+from app.models.catasto_phase1 import (
+    CatAnomalia,
+    CatComune,
+    CatConsorzioUnit,
+    CatParticella,
+    CatParticellaHistory,
+    CatUtenzaIrrigua,
+)
 from app.schemas.catasto_phase1 import (
     CatAnomaliaResponse,
+    CatConsorzioOccupancyResponse,
+    CatConsorzioUnitSummaryResponse,
     CatParticellaDetailResponse,
+    CatParticellaConsorzioResponse,
     CatParticellaHistoryResponse,
     CatParticellaResponse,
     CatUtenzaIrriguaResponse,
@@ -77,6 +87,45 @@ def get_particella(particella_id: UUID, db: Session = Depends(get_db), _: Applic
     payload = CatParticellaDetailResponse.model_validate(item)
     payload.fuori_distretto = item.fuori_distretto
     return payload
+
+
+@router.get("/{particella_id}/consorzio", response_model=CatParticellaConsorzioResponse)
+def get_particella_consorzio(
+    particella_id: UUID,
+    db: Session = Depends(get_db),
+    _: ApplicationUser = Depends(require_active_user),
+) -> CatParticellaConsorzioResponse:
+    item = db.get(CatParticella, particella_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Particella not found")
+
+    units = (
+        db.execute(
+            select(CatConsorzioUnit)
+            .where(CatConsorzioUnit.particella_id == particella_id)
+            .order_by(desc(CatConsorzioUnit.source_last_seen), desc(CatConsorzioUnit.created_at))
+        )
+        .scalars()
+        .all()
+    )
+
+    payload_units: list[CatConsorzioUnitSummaryResponse] = []
+    for unit in units:
+        comune_record = db.get(CatComune, unit.comune_id) if unit.comune_id else None
+        source_comune_record = db.get(CatComune, unit.source_comune_id) if unit.source_comune_id else None
+        base_payload = CatConsorzioUnitSummaryResponse.model_validate(unit).model_dump(
+            exclude={"comune_label", "source_comune_resolved_label", "occupancies"}
+        )
+        payload_units.append(
+            CatConsorzioUnitSummaryResponse(
+                **base_payload,
+                comune_label=comune_record.nome_comune if comune_record else None,
+                source_comune_resolved_label=source_comune_record.nome_comune if source_comune_record else None,
+                occupancies=[CatConsorzioOccupancyResponse.model_validate(occ) for occ in unit.occupancies],
+            )
+        )
+
+    return CatParticellaConsorzioResponse(particella_id=particella_id, units=payload_units)
 
 
 @router.get("/{particella_id}/geojson")

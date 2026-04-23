@@ -28,6 +28,72 @@ Macro-moduli registrati ad oggi:
 
 Questa struttura consente di aggiungere nuovi moduli Capacitas senza estendere `session.py` con logica applicativa dedicata.
 
+## Ambito funzionale implementato al 23 aprile 2026
+
+Oltre al supporto gia presente per login SSO, attivazione app e ricerca anagrafica AJAX, il runtime ora include il primo blocco operativo `Terreni`.
+
+Implementato:
+
+- client e parser per:
+  - lookup frazioni `ajaxFrazioni.aspx`
+  - lookup sezioni `ajaxSezioni.aspx`
+  - lookup fogli `ajaxFogli.aspx`
+  - ricerca terreni `ajaxGrid.aspx` modulo `terreni_ricerca`
+  - apertura e parsing `rptCertificato.aspx`
+  - apertura e parsing `dettaglioTerreno.aspx`
+- endpoint:
+  - `GET /elaborazioni/capacitas/involture/frazioni`
+  - `GET /elaborazioni/capacitas/involture/sezioni`
+  - `GET /elaborazioni/capacitas/involture/fogli`
+  - `POST /elaborazioni/capacitas/involture/terreni/search`
+  - `POST /elaborazioni/capacitas/involture/terreni/sync`
+  - `POST /elaborazioni/capacitas/involture/terreni/sync-batch`
+  - `POST /elaborazioni/capacitas/involture/terreni/jobs`
+  - `GET /elaborazioni/capacitas/involture/terreni/jobs`
+  - `GET /elaborazioni/capacitas/involture/terreni/jobs/{id}`
+  - `POST /elaborazioni/capacitas/involture/terreni/jobs/{id}/run`
+- persistenza nel layer catasto consortile:
+  - `cat_consorzio_units`
+  - `cat_consorzio_unit_segments`
+  - `cat_consorzio_occupancies`
+  - `cat_capacitas_terreni_rows`
+  - `cat_capacitas_certificati`
+  - `cat_capacitas_terreno_details`
+  - `capacitas_terreni_sync_jobs`
+- frontend workspace in `frontend/src/components/elaborazioni/capacitas-workspace.tsx` con:
+  - ricerca anagrafica
+  - lookup guidato `frazioni -> sezioni -> fogli`
+  - preview risultati Terreni
+  - avvio job Terreni in background
+  - monitor job con refresh e rerun manuale
+
+Limitazioni deliberate di questo step:
+
+- il job massivo e persistito, parte subito in background dal backend applicativo e resta rilanciabile via API; non esiste ancora un worker dedicato separato o una coda esterna
+- la risoluzione `comune testuale -> frazione Capacitas` resta separata tramite endpoint lookup
+- il matching automatico con `ana_subjects` non e ancora stato introdotto
+
+Regola speciale implementata:
+
+- se Capacitas restituisce una particella su `Arborea` o `Terralba` ma in GAIA la stessa combinazione `foglio/particella/sub` esiste sull'altro comune, il sistema mantiene come comune canonico quello reale di GAIA
+- il comune sorgente Capacitas viene comunque salvato in `cat_consorzio_units` (`source_*`, `comune_resolution_mode`) per mostrare all'utente che la particella era storicamente censita su un comune diverso
+
+## Ambito funzionale da estendere
+
+Questo non e sufficiente per il dominio Catasto del Consorzio.
+
+Estensione ulteriore richiesta:
+
+- navigazione e scrape della sezione `Ricerche -> Terreni`
+- recupero storico risultati per `comune/frazione/sezione/foglio/particella`
+- apertura e parsing delle schede `rptCertificato.aspx`
+- apertura e parsing del dettaglio terreno `dettaglioTerreno.aspx`
+- acquisizione dei dati di riordino fondiario e delle porzioni irrigue operative
+
+Obiettivo applicativo:
+
+- alimentare il catasto consortile reale, distinto dalla sola particella catastale ufficiale
+
 ## Decoder risposta
 
 Le risposte di `ajaxRicerca.aspx` (e altri endpoint AJAX) sono Base64 + compressione
@@ -78,6 +144,140 @@ Nota implementativa:
 - `CapacitasSessionManager.activate_app()` risolve la configurazione tramite registry
 - alias applicativi come `visure` o `invisure` vengono normalizzati alla chiave canonica `involture`
 
+## Flusso Terreni da supportare
+
+Sequenza osservata dai file HTML di riferimento:
+
+1. login SSO su `https://sso.servizicapacitas.com/pages/login.aspx?...`
+2. redirect su `main.aspx?token=...`
+3. attivazione app `involture`
+4. apertura:
+   - `https://involture1.servizicapacitas.com/pages/ricerche.aspx?...`
+   - `https://involture1.servizicapacitas.com/pages/ricercaTerreni.aspx?...`
+5. ricerca per:
+   - comune/frazione
+   - sezione
+   - foglio
+   - particella
+6. acquisizione griglia risultati
+7. drill-down:
+   - su `CCO` -> `rptCertificato.aspx`
+   - su `ID terreno` -> `dettaglioTerreno.aspx`
+
+### Evidenze dai file locali
+
+- `ricercaTerreni.aspx` usa `ajax/ajaxRicerca.aspx` per popolare la griglia risultati
+- i risultati contengono gia campi strutturati utili:
+  - `ID`
+  - `PVC`
+  - `COM`
+  - `CCO`
+  - `FRA`
+  - `CCS`
+  - `Foglio`
+  - `Partic`
+  - `Sub`
+  - `Superficie`
+  - `Anno`
+  - `Voltura`
+  - `Opcode`
+  - `DataReg`
+  - `BacDescr`
+- la pagina `rptCertificato.aspx` contiene:
+  - partita/scheda
+  - utenza
+  - soggetti/anagrafica
+  - titoli (`Proprieta 1/1`, `1/9`, ecc.)
+  - elenco terreni
+  - riferimenti `Riordino`, `Maglia`, `Lotto`
+- `dettaglioTerreno.aspx` espone:
+  - estremi del terreno
+  - parametri tecnici
+  - dati di riordino (`RIORDINO_F`, `MAGLIA_RF`, `LOTTO_RF`)
+  - segnali e azioni di porzione irrigua
+  - operazioni di voltura/frazionamento/affitto
+
+## Gestione comuni e frazioni
+
+La ricerca Terreni non usa solo il comune amministrativo “piatto”.
+
+Nei casi osservati:
+
+- lo stesso comune puo avere voci multiple in autocomplete, ad esempio:
+  - `04 DONIGALA FENUGHEDU*ORISTANO`
+  - `05 MASSAMA*ORISTANO`
+- casi simili sono attesi anche per Cabras e Simaxis
+
+Regola implementativa:
+
+- non usare il solo testo comune come chiave di ricerca
+- salvare sia il valore scelto nella combo/autocomplete sia i codici tecnici correlati (`COM`, `FRA`, eventuale voce completa mostrata)
+- distinguere sempre:
+  - comune amministrativo
+  - frazione/localita Capacitas
+  - codice Capacitas della ricerca selezionata
+
+## Casi di risposta da modellare
+
+### Caso A — singola riga
+
+Esempio osservato:
+
+- comune `URAS`
+- foglio `14`
+- particella `1695`
+- una sola riga risultato
+
+Flusso:
+
+- la griglia identifica un solo `CCO`
+- il click su `Contrib.` apre la scheda `rptCertificato.aspx`
+- tutti i dati della scheda vanno persistiti
+
+### Caso B — piu righe storiche
+
+Esempio osservato:
+
+- comune `URAS`
+- foglio `1`
+- particella `680`
+- cinque record per anni/volture differenti
+
+Interpretazione:
+
+- i record rappresentano storico consortile del terreno
+- possono esserci piu righe per lo stesso anno
+- possono esserci variazioni di scheda, voltura o utilizzatore reale
+- il record “corrente” tende a essere la riga nera; le righe rosse rappresentano stati precedenti o storicizzati
+
+Regola implementativa:
+
+- non tenere solo la riga “attuale”
+- salvare tutte le righe restituite dalla ricerca Terreni
+- aprire e persistere le schede correlate per tutte le righe ritenute rilevanti
+- salvare attributi di ordinamento/stato visuale per ricostruire il “current snapshot” senza perdere lo storico
+
+## Modello tecnico minimo da supportare
+
+La pipeline Capacitas Terreni deve produrre almeno tre livelli di dato:
+
+1. `search result snapshot`
+   - ogni riga della griglia ricerca Terreni
+   - chiave naturale: `COM/FRA/PVC/CCO/CCS/ID/Anno/Voltura`
+2. `scheda certificato snapshot`
+   - contenuto completo di `rptCertificato.aspx`
+   - soggetti, titoli, terreni, utenza, stato ruolo
+3. `terreno detail snapshot`
+   - contenuto completo di `dettaglioTerreno.aspx`
+   - riordino, parametri, porzione irrigua, metadati terreno
+
+Persistenza consigliata:
+
+- salvare sia campi normalizzati sia `raw_html`/`raw_json` di audit
+- usare snapshot storicizzati, non semplice overwrite
+
+## TODO successivi
+
 ## Credenziali — gestione
 
 - Tabella: `capacitas_credentials`
@@ -97,6 +297,16 @@ DELETE /elaborazioni/capacitas/credentials/{id}
 POST   /elaborazioni/capacitas/credentials/{id}/test
 
 POST   /elaborazioni/capacitas/involture/search
+GET    /elaborazioni/capacitas/involture/frazioni?q=...
+GET    /elaborazioni/capacitas/involture/sezioni?frazione_id=...
+GET    /elaborazioni/capacitas/involture/fogli?frazione_id=...&sezione=...
+POST   /elaborazioni/capacitas/involture/terreni/search
+POST   /elaborazioni/capacitas/involture/terreni/sync
+POST   /elaborazioni/capacitas/involture/terreni/sync-batch
+POST   /elaborazioni/capacitas/involture/terreni/jobs         -> crea il job e avvia subito il background run
+GET    /elaborazioni/capacitas/involture/terreni/jobs
+GET    /elaborazioni/capacitas/involture/terreni/jobs/{id}
+POST   /elaborazioni/capacitas/involture/terreni/jobs/{id}/run -> rerun manuale esplicito
 ```
 
 ## Mount in router.py
@@ -116,3 +326,14 @@ router.include_router(capacitas_router)
 - [ ] Organizzare ogni macro-modulo in sottopackage per servizi AJAX, parser e mapping risposta
 - [ ] Aggiungere endpoint `/involture/search` con paginazione/cache opzionale
 - [ ] Frontend: pagina `/elaborazioni/settings` → sezione "Capacitas" con gestione credenziali
+- [x] Aggiungere client `TerreniClient` per `ricercaTerreni.aspx`, `rptCertificato.aspx`, `dettaglioTerreno.aspx`
+- [x] Parser HTML strutturati per:
+  - griglia ricerca terreni
+  - scheda certificato
+  - dettaglio terreno / riordino
+- [x] Persistenza dei dati grezzi e normalizzati per il catasto consortile
+- [x] Sync batch applicativo su piu particelle con report per-item
+- [x] Job persistito e rilanciabile per batch Terreni
+- [ ] Job di acquisizione massiva “Terreni Capacitas” in `elaborazioni`
+- [ ] Lookup guidato `frazioni -> sezioni -> fogli` lato frontend
+- [ ] Matching automatico con `ana_subjects` e deduplica snapshot
