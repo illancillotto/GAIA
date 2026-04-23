@@ -111,7 +111,7 @@ export default function CatastoDashboardPage() {
   return (
     <CatastoPage
       title="GAIA Catasto"
-      description="Dashboard Catasto Fase 1: distretti, particelle, anomalie e import Capacitas."
+      description="Dashboard Catasto: distretti, particelle, anomalie, ricerca anagrafica e import Capacitas."
       breadcrumb="Catasto / Dashboard"
       requiredModule="catasto"
     >

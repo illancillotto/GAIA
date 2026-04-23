@@ -188,7 +188,7 @@ export default function CatastoParticellaDetailPage() {
   return (
     <CatastoPage
       title={reference}
-      description="Scheda particella (Fase 1): dati catastali e storico SCD2."
+      description="Scheda particella con dati catastali, anagrafica collegata e storico SCD2."
       breadcrumb="Catasto / Particelle / Dettaglio"
       requiredModule="catasto"
     >

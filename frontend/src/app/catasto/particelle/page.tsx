@@ -104,7 +104,7 @@ export default function CatastoParticellePage() {
   return (
     <CatastoPage
       title="Particelle"
-      description="Lista particelle (Fase 1) con filtri principali."
+      description="Lista particelle del dominio Catasto con filtri principali."
       breadcrumb="Catasto / Particelle"
       requiredModule="catasto"
     >

@@ -151,7 +151,7 @@ export default function CatastoAnomaliePage() {
   return (
     <CatastoPage
       title="Anomalie"
-      description="Lista anomalie (Fase 1) con filtri principali."
+      description="Lista anomalie del dominio Catasto con filtri principali."
       breadcrumb="Catasto / Anomalie"
       requiredModule="catasto"
       requiredRoles={["admin", "super_admin"]}

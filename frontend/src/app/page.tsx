@@ -154,6 +154,54 @@ const emptyUtenzeSummary: AnagraficaStats = {
 
 const allModules: HomeModule[] = [
   {
+    id: "catasto",
+    title: "GAIA Catasto",
+    eyebrow: "Dominio dati",
+    description:
+      "Distretti, particelle, anomalie, ricerca anagrafica e import Capacitas.",
+    href: "/catasto",
+    status: "warming",
+    statusLabel: "In sviluppo",
+    icon: "account_balance",
+    enabledKeys: ["catasto"],
+  },
+  {
+    id: "operazioni",
+    title: "GAIA Operazioni",
+    eyebrow: "Field operations",
+    description:
+      "Modulo in sviluppo per mezzi, attività, segnalazioni e pratiche operative.",
+    href: "/operazioni",
+    status: "warming",
+    statusLabel: "In sviluppo",
+    icon: "local_shipping",
+    enabledKeys: ["operazioni"],
+  },
+  {
+    id: "utenze",
+    title: "GAIA Utenze",
+    eyebrow: "Soggetti e documenti",
+    description:
+      "Modulo in sviluppo per soggetti, documenti e qualità del dato, con superficie ancora non consolidata.",
+    href: "/utenze",
+    status: "warming",
+    statusLabel: "In sviluppo",
+    icon: "badge",
+    enabledKeys: ["utenze"],
+  },
+  {
+    id: "ruolo",
+    title: "GAIA Ruolo",
+    eyebrow: "Ruolo consortile",
+    description:
+      "Import e consultazione degli avvisi del ruolo consortile (Capacitas). Collegamento soggetti, statistiche per comune e anno tributario.",
+    href: "/ruolo",
+    status: "warming",
+    statusLabel: "In sviluppo",
+    icon: "receipt_long",
+    enabledKeys: ["ruolo"],
+  },
+  {
     id: "accessi",
     title: "GAIA NAS Control",
     eyebrow: "Governance accessi",
@@ -178,18 +226,6 @@ const allModules: HomeModule[] = [
     enabledKeys: ["rete"],
   },
   {
-    id: "catasto",
-    title: "GAIA Catasto",
-    eyebrow: "Dominio dati",
-    description:
-      "Distretti, particelle, anomalie e import Capacitas (Catasto Fase 1).",
-    href: "/catasto",
-    status: "warming",
-    statusLabel: "In sviluppo",
-    icon: "account_balance",
-    enabledKeys: ["catasto"],
-  },
-  {
     id: "elaborazioni",
     title: "GAIA Elaborazioni",
     eyebrow: "Runtime operativo catasto",
@@ -200,42 +236,6 @@ const allModules: HomeModule[] = [
     statusLabel: "In sviluppo",
     icon: "sync_alt",
     enabledKeys: ["catasto"],
-  },
-  {
-    id: "utenze",
-    title: "GAIA Utenze",
-    eyebrow: "Soggetti e documenti",
-    description:
-      "Modulo in sviluppo per soggetti, documenti e qualità del dato, con superficie ancora non consolidata.",
-    href: "/utenze",
-    status: "warming",
-    statusLabel: "In sviluppo",
-    icon: "badge",
-    enabledKeys: ["utenze"],
-  },
-  {
-    id: "inventario",
-    title: "GAIA Inventario",
-    eyebrow: "Asset fisici",
-    description:
-      "Area non ancora avviata: non sono presenti workflow o dati operativi utilizzabili.",
-    href: "/inventory",
-    status: "coming",
-    statusLabel: "Non avviato",
-    icon: "inventory_2",
-    enabledKeys: ["inventario"],
-  },
-  {
-    id: "operazioni",
-    title: "GAIA Operazioni",
-    eyebrow: "Field operations",
-    description:
-      "Modulo in sviluppo per mezzi, attività, segnalazioni e pratiche operative.",
-    href: "/operazioni",
-    status: "warming",
-    statusLabel: "In sviluppo",
-    icon: "local_shipping",
-    enabledKeys: ["operazioni"],
   },
   {
     id: "riordino",
@@ -250,16 +250,16 @@ const allModules: HomeModule[] = [
     enabledKeys: ["riordino"],
   },
   {
-    id: "ruolo",
-    title: "GAIA Ruolo",
-    eyebrow: "Ruolo consortile",
+    id: "inventario",
+    title: "GAIA Inventario",
+    eyebrow: "Asset fisici",
     description:
-      "Import e consultazione degli avvisi del ruolo consortile (Capacitas). Collegamento soggetti, statistiche per comune e anno tributario.",
-    href: "/ruolo",
-    status: "warming",
-    statusLabel: "In sviluppo",
-    icon: "receipt_long",
-    enabledKeys: ["ruolo"],
+      "Area non ancora avviata: non sono presenti workflow o dati operativi utilizzabili.",
+    href: "/inventory",
+    status: "coming",
+    statusLabel: "Non avviato",
+    icon: "inventory_2",
+    enabledKeys: ["inventario"],
   },
 ];
 
