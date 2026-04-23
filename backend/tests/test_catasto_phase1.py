@@ -782,6 +782,28 @@ def test_search_anagrafica_returns_match_with_utenza_and_intestatario() -> None:
     assert match["intestatari"][0]["codice_fiscale"] == "DNIFSE64C01L122Y"
 
 
+def test_search_anagrafica_by_nome_uses_cat_comuni_when_particella_name_is_null() -> None:
+    db = TestingSessionLocal()
+    try:
+        particella = db.query(CatParticella).filter(CatParticella.foglio == "5", CatParticella.particella == "120").one()
+        particella.nome_comune = None
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get(
+        "/catasto/anagrafica/search?comune=Arborea&foglio=5&particella=120",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload["matches"]) == 1
+    match = payload["matches"][0]
+    assert match["comune"] == "Arborea"
+    assert match["cod_comune_capacitas"] == 165
+
+
 def test_bulk_search_anagrafica_returns_mixed_row_outcomes() -> None:
     response = client.post(
         "/catasto/anagrafica/bulk-search",

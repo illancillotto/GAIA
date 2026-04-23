@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_active_user
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
-from app.models.catasto_phase1 import CatAnomalia, CatIntestatario, CatParticella, CatUtenzaIrrigua
+from app.models.catasto_phase1 import CatAnomalia, CatComune, CatIntestatario, CatParticella, CatUtenzaIrrigua
 from app.schemas.catasto_phase1 import (
     CatAnagraficaBulkSearchRequest,
     CatAnagraficaBulkSearchResponse,
@@ -63,6 +63,7 @@ def _utenza_summary_from_record(u: CatUtenzaIrrigua | None) -> CatAnagraficaUten
 
 
 def _build_match(db: Session, p: CatParticella) -> CatAnagraficaMatch:
+    comune_record = db.get(CatComune, p.comune_id) if p.comune_id else None
     latest_utenza = (
         db.execute(
             select(CatUtenzaIrrigua)
@@ -106,10 +107,10 @@ def _build_match(db: Session, p: CatParticella) -> CatAnagraficaMatch:
 
     return CatAnagraficaMatch(
         particella_id=p.id,
-        comune=p.nome_comune,
+        comune=p.nome_comune or (comune_record.nome_comune if comune_record else None),
         comune_id=p.comune_id,
         cod_comune_capacitas=p.cod_comune_capacitas,
-        codice_catastale=p.codice_catastale,
+        codice_catastale=p.codice_catastale or (comune_record.codice_catastale if comune_record else None),
         foglio=p.foglio,
         particella=p.particella,
         subalterno=p.subalterno,
@@ -137,6 +138,7 @@ def search_anagrafica(
 
     query = (
         select(CatParticella)
+        .outerjoin(CatComune, CatComune.id == CatParticella.comune_id)
         .where(
             CatParticella.is_current.is_(True),
             CatParticella.foglio == foglio_norm,
@@ -149,7 +151,9 @@ def search_anagrafica(
         if _looks_like_int(comune_norm):
             query = query.where(CatParticella.cod_comune_capacitas == int(comune_norm))
         else:
-            query = query.where(func.lower(func.coalesce(CatParticella.nome_comune, "")) == comune_norm.lower())
+            query = query.where(
+                func.lower(func.coalesce(CatParticella.nome_comune, CatComune.nome_comune, "")) == comune_norm.lower()
+            )
 
     items = db.execute(query.limit(50)).scalars().all()
     matches = [_build_match(db, p) for p in items]
@@ -184,6 +188,7 @@ def bulk_search_anagrafica(
 
         query = (
             select(CatParticella)
+            .outerjoin(CatComune, CatComune.id == CatParticella.comune_id)
             .where(
                 CatParticella.is_current.is_(True),
                 CatParticella.foglio == foglio_norm,
@@ -195,7 +200,9 @@ def bulk_search_anagrafica(
             if _looks_like_int(comune_norm):
                 query = query.where(CatParticella.cod_comune_capacitas == int(comune_norm))
             else:
-                query = query.where(func.lower(func.coalesce(CatParticella.nome_comune, "")) == comune_norm.lower())
+                query = query.where(
+                    func.lower(func.coalesce(CatParticella.nome_comune, CatComune.nome_comune, "")) == comune_norm.lower()
+                )
 
         try:
             items = db.execute(query.limit(50)).scalars().all()

@@ -160,6 +160,7 @@ def finalize_shapefile_import(
       FROM {staging_table} t
       CROSS JOIN LATERAL (
         SELECT NULLIF(TRIM(COALESCE(
+          NULLIF(TRIM(COALESCE(to_jsonb(t)->>'codi_fisc', to_jsonb(t)->>'CODI_FISC', to_jsonb(t)->>'cod_fisc', to_jsonb(t)->>'COD_FISC')), ''),
           NULLIF(TRIM(left(split_part(COALESCE(to_jsonb(t)->>'cfm',''), '-', 1), 4)), ''),
           NULLIF(TRIM(left(COALESCE(to_jsonb(t)->>'nationalca',''), 4)), '')
         )), '') AS cod_catastale

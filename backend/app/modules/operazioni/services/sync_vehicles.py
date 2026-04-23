@@ -236,7 +236,16 @@ def sync_white_taken_charge(
     for row in ordered_rows:
         existing = db.scalar(select(VehicleUsageSession).where(VehicleUsageSession.wc_id == row.wc_id))
         if existing is not None:
-            usage_sessions_skipped += 1
+            # If the session was open and WC now has return data, close it
+            ended_at_update = parse_italian_datetime(row.ended_at_text)
+            if existing.status == "open" and ended_at_update is not None and row.km_end is not None:
+                existing.ended_at = ended_at_update
+                existing.end_odometer_km = _to_decimal(row.km_end)
+                existing.km_end = row.km_end
+                existing.status = "closed"
+                usage_sessions_synced += 1
+            else:
+                usage_sessions_skipped += 1
             continue
 
         vehicle = db.scalar(select(Vehicle).where(Vehicle.wc_vehicle_id == row.vehicle_code))

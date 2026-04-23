@@ -158,6 +158,7 @@ Vincoli:
 - non duplicare il mapping in costanti Python o `CASE` SQL
 - tutte le validazioni e i mapping shapefile devono dipendere dallo stesso dataset
 - nelle response API e nel frontend preferire `cod_comune_capacitas` per evitare l'equivoco con il codice ISTAT ufficiale
+- nell'import shapefile il codice catastale comune va letto prima da `CODI_FISC` o varianti equivalenti del layer sorgente; `CFM` e `NATIONALCA` restano solo fallback di compatibilita
 
 ## API di dominio correnti
 
@@ -205,6 +206,7 @@ Note:
 - la ricerca massiva accetta file `.xlsx` o `.csv` lato frontend e normalizza il payload verso il backend
 - il match restituisce dati catastali, ultima utenza, intestatari disponibili e top anomalie
 - la vista risultati anagrafica espone anche `CCO` e `denominazione` dell'ultima utenza quando disponibili
+- il filtro per nome comune usa l'anagrafica canonica `cat_comuni` come fallback applicativo e non dipende solo dal campo denormalizzato `cat_particelle.nome_comune`
 
 Vincoli infrastrutturali:
 

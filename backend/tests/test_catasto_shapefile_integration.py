@@ -457,6 +457,7 @@ def test_finalize_shapefile_import_maps_cod_catastale_from_reference_dataset(db_
         text(
             f'''
             CREATE TABLE "{staging_table}" (
+              codi_fisc text,
               nume_fogl text,
               nume_part text,
               suba_part text,
@@ -471,14 +472,14 @@ def test_finalize_shapefile_import_maps_cod_catastale_from_reference_dataset(db_
         )
     )
 
-    # Row 1: mapping from CFM prefix (A368 -> 286 / San Nicolo d'Arcidano)
+    # Row 1: mapping from CODI_FISC must win over fallback fields (A368 -> 286 / San Nicolo d'Arcidano)
     db_session.execute(
         text(
             f'''
             INSERT INTO "{staging_table}" (
-              nume_fogl, nume_part, suba_part, cfm, nationalca, supe_part, num_dist, nome_dist, wkb_geometry
+              codi_fisc, nume_fogl, nume_part, suba_part, cfm, nationalca, supe_part, num_dist, nome_dist, wkb_geometry
             ) VALUES (
-              :foglio, :particella, '1', 'A368-ITEST', NULL, '10.00', :num_dist, 'Distretto map 1',
+              'A368', :foglio, :particella, '1', 'B314-IGNORED', NULL, '10.00', :num_dist, 'Distretto map 1',
               ST_GeomFromText(:wkt1, 4326)
             )
             '''
@@ -493,9 +494,9 @@ def test_finalize_shapefile_import_maps_cod_catastale_from_reference_dataset(db_
         text(
             f'''
             INSERT INTO "{staging_table}" (
-              nume_fogl, nume_part, suba_part, cfm, nationalca, supe_part, num_dist, nome_dist, wkb_geometry
+              codi_fisc, nume_fogl, nume_part, suba_part, cfm, nationalca, supe_part, num_dist, nome_dist, wkb_geometry
             ) VALUES (
-              :foglio2, :particella2, '1', NULL, 'B314TEST0001', '11.00', :num_dist, 'Distretto map 2',
+              NULL, :foglio2, :particella2, '1', NULL, 'B314TEST0001', '11.00', :num_dist, 'Distretto map 2',
               ST_GeomFromText(:wkt2, 4326)
             )
             '''
@@ -510,9 +511,9 @@ def test_finalize_shapefile_import_maps_cod_catastale_from_reference_dataset(db_
         text(
             f'''
             INSERT INTO "{staging_table}" (
-              nume_fogl, nume_part, suba_part, cfm, nationalca, supe_part, num_dist, nome_dist, wkb_geometry
+              codi_fisc, nume_fogl, nume_part, suba_part, cfm, nationalca, supe_part, num_dist, nome_dist, wkb_geometry
             ) VALUES (
-              :foglio3, :particella3, '1', 'H301-ITEST', NULL, '12.00', :num_dist, 'Distretto map 3',
+              NULL, :foglio3, :particella3, '1', 'H301-ITEST', NULL, '12.00', :num_dist, 'Distretto map 3',
               ST_GeomFromText(:wkt3, 4326)
             )
             '''
