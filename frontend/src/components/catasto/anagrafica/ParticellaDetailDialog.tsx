@@ -50,6 +50,7 @@ export function ParticellaDetailDialog({
 
   useEffect(() => {
     if (!open || !match) return;
+    const currentMatch = match;
 
     async function load(): Promise<void> {
       const token = getStoredAccessToken();
@@ -59,9 +60,9 @@ export function ParticellaDetailDialog({
       setError(null);
       try {
         const [p, u, g] = await Promise.all([
-          catastoGetParticella(token, match.particella_id),
-          catastoGetParticellaUtenze(token, match.particella_id),
-          catastoGetParticellaGeojson(token, match.particella_id),
+          catastoGetParticella(token, currentMatch.particella_id),
+          catastoGetParticellaUtenze(token, currentMatch.particella_id),
+          catastoGetParticellaGeojson(token, currentMatch.particella_id),
         ]);
         setParticella(p);
         setUtenze(u);
@@ -120,7 +121,10 @@ export function ParticellaDetailDialog({
             <p className="text-[10px] font-medium uppercase tracking-widest text-gray-400">Catasto</p>
             <div className="mt-2 space-y-1 text-sm text-gray-700">
               <p>
-                <span className="text-gray-500">Superficie:</span> {formatHaFromMq(match.superficie_mq)}
+                <span className="text-gray-500">Sup. catastale:</span> {formatHaFromMq(match.superficie_mq)}
+              </p>
+              <p>
+                <span className="text-gray-500">Sup. grafica:</span> {formatHaFromMq(particella?.superficie_grafica_mq ?? match.superficie_grafica_mq)}
               </p>
               <p>
                 <span className="text-gray-500">Fonte:</span> {particella?.source_type ?? "—"}
@@ -245,4 +249,3 @@ export function ParticellaDetailDialog({
     </div>
   );
 }
-

@@ -28,6 +28,18 @@ def _polygon_wkt(x0: float, y0: float) -> str:
     )
 
 
+def _expected_graphical_area(db: Session, wkt: str) -> str:
+    value = db.execute(
+        text(
+            """
+            SELECT ROUND(ST_Area(ST_Transform(ST_GeomFromText(:wkt, 4326), 3003))::numeric, 2)
+            """
+        ),
+        {"wkt": wkt},
+    ).scalar_one()
+    return str(value)
+
+
 @pytest.fixture(scope="module")
 def engine():
     if not settings.database_url.startswith("postgresql"):
@@ -111,6 +123,8 @@ def test_finalize_shapefile_import_inserts_current_particelle_and_distretti(db_s
             '''
         )
     )
+    geometry_wkt = _polygon_wkt(8.58, 39.78)
+    new_geometry_wkt = _polygon_wkt(8.59, 39.79)
     db_session.execute(
         text(
             f'''
@@ -126,7 +140,7 @@ def test_finalize_shapefile_import_inserts_current_particelle_and_distretti(db_s
             "foglio": foglio,
             "particella": particella,
             "num_distretto": num_distretto,
-            "wkt": _polygon_wkt(8.58, 39.78),
+            "wkt": geometry_wkt,
         },
     )
     db_session.commit()
@@ -146,6 +160,7 @@ def test_finalize_shapefile_import_inserts_current_particelle_and_distretti(db_s
         distretto = db_session.execute(
             select(CatDistretto).where(CatDistretto.num_distretto == num_distretto)
         ).scalar_one_or_none()
+        expected_graphical_area = _expected_graphical_area(db_session, geometry_wkt)
 
         assert result["status"] == "completed"
         assert batch is not None
@@ -157,6 +172,7 @@ def test_finalize_shapefile_import_inserts_current_particelle_and_distretti(db_s
         assert inserted[0].cod_comune_capacitas == 165
         assert inserted[0].foglio == foglio
         assert inserted[0].particella == particella
+        assert str(inserted[0].superficie_grafica_mq) == expected_graphical_area
         assert inserted[0].num_distretto == num_distretto
         assert distretto is not None
         assert distretto.nome_distretto == f"Distretto test {suffix}"
@@ -205,6 +221,20 @@ def test_finalize_shapefile_import_writes_history_on_changed_particella(db_sessi
     db_session.add(existing)
     db_session.commit()
     existing_id = existing.id
+    old_geometry_wkt = _polygon_wkt(8.585, 39.785)
+    old_graphical_area = _expected_graphical_area(db_session, old_geometry_wkt)
+    db_session.execute(
+        text(
+            """
+            UPDATE cat_particelle
+            SET geometry = ST_GeomFromText(:wkt, 4326),
+                superficie_grafica_mq = ROUND(ST_Area(ST_Transform(ST_GeomFromText(:wkt, 4326), 3003))::numeric, 2)
+            WHERE id = :particella_id
+            """
+        ),
+        {"wkt": old_geometry_wkt, "particella_id": str(existing_id)},
+    )
+    db_session.commit()
 
     db_session.execute(
         text(
@@ -237,7 +267,7 @@ def test_finalize_shapefile_import_writes_history_on_changed_particella(db_sessi
             "foglio": foglio,
             "particella": particella,
             "num_distretto": num_distretto,
-            "wkt": _polygon_wkt(8.59, 39.79),
+            "wkt": new_geometry_wkt,
         },
     )
     db_session.commit()
@@ -261,6 +291,7 @@ def test_finalize_shapefile_import_writes_history_on_changed_particella(db_sessi
         history_rows = db_session.execute(
             select(CatParticellaHistory).where(CatParticellaHistory.particella_id == existing_id)
         ).scalars().all()
+        expected_new_graphical_area = _expected_graphical_area(db_session, new_geometry_wkt)
 
         assert result["status"] == "completed"
         assert existing.is_current is False
@@ -268,9 +299,11 @@ def test_finalize_shapefile_import_writes_history_on_changed_particella(db_sessi
         assert len(current_rows) == 1
         assert current_rows[0].id != existing_id
         assert str(current_rows[0].superficie_mq) == "1450.00"
+        assert str(current_rows[0].superficie_grafica_mq) == expected_new_graphical_area
         assert current_rows[0].cfm == "A357-NEW"
         assert len(history_rows) == 1
         assert str(history_rows[0].superficie_mq) == "1000.00"
+        assert str(history_rows[0].superficie_grafica_mq) == old_graphical_area
         assert history_rows[0].change_reason == "import_shapefile"
     finally:
         _cleanup_shapefile_artifacts(

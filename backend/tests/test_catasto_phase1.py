@@ -162,6 +162,7 @@ def seed_phase1_lookup_data(db: Session) -> None:
         nome_distretto="Distretto 10",
         is_current=True,
         superficie_mq=1000,
+        superficie_grafica_mq=975,
     )
     db.add_all(
         [
@@ -219,6 +220,7 @@ def seed_phase1_lookup_data(db: Session) -> None:
             particella="120",
             subalterno="1",
             superficie_mq=950,
+            superficie_grafica_mq=940,
             num_distretto="10",
             valid_from=date(2024, 1, 1),
             valid_to=date(2024, 12, 31),
@@ -718,8 +720,11 @@ def test_particella_detail_history_utenze_and_anomalie_endpoints() -> None:
 
     assert detail_response.status_code == 200
     assert detail_response.json()["foglio"] == "5"
+    assert detail_response.json()["superficie_mq"] == "1000.00"
+    assert detail_response.json()["superficie_grafica_mq"] == "975.00"
     assert history_response.status_code == 200
     assert len(history_response.json()) == 1
+    assert history_response.json()[0]["superficie_grafica_mq"] == "940.00"
     assert utenze_response.status_code == 200
     assert len(utenze_response.json()) == 1
     assert utenze_response.json()[0]["codice_fiscale"] == "DNIFSE64C01L122Y"
@@ -777,6 +782,8 @@ def test_search_anagrafica_returns_match_with_utenza_and_intestatario() -> None:
     match = payload["matches"][0]
     assert match["cod_comune_capacitas"] == 165
     assert match["codice_catastale"] == "A357"
+    assert match["superficie_mq"] == "1000.00"
+    assert match["superficie_grafica_mq"] == "975.00"
     assert match["utenza_latest"]["cco"] == "UT-SEED-001"
     assert len(match["intestatari"]) == 1
     assert match["intestatari"][0]["codice_fiscale"] == "DNIFSE64C01L122Y"

@@ -89,11 +89,20 @@ export default function CatastoParticellePage() {
         cell: ({ row }) => <span className="text-sm text-gray-700">{row.original.num_distretto ?? "—"}</span>,
       },
       {
-        header: "Sup. (ha)",
-        id: "sup",
+        header: "Sup. catastale (ha)",
+        id: "supCatastale",
         cell: ({ row }) => (
           <span className="text-sm text-gray-700">
             {row.original.superficie_mq ? `${formatHaFromMq(row.original.superficie_mq)} ha` : "—"}
+          </span>
+        ),
+      },
+      {
+        header: "Sup. grafica (ha)",
+        id: "supGrafica",
+        cell: ({ row }) => (
+          <span className="text-sm text-gray-700">
+            {row.original.superficie_grafica_mq ? `${formatHaFromMq(row.original.superficie_grafica_mq)} ha` : "—"}
           </span>
         ),
       },

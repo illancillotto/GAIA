@@ -153,6 +153,10 @@ def finalize_shapefile_import(
           NULLIF(NULLIF(UPPER(TRIM(to_jsonb(t)->>'SUPE_PART')), 'NULL'), '')::numeric,
           NULLIF(NULLIF(UPPER(TRIM(to_jsonb(t)->>'superficie_mq')), 'NULL'), '')::numeric
         ) AS superficie_mq,
+        CASE
+          WHEN t."{geom_col}" IS NOT NULL THEN ROUND(ST_Area(ST_Transform(t."{geom_col}", 3003))::numeric, 2)
+          ELSE NULL
+        END AS superficie_grafica_mq,
         NULLIF(TRIM(COALESCE(to_jsonb(t)->>'num_dist', to_jsonb(t)->>'NUM_DIST', to_jsonb(t)->>'num_distretto')), '') AS num_distretto,
         NULLIF(TRIM(COALESCE(to_jsonb(t)->>'nome_dist', to_jsonb(t)->>'Nome_Dist', to_jsonb(t)->>'nome_distretto')), '') AS nome_distretto,
         COALESCE(NULLIF(TRIM(to_jsonb(t)->>'suppressed'), '')::boolean, false) AS suppressed,
@@ -193,6 +197,7 @@ def finalize_shapefile_import(
                 OR (p.sezione_catastale IS DISTINCT FROM s.sezione_catastale)
                 OR (p.cfm IS DISTINCT FROM s.cfm)
                 OR (p.superficie_mq IS DISTINCT FROM s.superficie_mq)
+                OR (p.superficie_grafica_mq IS DISTINCT FROM s.superficie_grafica_mq)
                 OR (p.num_distretto IS DISTINCT FROM s.num_distretto)
                 OR (p.nome_distretto IS DISTINCT FROM s.nome_distretto)
                 OR (p.suppressed IS DISTINCT FROM s.suppressed)
@@ -212,6 +217,7 @@ def finalize_shapefile_import(
               particella,
               subalterno,
               superficie_mq,
+              superficie_grafica_mq,
               num_distretto,
               geometry,
               valid_from,
@@ -230,6 +236,7 @@ def finalize_shapefile_import(
               c.particella,
               c.subalterno,
               c.superficie_mq,
+              c.superficie_grafica_mq,
               c.num_distretto,
               c.geometry,
               c.valid_from,
@@ -264,6 +271,7 @@ def finalize_shapefile_import(
                 OR (p.sezione_catastale IS DISTINCT FROM s.sezione_catastale)
                 OR (p.cfm IS DISTINCT FROM s.cfm)
                 OR (p.superficie_mq IS DISTINCT FROM s.superficie_mq)
+                OR (p.superficie_grafica_mq IS DISTINCT FROM s.superficie_grafica_mq)
                 OR (p.num_distretto IS DISTINCT FROM s.num_distretto)
                 OR (p.nome_distretto IS DISTINCT FROM s.nome_distretto)
                 OR (p.suppressed IS DISTINCT FROM s.suppressed)
@@ -294,6 +302,7 @@ def finalize_shapefile_import(
               subalterno,
               cfm,
               superficie_mq,
+              superficie_grafica_mq,
               num_distretto,
               nome_distretto,
               geometry,
@@ -319,6 +328,7 @@ def finalize_shapefile_import(
               s.subalterno,
               s.cfm,
               s.superficie_mq,
+              s.superficie_grafica_mq,
               s.num_distretto,
               s.nome_distretto,
               s.geometry,

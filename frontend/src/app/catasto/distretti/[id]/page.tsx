@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { CatastoPage } from "@/components/catasto/catasto-page";
@@ -48,7 +48,10 @@ type TabKey = "particelle" | "anomalie";
 
 export default function CatastoDistrettoDetailPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const distrettoId = params.id;
+  const isEmbedded = searchParams.get("embedded") === "1";
 
   const [anno, setAnno] = useState<number>(currentYear());
   const [tab, setTab] = useState<TabKey>("particelle");
@@ -115,7 +118,7 @@ export default function CatastoDistrettoDetailPage() {
     void load();
   }, [anno, distrettoId, tab]);
 
-  const columns = useMemo<ColumnDef<CatParticella>[]>(
+  const particelleColumns = useMemo<ColumnDef<CatParticella>[]>(
     () => [
       {
         header: "Comune",
@@ -138,8 +141,8 @@ export default function CatastoDistrettoDetailPage() {
         ),
       },
       {
-        header: "Sup. (ha)",
-        id: "sup",
+        header: "Sup. catastale (ha)",
+        id: "supCatastale",
         cell: ({ row }) => (
           <span className="text-sm text-gray-700">
             {row.original.superficie_mq ? `${formatHaFromMq(row.original.superficie_mq)} ha` : "—"}
@@ -147,12 +150,12 @@ export default function CatastoDistrettoDetailPage() {
         ),
       },
       {
-        header: "Dettaglio",
-        id: "open",
+        header: "Sup. grafica (ha)",
+        id: "supGrafica",
         cell: ({ row }) => (
-          <Link className="text-sm font-medium text-[#1D4E35]" href={`/catasto/particelle/${row.original.id}`}>
-            Apri
-          </Link>
+          <span className="text-sm text-gray-700">
+            {row.original.superficie_grafica_mq ? `${formatHaFromMq(row.original.superficie_grafica_mq)} ha` : "—"}
+          </span>
         ),
       },
     ],
@@ -168,6 +171,128 @@ export default function CatastoDistrettoDetailPage() {
     ],
     [],
   );
+
+  function triggerDownload(content: BlobPart, mimeType: string, filename: string): void {
+    const blob = new Blob([content], { type: mimeType });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportCurrentCsv(): void {
+    if (!distretto) return;
+    const filename = `distretto-${distretto.num_distretto}-${tab}-${anno}.csv`;
+    const rows = tab === "particelle"
+      ? [
+          ["Comune", "Codice Capacitas", "Foglio", "Particella", "Subalterno", "Superficie catastale mq", "Superficie grafica mq", "Distretto"],
+          ...particelle.map((item) => [
+            item.nome_comune ?? "",
+            String(item.cod_comune_capacitas ?? ""),
+            item.foglio ?? "",
+            item.particella ?? "",
+            item.subalterno ?? "",
+            String(item.superficie_mq ?? ""),
+            String(item.superficie_grafica_mq ?? ""),
+            String(item.num_distretto ?? ""),
+          ]),
+        ]
+      : [
+          ["Severita", "Tipo", "Stato", "Descrizione"],
+          ...anomalie.map((item) => [
+            item.severita ?? "",
+            item.tipo ?? "",
+            item.status ?? "",
+            item.descrizione ?? "",
+          ]),
+        ];
+    const content = rows
+      .map((row) => row.map((value) => `"${String(value).replaceAll("\"", "\"\"")}"`).join(";"))
+      .join("\n");
+    triggerDownload(content, "text/csv;charset=utf-8", filename);
+  }
+
+  function exportCurrentXls(): void {
+    if (!distretto) return;
+    const filename = `distretto-${distretto.num_distretto}-${tab}-${anno}.xls`;
+    const headers = tab === "particelle"
+      ? ["Comune", "Codice Capacitas", "Foglio", "Particella", "Subalterno", "Superficie catastale mq", "Superficie grafica mq", "Distretto"]
+      : ["Severita", "Tipo", "Stato", "Descrizione"];
+    const rows = tab === "particelle"
+      ? particelle.map((item) => [
+          item.nome_comune ?? "",
+          String(item.cod_comune_capacitas ?? ""),
+          item.foglio ?? "",
+          item.particella ?? "",
+          item.subalterno ?? "",
+          String(item.superficie_mq ?? ""),
+          String(item.superficie_grafica_mq ?? ""),
+          String(item.num_distretto ?? ""),
+        ])
+      : anomalie.map((item) => [
+          item.severita ?? "",
+          item.tipo ?? "",
+          item.status ?? "",
+          item.descrizione ?? "",
+        ]);
+    const table = `
+      <table>
+        <thead><tr>${headers.map((header) => `<th>${header}</th>`).join("")}</tr></thead>
+        <tbody>${rows.map((row) => `<tr>${row.map((value) => `<td>${String(value)}</td>`).join("")}</tr>`).join("")}</tbody>
+      </table>
+    `;
+    triggerDownload(`\ufeff${table}`, "application/vnd.ms-excel;charset=utf-8", filename);
+  }
+
+  function exportCurrentPdf(): void {
+    if (!distretto) return;
+    const headers = tab === "particelle" ? ["Comune", "Riferimento", "Sup. catastale (ha)", "Sup. grafica (ha)"] : ["Sev", "Tipo", "Stato", "Descrizione"];
+    const rows = tab === "particelle"
+      ? particelle.map((item) => [
+          item.nome_comune ?? "—",
+          `Fg.${item.foglio} Part.${item.particella}${item.subalterno ? ` Sub.${item.subalterno}` : ""}`,
+          item.superficie_mq ? `${formatHaFromMq(item.superficie_mq)} ha` : "—",
+          item.superficie_grafica_mq ? `${formatHaFromMq(item.superficie_grafica_mq)} ha` : "—",
+        ])
+      : anomalie.map((item) => [
+          item.severita ?? "—",
+          item.tipo ?? "—",
+          item.status ?? "—",
+          item.descrizione ?? "—",
+        ]);
+    const popup = window.open("", "_blank", "width=1200,height=800");
+    if (!popup) return;
+    popup.document.write(`
+      <html>
+        <head>
+          <title>Distretto ${distretto.num_distretto}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 24px; color: #111827; }
+            h1 { font-size: 20px; margin-bottom: 4px; }
+            p { color: #6b7280; margin-bottom: 16px; }
+            table { width: 100%; border-collapse: collapse; }
+            th, td { border: 1px solid #d1d5db; padding: 8px; text-align: left; font-size: 12px; vertical-align: top; }
+            th { background: #f3f4f6; }
+          </style>
+        </head>
+        <body>
+          <h1>Distretto ${distretto.num_distretto}</h1>
+          <p>${distretto.nome_distretto ?? ""} · ${tab} · anno ${anno}</p>
+          <table>
+            <thead><tr>${headers.map((header) => `<th>${header}</th>`).join("")}</tr></thead>
+            <tbody>${rows.map((row) => `<tr>${row.map((value) => `<td>${String(value)}</td>`).join("")}</tr>`).join("")}</tbody>
+          </table>
+        </body>
+      </html>
+    `);
+    popup.document.close();
+    popup.focus();
+    popup.print();
+  }
 
   return (
     <CatastoPage
@@ -208,6 +333,17 @@ export default function CatastoDistrettoDetailPage() {
           </div>
         </div>
 
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-gray-100 bg-white px-4 py-3">
+          <p className="text-sm text-gray-500">
+            Export vista corrente: <span className="font-medium text-gray-800">{tab === "particelle" ? "Particelle" : "Anomalie"}</span>
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <button type="button" className="btn-secondary" onClick={exportCurrentCsv}>Esporta CSV</button>
+            <button type="button" className="btn-secondary" onClick={exportCurrentXls}>Esporta XLS</button>
+            <button type="button" className="btn-secondary" onClick={exportCurrentPdf}>Esporta PDF</button>
+          </div>
+        </div>
+
         <div className="grid gap-3 md:grid-cols-4">
           <MetricCard label="Particelle" value={isLoading ? "—" : kpi?.totale_particelle ?? "—"} />
           <MetricCard label="Utenze" value={isLoading ? "—" : kpi?.totale_utenze ?? "—"} />
@@ -244,8 +380,11 @@ export default function CatastoDistrettoDetailPage() {
             <div className="mt-4">
               <DataTable
                 data={particelle}
-                columns={columns}
+                columns={particelleColumns}
                 initialPageSize={12}
+                onRowClick={(row) => {
+                  router.push(isEmbedded ? `/catasto/particelle/${row.id}?embedded=1` : `/catasto/particelle/${row.id}`);
+                }}
                 emptyTitle={isLoading ? "Caricamento…" : "Nessuna particella"}
                 emptyDescription={isLoading ? "Sto caricando le particelle." : "Non risultano particelle per questo distretto."}
               />

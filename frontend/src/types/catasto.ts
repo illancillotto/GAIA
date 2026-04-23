@@ -74,6 +74,7 @@ export type CatParticella = {
   subalterno: string | null;
   cfm: string | null;
   superficie_mq: string | null;
+  superficie_grafica_mq: string | null;
   num_distretto: string | null;
   nome_distretto: string | null;
   source_type: string;
@@ -100,6 +101,7 @@ export type CatParticellaHistory = {
   particella: string;
   subalterno: string | null;
   superficie_mq: string | null;
+  superficie_grafica_mq: string | null;
   num_distretto: string | null;
   valid_from: string;
   valid_to: string;
@@ -225,6 +227,7 @@ export type CatAnagraficaMatch = {
   num_distretto: string | null;
   nome_distretto: string | null;
   superficie_mq: string | null;
+  superficie_grafica_mq: string | null;
   utenza_latest: CatAnagraficaUtenzaSummary | null;
   intestatari: CatIntestatario[];
   anomalie_count: number;

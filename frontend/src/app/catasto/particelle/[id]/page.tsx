@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { CatastoPage } from "@/components/catasto/catasto-page";
@@ -28,7 +28,10 @@ function formatHaFromMq(value: string | number): string {
 
 export default function CatastoParticellaDetailPage() {
   const params = useParams<{ id: string }>();
+  const router = useRouter();
+  const searchParams = useSearchParams();
   const particellaId = params.id;
+  const isEmbedded = searchParams.get("embedded") === "1";
 
   const [item, setItem] = useState<CatParticellaDetail | null>(null);
   const [history, setHistory] = useState<CatParticellaHistory[]>([]);
@@ -98,9 +101,14 @@ export default function CatastoParticellaDetailPage() {
       },
       { header: "Distretto", accessorKey: "num_distretto", cell: ({ row }) => <span className="text-sm text-gray-700">{row.original.num_distretto ?? "—"}</span> },
       {
-        header: "Sup. (ha)",
-        id: "sup",
+        header: "Sup. catastale (ha)",
+        id: "supCatastale",
         cell: ({ row }) => <span className="text-sm text-gray-700">{row.original.superficie_mq ? `${formatHaFromMq(row.original.superficie_mq)} ha` : "—"}</span>,
+      },
+      {
+        header: "Sup. grafica (ha)",
+        id: "supGrafica",
+        cell: ({ row }) => <span className="text-sm text-gray-700">{row.original.superficie_grafica_mq ? `${formatHaFromMq(row.original.superficie_grafica_mq)} ha` : "—"}</span>,
       },
       { header: "Reason", accessorKey: "change_reason", cell: ({ row }) => <span className="text-sm text-gray-600">{row.original.change_reason ?? "—"}</span> },
     ],
@@ -193,6 +201,14 @@ export default function CatastoParticellaDetailPage() {
       requiredModule="catasto"
     >
       <div className="page-stack">
+        {isEmbedded ? (
+          <div className="flex justify-start">
+            <button type="button" className="btn-secondary" onClick={() => router.back()}>
+              Indietro
+            </button>
+          </div>
+        ) : null}
+
         {error ? (
           <AlertBanner variant="danger" title="Errore caricamento">
             {error}
@@ -220,7 +236,8 @@ export default function CatastoParticellaDetailPage() {
               </div>
 
               <div className="mt-4 grid gap-3 md:grid-cols-4">
-                <MetricCard label="Sup. (ha)" value={item.superficie_mq ? `${formatHaFromMq(item.superficie_mq)} ha` : "—"} />
+                <MetricCard label="Sup. catastale (ha)" value={item.superficie_mq ? `${formatHaFromMq(item.superficie_mq)} ha` : "—"} />
+                <MetricCard label="Sup. grafica (ha)" value={item.superficie_grafica_mq ? `${formatHaFromMq(item.superficie_grafica_mq)} ha` : "—"} />
                 <MetricCard label="Valid from" value={item.valid_from} />
                 <MetricCard label="Source" value={item.source_type} />
                 <MetricCard label="Current" value={item.is_current ? "Sì" : "No"} variant={item.is_current ? "success" : "warning"} />

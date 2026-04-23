@@ -117,6 +117,7 @@ def _build_match(db: Session, p: CatParticella) -> CatAnagraficaMatch:
         num_distretto=p.num_distretto,
         nome_distretto=p.nome_distretto,
         superficie_mq=p.superficie_mq,
+        superficie_grafica_mq=p.superficie_grafica_mq,
         utenza_latest=_utenza_summary_from_record(latest_utenza),
         intestatari=intestatari,
         anomalie_count=int(anomalie_count or 0),

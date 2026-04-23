@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import { CatastoPage } from "@/components/catasto/catasto-page";
 import { KpiCard } from "@/components/catasto/KpiCard";
+import { CatastoWorkspaceModal } from "@/components/catasto/workspace-modal";
 import { AlertBanner } from "@/components/ui/alert-banner";
 import { RefreshIcon } from "@/components/ui/icons";
 import {
@@ -48,6 +49,7 @@ export default function CatastoDashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [annoNotice, setAnnoNotice] = useState<string | null>(null);
+  const [selectedDistretto, setSelectedDistretto] = useState<CatDistretto | null>(null);
 
   useEffect(() => {
     async function load(): Promise<void> {
@@ -184,10 +186,11 @@ export default function CatastoDashboardPage() {
               distretti.slice(0, 9).map((d) => {
                 const kpi = kpiByDistrettoId[d.id];
                 return (
-                  <Link
+                  <button
                     key={d.id}
-                    href={`/catasto/distretti/${d.id}`}
-                    className="rounded-2xl border border-gray-100 bg-white p-4 transition hover:border-[#c8d8ce] hover:shadow-sm"
+                    type="button"
+                    onClick={() => setSelectedDistretto(d)}
+                    className="rounded-2xl border border-gray-100 bg-white p-4 text-left transition hover:border-[#c8d8ce] hover:shadow-sm"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -226,12 +229,20 @@ export default function CatastoDashboardPage() {
                     ) : (
                       <p className="mt-3 text-xs text-gray-400">KPI non disponibili.</p>
                     )}
-                  </Link>
+                  </button>
                 );
               })
             )}
           </div>
         </article>
+
+        <CatastoWorkspaceModal
+          open={selectedDistretto != null}
+          href={selectedDistretto ? `/catasto/distretti/${selectedDistretto.id}` : null}
+          title={selectedDistretto ? `Distretto ${selectedDistretto.num_distretto}` : "Dettaglio distretto"}
+          description={selectedDistretto?.nome_distretto ?? "Dettaglio distretto aperto in modale dalla dashboard Catasto."}
+          onClose={() => setSelectedDistretto(null)}
+        />
       </div>
     </CatastoPage>
   );

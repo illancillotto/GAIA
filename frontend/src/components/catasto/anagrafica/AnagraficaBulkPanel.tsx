@@ -190,7 +190,7 @@ export function AnagraficaBulkPanel() {
             <div className="text-sm text-gray-700">
               <p className="font-medium">{m.comune ?? m.cod_comune_capacitas ?? "—"}</p>
               <p className="text-xs text-gray-500">
-                Distretto: {m.num_distretto ?? "—"} · Sup: {formatHaFromMq(m.utenza_latest?.sup_irrigabile_mq ?? m.superficie_mq)}
+                Distretto: {m.num_distretto ?? "—"} · Sup. cat.: {formatHaFromMq(m.superficie_mq)}
               </p>
             </div>
           );

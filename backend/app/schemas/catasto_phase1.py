@@ -88,6 +88,7 @@ class CatParticellaResponse(BaseModel):
     subalterno: str | None
     cfm: str | None
     superficie_mq: Decimal | None
+    superficie_grafica_mq: Decimal | None
     num_distretto: str | None
     nome_distretto: str | None
     source_type: str
@@ -116,6 +117,7 @@ class CatParticellaHistoryResponse(BaseModel):
     particella: str
     subalterno: str | None
     superficie_mq: Decimal | None
+    superficie_grafica_mq: Decimal | None
     num_distretto: str | None
     valid_from: date
     valid_to: date
@@ -243,6 +245,7 @@ class CatAnagraficaMatch(BaseModel):
     num_distretto: str | None = None
     nome_distretto: str | None = None
     superficie_mq: Decimal | None = None
+    superficie_grafica_mq: Decimal | None = None
 
     utenza_latest: CatAnagraficaUtenzaSummary | None = None
     intestatari: list[CatIntestatarioResponse] = []

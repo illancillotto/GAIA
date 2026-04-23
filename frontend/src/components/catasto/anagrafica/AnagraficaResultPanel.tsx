@@ -102,7 +102,10 @@ export function AnagraficaResultPanel({
                 <p className="text-[10px] font-medium uppercase tracking-widest text-gray-400">Catasto</p>
                 <div className="mt-2 space-y-1 text-sm text-gray-700">
                   <p>
-                    <span className="text-gray-500">Superficie:</span> {formatHaFromMq(m.superficie_mq)}
+                    <span className="text-gray-500">Sup. catastale:</span> {formatHaFromMq(m.superficie_mq)}
+                  </p>
+                  <p>
+                    <span className="text-gray-500">Sup. grafica:</span> {formatHaFromMq(m.superficie_grafica_mq)}
                   </p>
                   <p>
                     <span className="text-gray-500">Nome distretto:</span> {m.nome_distretto ?? "—"}

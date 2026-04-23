@@ -47,6 +47,7 @@ export function ProtectedPage({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isCheckingSession, setIsCheckingSession] = useState(true);
   const [grantedSectionKeys, setGrantedSectionKeys] = useState<string[]>([]);
+  const [isEmbedded, setIsEmbedded] = useState(false);
 
   useEffect(() => {
     async function loadSession() {
@@ -89,6 +90,14 @@ export function ProtectedPage({
     void loadSession();
   }, [router]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") {
+      return;
+    }
+    const params = new URLSearchParams(window.location.search);
+    setIsEmbedded(params.get("embedded") === "1");
+  }, []);
+
   function handleLogout(): void {
     setCurrentUser(null);
     setLoadError(null);
@@ -124,6 +133,29 @@ export function ProtectedPage({
   const isRoleAllowed = requiredRoles ? requiredRoles.includes(currentUser.role) : true;
 
   if (!isSectionAllowed || !isModuleAllowed || !isRoleAllowed) {
+    if (isEmbedded) {
+      return (
+        <main className="min-h-screen bg-[#f7faf7] px-5 py-5">
+          <section className="rounded-[24px] border border-gray-200 bg-white p-6 shadow-sm">
+            <div className="mb-6">
+              <h2 className="page-heading">{title}</h2>
+              <p className="mt-1 text-sm text-gray-500">{description}</p>
+            </div>
+            <article className="rounded-xl border border-gray-100 bg-gray-50 p-4">
+              <p className="text-sm font-medium text-red-700">Accesso non autorizzato</p>
+              <p className="mt-2 text-sm text-gray-600">
+                {!isModuleAllowed
+                  ? "Questa sezione e disponibile solo per gli utenti abilitati al modulo richiesto."
+                  : requiredRoles
+                  ? "Questa sezione e disponibile solo per i ruoli autorizzati."
+                  : "Questa sezione e disponibile solo per admin, super admin o utenti esplicitamente abilitati."}
+              </p>
+            </article>
+          </section>
+        </main>
+      );
+    }
+
     return (
       <AppShell
         currentUser={currentUser}
@@ -150,6 +182,20 @@ export function ProtectedPage({
           </article>
         </section>
       </AppShell>
+    );
+  }
+
+  if (isEmbedded) {
+    return (
+      <main className="min-h-screen bg-[#f7faf7] px-5 py-5">
+        <section className="rounded-[24px] border border-gray-200 bg-white p-6 shadow-sm">
+          <div className="mb-6">
+            <h2 className="page-heading">{title}</h2>
+            <p className="mt-1 text-sm text-gray-500">{description}</p>
+          </div>
+          <div className="page-stack">{children}</div>
+        </section>
+      </main>
     );
   }
 

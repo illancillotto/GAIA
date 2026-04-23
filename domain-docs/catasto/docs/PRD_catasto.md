@@ -121,6 +121,8 @@ Nota di integrazione territoriale:
 - il valore `0` non va trattato come codice comune valido: indica un mapping mancante e va considerato anomalia tecnica o dato incompleto
 - prima di aggiungere nuovi comuni o nuove sorgenti shapefile, aggiornare il dataset di riferimento e i test di integrazione, non il SQL inline
 - la tabella `cat_comuni` e la sorgente canonica per l'anagrafica comuni; `cat_particelle`, `cat_particelle_history` e `cat_utenze_irrigue` referenziano il comune tramite `comune_id`
+- nelle particelle territoriali `superficie_mq` mantiene il significato di superficie catastale sorgente; la superficie derivata dai poligoni viene salvata separatamente in `superficie_grafica_mq`
+- `superficie_grafica_mq` viene ricalcolata da PostGIS sulla geometria normalizzata in `EPSG:4326` tramite trasformazione metrica a `EPSG:3003`, cosi da evitare ambiguita tra dato amministrativo e dato GIS
 
 Entita correlate ma governate dal runtime `elaborazioni`:
 
@@ -204,7 +206,7 @@ Note:
 
 - la ricerca singola parte da `comune`, `foglio`, `particella`
 - la ricerca massiva accetta file `.xlsx` o `.csv` lato frontend e normalizza il payload verso il backend
-- il match restituisce dati catastali, ultima utenza, intestatari disponibili e top anomalie
+- il match restituisce dati catastali, entrambe le superfici (`superficie_mq` catastale e `superficie_grafica_mq` GIS), ultima utenza, intestatari disponibili e top anomalie
 - la vista risultati anagrafica espone anche `CCO` e `denominazione` dell'ultima utenza quando disponibili
 - il filtro per nome comune usa l'anagrafica canonica `cat_comuni` come fallback applicativo e non dipende solo dal campo denormalizzato `cat_particelle.nome_comune`
 
@@ -245,9 +247,12 @@ Comportamento attuale:
 - `/catasto/import/[id]` espone il dettaglio dedicato di un batch con metadati, preview, contatori e lista anomalie
 - il segmento frontend `/catasto` monta la navigation shell di dominio nel layout dedicato, non nel singolo wrapper pagina
 - `/catasto/distretti` e `/catasto/distretti/[id]` coprono KPI e drill-down per distretto
+- dalla dashboard `/catasto` il click su un distretto apre un workspace rapido in modale; da li i dettagli particella restano embedded senza sidebar completa e con navigazione indietro interna
 - `/catasto/particelle` e `/catasto/particelle/[id]` coprono lookup e dettaglio con utenze/anomalie
 - `/catasto/anomalie` espone la lista operativa con aggiornamento stato
 - `/catasto/ricerca-anagrafica` espone ricerca singola e bulk da riferimenti catastali con preview dei match
+- nelle liste e nei dettagli particella il frontend distingue esplicitamente `Sup. catastale` e `Sup. grafica` per evitare di sovraccaricare l'unico dato storico `superficie_mq`
+- il dettaglio distretto embedded espone export diretti `CSV`, `XLS`, `PDF` sulla vista corrente e usa righe particella cliccabili per il drill-down
 - `/catasto/ricerca-anagrafica` include export CSV/XLSX dell'elaborazione massiva
 - il workflow mutativo sulle anomalie (`PATCH`) è riservato ad admin/super_admin, mentre la consultazione resta disponibile agli utenti Catasto attivi
 - il flusso anagrafica e coperto anche da E2E browser dedicato oltre che da test backend e smoke frontend
