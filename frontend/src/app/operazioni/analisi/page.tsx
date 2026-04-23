@@ -23,6 +23,8 @@ import {
   getAnalyticsAnomalies,
   getAnalyticsAvailablePeriods,
   getUnresolvedTransactions,
+  getOperatorDetail,
+  type OperatorDetailResponse,
   type PersistedUnresolvedRow,
 } from "@/features/operazioni/api/client";
 
@@ -107,6 +109,7 @@ function anomalyDetailChips(item: AnomalyItem): { label: string; value: string; 
     case "orphan_session":
       if (d.hours_open != null) chips.push({ label: "Aperta da", value: `${Number(d.hours_open).toFixed(0)}h` });
       if (d.wc_id != null) chips.push({ label: "WC", value: String(d.wc_id), href: `https://login.bonificaoristanese.it/vehicles/taken-charge/edit/${d.wc_id}` });
+      if (d.operator_name) chips.push({ label: "Ultimo operatore", value: String(d.operator_name) });
       break;
     case "driver_mismatch":
       if (d.actual_driver) chips.push({ label: "Guidatore", value: String(d.actual_driver) });
@@ -235,6 +238,179 @@ function LoadingCard() {
   );
 }
 
+function InlineHelp({ text }: { text: string }) {
+  return (
+    <span
+      title={text}
+      className="inline-flex h-4 w-4 items-center justify-center rounded-full border border-gray-300 bg-white text-[10px] font-semibold text-gray-500 cursor-help"
+    >
+      ?
+    </span>
+  );
+}
+
+function formatOperatorMetricNumber(value: string | null | undefined, suffix?: string): string {
+  if (value == null || value === "") {
+    return "—";
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    return "—";
+  }
+  const formatted = parsed.toLocaleString("it-IT", {
+    minimumFractionDigits: Number.isInteger(parsed) ? 0 : 1,
+    maximumFractionDigits: Number.isInteger(parsed) ? 0 : 1,
+  });
+  return suffix ? `${formatted} ${suffix}` : formatted;
+}
+
+function formatOperatorCurrency(value: string | null | undefined): string {
+  if (value == null || value === "") {
+    return "—";
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed)
+    ? new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", maximumFractionDigits: 2 }).format(parsed)
+    : "—";
+}
+
+function OperatorQuickModal({
+  open,
+  operatorId,
+  operatorName,
+  onClose,
+}: {
+  open: boolean;
+  operatorId: string | null;
+  operatorName: string | null;
+  onClose: () => void;
+}) {
+  const [detail, setDetail] = useState<OperatorDetailResponse | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open || !operatorId) {
+      setDetail(null);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    void getOperatorDetail(operatorId)
+      .then((payload) => setDetail(payload))
+      .catch((currentError) => {
+        setError(currentError instanceof Error ? currentError.message : "Errore nel caricamento operatore");
+      })
+      .finally(() => setLoading(false));
+  }, [open, operatorId]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    function handleKeyDown(event: KeyboardEvent): void {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open, onClose]);
+
+  if (!open) {
+    return null;
+  }
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/40 p-4 backdrop-blur-sm">
+      <div className="flex w-full max-w-3xl flex-col overflow-hidden rounded-[24px] border border-gray-200 bg-white shadow-xl">
+        <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-6 py-5">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1D4E35]">Operatore collegato</p>
+            <h2 className="mt-2 text-xl font-semibold text-gray-900">{operatorName || "Operatore"}</h2>
+            <p className="mt-1 text-sm text-gray-500">Dettaglio rapido dalla lista anomalie.</p>
+          </div>
+          <button className="btn-secondary" type="button" onClick={onClose}>
+            Chiudi
+          </button>
+        </div>
+
+        <div className="bg-[#f7faf7] px-6 py-6">
+          {loading ? (
+            <div className="rounded-2xl border border-[#e4e8e2] bg-white px-4 py-5 text-sm text-gray-500">Caricamento operatore.</div>
+          ) : error ? (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-5 text-sm text-rose-700">{error}</div>
+          ) : !detail ? (
+            <div className="rounded-2xl border border-[#e4e8e2] bg-white px-4 py-5 text-sm text-gray-500">Dettaglio non disponibile.</div>
+          ) : (
+            <div className="space-y-4">
+              <div className="grid gap-4 lg:grid-cols-[1.1fr_0.9fr]">
+                <div className="rounded-2xl border border-[#e4e8e2] bg-white p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#667267]">Profilo</p>
+                  <div className="mt-3 space-y-2 text-sm text-gray-600">
+                    <p><span className="font-medium text-gray-900">Ruolo:</span> {detail.operator.role ?? "—"}</p>
+                    <p><span className="font-medium text-gray-900">Email:</span> {detail.operator.email ?? "—"}</p>
+                    <p><span className="font-medium text-gray-900">Username:</span> {detail.operator.username ?? "—"}</p>
+                    <p><span className="font-medium text-gray-900">Stato:</span> {detail.operator.enabled ? "Abilitato" : "Disabilitato"}</p>
+                  </div>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {detail.current_fuel_cards.length > 0 ? detail.current_fuel_cards.map((card) => (
+                      <span key={card.id} className="rounded-full border border-[#d5e2d8] bg-[#edf5f0] px-3 py-1 text-xs font-semibold text-[#1D4E35]">
+                        {card.codice || card.pan}
+                      </span>
+                    )) : (
+                      <span className="text-xs text-gray-500">Nessuna fuel card assegnata.</span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-[#e4e8e2] bg-white p-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#667267]">Sintesi</p>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-xl border border-[#eef2ec] bg-[#fafbf8] px-3 py-2.5">
+                      <p className="text-[10px] uppercase tracking-[0.14em] text-gray-500">Km</p>
+                      <p className="mt-1 text-lg font-semibold text-gray-900">{formatOperatorMetricNumber(detail.stats.total_km_travelled, "km")}</p>
+                    </div>
+                    <div className="rounded-xl border border-[#eef2ec] bg-[#fafbf8] px-3 py-2.5">
+                      <p className="text-[10px] uppercase tracking-[0.14em] text-gray-500">Litri</p>
+                      <p className="mt-1 text-lg font-semibold text-gray-900">{formatOperatorMetricNumber(detail.stats.total_liters, "L")}</p>
+                    </div>
+                    <div className="rounded-xl border border-[#eef2ec] bg-[#fafbf8] px-3 py-2.5">
+                      <p className="text-[10px] uppercase tracking-[0.14em] text-gray-500">Costo</p>
+                      <p className="mt-1 text-lg font-semibold text-gray-900">{formatOperatorCurrency(detail.stats.total_fuel_cost)}</p>
+                    </div>
+                    <div className="rounded-xl border border-[#eef2ec] bg-[#fafbf8] px-3 py-2.5">
+                      <p className="text-[10px] uppercase tracking-[0.14em] text-gray-500">Mezzo più usato</p>
+                      <p className="mt-1 text-sm font-semibold text-gray-900">{detail.stats.most_used_vehicle?.vehicle_label ?? "—"}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-end gap-3">
+                <Link
+                  href={`/operazioni/operatori?operatorId=${operatorId}&from=analisi`}
+                  onClick={onClose}
+                  className="btn-primary text-sm"
+                >
+                  Apri pagina operatore
+                </Link>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Unresolved transactions modal ────────────────────────────────────────────
 
 function UnresolvedTransactionsModal({ onClose }: { onClose: () => void }) {
@@ -329,101 +505,412 @@ function UnresolvedTransactionsModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-// ─── Fuel operators table (with "Non identificato" special row) ────────────────
+function formatLiters(value: number | null | undefined): string {
+  return value == null ? "—" : `${Number(value).toLocaleString("it-IT", { maximumFractionDigits: 2 })} L`;
+}
 
-function FuelOperatorsTable({
+function formatKilometers(value: number | null | undefined): string {
+  return value == null
+    ? "—"
+    : `${Number(value).toLocaleString("it-IT", { minimumFractionDigits: 1, maximumFractionDigits: 1 })} km`;
+}
+
+function formatEuro(value: number | null | undefined, digits = 2): string {
+  return value == null ? "—" : `€ ${Number(value).toLocaleString("it-IT", { minimumFractionDigits: digits, maximumFractionDigits: digits })}`;
+}
+
+function formatConsumption(value: number | null | undefined): string {
+  return value == null ? "—" : Number(value).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function consumptionTone(judgement: string | null | undefined): string {
+  if (judgement === "OK") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (judgement === "Alto") return "border-amber-200 bg-amber-50 text-amber-700";
+  if (judgement) return "border-rose-200 bg-rose-50 text-rose-700";
+  return "border-gray-200 bg-white text-gray-500";
+}
+
+function asNumber(value: number | null | undefined): number {
+  return value ?? Number.NEGATIVE_INFINITY;
+}
+
+function VehicleConsumptionExplorer({ rows }: { rows: FuelTopItem[] }) {
+  const [showAll, setShowAll] = useState(false);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState("liters_desc");
+
+  if (rows.length === 0) {
+    return <p className="py-4 text-center text-sm text-gray-400">Nessun dato disponibile</p>;
+  }
+
+  const normalizedSearch = search.trim().toLowerCase();
+  const filteredRows = normalizedSearch
+    ? rows.filter((row) => row.label.toLowerCase().includes(normalizedSearch))
+    : rows;
+  const sortedRows = [...filteredRows].sort((a, b) => {
+    switch (sortBy) {
+      case "name_asc":
+        return a.label.localeCompare(b.label, "it");
+      case "km_desc":
+        return asNumber((b.total_km as number | null | undefined) ?? null) - asNumber((a.total_km as number | null | undefined) ?? null);
+      case "cost_desc":
+        return asNumber(b.total_cost) - asNumber(a.total_cost);
+      case "refuels_desc":
+        return b.refuel_count - a.refuel_count;
+      case "consumption_desc":
+        return asNumber((b.avg_consumption_l_per_100km as number | null | undefined) ?? null) - asNumber((a.avg_consumption_l_per_100km as number | null | undefined) ?? null);
+      case "liters_desc":
+      default:
+        return asNumber(b.total_liters) - asNumber(a.total_liters);
+    }
+  });
+  const visibleRows = showAll || normalizedSearch ? sortedRows : sortedRows.slice(0, 6);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="flex items-center gap-2 text-xs text-gray-500">
+          <span>Ogni riga mostra il riepilogo consumo; espandi per vedere le stazioni più usate.</span>
+          <InlineHelp text="L/100km indica i litri consumati ogni 100 km. Consumo confronta il valore rilevato con un riferimento atteso per quel tipo di mezzo. €/L è il costo medio per litro, € medio il costo medio per rifornimento, L medi i litri medi per rifornimento." />
+        </p>
+        {rows.length > 6 ? (
+          <button
+            type="button"
+            onClick={() => setShowAll((current) => !current)}
+            className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700 transition hover:bg-gray-200"
+          >
+            {showAll ? "Mostra meno" : `Mostra tutti (${rows.length})`}
+          </button>
+        ) : null}
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-[18px] border border-[#e8ede7] bg-[#f8faf8] px-3 py-3">
+        <label className="min-w-[220px] flex-1">
+          <span className="sr-only">Cerca veicolo</span>
+          <input
+            type="text"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Cerca targa o mezzo"
+            className="w-full rounded-full border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#9db7a5] focus:ring-2 focus:ring-[#dbe9de]"
+          />
+        </label>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 text-xs text-gray-500">
+            <span>Ordina</span>
+            <select
+              value={sortBy}
+              onChange={(event) => setSortBy(event.target.value)}
+              className="rounded-full border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 outline-none transition focus:border-[#9db7a5] focus:ring-2 focus:ring-[#dbe9de]"
+            >
+              <option value="liters_desc">Litri ↓</option>
+              <option value="km_desc">Km ↓</option>
+              <option value="consumption_desc">L/100km ↓</option>
+              <option value="cost_desc">Costo ↓</option>
+              <option value="refuels_desc">Rifornimenti ↓</option>
+              <option value="name_asc">Nome A-Z</option>
+            </select>
+          </label>
+          <span className="text-xs text-gray-500">
+            {filteredRows.length} risultati
+          </span>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        {visibleRows.map((row, index) => {
+          const stationRows = (row.top_stations ?? []).map((station) => ({
+            station: station.station_name,
+            total_liters: station.total_liters,
+            total_cost: station.total_cost,
+            refuel_count: station.refuel_count,
+          }));
+          const isExpanded = Boolean(expanded[row.id]);
+          return (
+            <div key={row.id} className="overflow-hidden rounded-[20px] border border-[#e4e8e2] bg-[linear-gradient(180deg,_#ffffff,_#fafcf9)] shadow-sm">
+              <button
+                type="button"
+                onClick={() => setExpanded((current) => ({ ...current, [row.id]: !current[row.id] }))}
+                className="w-full px-3.5 py-2.5 text-left transition hover:bg-[#f7faf7]"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#edf5f0] px-1.5 text-[10px] font-semibold text-[#1D4E35]">
+                        {index + 1}
+                      </span>
+                      <p className="truncate text-[13px] font-semibold text-gray-900">{row.label}</p>
+                      <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${consumptionTone(row.consumption_judgement as string | null | undefined)}`}>
+                        {row.consumption_judgement ?? "—"}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap gap-1 text-[10px] text-gray-500">
+                      <span title="Litri totali riforniti dal mezzo nel periodo selezionato." className="rounded-full border border-gray-200 bg-white px-1.5 py-0.5">{formatLiters(row.total_liters)}</span>
+                      <span title="Chilometri percorsi dal mezzo nel periodo, stimati dalle sessioni chiuse." className="rounded-full border border-gray-200 bg-white px-1.5 py-0.5">{formatKilometers((row.total_km as number | null | undefined) ?? null)}</span>
+                      <span title="Consumo medio espresso in litri ogni 100 chilometri." className="rounded-full border border-gray-200 bg-white px-1.5 py-0.5">L/100km {formatConsumption((row.avg_consumption_l_per_100km as number | null | undefined) ?? null)}</span>
+                      <span className="rounded-full border border-gray-200 bg-white px-1.5 py-0.5">{formatEuro(row.total_cost)}</span>
+                      <span title="Numero totale di rifornimenti registrati per il mezzo nel periodo." className="rounded-full border border-gray-200 bg-white px-1.5 py-0.5">{row.refuel_count} riforn.</span>
+                    </div>
+                  </div>
+                  <div className="grid shrink-0 grid-cols-2 gap-1 text-right text-[10px] text-gray-500 sm:grid-cols-3">
+                    <div className="rounded-lg border border-[#eef2ec] bg-white px-2 py-1">
+                      <p className="flex items-center justify-end gap-1">€/L <InlineHelp text="Costo medio per litro calcolato sui rifornimenti del mezzo nel periodo." /></p>
+                      <p className="mt-0.5 font-semibold text-gray-900">{formatEuro(row.avg_price_per_liter ?? null, 3)}</p>
+                    </div>
+                    <div className="rounded-lg border border-[#eef2ec] bg-white px-2 py-1">
+                      <p className="flex items-center justify-end gap-1">€ medio <InlineHelp text="Costo medio di ciascun rifornimento del mezzo nel periodo." /></p>
+                      <p className="mt-0.5 font-semibold text-gray-900">{formatEuro(row.avg_refuel_cost ?? null)}</p>
+                    </div>
+                    <div className="col-span-2 rounded-lg border border-[#eef2ec] bg-white px-2 py-1 sm:col-span-1">
+                      <p className="flex items-center justify-end gap-1">L medi <InlineHelp text="Litri medi caricati per ogni rifornimento del mezzo nel periodo." /></p>
+                      <p className="mt-0.5 font-semibold text-gray-900">{formatLiters(row.avg_liters_per_refuel ?? null)}</p>
+                    </div>
+                  </div>
+                </div>
+              </button>
+
+              {isExpanded ? (
+                <div className="border-t border-[#eef2ec] bg-[#f8fbf8] px-4 py-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#667267]">
+                      <span>Stazioni di servizio più usate</span>
+                      <InlineHelp text="Mostra i distributori più frequenti per il mezzo selezionato, ordinati per utilizzo nel periodo." />
+                    </p>
+                    <span className="text-xs text-gray-500">{stationRows.length} stazioni</span>
+                  </div>
+                  {stationRows.length === 0 ? (
+                    <p className="text-sm text-gray-400">Nessuna stazione associata nel periodo.</p>
+                  ) : (
+                    <TopTable
+                      rows={stationRows}
+                      columns={[
+                        { key: "station", label: "Stazione" },
+                        { key: "total_liters", label: "Litri", align: "right", format: (v) => formatLiters(Number(v)) },
+                        { key: "total_cost", label: "Costo", align: "right", format: (v) => formatEuro(Number(v)) },
+                        { key: "refuel_count", label: "Riforn.", align: "right" },
+                      ]}
+                    />
+                  )}
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+        {visibleRows.length === 0 ? (
+          <div className="rounded-[18px] border border-dashed border-[#d8dfd8] bg-[#f8faf8] px-4 py-6 text-center text-sm text-gray-500">
+            Nessun veicolo trovato con il filtro corrente.
+          </div>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+function OperatorConsumptionExplorer({
   rows,
   onResolveClick,
 }: {
   rows: FuelTopItem[];
   onResolveClick: () => void;
 }) {
+  const [showAll, setShowAll] = useState(false);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [search, setSearch] = useState("");
+  const [sortBy, setSortBy] = useState("liters_desc");
+
   if (rows.length === 0) {
     return <p className="py-4 text-center text-sm text-gray-400">Nessun dato disponibile</p>;
   }
+
+  const normalizedSearch = search.trim().toLowerCase();
+  const filteredRows = normalizedSearch
+    ? rows.filter((row) => row.label.toLowerCase().includes(normalizedSearch))
+    : rows;
+  const sortedRows = [...filteredRows].sort((a, b) => {
+    switch (sortBy) {
+      case "name_asc":
+        return a.label.localeCompare(b.label, "it");
+      case "km_desc":
+        return asNumber((b.total_km as number | null | undefined) ?? null) - asNumber((a.total_km as number | null | undefined) ?? null);
+      case "cost_desc":
+        return asNumber(b.total_cost) - asNumber(a.total_cost);
+      case "refuels_desc":
+        return b.refuel_count - a.refuel_count;
+      case "consumption_desc":
+        return asNumber((b.avg_consumption_l_per_100km as number | null | undefined) ?? null) - asNumber((a.avg_consumption_l_per_100km as number | null | undefined) ?? null);
+      case "liters_desc":
+      default:
+        return asNumber(b.total_liters) - asNumber(a.total_liters);
+    }
+  });
+  const visibleRows = showAll || normalizedSearch ? sortedRows : sortedRows.slice(0, 6);
+
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-gray-100">
-            <th className="pb-2 text-left text-xs font-medium text-gray-500">Operatore</th>
-            <th className="pb-2 text-right text-xs font-medium text-gray-500">Litri</th>
-            <th className="pb-2 text-right text-xs font-medium text-gray-500">Km</th>
-            <th className="pb-2 text-right text-xs font-medium text-gray-500">L/100km</th>
-            <th className="pb-2 text-right text-xs font-medium text-gray-500">Consumo</th>
-            <th className="pb-2 text-right text-xs font-medium text-gray-500">Costo</th>
-            <th className="pb-2 text-right text-xs font-medium text-gray-500">€/L</th>
-            <th className="pb-2 text-right text-xs font-medium text-gray-500">€ medio</th>
-            <th className="pb-2 text-right text-xs font-medium text-gray-500">L medi</th>
-            <th className="pb-2 text-right text-xs font-medium text-gray-500">Riforn.</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row, i) => {
-            const isUnknown = row.id === "unknown";
-            const price = row.avg_price_per_liter ?? null;
-            const avgCost = row.avg_refuel_cost ?? null;
-            const avgLiters = row.avg_liters_per_refuel ?? null;
-            const km = (row.total_km as number | null | undefined) ?? null;
-            const cons = (row.avg_consumption_l_per_100km as number | null | undefined) ?? null;
-            const judge = (row.consumption_judgement as string | null | undefined) ?? null;
-            return (
-              <tr key={i} className="border-b border-gray-50 last:border-0">
-                <td className="py-2 text-gray-700">
-                  {isUnknown ? (
-                    <span className="inline-flex flex-wrap items-baseline gap-1.5">
-                      <span className="text-gray-400 italic">Non identificato</span>
-                      <button
-                        onClick={onResolveClick}
-                        className="text-[11px] text-amber-600 underline underline-offset-2 hover:text-amber-800"
-                      >
-                        (risolvi anomalie)
-                      </button>
-                    </span>
+    <div className="space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <p className="flex items-center gap-2 text-xs text-gray-500">
+          <span>Righe espandibili con il riepilogo consumo e il dettaglio mezzi usati per ciascun operatore.</span>
+          <InlineHelp text="Relazioni uso mostra i mezzi associati all'operatore nel periodo e i relativi consumi. Le metriche L/100km, €/L, € medio e L medi sono calcolate sui rifornimenti attribuiti all'operatore." />
+        </p>
+        {rows.length > 6 ? (
+          <button
+            type="button"
+            onClick={() => setShowAll((current) => !current)}
+            className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700 transition hover:bg-gray-200"
+          >
+            {showAll ? "Mostra meno" : `Mostra tutti (${rows.length})`}
+          </button>
+        ) : null}
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-[18px] border border-[#e8ede7] bg-[#f8faf8] px-3 py-3">
+        <label className="min-w-[220px] flex-1">
+          <span className="sr-only">Cerca operatore</span>
+          <input
+            type="text"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Cerca operatore"
+            className="w-full rounded-full border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#9db7a5] focus:ring-2 focus:ring-[#dbe9de]"
+          />
+        </label>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 text-xs text-gray-500">
+            <span>Ordina</span>
+            <select
+              value={sortBy}
+              onChange={(event) => setSortBy(event.target.value)}
+              className="rounded-full border border-gray-200 bg-white px-3 py-2 text-xs text-gray-700 outline-none transition focus:border-[#9db7a5] focus:ring-2 focus:ring-[#dbe9de]"
+            >
+              <option value="liters_desc">Litri ↓</option>
+              <option value="km_desc">Km ↓</option>
+              <option value="consumption_desc">L/100km ↓</option>
+              <option value="cost_desc">Costo ↓</option>
+              <option value="refuels_desc">Rifornimenti ↓</option>
+              <option value="name_asc">Nome A-Z</option>
+            </select>
+          </label>
+          <span className="text-xs text-gray-500">
+            {filteredRows.length} risultati
+          </span>
+        </div>
+      </div>
+
+      <div className="space-y-2">
+        {visibleRows.map((row, index) => {
+          const isUnknown = row.id === "unknown";
+          const relatedRows = (row.related ?? []).map((related) => ({
+            label: related.label,
+            total_liters: related.total_liters,
+            total_cost: related.total_cost,
+            avg_price_per_liter: related.avg_price_per_liter ?? null,
+            avg_liters_per_refuel: related.avg_liters_per_refuel ?? null,
+            refuel_count: related.refuel_count,
+          }));
+          const isExpanded = Boolean(expanded[row.id]);
+          return (
+            <div key={row.id} className="overflow-hidden rounded-[20px] border border-[#e4e8e2] bg-[linear-gradient(180deg,_#ffffff,_#fafcf9)] shadow-sm">
+              <button
+                type="button"
+                onClick={() => setExpanded((current) => ({ ...current, [row.id]: !current[row.id] }))}
+                className="w-full px-3.5 py-2.5 text-left transition hover:bg-[#f7faf7]"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-[#eef2ff] px-1.5 text-[10px] font-semibold text-[#3650a6]">
+                        {index + 1}
+                      </span>
+                      {isUnknown ? (
+                        <span className="inline-flex flex-wrap items-baseline gap-1.5">
+                          <span className="text-sm font-semibold italic text-gray-500">Non identificato</span>
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onResolveClick();
+                            }}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter" || event.key === " ") {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                onResolveClick();
+                              }
+                            }}
+                            className="text-[11px] text-amber-600 underline underline-offset-2 hover:text-amber-800"
+                          >
+                            risolvi anomalie
+                          </span>
+                        </span>
+                      ) : (
+                        <p className="truncate text-[13px] font-semibold text-gray-900">{row.label}</p>
+                      )}
+                      <span className={`rounded-full border px-1.5 py-0.5 text-[10px] font-medium ${consumptionTone(row.consumption_judgement as string | null | undefined)}`}>
+                        {row.consumption_judgement ?? "—"}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 flex flex-wrap gap-1 text-[10px] text-gray-500">
+                      <span title="Litri totali attribuiti all'operatore nel periodo selezionato." className="rounded-full border border-gray-200 bg-white px-1.5 py-0.5">{formatLiters(row.total_liters)}</span>
+                      <span title="Chilometri associati all'operatore nel periodo, stimati dalle sessioni chiuse." className="rounded-full border border-gray-200 bg-white px-1.5 py-0.5">{formatKilometers((row.total_km as number | null | undefined) ?? null)}</span>
+                      <span title="Consumo medio espresso in litri ogni 100 chilometri per l'operatore." className="rounded-full border border-gray-200 bg-white px-1.5 py-0.5">L/100km {formatConsumption((row.avg_consumption_l_per_100km as number | null | undefined) ?? null)}</span>
+                      <span className="rounded-full border border-gray-200 bg-white px-1.5 py-0.5">{formatEuro(row.total_cost)}</span>
+                      <span title="Numero totale di rifornimenti attribuiti all'operatore nel periodo." className="rounded-full border border-gray-200 bg-white px-1.5 py-0.5">{row.refuel_count} riforn.</span>
+                    </div>
+                  </div>
+                  <div className="grid shrink-0 grid-cols-2 gap-1 text-right text-[10px] text-gray-500 sm:grid-cols-3">
+                    <div className="rounded-lg border border-[#eef2ec] bg-white px-2 py-1">
+                      <p className="flex items-center justify-end gap-1">€/L <InlineHelp text="Costo medio per litro dei rifornimenti attribuiti all'operatore." /></p>
+                      <p className="mt-0.5 font-semibold text-gray-900">{formatEuro(row.avg_price_per_liter ?? null, 3)}</p>
+                    </div>
+                    <div className="rounded-lg border border-[#eef2ec] bg-white px-2 py-1">
+                      <p className="flex items-center justify-end gap-1">€ medio <InlineHelp text="Costo medio per rifornimento attribuito all'operatore nel periodo." /></p>
+                      <p className="mt-0.5 font-semibold text-gray-900">{formatEuro(row.avg_refuel_cost ?? null)}</p>
+                    </div>
+                    <div className="col-span-2 rounded-lg border border-[#eef2ec] bg-white px-2 py-1 sm:col-span-1">
+                      <p className="flex items-center justify-end gap-1">Mezzi <InlineHelp text="Numero di mezzi associati all'operatore nel dettaglio espandibile." /></p>
+                      <p className="mt-0.5 font-semibold text-gray-900">{relatedRows.length}</p>
+                    </div>
+                  </div>
+                </div>
+              </button>
+
+              {isExpanded ? (
+                <div className="border-t border-[#eef2ec] bg-[#f8fbf8] px-4 py-4">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <p className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#667267]">
+                      <span>Relazioni uso (operatore → mezzi)</span>
+                      <InlineHelp text="Dettaglio dei mezzi usati dall'operatore con consumi, prezzo medio e frequenza rifornimenti nel periodo." />
+                    </p>
+                    <span className="text-xs text-gray-500">{relatedRows.length} mezzi</span>
+                  </div>
+                  {relatedRows.length === 0 ? (
+                    <p className="text-sm text-gray-400">Nessun mezzo associabile nel periodo.</p>
                   ) : (
-                    row.label
+                    <TopTable
+                      rows={relatedRows}
+                      columns={[
+                        { key: "label", label: "Mezzo" },
+                        { key: "total_liters", label: "Litri", align: "right", format: (v) => formatLiters(Number(v)) },
+                        { key: "total_cost", label: "Costo", align: "right", format: (v) => formatEuro(Number(v)) },
+                        { key: "avg_price_per_liter", label: "€/L", align: "right", format: (v) => (v == null ? "—" : formatEuro(Number(v), 3)) },
+                        { key: "avg_liters_per_refuel", label: "L medi", align: "right", format: (v) => (v == null ? "—" : formatLiters(Number(v))) },
+                        { key: "refuel_count", label: "Riforn.", align: "right" },
+                      ]}
+                    />
                   )}
-                </td>
-                <td className="py-2 text-right tabular-nums text-gray-700">
-                  {Number(row.total_liters).toLocaleString("it-IT")} L
-                </td>
-                <td className="py-2 text-right tabular-nums text-gray-700">
-                  {km !== null ? `${Number(km).toLocaleString("it-IT")} km` : "—"}
-                </td>
-                <td className="py-2 text-right tabular-nums text-gray-700">
-                  {cons !== null ? `${Number(cons).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
-                </td>
-                <td className="py-2 text-right text-xs">
-                  {judge ? (
-                    <span className={`rounded-full px-2 py-0.5 font-medium ${
-                      judge === "OK" ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                      : judge === "Alto" ? "bg-amber-50 text-amber-700 border border-amber-200"
-                      : "bg-rose-50 text-rose-700 border border-rose-200"
-                    }`}>
-                      {judge}
-                    </span>
-                  ) : "—"}
-                </td>
-                <td className="py-2 text-right tabular-nums text-gray-700">
-                  € {Number(row.total_cost).toLocaleString("it-IT", { minimumFractionDigits: 2 })}
-                </td>
-                <td className="py-2 text-right tabular-nums text-gray-700">
-                  {price !== null ? `€ ${Number(price).toLocaleString("it-IT", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}` : "—"}
-                </td>
-                <td className="py-2 text-right tabular-nums text-gray-700">
-                  {avgCost !== null ? `€ ${Number(avgCost).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "—"}
-                </td>
-                <td className="py-2 text-right tabular-nums text-gray-700">
-                  {avgLiters !== null ? `${Number(avgLiters).toLocaleString("it-IT", { maximumFractionDigits: 2 })} L` : "—"}
-                </td>
-                <td className="py-2 text-right tabular-nums text-gray-700">
-                  {String(row.refuel_count)}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                </div>
+              ) : null}
+            </div>
+          );
+        })}
+        {visibleRows.length === 0 ? (
+          <div className="rounded-[18px] border border-dashed border-[#d8dfd8] bg-[#f8faf8] px-4 py-6 text-center text-sm text-gray-500">
+            Nessun operatore trovato con il filtro corrente.
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -435,8 +922,6 @@ function CarburantePanel({ params }: { params: { from_date?: string; to_date?: s
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showUnresolved, setShowUnresolved] = useState(false);
-  const [showAllStations, setShowAllStations] = useState(false);
-  const [showAllRelations, setShowAllRelations] = useState(false);
   const { from_date, to_date, granularity } = params;
 
   useEffect(() => {
@@ -513,122 +998,22 @@ function CarburantePanel({ params }: { params: { from_date?: string; to_date?: s
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <SectionCard title="Top veicoli per consumo">
-          <TopTable
-            rows={data.top_vehicles}
-            columns={[
-              { key: "label", label: "Targa / Mezzo" },
-              { key: "total_liters", label: "Litri", align: "right", format: (v) => `${Number(v).toLocaleString("it-IT")} L` },
-              { key: "total_km", label: "Km", align: "right", format: (v) => (v == null ? "—" : `${Number(v).toLocaleString("it-IT")} km`) },
-              { key: "avg_consumption_l_per_100km", label: "L/100km", align: "right", format: (v) => (v == null ? "—" : `${Number(v).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`) },
-              { key: "consumption_judgement", label: "Consumo", align: "right", format: (v) => (v == null ? "—" : String(v)) },
-              { key: "total_cost", label: "Costo", align: "right", format: (v) => `€ ${Number(v).toLocaleString("it-IT", { minimumFractionDigits: 2 })}` },
-              { key: "avg_price_per_liter", label: "€/L", align: "right", format: (v) => (v == null ? "—" : `€ ${Number(v).toLocaleString("it-IT", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`) },
-              { key: "avg_refuel_cost", label: "€ medio", align: "right", format: (v) => (v == null ? "—" : `€ ${Number(v).toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`) },
-              { key: "avg_liters_per_refuel", label: "L medi", align: "right", format: (v) => (v == null ? "—" : `${Number(v).toLocaleString("it-IT", { maximumFractionDigits: 2 })} L`) },
-              { key: "refuel_count", label: "Riforn.", align: "right" },
-            ]}
-          />
+        <SectionShell title="Top veicoli per consumo e stazioni di servizio">
+          <VehicleConsumptionExplorer rows={data.top_vehicles} />
           {data.top_vehicles.some((v) => v.total_km == null) && (
             <p className="mt-2 text-xs text-gray-400">
               I mezzi con «—» km non hanno sessioni di utilizzo chiuse nel periodo selezionato.
             </p>
           )}
-        </SectionCard>
+        </SectionShell>
 
-        <SectionCard title="Top operatori per consumo">
-          <FuelOperatorsTable rows={data.top_operators} onResolveClick={() => setShowUnresolved(true)} />
+        <SectionShell title="Top operatori per consumo e relazioni uso">
+          <OperatorConsumptionExplorer rows={data.top_operators} onResolveClick={() => setShowUnresolved(true)} />
           {data.top_operators.some((o) => o.total_km == null) && (
             <p className="mt-2 text-xs text-gray-400">
               Gli operatori con «—» km non hanno sessioni di utilizzo abbinate nel periodo selezionato.
             </p>
           )}
-        </SectionCard>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <SectionShell
-          title="Stazioni di servizio più usate"
-          actions={(
-            <button
-              onClick={() => setShowAllStations((s) => !s)}
-              className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200"
-            >
-              {showAllStations ? "Mostra meno" : "Mostra tutti"}
-            </button>
-          )}
-        >
-          <TopTable
-            rows={(showAllStations ? data.top_vehicles : data.top_vehicles.slice(0, 5)).flatMap((v) =>
-              (v.top_stations ?? []).map((s) => ({
-                vehicle: v.label,
-                station: s.station_name,
-                refuel_count: s.refuel_count,
-                total_liters: s.total_liters,
-                total_cost: s.total_cost,
-              }))
-            )}
-            columns={[
-              { key: "vehicle", label: "Mezzo" },
-              { key: "station", label: "Stazione" },
-              { key: "total_liters", label: "Litri", align: "right", format: (v) => `${Number(v).toLocaleString("it-IT")} L` },
-              { key: "total_cost", label: "Costo", align: "right", format: (v) => `€ ${Number(v).toLocaleString("it-IT", { minimumFractionDigits: 2 })}` },
-              { key: "refuel_count", label: "Riforn.", align: "right" },
-            ]}
-          />
-          <p className="mt-2 text-xs text-gray-400">
-            Mostra le stazioni più usate per ciascun mezzo (top mezzi nel periodo selezionato).
-          </p>
-        </SectionShell>
-
-        <SectionShell
-          title="Relazioni uso (operatore → mezzi)"
-          actions={(
-            <button
-              onClick={() => setShowAllRelations((s) => !s)}
-              className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700 hover:bg-gray-200"
-            >
-              {showAllRelations ? "Mostra meno" : "Mostra tutti"}
-            </button>
-          )}
-        >
-          <div className="space-y-3">
-            {(showAllRelations ? data.top_operators : data.top_operators.slice(0, 5)).map((op) => (
-              <details key={op.id} className="group rounded-xl border border-gray-100 bg-gray-50">
-                <summary className="flex cursor-pointer items-center justify-between gap-3 px-3 py-2 text-sm">
-                  <div className="min-w-0">
-                    <p className="truncate font-semibold text-gray-800">{op.label}</p>
-                    <p className="mt-0.5 text-xs text-gray-500">
-                      {Number(op.total_liters).toLocaleString("it-IT")} L · € {Number(op.total_cost).toLocaleString("it-IT", { minimumFractionDigits: 2 })} · {op.refuel_count} riforn.
-                    </p>
-                  </div>
-                  <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-gray-600 border border-gray-200">
-                    {(op.related?.length ?? 0) || 0} mezzi
-                  </span>
-                </summary>
-                <div className="px-3 pb-3">
-                  {(op.related?.length ?? 0) === 0 ? (
-                    <p className="mt-1 text-xs text-gray-400">Nessun mezzo associabile nel periodo.</p>
-                  ) : (
-                    <TopTable
-                      rows={(op.related ?? [])}
-                      columns={[
-                        { key: "label", label: "Mezzo" },
-                        { key: "total_liters", label: "Litri", align: "right", format: (v) => `${Number(v).toLocaleString("it-IT")} L` },
-                        { key: "total_cost", label: "Costo", align: "right", format: (v) => `€ ${Number(v).toLocaleString("it-IT", { minimumFractionDigits: 2 })}` },
-                        { key: "avg_price_per_liter", label: "€/L", align: "right", format: (v) => (v == null ? "—" : `€ ${Number(v).toLocaleString("it-IT", { minimumFractionDigits: 3, maximumFractionDigits: 3 })}`) },
-                        { key: "avg_liters_per_refuel", label: "L medi", align: "right", format: (v) => (v == null ? "—" : `${Number(v).toLocaleString("it-IT", { maximumFractionDigits: 2 })} L`) },
-                        { key: "refuel_count", label: "Riforn.", align: "right" },
-                      ]}
-                    />
-                  )}
-                </div>
-              </details>
-            ))}
-          </div>
-          <p className="mt-2 text-xs text-gray-400">
-            Clicca su un operatore per espandere il dettaglio dei mezzi e consumi nel periodo selezionato.
-          </p>
         </SectionShell>
       </div>
 
@@ -840,6 +1225,7 @@ function AnomaliePanel({ params }: { params: { from_date?: string; to_date?: str
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState("");
+  const [operatorModal, setOperatorModal] = useState<{ id: string; name: string | null } | null>(null);
   const { from_date, to_date } = params;
 
   const load = useCallback((filter: string) => {
@@ -930,6 +1316,9 @@ function AnomaliePanel({ params }: { params: { from_date?: string; to_date?: str
           <div className="space-y-2">
             {data.items.map((item) => {
               const chips = anomalyDetailChips(item);
+              const details = item.details as Record<string, unknown>;
+              const linkedOperatorId = typeof details.operator_id === "string" && details.operator_id ? details.operator_id : null;
+              const linkedOperatorName = typeof details.operator_name === "string" ? details.operator_name : null;
               return (
                 <div key={item.id} className="flex items-start gap-3 rounded-xl border border-gray-100 bg-gray-50 p-3">
                   <AlertTriangleIcon className={`mt-0.5 h-4 w-4 shrink-0 ${item.severity === "high" ? "text-rose-500" : item.severity === "medium" ? "text-amber-500" : "text-sky-500"}`} />
@@ -945,8 +1334,8 @@ function AnomaliePanel({ params }: { params: { from_date?: string; to_date?: str
                       {item.entity_label ? ` · ${item.entity_label}` : ""}
                       {" · "}{new Date(item.detected_at).toLocaleDateString("it-IT")}
                     </p>
-                    {chips.length > 0 && (
-                      <div className="mt-2 flex flex-wrap gap-1.5">
+                    {(chips.length > 0 || (item.type === "orphan_session" && linkedOperatorId)) && (
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5">
                         {chips.map((chip) =>
                           chip.href ? (
                             <a
@@ -966,6 +1355,15 @@ function AnomaliePanel({ params }: { params: { from_date?: string; to_date?: str
                             </span>
                           )
                         )}
+                        {item.type === "orphan_session" && linkedOperatorId ? (
+                          <button
+                            type="button"
+                            onClick={() => setOperatorModal({ id: linkedOperatorId, name: linkedOperatorName })}
+                            className="rounded-full border border-[#d5e2d8] bg-white px-3 py-1 text-xs font-semibold text-[#1D4E35] transition hover:bg-[#edf5f0]"
+                          >
+                            Visualizza operatore
+                          </button>
+                        ) : null}
                       </div>
                     )}
                   </div>
@@ -975,6 +1373,13 @@ function AnomaliePanel({ params }: { params: { from_date?: string; to_date?: str
           </div>
         )}
       </SectionCard>
+
+      <OperatorQuickModal
+        open={operatorModal != null}
+        operatorId={operatorModal?.id ?? null}
+        operatorName={operatorModal?.name ?? null}
+        onClose={() => setOperatorModal(null)}
+      />
     </div>
   );
 }

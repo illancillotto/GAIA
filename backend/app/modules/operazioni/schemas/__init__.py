@@ -11,6 +11,12 @@ from app.modules.operazioni.schemas.fuel_cards import (
     FuelCardResponse,
 )
 from app.modules.operazioni.schemas.operators import (
+    OperatorFuelCardSummary,
+    OperatorFuelLogSummary,
+    OperatorUsageSessionSummary,
+    OperatorVehicleUsageSummary,
+    WCOperatorDetailResponse,
+    WCOperatorDetailStats,
     WCOperatorListResponse,
     WCOperatorResponse,
 )
@@ -61,6 +67,12 @@ __all__ = [
     "TeamMembershipCreate",
     "TeamMembershipResponse",
     "TeamResponse",
+    "OperatorFuelCardSummary",
+    "OperatorFuelLogSummary",
+    "OperatorUsageSessionSummary",
+    "OperatorVehicleUsageSummary",
+    "WCOperatorDetailResponse",
+    "WCOperatorDetailStats",
     "WCOperatorListResponse",
     "WCOperatorResponse",
     "VehicleAssignmentClose",

@@ -420,7 +420,7 @@ def fuel_analytics(
             count_by_vehicle[log.vehicle_id] += 1
             logs_by_vehicle[log.vehicle_id].append(log)
 
-    top_vehicles = sorted(liters_by_vehicle, key=liters_by_vehicle.__getitem__, reverse=True)[:10]
+    top_vehicles = sorted(liters_by_vehicle, key=liters_by_vehicle.__getitem__, reverse=True)
     top_vehicles_out = [
         FuelTopItem(
             id=str(vid),
@@ -577,7 +577,7 @@ def fuel_analytics(
             return km_by_op_name.get(fkey, 0.0), dict(km_by_op_name_vehicle.get(fkey, {}))
         return 0.0, {}
 
-    top_fuel_keys = sorted(liters_by_key, key=liters_by_key.__getitem__, reverse=True)[:10]
+    top_fuel_keys = sorted(liters_by_key, key=liters_by_key.__getitem__, reverse=True)
     top_operators_out = []
     for fkey in top_fuel_keys:
         fid, flabel = _op_display(fkey)
@@ -1082,10 +1082,48 @@ def anomalies_analytics(
             for v in db.scalars(select(Vehicle).where(Vehicle.id.in_(vehicle_ids))).all():
                 vehicles_map[v.id] = v
 
+        gaia_user_ids = {
+            s.actual_driver_user_id
+            for s in orphan_sessions
+            if s.actual_driver_user_id is not None
+        }
+        wc_operator_by_gaia: dict[int, WCOperator] = {}
+        if gaia_user_ids:
+            for op in db.scalars(select(WCOperator).where(WCOperator.gaia_user_id.in_(gaia_user_ids))).all():
+                if op.gaia_user_id is not None:
+                    wc_operator_by_gaia[op.gaia_user_id] = op
+
+        orphan_operator_names = {
+            " ".join(part for part in [s.operator_name] if part).strip().lower()
+            for s in orphan_sessions
+            if s.operator_name and s.operator_name.strip()
+        }
+        wc_operator_by_name: dict[str, WCOperator] = {}
+        if orphan_operator_names:
+            candidate_ops = db.scalars(select(WCOperator).where(WCOperator.last_name.is_not(None))).all()
+            for op in candidate_ops:
+                full_name = " ".join(part for part in [op.first_name, op.last_name] if part).strip().lower()
+                reverse_name = " ".join(part for part in [op.last_name, op.first_name] if part).strip().lower()
+                if full_name in orphan_operator_names and full_name not in wc_operator_by_name:
+                    wc_operator_by_name[full_name] = op
+                if reverse_name in orphan_operator_names and reverse_name not in wc_operator_by_name:
+                    wc_operator_by_name[reverse_name] = op
+
         for s in orphan_sessions:
             v = vehicles_map.get(s.vehicle_id)
             started = s.started_at if s.started_at.tzinfo else s.started_at.replace(tzinfo=timezone.utc)
             hours_open = (now_utc - started).total_seconds() / 3600
+            wc_operator = None
+            if s.actual_driver_user_id is not None:
+                wc_operator = wc_operator_by_gaia.get(s.actual_driver_user_id)
+            normalized_operator_name = s.operator_name.strip().lower() if s.operator_name else None
+            if wc_operator is None and normalized_operator_name:
+                wc_operator = wc_operator_by_name.get(normalized_operator_name)
+            operator_name = (
+                " ".join(part for part in [wc_operator.first_name, wc_operator.last_name] if part).strip()
+                if wc_operator is not None
+                else (s.operator_name or None)
+            )
             anomalies.append(AnomalyItem(
                 id=f"orphan_{s.id}",
                 type="orphan_session",
@@ -1094,7 +1132,13 @@ def anomalies_analytics(
                 entity_id=str(s.id),
                 entity_label=getattr(v, "plate_number", None) or str(s.vehicle_id),
                 detected_at=s.started_at.isoformat(),
-                details={"hours_open": round(hours_open, 1), "vehicle_id": str(s.vehicle_id), "wc_id": s.wc_id},
+                details={
+                    "hours_open": round(hours_open, 1),
+                    "vehicle_id": str(s.vehicle_id),
+                    "wc_id": s.wc_id,
+                    "operator_name": operator_name,
+                    "operator_id": str(wc_operator.id) if wc_operator is not None else None,
+                },
             ))
 
     # 2. Driver mismatch: actual_driver != assigned operator in the period

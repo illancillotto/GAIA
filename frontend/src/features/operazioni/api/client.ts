@@ -474,6 +474,80 @@ export async function getOperator(id: string) {
   return fetchOperazioni(`/operators/${id}`);
 }
 
+export interface OperatorFuelCardSummary {
+  id: string;
+  codice: string | null;
+  pan: string;
+  is_blocked: boolean;
+  expires_at: string | null;
+}
+
+export interface OperatorVehicleUsageSummary {
+  vehicle_id: string;
+  vehicle_label: string;
+  usage_count: number;
+  km_travelled: string | null;
+}
+
+export interface OperatorFuelLogSummary {
+  id: string;
+  vehicle_id: string;
+  vehicle_label: string;
+  fueled_at: string;
+  liters: string;
+  total_cost: string | null;
+  odometer_km: string | null;
+  station_name: string | null;
+}
+
+export interface OperatorUsageSessionSummary {
+  id: string;
+  vehicle_id: string;
+  vehicle_label: string;
+  started_at: string;
+  ended_at: string | null;
+  status: string;
+  km_travelled: string | null;
+}
+
+export interface OperatorDetailStats {
+  fuel_cards_count: number;
+  fuel_logs_count: number;
+  usage_sessions_count: number;
+  total_liters: string;
+  total_fuel_cost: string | null;
+  total_km_travelled: string;
+  most_used_vehicle: OperatorVehicleUsageSummary | null;
+  last_used_vehicle_label: string | null;
+}
+
+export interface OperatorDetailResponse {
+  operator: {
+    id: string;
+    wc_id: number;
+    username: string | null;
+    email: string | null;
+    first_name: string | null;
+    last_name: string | null;
+    tax: string | null;
+    role: string | null;
+    enabled: boolean;
+    gaia_user_id: number | null;
+    wc_synced_at: string | null;
+    created_at: string;
+    updated_at: string;
+    current_fuel_cards: OperatorFuelCardSummary[];
+  };
+  stats: OperatorDetailStats;
+  current_fuel_cards: OperatorFuelCardSummary[];
+  recent_fuel_logs: OperatorFuelLogSummary[];
+  recent_usage_sessions: OperatorUsageSessionSummary[];
+}
+
+export async function getOperatorDetail(id: string): Promise<OperatorDetailResponse> {
+  return fetchOperazioni(`/operators/${id}/detail`);
+}
+
 export async function getUnlinkedOperators() {
   return fetchOperazioni("/operators/unlinked");
 }

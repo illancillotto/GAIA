@@ -1,5 +1,6 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
@@ -18,12 +19,16 @@ import {
   autoLinkGaiaOperators,
   bulkImportOperatorsAsGaiaUsers,
   getAreas,
+  getOperatorDetail,
   getOperators,
   getUnlinkedOperators,
   inviteOperator,
   type BulkImportedOperator,
   type BulkImportResult,
+  type OperatorDetailResponse,
+  type OperatorFuelCardSummary,
 } from "@/features/operazioni/api/client";
+import type { CurrentUser } from "@/types/api";
 
 type OperatorItem = {
   id: string;
@@ -39,6 +44,7 @@ type OperatorItem = {
   wc_synced_at: string | null;
   created_at: string;
   updated_at: string;
+  current_fuel_cards: OperatorFuelCardSummary[];
 };
 
 type GaiaUserMin = {
@@ -73,6 +79,10 @@ const enabledTone = {
   true: "bg-emerald-50 text-emerald-700",
   false: "bg-gray-100 text-gray-600",
 };
+
+const integerFormatter = new Intl.NumberFormat("it-IT", { maximumFractionDigits: 0 });
+const decimalFormatter = new Intl.NumberFormat("it-IT", { minimumFractionDigits: 0, maximumFractionDigits: 1 });
+const currencyFormatter = new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", maximumFractionDigits: 2 });
 
 function displayName(operator: OperatorItem): string {
   const name = `${operator.first_name ?? ""} ${operator.last_name ?? ""}`.trim();
@@ -109,51 +119,124 @@ function roleLabel(role: string | null): string {
   return role ? role.replaceAll("_", " ") : "Senza ruolo";
 }
 
-function DesktopOperatorCard({ operator }: { operator: OperatorItem }) {
+function fuelCardCodes(operator: Pick<OperatorItem, "current_fuel_cards">): string {
+  const codes = operator.current_fuel_cards
+    .map((card) => card.codice?.trim())
+    .filter((value): value is string => Boolean(value));
+  if (codes.length === 0) {
+    return "Nessuna carta";
+  }
+  return codes.join(" · ");
+}
+
+function isAdminUser(user: CurrentUser): boolean {
+  return user.role === "admin" || user.role === "super_admin";
+}
+
+function parseNumeric(value: string | null | undefined): number | null {
+  if (value == null || value === "") {
+    return null;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function formatNumeric(value: string | null | undefined, suffix?: string): string {
+  const parsed = parseNumeric(value);
+  if (parsed == null) {
+    return "—";
+  }
+  const formatted = Number.isInteger(parsed) ? integerFormatter.format(parsed) : decimalFormatter.format(parsed);
+  return suffix ? `${formatted} ${suffix}` : formatted;
+}
+
+function formatCurrencyValue(value: string | null | undefined): string {
+  const parsed = parseNumeric(value);
+  return parsed == null ? "—" : currencyFormatter.format(parsed);
+}
+
+function formatDateTime(value: string | null | undefined): string {
+  if (!value) {
+    return "—";
+  }
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+  return date.toLocaleString("it-IT", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function DesktopOperatorCard({
+  operator,
+  canOpenDetail,
+  onOpenDetail,
+}: {
+  operator: OperatorItem;
+  canOpenDetail: boolean;
+  onOpenDetail: (operator: OperatorItem) => void;
+}) {
   return (
-    <div className="group overflow-hidden rounded-[24px] border border-[#e6ebe5] bg-white shadow-panel transition hover:-translate-y-1 hover:border-[#c9d6cd] hover:shadow-lg">
-      <div className={cn("relative h-28 overflow-hidden bg-gradient-to-br", operatorVisualTone(operator))}>
-        <div className="absolute inset-x-0 top-0 flex items-center justify-between p-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-[18px] border border-white/80 bg-white/90 text-base font-semibold text-[#1D4E35] shadow-sm">
+    <button
+      type="button"
+      onClick={() => (canOpenDetail ? onOpenDetail(operator) : undefined)}
+      className={cn(
+        "group overflow-hidden rounded-[22px] border border-[#e6ebe5] bg-white text-left shadow-panel transition hover:-translate-y-1 hover:border-[#c9d6cd] hover:shadow-lg",
+        canOpenDetail ? "cursor-pointer" : "cursor-default",
+      )}
+    >
+      <div className={cn("relative h-24 overflow-hidden bg-gradient-to-br", operatorVisualTone(operator))}>
+        <div className="absolute inset-x-0 top-0 flex items-center justify-between p-2.5">
+          <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/80 bg-white/90 text-sm font-semibold text-[#1D4E35] shadow-sm">
             {initialsForOperator(operator)}
           </div>
           <span
             className={cn(
-              "rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em]",
+              "rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.16em]",
               enabledTone[String(Boolean(operator.enabled)) as "true" | "false"],
             )}
           >
             {operator.enabled ? "Abilitato" : "Disabilitato"}
           </span>
         </div>
-        <div className="absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-black/5 to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-black/5 to-transparent" />
       </div>
 
-      <div className="px-4 pb-4 pt-3">
-        <div className="flex items-start justify-between gap-3">
+      <div className="px-3.5 pb-3.5 pt-2.5">
+        <div className="flex items-start justify-between gap-2.5">
           <div className="min-w-0">
-            <p className="truncate text-[0.98rem] font-semibold uppercase tracking-tight text-gray-900">
+            <p className="truncate text-[0.92rem] font-semibold uppercase tracking-tight text-gray-900">
               {displayName(operator)}
             </p>
-            <p className="mt-1 text-[13px] text-gray-600">{roleLabel(operator.role)}</p>
+            <p className="mt-0.5 text-xs text-gray-600">{roleLabel(operator.role)}</p>
           </div>
-          <span className="text-lg text-gray-300 transition group-hover:text-[#1D4E35]">⋮</span>
+          <span className="text-base text-gray-300 transition group-hover:text-[#1D4E35]">⋮</span>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span className="inline-flex rounded-full border border-[#e2e6e1] bg-[#f6f7f4] px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#5d695f]">
+        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+          <span className="inline-flex rounded-full border border-[#e2e6e1] bg-[#f6f7f4] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#5d695f]">
             WC {operator.wc_id}
           </span>
           {operator.gaia_user_id ? (
-            <span className="inline-flex rounded-full border border-[#e2e6e1] bg-white px-3 py-1 text-xs font-semibold text-gray-700">
+            <span className="inline-flex rounded-full border border-[#e2e6e1] bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-700">
               GAIA {operator.gaia_user_id}
             </span>
           ) : null}
         </div>
 
-        <div className="mt-4 border-t border-dashed border-[#edf1eb] pt-3">
+        <div className="mt-2 rounded-[16px] border border-[#eef2ec] bg-[#fafbf8] px-2.5 py-2">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#667267]">Fuel card</p>
+          <p className="mt-1 truncate text-[11px] font-medium text-gray-700">{fuelCardCodes(operator)}</p>
+        </div>
+
+        <div className="mt-3 border-t border-dashed border-[#edf1eb] pt-2.5">
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#667267]">Contatti</p>
-          <div className="mt-2.5 grid gap-1.5 text-[13px] text-gray-600">
+          <div className="mt-2 grid gap-1 text-xs text-gray-600">
             <p>
               <span className="font-medium text-gray-900">Email:</span> {operator.email || "—"}
             </p>
@@ -163,16 +246,31 @@ function DesktopOperatorCard({ operator }: { operator: OperatorItem }) {
           </div>
         </div>
       </div>
-    </div>
+    </button>
   );
 }
 
-function MobileOperatorCard({ operator }: { operator: OperatorItem }) {
+function MobileOperatorCard({
+  operator,
+  canOpenDetail,
+  onOpenDetail,
+}: {
+  operator: OperatorItem;
+  canOpenDetail: boolean;
+  onOpenDetail: (operator: OperatorItem) => void;
+}) {
   return (
-    <div className="flex items-center gap-3 rounded-[22px] border border-[#e6ebe5] bg-[linear-gradient(180deg,_#ffffff,_#fbfcfa)] px-3 py-3 shadow-panel transition active:scale-[0.995]">
+    <button
+      type="button"
+      onClick={() => (canOpenDetail ? onOpenDetail(operator) : undefined)}
+      className={cn(
+        "flex w-full items-center gap-2.5 rounded-[20px] border border-[#e6ebe5] bg-[linear-gradient(180deg,_#ffffff,_#fbfcfa)] px-3 py-2.5 text-left shadow-panel transition active:scale-[0.995]",
+        canOpenDetail ? "cursor-pointer" : "cursor-default",
+      )}
+    >
       <div
         className={cn(
-          "relative flex h-[52px] w-[52px] shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-gradient-to-br text-sm font-semibold text-[#1D4E35]",
+          "relative flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-[18px] bg-gradient-to-br text-sm font-semibold text-[#1D4E35]",
           operatorVisualTone(operator),
         )}
       >
@@ -182,27 +280,218 @@ function MobileOperatorCard({ operator }: { operator: OperatorItem }) {
       <div className="min-w-0 flex-1">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="truncate text-[11px] font-semibold uppercase tracking-[0.18em] text-[#667267]">{roleLabel(operator.role)}</p>
-            <p className="truncate text-[1rem] font-semibold leading-tight text-gray-900">{displayName(operator)}</p>
+            <p className="truncate text-[10px] font-semibold uppercase tracking-[0.16em] text-[#667267]">{roleLabel(operator.role)}</p>
+            <p className="truncate text-[0.95rem] font-semibold leading-tight text-gray-900">{displayName(operator)}</p>
           </div>
-          <span className={cn("shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold", enabledTone[String(Boolean(operator.enabled)) as "true" | "false"])}>
+          <span className={cn("shrink-0 rounded-full px-2 py-1 text-[10px] font-semibold", enabledTone[String(Boolean(operator.enabled)) as "true" | "false"])}>
             {operator.enabled ? "Ok" : "Off"}
           </span>
         </div>
-        <p className="mt-1 text-xs text-gray-600">{operatorMeta(operator)}</p>
-        <div className="mt-2.5 flex items-center justify-between gap-3">
+        <p className="mt-0.5 truncate text-[11px] text-gray-600">{operatorMeta(operator)}</p>
+        <p className="mt-1 truncate text-[11px] font-medium text-[#516053]">Carta: {fuelCardCodes(operator)}</p>
+        <div className="mt-2 flex items-center justify-between gap-3">
           <p className="truncate text-xs text-gray-500">
             WC {operator.wc_id}
             {operator.gaia_user_id ? ` · GAIA ${operator.gaia_user_id}` : ""}
           </p>
-          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#f6f7f4] text-gray-500">→</div>
+          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#f6f7f4] text-xs text-gray-500">→</div>
+        </div>
+      </div>
+    </button>
+  );
+}
+
+const PREVIEW_COUNT = 6;
+
+function OperatorDetailModal({
+  open,
+  operator,
+  detail,
+  isLoading,
+  error,
+  onClose,
+}: {
+  open: boolean;
+  operator: OperatorItem | null;
+  detail: OperatorDetailResponse | null;
+  isLoading: boolean;
+  error: string | null;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    function handleKeyDown(event: KeyboardEvent): void {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open, onClose]);
+
+  if (!open || !operator) {
+    return null;
+  }
+
+  const effectiveDetail = detail?.operator.id === operator.id ? detail : null;
+  const subject = effectiveDetail?.operator ?? operator;
+  const cards = effectiveDetail?.current_fuel_cards ?? subject.current_fuel_cards ?? [];
+
+  return (
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/45 px-4 py-6 backdrop-blur-sm">
+      <div className="flex max-h-[94vh] w-full max-w-5xl flex-col overflow-hidden rounded-[28px] border border-gray-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.24)]">
+        <div className="border-b border-gray-100 px-6 py-5">
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1D4E35]">Dettaglio operatore</p>
+              <h2 className="mt-2 text-2xl font-semibold text-gray-900">{displayName(subject)}</h2>
+              <p className="mt-1 text-sm text-gray-500">
+                {roleLabel(subject.role)} · WC {subject.wc_id}
+                {subject.gaia_user_id ? ` · GAIA ${subject.gaia_user_id}` : ""}
+              </p>
+            </div>
+            <button className="btn-secondary" type="button" onClick={onClose}>
+              Chiudi
+            </button>
+          </div>
+        </div>
+
+        <div className="overflow-y-auto bg-[#f7faf7] px-6 py-6">
+          {isLoading ? (
+            <div className="rounded-[24px] border border-[#dfe7df] bg-white px-5 py-6 text-sm text-gray-500">Caricamento dettaglio operatore.</div>
+          ) : error ? (
+            <div className="rounded-[24px] border border-rose-200 bg-rose-50 px-5 py-6 text-sm text-rose-700">{error}</div>
+          ) : !effectiveDetail ? (
+            <div className="rounded-[24px] border border-[#dfe7df] bg-white px-5 py-6 text-sm text-gray-500">Nessun dettaglio disponibile.</div>
+          ) : (
+            <div className="space-y-6">
+              <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+                <div className="rounded-[24px] border border-[#e4e8e2] bg-white p-5">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#667267]">KPI operativi</p>
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-[18px] border border-[#eef2ec] bg-[#fafbf8] px-4 py-3">
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-gray-500">Carte</p>
+                      <p className="mt-2 text-2xl font-semibold text-gray-900">{effectiveDetail.stats.fuel_cards_count}</p>
+                    </div>
+                    <div className="rounded-[18px] border border-[#eef2ec] bg-[#fafbf8] px-4 py-3">
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-gray-500">Litri</p>
+                      <p className="mt-2 text-2xl font-semibold text-gray-900">{formatNumeric(effectiveDetail.stats.total_liters, "L")}</p>
+                    </div>
+                    <div className="rounded-[18px] border border-[#eef2ec] bg-[#fafbf8] px-4 py-3">
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-gray-500">Costo</p>
+                      <p className="mt-2 text-2xl font-semibold text-gray-900">{formatCurrencyValue(effectiveDetail.stats.total_fuel_cost)}</p>
+                    </div>
+                    <div className="rounded-[18px] border border-[#eef2ec] bg-[#fafbf8] px-4 py-3">
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-gray-500">Km percorsi</p>
+                      <p className="mt-2 text-2xl font-semibold text-gray-900">{formatNumeric(effectiveDetail.stats.total_km_travelled, "km")}</p>
+                    </div>
+                  </div>
+                  <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-[18px] border border-[#eef2ec] bg-white px-4 py-3">
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-gray-500">Utilizzi mezzo</p>
+                      <p className="mt-1 text-lg font-semibold text-gray-900">{effectiveDetail.stats.usage_sessions_count}</p>
+                      <p className="mt-1 text-xs text-gray-500">Sessioni registrate per questo operatore.</p>
+                    </div>
+                    <div className="rounded-[18px] border border-[#eef2ec] bg-white px-4 py-3">
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-gray-500">Mezzo più usato</p>
+                      <p className="mt-1 text-sm font-semibold text-gray-900">{effectiveDetail.stats.most_used_vehicle?.vehicle_label ?? "—"}</p>
+                      <p className="mt-1 text-xs text-gray-500">
+                        {effectiveDetail.stats.most_used_vehicle
+                          ? `${effectiveDetail.stats.most_used_vehicle.usage_count} utilizzi · ${formatNumeric(effectiveDetail.stats.most_used_vehicle.km_travelled, "km")}`
+                          : "Nessuna sessione mezzo disponibile."}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-[24px] border border-[#e4e8e2] bg-white p-5">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#667267]">Profilo</p>
+                  <div className="mt-4 space-y-3 text-sm text-gray-600">
+                    <p><span className="font-medium text-gray-900">Email:</span> {subject.email || "—"}</p>
+                    <p><span className="font-medium text-gray-900">Username:</span> {subject.username || "—"}</p>
+                    <p><span className="font-medium text-gray-900">Codice fiscale:</span> {subject.tax || "—"}</p>
+                    <p><span className="font-medium text-gray-900">Stato:</span> {subject.enabled ? "Abilitato" : "Disabilitato"}</p>
+                    <p><span className="font-medium text-gray-900">Ultimo mezzo usato:</span> {effectiveDetail.stats.last_used_vehicle_label ?? "—"}</p>
+                  </div>
+                  <div className="mt-5 rounded-[18px] border border-[#eef2ec] bg-[#fafbf8] px-4 py-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#667267]">Fuel card correnti</p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      {cards.length > 0 ? cards.map((card) => (
+                        <span key={card.id} className="rounded-full border border-[#d5e2d8] bg-white px-3 py-1 text-xs font-semibold text-[#1D4E35]">
+                          {card.codice || card.pan}
+                        </span>
+                      )) : <span className="text-xs text-gray-500">Nessuna carta assegnata.</span>}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid gap-4 xl:grid-cols-2">
+                <div className="rounded-[24px] border border-[#e4e8e2] bg-white p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#667267]">Ultimi rifornimenti</p>
+                    <span className="text-xs text-gray-500">{effectiveDetail.recent_fuel_logs.length} record</span>
+                  </div>
+                  <div className="mt-4 space-y-3">
+                    {effectiveDetail.recent_fuel_logs.length > 0 ? effectiveDetail.recent_fuel_logs.map((item) => (
+                      <div key={item.id} className="rounded-[18px] border border-[#eef2ec] bg-[#fafbf8] px-4 py-3">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-semibold text-gray-900">{item.vehicle_label}</p>
+                            <p className="mt-0.5 text-xs text-gray-500">{formatDateTime(item.fueled_at)}{item.station_name ? ` · ${item.station_name}` : ""}</p>
+                          </div>
+                          <span className="rounded-full border border-[#d5e2d8] bg-white px-2.5 py-1 text-xs font-semibold text-[#1D4E35]">
+                            {formatNumeric(item.liters, "L")}
+                          </span>
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
+                          <span>Costo {formatCurrencyValue(item.total_cost)}</span>
+                          <span>Km {formatNumeric(item.odometer_km)}</span>
+                        </div>
+                      </div>
+                    )) : <p className="text-sm text-gray-500">Nessun dato carburante disponibile.</p>}
+                  </div>
+                </div>
+
+                <div className="rounded-[24px] border border-[#e4e8e2] bg-white p-5">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#667267]">Ultimi utilizzi mezzo</p>
+                    <span className="text-xs text-gray-500">{effectiveDetail.recent_usage_sessions.length} record</span>
+                  </div>
+                  <div className="mt-4 space-y-3">
+                    {effectiveDetail.recent_usage_sessions.length > 0 ? effectiveDetail.recent_usage_sessions.map((item) => (
+                      <div key={item.id} className="rounded-[18px] border border-[#eef2ec] bg-[#fafbf8] px-4 py-3">
+                        <div className="flex flex-wrap items-start justify-between gap-2">
+                          <div>
+                            <p className="text-sm font-semibold text-gray-900">{item.vehicle_label}</p>
+                            <p className="mt-0.5 text-xs text-gray-500">Inizio {formatDateTime(item.started_at)} · Fine {formatDateTime(item.ended_at)}</p>
+                          </div>
+                          <span className={cn("rounded-full px-2.5 py-1 text-xs font-semibold", item.status === "open" ? "bg-amber-100 text-amber-800" : "bg-emerald-50 text-emerald-700")}>
+                            {item.status}
+                          </span>
+                        </div>
+                        <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-600">
+                          <span>Km sessione {formatNumeric(item.km_travelled, "km")}</span>
+                        </div>
+                      </div>
+                    )) : <p className="text-sm text-gray-500">Nessun utilizzo mezzo disponibile.</p>}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
 }
-
-const PREVIEW_COUNT = 6;
 
 function CredentialsTable({ operators, onClose }: { operators: BulkImportedOperator[]; onClose: () => void }) {
   const [copied, setCopied] = useState(false);
@@ -479,7 +768,8 @@ function sortByCountThenLabel<T extends { label: string; count: number }>(items:
   return [...items].sort((a, b) => (b.count - a.count) || a.label.localeCompare(b.label, "it"));
 }
 
-function OperatoriContent() {
+function OperatoriContent({ currentUser }: { currentUser: CurrentUser }) {
+  const searchParams = useSearchParams();
   const [operators, setOperators] = useState<OperatorItem[]>([]);
   const [operatorsTotal, setOperatorsTotal] = useState(0);
   const [areas, setAreas] = useState<AreaItem[]>([]);
@@ -490,6 +780,11 @@ function OperatoriContent() {
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("");
   const [enabledFilter, setEnabledFilter] = useState("");
+  const [selectedOperator, setSelectedOperator] = useState<OperatorItem | null>(null);
+  const [operatorDetail, setOperatorDetail] = useState<OperatorDetailResponse | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+  const [autoOpenedOperatorId, setAutoOpenedOperatorId] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -569,6 +864,47 @@ function OperatoriContent() {
       .sort((a, b) => b.items.length - a.items.length || a.role.localeCompare(b.role, "it"));
   }, [operators]);
 
+  const canOpenAdminDetail = isAdminUser(currentUser);
+  const requestedOperatorId = searchParams.get("operatorId");
+
+  const handleOpenDetail = useCallback((operator: OperatorItem) => {
+    if (!canOpenAdminDetail) {
+      return;
+    }
+    setSelectedOperator(operator);
+    setOperatorDetail(null);
+    setDetailError(null);
+    setDetailLoading(true);
+    void getOperatorDetail(operator.id)
+      .then((payload) => {
+        setOperatorDetail(payload);
+        setDetailError(null);
+      })
+      .catch((error) => {
+        setDetailError(error instanceof Error ? error.message : "Errore nel caricamento dettaglio operatore");
+      })
+      .finally(() => setDetailLoading(false));
+  }, [canOpenAdminDetail]);
+
+  const handleCloseDetail = useCallback(() => {
+    setSelectedOperator(null);
+    setOperatorDetail(null);
+    setDetailError(null);
+    setDetailLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (!canOpenAdminDetail || !requestedOperatorId || autoOpenedOperatorId === requestedOperatorId) {
+      return;
+    }
+    const operator = operators.find((item) => item.id === requestedOperatorId);
+    if (!operator) {
+      return;
+    }
+    handleOpenDetail(operator);
+    setAutoOpenedOperatorId(requestedOperatorId);
+  }, [autoOpenedOperatorId, canOpenAdminDetail, handleOpenDetail, operators, requestedOperatorId]);
+
   return (
     <div className="page-stack">
       <OperazioniCollectionHero
@@ -634,7 +970,9 @@ function OperatoriContent() {
           <div className="rounded-[24px] border border-[#e4e8e2] bg-[#fcfcf9] p-3">
             <p className="label-caption">Suggerimento</p>
             <p className="mt-2 text-sm text-gray-600">
-              Usa il filtro ruolo per costruire rapidamente l&apos;organigramma utenti qui sotto.
+              {canOpenAdminDetail
+                ? "Usa il filtro ruolo e clicca una card per aprire il dettaglio admin con carte, consumi e utilizzo mezzi."
+                : "Usa il filtro ruolo per costruire rapidamente l&apos;organigramma utenti qui sotto."}
             </p>
           </div>
         </div>
@@ -646,14 +984,24 @@ function OperatoriContent() {
             <EmptyState icon={UsersIcon} title="Nessun operatore trovato" description="Non risultano operatori con i filtri correnti." />
           ) : (
             <>
-              <div className="hidden gap-5 lg:grid xl:grid-cols-3">
+              <div className="hidden gap-4 lg:grid xl:grid-cols-3">
                 {operators.map((operator) => (
-                  <DesktopOperatorCard key={operator.id} operator={operator} />
+                  <DesktopOperatorCard
+                    key={operator.id}
+                    operator={operator}
+                    canOpenDetail={canOpenAdminDetail}
+                    onOpenDetail={handleOpenDetail}
+                  />
                 ))}
               </div>
               <div className="space-y-3 lg:hidden">
                 {operators.map((operator) => (
-                  <MobileOperatorCard key={operator.id} operator={operator} />
+                  <MobileOperatorCard
+                    key={operator.id}
+                    operator={operator}
+                    canOpenDetail={canOpenAdminDetail}
+                    onOpenDetail={handleOpenDetail}
+                  />
                 ))}
               </div>
             </>
@@ -774,6 +1122,15 @@ function OperatoriContent() {
           )}
         </OperazioniCollectionPanel>
       </div>
+
+      <OperatorDetailModal
+        open={selectedOperator != null}
+        operator={selectedOperator}
+        detail={operatorDetail}
+        isLoading={detailLoading}
+        error={detailError}
+        onClose={handleCloseDetail}
+      />
     </div>
   );
 }
@@ -785,8 +1142,7 @@ export default function OperatoriPage() {
       description="Anagrafica operatori, ruoli, abilitazioni e organigramma aree/utenti."
       breadcrumb="Lista"
     >
-      {() => <OperatoriContent />}
+      {({ currentUser }) => <OperatoriContent currentUser={currentUser} />}
     </OperazioniModulePage>
   );
 }
-
