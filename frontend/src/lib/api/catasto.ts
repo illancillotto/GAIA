@@ -252,6 +252,13 @@ export async function catastoSearchAnagrafica(
   });
 }
 
+export async function capacitasGetRptCertificatoLink(token: string, cco: string): Promise<{ url: string }> {
+  const query = new URLSearchParams({ cco });
+  return request<{ url: string }>(`/elaborazioni/capacitas/involture/link/rpt-certificato?${query.toString()}`, {
+    headers: authHeaders(token),
+  });
+}
+
 export async function catastoBulkSearchAnagrafica(
   token: string,
   payload: CatAnagraficaBulkSearchRequest,

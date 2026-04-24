@@ -4,7 +4,8 @@ import logging
 from datetime import datetime, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user, require_admin_user
@@ -28,6 +29,7 @@ from app.modules.elaborazioni.capacitas.models import (
 )
 from app.modules.elaborazioni.capacitas.session import CapacitasSessionManager
 from app.models.application_user import ApplicationUser
+from app.models.catasto_phase1 import CatCapacitasTerrenoRow, CatConsorzioOccupancy
 from app.services.elaborazioni_capacitas import (
     create_credential,
     delete_credential,
@@ -470,3 +472,63 @@ async def run_terreni_job(
         ) from exc
     finally:
         await manager.close()
+
+
+_RPT_CERTIFICATO_BASE = "https://involture1.servizicapacitas.com/pages/rptCertificato.aspx"
+
+
+@router.get("/involture/link/rpt-certificato")
+async def get_rpt_certificato_link(
+    _: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+    cco: str = Query(..., min_length=1),
+    credential_id: int | None = None,
+) -> dict[str, str]:
+    """Return a direct authenticated URL to rptCertificato.aspx for a given CCO."""
+    cco = cco.strip()
+
+    row = db.execute(
+        select(CatCapacitasTerrenoRow)
+        .where(CatCapacitasTerrenoRow.cco == cco)
+        .where(CatCapacitasTerrenoRow.com.is_not(None))
+        .limit(1)
+    ).scalar_one_or_none()
+
+    if row is None:
+        occ = db.execute(
+            select(CatConsorzioOccupancy)
+            .where(CatConsorzioOccupancy.cco == cco)
+            .where(CatConsorzioOccupancy.com.is_not(None))
+            .limit(1)
+        ).scalar_one_or_none()
+        if occ is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Parametri COM/PVC/FRA non trovati per CCO {cco}. Eseguire prima la sincronizzazione Capacitas.",
+            )
+        com, pvc, fra, ccs = occ.com, occ.pvc, occ.fra, occ.ccs
+    else:
+        com, pvc, fra, ccs = row.com, row.pvc, row.fra, row.ccs
+
+    try:
+        credential, password = pick_credential(db, credential_id)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+
+    manager = CapacitasSessionManager(credential.username, password)
+    try:
+        await manager.login()
+        token = manager.get_token()
+        mark_credential_used(db, credential.id)
+    except Exception as exc:
+        logger.exception("Errore login Capacitas per direct link: cred_id=%d err=%s", credential.id, exc)
+        mark_credential_error(db, credential.id, str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Errore autenticazione Capacitas: {exc}",
+        ) from exc
+    finally:
+        await manager.close()
+
+    params = f"CCO={cco}&COM={com or ''}&PVC={pvc or ''}&FRA={fra or ''}&CCS={ccs or '00000'}&BC=HomRicTer&token={token}&app=involture&tenant="
+    return {"url": f"{_RPT_CERTIFICATO_BASE}?{params}"}

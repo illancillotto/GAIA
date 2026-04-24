@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 
 import type { CatAnagraficaMatch, CatParticellaConsorzio, CatParticellaDetail, CatUtenzaIrrigua, GeoJSONFeature } from "@/types/catasto";
 import { getStoredAccessToken } from "@/lib/auth";
-import { catastoGetParticella, catastoGetParticellaConsorzio, catastoGetParticellaGeojson, catastoGetParticellaUtenze } from "@/lib/api/catasto";
+import { capacitasGetRptCertificatoLink, catastoGetParticella, catastoGetParticellaConsorzio, catastoGetParticellaGeojson, catastoGetParticellaUtenze } from "@/lib/api/catasto";
 
 function formatHaFromMq(value: string | number | null | undefined): string {
   if (value == null) return "—";
@@ -61,6 +61,8 @@ export function ParticellaDetailDialog({
   const [utenze, setUtenze] = useState<CatUtenzaIrrigua[]>([]);
   const [geojson, setGeojson] = useState<GeoJSONFeature | null>(null);
   const [capacitasModalCco, setCapacitasModalCco] = useState<string | null>(null);
+  const [capacitasLinkBusy, setCapacitasLinkBusy] = useState(false);
+  const [capacitasLinkError, setCapacitasLinkError] = useState<string | null>(null);
 
   const reference = useMemo(() => (match ? formatRef(match) : "Particella"), [match]);
   const centroid = useMemo(() => extractLonLat(geojson), [geojson]);
@@ -343,27 +345,52 @@ export function ParticellaDetailDialog({
           role="dialog"
           aria-modal="true"
           onMouseDown={(e) => {
-            if (e.target === e.currentTarget) setCapacitasModalCco(null);
+            if (e.target === e.currentTarget) {
+              setCapacitasModalCco(null);
+              setCapacitasLinkError(null);
+            }
           }}
         >
           <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl">
             <p className="text-sm font-semibold text-gray-900">Visualizza su Capacitas</p>
             <p className="mt-1 text-xs text-gray-500">CCO: {capacitasModalCco}</p>
-            <div className="mt-4 rounded-xl border border-amber-100 bg-amber-50 p-3 text-sm text-amber-800">
-              Effettua prima il login su Capacitas da questo browser, poi clicca il link qui sotto.
-            </div>
+            {capacitasLinkError ? (
+              <div className="mt-4 rounded-xl border border-red-100 bg-red-50 p-3 text-sm text-red-800">
+                {capacitasLinkError}
+              </div>
+            ) : null}
             <div className="mt-4">
-              <a
-                href="https://involture1.servizicapacitas.com/pages/ricercaTerreni.aspx"
-                target="_blank"
-                rel="noreferrer"
-                className="btn-primary block text-center"
+              <button
+                type="button"
+                className="btn-primary w-full"
+                disabled={capacitasLinkBusy}
+                onClick={async () => {
+                  const token = getStoredAccessToken();
+                  if (!token) return;
+                  setCapacitasLinkBusy(true);
+                  setCapacitasLinkError(null);
+                  try {
+                    const { url } = await capacitasGetRptCertificatoLink(token, capacitasModalCco);
+                    window.open(url, "_blank", "noopener,noreferrer");
+                  } catch (e) {
+                    setCapacitasLinkError(e instanceof Error ? e.message : "Errore generazione link Capacitas");
+                  } finally {
+                    setCapacitasLinkBusy(false);
+                  }
+                }}
               >
-                Vai a Capacitas Involture
-              </a>
+                {capacitasLinkBusy ? "Apertura…" : "Apri su Capacitas"}
+              </button>
             </div>
             <div className="mt-3 flex justify-end">
-              <button type="button" className="btn-secondary" onClick={() => setCapacitasModalCco(null)}>
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => {
+                  setCapacitasModalCco(null);
+                  setCapacitasLinkError(null);
+                }}
+              >
                 Chiudi
               </button>
             </div>
