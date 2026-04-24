@@ -185,33 +185,18 @@ async def sync_terreni_batch(
         "linked_units": 0,
         "linked_occupancies": 0,
     }
-    frazione_cache: dict[str, str] = {}
+    frazione_cache: dict[str, list[str]] = {}
 
     for item in request.items:
-        frazione_id = item.frazione_id or await _resolve_batch_frazione_id(client, item.comune, frazione_cache)
-        sync_request = CapacitasTerreniSearchRequest(
-            frazione_id=frazione_id,
-            sezione=item.sezione,
-            foglio=item.foglio,
-            particella=item.particella,
-            sub=item.sub,
-            qualita=item.qualita,
-            caratura=item.caratura,
-            caratura_val=item.caratura_val,
-            in_essere=item.in_essere,
-            in_dom_irr=item.in_dom_irr,
-            limita_risultati=item.limita_risultati,
-            credential_id=item.credential_id if item.credential_id is not None else request.credential_id,
+        frazione_candidates = (
+            [item.frazione_id]
+            if item.frazione_id
+            else await _resolve_batch_frazione_candidates(client, item.comune, frazione_cache)
         )
-        search_key = build_search_key(sync_request)
+        search_key = ""
         try:
-            result = await sync_terreni_for_request(
-                db,
-                client,
-                sync_request,
-                fetch_certificati=item.fetch_certificati if item.fetch_certificati is not None else request.fetch_certificati,
-                fetch_details=item.fetch_details if item.fetch_details is not None else request.fetch_details,
-            )
+            result = await _sync_batch_item_with_candidates(db, client, request, item, frazione_candidates)
+            search_key = result.search_key
             item_results.append(
                 CapacitasTerreniBatchItemResult(
                     label=item.label,
@@ -234,6 +219,23 @@ async def sync_terreni_batch(
             totals["linked_occupancies"] += result.linked_occupancies
         except Exception as exc:
             db.rollback()
+            if not search_key:
+                search_key = build_search_key(
+                    CapacitasTerreniSearchRequest(
+                        frazione_id=frazione_candidates[0] if frazione_candidates else "",
+                        sezione=item.sezione,
+                        foglio=item.foglio,
+                        particella=item.particella,
+                        sub=item.sub,
+                        qualita=item.qualita,
+                        caratura=item.caratura,
+                        caratura_val=item.caratura_val,
+                        in_essere=item.in_essere,
+                        in_dom_irr=item.in_dom_irr,
+                        limita_risultati=item.limita_risultati,
+                        credential_id=item.credential_id if item.credential_id is not None else request.credential_id,
+                    )
+                )
             item_results.append(
                 CapacitasTerreniBatchItemResult(
                     label=item.label,
@@ -272,11 +274,66 @@ def _extract_lookup_suffix(value: str) -> str:
     return value.split("*")[-1].strip()
 
 
-async def _resolve_batch_frazione_id(
+async def _sync_batch_item_with_candidates(
+    db: Session,
+    client: InVoltureClient,
+    batch_request: CapacitasTerreniBatchRequest,
+    item: CapacitasTerreniBatchItem,
+    frazione_candidates: list[str],
+) -> CapacitasTerreniSyncResponse:
+    attempted_errors: list[str] = []
+
+    for frazione_id in frazione_candidates:
+        sync_request = CapacitasTerreniSearchRequest(
+            frazione_id=frazione_id,
+            sezione=item.sezione,
+            foglio=item.foglio,
+            particella=item.particella,
+            sub=item.sub,
+            qualita=item.qualita,
+            caratura=item.caratura,
+            caratura_val=item.caratura_val,
+            in_essere=item.in_essere,
+            in_dom_irr=item.in_dom_irr,
+            limita_risultati=item.limita_risultati,
+            credential_id=item.credential_id if item.credential_id is not None else batch_request.credential_id,
+        )
+        try:
+            return await sync_terreni_for_request(
+                db,
+                client,
+                sync_request,
+                fetch_certificati=item.fetch_certificati if item.fetch_certificati is not None else batch_request.fetch_certificati,
+                fetch_details=item.fetch_details if item.fetch_details is not None else batch_request.fetch_details,
+            )
+        except RuntimeError as exc:
+            db.rollback()
+            message = str(exc)
+            attempted_errors.append(message)
+            if len(frazione_candidates) == 1 or not _is_retryable_missing_result_error(message):
+                raise
+        except Exception:
+            db.rollback()
+            raise
+
+    comune_value = (item.comune or "").strip() or "n/d"
+    raise RuntimeError(
+        f"Particella {item.foglio}/{item.particella}"
+        f"{('/' + item.sub) if item.sub else ''} non trovata in nessuna delle {len(frazione_candidates)} "
+        f"frazioni candidate per comune '{comune_value}'. Ultimo esito: {attempted_errors[-1] if attempted_errors else 'n/d'}"
+    )
+
+
+def _is_retryable_missing_result_error(message: str) -> bool:
+    normalized = message.casefold()
+    return "non trov" in normalized or "nessun" in normalized or "no result" in normalized
+
+
+async def _resolve_batch_frazione_candidates(
     client: InVoltureClient,
     comune: str | None,
-    cache: dict[str, str],
-) -> str:
+    cache: dict[str, list[str]],
+) -> list[str]:
     comune_value = (comune or "").strip()
     if not comune_value:
         raise RuntimeError("Riga batch non valida: serve 'comune' oppure 'frazione_id'.")
@@ -290,20 +347,20 @@ async def _resolve_batch_frazione_id(
     if not options:
         raise RuntimeError(f"Nessuna frazione Capacitas trovata per comune '{comune_value}'.")
     if len(options) == 1:
-        cache[cache_key] = options[0].id
-        return options[0].id
+        cache[cache_key] = [options[0].id]
+        return cache[cache_key]
 
     exact_matches = [option for option in options if _normalize_lookup_label(option.display) == cache_key]
-    if len(exact_matches) == 1:
-        cache[cache_key] = exact_matches[0].id
-        return exact_matches[0].id
+    if exact_matches:
+        cache[cache_key] = [option.id for option in exact_matches]
+        return cache[cache_key]
 
     suffix_matches = [
         option for option in options if _normalize_lookup_label(_extract_lookup_suffix(option.display)) == cache_key
     ]
-    if len(suffix_matches) == 1:
-        cache[cache_key] = suffix_matches[0].id
-        return suffix_matches[0].id
+    if suffix_matches:
+        cache[cache_key] = [option.id for option in suffix_matches]
+        return cache[cache_key]
 
     raise RuntimeError(
         f"Comune '{comune_value}' ambiguo in Capacitas: trovate {len(options)} frazioni. Usa un nome piu specifico oppure risolvi prima il lookup manuale."

@@ -67,7 +67,8 @@ Implementato:
   - avvio job Terreni in background
   - tab `Massiva da file` con import `.xlsx/.csv` locale e creazione job batch
   - template scaricabile `Excel` / `CSV` con colonne umane `comune, sezione, foglio, particella, sub`
-  - risoluzione backend `comune -> frazione_id Capacitas` durante il batch, con errore esplicito se il comune e ambiguo
+  - risoluzione backend `comune -> frazione_id Capacitas` durante il batch
+  - se un comune ha piu frazioni candidate con match sul nome (`Arborea`, `Santa Giusta`, ecc.), il batch prova i candidati in sequenza e usa quello che restituisce davvero la particella
   - flag globali di avvio job per `fetch_certificati` e `fetch_details`, non piu richiesti per ogni riga file
   - monitor job con refresh, rerun manuale ed eliminazione dei job terminati
 
