@@ -279,6 +279,7 @@ Campi chiave:
 Regola:
 
 - il dato Capacitas degli intestatari non deve essere scritto direttamente dentro `ana_persons`
+- il primo scrape valido di un soggetto costituisce la baseline iniziale del profilo noto in GAIA, cioe l'"anno zero" da cui parte la storicizzazione
 - prima viene salvato lo snapshot grezzo/normalizzato dell'intestatario
 - poi, se esiste un match anagrafico su `codice_fiscale` o sul soggetto Capacitas gia noto, viene valorizzato `subject_id`
 - quando il match aggiorna `ana_persons`, il cambiamento deve produrre uno snapshot in `ana_person_snapshots`

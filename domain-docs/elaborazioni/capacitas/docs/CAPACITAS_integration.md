@@ -292,6 +292,7 @@ Persistenza consigliata:
 - usare snapshot storicizzati, non semplice overwrite
 - per gli intestatari proprietari rilevati in Capacitas usare una tabella dedicata `cat_capacitas_intestatari`, separata dall'anagrafica GAIA
 - il link verso `ana_subjects` deve essere opzionale e derivare da match su `codice_fiscale` o fallback `source_external_id=IDXANA`
+- il primo scrape valido costituisce la baseline iniziale del profilo in GAIA; gli scrape successivi aggiornano `ana_persons` solo dopo aver scritto uno snapshot in `ana_person_snapshots` quando i dati cambiano
 
 ## TODO successivi
 
