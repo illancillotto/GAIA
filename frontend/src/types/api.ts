@@ -1146,8 +1146,12 @@ export type CapacitasTerreniSearchResult = {
   rows: CapacitasTerrenoRow[];
 };
 
-export type CapacitasTerreniBatchItemInput = CapacitasTerreniSearchInput & {
+export type CapacitasTerreniBatchItemInput = Omit<CapacitasTerreniSearchInput, "frazione_id"> & {
   label?: string | null;
+  comune?: string | null;
+  frazione_id?: string;
+  foglio: string;
+  particella: string;
   fetch_certificati?: boolean;
   fetch_details?: boolean;
 };
@@ -1156,6 +1160,8 @@ export type CapacitasTerreniJobCreateInput = {
   items: CapacitasTerreniBatchItemInput[];
   continue_on_error?: boolean;
   credential_id?: number | null;
+  fetch_certificati?: boolean;
+  fetch_details?: boolean;
 };
 
 export type CapacitasTerreniBatchItemResult = {

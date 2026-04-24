@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
+import re
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -184,10 +185,23 @@ async def sync_terreni_batch(
         "linked_units": 0,
         "linked_occupancies": 0,
     }
+    frazione_cache: dict[str, str] = {}
 
     for item in request.items:
-        sync_request = item.model_copy(
-            update={"credential_id": item.credential_id if item.credential_id is not None else request.credential_id}
+        frazione_id = item.frazione_id or await _resolve_batch_frazione_id(client, item.comune, frazione_cache)
+        sync_request = CapacitasTerreniSearchRequest(
+            frazione_id=frazione_id,
+            sezione=item.sezione,
+            foglio=item.foglio,
+            particella=item.particella,
+            sub=item.sub,
+            qualita=item.qualita,
+            caratura=item.caratura,
+            caratura_val=item.caratura_val,
+            in_essere=item.in_essere,
+            in_dom_irr=item.in_dom_irr,
+            limita_risultati=item.limita_risultati,
+            credential_id=item.credential_id if item.credential_id is not None else request.credential_id,
         )
         search_key = build_search_key(sync_request)
         try:
@@ -195,8 +209,8 @@ async def sync_terreni_batch(
                 db,
                 client,
                 sync_request,
-                fetch_certificati=sync_request.fetch_certificati,
-                fetch_details=sync_request.fetch_details,
+                fetch_certificati=item.fetch_certificati if item.fetch_certificati is not None else request.fetch_certificati,
+                fetch_details=item.fetch_details if item.fetch_details is not None else request.fetch_details,
             )
             item_results.append(
                 CapacitasTerreniBatchItemResult(
@@ -245,6 +259,54 @@ def build_search_key(request: CapacitasTerreniSearchRequest) -> str:
             request.particella.strip(),
             request.sub.strip(),
         ]
+    )
+
+
+def _normalize_lookup_label(value: str) -> str:
+    return re.sub(r"\s+", " ", value.strip()).casefold()
+
+
+def _extract_lookup_suffix(value: str) -> str:
+    if "*" not in value:
+        return value
+    return value.split("*")[-1].strip()
+
+
+async def _resolve_batch_frazione_id(
+    client: InVoltureClient,
+    comune: str | None,
+    cache: dict[str, str],
+) -> str:
+    comune_value = (comune or "").strip()
+    if not comune_value:
+        raise RuntimeError("Riga batch non valida: serve 'comune' oppure 'frazione_id'.")
+
+    cache_key = _normalize_lookup_label(comune_value)
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    options = await client.search_frazioni(comune_value)
+    if not options:
+        raise RuntimeError(f"Nessuna frazione Capacitas trovata per comune '{comune_value}'.")
+    if len(options) == 1:
+        cache[cache_key] = options[0].id
+        return options[0].id
+
+    exact_matches = [option for option in options if _normalize_lookup_label(option.display) == cache_key]
+    if len(exact_matches) == 1:
+        cache[cache_key] = exact_matches[0].id
+        return exact_matches[0].id
+
+    suffix_matches = [
+        option for option in options if _normalize_lookup_label(_extract_lookup_suffix(option.display)) == cache_key
+    ]
+    if len(suffix_matches) == 1:
+        cache[cache_key] = suffix_matches[0].id
+        return suffix_matches[0].id
+
+    raise RuntimeError(
+        f"Comune '{comune_value}' ambiguo in Capacitas: trovate {len(options)} frazioni. Usa un nome piu specifico oppure risolvi prima il lookup manuale."
     )
 
 

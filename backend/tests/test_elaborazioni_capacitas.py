@@ -832,6 +832,89 @@ def test_capacitas_terreni_sync_batch_returns_item_results(monkeypatch: pytest.M
     assert payload["items"][1]["ok"] is False
 
 
+def test_capacitas_terreni_sync_batch_resolves_comune_and_applies_global_flags(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    create_response = client.post(
+        "/elaborazioni/capacitas/credentials",
+        headers=auth_headers(),
+        json={"label": "Terreni Batch Comune", "username": "capacitas-user", "password": "capacitas-secret"},
+    )
+    credential_id = create_response.json()["id"]
+
+    async def fake_login(self):
+        from app.modules.elaborazioni.capacitas.session import CapacitasSession
+
+        self._session = CapacitasSession(token="123e4567-e89b-12d3-a456-426614174000")
+        return self._session
+
+    async def fake_activate_app(self, app_name: str) -> None:
+        return None
+
+    async def fake_close(self) -> None:
+        return None
+
+    async def fake_search_frazioni(self, query: str) -> list[CapacitasLookupOption]:
+        assert query == "Uras"
+        return [CapacitasLookupOption(id="38", display="URAS")]
+
+    async def fake_search_terreni(self, request) -> CapacitasTerreniSearchResult:
+        assert request.frazione_id == "38"
+        return CapacitasTerreniSearchResult(
+            total=1,
+            rows=[
+                {
+                    "ID": "batch-row-umanizzato-1",
+                    "PVC": "097",
+                    "COM": "289",
+                    "CCO": "0A1103877",
+                    "FRA": "38",
+                    "CCS": "00000",
+                    "Foglio": "1",
+                    "Partic": "680",
+                    "Anno": "2026",
+                    "Belfiore": "L496",
+                    "Ta_ext": " 9",
+                }
+            ],
+        )
+
+    async def fail_fetch_certificato(self, **kwargs):
+        raise AssertionError("fetch_certificato non deve essere invocato quando fetch_certificati=false")
+
+    async def fail_fetch_detail(self, **kwargs):
+        raise AssertionError("fetch_terreno_detail non deve essere invocato quando fetch_details=false")
+
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.login", fake_login)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.activate_app", fake_activate_app)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.close", fake_close)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.search_frazioni", fake_search_frazioni)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.search_terreni", fake_search_terreni)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.fetch_certificato", fail_fetch_certificato)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.fetch_terreno_detail", fail_fetch_detail)
+
+    response = client.post(
+        "/elaborazioni/capacitas/involture/terreni/sync-batch",
+        headers=auth_headers(),
+        json={
+            "credential_id": credential_id,
+            "continue_on_error": True,
+            "fetch_certificati": False,
+            "fetch_details": False,
+            "items": [{"comune": "Uras", "foglio": "1", "particella": "680"}],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["processed_items"] == 1
+    assert payload["failed_items"] == 0
+    assert payload["imported_rows"] == 1
+    assert payload["imported_certificati"] == 0
+    assert payload["imported_details"] == 0
+    assert payload["items"][0]["ok"] is True
+
+
 def test_capacitas_terreni_sync_resolves_arborea_terralba_swap_to_real_comune(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -154,14 +154,31 @@ class CapacitasTerreniSyncResponse(BaseModel):
     search_key: str
 
 
-class CapacitasTerreniBatchItem(CapacitasTerreniSyncRequest):
+class CapacitasTerreniBatchItem(BaseModel):
     label: str | None = None
+    comune: str | None = None
+    frazione_id: str | None = None
+    sezione: str = ""
+    foglio: str = Field(min_length=1)
+    particella: str = Field(min_length=1)
+    sub: str = ""
+    qualita: str = ""
+    caratura: str = ""
+    caratura_val: str = ""
+    in_essere: bool = False
+    in_dom_irr: bool = False
+    limita_risultati: bool = False
+    credential_id: int | None = None
+    fetch_certificati: bool | None = None
+    fetch_details: bool | None = None
 
 
 class CapacitasTerreniBatchRequest(BaseModel):
     items: list[CapacitasTerreniBatchItem] = Field(min_length=1)
     continue_on_error: bool = True
     credential_id: int | None = None
+    fetch_certificati: bool = True
+    fetch_details: bool = True
 
 
 class CapacitasTerreniBatchItemResult(BaseModel):

@@ -65,6 +65,10 @@ Implementato:
   - lookup guidato `frazioni -> sezioni -> fogli`
   - preview risultati Terreni
   - avvio job Terreni in background
+  - tab `Massiva da file` con import `.xlsx/.csv` locale e creazione job batch
+  - template scaricabile `Excel` / `CSV` con colonne umane `comune, sezione, foglio, particella, sub`
+  - risoluzione backend `comune -> frazione_id Capacitas` durante il batch, con errore esplicito se il comune e ambiguo
+  - flag globali di avvio job per `fetch_certificati` e `fetch_details`, non piu richiesti per ogni riga file
   - monitor job con refresh e rerun manuale
 
 Limitazioni deliberate di questo step:
