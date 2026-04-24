@@ -229,13 +229,11 @@ Note:
 
 ### Fase 4 anagrafica
 
-- `GET /catasto/anagrafica/search`
-- `POST /catasto/anagrafica/bulk-search`
+- `POST /catasto/elaborazioni-massive/particelle`
 
 Note:
 
-- la ricerca singola parte da `comune`, `foglio`, `particella`
-- la ricerca massiva accetta file `.xlsx` o `.csv` lato frontend e normalizza il payload verso il backend
+- la funzionalità è solo in modalità massiva: accetta file `.xlsx` o `.csv` lato frontend e normalizza il payload verso il backend
 - il match restituisce dati catastali, entrambe le superfici (`superficie_mq` catastale e `superficie_grafica_mq` GIS), ultima utenza, intestatari disponibili e top anomalie
 - la vista risultati anagrafica espone anche `CCO` e `denominazione` dell'ultima utenza quando disponibili
 - il filtro per nome comune usa l'anagrafica canonica `cat_comuni` come fallback applicativo e non dipende solo dal campo denormalizzato `cat_particelle.nome_comune`

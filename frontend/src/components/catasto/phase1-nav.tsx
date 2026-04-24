@@ -10,7 +10,7 @@ const links: { href: string; label: string; match?: "exact" | "prefix" }[] = [
   { href: "/catasto/distretti", label: "Distretti", match: "prefix" },
   { href: "/catasto/particelle", label: "Particelle", match: "prefix" },
   { href: "/catasto/anomalie", label: "Anomalie", match: "prefix" },
-  { href: "/catasto/ricerca-anagrafica", label: "Ricerca anagrafica", match: "prefix" },
+  { href: "/catasto/elaborazioni-massive", label: "Elaborazione massiva", match: "prefix" },
   { href: "/catasto/import", label: "Import", match: "prefix" },
 ];
 

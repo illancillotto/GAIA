@@ -67,7 +67,7 @@ test("layout includes app shell, sidebar and topbar", () => {
   assert.match(moduleSidebar, /Sincronizzazione/);
   assert.match(moduleSidebar, /Review NAS/);
   assert.match(moduleSidebar, /Capacitas/);
-  assert.match(moduleSidebar, /Ricerca anagrafica/);
+  assert.match(moduleSidebar, /Elaborazione massiva/);
   assert.match(topbar, /StatusPill/);
   assert.match(statusPill, /Backend connesso/);
 });
@@ -93,9 +93,7 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   const distrettiPage = read("src/app/catasto/distretti/page.tsx");
   const particelleDetailPage = read("src/app/catasto/particelle/[id]/page.tsx");
   const anomaliePage = read("src/app/catasto/anomalie/page.tsx");
-  const anagraficaPage = read("src/app/catasto/ricerca-anagrafica/page.tsx");
-  const anagraficaSingleForm = read("src/components/catasto/anagrafica/AnagraficaSingleSearchForm.tsx");
-  const anagraficaResultPanel = read("src/components/catasto/anagrafica/AnagraficaResultPanel.tsx");
+  const anagraficaPage = read("src/app/catasto/elaborazioni-massive/page.tsx");
   const anagraficaBulkPanel = read("src/components/catasto/anagrafica/AnagraficaBulkPanel.tsx");
 
   assert.match(dashboardPage, /GAIA Catasto/);
@@ -148,11 +146,8 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   assert.match(distrettiPage, /catastoGetDistrettoKpi/);
   assert.match(anomaliePage, /catastoUpdateAnomalia/);
   assert.match(anomaliePage, /requiredRoles=\{\["admin", "super_admin"\]\}/);
-  assert.match(anagraficaPage, /Ricerca anagrafica/);
-  assert.match(anagraficaPage, /catastoSearchAnagrafica/);
+  assert.match(anagraficaPage, /Elaborazione massiva/);
   assert.match(anagraficaPage, /AnagraficaBulkPanel/);
-  assert.match(anagraficaSingleForm, /Comune \(codice Capacitas o nome\)/);
-  assert.match(anagraficaResultPanel, /Codice Capacitas/);
   assert.match(anagraficaBulkPanel, /catastoBulkSearchAnagrafica/);
   assert.match(particelleDetailPage, /catastoGetParticellaUtenze/);
   assert.match(particelleDetailPage, /catastoGetParticellaAnomalie/);

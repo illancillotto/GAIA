@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Literal
 from uuid import UUID
 
-from fastapi import APIRouter, Body, Depends, Query
+from fastapi import APIRouter, Body, Depends
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
@@ -16,12 +16,11 @@ from app.schemas.catasto_phase1 import (
     CatAnagraficaBulkSearchResponse,
     CatAnagraficaBulkSearchRowResult,
     CatAnagraficaMatch,
-    CatAnagraficaSearchResponse,
     CatAnagraficaUtenzaSummary,
     CatIntestatarioResponse,
 )
 
-router = APIRouter(prefix="/catasto/anagrafica", tags=["catasto-anagrafica"])
+router = APIRouter(prefix="/catasto/elaborazioni-massive/particelle", tags=["catasto-elaborazioni-massive"])
 
 
 def _norm_str(value: str | None) -> str | None:
@@ -125,43 +124,7 @@ def _build_match(db: Session, p: CatParticella) -> CatAnagraficaMatch:
     )
 
 
-@router.get("/search", response_model=CatAnagraficaSearchResponse)
-def search_anagrafica(
-    foglio: str = Query(..., min_length=1),
-    particella: str = Query(..., min_length=1),
-    comune: str | None = Query(None, description="Codice comune Capacitas oppure nome comune (case-insensitive)."),
-    db: Session = Depends(get_db),
-    _: ApplicationUser = Depends(require_active_user),
-) -> CatAnagraficaSearchResponse:
-    comune_norm = _norm_str(comune)
-    foglio_norm = _norm_str(foglio) or ""
-    particella_norm = _norm_str(particella) or ""
-
-    query = (
-        select(CatParticella)
-        .outerjoin(CatComune, CatComune.id == CatParticella.comune_id)
-        .where(
-            CatParticella.is_current.is_(True),
-            CatParticella.foglio == foglio_norm,
-            CatParticella.particella == particella_norm,
-        )
-        .order_by(CatParticella.cod_comune_capacitas, CatParticella.foglio, CatParticella.particella)
-    )
-
-    if comune_norm:
-        if _looks_like_int(comune_norm):
-            query = query.where(CatParticella.cod_comune_capacitas == int(comune_norm))
-        else:
-            query = query.where(
-                func.lower(func.coalesce(CatParticella.nome_comune, CatComune.nome_comune, "")) == comune_norm.lower()
-            )
-
-    items = db.execute(query.limit(50)).scalars().all()
-    matches = [_build_match(db, p) for p in items]
-    return CatAnagraficaSearchResponse(matches=matches)
-
-
-@router.post("/bulk-search", response_model=CatAnagraficaBulkSearchResponse)
+@router.post("", response_model=CatAnagraficaBulkSearchResponse)
 def bulk_search_anagrafica(
     payload: CatAnagraficaBulkSearchRequest = Body(...),
     db: Session = Depends(get_db),

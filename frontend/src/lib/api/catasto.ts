@@ -4,7 +4,6 @@ import type {
   CatAnomalia,
   CatAnagraficaBulkSearchRequest,
   CatAnagraficaBulkSearchResponse,
-  CatAnagraficaSearchResponse,
   CatDistretto,
   CatDistrettoKpi,
   CatImportBatch,
@@ -239,19 +238,6 @@ export async function catastoListSchemi(token: string): Promise<CatSchemaContrib
   });
 }
 
-export async function catastoSearchAnagrafica(
-  token: string,
-  params: { comune?: string; foglio: string; particella: string },
-): Promise<CatAnagraficaSearchResponse> {
-  const query = new URLSearchParams();
-  if (params.comune) query.set("comune", params.comune);
-  query.set("foglio", params.foglio);
-  query.set("particella", params.particella);
-  return request<CatAnagraficaSearchResponse>(`/catasto/anagrafica/search?${query.toString()}`, {
-    headers: authHeaders(token),
-  });
-}
-
 export async function capacitasGetRptCertificatoLink(token: string, cco: string): Promise<{ url: string }> {
   const query = new URLSearchParams({ cco });
   return request<{ url: string }>(`/elaborazioni/capacitas/involture/link/rpt-certificato?${query.toString()}`, {
@@ -263,7 +249,7 @@ export async function catastoBulkSearchAnagrafica(
   token: string,
   payload: CatAnagraficaBulkSearchRequest,
 ): Promise<CatAnagraficaBulkSearchResponse> {
-  return request<CatAnagraficaBulkSearchResponse>("/catasto/anagrafica/bulk-search", {
+  return request<CatAnagraficaBulkSearchResponse>("/catasto/elaborazioni-massive/particelle", {
     method: "POST",
     headers: { ...authHeaders(token), "Content-Type": "application/json" },
     body: JSON.stringify(payload),

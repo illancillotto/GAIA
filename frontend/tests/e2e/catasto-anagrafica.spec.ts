@@ -12,137 +12,13 @@ async function loginAsAdmin(page: Page) {
 }
 
 test("admin executes catasto anagrafica single search", async ({ page }) => {
-  await loginAsAdmin(page);
-
-  await page.route("**/api/catasto/anagrafica/search**", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        matches: [
-          {
-            particella_id: "00000000-0000-0000-0000-000000000501",
-            comune_id: "00000000-0000-0000-0000-000000000601",
-            comune: "Arborea",
-            cod_comune_capacitas: 165,
-            codice_catastale: "A357",
-            foglio: "5",
-            particella: "120",
-            subalterno: "1",
-            num_distretto: "10",
-            nome_distretto: "Distretto 10",
-            superficie_mq: "1000.00",
-            utenza_latest: {
-              id: "00000000-0000-0000-0000-000000000701",
-              cco: "UT-SEED-001",
-              anno_campagna: 2025,
-              stato: "importata",
-              num_distretto: 10,
-              nome_distretto: "Distretto 10",
-              sup_irrigabile_mq: "900.00",
-              denominazione: "Fenu Denise",
-              codice_fiscale: "DNIFSE64C01L122Y",
-              ha_anomalie: false,
-            },
-            intestatari: [
-              {
-                id: "00000000-0000-0000-0000-000000000801",
-                codice_fiscale: "DNIFSE64C01L122Y",
-                denominazione: "Fenu Denise",
-                tipo: "PF",
-                cognome: "Fenu",
-                nome: "Denise",
-                data_nascita: null,
-                luogo_nascita: null,
-                ragione_sociale: null,
-                source: "capacitas",
-                last_verified_at: null,
-                deceduto: null,
-              },
-            ],
-            anomalie_count: 1,
-            anomalie_top: [{ tipo: "VAL-06-imponibile", count: 1 }],
-          },
-        ],
-      }),
-    });
-  });
-
-  await page.route("**/api/catasto/particelle/00000000-0000-0000-0000-000000000501", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        comune_id: "00000000-0000-0000-0000-000000000601",
-        id: "00000000-0000-0000-0000-000000000501",
-        national_code: null,
-        cod_comune_capacitas: 165,
-        codice_catastale: "A357",
-        nome_comune: "Arborea",
-        sezione_catastale: null,
-        foglio: "5",
-        particella: "120",
-        subalterno: "1",
-        cfm: null,
-        superficie_mq: "1000.00",
-        num_distretto: "10",
-        nome_distretto: "Distretto 10",
-        source_type: "shapefile",
-        valid_from: "2026-01-01",
-        valid_to: null,
-        is_current: true,
-        suppressed: false,
-        created_at: "2026-01-01T00:00:00Z",
-        updated_at: "2026-01-01T00:00:00Z",
-        fuori_distretto: false,
-      }),
-    });
-  });
-
-  await page.route("**/api/catasto/particelle/00000000-0000-0000-0000-000000000501/utenze", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify([]),
-    });
-  });
-
-  await page.route("**/api/catasto/particelle/00000000-0000-0000-0000-000000000501/geojson", async (route) => {
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({
-        type: "Feature",
-        geometry: { type: "Polygon", coordinates: [] },
-        properties: { geometry_type: "ST_Polygon", centroid: { type: "Point", coordinates: [8.0, 39.0] } },
-      }),
-    });
-  });
-
-  await page.goto("/catasto/ricerca-anagrafica");
-  await expect(page.getByRole("heading", { name: "Ricerca anagrafica" }).first()).toBeVisible();
-
-  await page.getByLabel("Comune (codice Capacitas o nome)").fill("165");
-  await page.getByLabel("Foglio *").fill("5");
-  await page.getByLabel("Particella *").fill("120");
-  await page.getByRole("button", { name: "Cerca", exact: true }).click();
-
-  await expect(page.getByText("Codice Capacitas:")).toBeVisible();
-  await expect(page.getByText("Fenu Denise", { exact: true })).toBeVisible();
-  await expect(page.getByText("ID utenza:")).toBeVisible();
-  await expect(page.getByRole("link", { name: "Apri particella" })).toBeVisible();
-
-  await page.getByRole("button", { name: "Dettagli" }).click();
-  await expect(page.getByRole("dialog", { name: /Dettaglio Fg\.5 Part\.120 Sub\.1/ })).toBeVisible();
-  await expect(page.getByRole("link", { name: "Visualizza su mappa" })).toBeVisible();
-  await page.getByRole("button", { name: "Chiudi" }).click();
-  await expect(page.getByRole("dialog", { name: /Dettaglio Fg\.5 Part\.120 Sub\.1/ })).toBeHidden();
+  test.skip(true, "La ricerca singola è stata rimossa: resta solo l’elaborazione massiva.");
 });
 
 test("admin executes catasto anagrafica bulk search", async ({ page }) => {
   await loginAsAdmin(page);
 
-  await page.route("**/api/catasto/anagrafica/bulk-search", async (route) => {
+  await page.route("**/api/catasto/elaborazioni-massive/particelle", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -202,8 +78,7 @@ test("admin executes catasto anagrafica bulk search", async ({ page }) => {
     });
   });
 
-  await page.goto("/catasto/ricerca-anagrafica");
-  await page.getByRole("button", { name: "Elaborazione massiva" }).click();
+  await page.goto("/catasto/elaborazioni-massive");
 
   await page.getByLabel("File ricerca anagrafica").setInputFiles({
     name: "anagrafica.csv",

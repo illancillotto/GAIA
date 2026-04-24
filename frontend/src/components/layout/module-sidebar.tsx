@@ -85,7 +85,12 @@ export function ModuleSidebar({
         <NavItem href="/catasto/distretti" icon={SearchIcon} label="Distretti" match="prefix" />
         <NavItem href="/catasto/particelle" icon={FolderIcon} label="Particelle" match="prefix" />
         <NavItem href="/catasto/anomalie" icon={AlertTriangleIcon} label="Anomalie" match="prefix" />
-        <NavItem href="/catasto/ricerca-anagrafica" icon={UserIcon} label="Ricerca anagrafica" match="prefix" />
+        <NavItem
+          href="/catasto/elaborazioni-massive"
+          icon={UserIcon}
+          label="Elaborazioni massiva"
+          match="prefix"
+        />
         <NavItem href="/catasto/import" icon={RefreshIcon} label="Import" match="prefix" />
 
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Legacy</p>
