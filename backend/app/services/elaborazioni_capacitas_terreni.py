@@ -268,10 +268,36 @@ def _normalize_lookup_label(value: str) -> str:
     return re.sub(r"\s+", " ", value.strip()).casefold()
 
 
+def _strip_numeric_prefix(value: str) -> str:
+    """Strip leading numeric code like '03 ' or '11 ' from Capacitas display labels."""
+    return re.sub(r"^\d+\s+", "", value).strip()
+
+
+def _extract_lookup_comune(value: str) -> str:
+    """Return the comune (right-hand) part of a Capacitas label.
+
+    For 'NN FRAZIONE*COMUNE' returns 'COMUNE'; for 'NN NOME' (no asterisk)
+    returns 'NOME' after stripping the numeric prefix.
+    """
+    if "*" in value:
+        return value.split("*")[-1].strip()
+    return _strip_numeric_prefix(value)
+
+
+def _extract_lookup_frazione(value: str) -> str:
+    """Return the frazione (left-hand) part of a Capacitas label.
+
+    For 'NN FRAZIONE*COMUNE' returns 'FRAZIONE' (numeric prefix stripped);
+    for 'NN NOME' (no asterisk) returns 'NOME' after stripping the prefix.
+    """
+    if "*" in value:
+        return _strip_numeric_prefix(value.split("*")[0])
+    return _strip_numeric_prefix(value)
+
+
 def _extract_lookup_suffix(value: str) -> str:
-    if "*" not in value:
-        return value
-    return value.split("*")[-1].strip()
+    """Legacy alias kept for call-sites; delegates to _extract_lookup_comune."""
+    return _extract_lookup_comune(value)
 
 
 async def _sync_batch_item_with_candidates(
@@ -355,11 +381,22 @@ async def _resolve_batch_frazione_candidates(
         cache[cache_key] = [option.id for option in exact_matches]
         return cache[cache_key]
 
-    suffix_matches = [
-        option for option in options if _normalize_lookup_label(_extract_lookup_suffix(option.display)) == cache_key
+    # Match on the comune part (right of *, or label minus numeric prefix).
+    # Handles "03 CABRAS" (no *) and "11 ORISTANO*ORISTANO" alike.
+    comune_matches = [
+        option for option in options if _normalize_lookup_label(_extract_lookup_comune(option.display)) == cache_key
     ]
-    if suffix_matches:
-        cache[cache_key] = [option.id for option in suffix_matches]
+    if comune_matches:
+        cache[cache_key] = [option.id for option in comune_matches]
+        return cache[cache_key]
+
+    # Fallback: match on the frazione part (left of *, or label minus numeric prefix).
+    # Covers the reverse lookup when the user inputs a frazione name rather than the comune.
+    frazione_matches = [
+        option for option in options if _normalize_lookup_label(_extract_lookup_frazione(option.display)) == cache_key
+    ]
+    if frazione_matches:
+        cache[cache_key] = [option.id for option in frazione_matches]
         return cache[cache_key]
 
     raise RuntimeError(

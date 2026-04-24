@@ -1188,6 +1188,170 @@ def test_capacitas_terreni_sync_batch_tries_duplicate_comune_matches_in_sequence
     assert attempted_frazioni == ["14", "35"]
 
 
+def test_capacitas_terreni_sync_batch_matches_comune_without_asterisk(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """'03 CABRAS' (no asterisk) must match the query 'Cabras' via the comune part."""
+    create_response = client.post(
+        "/elaborazioni/capacitas/credentials",
+        headers=auth_headers(),
+        json={"label": "Terreni Cabras", "username": "capacitas-user", "password": "capacitas-secret"},
+    )
+    credential_id = create_response.json()["id"]
+
+    async def fake_login(self):
+        from app.modules.elaborazioni.capacitas.session import CapacitasSession
+
+        self._session = CapacitasSession(token="123e4567-e89b-12d3-a456-426614174000")
+        return self._session
+
+    async def fake_activate_app(self, app_name: str) -> None:
+        return None
+
+    async def fake_close(self) -> None:
+        return None
+
+    async def fake_search_frazioni(self, query: str) -> list[CapacitasLookupOption]:
+        assert query == "Cabras"
+        return [
+            CapacitasLookupOption(id="03", display="03 CABRAS"),
+            CapacitasLookupOption(id="20", display="20 SOLANAS*CABRAS"),
+        ]
+
+    attempted_frazioni: list[str] = []
+
+    async def fake_search_terreni(self, request) -> CapacitasTerreniSearchResult:
+        attempted_frazioni.append(request.frazione_id)
+        if request.frazione_id != "03":
+            raise RuntimeError("Particella non trovata")
+        return CapacitasTerreniSearchResult(
+            total=1,
+            rows=[
+                {
+                    "ID": "cabras-row-1",
+                    "PVC": "097",
+                    "COM": "050",
+                    "CCO": "0A1103877",
+                    "FRA": "03",
+                    "CCS": "00000",
+                    "Foglio": "5",
+                    "Partic": "200",
+                    "Anno": "2026",
+                    "Belfiore": "B354",
+                    "Ta_ext": " 9",
+                }
+            ],
+        )
+
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.login", fake_login)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.activate_app", fake_activate_app)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.close", fake_close)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.search_frazioni", fake_search_frazioni)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.search_terreni", fake_search_terreni)
+
+    response = client.post(
+        "/elaborazioni/capacitas/involture/terreni/sync-batch",
+        headers=auth_headers(),
+        json={
+            "credential_id": credential_id,
+            "continue_on_error": True,
+            "fetch_certificati": False,
+            "fetch_details": False,
+            "items": [{"comune": "Cabras", "foglio": "5", "particella": "200"}],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["processed_items"] == 1
+    assert payload["failed_items"] == 0
+    assert payload["items"][0]["ok"] is True
+    assert "03" in attempted_frazioni
+
+
+def test_capacitas_terreni_sync_batch_matches_oristano_city_among_frazioni(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """With multiple frazioni all sharing '*ORISTANO', the city record '11 ORISTANO*ORISTANO' must be tried."""
+    create_response = client.post(
+        "/elaborazioni/capacitas/credentials",
+        headers=auth_headers(),
+        json={"label": "Terreni Oristano", "username": "capacitas-user", "password": "capacitas-secret"},
+    )
+    credential_id = create_response.json()["id"]
+
+    async def fake_login(self):
+        from app.modules.elaborazioni.capacitas.session import CapacitasSession
+
+        self._session = CapacitasSession(token="123e4567-e89b-12d3-a456-426614174000")
+        return self._session
+
+    async def fake_activate_app(self, app_name: str) -> None:
+        return None
+
+    async def fake_close(self) -> None:
+        return None
+
+    async def fake_search_frazioni(self, query: str) -> list[CapacitasLookupOption]:
+        assert query == "Oristano"
+        return [
+            CapacitasLookupOption(id="04", display="04 DONIGALA FENUGHEDU*ORISTANO"),
+            CapacitasLookupOption(id="09", display="09 NURAXINIEDDU*ORISTANO"),
+            CapacitasLookupOption(id="11", display="11 ORISTANO*ORISTANO"),
+            CapacitasLookupOption(id="18", display="18 SILI'*ORISTANO"),
+        ]
+
+    attempted_frazioni: list[str] = []
+
+    async def fake_search_terreni(self, request) -> CapacitasTerreniSearchResult:
+        attempted_frazioni.append(request.frazione_id)
+        if request.frazione_id != "11":
+            raise RuntimeError("Particella non trovata")
+        return CapacitasTerreniSearchResult(
+            total=1,
+            rows=[
+                {
+                    "ID": "oristano-row-1",
+                    "PVC": "097",
+                    "COM": "170",
+                    "CCO": "0A1103877",
+                    "FRA": "11",
+                    "CCS": "00000",
+                    "Foglio": "3",
+                    "Partic": "500",
+                    "Anno": "2026",
+                    "Belfiore": "G113",
+                    "Ta_ext": " 9",
+                }
+            ],
+        )
+
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.login", fake_login)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.activate_app", fake_activate_app)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.close", fake_close)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.search_frazioni", fake_search_frazioni)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.search_terreni", fake_search_terreni)
+
+    response = client.post(
+        "/elaborazioni/capacitas/involture/terreni/sync-batch",
+        headers=auth_headers(),
+        json={
+            "credential_id": credential_id,
+            "continue_on_error": True,
+            "fetch_certificati": False,
+            "fetch_details": False,
+            "items": [{"comune": "Oristano", "foglio": "3", "particella": "500"}],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["processed_items"] == 1
+    assert payload["failed_items"] == 0
+    assert payload["items"][0]["ok"] is True
+    assert "11" in attempted_frazioni
+
+
 def test_capacitas_terreni_sync_resolves_arborea_terralba_swap_to_real_comune(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
