@@ -17,6 +17,7 @@ from app.modules.elaborazioni.capacitas.models import (
 from app.modules.elaborazioni.capacitas.session import CapacitasSessionManager
 from app.modules.elaborazioni.capacitas.apps.involture.parsers import (
     parse_certificato_html,
+    parse_lookup_option_rows,
     parse_lookup_options,
     parse_terreni_search_result,
     parse_terreno_detail_html,
@@ -177,7 +178,23 @@ class InVoltureClient:
             headers={**_AJAX_HEADERS, "Referer": f"{RICERCA_TERRENI_URL}?token={token}&app=involture&tenant="},
         )
         response.raise_for_status()
-        return parse_lookup_options(response.text)
+        try:
+            decoded = decode_response(response.text.strip())
+            if isinstance(decoded, list):
+                return parse_lookup_option_rows(decoded)
+            if isinstance(decoded, dict):
+                rows = decoded.get("rows", decoded.get("Rows", []))
+                if isinstance(rows, list):
+                    return parse_lookup_option_rows(rows)
+            if isinstance(decoded, str):
+                return parse_lookup_options(decoded)
+            raise ValueError(f"lookup payload type inatteso: {type(decoded).__name__}")
+        except Exception as exc:
+            snippet = " ".join(response.text.strip().split())[:240]
+            raise RuntimeError(
+                f"Capacitas lookup fallito su {url}: payload non riconosciuto. "
+                f"final_url={response.url} snippet={snippet}"
+            ) from exc
 
 
 def _parse_search_result(data: dict | list | str) -> CapacitasSearchResult:

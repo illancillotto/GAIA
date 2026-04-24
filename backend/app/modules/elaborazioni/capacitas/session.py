@@ -8,19 +8,23 @@ import json
 import logging
 from pathlib import Path
 import re
+from urllib.parse import quote, unquote_plus
 from uuid import uuid4
 
 import httpx
 
 from app.core.config import settings
 from app.modules.elaborazioni.capacitas.apps import get_app_hosts, get_capacitas_app
+from app.modules.elaborazioni.capacitas.decoder import decode_response
 
 logger = logging.getLogger(__name__)
 
 SSO_BASE = "https://sso.servizicapacitas.com"
 LOGIN_URL = f"{SSO_BASE}/pages/login.aspx"
+SSO_TILES_URL = f"{SSO_BASE}/pages/ajax/ajaxTiles.aspx"
 KEEP_ALIVE_PATH = "/pages/handler/handlerKeepSessionAlive.ashx"
 KEEP_ALIVE_INTERVAL = 25
+SSO_MAIN_URL_TEMPLATE = f"{SSO_BASE}/pages/main.aspx?token={{token}}&app=&tenant="
 
 APP_HOSTS = get_app_hosts()
 
@@ -28,7 +32,7 @@ APP_HOSTS = get_app_hosts()
 @dataclass
 class CapacitasSession:
     token: str
-    app_cookies: dict[str, dict] = field(default_factory=dict)
+    app_cookies: dict[str, list[dict[str, str]]] = field(default_factory=dict)
     authenticated_at: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
     last_keepalive: dict[str, datetime] = field(default_factory=dict)
 
@@ -67,8 +71,9 @@ class CapacitasSessionManager:
             },
         )
 
-        logger.info("Capacitas login: GET %s", LOGIN_URL)
-        response = await self._http.get(LOGIN_URL)
+        login_url = self._build_login_url()
+        logger.info("Capacitas login: GET %s", login_url)
+        response = await self._http.get(login_url)
         response.raise_for_status()
         self._last_login_page = response.text
 
@@ -77,7 +82,7 @@ class CapacitasSessionManager:
             raise RuntimeError("Capacitas login: __VIEWSTATE non trovato nella pagina di login")
         logger.info("Capacitas login: POST credenziali per %s", self.username)
         response = await self._http.post(
-            LOGIN_URL,
+            login_url,
             data=form_data,
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
@@ -107,15 +112,95 @@ class CapacitasSessionManager:
             raise RuntimeError("Sessione non inizializzata. Chiamare login() prima.")
 
         app_config = get_capacitas_app(app)
-        url = app_config.main_url(self._session.token)
+        url = await self._resolve_app_launch_url(app_config.key)
         logger.info("Capacitas activate_app: GET %s", url)
         response = await self._http.get(url)
         response.raise_for_status()
 
-        cookies = dict(self._http.cookies)
-        if app_config.auth_cookie_name not in cookies:
+        final_url = str(response.url)
+        if "/pages/errore.aspx" in final_url:
+            raise RuntimeError(
+                "Capacitas activate_app fallito: il portale ha rediretto su errore.aspx "
+                f"per app={app_config.key}. URL finale={final_url}"
+            )
+
+        cookies = self._snapshot_cookies()
+        if not any(cookie["name"] == app_config.auth_cookie_name for cookie in cookies):
             logger.warning("Cookie %s non impostato dopo activate_app", app_config.auth_cookie_name)
         self._session.app_cookies[app_config.key] = cookies
+
+    def _build_login_url(self) -> str:
+        cod_cons = (settings.capacitas_cod_cons or "").strip()
+        if not cod_cons:
+            return LOGIN_URL
+        return f"{LOGIN_URL}?op=&codCons={quote(cod_cons, safe='')}&app=&tenant="
+
+    async def _resolve_app_launch_url(self, app: str) -> str:
+        if self._session is None or self._http is None:
+            raise RuntimeError("Sessione non inizializzata. Chiamare login() prima.")
+
+        app_config = get_capacitas_app(app)
+        response = await self._http.post(
+            SSO_TILES_URL,
+            data={"op": "tiles", "key": quote("root", safe="")},
+            headers={
+                "Accept": "*/*",
+                "X-Requested-With": "XMLHttpRequest",
+                "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8",
+                "Referer": SSO_MAIN_URL_TEMPLATE.format(token=self._session.token),
+            },
+        )
+        response.raise_for_status()
+
+        try:
+            tiles_payload = decode_response(response.text)
+        except Exception as exc:
+            logger.warning("Capacitas activate_app: decode tile root fallito per app=%s err=%s", app_config.key, exc)
+            return app_config.main_url(self._session.token)
+
+        if not isinstance(tiles_payload, list):
+            logger.warning(
+                "Capacitas activate_app: payload tiles inatteso per app=%s type=%s",
+                app_config.key,
+                type(tiles_payload).__name__,
+            )
+            return app_config.main_url(self._session.token)
+
+        launch = self._match_app_launch_url(tiles_payload, app_config)
+        return launch or app_config.main_url(self._session.token)
+
+    def _match_app_launch_url(self, tiles_payload: list[object], app_config) -> str | None:
+        normalized_targets = {app_config.key, *app_config.aliases, app_config.display_name.lower()}
+        for item in tiles_payload:
+            if not isinstance(item, dict):
+                continue
+            tile_payload = item.get("tile")
+            if not isinstance(tile_payload, str) or not tile_payload.strip():
+                continue
+
+            tile_html = unquote_plus(tile_payload)
+            tile_app = self._extract_tile_attr(tile_html, "app").lower()
+            tile_descr = self._extract_tile_attr(tile_html, "descriz").lower()
+            tile_url = unquote_plus(self._extract_tile_attr(tile_html, "url"))
+            tile_cod_cons = self._extract_tile_attr(tile_html, "codcons")
+            tile_id_run = self._extract_tile_attr(tile_html, "idrun")
+
+            if tile_app not in normalized_targets and tile_descr not in normalized_targets:
+                continue
+            if not tile_url or not tile_id_run:
+                continue
+
+            return (
+                f"{tile_url}?token={self._session.token}"
+                f"&codConsApp={quote(tile_cod_cons, safe='')}"
+                f"&idRun={quote(tile_id_run, safe='')}"
+            )
+        return None
+
+    @staticmethod
+    def _extract_tile_attr(tile_html: str, attr_name: str) -> str:
+        match = re.search(rf"data-{re.escape(attr_name)}='([^']*)'", tile_html, re.IGNORECASE)
+        return html.unescape(match.group(1)) if match else ""
 
     async def start_keepalive(self, app: str) -> None:
         app_config = get_capacitas_app(app)
@@ -301,6 +386,7 @@ class CapacitasSessionManager:
             metadata = {
                 "username": self.username,
                 "login_url": LOGIN_URL,
+                "login_request_url": self._build_login_url(),
                 "final_url": str(response.url),
                 "history_urls": [str(item.url) for item in response.history],
                 "status_code": response.status_code,
@@ -328,6 +414,19 @@ class CapacitasSessionManager:
             return ""
         names = sorted({cookie.name for cookie in self._http.cookies.jar})
         return ",".join(names[:12])
+
+    def _snapshot_cookies(self) -> list[dict[str, str]]:
+        if self._http is None:
+            return []
+        return [
+            {
+                "name": cookie.name,
+                "domain": cookie.domain,
+                "path": cookie.path,
+                "value_preview": cookie.value[:80],
+            }
+            for cookie in self._http.cookies.jar
+        ]
 
     @staticmethod
     def _extract_html_title(html_text: str) -> str:

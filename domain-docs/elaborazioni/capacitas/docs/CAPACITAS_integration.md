@@ -69,7 +69,7 @@ Implementato:
   - template scaricabile `Excel` / `CSV` con colonne umane `comune, sezione, foglio, particella, sub`
   - risoluzione backend `comune -> frazione_id Capacitas` durante il batch, con errore esplicito se il comune e ambiguo
   - flag globali di avvio job per `fetch_certificati` e `fetch_details`, non piu richiesti per ogni riga file
-  - monitor job con refresh e rerun manuale
+  - monitor job con refresh, rerun manuale ed eliminazione dei job terminati
 
 Limitazioni deliberate di questo step:
 
@@ -124,15 +124,20 @@ Ricerca effettuata: CF `PRCLSN82R27B354B` (tipo=2), risultato atteso: 2 righe (P
 ## Flusso SSO — riepilogo
 
 ```
-GET  sso.servizicapacitas.com/pages/login.aspx
+GET  sso.servizicapacitas.com/pages/login.aspx?op=&codCons=<CODCONS>&app=&tenant=
   → estrai __VIEWSTATE, __EVENTVALIDATION
 
-POST sso.servizicapacitas.com/pages/login.aspx
+POST sso.servizicapacitas.com/pages/login.aspx?op=&codCons=<CODCONS>&app=&tenant=
   body: username + password + viewstate
   → redirect a /pages/main.aspx?token=<UUID>
 
-GET  involture1.servizicapacitas.com/pages/main.aspx?token=<UUID>&app=involture&tenant=
-  → imposta cookie involture__AUTH_COOKIE
+POST sso.servizicapacitas.com/pages/ajax/ajaxTiles.aspx
+  body: op=tiles&key=root
+  → restituisce le tile SSO con data-url, data-codcons, data-idrun
+
+GET  <tile.data-url>?token=<UUID>&codConsApp=<tile.data-codcons>&idRun=<tile.data-idrun>
+  → redirect a involture1/.../pages/main.aspx?token=<UUID>&app=involture&tenant=
+  → imposta cookie/sessione validi per l'app
 
 POST involture1.servizicapacitas.com/pages/ajax/ajaxRicerca.aspx
   body: q=<CF_urlenc>&tipo=ricanag&soloConBeni=false&opz=2
@@ -145,17 +150,19 @@ POST */pages/handler/handlerKeepSessionAlive.ashx  ogni 25s
 Nota implementativa:
 
 - l'attivazione di un'app non usa piu host hardcoded in `session.py`
-- `CapacitasSessionManager.activate_app()` risolve la configurazione tramite registry
+- `CapacitasSessionManager.activate_app()` risolve la configurazione tramite registry e tile SSO
+- per `inVOLTURE` il launch corretto parte da `login.aspx?token=...&codConsApp=...&idRun=...`, non da `main.aspx?...&app=involture`
 - alias applicativi come `visure` o `invisure` vengono normalizzati alla chiave canonica `involture`
 
 ## Flusso Terreni da supportare
 
 Sequenza osservata dai file HTML di riferimento:
 
-1. login SSO su `https://sso.servizicapacitas.com/pages/login.aspx?...`
+1. login SSO su `https://sso.servizicapacitas.com/pages/login.aspx?op=&codCons=...&app=&tenant=`
 2. redirect su `main.aspx?token=...`
-3. attivazione app `involture`
-4. apertura:
+3. lookup tile SSO `involture` via `ajaxTiles.aspx`
+4. attivazione app su `login.aspx?token=...&codConsApp=...&idRun=...`
+5. apertura:
    - `https://involture1.servizicapacitas.com/pages/ricerche.aspx?...`
    - `https://involture1.servizicapacitas.com/pages/ricercaTerreni.aspx?...`
 5. ricerca per:

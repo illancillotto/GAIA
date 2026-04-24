@@ -395,6 +395,11 @@ def get_terreni_sync_job(db: Session, job_id: int) -> CapacitasTerreniSyncJob | 
     return db.get(CapacitasTerreniSyncJob, job_id)
 
 
+def delete_terreni_sync_job(db: Session, job: CapacitasTerreniSyncJob) -> None:
+    db.delete(job)
+    db.commit()
+
+
 def serialize_terreni_sync_job(job: CapacitasTerreniSyncJob) -> CapacitasTerreniJobOut:
     return CapacitasTerreniJobOut.model_validate(job)
 

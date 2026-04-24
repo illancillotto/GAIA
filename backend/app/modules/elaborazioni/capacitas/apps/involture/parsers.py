@@ -18,9 +18,15 @@ from app.modules.elaborazioni.capacitas.models import (
 
 
 def parse_lookup_options(payload: str) -> list[CapacitasLookupOption]:
-    rows = _parse_jsish_payload(payload)
+    rows = _parse_jsish_payload(payload, context="lookup_options")
+    return parse_lookup_option_rows(rows)
+
+
+def parse_lookup_option_rows(rows: list[object]) -> list[CapacitasLookupOption]:
     options: list[CapacitasLookupOption] = []
     for row in rows:
+        if not isinstance(row, dict):
+            continue
         item_id = str(row.get("ID", "")).strip()
         display = clean_html_text(unquote(str(row.get("Display", "")).replace("+", " ")))
         if not item_id or not display:
@@ -30,7 +36,7 @@ def parse_lookup_options(payload: str) -> list[CapacitasLookupOption]:
 
 
 def parse_terreni_search_result(payload: str) -> CapacitasTerreniSearchResult:
-    rows_raw = _parse_jsish_payload(payload)
+    rows_raw = _parse_jsish_payload(payload, context="terreni_search_result")
     rows = [_normalize_terreno_row(row) for row in rows_raw]
     return CapacitasTerreniSearchResult(total=len(rows), rows=rows)
 
@@ -148,11 +154,15 @@ def _derive_row_visual_state(value: str | None) -> str | None:
     return "current_black"
 
 
-def _parse_jsish_payload(payload: str) -> list[dict]:
+def _parse_jsish_payload(payload: str, context: str = "payload") -> list[dict]:
     cleaned = payload.strip().lstrip("\ufeff")
     if not cleaned:
         return []
-    parsed = json5.loads(cleaned)
+    try:
+        parsed = json5.loads(cleaned)
+    except Exception as exc:
+        snippet = clean_html_text(cleaned)[:240]
+        raise ValueError(f"Capacitas parser error ({context}): payload inatteso: {snippet}") from exc
     if isinstance(parsed, dict):
         return [parsed]
     return [row for row in parsed if isinstance(row, dict)]
@@ -164,7 +174,7 @@ def _extract_load_data_grid_rows(html: str) -> list[dict]:
         return []
     encoded = match.group(1)[1:-1]
     decoded = encoded.encode("utf-8").decode("unicode_escape")
-    return _parse_jsish_payload(decoded)
+    return _parse_jsish_payload(decoded, context="detail_grid")
 
 
 def _extract_optional(value: str, pattern: str) -> str | None:

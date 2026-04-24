@@ -41,6 +41,7 @@ from app.services.elaborazioni_capacitas import (
 )
 from app.services.elaborazioni_capacitas_terreni import (
     create_terreni_sync_job,
+    delete_terreni_sync_job,
     get_terreni_sync_job,
     list_terreni_sync_jobs,
     run_terreni_sync_job,
@@ -418,6 +419,23 @@ def get_terreni_job(
     if job is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job non trovato")
     return serialize_terreni_sync_job(job)
+
+
+@router.delete("/involture/terreni/jobs/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_terreni_job(
+    job_id: int,
+    _: Annotated[ApplicationUser, Depends(require_admin_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> None:
+    job = get_terreni_sync_job(db, job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job non trovato")
+    if job.status not in {"succeeded", "completed_with_errors", "failed"}:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Il job puo essere eliminato solo quando e terminato",
+        )
+    delete_terreni_sync_job(db, job)
 
 
 @router.post("/involture/terreni/jobs/{job_id}/run", response_model=CapacitasTerreniJobOut)

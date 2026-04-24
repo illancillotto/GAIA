@@ -38,6 +38,10 @@ class Settings(BaseSettings):
         default="/data/elaborazioni/capacitas-debug",
         alias="CAPACITAS_DEBUG_STORAGE_PATH",
     )
+    capacitas_cod_cons: str = Field(
+        default="090",
+        alias="CAPACITAS_COD_CONS",
+    )
     bonifica_oristanese_debug_storage_path: str = Field(
         default="/data/elaborazioni/bonifica-oristanese-debug",
         alias="BONIFICA_ORISTANESE_DEBUG_STORAGE_PATH",

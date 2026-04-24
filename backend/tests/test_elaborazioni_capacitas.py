@@ -260,6 +260,91 @@ def test_capacitas_session_builds_login_form_data_from_real_markup() -> None:
     assert form_data["ctl00$ContentMain$txtGAUerInput"] == ""
 
 
+@pytest.mark.anyio
+async def test_capacitas_activate_app_uses_sso_tile_launch_and_handles_duplicate_cookie_names(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import httpx
+
+    from app.modules.elaborazioni.capacitas.session import CapacitasSession, CapacitasSessionManager
+
+    requests: list[httpx.Request] = []
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.url.path == "/pages/ajax/ajaxTiles.aspx":
+            return httpx.Response(200, text="ignored")
+        return httpx.Response(
+            200,
+            headers=[
+                ("set-cookie", "ASP.NET_SessionId=abc; Domain=sso.servizicapacitas.com; Path=/"),
+                ("set-cookie", "ASP.NET_SessionId=def; Domain=involture1.servizicapacitas.com; Path=/"),
+                ("set-cookie", "involture__AUTH_COOKIE=123e4567-e89b-12d3-a456-426614174000|tenant; Domain=sso.servizicapacitas.com; Path=/"),
+            ],
+            text="ok",
+        )
+
+    transport = httpx.MockTransport(handler)
+    manager = CapacitasSessionManager("PORCUAL", "secret")
+    manager._http = httpx.AsyncClient(transport=transport)
+    manager._session = CapacitasSession(token="123e4567-e89b-12d3-a456-426614174000")
+    monkeypatch.setattr(
+        "app.modules.elaborazioni.capacitas.session.decode_response",
+        lambda payload: [
+            {
+                "tile": (
+                    "%3cspan+class%3d%27tile%27+data-idrun%3d%27run-123%27+data-codcons%3d%27090%27+"
+                    "data-url%3d%27https%253a%252f%252finvolture1.servizicapacitas.com%252fpages%252flogin.aspx%27+"
+                    "data-descriz%3d%27inVOLTURE%27+data-app%3d%27involture%27%3e%3c%2fspan%3e"
+                )
+            }
+        ],
+    )
+
+    await manager.activate_app("involture")
+
+    cookies = manager._session.app_cookies["involture"]
+    assert len(cookies) >= 1
+    assert any(cookie["name"] == "ASP.NET_SessionId" for cookie in cookies)
+    assert len(requests) == 2
+    assert requests[0].url.path == "/pages/ajax/ajaxTiles.aspx"
+    assert requests[1].url.path == "/pages/login.aspx"
+    assert requests[1].url.params["codConsApp"] == "090"
+    assert requests[1].url.params["idRun"] == "run-123"
+    assert requests[1].url.params["token"] == "123e4567-e89b-12d3-a456-426614174000"
+
+    await manager.close()
+
+
+@pytest.mark.anyio
+async def test_involture_lookup_decodes_sz_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    import httpx
+
+    from app.modules.elaborazioni.capacitas.apps.involture.client import InVoltureClient
+    from app.modules.elaborazioni.capacitas.session import CapacitasSessionManager
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text="SZignored")
+
+    transport = httpx.MockTransport(handler)
+    manager = CapacitasSessionManager("PORCUAL", "secret")
+    manager._http = httpx.AsyncClient(transport=transport)
+    manager._session = type("SessionStub", (), {"token": "123e4567-e89b-12d3-a456-426614174000"})()
+    monkeypatch.setattr(
+        "app.modules.elaborazioni.capacitas.apps.involture.client.decode_response",
+        lambda payload: [{"ID": "38", "Display": "URAS"}],
+    )
+
+    client_api = InVoltureClient(manager)
+    rows = await client_api.search_frazioni("uras")
+
+    assert len(rows) == 1
+    assert rows[0].id == "38"
+    assert rows[0].display == "URAS"
+
+    await manager.close()
+
+
 def test_capacitas_terreni_parsers_extract_rows_certificato_and_detail() -> None:
     from app.modules.elaborazioni.capacitas.apps.involture.parsers import (
         parse_certificato_html,
@@ -1162,6 +1247,56 @@ def test_capacitas_terreni_job_create_rejects_inactive_credential() -> None:
 
     assert response.status_code == 503
     assert "non attiva" in response.json()["detail"]
+
+
+def test_capacitas_terreni_job_delete_removes_terminal_job() -> None:
+    db = TestingSessionLocal()
+    try:
+        job = CapacitasTerreniSyncJob(
+            requested_by_user_id=1,
+            credential_id=None,
+            status="succeeded",
+            mode="batch",
+            payload_json={"items": [{"comune": "Uras", "foglio": "1", "particella": "680"}]},
+            result_json={"processed_items": 1},
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+        job_id = job.id
+    finally:
+        db.close()
+
+    response = client.delete(f"/elaborazioni/capacitas/involture/terreni/jobs/{job_id}", headers=auth_headers())
+    assert response.status_code == 204
+
+    db = TestingSessionLocal()
+    try:
+        assert db.get(CapacitasTerreniSyncJob, job_id) is None
+    finally:
+        db.close()
+
+
+def test_capacitas_terreni_job_delete_rejects_processing_job() -> None:
+    db = TestingSessionLocal()
+    try:
+        job = CapacitasTerreniSyncJob(
+            requested_by_user_id=1,
+            credential_id=None,
+            status="processing",
+            mode="batch",
+            payload_json={"items": [{"comune": "Uras", "foglio": "1", "particella": "680"}]},
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+        job_id = job.id
+    finally:
+        db.close()
+
+    response = client.delete(f"/elaborazioni/capacitas/involture/terreni/jobs/{job_id}", headers=auth_headers())
+    assert response.status_code == 409
+    assert "terminato" in response.json()["detail"]
 
 
 def test_capacitas_credential_test_returns_diagnostic_detail_on_login_failure(

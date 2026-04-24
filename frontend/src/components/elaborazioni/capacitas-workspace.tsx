@@ -15,6 +15,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { DocumentIcon, LockIcon, RefreshIcon, SearchIcon, ServerIcon, UsersIcon } from "@/components/ui/icons";
 import {
   createCapacitasTerreniJob,
+  deleteCapacitasTerreniJob,
   getCapacitasFogli,
   getCapacitasSezioni,
   listCapacitasCredentials,
@@ -255,6 +256,7 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
   const [terreniSearching, setTerreniSearching] = useState(false);
   const [terreniJobsLoading, setTerreniJobsLoading] = useState(false);
   const [terreniJobBusyId, setTerreniJobBusyId] = useState<number | null>(null);
+  const [terreniDeletingJobId, setTerreniDeletingJobId] = useState<number | null>(null);
   const [terreniCreatingJob, setTerreniCreatingJob] = useState(false);
   const [terreniError, setTerreniError] = useState<string | null>(null);
   const [terreniStatusMessage, setTerreniStatusMessage] = useState<string | null>(null);
@@ -515,6 +517,23 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
       setTerreniError(rerunError instanceof Error ? rerunError.message : "Errore rerun job Terreni");
     } finally {
       setTerreniJobBusyId(null);
+    }
+  }
+
+  async function handleDeleteJob(jobId: number): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) return;
+
+    setTerreniDeletingJobId(jobId);
+    try {
+      await deleteCapacitasTerreniJob(token, jobId);
+      setTerreniStatusMessage(`Job #${jobId} eliminato.`);
+      setTerreniError(null);
+      setTerreniJobs((current) => current.filter((job) => job.id !== jobId));
+    } catch (deleteError) {
+      setTerreniError(deleteError instanceof Error ? deleteError.message : "Errore eliminazione job Terreni");
+    } finally {
+      setTerreniDeletingJobId(null);
     }
   }
 
@@ -1160,6 +1179,7 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
                       <th>Label</th>
                       <th>Comune</th>
                       <th>Sezione</th>
+                      <th>Foglio</th>
                       <th>Particella</th>
                       <th>Sub</th>
                     </tr>
@@ -1170,9 +1190,8 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
                         <td className="font-medium text-gray-900">{item.label ?? "—"}</td>
                         <td>{item.comune ?? "—"}</td>
                         <td>{item.sezione || "—"}</td>
-                        <td>
-                          {item.foglio}/{item.particella}
-                        </td>
+                        <td>{item.foglio}</td>
+                        <td>{item.particella}</td>
                         <td>{item.sub || "—"}</td>
                       </tr>
                     ))}
@@ -1258,6 +1277,14 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
                           <div className="flex flex-wrap items-center gap-2">
                             <button className="btn-secondary" disabled={terreniJobBusyId === job.id} onClick={() => void handleRerunJob(job.id)} type="button">
                               {terreniJobBusyId === job.id ? "Rerun..." : "Rilancia"}
+                            </button>
+                            <button
+                              className="btn-secondary"
+                              disabled={terreniDeletingJobId === job.id || job.status === "pending" || job.status === "processing"}
+                              onClick={() => void handleDeleteJob(job.id)}
+                              type="button"
+                            >
+                              {terreniDeletingJobId === job.id ? "Elimina..." : "Elimina"}
                             </button>
                           </div>
                         </td>

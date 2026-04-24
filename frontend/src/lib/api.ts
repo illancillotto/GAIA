@@ -1479,6 +1479,15 @@ export async function rerunCapacitasTerreniJob(token: string, jobId: number): Pr
   });
 }
 
+export async function deleteCapacitasTerreniJob(token: string, jobId: number): Promise<void> {
+  await request<null>(`/elaborazioni/capacitas/involture/terreni/jobs/${jobId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
 export async function getCatastoComuni(token: string, search?: string): Promise<CatastoComune[]> {
   const query = createQueryString({ search });
   return request<CatastoComune[]>(`/catasto/comuni${query}`, {
