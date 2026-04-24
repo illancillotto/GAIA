@@ -122,7 +122,8 @@ class InVoltureClient:
             headers={**_AJAX_HEADERS, "Referer": f"{RICERCA_TERRENI_URL}?token={token}&app=involture&tenant="},
         )
         response.raise_for_status()
-        return parse_terreni_search_result(response.text)
+        decoded = decode_response(response.text.strip())
+        return parse_terreni_search_result(decoded)
 
     async def fetch_certificato(
         self,

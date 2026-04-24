@@ -84,6 +84,8 @@ export type CatParticella = {
   suppressed: boolean;
   created_at: string;
   updated_at: string;
+  utenza_cf: string | null;
+  utenza_denominazione: string | null;
 };
 
 export type CatParticellaDetail = CatParticella & {

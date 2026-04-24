@@ -1,7 +1,8 @@
 "use client";
 
 import * as XLSX from "xlsx";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { ProtectedPage } from "@/components/app/protected-page";
 import {
@@ -32,6 +33,7 @@ import type {
   CapacitasLookupOption,
   CapacitasSearchResult,
   CapacitasTerreniBatchItemInput,
+  CapacitasTerreniBatchItemResult,
   CapacitasTerreniJob,
   CapacitasTerreniSearchResult,
   CapacitasTerrenoRow,
@@ -86,6 +88,134 @@ function renderJobStatus(status: string): { label: string; className: string } {
     default:
       return { label: "In attesa", className: "bg-slate-50 text-slate-700 ring-slate-200" };
   }
+}
+
+function TerreniJobCompletionModal({
+  job,
+  onClose,
+  onShowErrors,
+}: {
+  job: CapacitasTerreniJob;
+  onClose: () => void;
+  onShowErrors: (job: CapacitasTerreniJob) => void;
+}) {
+  const result = isTerreniBatchResult(job.result_json) ? job.result_json : null;
+  const tone = renderJobStatus(job.status);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/35 px-4">
+      <div className="w-full max-w-lg rounded-3xl bg-white shadow-2xl">
+        <div className="px-6 pt-6">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-gray-400">Job #{job.id} completato</p>
+              <h3 className="mt-1 text-lg font-semibold text-gray-900">Report elaborazione Terreni</h3>
+            </div>
+            <button
+              aria-label="Chiudi"
+              className="mt-0.5 rounded-full p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+              onClick={onClose}
+              type="button"
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                <path d="M6 18L18 6M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </button>
+          </div>
+
+          <div className="mt-4 flex items-center gap-3">
+            <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${tone.className}`}>
+              {tone.label}
+            </span>
+            <span className="text-xs text-gray-400">
+              {formatDateTime(job.started_at)} → {formatDateTime(job.completed_at)}
+            </span>
+          </div>
+        </div>
+
+        {result ? (
+          <div className="mt-5 grid grid-cols-2 gap-px bg-gray-100 border-t border-gray-100">
+            {(
+              [
+                ["Item processati", result.processed_items],
+                ["Righe importate", result.imported_rows],
+                ["Unità linkate", result.linked_units],
+                ["Occupazioni linkate", result.linked_occupancies],
+                ["Certificati importati", result.imported_certificati],
+                ["Dettagli importati", result.imported_details],
+              ] as [string, number][]
+            ).map(([label, value]) => (
+              <div className="bg-white px-6 py-3" key={label}>
+                <p className="text-xs text-gray-500">{label}</p>
+                <p className="mt-0.5 text-xl font-semibold text-gray-900">{value}</p>
+              </div>
+            ))}
+          </div>
+        ) : job.error_detail ? (
+          <div className="mt-4 px-6 pb-2 text-sm text-rose-700">{job.error_detail}</div>
+        ) : null}
+
+        <div className="flex flex-wrap items-center justify-end gap-2 border-t border-gray-100 px-6 py-4">
+          {result && result.failed_items > 0 ? (
+            <button className="btn-secondary text-amber-700" onClick={() => onShowErrors(job)} type="button">
+              Vedi {result.failed_items} errori
+            </button>
+          ) : null}
+          <button className="btn-primary" onClick={onClose} type="button">
+            Chiudi
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TerreniJobErrorsModal({ job, onClose }: { job: CapacitasTerreniJob; onClose: () => void }) {
+  const result = isTerreniBatchResult(job.result_json) ? job.result_json : null;
+  const failedItems = result ? result.items.filter((item) => !item.ok) : [];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-gray-950/35 px-4 py-12">
+      <div className="w-full max-w-2xl rounded-3xl bg-white shadow-2xl">
+        <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-gray-400">Job #{job.id}</p>
+            <h3 className="mt-0.5 text-lg font-semibold text-gray-900">
+              {failedItems.length} item con errore
+            </h3>
+          </div>
+          <button
+            aria-label="Chiudi"
+            className="rounded-full p-1.5 text-gray-400 transition hover:bg-gray-100 hover:text-gray-700"
+            onClick={onClose}
+            type="button"
+          >
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+              <path d="M6 18L18 6M6 6l12 12" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
+        </div>
+        <div className="divide-y divide-gray-100 px-6 py-2 max-h-[60vh] overflow-y-auto">
+          {failedItems.length === 0 ? (
+            <p className="py-4 text-sm text-gray-500">Nessun errore da mostrare.</p>
+          ) : (
+            failedItems.map((item, i) => (
+              <div className="py-3" key={i}>
+                <div className="font-medium text-sm text-gray-900">{item.label ?? item.search_key}</div>
+                {item.label ? <div className="text-xs text-gray-400 mb-1">{item.search_key}</div> : null}
+                <div className="text-sm text-rose-700">{item.error ?? "Errore sconosciuto"}</div>
+              </div>
+            ))
+          )}
+        </div>
+        <div className="flex justify-end border-t border-gray-100 px-6 py-4">
+          <button className="btn-secondary" onClick={onClose} type="button">
+            Chiudi
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function triggerDownload(blob: Blob, filename: string): void {
@@ -220,6 +350,10 @@ function isTerreniBatchResult(value: unknown): value is {
   failed_items: number;
   imported_rows: number;
   linked_units: number;
+  linked_occupancies: number;
+  imported_certificati: number;
+  imported_details: number;
+  items: CapacitasTerreniBatchItemResult[];
 } {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return false;
@@ -233,6 +367,7 @@ function isTerreniBatchResult(value: unknown): value is {
 }
 
 export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?: boolean }) {
+  const searchParams = useSearchParams();
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [credentials, setCredentials] = useState<CapacitasCredential[]>([]);
   const [results, setResults] = useState<CapacitasSearchResult | null>(null);
@@ -257,6 +392,9 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
   const [terreniJobsLoading, setTerreniJobsLoading] = useState(false);
   const [terreniJobBusyId, setTerreniJobBusyId] = useState<number | null>(null);
   const [terreniDeletingJobId, setTerreniDeletingJobId] = useState<number | null>(null);
+  const [terreniJobErrorsModal, setTerreniJobErrorsModal] = useState<CapacitasTerreniJob | null>(null);
+  const [terreniCompletedJobModal, setTerreniCompletedJobModal] = useState<CapacitasTerreniJob | null>(null);
+  const inFlightJobIds = useRef<Set<number>>(new Set());
   const [terreniCreatingJob, setTerreniCreatingJob] = useState(false);
   const [terreniError, setTerreniError] = useState<string | null>(null);
   const [terreniStatusMessage, setTerreniStatusMessage] = useState<string | null>(null);
@@ -296,6 +434,17 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
     void loadCredentials();
     void loadTerreniJobs();
   }, []);
+
+  useEffect(() => {
+    const q = searchParams.get("q");
+    const tipo = searchParams.get("tipo");
+    if (!q) return;
+    setFormState((s) => ({
+      ...s,
+      q,
+      tipo_ricerca: tipo !== null && /^\d+$/.test(tipo) ? Number(tipo) : s.tipo_ricerca,
+    }));
+  }, [searchParams]);
 
   useEffect(() => {
     if (!jobsInFlight) return undefined;
@@ -341,6 +490,22 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
     }
     try {
       const nextJobs = await listCapacitasTerreniJobs(token);
+      const prevInFlight = inFlightJobIds.current;
+      const terminalStatuses = new Set(["succeeded", "completed_with_errors", "failed"]);
+
+      if (silent && prevInFlight.size > 0) {
+        const justCompleted = nextJobs.find(
+          (j) => prevInFlight.has(j.id) && terminalStatuses.has(j.status),
+        );
+        if (justCompleted) {
+          setTerreniCompletedJobModal(justCompleted);
+        }
+      }
+
+      inFlightJobIds.current = new Set(
+        nextJobs.filter((j) => j.status === "pending" || j.status === "processing").map((j) => j.id),
+      );
+
       setTerreniJobs(nextJobs);
       if (!silent) {
         setTerreniError(null);
@@ -1275,6 +1440,16 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
                         </td>
                         <td>
                           <div className="flex flex-wrap items-center gap-2">
+                            {result ? (
+                              <button className="btn-secondary" onClick={() => setTerreniCompletedJobModal(job)} type="button">
+                                Dettagli
+                              </button>
+                            ) : null}
+                            {result && result.failed_items > 0 ? (
+                              <button className="btn-secondary text-amber-700" onClick={() => setTerreniJobErrorsModal(job)} type="button">
+                                Errori
+                              </button>
+                            ) : null}
                             <button className="btn-secondary" disabled={terreniJobBusyId === job.id} onClick={() => void handleRerunJob(job.id)} type="button">
                               {terreniJobBusyId === job.id ? "Rerun..." : "Rilancia"}
                             </button>
@@ -1304,6 +1479,19 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
         open={settingsModalOpen}
         title="Credenziali"
       />
+      {terreniJobErrorsModal ? (
+        <TerreniJobErrorsModal job={terreniJobErrorsModal} onClose={() => setTerreniJobErrorsModal(null)} />
+      ) : null}
+      {terreniCompletedJobModal ? (
+        <TerreniJobCompletionModal
+          job={terreniCompletedJobModal}
+          onClose={() => setTerreniCompletedJobModal(null)}
+          onShowErrors={(job) => {
+            setTerreniCompletedJobModal(null);
+            setTerreniJobErrorsModal(job);
+          }}
+        />
+      ) : null}
     </>
   );
 

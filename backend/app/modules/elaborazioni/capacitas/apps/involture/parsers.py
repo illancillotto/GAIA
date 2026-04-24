@@ -35,8 +35,13 @@ def parse_lookup_option_rows(rows: list[object]) -> list[CapacitasLookupOption]:
     return options
 
 
-def parse_terreni_search_result(payload: str) -> CapacitasTerreniSearchResult:
-    rows_raw = _parse_jsish_payload(payload, context="terreni_search_result")
+def parse_terreni_search_result(payload: str | list | dict) -> CapacitasTerreniSearchResult:
+    if isinstance(payload, list):
+        rows_raw = [row for row in payload if isinstance(row, dict)]
+    elif isinstance(payload, dict):
+        rows_raw = [payload]
+    else:
+        rows_raw = _parse_jsish_payload(payload, context="terreni_search_result")
     rows = [_normalize_terreno_row(row) for row in rows_raw]
     return CapacitasTerreniSearchResult(total=len(rows), rows=rows)
 

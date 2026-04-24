@@ -60,6 +60,7 @@ export function ParticellaDetailDialog({
   const [consorzio, setConsorzio] = useState<CatParticellaConsorzio | null>(null);
   const [utenze, setUtenze] = useState<CatUtenzaIrrigua[]>([]);
   const [geojson, setGeojson] = useState<GeoJSONFeature | null>(null);
+  const [capacitasModalCco, setCapacitasModalCco] = useState<string | null>(null);
 
   const reference = useMemo(() => (match ? formatRef(match) : "Particella"), [match]);
   const centroid = useMemo(() => extractLonLat(geojson), [geojson]);
@@ -295,6 +296,7 @@ export function ParticellaDetailDialog({
                     <th className="pr-4">CF</th>
                     <th className="pr-4">Denominazione</th>
                     <th className="pr-4">Sup. irrigabile</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -305,6 +307,21 @@ export function ParticellaDetailDialog({
                       <td className="py-1 pr-4 text-sm text-gray-700">{u.codice_fiscale ?? "—"}</td>
                       <td className="py-1 pr-4 text-sm text-gray-700">{u.denominazione ?? "—"}</td>
                       <td className="py-1 pr-4 text-sm text-gray-700">{formatHaFromMq(u.sup_irrigabile_mq)}</td>
+                      <td className="py-1 text-sm">
+                        {u.cco ? (
+                          <button
+                            type="button"
+                            className="flex items-center gap-1 text-xs font-medium text-[#1D4E35] hover:underline"
+                            onClick={() => setCapacitasModalCco(u.cco!)}
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">
+                              <path d="M6.22 8.72a.75.75 0 0 0 1.06 1.06l5.22-5.22v1.69a.75.75 0 0 0 1.5 0v-3.5a.75.75 0 0 0-.75-.75h-3.5a.75.75 0 0 0 0 1.5h1.69L6.22 8.72Z" />
+                              <path d="M3.5 6.75c0-.69.56-1.25 1.25-1.25H7A.75.75 0 0 0 7 4H4.75A2.75 2.75 0 0 0 2 6.75v4.5A2.75 2.75 0 0 0 4.75 14h4.5A2.75 2.75 0 0 0 12 11.25V9a.75.75 0 0 0-1.5 0v2.25c0 .69-.56 1.25-1.25 1.25h-4.5c-.69 0-1.25-.56-1.25-1.25v-4.5Z" />
+                            </svg>
+                            Visualizza su Capacitas
+                          </button>
+                        ) : null}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -319,6 +336,40 @@ export function ParticellaDetailDialog({
           </a>
         </div>
       </div>
+
+      {capacitasModalCco ? (
+        <div
+          className="fixed inset-0 z-60 flex items-center justify-center bg-gray-900/50 px-4"
+          role="dialog"
+          aria-modal="true"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setCapacitasModalCco(null);
+          }}
+        >
+          <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl">
+            <p className="text-sm font-semibold text-gray-900">Visualizza su Capacitas</p>
+            <p className="mt-1 text-xs text-gray-500">CCO: {capacitasModalCco}</p>
+            <div className="mt-4 rounded-xl border border-amber-100 bg-amber-50 p-3 text-sm text-amber-800">
+              Effettua prima il login su Capacitas da questo browser, poi clicca il link qui sotto.
+            </div>
+            <div className="mt-4">
+              <a
+                href="https://involture1.servizicapacitas.com/pages/ricercaTerreni.aspx"
+                target="_blank"
+                rel="noreferrer"
+                className="btn-primary block text-center"
+              >
+                Vai a Capacitas Involture
+              </a>
+            </div>
+            <div className="mt-3 flex justify-end">
+              <button type="button" className="btn-secondary" onClick={() => setCapacitasModalCco(null)}>
+                Chiudi
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

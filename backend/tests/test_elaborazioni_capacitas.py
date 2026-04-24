@@ -437,6 +437,36 @@ def test_capacitas_credentials_crud_encrypts_password() -> None:
     assert delete_response.status_code == 204
 
 
+def test_parse_terreni_search_result_accepts_decoded_list_and_empty_list() -> None:
+    from app.modules.elaborazioni.capacitas.apps.involture.parsers import parse_terreni_search_result
+
+    # SZ-decoded empty list (e.g. SZe797f7RCLAA= → [])
+    result_empty = parse_terreni_search_result([])
+    assert result_empty.total == 0
+    assert result_empty.rows == []
+
+    # SZ-decoded non-empty list
+    rows = [
+        {
+            "ID": "abc",
+            "PVC": "097",
+            "COM": "289",
+            "CCO": "0A1103877",
+            "FRA": "38",
+            "CCS": "00000",
+            "Foglio": "1",
+            "Partic": "680",
+            "Anno": "2026",
+            "Belfiore": "L496",
+            "Ta_ext": " 9",
+        }
+    ]
+    result = parse_terreni_search_result(rows)
+    assert result.total == 1
+    assert result.rows[0].foglio == "1"
+    assert result.rows[0].particella == "680"
+
+
 def test_capacitas_involture_search_uses_selected_credential_and_returns_rows(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

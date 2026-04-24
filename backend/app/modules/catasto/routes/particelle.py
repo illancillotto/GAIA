@@ -38,14 +38,16 @@ def list_particelle(
     _: ApplicationUser = Depends(require_active_user),
     comune: int | None = Query(None),
     codice_catastale: str | None = Query(None, description="Codice catastale comune (es. A357)."),
+    nome_comune: str | None = Query(None, description="Nome comune (ricerca parziale, case-insensitive)."),
     foglio: str | None = Query(None),
     particella: str | None = Query(None),
     distretto: str | None = Query(None),
     anno: int | None = Query(None),
     cf: str | None = Query(None),
+    intestatario: str | None = Query(None, description="Ricerca parziale sulla denominazione utenza (case-insensitive)."),
     ha_anomalie: bool | None = Query(None),
     limit: int = Query(100, ge=1, le=500),
-) -> list[CatParticella]:
+) -> list[CatParticellaResponse]:
     query = select(CatParticella).where(CatParticella.is_current.is_(True)).order_by(
         CatParticella.cod_comune_capacitas, CatParticella.foglio, CatParticella.particella
     )
@@ -53,6 +55,8 @@ def list_particelle(
         query = query.where(CatParticella.cod_comune_capacitas == comune)
     if codice_catastale:
         query = query.where(CatParticella.codice_catastale == codice_catastale.strip().upper())
+    if nome_comune:
+        query = query.where(CatParticella.nome_comune.ilike(f"%{nome_comune.strip()}%"))
     if foglio:
         query = query.where(CatParticella.foglio == foglio)
     if particella:
@@ -60,12 +64,14 @@ def list_particelle(
     if distretto:
         query = query.where(CatParticella.num_distretto == distretto)
 
-    if anno is not None or cf or ha_anomalie is not None:
+    if anno is not None or cf or intestatario or ha_anomalie is not None:
         utenze_filters: list = [CatUtenzaIrrigua.particella_id == CatParticella.id]
         if anno is not None:
             utenze_filters.append(CatUtenzaIrrigua.anno_campagna == anno)
         if cf:
             utenze_filters.append(CatUtenzaIrrigua.codice_fiscale == cf.strip().upper())
+        if intestatario:
+            utenze_filters.append(CatUtenzaIrrigua.denominazione.ilike(f"%{intestatario.strip()}%"))
         if ha_anomalie is True:
             utenze_filters.append(
                 exists(select(CatAnomalia.id).where(CatAnomalia.utenza_id == CatUtenzaIrrigua.id))
@@ -76,7 +82,37 @@ def list_particelle(
             )
         query = query.where(exists(select(CatUtenzaIrrigua.id).where(*utenze_filters)))
 
-    return list(db.execute(query.limit(limit)).scalars().all())
+    items = list(db.execute(query.limit(limit)).scalars().all())
+    if not items:
+        return []
+
+    particella_ids = [p.id for p in items]
+    rn_col = func.row_number().over(
+        partition_by=CatUtenzaIrrigua.particella_id,
+        order_by=desc(CatUtenzaIrrigua.anno_campagna),
+    ).label("rn")
+    ranked_sq = (
+        select(
+            CatUtenzaIrrigua.particella_id,
+            CatUtenzaIrrigua.codice_fiscale,
+            CatUtenzaIrrigua.denominazione,
+            rn_col,
+        )
+        .where(CatUtenzaIrrigua.particella_id.in_(particella_ids))
+        .subquery()
+    )
+    latest_rows = db.execute(select(ranked_sq).where(ranked_sq.c.rn == 1)).all()
+    utenza_map = {row.particella_id: row for row in latest_rows}
+
+    responses: list[CatParticellaResponse] = []
+    for p in items:
+        r = CatParticellaResponse.model_validate(p)
+        u = utenza_map.get(p.id)
+        if u:
+            r.utenza_cf = u.codice_fiscale
+            r.utenza_denominazione = u.denominazione
+        responses.append(r)
+    return responses
 
 
 @router.get("/{particella_id}", response_model=CatParticellaDetailResponse)
