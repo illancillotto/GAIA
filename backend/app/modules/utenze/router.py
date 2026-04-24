@@ -29,6 +29,7 @@ from app.modules.utenze.models import (
     AnagraficaImportJobItem,
     AnagraficaImportJobItemStatus,
     AnagraficaPerson,
+    AnagraficaPersonSnapshot,
     AnagraficaSubject,
     AnagraficaSubjectStatus,
     AnagraficaXlsxImportBatch,
@@ -53,6 +54,7 @@ from app.modules.utenze.schemas import (
     AnagraficaCompanyPayload,
     AnagraficaPersonPayload,
     AnagraficaPersonResponse,
+    AnagraficaPersonSnapshotResponse,
     AnagraficaPreviewDocumentResponse,
     AnagraficaResetRequest,
     AnagraficaResetResponse,
@@ -83,6 +85,7 @@ from app.modules.utenze.services.import_service import (
     reset_anagrafica_data,
 )
 from app.modules.utenze.services.csv_import_service import import_subjects_from_csv
+from app.modules.utenze.services.person_history_service import snapshot_person_if_changed
 from app.modules.utenze.services.xlsx_import_service import run_xlsx_import
 from app.services.nas_connector import NasConnectorError, get_nas_client
 
@@ -1174,6 +1177,13 @@ def _apply_subject_payload(db: Session, subject: AnagraficaSubject, subject_type
             db.delete(existing_company)
         if person is not None:
             person_payload = person.model_dump()  # type: ignore[union-attr]
+            snapshot_person_if_changed(
+                db,
+                existing_person,
+                person_payload,
+                source_system=subject.source_system or "gaia",
+                source_ref=subject.source_external_id,
+            )
             model = existing_person or AnagraficaPerson(subject_id=subject.id, **person_payload)
             for key, value in person_payload.items():
                 setattr(model, key, value)
@@ -1636,6 +1646,11 @@ def _build_subject_detail(db: Session, subject_id: uuid.UUID) -> AnagraficaSubje
         .where(AnagraficaAuditLog.subject_id == subject_id)
         .order_by(AnagraficaAuditLog.changed_at.desc())
     ).all()
+    person_snapshots = db.scalars(
+        select(AnagraficaPersonSnapshot)
+        .where(AnagraficaPersonSnapshot.subject_id == subject_id)
+        .order_by(AnagraficaPersonSnapshot.collected_at.desc())
+    ).all()
     person_response = None
     company_response = None
     if person is not None:
@@ -1690,6 +1705,30 @@ def _build_subject_detail(db: Session, subject_id: uuid.UUID) -> AnagraficaSubje
         created_at=subject.created_at,
         updated_at=subject.updated_at,
         person=person_response,
+        person_snapshots=[
+            AnagraficaPersonSnapshotResponse.model_validate(
+                {
+                    "id": str(item.id),
+                    "subject_id": str(item.subject_id),
+                    "source_system": item.source_system,
+                    "source_ref": item.source_ref,
+                    "cognome": item.cognome,
+                    "nome": item.nome,
+                    "codice_fiscale": item.codice_fiscale,
+                    "data_nascita": item.data_nascita,
+                    "comune_nascita": item.comune_nascita,
+                    "indirizzo": item.indirizzo,
+                    "comune_residenza": item.comune_residenza,
+                    "cap": item.cap,
+                    "email": item.email,
+                    "telefono": item.telefono,
+                    "note": item.note,
+                    "valid_from": item.valid_from,
+                    "collected_at": item.collected_at,
+                }
+            )
+            for item in person_snapshots
+        ],
         company=company_response,
         documents=[_build_document_response(item) for item in documents],
         audit_log=[

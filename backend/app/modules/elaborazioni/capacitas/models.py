@@ -108,6 +108,20 @@ class CapacitasCertificatoTerreno(BaseModel):
     riordino_lotto: str | None = None
 
 
+class CapacitasIntestatario(BaseModel):
+    idxana: str | None = None
+    idxesa: str | None = None
+    codice_fiscale: str | None = None
+    denominazione: str | None = None
+    data_nascita: date | None = None
+    luogo_nascita: str | None = None
+    residenza: str | None = None
+    comune_residenza: str | None = None
+    cap: str | None = None
+    titoli: str | None = None
+    deceduto: bool = False
+
+
 class CapacitasTerrenoCertificato(BaseModel):
     cco: str | None = None
     fra: str | None = None
@@ -120,7 +134,7 @@ class CapacitasTerrenoCertificato(BaseModel):
     utenza_code: str | None = None
     utenza_status: str | None = None
     ruolo_status: str | None = None
-    intestatari: list[str] = Field(default_factory=list)
+    intestatari: list[CapacitasIntestatario] = Field(default_factory=list)
     terreni: list[CapacitasCertificatoTerreno] = Field(default_factory=list)
     raw_text: str | None = None
     raw_html: str | None = None

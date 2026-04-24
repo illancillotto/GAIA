@@ -296,7 +296,7 @@ export default function CatastoParticellaDetailPage() {
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="text-sm font-medium text-gray-900">Catasto consortile</p>
-              <p className="mt-1 text-sm text-gray-500">Unità consortili derivate da Capacitas Terreni, con comune canonico GAIA, comune sorgente e occupazioni storiche.</p>
+              <p className="mt-1 text-sm text-gray-500">Vista operativa del Consorzio: distingue utilizzatore/pagatore annuale e intestatari proprietari rilevati in Capacitas.</p>
             </div>
             <p className="text-sm text-gray-500">{isLoading ? "Caricamento…" : `${consorzio?.units.length ?? 0} unità`}</p>
           </div>
@@ -344,6 +344,55 @@ export default function CatastoParticellaDetailPage() {
                     <MetricCard label="Attiva" value={unit.is_active ? "Sì" : "No"} variant={unit.is_active ? "success" : "warning"} />
                   </div>
 
+                  <div className="mt-4 rounded-xl border border-white bg-white p-3">
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">Intestatari proprietari</p>
+                        <p className="mt-1 text-sm text-gray-500">Proprietari / aventi titolo rilevati in Capacitas. Non coincidono necessariamente con chi usa o paga l’acqua nell’annualità.</p>
+                      </div>
+                      <p className="text-sm text-gray-500">{unit.intestatari_proprietari.length} righe</p>
+                    </div>
+                    {unit.intestatari_proprietari.length === 0 ? (
+                      <p className="mt-3 text-sm text-gray-500">Nessun intestatario strutturato ancora disponibile per questa unità.</p>
+                    ) : (
+                      <div className="mt-3 space-y-2">
+                        {unit.intestatari_proprietari.map((owner) => (
+                          <div key={owner.id} className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
+                            <p className="text-sm font-medium text-gray-900">
+                              {owner.denominazione ?? "—"}
+                              {owner.deceduto ? <span className="ml-2 rounded-full bg-rose-50 px-2 py-0.5 text-xs font-medium text-rose-700">Deceduto</span> : null}
+                            </p>
+                            <p className="mt-1 text-xs text-gray-500">
+                              CF: <span className="font-medium text-gray-700">{owner.codice_fiscale ?? "—"}</span>
+                              {" · "}Titolo: <span className="font-medium text-gray-700">{owner.titoli ?? "—"}</span>
+                            </p>
+                            <p className="mt-1 text-xs text-gray-500">
+                              Nascita: <span className="font-medium text-gray-700">{owner.data_nascita ?? "—"}</span>
+                              {owner.luogo_nascita ? ` · ${owner.luogo_nascita}` : ""}
+                            </p>
+                            <p className="mt-1 text-xs text-gray-500">
+                              Residenza: <span className="font-medium text-gray-700">{owner.residenza ?? owner.comune_residenza ?? "—"}</span>
+                            </p>
+                            {owner.person ? (
+                              <div className="mt-2 rounded-md border border-emerald-100 bg-emerald-50 px-2 py-1.5">
+                                <p className="text-xs font-medium text-emerald-800">Anagrafica GAIA corrente</p>
+                                <p className="mt-1 text-xs text-emerald-700">
+                                  {owner.person.cognome} {owner.person.nome} · {owner.person.codice_fiscale}
+                                </p>
+                                <p className="mt-1 text-xs text-emerald-700">
+                                  Residenza corrente: {owner.person.indirizzo ?? owner.person.comune_residenza ?? "—"}
+                                </p>
+                                <p className="mt-1 text-xs text-emerald-700">
+                                  Storico anagrafica: {owner.person_snapshots.length} snapshot
+                                </p>
+                              </div>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
                   <div className="mt-4">
                     <DataTable
                       data={unit.occupancies}
@@ -361,8 +410,8 @@ export default function CatastoParticellaDetailPage() {
         <article className="panel-card">
           <div className="flex flex-wrap items-end justify-between gap-4">
             <div>
-              <p className="text-sm font-medium text-gray-900">Ruoli tributo</p>
-              <p className="mt-1 text-sm text-gray-500">Utenze irrigue (per anno campagna).</p>
+              <p className="text-sm font-medium text-gray-900">Utilizzatore / pagatore annualità</p>
+              <p className="mt-1 text-sm text-gray-500">Righe `cat_utenze_irrigue` per anno campagna: soggetto operativo che usa l’acqua o paga il ruolo.</p>
             </div>
             <div>
               <p className="text-sm text-gray-500">Anno campagna</p>

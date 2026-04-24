@@ -124,6 +124,32 @@ class AnagraficaPerson(Base):
     )
 
 
+class AnagraficaPersonSnapshot(Base):
+    __tablename__ = "ana_person_snapshots"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    subject_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("ana_subjects.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    source_system: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    source_ref: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    cognome: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    nome: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    codice_fiscale: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
+    data_nascita: Mapped[date | None] = mapped_column(Date, nullable=True)
+    comune_nascita: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    indirizzo: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    comune_residenza: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    cap: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    email: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    telefono: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    valid_from: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    collected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+
+
 class AnagraficaCompany(Base):
     __tablename__ = "ana_companies"
     __table_args__ = (UniqueConstraint("partita_iva", name="uq_ana_companies_partita_iva"),)

@@ -51,6 +51,9 @@
 - preservato lo stato `rejected` sui re-sync Bonifica per evitare riaperture automatiche
 - rinominata la UX staging da `approva` a `importa in anagrafica` per rendere esplicito il passaggio verso `ana_subjects`
 - tracciata l'origine WhiteCompany sui soggetti importati con `ana_subjects.source_system=whitecompany` e `ana_subjects.source_external_id=<wc_id>`
+- introdotta la tabella `ana_person_snapshots` per la storicizzazione interrogabile dei dati persona
+- il dettaglio soggetto ora espone `person_snapshots` oltre ad audit log e documenti
+- gli update manuali e gli import CSV/XLSX/NAS salvano uno snapshot del profilo persona precedente quando cambiano i dati
 
 ## Verifiche Eseguite
 

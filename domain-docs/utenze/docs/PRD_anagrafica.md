@@ -86,7 +86,7 @@ Il nucleo del modulo è il registro dei soggetti. Ogni soggetto ha una scheda co
 | RF-ANA-04 | MUST | Collegamento a cartella NAS originale (path smb://) per ogni soggetto |
 | RF-ANA-05 | MUST | Import automatico da struttura cartelle NAS con parsing nome cartella |
 | RF-ANA-06 | MUST | Gestione documenti allegati con classificazione per tipo |
-| RF-ANA-07 | SHOULD | Storico modifiche anagrafica (chi ha modificato e quando) |
+| RF-ANA-07 | SHOULD | Storico modifiche anagrafica interrogabile: audit log operativo e snapshot puntuali dei dati persona |
 | RF-ANA-08 | SHOULD | Collegamento a pratiche e visure GAIA Catasto |
 | RF-ANA-09 | COULD | Deduplicazione soggetti (stesso CF/PIVA con cartelle diverse) |
 | RF-ANA-10 | COULD | Export anagrafica in CSV/XLSX con filtri |
@@ -190,6 +190,7 @@ Fallback:        Non classificato — richiede revisione manuale
 |---------|-------------|
 | `ana_subjects` | Anagrafica soggetti: `id, subject_type, status, source_system, source_external_id, nas_folder_path, nas_folder_letter, imported_at, created_at, updated_at` |
 | `ana_persons` | Dati persona fisica: `subject_id, cognome, nome, codice_fiscale, data_nascita, comune_nascita, indirizzo, comune_residenza, cap, email, telefono, note` |
+| `ana_person_snapshots` | Storico puntuale dei dati persona: `id, subject_id, source_system, source_ref, cognome, nome, codice_fiscale, data_nascita, comune_nascita, indirizzo, comune_residenza, cap, email, telefono, note, valid_from, collected_at` |
 | `ana_companies` | Dati persona giuridica: `subject_id, ragione_sociale, partita_iva, codice_fiscale, forma_giuridica, sede_legale, comune_sede, cap, email_pec, telefono, note` |
 | `ana_documents` | Documenti: `id, subject_id, doc_type, filename, nas_path, file_size_bytes, file_modified_at, classification_source, storage_type, local_path, uploaded_at, notes` |
 | `ana_import_jobs` | Job di import NAS: `id, letter, status, started_at, completed_at, total_folders, imported_ok, imported_errors, log_json` |
@@ -209,6 +210,7 @@ ImportJobStatus: PENDING | RUNNING | COMPLETED | FAILED
 ### 3.3 Indici di performance
 
 - `ana_persons(codice_fiscale)` — unique
+- `ana_person_snapshots(subject_id, collected_at)`
 - `ana_companies(partita_iva)` — unique
 - `ana_subjects(nas_folder_letter, nas_folder_path)`
 - `ana_documents(subject_id, doc_type)`
@@ -234,7 +236,7 @@ Tutti gli endpoint sono esposti sotto il prefisso `/anagrafica`.
 |----------|--------|-------------|
 | `/anagrafica/subjects` | GET | Lista soggetti con filtri, paginazione, full-text search |
 | `/anagrafica/subjects` | POST | Crea nuovo soggetto manualmente |
-| `/anagrafica/subjects/{id}` | GET | Dettaglio soggetto con documenti e audit log |
+| `/anagrafica/subjects/{id}` | GET | Dettaglio soggetto con documenti, audit log e `person_snapshots` per le persone fisiche |
 | `/anagrafica/subjects/{id}` | PUT | Aggiorna dati soggetto |
 | `/anagrafica/subjects/{id}` | DELETE | Disattivazione logica (status = inactive) |
 | `/anagrafica/subjects/{id}/documents` | GET | Lista documenti del soggetto |
@@ -312,7 +314,7 @@ Note architetturali operative:
 | `/anagrafica` | Dashboard: totali soggetti, documenti non classificati, ultimi importati, link rapidi |
 | `/anagrafica?search=...` | Lista soggetti con ricerca, filtri tipo/status/lettera, ordinamento, paginazione |
 | `/anagrafica/new` | Form creazione manuale: tab Persona Fisica / Persona Giuridica |
-| `/anagrafica/[id]` | Scheda soggetto: dati anagrafici, lista documenti con tipo/preview/link NAS, audit log |
+| `/anagrafica/[id]` | Scheda soggetto: dati anagrafici, lista documenti con tipo/preview/link NAS, audit log e storico snapshot persona |
 | `/anagrafica/[id]/edit` | Modifica dati anagrafici |
 | `/anagrafica/import` | Wizard import NAS: selezione lettera → preview → conferma → esecuzione |
 | `/anagrafica/import/[jobId]` | Log dettagliato job: errori, soggetti importati, documenti catalogati |

@@ -2,9 +2,12 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
+
+from app.modules.utenze.schemas import AnagraficaPersonResponse, AnagraficaPersonSnapshotResponse
 
 
 class CatImportBatchResponse(BaseModel):
@@ -129,6 +132,27 @@ class CatConsorzioOccupancyResponse(BaseModel):
     updated_at: datetime
 
 
+class CatCapacitasIntestatarioResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    subject_id: UUID | None
+    idxana: str | None
+    idxesa: str | None
+    codice_fiscale: str | None
+    denominazione: str | None
+    data_nascita: date | None
+    luogo_nascita: str | None
+    residenza: str | None
+    comune_residenza: str | None
+    cap: str | None
+    titoli: str | None
+    deceduto: bool
+    collected_at: datetime
+    person: AnagraficaPersonResponse | None = None
+    person_snapshots: list[AnagraficaPersonSnapshotResponse] = []
+
+
 class CatConsorzioUnitSummaryResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -154,6 +178,7 @@ class CatConsorzioUnitSummaryResponse(BaseModel):
     comune_label: str | None = None
     source_comune_resolved_label: str | None = None
     occupancies: list[CatConsorzioOccupancyResponse] = []
+    intestatari_proprietari: list[CatCapacitasIntestatarioResponse] = []
 
 
 class CatParticellaConsorzioResponse(BaseModel):
@@ -315,25 +340,39 @@ class CatAnagraficaSearchResponse(BaseModel):
 
 
 class CatAnagraficaBulkSearchRow(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     row_index: int
     comune: str | None = None
+    sezione: str | None = None
     foglio: str | None = None
     particella: str | None = None
+    sub: str | None = None
+    codice_fiscale: str | None = None
+    partita_iva: str | None = None
 
 
 class CatAnagraficaBulkSearchRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    kind: Literal["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"] | None = None
     rows: list[CatAnagraficaBulkSearchRow]
 
 
 class CatAnagraficaBulkSearchRowResult(BaseModel):
     row_index: int
     comune_input: str | None = None
+    sezione_input: str | None = None
     foglio_input: str | None = None
     particella_input: str | None = None
+    sub_input: str | None = None
+    codice_fiscale_input: str | None = None
+    partita_iva_input: str | None = None
     esito: str
     message: str
     particella_id: UUID | None = None
     match: CatAnagraficaMatch | None = None
+    matches: list[CatAnagraficaMatch] | None = None
     matches_count: int | None = None
 
 

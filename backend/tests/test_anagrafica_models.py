@@ -9,7 +9,7 @@ from sqlalchemy.pool import StaticPool
 from app.core.security import hash_password
 from app.db.base import Base
 from app.models.application_user import ApplicationUser, ApplicationUserRole
-from app.modules.utenze.models import AnagraficaCompany, AnagraficaPerson, AnagraficaSubject
+from app.modules.utenze.models import AnagraficaCompany, AnagraficaPerson, AnagraficaPersonSnapshot, AnagraficaSubject
 
 
 @pytest.fixture
@@ -34,6 +34,7 @@ def test_anagrafica_tables_are_registered_in_metadata() -> None:
 
     assert "ana_subjects" in table_names
     assert "ana_persons" in table_names
+    assert "ana_person_snapshots" in table_names
     assert "ana_companies" in table_names
     assert "ana_documents" in table_names
     assert "ana_import_jobs" in table_names
@@ -117,6 +118,41 @@ def test_person_codice_fiscale_must_be_unique(db_session: Session) -> None:
     )
     with pytest.raises(IntegrityError):
         db_session.commit()
+
+
+def test_can_persist_person_snapshot(db_session: Session) -> None:
+    subject = AnagraficaSubject(
+        subject_type="person",
+        status="active",
+        source_name_raw="Rossi_Mario_RSSMRA80A01H501Z",
+        nas_folder_path=str(uuid.uuid4()),
+    )
+    db_session.add(subject)
+    db_session.flush()
+
+    db_session.add(
+        AnagraficaPerson(
+            subject_id=subject.id,
+            cognome="Rossi",
+            nome="Mario",
+            codice_fiscale="RSSMRA80A01H501Z",
+            comune_residenza="Oristano",
+        )
+    )
+    db_session.flush()
+    db_session.add(
+        AnagraficaPersonSnapshot(
+            subject_id=subject.id,
+            source_system="xlsx_import",
+            cognome="Rossi",
+            nome="Mario",
+            codice_fiscale="RSSMRA80A01H501Z",
+            comune_residenza="Oristano",
+        )
+    )
+    db_session.commit()
+
+    assert db_session.query(AnagraficaPersonSnapshot).count() == 1
 
 
 def test_import_job_can_reference_application_user(db_session: Session) -> None:

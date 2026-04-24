@@ -17,6 +17,7 @@ from app.modules.utenze.models import (
     AnagraficaSubject,
     AnagraficaSubjectStatus,
 )
+from app.modules.utenze.services.person_history_service import snapshot_person_if_changed
 
 
 CSV_IMPORT_MARKER = "[CSV IMPORT]"
@@ -110,6 +111,32 @@ def import_subjects_from_csv(
                     db.add(subject)
                     db.flush()
 
+                person_data = {
+                    "cognome": cognome,
+                    "nome": nome,
+                    "codice_fiscale": codice_fiscale,
+                    "data_nascita": _parse_date(row.get("DATA_NASCITA")),
+                    "comune_nascita": _nullable(row.get("COM_NASCITA")),
+                    "indirizzo": _nullable(row.get("INDIRIZZO_RESIDENZA")),
+                    "comune_residenza": _merge_city_with_province(row.get("COM_RESIDENZA"), row.get("PR")),
+                    "cap": _nullable(row.get("CAP")),
+                    "email": None,
+                    "telefono": None,
+                    "note": _merge_csv_metadata_note(
+                        person.note if person is not None else None,
+                        sesso=_nullable(row.get("SESSO")),
+                        variaz_anagr=_nullable(row.get("VARIAZ_ANAGR")),
+                        stato_csv=_nullable(row.get("STATO")),
+                        decesso=_nullable(row.get("DECESSO")),
+                    ),
+                }
+                snapshot_person_if_changed(
+                    db,
+                    person,
+                    person_data,
+                    source_system="csv_import",
+                    collected_at=imported_at,
+                )
                 person_model = person or AnagraficaPerson(
                     subject_id=subject.id,
                     cognome=cognome,
@@ -119,18 +146,12 @@ def import_subjects_from_csv(
                 person_model.cognome = cognome
                 person_model.nome = nome
                 person_model.codice_fiscale = codice_fiscale
-                person_model.data_nascita = _parse_date(row.get("DATA_NASCITA"))
-                person_model.comune_nascita = _nullable(row.get("COM_NASCITA"))
-                person_model.indirizzo = _nullable(row.get("INDIRIZZO_RESIDENZA"))
-                person_model.comune_residenza = _merge_city_with_province(row.get("COM_RESIDENZA"), row.get("PR"))
-                person_model.cap = _nullable(row.get("CAP"))
-                person_model.note = _merge_csv_metadata_note(
-                    person_model.note,
-                    sesso=_nullable(row.get("SESSO")),
-                    variaz_anagr=_nullable(row.get("VARIAZ_ANAGR")),
-                    stato_csv=_nullable(row.get("STATO")),
-                    decesso=_nullable(row.get("DECESSO")),
-                )
+                person_model.data_nascita = person_data["data_nascita"]
+                person_model.comune_nascita = person_data["comune_nascita"]
+                person_model.indirizzo = person_data["indirizzo"]
+                person_model.comune_residenza = person_data["comune_residenza"]
+                person_model.cap = person_data["cap"]
+                person_model.note = person_data["note"]
                 db.add(person_model)
 
                 db.add(

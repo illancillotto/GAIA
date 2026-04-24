@@ -30,6 +30,7 @@ from app.models.catasto import (
 from app.models.capacitas import CapacitasCredential, CapacitasTerreniSyncJob
 from app.modules.catasto.models import (
     CatCapacitasCertificato,
+    CatCapacitasIntestatario,
     CatCapacitasTerrenoDetail,
     CatCapacitasTerrenoRow,
     CatConsorzioOccupancy,
@@ -76,6 +77,7 @@ __all__ = [
     "CatastoBatchStatus",
     "CatastoCaptchaLog",
     "CatCapacitasCertificato",
+    "CatCapacitasIntestatario",
     "CatCapacitasTerrenoDetail",
     "CatCapacitasTerrenoRow",
     "CatastoComune",

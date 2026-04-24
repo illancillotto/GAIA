@@ -6,6 +6,7 @@ from app.models.capacitas import CapacitasCredential, CapacitasTerreniSyncJob
 from app.models.wc_sync_job import WCSyncJob
 from app.modules.catasto.models import (
     CatCapacitasCertificato,
+    CatCapacitasIntestatario,
     CatCapacitasTerrenoDetail,
     CatCapacitasTerrenoRow,
     CatConsorzioOccupancy,
@@ -42,6 +43,7 @@ from app.modules.utenze.models import (
     AnagraficaImportJob,
     AnagraficaImportJobItem,
     AnagraficaPerson,
+    AnagraficaPersonSnapshot,
     AnagraficaSubject,
     BonificaUserStaging,
 )
@@ -81,6 +83,7 @@ __all__ = [
     "AnagraficaImportJob",
     "AnagraficaImportJobItem",
     "AnagraficaPerson",
+    "AnagraficaPersonSnapshot",
     "AnagraficaSubject",
     "BonificaUserStaging",
     "Base",
@@ -88,6 +91,7 @@ __all__ = [
     "CapacitasCredential",
     "CapacitasTerreniSyncJob",
     "CatCapacitasCertificato",
+    "CatCapacitasIntestatario",
     "CatCapacitasTerrenoDetail",
     "CatCapacitasTerrenoRow",
     "CatastoBatch",

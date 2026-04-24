@@ -248,6 +248,17 @@ class AnagraficaPersonResponse(AnagraficaPersonPayload):
     updated_at: datetime
 
 
+class AnagraficaPersonSnapshotResponse(AnagraficaPersonPayload):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    subject_id: str
+    source_system: str
+    source_ref: str | None = None
+    valid_from: datetime | None
+    collected_at: datetime
+
+
 class AnagraficaCompanyResponse(AnagraficaCompanyPayload):
     model_config = ConfigDict(from_attributes=True)
 
@@ -343,6 +354,7 @@ class AnagraficaSubjectDetailResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     person: AnagraficaPersonResponse | None = None
+    person_snapshots: list[AnagraficaPersonSnapshotResponse] = Field(default_factory=list)
     company: AnagraficaCompanyResponse | None = None
     documents: list[AnagraficaPreviewDocumentResponse] = Field(default_factory=list)
     audit_log: list[AnagraficaAuditLogResponse] = Field(default_factory=list)

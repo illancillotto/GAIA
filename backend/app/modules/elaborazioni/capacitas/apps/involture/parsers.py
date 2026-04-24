@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json5
 import re
+from datetime import date, datetime
 from urllib.parse import unquote
 
 from bs4 import BeautifulSoup
@@ -9,6 +10,7 @@ from bs4 import BeautifulSoup
 from app.modules.elaborazioni.bonifica_oristanese.parsers import clean_html_text
 from app.modules.elaborazioni.capacitas.models import (
     CapacitasLookupOption,
+    CapacitasIntestatario,
     CapacitasTerreniSearchResult,
     CapacitasTerrenoCertificato,
     CapacitasCertificatoTerreno,
@@ -54,11 +56,7 @@ def parse_certificato_html(html: str) -> CapacitasTerrenoCertificato:
     partita_match = re.search(r"PARTITA:\s*([^\s]+)\s*-\s*(.*?)\s*-\s*STATO:\s*(.*?)(?:UTENZA:|$)", text)
     utenza_match = re.search(r"UTENZA:\s*([^\s]+)\s*-\s*STATO CNC:\s*(.*?)(?:DI:|$)", text)
 
-    intestatari: list[str] = []
-    for row in container.select(".rpt-riga-ana") if container else []:
-        value = clean_html_text(row)
-        if value.startswith("DI:"):
-            intestatari.append(value[3:].strip())
+    intestatari = _parse_capacitas_intestatari(container) if container else []
 
     terreni: list[CapacitasCertificatoTerreno] = []
     terreno_rows = list(container.select(".rpt-riga-terreno") if container else [])
@@ -99,6 +97,41 @@ def parse_certificato_html(html: str) -> CapacitasTerrenoCertificato:
     )
 
 
+def _parse_capacitas_intestatari(container: BeautifulSoup) -> list[CapacitasIntestatario]:
+    rows = list(container.select(".rpt-riga-ana"))
+    results: list[CapacitasIntestatario] = []
+    for row in rows:
+        den = row.select_one(".rpt-testo-evid")
+        denominazione = clean_html_text(den) if den else None
+        row_text = clean_html_text(row)
+        codice_fiscale_match = re.search(r"\bC\.F\.\s*([A-Z0-9]{11,16})\b", row_text, flags=re.IGNORECASE)
+        event_span = next(
+            (span for span in row.select("span") if any(cls.startswith("evento-") for cls in (span.get("class") or []))),
+            None,
+        )
+        lines = _collect_intestatario_detail_lines(row)
+        birth_data = _parse_birth_line(lines)
+        res_data = _parse_residenza_line(lines)
+        titoli = _parse_titoli_line(lines)
+        deceduto_text = clean_html_text(event_span) if event_span else ""
+        results.append(
+            CapacitasIntestatario(
+                idxana=_strip_value(row.get("data-idxana")),
+                idxesa=_strip_value(row.get("data-idxesa")),
+                codice_fiscale=codice_fiscale_match.group(1).upper() if codice_fiscale_match else None,
+                denominazione=denominazione,
+                data_nascita=birth_data[0],
+                luogo_nascita=birth_data[1],
+                residenza=res_data[0],
+                comune_residenza=res_data[1],
+                cap=res_data[2],
+                titoli=titoli,
+                deceduto="decedut" in deceduto_text.casefold(),
+            )
+        )
+    return results
+
+
 def parse_terreno_detail_html(html: str) -> CapacitasTerrenoDetail:
     soup = BeautifulSoup(html, "html.parser")
     params: dict[str, str] = {}
@@ -135,6 +168,59 @@ def _parse_certificato_terreno_row(row_text: str, row_id: str | None) -> Capacit
             superficie_text=match.group(5).strip(),
         )
     return CapacitasCertificatoTerreno(external_row_id=row_id)
+
+
+def _collect_intestatario_detail_lines(row) -> list[str]:
+    lines: list[str] = []
+    sibling = row.find_next_sibling()
+    while sibling is not None:
+        classes = sibling.get("class") or []
+        if "rpt-riga-ana" in classes or "rpt-riga-terreno" in classes or "rpt-sep" in classes:
+            break
+        if "rpt-riga-vuota" in classes:
+            break
+        if "rpt-riga" in classes:
+            lines.append(clean_html_text(sibling))
+        sibling = sibling.find_next_sibling()
+    return lines
+
+
+def _parse_birth_line(lines: list[str]) -> tuple[date | None, str | None]:
+    for line in lines:
+        match = re.search(r"nat[oa]\s+il\s+(\d{2}/\d{2}/\d{4})\s+in\s+<?[^>]*>?\s*(.+)$", line, flags=re.IGNORECASE)
+        if not match:
+            continue
+        date_value = None
+        try:
+            date_value = datetime.strptime(match.group(1), "%d/%m/%Y").date()
+        except ValueError:
+            date_value = None
+        return date_value, clean_html_text(match.group(2))
+    return None, None
+
+
+def _parse_residenza_line(lines: list[str]) -> tuple[str | None, str | None, str | None]:
+    for line in lines:
+        if not line.startswith("RES:"):
+            continue
+        cleaned = clean_html_text(line[4:])
+        cap_match = re.match(r"(\d{5})\s+(.*)$", cleaned)
+        cap = cap_match.group(1) if cap_match else None
+        remainder = cap_match.group(2) if cap_match else cleaned
+        comune_match = re.search(r"(.+?)\s*\(([A-Z]{2})\)\s*-\s*(.+)$", remainder)
+        if comune_match:
+            comune = clean_html_text(comune_match.group(1))
+            indirizzo = clean_html_text(comune_match.group(3))
+            return f"{(cap + ' ') if cap else ''}{comune} ({comune_match.group(2)}) - {indirizzo}".strip(), comune, cap
+        return cleaned or None, None, cap
+    return None, None, None
+
+
+def _parse_titoli_line(lines: list[str]) -> str | None:
+    for line in lines:
+        if line.startswith("TITOLI:"):
+            return clean_html_text(line[7:])
+    return None
 
 
 def _normalize_terreno_row(row: dict) -> CapacitasTerrenoRow:

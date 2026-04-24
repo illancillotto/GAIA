@@ -17,6 +17,7 @@ from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.models.catasto_phase1 import (
     CatAnomalia,
     CatCapacitasCertificato,
+    CatCapacitasIntestatario,
     CatCapacitasTerrenoDetail,
     CatCapacitasTerrenoRow,
     CatComune,
@@ -31,6 +32,8 @@ from app.models.catasto_phase1 import (
     CatSchemaContributo,
     CatUtenzaIrrigua,
 )
+from app.modules.utenze.models import AnagraficaSubject
+from app.modules.utenze.models import AnagraficaPerson, AnagraficaPersonSnapshot
 from app.modules.catasto.routes import import_routes as import_routes_module
 from app.modules.catasto.services.import_capacitas import CapacitasImportDuplicateError, import_capacitas_excel
 from app.modules.catasto.services.comuni_reference import load_comuni_reference
@@ -741,7 +744,67 @@ def test_particella_detail_history_utenze_and_anomalie_endpoints() -> None:
     try:
         particella = db.query(CatParticella).filter(CatParticella.foglio == "5").one()
         utenza = db.query(CatUtenzaIrrigua).filter(CatUtenzaIrrigua.cco == "UT-SEED-001").one()
+        subject = AnagraficaSubject(
+            subject_type="person",
+            status="active",
+            source_system="capacitas",
+            source_external_id="IDX-ANA-1",
+            source_name_raw="Rossi_Mario_RSSMRA80A01H501Z",
+            requires_review=False,
+        )
+        db.add(subject)
+        db.flush()
+        subject_id = subject.id
+        db.add(
+            AnagraficaPerson(
+                subject_id=subject.id,
+                cognome="Rossi",
+                nome="Mario",
+                codice_fiscale="RSSMRA80A01H501Z",
+                comune_residenza="Oristano",
+                indirizzo="Via Roma 1",
+            )
+        )
+        db.flush()
+        db.add(
+            AnagraficaPersonSnapshot(
+                subject_id=subject.id,
+                source_system="capacitas",
+                source_ref="IDX-ANA-1",
+                cognome="Rossi",
+                nome="Mario",
+                codice_fiscale="RSSMRA80A01H501Z",
+                comune_residenza="Uras",
+                indirizzo="Via Vecchia 3",
+                collected_at=datetime.now(timezone.utc),
+            )
+        )
         particella_id = particella.id
+        certificato = CatCapacitasCertificato(
+            cco="UT-SEED-001",
+            fra="38",
+            ccs="00000",
+            pvc="097",
+            com="289",
+            partita_code="UT-SEED-001/38/00000",
+            collected_at=datetime.now(timezone.utc),
+        )
+        db.add(certificato)
+        db.flush()
+        db.add(
+            CatCapacitasIntestatario(
+                certificato_id=certificato.id,
+                subject_id=subject.id,
+                idxana="IDX-ANA-1",
+                idxesa="IDX-ESA-1",
+                codice_fiscale="RSSMRA80A01H501Z",
+                denominazione="Rossi Mario",
+                comune_residenza="ORISTANO",
+                titoli="Proprieta` 1/1",
+                deceduto=False,
+                collected_at=datetime.now(timezone.utc),
+            )
+        )
         db.add(
             CatAnomalia(
                 utenza_id=utenza.id,
@@ -783,6 +846,10 @@ def test_particella_detail_history_utenze_and_anomalie_endpoints() -> None:
     assert consorzio_payload["units"][0]["comune_resolution_mode"] == "swapped_arborea_terralba"
     assert consorzio_payload["units"][0]["source_comune_label"] == "Cabras"
     assert consorzio_payload["units"][0]["occupancies"][0]["cco"] == "UT-SEED-001"
+    assert consorzio_payload["units"][0]["intestatari_proprietari"][0]["codice_fiscale"] == "RSSMRA80A01H501Z"
+    assert consorzio_payload["units"][0]["intestatari_proprietari"][0]["subject_id"] == str(subject_id)
+    assert consorzio_payload["units"][0]["intestatari_proprietari"][0]["person"]["comune_residenza"] == "Oristano"
+    assert consorzio_payload["units"][0]["intestatari_proprietari"][0]["person_snapshots"][0]["comune_residenza"] == "Uras"
 
 
 def test_particelle_endpoint_supports_combined_lookup_filters() -> None:
@@ -1189,6 +1256,7 @@ def test_catasto_consorzio_tables_are_registered_in_metadata() -> None:
     assert "cat_consorzio_occupancies" in table_names
     assert "cat_capacitas_terreni_rows" in table_names
     assert "cat_capacitas_certificati" in table_names
+    assert "cat_capacitas_intestatari" in table_names
     assert "cat_capacitas_terreno_details" in table_names
 
 

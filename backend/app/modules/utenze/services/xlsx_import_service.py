@@ -23,6 +23,7 @@ from app.modules.utenze.models import (
     AnagraficaXlsxImportBatch,
     AnagraficaXlsxImportBatchStatus,
 )
+from app.modules.utenze.services.person_history_service import snapshot_person_if_changed
 
 XLSX_SOURCE_SYSTEM = "xlsx_import"
 ANOMALIA_EXTERNAL_ID = "ANOMALIA-999"
@@ -318,6 +319,14 @@ def _upsert_person(
         return "unchanged"
 
     # Aggiorna
+    snapshot_person_if_changed(
+        db,
+        existing_person,
+        new_data,
+        source_system=XLSX_SOURCE_SYSTEM,
+        source_ref=None,
+        collected_at=now,
+    )
     subject.source_name_raw = source_name_raw
     subject.status = _resolve_status(row)
     subject.source_system = XLSX_SOURCE_SYSTEM

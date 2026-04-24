@@ -161,7 +161,7 @@ export function ParticellaDetailDialog({
             <p className="text-[10px] font-medium uppercase tracking-widest text-gray-400">Proprietà / possesso</p>
             <div className="mt-2 space-y-2 text-sm text-gray-700">
               {(match.intestatari ?? []).length === 0 ? (
-                <p className="text-gray-500">Nessun intestatario disponibile (non presente in `cat_intestatari`).</p>
+                <p className="text-gray-500">Nessun intestatario disponibile nel dataset proprietari oggi collegato.</p>
               ) : (
                 <ul className="list-disc pl-5">
                   {(match.intestatari ?? []).slice(0, 10).map((i) => (
@@ -226,7 +226,7 @@ export function ParticellaDetailDialog({
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="font-medium text-gray-900">Catasto consortile</p>
-              <p className="mt-1 text-sm text-gray-500">Comune reale GAIA, comune sorgente Capacitas e occupazioni correnti/storiche.</p>
+              <p className="mt-1 text-sm text-gray-500">Vista operativa del Consorzio: separa utilizzatore/pagatore annuale dagli intestatari proprietari rilevati in Capacitas.</p>
             </div>
             <p className="text-sm text-gray-500">{busy ? "Caricamento…" : `${consorzio?.units.length ?? 0} unità`}</p>
           </div>
@@ -270,6 +270,38 @@ export function ParticellaDetailDialog({
                       </p>
                     ) : null}
                   </div>
+                  <div className="mt-3 rounded-lg border border-gray-100 bg-gray-50 p-3">
+                    <p className="text-xs font-medium uppercase tracking-widest text-gray-400">Intestatari Proprietari</p>
+                    {unit.intestatari_proprietari.length === 0 ? (
+                      <p className="mt-2 text-sm text-gray-500">Nessun intestatario strutturato ancora disponibile.</p>
+                    ) : (
+                      <div className="mt-2 space-y-2">
+                        {unit.intestatari_proprietari.slice(0, 5).map((owner) => (
+                          <div key={owner.id} className="rounded-lg border border-white bg-white px-3 py-2 text-sm text-gray-700">
+                            <p className="font-medium text-gray-900">
+                              {owner.denominazione ?? "—"}
+                              {owner.deceduto ? <span className="ml-2 text-xs font-medium text-rose-700">Deceduto</span> : null}
+                            </p>
+                            <p className="mt-1 text-xs text-gray-500">
+                              CF: <span className="font-medium text-gray-700">{owner.codice_fiscale ?? "—"}</span>
+                              {" · "}Titolo: <span className="font-medium text-gray-700">{owner.titoli ?? "—"}</span>
+                            </p>
+                            {owner.person ? (
+                              <div className="mt-2 rounded-md border border-emerald-100 bg-emerald-50 px-2 py-1.5">
+                                <p className="text-xs font-medium text-emerald-800">Anagrafica GAIA corrente</p>
+                                <p className="mt-1 text-xs text-emerald-700">
+                                  {owner.person.cognome} {owner.person.nome} · {owner.person.codice_fiscale}
+                                </p>
+                                <p className="mt-1 text-xs text-emerald-700">
+                                  Storico anagrafica: {owner.person_snapshots.length} snapshot
+                                </p>
+                              </div>
+                            ) : null}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               ))
             )}
@@ -279,8 +311,8 @@ export function ParticellaDetailDialog({
         <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 p-3 text-sm text-gray-700">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="font-medium text-gray-900">Utenze collegate</p>
-              <p className="mt-1 text-sm text-gray-500">Elenco sintetico (ultime 10 per anno campagna).</p>
+              <p className="font-medium text-gray-900">Utilizzatore / pagatore annualità</p>
+              <p className="mt-1 text-sm text-gray-500">Elenco sintetico delle righe `cat_utenze_irrigue`: soggetto operativo della campagna annuale.</p>
             </div>
             <p className="text-sm text-gray-500">{busy ? "Caricamento…" : `${utenze.length} righe`}</p>
           </div>

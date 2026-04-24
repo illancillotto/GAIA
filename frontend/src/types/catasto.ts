@@ -113,6 +113,58 @@ export type CatConsorzioOccupancy = {
   updated_at: string;
 };
 
+export type CatCapacitasIntestatario = {
+  id: UUID;
+  subject_id: UUID | null;
+  idxana: string | null;
+  idxesa: string | null;
+  codice_fiscale: string | null;
+  denominazione: string | null;
+  data_nascita: string | null;
+  luogo_nascita: string | null;
+  residenza: string | null;
+  comune_residenza: string | null;
+  cap: string | null;
+  titoli: string | null;
+  deceduto: boolean;
+  collected_at: string;
+  person: {
+    subject_id: string;
+    cognome: string;
+    nome: string;
+    codice_fiscale: string;
+    data_nascita: string | null;
+    comune_nascita: string | null;
+    indirizzo: string | null;
+    comune_residenza: string | null;
+    cap: string | null;
+    email: string | null;
+    telefono: string | null;
+    note: string | null;
+    created_at: string;
+    updated_at: string;
+  } | null;
+  person_snapshots: Array<{
+    id: string;
+    subject_id: string;
+    source_system: string;
+    source_ref: string | null;
+    cognome: string;
+    nome: string;
+    codice_fiscale: string;
+    data_nascita: string | null;
+    comune_nascita: string | null;
+    indirizzo: string | null;
+    comune_residenza: string | null;
+    cap: string | null;
+    email: string | null;
+    telefono: string | null;
+    note: string | null;
+    valid_from: string | null;
+    collected_at: string;
+  }>;
+};
+
 export type CatConsorzioUnit = {
   id: UUID;
   particella_id: UUID | null;
@@ -136,6 +188,7 @@ export type CatConsorzioUnit = {
   comune_label: string | null;
   source_comune_resolved_label: string | null;
   occupancies: CatConsorzioOccupancy[];
+  intestatari_proprietari: CatCapacitasIntestatario[];
 };
 
 export type CatParticellaConsorzio = {
@@ -294,23 +347,33 @@ export type CatAnagraficaSearchResponse = {
 export type CatAnagraficaBulkRowInput = {
   row_index: number;
   comune?: string | null;
+  sezione?: string | null;
   foglio?: string | null;
   particella?: string | null;
+  sub?: string | null;
+  codice_fiscale?: string | null;
+  partita_iva?: string | null;
 };
 
 export type CatAnagraficaBulkSearchRequest = {
+  kind?: "CF_PIVA_PARTICELLE" | "COMUNE_FOGLIO_PARTICELLA_INTESTATARI";
   rows: CatAnagraficaBulkRowInput[];
 };
 
 export type CatAnagraficaBulkRowResult = {
   row_index: number;
   comune_input: string | null;
+  sezione_input: string | null;
   foglio_input: string | null;
   particella_input: string | null;
+  sub_input: string | null;
+  codice_fiscale_input: string | null;
+  partita_iva_input: string | null;
   esito: "FOUND" | "NOT_FOUND" | "MULTIPLE_MATCHES" | "INVALID_ROW" | "ERROR" | string;
   message: string;
   particella_id: UUID | null;
   match: CatAnagraficaMatch | null;
+  matches: CatAnagraficaMatch[] | null;
   matches_count: number | null;
 };
 

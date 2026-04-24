@@ -353,6 +353,7 @@ def test_subjects_crud_search_and_stats() -> None:
     detail_payload = detail_response.json()
     assert detail_payload["person"]["codice_fiscale"] == "RSSMRA80A01H501Z"
     assert len(detail_payload["audit_log"]) == 1
+    assert detail_payload["person_snapshots"] == []
 
     update_response = client.put(
         f"/utenze/subjects/{subject_id}",
@@ -371,6 +372,9 @@ def test_subjects_crud_search_and_stats() -> None:
     updated = update_response.json()
     assert updated["requires_review"] is True
     assert updated["person"]["telefono"] == "0783123456"
+    assert len(updated["person_snapshots"]) == 1
+    assert updated["person_snapshots"][0]["email"] == "mario.rossi@example.local"
+    assert updated["person_snapshots"][0]["telefono"] is None
 
     search_response = client.get("/utenze/search?q=mario", headers=headers)
     assert search_response.status_code == 200

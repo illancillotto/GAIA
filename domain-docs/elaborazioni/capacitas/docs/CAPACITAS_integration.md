@@ -58,6 +58,7 @@ Implementato:
   - `cat_consorzio_occupancies`
   - `cat_capacitas_terreni_rows`
   - `cat_capacitas_certificati`
+  - `cat_capacitas_intestatari`
   - `cat_capacitas_terreno_details`
   - `capacitas_terreni_sync_jobs`
 - frontend workspace in `frontend/src/components/elaborazioni/capacitas-workspace.tsx` con:
@@ -76,7 +77,8 @@ Limitazioni deliberate di questo step:
 
 - il job massivo e persistito, parte subito in background dal backend applicativo e resta rilanciabile via API; non esiste ancora un worker dedicato separato o una coda esterna
 - la risoluzione `comune testuale -> frazione Capacitas` resta separata tramite endpoint lookup
-- il matching automatico con `ana_subjects` non e ancora stato introdotto
+- il matching automatico con `ana_subjects` e ora introdotto solo per gli intestatari proprietari con `codice_fiscale` disponibile
+- non e ancora presente una deduplica multi-sorgente avanzata oltre al match su CF e al fallback su `IDXANA`
 
 Regola speciale implementata:
 
@@ -279,6 +281,7 @@ La pipeline Capacitas Terreni deve produrre almeno tre livelli di dato:
 2. `scheda certificato snapshot`
    - contenuto completo di `rptCertificato.aspx`
    - soggetti, titoli, terreni, utenza, stato ruolo
+   - per ogni intestatario: `IDXANA`, `IDXESA`, CF, dati di nascita, residenza, titoli, flag `deceduto`
 3. `terreno detail snapshot`
    - contenuto completo di `dettaglioTerreno.aspx`
    - riordino, parametri, porzione irrigua, metadati terreno
@@ -287,6 +290,8 @@ Persistenza consigliata:
 
 - salvare sia campi normalizzati sia `raw_html`/`raw_json` di audit
 - usare snapshot storicizzati, non semplice overwrite
+- per gli intestatari proprietari rilevati in Capacitas usare una tabella dedicata `cat_capacitas_intestatari`, separata dall'anagrafica GAIA
+- il link verso `ana_subjects` deve essere opzionale e derivare da match su `codice_fiscale` o fallback `source_external_id=IDXANA`
 
 ## TODO successivi
 
@@ -348,4 +353,5 @@ router.include_router(capacitas_router)
 - [x] Job persistito e rilanciabile per batch Terreni
 - [ ] Job di acquisizione massiva “Terreni Capacitas” in `elaborazioni`
 - [ ] Lookup guidato `frazioni -> sezioni -> fogli` lato frontend
-- [ ] Matching automatico con `ana_subjects` e deduplica snapshot
+- [~] Matching automatico con `ana_subjects` e deduplica snapshot
+  stato attuale: match su CF/fallback `IDXANA` per intestatari proprietari, con update di `ana_persons` storicizzato tramite `ana_person_snapshots`

@@ -44,3 +44,17 @@ def test_anagrafica_migration_includes_expected_uniques() -> None:
     assert '"uq_ana_subjects_nas_folder_path"' in migration
     assert '"uq_ana_persons_codice_fiscale"' in migration
     assert '"uq_ana_companies_partita_iva"' in migration
+
+
+def test_person_snapshot_migration_creates_history_table() -> None:
+    migration = (
+        ROOT
+        / "backend"
+        / "alembic"
+        / "versions"
+        / "20260424_0060_add_anagrafica_person_snapshots.py"
+    ).read_text(encoding="utf-8")
+
+    assert '"ana_person_snapshots"' in migration
+    assert '"ix_ana_person_snapshots_subject_id"' in migration
+    assert '"ix_ana_person_snapshots_collected_at"' in migration

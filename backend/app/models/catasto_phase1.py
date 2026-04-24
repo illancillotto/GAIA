@@ -431,6 +431,38 @@ class CatCapacitasCertificato(Base):
     collected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
+    intestatari_snapshots: Mapped[list["CatCapacitasIntestatario"]] = relationship(
+        back_populates="certificato", cascade="all, delete-orphan"
+    )
+
+
+class CatCapacitasIntestatario(Base):
+    __tablename__ = "cat_capacitas_intestatari"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    certificato_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("cat_capacitas_certificati.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    subject_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ana_subjects.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    idxana: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    idxesa: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    codice_fiscale: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    denominazione: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    data_nascita: Mapped[date | None] = mapped_column(Date, nullable=True)
+    luogo_nascita: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    residenza: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    comune_residenza: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    cap: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    titoli: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    deceduto: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    raw_payload_json: Mapped[dict | list | None] = mapped_column(JSON, nullable=True)
+    collected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    certificato: Mapped["CatCapacitasCertificato"] = relationship(back_populates="intestatari_snapshots")
+
 
 class CatCapacitasTerrenoDetail(Base):
     __tablename__ = "cat_capacitas_terreno_details"
@@ -483,6 +515,7 @@ __all__ = [
     "CatAliquota",
     "CatAnomalia",
     "CatCapacitasCertificato",
+    "CatCapacitasIntestatario",
     "CatCapacitasTerrenoDetail",
     "CatCapacitasTerrenoRow",
     "CatDistretto",

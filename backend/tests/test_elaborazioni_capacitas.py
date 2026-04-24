@@ -20,6 +20,7 @@ from app.models.capacitas import CapacitasCredential
 from app.models.capacitas import CapacitasTerreniSyncJob
 from app.models.catasto_phase1 import (
     CatCapacitasCertificato,
+    CatCapacitasIntestatario,
     CatCapacitasTerrenoDetail,
     CatCapacitasTerrenoRow,
     CatComune,
@@ -30,6 +31,7 @@ from app.models.catasto_phase1 import (
     CatSchemaContributo,
     CatUtenzaIrrigua,
 )
+from app.modules.utenze.models import AnagraficaPerson, AnagraficaPersonSnapshot, AnagraficaSubject
 from app.modules.elaborazioni.capacitas.models import (
     CapacitasLookupOption,
     CapacitasSearchResult,
@@ -361,7 +363,10 @@ def test_capacitas_terreni_parsers_extract_rows_certificato_and_detail() -> None
     <pre id="Capacitas_ContentMain_ContentCertificatoPre">
       <div>PARTITA: <span>0A1103877/38/00000</span> - URAS - STATO: Iscrivibile a ruolo</div>
       <div> UTENZA: D001254734 - STATO CNC: non iscritta a ruolo</div>
-      <div class='rpt-riga rpt-riga-ana'>DI: <span>Lasi Daniela</span> C.F. LSADNL68S48L496D</div>
+      <div class='rpt-riga rpt-riga-ana' data-idxesa='D5DAB932-5D57-4088-A55B-C60EAE215F59' data-idxana='BD23974F-E9A2-4DFA-8B2C-9B18B1699EB8'>DI: <span>Lasi Daniela</span> C.F. LSADNL68S48L496D <span class='evento-'></span></div>
+      <div class='rpt-riga'>    nata il 08/11/1968 in &lt;L496&gt; URAS</div>
+      <div class='rpt-riga'>    RES: 09098 &lt;L122&gt; TERRALBA (OR) - VIA Manca 151</div>
+      <div class='rpt-riga'>    TITOLI: Proprieta` 1/1</div>
       <div class='rpt-riga rpt-riga-terreno' data-id='74354D04-D124-4D9E-A3B4-9CA24400EA9F'>   34    1   680            5.500 0 </div>
       <div class='rpt-riga rpt-riga-terreno' data-id='74354D04-D124-4D9E-A3B4-9CA24400EA9F'><strong>Riordino: </strong>R.F. 23/8099 <strong> Maglia: </strong>178 <strong> Lotto: </strong>1</div>
     </pre>
@@ -384,6 +389,11 @@ def test_capacitas_terreni_parsers_extract_rows_certificato_and_detail() -> None
     assert result.rows[0].row_visual_state == "current_black"
     assert certificato.partita_code == "0A1103877/38/00000"
     assert certificato.utenza_code == "D001254734"
+    assert certificato.intestatari[0].idxana == "BD23974F-E9A2-4DFA-8B2C-9B18B1699EB8"
+    assert certificato.intestatari[0].codice_fiscale == "LSADNL68S48L496D"
+    assert certificato.intestatari[0].luogo_nascita == "URAS"
+    assert certificato.intestatari[0].comune_residenza == "TERRALBA"
+    assert certificato.intestatari[0].titoli == "Proprieta` 1/1"
     assert certificato.terreni[0].riordino_code == "R.F. 23/8099"
     assert detail.foglio == "1"
     assert detail.particella == "680"
@@ -725,6 +735,20 @@ def test_capacitas_terreni_sync_persists_consorzio_snapshot(monkeypatch: pytest.
             utenza_code="D001254734",
             utenza_status="non iscritta a ruolo",
             ruolo_status="Iscrivibile a ruolo",
+            intestatari=[
+                {
+                    "idxana": "BD23974F-E9A2-4DFA-8B2C-9B18B1699EB8",
+                    "idxesa": "D5DAB932-5D57-4088-A55B-C60EAE215F59",
+                    "codice_fiscale": "LSADNL68S48L496D",
+                    "denominazione": "Lasi Daniela",
+                    "data_nascita": date(1968, 11, 8),
+                    "luogo_nascita": "URAS",
+                    "residenza": "09098 TERRALBA (OR) - VIA Manca 151",
+                    "comune_residenza": "TERRALBA",
+                    "cap": "09098",
+                    "titoli": "Proprieta` 1/1",
+                }
+            ],
             raw_html="<html>certificato</html>",
         )
 
@@ -776,7 +800,12 @@ def test_capacitas_terreni_sync_persists_consorzio_snapshot(monkeypatch: pytest.
         assert db.query(CatConsorzioOccupancy).count() == 1
         assert db.query(CatCapacitasTerrenoRow).count() == 1
         assert db.query(CatCapacitasCertificato).count() == 1
+        assert db.query(CatCapacitasIntestatario).count() == 1
         assert db.query(CatCapacitasTerrenoDetail).count() == 1
+        assert db.query(AnagraficaSubject).count() == 1
+        person = db.query(AnagraficaPerson).one()
+        assert person.codice_fiscale == "LSADNL68S48L496D"
+        assert person.comune_residenza == "TERRALBA"
     finally:
         db.close()
 
@@ -880,6 +909,131 @@ def test_capacitas_terreni_sync_avoids_duplicate_certificati_for_same_cco(monkey
     try:
         assert db.query(CatCapacitasCertificato).count() == 1
         assert db.query(CatCapacitasTerrenoRow).count() == 2
+    finally:
+        db.close()
+
+
+def test_capacitas_terreni_sync_updates_existing_person_with_snapshot(monkeypatch: pytest.MonkeyPatch) -> None:
+    create_response = client.post(
+        "/elaborazioni/capacitas/credentials",
+        headers=auth_headers(),
+        json={"label": "Terreni Snapshot", "username": "capacitas-user", "password": "capacitas-secret"},
+    )
+    credential_id = create_response.json()["id"]
+
+    db = TestingSessionLocal()
+    try:
+        subject = AnagraficaSubject(
+            subject_type="person",
+            status="active",
+            source_system="gaia",
+            source_name_raw="Lasi_Daniela_LSADNL68S48L496D",
+            requires_review=False,
+        )
+        db.add(subject)
+        db.flush()
+        db.add(
+            AnagraficaPerson(
+                subject_id=subject.id,
+                cognome="Lasi",
+                nome="Daniela",
+                codice_fiscale="LSADNL68S48L496D",
+                comune_residenza="URAS",
+                indirizzo="VIA Vecchia 1",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    async def fake_login(self):
+        from app.modules.elaborazioni.capacitas.session import CapacitasSession
+
+        self._session = CapacitasSession(token="123e4567-e89b-12d3-a456-426614174000")
+        return self._session
+
+    async def fake_activate_app(self, app_name: str) -> None:
+        return None
+
+    async def fake_close(self) -> None:
+        return None
+
+    async def fake_search_terreni(self, request) -> CapacitasTerreniSearchResult:
+        return CapacitasTerreniSearchResult(
+            total=1,
+            rows=[
+                {
+                    "ID": "snapshot-row-1",
+                    "PVC": "097",
+                    "COM": "289",
+                    "CCO": "0A1103877",
+                    "FRA": "38",
+                    "CCS": "00000",
+                    "Foglio": "1",
+                    "Partic": "680",
+                    "Anno": "2026",
+                    "Belfiore": "L496",
+                    "Ta_ext": " 9",
+                }
+            ],
+        )
+
+    async def fake_fetch_certificato(self, **kwargs) -> CapacitasTerrenoCertificato:
+        return CapacitasTerrenoCertificato(
+            cco="0A1103877",
+            fra="38",
+            ccs="00000",
+            pvc="097",
+            com="289",
+            partita_code="0A1103877/38/00000",
+            intestatari=[
+                {
+                    "idxana": "BD23974F-E9A2-4DFA-8B2C-9B18B1699EB8",
+                    "idxesa": "D5DAB932-5D57-4088-A55B-C60EAE215F59",
+                    "codice_fiscale": "LSADNL68S48L496D",
+                    "denominazione": "Lasi Daniela",
+                    "comune_residenza": "TERRALBA",
+                    "residenza": "09098 TERRALBA (OR) - VIA Manca 151",
+                    "cap": "09098",
+                }
+            ],
+            raw_html="<html>certificato</html>",
+        )
+
+    async def fake_fetch_detail(self, **kwargs) -> CapacitasTerrenoDetail:
+        return CapacitasTerrenoDetail(external_row_id="snapshot-row-1", foglio="1", particella="680", raw_html="<html>dettaglio</html>")
+
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.login", fake_login)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.activate_app", fake_activate_app)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.close", fake_close)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.search_terreni", fake_search_terreni)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.fetch_certificato", fake_fetch_certificato)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.fetch_terreno_detail", fake_fetch_detail)
+
+    response = client.post(
+        "/elaborazioni/capacitas/involture/terreni/sync",
+        headers=auth_headers(),
+        json={
+            "frazione_id": "38",
+            "foglio": "1",
+            "particella": "680",
+            "credential_id": credential_id,
+            "fetch_certificati": True,
+            "fetch_details": True,
+        },
+    )
+
+    assert response.status_code == 200
+
+    db = TestingSessionLocal()
+    try:
+        person = db.query(AnagraficaPerson).filter_by(codice_fiscale="LSADNL68S48L496D").one()
+        assert person.comune_residenza == "TERRALBA"
+        assert person.indirizzo == "09098 TERRALBA (OR) - VIA Manca 151"
+        assert db.query(AnagraficaPersonSnapshot).count() == 1
+        snapshot = db.query(AnagraficaPersonSnapshot).one()
+        assert snapshot.comune_residenza == "URAS"
+        assert db.query(CatCapacitasIntestatario).one().subject_id == person.subject_id
     finally:
         db.close()
 

@@ -117,7 +117,7 @@ export function AnagraficaResultPanel({
                 <p className="text-[10px] font-medium uppercase tracking-widest text-gray-400">Anagrafica</p>
                 <div className="mt-2 space-y-2 text-sm text-gray-700">
                   {intestatari.length === 0 ? (
-                    <p className="text-gray-500">Nessun intestatario disponibile (non presente in `cat_intestatari`).</p>
+                    <p className="text-gray-500">Nessun intestatario disponibile nel dataset proprietari oggi collegato.</p>
                   ) : (
                     <ul className="list-disc pl-5">
                       {intestatari.slice(0, 8).map((i) => (
@@ -185,7 +185,7 @@ export function AnagraficaResultPanel({
                 ) : null}
               </p>
               <p className="mt-1 text-gray-500">
-                Il dettaglio mostra anche il catasto consortile: comune reale GAIA, comune sorgente Capacitas e occupazioni.
+                Il dettaglio mostra anche il catasto consortile: utilizzatore/pagatore annuale, intestatari proprietari rilevati in Capacitas e comune reale GAIA.
               </p>
             </div>
           </article>

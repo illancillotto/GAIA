@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.models.catasto_phase1 import (
     CatCapacitasCertificato,
+    CatCapacitasIntestatario,
     CatCapacitasTerrenoDetail,
     CatCapacitasTerrenoRow,
     CatComune,
@@ -19,6 +20,8 @@ from app.models.catasto_phase1 import (
     CatParticella,
     CatUtenzaIrrigua,
 )
+from app.modules.utenze.models import AnagraficaPerson, AnagraficaSubject, AnagraficaSubjectStatus, AnagraficaSubjectType
+from app.modules.utenze.services.person_history_service import snapshot_person_if_changed
 from app.models.capacitas import CapacitasTerreniSyncJob
 from app.modules.elaborazioni.capacitas.apps.involture.client import InVoltureClient
 from app.modules.elaborazioni.capacitas.models import (
@@ -30,6 +33,7 @@ from app.modules.elaborazioni.capacitas.models import (
     CapacitasTerreniJobOut,
     CapacitasTerreniSearchRequest,
     CapacitasTerreniSyncResponse,
+    CapacitasIntestatario,
     CapacitasTerrenoCertificato,
     CapacitasTerrenoDetail,
     CapacitasTerrenoRow,
@@ -122,22 +126,23 @@ async def sync_terreni_for_request(
                 )
                 certificato_cache[cache_key] = certificato
                 counters.certificati += 1
-                db.add(
-                    CatCapacitasCertificato(
-                        cco=certificato.cco or row.cco,
-                        fra=certificato.fra or row.fra,
-                        ccs=certificato.ccs or row.ccs,
-                        pvc=certificato.pvc or row.pvc,
-                        com=certificato.com or row.com,
-                        partita_code=certificato.partita_code,
-                        utenza_code=certificato.utenza_code,
-                        utenza_status=certificato.utenza_status,
-                        ruolo_status=certificato.ruolo_status or certificato.partita_status,
-                        raw_html=certificato.raw_html,
-                        parsed_json=certificato.model_dump(exclude_none=True),
-                        collected_at=collected_at,
-                    )
+                certificato_snapshot = CatCapacitasCertificato(
+                    cco=certificato.cco or row.cco,
+                    fra=certificato.fra or row.fra,
+                    ccs=certificato.ccs or row.ccs,
+                    pvc=certificato.pvc or row.pvc,
+                    com=certificato.com or row.com,
+                    partita_code=certificato.partita_code,
+                    utenza_code=certificato.utenza_code,
+                    utenza_status=certificato.utenza_status,
+                    ruolo_status=certificato.ruolo_status or certificato.partita_status,
+                    raw_html=certificato.raw_html,
+                    parsed_json=certificato.model_dump(exclude_none=True),
+                    collected_at=collected_at,
                 )
+                db.add(certificato_snapshot)
+                db.flush()
+                _persist_capacitas_intestatari(db, certificato_snapshot, certificato, collected_at)
 
         if detail is not None:
             db.add(
@@ -266,6 +271,152 @@ def build_search_key(request: CapacitasTerreniSearchRequest) -> str:
 
 def _normalize_lookup_label(value: str) -> str:
     return re.sub(r"\s+", " ", value.strip()).casefold()
+
+
+def _persist_capacitas_intestatari(
+    db: Session,
+    certificato_snapshot: CatCapacitasCertificato,
+    certificato: CapacitasTerrenoCertificato,
+    collected_at: datetime,
+) -> None:
+    for intestatario in certificato.intestatari:
+        subject = _match_or_create_subject_from_intestatario(db, intestatario, collected_at)
+        db.add(
+            CatCapacitasIntestatario(
+                certificato_id=certificato_snapshot.id,
+                subject_id=subject.id if subject else None,
+                idxana=intestatario.idxana,
+                idxesa=intestatario.idxesa,
+                codice_fiscale=intestatario.codice_fiscale,
+                denominazione=intestatario.denominazione,
+                data_nascita=intestatario.data_nascita,
+                luogo_nascita=intestatario.luogo_nascita,
+                residenza=intestatario.residenza,
+                comune_residenza=intestatario.comune_residenza,
+                cap=intestatario.cap,
+                titoli=intestatario.titoli,
+                deceduto=intestatario.deceduto,
+                raw_payload_json=intestatario.model_dump(exclude_none=True),
+                collected_at=collected_at,
+            )
+        )
+
+
+def _match_or_create_subject_from_intestatario(
+    db: Session,
+    intestatario: CapacitasIntestatario,
+    collected_at: datetime,
+) -> AnagraficaSubject | None:
+    normalized_cf = _normalize_cf(intestatario.codice_fiscale)
+    person: AnagraficaPerson | None = None
+
+    if normalized_cf:
+        person = db.scalar(select(AnagraficaPerson).where(AnagraficaPerson.codice_fiscale == normalized_cf))
+    if person is None and intestatario.idxana:
+        subject = db.scalar(
+            select(AnagraficaSubject).where(
+                AnagraficaSubject.source_system == "capacitas",
+                AnagraficaSubject.source_external_id == intestatario.idxana,
+            )
+        )
+        if subject is not None:
+            person = db.get(AnagraficaPerson, subject.id)
+
+    if person is None and not normalized_cf:
+        return None
+
+    if person is None:
+        assert normalized_cf is not None
+        subject = AnagraficaSubject(
+            subject_type=AnagraficaSubjectType.PERSON.value,
+            status=AnagraficaSubjectStatus.ACTIVE.value,
+            source_system="capacitas",
+            source_external_id=intestatario.idxana,
+            source_name_raw=intestatario.denominazione or normalized_cf or "Capacitas intestatario",
+            requires_review=False,
+        )
+        db.add(subject)
+        db.flush()
+        cognome, nome = _split_denominazione(intestatario.denominazione)
+        person = AnagraficaPerson(
+            subject_id=subject.id,
+            cognome=cognome,
+            nome=nome,
+            codice_fiscale=normalized_cf,
+            data_nascita=intestatario.data_nascita,
+            comune_nascita=intestatario.luogo_nascita,
+            indirizzo=intestatario.residenza,
+            comune_residenza=intestatario.comune_residenza,
+            cap=intestatario.cap,
+        )
+        db.add(person)
+        return subject
+
+    subject = db.get(AnagraficaSubject, person.subject_id)
+    if subject is None:
+        return None
+
+    cognome, nome = _split_denominazione(intestatario.denominazione, fallback_cognome=person.cognome, fallback_nome=person.nome)
+    merged_data = {
+        "cognome": cognome,
+        "nome": nome,
+        "codice_fiscale": normalized_cf or person.codice_fiscale,
+        "data_nascita": intestatario.data_nascita or person.data_nascita,
+        "comune_nascita": intestatario.luogo_nascita or person.comune_nascita,
+        "indirizzo": intestatario.residenza or person.indirizzo,
+        "comune_residenza": intestatario.comune_residenza or person.comune_residenza,
+        "cap": intestatario.cap or person.cap,
+        "email": person.email,
+        "telefono": person.telefono,
+        "note": person.note,
+    }
+    snapshot_person_if_changed(
+        db,
+        person,
+        merged_data,
+        source_system="capacitas",
+        source_ref=intestatario.idxana,
+        collected_at=collected_at,
+    )
+    person.cognome = merged_data["cognome"]
+    person.nome = merged_data["nome"]
+    person.codice_fiscale = merged_data["codice_fiscale"]
+    person.data_nascita = merged_data["data_nascita"]
+    person.comune_nascita = merged_data["comune_nascita"]
+    person.indirizzo = merged_data["indirizzo"]
+    person.comune_residenza = merged_data["comune_residenza"]
+    person.cap = merged_data["cap"]
+
+    if subject.source_system == "capacitas" and intestatario.idxana:
+        subject.source_external_id = intestatario.idxana
+    elif subject.source_external_id is None and intestatario.idxana:
+        subject.source_external_id = intestatario.idxana
+
+    if not subject.source_name_raw and intestatario.denominazione:
+        subject.source_name_raw = intestatario.denominazione
+    return subject
+
+
+def _normalize_cf(value: str | None) -> str | None:
+    if not value:
+        return None
+    normalized = re.sub(r"\s+", "", value).upper()
+    return normalized or None
+
+
+def _split_denominazione(
+    denominazione: str | None,
+    *,
+    fallback_cognome: str | None = None,
+    fallback_nome: str | None = None,
+) -> tuple[str, str]:
+    cleaned = (denominazione or "").strip()
+    if not cleaned:
+        return fallback_cognome or "Sconosciuto", fallback_nome or "Capacitas"
+    parts = cleaned.split()
+    if len(parts) == 1:
+        return parts[0], fallback_nome or parts[0]
+    return parts[0], " ".join(parts[1:])
 
 
 def _strip_numeric_prefix(value: str) -> str:

@@ -113,12 +113,15 @@ Entita di dominio oggi rilevanti per `catasto`:
 - `cat_particelle_history`
 - `cat_utenze_irrigue`
 - `cat_intestatari`
+- `cat_capacitas_intestatari`
 - `cat_anomalie`
 
 Distinzione semantica obbligatoria:
 
 - `cat_particelle` e `cat_particelle_history` rappresentano la particella catastale ufficiale proveniente da shapefile / servizi Agenzia Entrate-Territorio
 - `cat_utenze_irrigue` rappresenta oggi una fotografia annuale del ruolo Capacitas 0648/0985 e identifica chi paga / usa realmente l'acqua in una specifica annualita
+- `cat_capacitas_intestatari` rappresenta gli intestatari proprietari / aventi titolo estratti dallo scrape Terreni Capacitas e collegati, quando possibile, all'anagrafica GAIA
+- `ana_persons` rappresenta il dato anagrafico corrente normalizzato in GAIA; `ana_person_snapshots` conserva lo storico puntuale dei cambiamenti nel tempo
 - il dominio non deve piu trattare `cat_utenze_irrigue` come semplice “appendice del ruolo”: il file Capacitas contiene gia il primo livello del catasto consortile reale
 - il catasto consortile reale e distinto dal catasto catastale: una particella catastale puo essere utilizzata da un soggetto diverso dal proprietario, puo essere gestita in affitto verbale, mezzadria, divisione familiare o suddivisa in piu porzioni irrigue operative
 

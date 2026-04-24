@@ -29,6 +29,7 @@ from app.modules.utenze.models import (
     AnagraficaSubjectStatus,
 )
 from app.modules.utenze.services.classify_service import classify_filename
+from app.modules.utenze.services.person_history_service import snapshot_person_if_changed
 from app.modules.utenze.services.parser_service import parse_folder_name
 from app.services.nas_connector import NasConnectorError, get_nas_client
 
@@ -1214,15 +1215,36 @@ def _sync_subject_details(db: Session, subject: AnagraficaSubject, subject_previ
         codice_fiscale = subject_preview.codice_fiscale or f"MISSING-CF-{str(subject.id)[:8]}".upper()
         if existing_company is not None:
             db.delete(existing_company)
+        person_data = {
+            "cognome": subject_preview.cognome or subject.source_name_raw,
+            "nome": subject_preview.nome or "-",
+            "codice_fiscale": codice_fiscale,
+            "data_nascita": None,
+            "comune_nascita": None,
+            "indirizzo": None,
+            "comune_residenza": None,
+            "cap": None,
+            "email": None,
+            "telefono": None,
+            "note": None,
+        }
+        snapshot_person_if_changed(
+            db,
+            existing_person,
+            person_data,
+            source_system=subject.source_system or "gaia",
+            source_ref=subject.source_external_id,
+            collected_at=subject.imported_at or datetime.now(UTC),
+        )
         person = existing_person or AnagraficaPerson(
             subject_id=subject.id,
             cognome=subject_preview.cognome or "",
             nome=subject_preview.nome or "",
             codice_fiscale=codice_fiscale,
         )
-        person.cognome = subject_preview.cognome or subject.source_name_raw
-        person.nome = subject_preview.nome or "-"
-        person.codice_fiscale = codice_fiscale
+        person.cognome = person_data["cognome"]
+        person.nome = person_data["nome"]
+        person.codice_fiscale = person_data["codice_fiscale"]
         db.add(person)
         db.flush()
         return

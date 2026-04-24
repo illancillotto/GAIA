@@ -64,6 +64,7 @@ Le seguenti tabelle sono ora presenti nel DB e nel runtime backend:
 - `cat_consorzio_occupancies`
 - `cat_capacitas_terreni_rows`
 - `cat_capacitas_certificati`
+- `cat_capacitas_intestatari`
 - `cat_capacitas_terreno_details`
 
 Copertura reale di questo step:
@@ -72,6 +73,8 @@ Copertura reale di questo step:
 - creazione di segmenti solo quando il dettaglio terreno espone dati di riordino
 - creazione di una occupancy `capacitas_terreni` collegata a `CatUtenzaIrrigua` quando il `CCO` e l'anno coincidono
 - salvataggio snapshot grezzi e normalizzati per ricerca, certificato e dettaglio terreno
+- salvataggio intestatari del certificato in snapshot strutturato con link opzionale a `ana_subjects`
+- esposizione lato Catasto del dato anagrafico corrente da `ana_persons` e dello storico da `ana_person_snapshots` quando esiste il collegamento
 - tracciamento del comune sorgente Capacitas separato dal comune canonico GAIA
 - esposizione nel dettaglio frontend della particella di:
   - unita consortili collegate
@@ -82,7 +85,6 @@ Copertura reale di questo step:
 
 Non ancora implementato:
 
-- matching automatico con `ana_subjects`
 - consolidamento multi-sorgente o deduplica avanzata
 - worker o scheduler dedicato per job massivi su portafogli di particelle
 
@@ -249,6 +251,38 @@ Campi suggeriti:
 - `raw_html`
 - `parsed_json`
 - `collected_at`
+
+### 5.b Snapshot intestatari certificato
+
+Tabella introdotta:
+
+- `cat_capacitas_intestatari`
+
+Campi chiave:
+
+- `certificato_id`
+- `subject_id` nullable verso `ana_subjects`
+- `idxana`
+- `idxesa`
+- `codice_fiscale`
+- `denominazione`
+- `data_nascita`
+- `luogo_nascita`
+- `residenza`
+- `comune_residenza`
+- `cap`
+- `titoli`
+- `deceduto`
+- `raw_payload_json`
+- `collected_at`
+
+Regola:
+
+- il dato Capacitas degli intestatari non deve essere scritto direttamente dentro `ana_persons`
+- prima viene salvato lo snapshot grezzo/normalizzato dell'intestatario
+- poi, se esiste un match anagrafico su `codice_fiscale` o sul soggetto Capacitas gia noto, viene valorizzato `subject_id`
+- quando il match aggiorna `ana_persons`, il cambiamento deve produrre uno snapshot in `ana_person_snapshots`
+- nelle API Catasto il dato anagrafico mostrato all'utente deve uscire da `ana_persons`; lo snapshot Capacitas resta la traccia sorgente/origine
 
 ### 6. Snapshot dettaglio terreno / riordino
 
