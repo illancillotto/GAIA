@@ -233,6 +233,33 @@ def test_capacitas_session_extracts_token_from_html_and_auth_cookie() -> None:
     assert cookie_token == "123e4567-e89b-12d3-a456-426614174000"
 
 
+def test_capacitas_session_builds_login_form_data_from_real_markup() -> None:
+    from app.modules.elaborazioni.capacitas.session import CapacitasSessionManager
+
+    html_text = """
+    <form method="post" action="./login.aspx" id="form1" onsubmit="MakeSafe();">
+      <input type="hidden" name="__LASTFOCUS" id="__LASTFOCUS" value="" />
+      <input type="hidden" name="__VIEWSTATE" id="__VIEWSTATE" value="vs123" />
+      <input type="hidden" name="__VIEWSTATEGENERATOR" id="__VIEWSTATEGENERATOR" value="gen123" />
+      <input type="hidden" name="__EVENTTARGET" id="__EVENTTARGET" value="" />
+      <input type="hidden" name="__EVENTARGUMENT" id="__EVENTARGUMENT" value="" />
+      <input type="hidden" name="__EVENTVALIDATION" id="__EVENTVALIDATION" value="ev123" />
+      <input name="ctl00$ContentMain$txtUsername" type="text" id="ContentMain_txtUsername" />
+      <input name="ctl00$ContentMain$txtPassword" type="password" id="ContentMain_txtPassword" />
+      <input type="submit" name="ctl00$ContentMain$btnAccedi" value="Accedi" id="ContentMain_btnAccedi" />
+      <input name="ctl00$ContentMain$txtGAUerInput" type="text" id="ContentMain_txtGAUerInput" />
+    </form>
+    """
+
+    form_data = CapacitasSessionManager._build_login_form_data(html_text, "PORCUAL", "#Cagliari1!")
+    assert form_data["__VIEWSTATE"] == "vs123"
+    assert form_data["__EVENTVALIDATION"] == "ev123"
+    assert form_data["ctl00$ContentMain$txtUsername"] == "PORCUAL"
+    assert form_data["ctl00$ContentMain$txtPassword"] == "#Cagliari1!"
+    assert form_data["ctl00$ContentMain$btnAccedi"] == "Accedi"
+    assert form_data["ctl00$ContentMain$txtGAUerInput"] == ""
+
+
 def test_capacitas_terreni_parsers_extract_rows_certificato_and_detail() -> None:
     from app.modules.elaborazioni.capacitas.apps.involture.parsers import (
         parse_certificato_html,
@@ -1114,6 +1141,27 @@ def test_capacitas_terreni_job_lifecycle_persists_and_runs(monkeypatch: pytest.M
         assert job.result_json is not None
     finally:
         db.close()
+
+
+def test_capacitas_terreni_job_create_rejects_inactive_credential() -> None:
+    create_response = client.post(
+        "/elaborazioni/capacitas/credentials",
+        headers=auth_headers(),
+        json={"label": "Terreni Inactive", "username": "capacitas-user", "password": "capacitas-secret", "active": False},
+    )
+    credential_id = create_response.json()["id"]
+
+    response = client.post(
+        "/elaborazioni/capacitas/involture/terreni/jobs",
+        headers=auth_headers(),
+        json={
+            "credential_id": credential_id,
+            "items": [{"comune": "Uras", "foglio": "1", "particella": "680"}],
+        },
+    )
+
+    assert response.status_code == 503
+    assert "non attiva" in response.json()["detail"]
 
 
 def test_capacitas_credential_test_returns_diagnostic_detail_on_login_failure(

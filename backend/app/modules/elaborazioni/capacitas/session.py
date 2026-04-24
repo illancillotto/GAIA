@@ -72,19 +72,9 @@ class CapacitasSessionManager:
         response.raise_for_status()
         self._last_login_page = response.text
 
-        viewstate, eventvalidation = self._extract_aspnet_fields(response.text)
-        if not viewstate:
+        form_data = self._build_login_form_data(response.text, self.username, self.password)
+        if "__VIEWSTATE" not in form_data:
             raise RuntimeError("Capacitas login: __VIEWSTATE non trovato nella pagina di login")
-
-        form_data = {
-            "__VIEWSTATE": viewstate,
-            "__EVENTVALIDATION": eventvalidation,
-            "__EVENTTARGET": "",
-            "__EVENTARGUMENT": "",
-            "Capacitas$ContentMain$txtUsername": self.username,
-            "Capacitas$ContentMain$txtPassword": self.password,
-            "Capacitas$ContentMain$btnLogin": "Entra",
-        }
         logger.info("Capacitas login: POST credenziali per %s", self.username)
         response = await self._http.post(
             LOGIN_URL,
@@ -180,6 +170,64 @@ class CapacitasSessionManager:
             viewstate_match.group(1) if viewstate_match else "",
             eventvalidation_match.group(1) if eventvalidation_match else "",
         )
+
+    @staticmethod
+    def _build_login_form_data(html_text: str, username: str, password: str) -> dict[str, str]:
+        form_data: dict[str, str] = {}
+
+        for match in re.finditer(r'<input[^>]+type="hidden"[^>]+name="([^"]+)"[^>]+value="([^"]*)"', html_text, re.IGNORECASE):
+            form_data[html.unescape(match.group(1))] = html.unescape(match.group(2))
+
+        username_name = CapacitasSessionManager._extract_input_name_by_id(html_text, "ContentMain_txtUsername")
+        password_name = CapacitasSessionManager._extract_input_name_by_id(html_text, "ContentMain_txtPassword")
+        submit_name, submit_value = CapacitasSessionManager._extract_submit_name_and_value(html_text, "ContentMain_btnAccedi")
+        gau_name = CapacitasSessionManager._extract_input_name_by_id(html_text, "ContentMain_txtGAUerInput")
+
+        if username_name:
+            form_data[username_name] = username
+        if password_name:
+            form_data[password_name] = password
+        if submit_name:
+            form_data[submit_name] = submit_value or "Accedi"
+        if gau_name and gau_name not in form_data:
+            form_data[gau_name] = ""
+
+        form_data.setdefault("__LASTFOCUS", "")
+        form_data.setdefault("__EVENTTARGET", "")
+        form_data.setdefault("__EVENTARGUMENT", "")
+        return form_data
+
+    @staticmethod
+    def _extract_input_name_by_id(html_text: str, element_id: str) -> str:
+        match = re.search(
+            rf'<input[^>]+name="([^"]+)"[^>]+id="{re.escape(element_id)}"[^>]*>',
+            html_text,
+            re.IGNORECASE,
+        )
+        if not match:
+            match = re.search(
+                rf'<input[^>]+id="{re.escape(element_id)}"[^>]+name="([^"]+)"[^>]*>',
+                html_text,
+                re.IGNORECASE,
+            )
+        return html.unescape(match.group(1)) if match else ""
+
+    @staticmethod
+    def _extract_submit_name_and_value(html_text: str, element_id: str) -> tuple[str, str]:
+        match = re.search(
+            rf'<input[^>]+type="submit"[^>]+name="([^"]+)"[^>]+value="([^"]*)"[^>]+id="{re.escape(element_id)}"[^>]*>',
+            html_text,
+            re.IGNORECASE,
+        )
+        if not match:
+            match = re.search(
+                rf'<input[^>]+type="submit"[^>]+id="{re.escape(element_id)}"[^>]+name="([^"]+)"[^>]+value="([^"]*)"[^>]*>',
+                html_text,
+                re.IGNORECASE,
+            )
+        if not match:
+            return "", ""
+        return html.unescape(match.group(1)), html.unescape(match.group(2))
 
     @staticmethod
     def _extract_token(url: str) -> str | None:

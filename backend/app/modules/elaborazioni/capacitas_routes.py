@@ -384,6 +384,12 @@ def create_terreni_job(
     current_user: Annotated[ApplicationUser, Depends(require_admin_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> CapacitasTerreniJobOut:
+    if body.credential_id is not None:
+        try:
+            pick_credential(db, body.credential_id)
+        except RuntimeError as exc:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+
     job = create_terreni_sync_job(
         db,
         requested_by_user_id=current_user.id,
