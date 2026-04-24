@@ -13,23 +13,23 @@ from app.models.application_user import ApplicationUser
 from app.models.catasto_phase1 import (
     CatAnomalia,
     CatCapacitasCertificato,
-    CatCapacitasIntestatario,
     CatComune,
     CatConsorzioUnit,
     CatParticella,
     CatParticellaHistory,
+    CatUtenzaIntestatario,
     CatUtenzaIrrigua,
 )
 from app.modules.utenze.models import AnagraficaPerson, AnagraficaPersonSnapshot
 from app.schemas.catasto_phase1 import (
     CatAnomaliaResponse,
-    CatCapacitasIntestatarioResponse,
     CatConsorzioOccupancyResponse,
     CatConsorzioUnitSummaryResponse,
     CatParticellaDetailResponse,
     CatParticellaConsorzioResponse,
     CatParticellaHistoryResponse,
     CatParticellaResponse,
+    CatUtenzaIntestatarioResponse,
     CatUtenzaIrriguaResponse,
 )
 from app.modules.utenze.schemas import AnagraficaPersonResponse, AnagraficaPersonSnapshotResponse
@@ -154,105 +154,86 @@ def get_particella_consorzio(
     for unit in units:
         comune_record = db.get(CatComune, unit.comune_id) if unit.comune_id else None
         source_comune_record = db.get(CatComune, unit.source_comune_id) if unit.source_comune_id else None
-        ccos = sorted({occ.cco for occ in unit.occupancies if occ.cco})
-        intestatari_proprietari: list[CatCapacitasIntestatarioResponse] = []
-        if ccos:
-            latest_certificati = (
+        utenza_ids = [occ.utenza_id for occ in unit.occupancies if occ.utenza_id]
+        intestatari_proprietari: list[CatUtenzaIntestatarioResponse] = []
+        if utenza_ids:
+            intestatari_rows = (
                 db.execute(
-                    select(CatCapacitasCertificato)
-                    .where(CatCapacitasCertificato.cco.in_(ccos))
-                    .order_by(desc(CatCapacitasCertificato.collected_at))
+                    select(CatUtenzaIntestatario)
+                    .where(CatUtenzaIntestatario.utenza_id.in_(utenza_ids))
+                    .order_by(desc(CatUtenzaIntestatario.data_agg), CatUtenzaIntestatario.denominazione.asc())
                 )
                 .scalars()
                 .all()
             )
-            latest_by_cco: dict[str, CatCapacitasCertificato] = {}
-            for certificato in latest_certificati:
-                if certificato.cco not in latest_by_cco:
-                    latest_by_cco[certificato.cco] = certificato
-            certificato_ids = [cert.id for cert in latest_by_cco.values()]
-            if certificato_ids:
-                intestatari_rows = (
-                    db.execute(
-                        select(CatCapacitasIntestatario)
-                        .where(CatCapacitasIntestatario.certificato_id.in_(certificato_ids))
-                        .order_by(
-                            desc(CatCapacitasIntestatario.collected_at),
-                            CatCapacitasIntestatario.denominazione.asc(),
+            for row in intestatari_rows:
+                person = db.get(AnagraficaPerson, row.subject_id) if row.subject_id else None
+                person_snapshots = []
+                if row.subject_id:
+                    person_snapshots = (
+                        db.execute(
+                            select(AnagraficaPersonSnapshot)
+                            .where(AnagraficaPersonSnapshot.subject_id == row.subject_id)
+                            .order_by(desc(AnagraficaPersonSnapshot.collected_at))
+                            .limit(10)
                         )
+                        .scalars()
+                        .all()
                     )
-                    .scalars()
-                    .all()
+                base_owner = CatUtenzaIntestatarioResponse.model_validate(row).model_dump(
+                    exclude={"person", "person_snapshots"}
                 )
-                intestatari_proprietari = []
-                for row in intestatari_rows:
-                    person = db.get(AnagraficaPerson, row.subject_id) if row.subject_id else None
-                    person_snapshots = []
-                    if row.subject_id:
-                        person_snapshots = (
-                            db.execute(
-                                select(AnagraficaPersonSnapshot)
-                                .where(AnagraficaPersonSnapshot.subject_id == row.subject_id)
-                                .order_by(desc(AnagraficaPersonSnapshot.collected_at))
-                                .limit(10)
+                intestatari_proprietari.append(
+                    CatUtenzaIntestatarioResponse(
+                        **base_owner,
+                        person=(
+                            AnagraficaPersonResponse.model_validate(
+                                {
+                                    "subject_id": str(person.subject_id),
+                                    "cognome": person.cognome,
+                                    "nome": person.nome,
+                                    "codice_fiscale": person.codice_fiscale,
+                                    "data_nascita": person.data_nascita,
+                                    "comune_nascita": person.comune_nascita,
+                                    "indirizzo": person.indirizzo,
+                                    "comune_residenza": person.comune_residenza,
+                                    "cap": person.cap,
+                                    "email": person.email,
+                                    "telefono": person.telefono,
+                                    "note": person.note,
+                                    "created_at": person.created_at,
+                                    "updated_at": person.updated_at,
+                                }
                             )
-                            .scalars()
-                            .all()
-                        )
-                    base_owner = CatCapacitasIntestatarioResponse.model_validate(row).model_dump(
-                        exclude={"person", "person_snapshots"}
+                            if person
+                            else None
+                        ),
+                        person_snapshots=[
+                            AnagraficaPersonSnapshotResponse.model_validate(
+                                {
+                                    "id": str(snapshot.id),
+                                    "subject_id": str(snapshot.subject_id),
+                                    "source_system": snapshot.source_system,
+                                    "source_ref": snapshot.source_ref,
+                                    "cognome": snapshot.cognome,
+                                    "nome": snapshot.nome,
+                                    "codice_fiscale": snapshot.codice_fiscale,
+                                    "data_nascita": snapshot.data_nascita,
+                                    "comune_nascita": snapshot.comune_nascita,
+                                    "indirizzo": snapshot.indirizzo,
+                                    "comune_residenza": snapshot.comune_residenza,
+                                    "cap": snapshot.cap,
+                                    "email": snapshot.email,
+                                    "telefono": snapshot.telefono,
+                                    "note": snapshot.note,
+                                    "valid_from": snapshot.valid_from,
+                                    "collected_at": snapshot.collected_at,
+                                }
+                            )
+                            for snapshot in person_snapshots
+                        ],
                     )
-                    intestatari_proprietari.append(
-                        CatCapacitasIntestatarioResponse(
-                            **base_owner,
-                            person=(
-                                AnagraficaPersonResponse.model_validate(
-                                    {
-                                        "subject_id": str(person.subject_id),
-                                        "cognome": person.cognome,
-                                        "nome": person.nome,
-                                        "codice_fiscale": person.codice_fiscale,
-                                        "data_nascita": person.data_nascita,
-                                        "comune_nascita": person.comune_nascita,
-                                        "indirizzo": person.indirizzo,
-                                        "comune_residenza": person.comune_residenza,
-                                        "cap": person.cap,
-                                        "email": person.email,
-                                        "telefono": person.telefono,
-                                        "note": person.note,
-                                        "created_at": person.created_at,
-                                        "updated_at": person.updated_at,
-                                    }
-                                )
-                                if person
-                                else None
-                            ),
-                            person_snapshots=[
-                                AnagraficaPersonSnapshotResponse.model_validate(
-                                    {
-                                        "id": str(snapshot.id),
-                                        "subject_id": str(snapshot.subject_id),
-                                        "source_system": snapshot.source_system,
-                                        "source_ref": snapshot.source_ref,
-                                        "cognome": snapshot.cognome,
-                                        "nome": snapshot.nome,
-                                        "codice_fiscale": snapshot.codice_fiscale,
-                                        "data_nascita": snapshot.data_nascita,
-                                        "comune_nascita": snapshot.comune_nascita,
-                                        "indirizzo": snapshot.indirizzo,
-                                        "comune_residenza": snapshot.comune_residenza,
-                                        "cap": snapshot.cap,
-                                        "email": snapshot.email,
-                                        "telefono": snapshot.telefono,
-                                        "note": snapshot.note,
-                                        "valid_from": snapshot.valid_from,
-                                        "collected_at": snapshot.collected_at,
-                                    }
-                                )
-                                for snapshot in person_snapshots
-                            ],
-                        )
-                    )
+                )
         base_payload = CatConsorzioUnitSummaryResponse.model_validate(unit).model_dump(
             exclude={"comune_label", "source_comune_resolved_label", "occupancies", "intestatari_proprietari"}
         )

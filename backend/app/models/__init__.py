@@ -36,6 +36,7 @@ from app.modules.catasto.models import (
     CatConsorzioOccupancy,
     CatConsorzioUnit,
     CatConsorzioUnitSegment,
+    CatUtenzaIntestatario,
 )
 from app.models.nas_group import NasGroup
 from app.models.nas_user import NasUser
@@ -90,6 +91,7 @@ __all__ = [
     "CatConsorzioOccupancy",
     "CatConsorzioUnit",
     "CatConsorzioUnitSegment",
+    "CatUtenzaIntestatario",
     "CapacitasCredential",
     "CapacitasTerreniSyncJob",
     "EffectivePermission",

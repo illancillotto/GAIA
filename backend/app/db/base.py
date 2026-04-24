@@ -12,6 +12,7 @@ from app.modules.catasto.models import (
     CatConsorzioOccupancy,
     CatConsorzioUnit,
     CatConsorzioUnitSegment,
+    CatUtenzaIntestatario,
 )
 from app.modules.accessi.wc_org_charts import WCOrgChart, WCOrgChartEntry
 from app.modules.inventory.models import WarehouseRequest
@@ -104,6 +105,7 @@ __all__ = [
     "CatConsorzioOccupancy",
     "CatConsorzioUnit",
     "CatConsorzioUnitSegment",
+    "CatUtenzaIntestatario",
     "DeviceInventoryLink",
     "DevicePosition",
     "EffectivePermission",

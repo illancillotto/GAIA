@@ -30,6 +30,7 @@ from app.models.catasto_phase1 import (
     CatParticella,
     CatParticellaHistory,
     CatSchemaContributo,
+    CatUtenzaIntestatario,
     CatUtenzaIrrigua,
 )
 from app.modules.utenze.models import AnagraficaSubject
@@ -791,6 +792,7 @@ def test_particella_detail_history_utenze_and_anomalie_endpoints() -> None:
         )
         db.add(certificato)
         db.flush()
+        now = datetime.now(timezone.utc)
         db.add(
             CatCapacitasIntestatario(
                 certificato_id=certificato.id,
@@ -802,7 +804,25 @@ def test_particella_detail_history_utenze_and_anomalie_endpoints() -> None:
                 comune_residenza="ORISTANO",
                 titoli="Proprieta` 1/1",
                 deceduto=False,
-                collected_at=datetime.now(timezone.utc),
+                collected_at=now,
+            )
+        )
+        db.add(
+            CatUtenzaIntestatario(
+                utenza_id=utenza.id,
+                subject_id=subject.id,
+                idxana="IDX-ANA-1",
+                idxesa="IDX-ESA-1",
+                history_id="HIST-1",
+                anno_riferimento=2025,
+                data_agg=now,
+                codice_fiscale="RSSMRA80A01H501Z",
+                denominazione="Rossi Mario",
+                comune_residenza="ORISTANO",
+                residenza="09070 ORISTANO - Via Roma 1",
+                titoli="Proprieta` 1/1",
+                deceduto=False,
+                collected_at=now,
             )
         )
         db.add(

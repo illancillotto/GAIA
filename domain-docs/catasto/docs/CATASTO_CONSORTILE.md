@@ -65,6 +65,7 @@ Le seguenti tabelle sono ora presenti nel DB e nel runtime backend:
 - `cat_capacitas_terreni_rows`
 - `cat_capacitas_certificati`
 - `cat_capacitas_intestatari`
+- `cat_utenza_intestatari`
 - `cat_capacitas_terreno_details`
 
 Copertura reale di questo step:
@@ -74,6 +75,9 @@ Copertura reale di questo step:
 - creazione di una occupancy `capacitas_terreni` collegata a `CatUtenzaIrrigua` quando il `CCO` e l'anno coincidono
 - salvataggio snapshot grezzi e normalizzati per ricerca, certificato e dettaglio terreno
 - salvataggio intestatari del certificato in snapshot strutturato con link opzionale a `ana_subjects`
+- popolamento di `cat_utenza_intestatari` per tenere traccia di tutti gli intestatari proprietari collegati a una specifica `cat_utenze_irrigue` in una determinata annualita
+- aggiornamento dell'anagrafica corrente direttamente su `ana_persons` quando lo storico Capacitas espone dati piu ricchi del certificato sintetico
+- scrittura di `ana_person_snapshots` quando lo scrape storico modifica il profilo corrente
 - esposizione lato Catasto del dato anagrafico corrente da `ana_persons` e dello storico da `ana_person_snapshots` quando esiste il collegamento
 - tracciamento del comune sorgente Capacitas separato dal comune canonico GAIA
 - esposizione nel dettaglio frontend della particella di:
@@ -257,6 +261,31 @@ Campi suggeriti:
 Tabella introdotta:
 
 - `cat_capacitas_intestatari`
+
+Ruolo:
+
+- conserva la fotografia sorgente degli intestatari letti dal certificato Terreni
+- non e il master anagrafico corrente
+- funge da snapshot tecnico/audit collegato alla singola acquisizione Capacitas
+
+### 5.c Intestatari annuali collegati all'utenza
+
+Tabella introdotta:
+
+- `cat_utenza_intestatari`
+
+Ruolo:
+
+- lega gli intestatari proprietari alla riga annuale `cat_utenze_irrigue`
+- conserva il contesto storico della singola annualita (`anno_riferimento`, `data_agg`, `voltura`, `op`, `site`, `sn`)
+- espone il collegamento al soggetto GAIA tramite `subject_id`
+- usa `ana_persons` come fonte corrente e `ana_person_snapshots` come storico interrogabile
+
+Principio operativo:
+
+- `cat_utenze_irrigue` continua a rappresentare l'utilizzatore/pagatore annuale
+- `cat_utenza_intestatari` rappresenta tutti gli intestatari proprietari noti per quella specifica utenza/anno
+- i due concetti non devono essere fusi
 
 Campi chiave:
 

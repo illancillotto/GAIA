@@ -230,6 +230,7 @@ class CatUtenzaIrrigua(Base):
     particella_record: Mapped["CatParticella | None"] = relationship(back_populates="utenze")
     anomalie: Mapped[list["CatAnomalia"]] = relationship(back_populates="utenza")
     occupancies: Mapped[list["CatConsorzioOccupancy"]] = relationship(back_populates="utenza_record")
+    intestatari_annuali: Mapped[list["CatUtenzaIntestatario"]] = relationship(back_populates="utenza_record")
     comune: Mapped["CatComune | None"] = relationship(foreign_keys=[comune_id])
 
     @property
@@ -464,6 +465,44 @@ class CatCapacitasIntestatario(Base):
     certificato: Mapped["CatCapacitasCertificato"] = relationship(back_populates="intestatari_snapshots")
 
 
+class CatUtenzaIntestatario(Base):
+    __tablename__ = "cat_utenza_intestatari"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    utenza_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("cat_utenze_irrigue.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    subject_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ana_subjects.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    idxana: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    idxesa: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    history_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    anno_riferimento: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    data_agg: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    at: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    site: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    voltura: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    op: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    sn: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    codice_fiscale: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    partita_iva: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    denominazione: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    data_nascita: Mapped[date | None] = mapped_column(Date, nullable=True)
+    luogo_nascita: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    sesso: Mapped[str | None] = mapped_column(String(4), nullable=True)
+    residenza: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    comune_residenza: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    cap: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    titoli: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    deceduto: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    collected_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    raw_payload_json: Mapped[dict | list | None] = mapped_column(JSON, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    utenza_record: Mapped["CatUtenzaIrrigua"] = relationship(back_populates="intestatari_annuali")
+
+
 class CatCapacitasTerrenoDetail(Base):
     __tablename__ = "cat_capacitas_terreno_details"
 
@@ -528,5 +567,6 @@ __all__ = [
     "CatParticella",
     "CatParticellaHistory",
     "CatSchemaContributo",
+    "CatUtenzaIntestatario",
     "CatUtenzaIrrigua",
 ]

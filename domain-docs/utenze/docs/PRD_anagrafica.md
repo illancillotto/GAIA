@@ -226,6 +226,15 @@ Per essere coerente con l'architettura reale del repository, il modulo richiede 
 - integrazione del modulo nelle sidebar e nella home frontend
 - aggiornamento dei tipi API frontend relativi a `CurrentUser` e `ApplicationUser`
 
+### 3.5 Storico anagrafico da Capacitas
+
+Per il dominio Catasto/Capacitas valgono queste regole:
+
+- il primo scrape utile da Capacitas costituisce la baseline iniziale del profilo in `ana_persons`
+- gli scrape successivi che modificano il profilo corrente scrivono prima uno snapshot in `ana_person_snapshots`
+- il dato corrente mostrato da Catasto deve uscire da `ana_persons`, non dalle tabelle snapshot Capacitas
+- le tabelle Capacitas collegate al catasto consortile (`cat_capacitas_intestatari`, `cat_utenza_intestatari`) non sostituiscono l'anagrafica GAIA: la arricchiscono e la collegano al contesto particella/annualita
+
 ---
 
 ## 4. API Endpoints

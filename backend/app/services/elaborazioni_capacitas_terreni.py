@@ -18,6 +18,7 @@ from app.models.catasto_phase1 import (
     CatConsorzioUnit,
     CatConsorzioUnitSegment,
     CatParticella,
+    CatUtenzaIntestatario,
     CatUtenzaIrrigua,
 )
 from app.modules.utenze.models import AnagraficaPerson, AnagraficaSubject, AnagraficaSubjectStatus, AnagraficaSubjectType
@@ -25,6 +26,8 @@ from app.modules.utenze.services.person_history_service import snapshot_person_i
 from app.models.capacitas import CapacitasTerreniSyncJob
 from app.modules.elaborazioni.capacitas.apps.involture.client import InVoltureClient
 from app.modules.elaborazioni.capacitas.models import (
+    CapacitasAnagraficaDetail,
+    CapacitasStoricoAnagraficaRow,
     CapacitasTerreniBatchItem,
     CapacitasTerreniBatchItemResult,
     CapacitasTerreniBatchRequest,
@@ -71,6 +74,8 @@ async def sync_terreni_for_request(
     search_key = build_search_key(request)
     counters = SyncCounters()
     certificato_cache: dict[tuple[str, str, str, str, str], CapacitasTerrenoCertificato] = {}
+    storico_cache: dict[str, list[CapacitasStoricoAnagraficaRow]] = {}
+    anagrafica_detail_cache: dict[str, CapacitasAnagraficaDetail] = {}
 
     for row in result.rows:
         unit = _find_or_create_unit(db, row)
@@ -106,7 +111,7 @@ async def sync_terreni_for_request(
             superficie_mq=_to_decimal(row.superficie),
             bac_descr=row.bac_descr,
             row_visual_state=row.row_visual_state,
-            raw_payload_json=row.model_dump(by_alias=True, exclude_none=True),
+            raw_payload_json=row.model_dump(by_alias=True, exclude_none=True, mode="json"),
             collected_at=collected_at,
         )
         db.add(row_snapshot)
@@ -137,12 +142,20 @@ async def sync_terreni_for_request(
                     utenza_status=certificato.utenza_status,
                     ruolo_status=certificato.ruolo_status or certificato.partita_status,
                     raw_html=certificato.raw_html,
-                    parsed_json=certificato.model_dump(exclude_none=True),
+                    parsed_json=certificato.model_dump(exclude_none=True, mode="json"),
                     collected_at=collected_at,
                 )
                 db.add(certificato_snapshot)
                 db.flush()
-                _persist_capacitas_intestatari(db, certificato_snapshot, certificato, collected_at)
+                await _persist_capacitas_intestatari(
+                    db,
+                    client,
+                    certificato_snapshot,
+                    certificato,
+                    collected_at,
+                    storico_cache=storico_cache,
+                    anagrafica_detail_cache=anagrafica_detail_cache,
+                )
 
         if detail is not None:
             db.add(
@@ -157,7 +170,7 @@ async def sync_terreni_for_request(
                     riordino_lotto=detail.riordino_lotto,
                     irridist=detail.irridist,
                     raw_html=detail.raw_html,
-                    parsed_json=detail.model_dump(exclude_none=True),
+                    parsed_json=detail.model_dump(exclude_none=True, mode="json"),
                     collected_at=collected_at,
                 )
             )
@@ -273,14 +286,49 @@ def _normalize_lookup_label(value: str) -> str:
     return re.sub(r"\s+", " ", value.strip()).casefold()
 
 
-def _persist_capacitas_intestatari(
+async def _persist_capacitas_intestatari(
     db: Session,
+    client: InVoltureClient,
     certificato_snapshot: CatCapacitasCertificato,
     certificato: CapacitasTerrenoCertificato,
     collected_at: datetime,
+    *,
+    storico_cache: dict[str, list[CapacitasStoricoAnagraficaRow]],
+    anagrafica_detail_cache: dict[str, CapacitasAnagraficaDetail],
 ) -> None:
+    utenze = []
+    if certificato.cco:
+        utenze = list(
+            db.scalars(select(CatUtenzaIrrigua).where(CatUtenzaIrrigua.cco == certificato.cco)).all()
+        )
     for intestatario in certificato.intestatari:
-        subject = _match_or_create_subject_from_intestatario(db, intestatario, collected_at)
+        history_rows: list[CapacitasStoricoAnagraficaRow] = []
+        if intestatario.idxana:
+            history_rows = storico_cache.get(intestatario.idxana, [])
+            if not history_rows:
+                try:
+                    history_rows = await client.fetch_anagrafica_history(idxana=intestatario.idxana)
+                except Exception:
+                    history_rows = []
+                storico_cache[intestatario.idxana] = history_rows
+
+        subject = (
+            _find_existing_subject_from_intestatario(db, intestatario)
+            if history_rows
+            else _match_or_create_subject_from_intestatario(db, intestatario, collected_at)
+        )
+        resolved_subject = await _persist_utenza_intestatari_from_history(
+            db,
+            client,
+            utenze,
+            intestatario,
+            collected_at,
+            storico_cache=storico_cache,
+            anagrafica_detail_cache=anagrafica_detail_cache,
+            fallback_subject=subject,
+            prefetched_history_rows=history_rows,
+        )
+        subject = resolved_subject or subject
         db.add(
             CatCapacitasIntestatario(
                 certificato_id=certificato_snapshot.id,
@@ -296,10 +344,276 @@ def _persist_capacitas_intestatari(
                 cap=intestatario.cap,
                 titoli=intestatario.titoli,
                 deceduto=intestatario.deceduto,
-                raw_payload_json=intestatario.model_dump(exclude_none=True),
+                raw_payload_json=intestatario.model_dump(exclude_none=True, mode="json"),
                 collected_at=collected_at,
             )
         )
+
+
+async def _persist_utenza_intestatari_from_history(
+    db: Session,
+    client: InVoltureClient,
+    utenze: list[CatUtenzaIrrigua],
+    intestatario: CapacitasIntestatario,
+    collected_at: datetime,
+    *,
+    storico_cache: dict[str, list[CapacitasStoricoAnagraficaRow]],
+    anagrafica_detail_cache: dict[str, CapacitasAnagraficaDetail],
+    fallback_subject: AnagraficaSubject | None,
+    prefetched_history_rows: list[CapacitasStoricoAnagraficaRow] | None = None,
+) -> AnagraficaSubject | None:
+    if not utenze:
+        return fallback_subject
+
+    history_rows: list[CapacitasStoricoAnagraficaRow] = prefetched_history_rows or []
+    if not history_rows and intestatario.idxana:
+        history_rows = storico_cache.get(intestatario.idxana, [])
+        if not history_rows:
+            try:
+                history_rows = await client.fetch_anagrafica_history(idxana=intestatario.idxana)
+            except Exception:
+                history_rows = []
+            storico_cache[intestatario.idxana] = history_rows
+
+    resolved_subject = fallback_subject
+    for utenza in utenze:
+        matched_rows = [row for row in history_rows if _to_int(row.anno) == utenza.anno_campagna]
+        if matched_rows:
+            for history_row in matched_rows:
+                subject = await _match_or_create_subject_from_history_row(
+                    db,
+                    client,
+                    history_row,
+                    intestatario,
+                    anagrafica_detail_cache=anagrafica_detail_cache,
+                )
+                resolved_subject = subject or resolved_subject
+                _upsert_utenza_intestatario_link(
+                    db,
+                    utenza,
+                    history_row=history_row,
+                    intestatario=intestatario,
+                    subject=subject,
+                    collected_at=collected_at,
+                )
+        else:
+            _upsert_utenza_intestatario_link(
+                db,
+                utenza,
+                history_row=None,
+                intestatario=intestatario,
+                subject=fallback_subject,
+                collected_at=collected_at,
+            )
+    return resolved_subject
+
+
+def _find_existing_subject_from_intestatario(
+    db: Session,
+    intestatario: CapacitasIntestatario,
+) -> AnagraficaSubject | None:
+    normalized_cf = _normalize_cf(intestatario.codice_fiscale)
+    if normalized_cf:
+        person = db.scalar(select(AnagraficaPerson).where(AnagraficaPerson.codice_fiscale == normalized_cf))
+        if person is not None:
+            return db.get(AnagraficaSubject, person.subject_id)
+
+    if intestatario.idxana:
+        return db.scalar(
+            select(AnagraficaSubject).where(
+                AnagraficaSubject.source_system == "capacitas",
+                AnagraficaSubject.source_external_id == intestatario.idxana,
+            )
+        )
+
+    return None
+
+
+async def _match_or_create_subject_from_history_row(
+    db: Session,
+    client: InVoltureClient,
+    history_row: CapacitasStoricoAnagraficaRow,
+    intestatario: CapacitasIntestatario,
+    *,
+    anagrafica_detail_cache: dict[str, CapacitasAnagraficaDetail],
+) -> AnagraficaSubject | None:
+    detail = anagrafica_detail_cache.get(history_row.history_id)
+    if detail is None:
+        detail = await client.fetch_anagrafica_detail(history_id=history_row.history_id)
+        anagrafica_detail_cache[history_row.history_id] = detail
+
+    normalized_cf = _normalize_cf(detail.codice_fiscale or history_row.codice_fiscale or intestatario.codice_fiscale)
+    person: AnagraficaPerson | None = None
+    if normalized_cf:
+        person = db.scalar(select(AnagraficaPerson).where(AnagraficaPerson.codice_fiscale == normalized_cf))
+    if person is None and (history_row.idxana or intestatario.idxana):
+        subject = db.scalar(
+            select(AnagraficaSubject).where(
+                AnagraficaSubject.source_system == "capacitas",
+                AnagraficaSubject.source_external_id == (history_row.idxana or intestatario.idxana),
+            )
+        )
+        if subject is not None:
+            person = db.get(AnagraficaPerson, subject.id)
+
+    if person is None and not normalized_cf:
+        return None
+
+    person_data = _build_person_payload_from_history(detail, history_row, intestatario, normalized_cf)
+    collected_at = _parse_datetime_value(history_row.data_agg) or datetime.now(timezone.utc)
+
+    if person is None:
+        assert normalized_cf is not None
+        subject = AnagraficaSubject(
+            subject_type=AnagraficaSubjectType.PERSON.value,
+            status=AnagraficaSubjectStatus.ACTIVE.value,
+            source_system="capacitas",
+            source_external_id=history_row.idxana or intestatario.idxana,
+            source_name_raw=detail.denominazione or history_row.denominazione or intestatario.denominazione or normalized_cf,
+            requires_review=False,
+        )
+        db.add(subject)
+        db.flush()
+        person = AnagraficaPerson(subject_id=subject.id, **person_data)
+        db.add(person)
+        return subject
+
+    subject = db.get(AnagraficaSubject, person.subject_id)
+    if subject is None:
+        return None
+
+    snapshot_person_if_changed(
+        db,
+        person,
+        person_data,
+        source_system="capacitas",
+        source_ref=history_row.idxana or intestatario.idxana,
+        collected_at=collected_at,
+    )
+    for key, value in person_data.items():
+        setattr(person, key, value)
+
+    if history_row.idxana or intestatario.idxana:
+        subject.source_external_id = history_row.idxana or intestatario.idxana
+    if not subject.source_name_raw:
+        subject.source_name_raw = detail.denominazione or history_row.denominazione or intestatario.denominazione
+    return subject
+
+
+def _build_residenza_from_detail(detail: CapacitasAnagraficaDetail, intestatario: CapacitasIntestatario) -> tuple[str | None, str | None, str | None]:
+    indirizzo = _compose_address(
+        detail.residenza_toponimo,
+        detail.residenza_indirizzo,
+        detail.residenza_civico,
+        detail.residenza_sub,
+    )
+    comune = detail.residenza_belfiore or intestatario.comune_residenza
+    cap = detail.residenza_cap or intestatario.cap
+    residenza = indirizzo
+    if comune:
+        residenza = f"{(cap + ' ') if cap else ''}{comune} - {indirizzo or ''}".strip(" -")
+    return residenza or intestatario.residenza, comune, cap
+
+
+def _build_person_payload_from_history(
+    detail: CapacitasAnagraficaDetail,
+    history_row: CapacitasStoricoAnagraficaRow,
+    intestatario: CapacitasIntestatario,
+    normalized_cf: str | None,
+) -> dict[str, object | None]:
+    cognome = detail.cognome or _split_denominazione(detail.denominazione or history_row.denominazione or intestatario.denominazione)[0]
+    nome = detail.nome or _split_denominazione(detail.denominazione or history_row.denominazione or intestatario.denominazione)[1]
+    comune_nascita = history_row.luogo_nascita or detail.luogo_nascita or intestatario.luogo_nascita
+    residenza, comune_residenza, cap = _build_residenza_from_detail(detail, intestatario)
+    indirizzo = _compose_address(
+        detail.residenza_toponimo,
+        detail.residenza_indirizzo,
+        detail.residenza_civico,
+        detail.residenza_sub,
+    ) or residenza or intestatario.residenza
+    note_parts = [part for part in detail.note if part]
+    return {
+        "cognome": cognome,
+        "nome": nome,
+        "codice_fiscale": normalized_cf or "",
+        "data_nascita": detail.data_nascita or _parse_date_ddmmyyyy(history_row.data_nascita) or intestatario.data_nascita,
+        "comune_nascita": comune_nascita,
+        "indirizzo": indirizzo,
+        "comune_residenza": comune_residenza,
+        "cap": cap,
+        "email": detail.email,
+        "telefono": detail.telefono or detail.cellulare,
+        "note": " | ".join(note_parts) if note_parts else None,
+    }
+
+
+def _upsert_utenza_intestatario_link(
+    db: Session,
+    utenza: CatUtenzaIrrigua,
+    *,
+    history_row: CapacitasStoricoAnagraficaRow | None,
+    intestatario: CapacitasIntestatario,
+    subject: AnagraficaSubject | None,
+    collected_at: datetime,
+) -> None:
+    existing = db.scalar(
+        select(CatUtenzaIntestatario).where(
+            CatUtenzaIntestatario.utenza_id == utenza.id,
+            CatUtenzaIntestatario.history_id == (history_row.history_id if history_row else None),
+            CatUtenzaIntestatario.idxana == (history_row.idxana if history_row and history_row.idxana else intestatario.idxana),
+        )
+    )
+    if existing is not None:
+        return
+
+    residenza = intestatario.residenza
+    comune_residenza = intestatario.comune_residenza
+    cap = intestatario.cap
+    if history_row is not None:
+        # When available, use the historic detail-backed view already normalized in GAIA.
+        detail_residenza = None
+        if subject is not None:
+            person = db.get(AnagraficaPerson, subject.id)
+            if person is not None:
+                detail_residenza = person.indirizzo
+                comune_residenza = person.comune_residenza or comune_residenza
+                cap = person.cap or cap
+        if detail_residenza:
+            residenza = detail_residenza
+
+    db.add(
+        CatUtenzaIntestatario(
+            utenza_id=utenza.id,
+            subject_id=subject.id if subject else None,
+            idxana=history_row.idxana if history_row and history_row.idxana else intestatario.idxana,
+            idxesa=intestatario.idxesa,
+            history_id=history_row.history_id if history_row else None,
+            anno_riferimento=_to_int(history_row.anno) if history_row else utenza.anno_campagna,
+            data_agg=_parse_datetime_value(history_row.data_agg) if history_row else collected_at,
+            at=history_row.at if history_row else None,
+            site=history_row.site if history_row else None,
+            voltura=history_row.voltura if history_row else None,
+            op=history_row.op if history_row else None,
+            sn=history_row.sn if history_row else None,
+            codice_fiscale=history_row.codice_fiscale if history_row and history_row.codice_fiscale else intestatario.codice_fiscale,
+            partita_iva=history_row.partita_iva if history_row else None,
+            denominazione=history_row.denominazione if history_row and history_row.denominazione else intestatario.denominazione,
+            data_nascita=_parse_date_ddmmyyyy(history_row.data_nascita) if history_row else intestatario.data_nascita,
+            luogo_nascita=history_row.luogo_nascita if history_row else intestatario.luogo_nascita,
+            sesso=history_row.sesso if history_row else None,
+            residenza=residenza,
+            comune_residenza=comune_residenza,
+            cap=cap,
+            titoli=intestatario.titoli,
+            deceduto=intestatario.deceduto,
+            collected_at=collected_at,
+            raw_payload_json=(
+                history_row.model_dump(by_alias=True, exclude_none=True, mode="json")
+                if history_row
+                else intestatario.model_dump(exclude_none=True, mode="json")
+            ),
+        )
+    )
 
 
 def _match_or_create_subject_from_intestatario(
@@ -402,6 +716,34 @@ def _normalize_cf(value: str | None) -> str | None:
         return None
     normalized = re.sub(r"\s+", "", value).upper()
     return normalized or None
+
+
+def _parse_date_ddmmyyyy(value: str | None) -> date | None:
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value.strip(), "%d/%m/%Y").date()
+    except ValueError:
+        return None
+
+
+def _parse_datetime_value(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    for pattern in ("%d/%m/%Y %H:%M:%S", "%d/%m/%Y %H:%M"):
+        try:
+            return datetime.strptime(value.strip(), pattern).replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+    return None
+
+
+def _compose_address(toponimo: str | None, indirizzo: str | None, civico: str | None, sub: str | None) -> str | None:
+    parts = [part.strip() for part in [toponimo, indirizzo, civico] if part and part.strip()]
+    value = " ".join(parts).strip()
+    if sub and sub.strip():
+        value = f"{value}/{sub.strip()}" if value else sub.strip()
+    return value or None
 
 
 def _split_denominazione(
@@ -624,7 +966,7 @@ def create_terreni_sync_job(
         credential_id=credential_id,
         status="pending",
         mode="batch",
-        payload_json=payload.model_dump(exclude_none=True),
+        payload_json=payload.model_dump(exclude_none=True, mode="json"),
     )
     db.add(job)
     db.commit()
@@ -664,7 +1006,7 @@ async def run_terreni_sync_job(
     try:
         result = await sync_terreni_batch(db, client, payload)
         job.status = "succeeded" if result.failed_items == 0 else "completed_with_errors"
-        job.result_json = result.model_dump(exclude_none=True)
+        job.result_json = result.model_dump(exclude_none=True, mode="json")
         job.completed_at = datetime.now(timezone.utc)
         db.commit()
         db.refresh(job)

@@ -41,6 +41,70 @@ class CapacitasSearchResult(BaseModel):
     rows: list[CapacitasAnagrafica]
 
 
+class CapacitasStoricoAnagraficaRow(BaseModel):
+    history_id: str = Field(alias="ID")
+    idxana: str | None = Field(default=None, alias="IDXANA")
+    at: str | None = Field(default=None, alias="At")
+    data_agg: str | None = Field(default=None, alias="DataAgg")
+    denominazione: str | None = Field(default=None, alias="Denominazione")
+    codice_fiscale: str | None = Field(default=None, alias="CodFisc")
+    partita_iva: str | None = Field(default=None, alias="PIva")
+    data_nascita: str | None = Field(default=None, alias="DataNascita")
+    luogo_nascita: str | None = Field(default=None, alias="LuogoNascita")
+    sesso: str | None = Field(default=None, alias="Sesso")
+    anno: str | None = Field(default=None, alias="Anno")
+    site: str | None = Field(default=None, alias="Site")
+    voltura: str | None = Field(default=None, alias="Voltura")
+    op: str | None = Field(default=None, alias="Op")
+    sn: str | None = Field(default=None, alias="SN")
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class CapacitasAnagraficaDetail(BaseModel):
+    history_id: str | None = None
+    idxana: str | None = None
+    idxesa: str | None = None
+    is_persona_fisica: bool = True
+    cognome: str | None = None
+    nome: str | None = None
+    sesso: str | None = None
+    data_nascita: date | None = None
+    denominazione: str | None = None
+    luogo_nascita: str | None = None
+    luogo_nascita_belfiore: str | None = None
+    luogo_nascita_provincia: str | None = None
+    codice_fiscale: str | None = None
+    codice_fiscale_origine: str | None = None
+    partita_iva: str | None = None
+    partita_iva_origine: str | None = None
+    sede_belfiore: str | None = None
+    residenza_belfiore: str | None = None
+    residenza_provincia: str | None = None
+    residenza_localita: str | None = None
+    residenza_toponimo: str | None = None
+    residenza_indirizzo: str | None = None
+    residenza_civico: str | None = None
+    residenza_sub: str | None = None
+    residenza_cap: str | None = None
+    domicilio_belfiore: str | None = None
+    domicilio_provincia: str | None = None
+    domicilio_localita: str | None = None
+    domicilio_toponimo: str | None = None
+    domicilio_indirizzo: str | None = None
+    domicilio_civico: str | None = None
+    domicilio_sub: str | None = None
+    domicilio_cap: str | None = None
+    email: str | None = None
+    pec: str | None = None
+    telefono: str | None = None
+    fax: str | None = None
+    cellulare: str | None = None
+    ufficio: str | None = None
+    note: list[str] = Field(default_factory=list)
+    raw_html: str | None = None
+
+
 class CapacitasLookupOption(BaseModel):
     id: str
     display: str

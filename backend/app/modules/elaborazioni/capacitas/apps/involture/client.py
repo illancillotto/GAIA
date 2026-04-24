@@ -6,9 +6,11 @@ from urllib.parse import quote
 from app.modules.elaborazioni.capacitas.apps import get_capacitas_app
 from app.modules.elaborazioni.capacitas.decoder import decode_response
 from app.modules.elaborazioni.capacitas.models import (
+    CapacitasAnagraficaDetail,
     CapacitasAnagrafica,
     CapacitasLookupOption,
     CapacitasSearchResult,
+    CapacitasStoricoAnagraficaRow,
     CapacitasTerreniSearchRequest,
     CapacitasTerreniSearchResult,
     CapacitasTerrenoCertificato,
@@ -16,9 +18,11 @@ from app.modules.elaborazioni.capacitas.models import (
 )
 from app.modules.elaborazioni.capacitas.session import CapacitasSessionManager
 from app.modules.elaborazioni.capacitas.apps.involture.parsers import (
+    parse_anagrafica_detail_html,
     parse_certificato_html,
     parse_lookup_option_rows,
     parse_lookup_options,
+    parse_storico_anagrafica_rows,
     parse_terreni_search_result,
     parse_terreno_detail_html,
 )
@@ -34,6 +38,9 @@ AJAX_GRID_URL = f"{INVOLTURE_APP.base_url}/pages/ajax/ajaxGrid.aspx"
 RICERCA_TERRENI_URL = f"{INVOLTURE_APP.base_url}/pages/ricercaTerreni.aspx"
 CERTIFICATO_URL = f"{INVOLTURE_APP.base_url}/pages/rptCertificato.aspx"
 DETTAGLIO_TERRENO_URL = f"{INVOLTURE_APP.base_url}/pages/dettaglioTerreno.aspx"
+AJAX_STORICO_URL = f"{INVOLTURE_APP.base_url}/pages/ajax/ajaxStorico.aspx"
+DLG_STORICO_ANAG_URL = f"{INVOLTURE_APP.base_url}/pages/dialog/dlgStoricoAnag.aspx"
+DLG_DETTAGLIO_ANAG_URL = f"{INVOLTURE_APP.base_url}/pages/dialog/dlgNuovaAnagrafica.aspx"
 
 _AJAX_HEADERS = {
     "Accept": "*/*",
@@ -169,6 +176,34 @@ class InVoltureClient:
         )
         response.raise_for_status()
         return parse_terreno_detail_html(response.text)
+
+    async def fetch_anagrafica_history(self, *, idxana: str) -> list[CapacitasStoricoAnagraficaRow]:
+        http = self._manager.get_http_client()
+        token = self._manager.get_token()
+        response = await http.get(
+            AJAX_STORICO_URL,
+            params={"op": "ana", "IDXAna": idxana},
+            headers={**_AJAX_HEADERS, "Referer": f"{DLG_STORICO_ANAG_URL}?IDXana={idxana}&token={token}&app=involture&tenant="},
+        )
+        response.raise_for_status()
+        try:
+            decoded = decode_response(response.text.strip())
+        except ValueError as exc:
+            message = str(exc).casefold()
+            if "errore applicativo capacitas" in message and ("storic" in message or "anagraf" in message):
+                return []
+            raise
+        return parse_storico_anagrafica_rows(decoded)
+
+    async def fetch_anagrafica_detail(self, *, history_id: str) -> CapacitasAnagraficaDetail:
+        http = self._manager.get_http_client()
+        token = self._manager.get_token()
+        response = await http.get(
+            DLG_DETTAGLIO_ANAG_URL,
+            params={"ID": history_id, "storica": "1", "token": token, "app": "involture", "tenant": ""},
+        )
+        response.raise_for_status()
+        return parse_anagrafica_detail_html(response.text)
 
     async def _lookup(self, url: str, payload: dict[str, str]) -> list[CapacitasLookupOption]:
         http = self._manager.get_http_client()

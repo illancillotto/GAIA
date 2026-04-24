@@ -14,6 +14,7 @@ from app.models.catasto_phase1 import (
     CatParticella,
     CatParticellaHistory,
     CatSchemaContributo,
+    CatUtenzaIntestatario,
     CatUtenzaIrrigua,
 )
 
@@ -33,5 +34,6 @@ __all__ = [
     "CatParticella",
     "CatParticellaHistory",
     "CatSchemaContributo",
+    "CatUtenzaIntestatario",
     "CatUtenzaIrrigua",
 ]

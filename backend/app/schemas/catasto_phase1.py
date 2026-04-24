@@ -132,14 +132,24 @@ class CatConsorzioOccupancyResponse(BaseModel):
     updated_at: datetime
 
 
-class CatCapacitasIntestatarioResponse(BaseModel):
+class CatUtenzaIntestatarioResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
+    utenza_id: UUID
     subject_id: UUID | None
     idxana: str | None
     idxesa: str | None
+    history_id: str | None
+    anno_riferimento: int | None
+    data_agg: datetime | None
+    at: str | None
+    site: str | None
+    voltura: str | None
+    op: str | None
+    sn: str | None
     codice_fiscale: str | None
+    partita_iva: str | None
     denominazione: str | None
     data_nascita: date | None
     luogo_nascita: str | None
@@ -178,7 +188,7 @@ class CatConsorzioUnitSummaryResponse(BaseModel):
     comune_label: str | None = None
     source_comune_resolved_label: str | None = None
     occupancies: list[CatConsorzioOccupancyResponse] = []
-    intestatari_proprietari: list[CatCapacitasIntestatarioResponse] = []
+    intestatari_proprietari: list[CatUtenzaIntestatarioResponse] = []
 
 
 class CatParticellaConsorzioResponse(BaseModel):

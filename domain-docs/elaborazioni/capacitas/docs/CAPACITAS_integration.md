@@ -59,6 +59,7 @@ Implementato:
   - `cat_capacitas_terreni_rows`
   - `cat_capacitas_certificati`
   - `cat_capacitas_intestatari`
+  - `cat_utenza_intestatari`
   - `cat_capacitas_terreno_details`
   - `capacitas_terreni_sync_jobs`
 - frontend workspace in `frontend/src/components/elaborazioni/capacitas-workspace.tsx` con:
@@ -78,6 +79,7 @@ Limitazioni deliberate di questo step:
 - il job massivo e persistito, parte subito in background dal backend applicativo e resta rilanciabile via API; non esiste ancora un worker dedicato separato o una coda esterna
 - la risoluzione `comune testuale -> frazione Capacitas` resta separata tramite endpoint lookup
 - il matching automatico con `ana_subjects` e ora introdotto solo per gli intestatari proprietari con `codice_fiscale` disponibile
+- quando e disponibile lo storico anagrafico Capacitas, il sync usa il dettaglio storico come fonte per aggiornare `ana_persons` e scrivere `ana_person_snapshots`
 - non e ancora presente una deduplica multi-sorgente avanzata oltre al match su CF e al fallback su `IDXANA`
 
 Regola speciale implementata:
@@ -177,6 +179,30 @@ Sequenza osservata dai file HTML di riferimento:
 7. drill-down:
    - su `CCO` -> `rptCertificato.aspx`
    - su `ID terreno` -> `dettaglioTerreno.aspx`
+8. dal dettaglio anagrafica:
+   - pulsante `Storico`
+   - lista storica `dialog/dlgStoricoAnag.aspx`
+   - dettaglio storico `dialog/dlgNuovaAnagrafica.aspx?ID=<history_id>&storica=1`
+
+## Storico anagrafico Capacitas
+
+Flusso osservato in `dettaglioAnagrafica.aspx`:
+
+- il menu `Storico` chiama `StoricoAnagrafiche()`
+- il portale verifica prima se esistono righe via `ajax/ajaxStorico.aspx?op=n_ana&IDXAna=...`
+- se non c'e storico, mostra un toast e non apre nessuna modal
+- se esiste una sola riga apre direttamente `dlgNuovaAnagrafica.aspx?ID=...&storica=1`
+- se esistono piu righe apre `dlgStoricoAnag.aspx?IDXana=...`, da cui poi si apre il dettaglio storico selezionato
+
+Uso in GAIA:
+
+- il client Terreni recupera lo storico via `ajaxStorico.aspx?op=ana&IDXAna=...`
+- per ogni riga storica rilevante per l'annualita apre `dlgNuovaAnagrafica.aspx?ID=...&storica=1`
+- il dettaglio storico alimenta:
+  - `ana_persons` come anagrafica corrente consolidata
+  - `ana_person_snapshots` quando il profilo cambia
+  - `cat_utenza_intestatari` per collegare tutti gli intestatari proprietari alla singola `cat_utenze_irrigue` dell'anno
+- se Capacitas non espone storico per quel soggetto, il sync usa il dato sintetico del certificato come fallback e non fallisce
 
 ### Evidenze dai file locali
 
@@ -290,7 +316,7 @@ Persistenza consigliata:
 
 - salvare sia campi normalizzati sia `raw_html`/`raw_json` di audit
 - usare snapshot storicizzati, non semplice overwrite
-- per gli intestatari proprietari rilevati in Capacitas usare una tabella dedicata `cat_capacitas_intestatari`, separata dall'anagrafica GAIA
+- per gli intestatari proprietari rilevati in Capacitas usare `cat_capacitas_intestatari` come snapshot sorgente e `cat_utenza_intestatari` come legame annuale verso `cat_utenze_irrigue`
 - il link verso `ana_subjects` deve essere opzionale e derivare da match su `codice_fiscale` o fallback `source_external_id=IDXANA`
 - il primo scrape valido costituisce la baseline iniziale del profilo in GAIA; gli scrape successivi aggiornano `ana_persons` solo dopo aver scritto uno snapshot in `ana_person_snapshots` quando i dati cambiano
 

@@ -24,6 +24,7 @@ from app.models.catasto_phase1 import (
     CatCapacitasTerrenoDetail,
     CatCapacitasTerrenoRow,
     CatComune,
+    CatUtenzaIntestatario,
     CatConsorzioOccupancy,
     CatConsorzioUnit,
     CatImportBatch,
@@ -33,7 +34,9 @@ from app.models.catasto_phase1 import (
 )
 from app.modules.utenze.models import AnagraficaPerson, AnagraficaPersonSnapshot, AnagraficaSubject
 from app.modules.elaborazioni.capacitas.models import (
+    CapacitasAnagraficaDetail,
     CapacitasLookupOption,
+    CapacitasStoricoAnagraficaRow,
     CapacitasSearchResult,
     CapacitasTerreniSearchResult,
     CapacitasTerrenoCertificato,
@@ -347,6 +350,29 @@ async def test_involture_lookup_decodes_sz_payload(monkeypatch: pytest.MonkeyPat
     await manager.close()
 
 
+@pytest.mark.anyio
+async def test_involture_fetch_anagrafica_history_returns_empty_on_missing_history(monkeypatch: pytest.MonkeyPatch) -> None:
+    import httpx
+
+    from app.modules.elaborazioni.capacitas.apps.involture.client import InVoltureClient
+    from app.modules.elaborazioni.capacitas.session import CapacitasSessionManager
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text="NOnessuno storico presente")
+
+    transport = httpx.MockTransport(handler)
+    manager = CapacitasSessionManager("PORCUAL", "secret")
+    manager._http = httpx.AsyncClient(transport=transport)
+    manager._session = type("SessionStub", (), {"token": "123e4567-e89b-12d3-a456-426614174000"})()
+
+    client_api = InVoltureClient(manager)
+    rows = await client_api.fetch_anagrafica_history(idxana="IDX-TEST")
+
+    assert rows == []
+
+    await manager.close()
+
+
 def test_capacitas_terreni_parsers_extract_rows_certificato_and_detail() -> None:
     from app.modules.elaborazioni.capacitas.apps.involture.parsers import (
         parse_certificato_html,
@@ -399,6 +425,78 @@ def test_capacitas_terreni_parsers_extract_rows_certificato_and_detail() -> None
     assert detail.particella == "680"
     assert detail.riordino_maglia == "178"
     assert detail.irridist == "34"
+
+
+def test_capacitas_storico_anagrafica_parsers_extract_list_and_detail() -> None:
+    from app.modules.elaborazioni.capacitas.apps.involture.parsers import (
+        parse_anagrafica_detail_html,
+        parse_storico_anagrafica_rows,
+    )
+
+    storico_payload = """
+    [
+      {
+        ID: '079a6609-2896-4bc8-99c1-5eed0030723a',
+        IDXANA: 'd485ad5a-ccb4-493d-b868-414d321a9b2a',
+        At: 'AT',
+        DataAgg: '14/01/2015 10:54:23',
+        Denominazione: 'Cadoni Angelo Antioco',
+        CodFisc: 'CDNNLN53M01G113C',
+        PIva: '',
+        DataNascita: '01/08/1953',
+        LuogoNascita: 'ORISTANO',
+        Sesso: 'M',
+        Anno: '2014',
+        Site: 'Z',
+        Voltura: '999999',
+        Op: 'FIX',
+        SN: '9'
+      }
+    ]
+    """
+    detail_html = """
+    <form name="formDlg" method="post" action="./dlgNuovaAnagrafica.aspx?ID=079a6609-2896-4bc8-99c1-5eed0030723a&storica=1" id="formDlg">
+      <input id="txtCognomeDlg" value="Cadoni" />
+      <input id="txtNomeDlg" value="Angelo Antioco" />
+      <input id="txtSessoDlg" value="M" />
+      <input id="txtDataDlg" value="01/08/1953" />
+      <input id="txtDenominazioneDlg" value="Cadoni Angelo Antioco" />
+      <input id="txtBelfioreDlg" value="G113" />
+      <input id="txtProvDlg" value="OR" />
+      <input id="txtCodFiscDlg" value="CDNNLN53M01G113C" />
+      <input id="txtPIvaDlg" value="" />
+      <input id="txtResBelfDlg" value="PALMAS ARBOREA" />
+      <input id="txtResProvDlg" value="OR" />
+      <input id="txtResLocaDlg" value="" />
+      <select id="ddlResToponDlg"><option selected="selected">VIA</option></select>
+      <input id="txtResIndirDlg" value="Mameli" />
+      <input id="txtResCivDlg" value="18" />
+      <input id="txtResSubDlg" value="" />
+      <input id="txtResCapDlg" value="09090" />
+      <input id="txtAltreInfoEmailDlg" value="cadoni@example.local" />
+      <input id="txtAltreInfoTelDlg" value="0783000000" />
+      <input id="txtAltreInfoNote1Dlg" value="Storico importato" />
+      <input id="cbFisicaDlg" type="checkbox" checked="checked" />
+    </form>
+    """
+
+    rows = parse_storico_anagrafica_rows(storico_payload)
+    detail = parse_anagrafica_detail_html(detail_html)
+
+    assert len(rows) == 1
+    assert rows[0].history_id == "079a6609-2896-4bc8-99c1-5eed0030723a"
+    assert rows[0].idxana == "d485ad5a-ccb4-493d-b868-414d321a9b2a"
+    assert rows[0].denominazione == "Cadoni Angelo Antioco"
+    assert rows[0].anno == "2014"
+    assert detail.history_id == "079a6609-2896-4bc8-99c1-5eed0030723a"
+    assert detail.cognome == "Cadoni"
+    assert detail.nome == "Angelo Antioco"
+    assert detail.codice_fiscale == "CDNNLN53M01G113C"
+    assert detail.residenza_belfiore == "PALMAS ARBOREA"
+    assert detail.residenza_toponimo == "VIA"
+    assert detail.residenza_indirizzo == "Mameli"
+    assert detail.residenza_civico == "18"
+    assert detail.note == ["Storico importato"]
 
 
 def test_capacitas_credentials_crud_encrypts_password() -> None:
@@ -1003,12 +1101,55 @@ def test_capacitas_terreni_sync_updates_existing_person_with_snapshot(monkeypatc
     async def fake_fetch_detail(self, **kwargs) -> CapacitasTerrenoDetail:
         return CapacitasTerrenoDetail(external_row_id="snapshot-row-1", foglio="1", particella="680", raw_html="<html>dettaglio</html>")
 
+    async def fake_fetch_anagrafica_history(self, *, idxana: str):
+        assert idxana == "BD23974F-E9A2-4DFA-8B2C-9B18B1699EB8"
+        return [
+            CapacitasStoricoAnagraficaRow(
+                ID="HIST-1",
+                IDXANA=idxana,
+                At="AT",
+                DataAgg="14/01/2026 10:54:23",
+                Denominazione="Lasi Daniela",
+                CodFisc="LSADNL68S48L496D",
+                DataNascita="18/11/1968",
+                LuogoNascita="TERRALBA",
+                Sesso="F",
+                Anno="2026",
+                Site="Z",
+                Voltura="1",
+                Op="FIX",
+                SN="9",
+            )
+        ]
+
+    async def fake_fetch_anagrafica_detail(self, *, history_id: str):
+        assert history_id == "HIST-1"
+        return CapacitasAnagraficaDetail(
+            history_id=history_id,
+            idxana="BD23974F-E9A2-4DFA-8B2C-9B18B1699EB8",
+            is_persona_fisica=True,
+            cognome="Lasi",
+            nome="Daniela",
+            sesso="F",
+            data_nascita=date(1968, 11, 18),
+            denominazione="Lasi Daniela",
+            codice_fiscale="LSADNL68S48L496D",
+            residenza_belfiore="TERRALBA",
+            residenza_cap="09098",
+            residenza_toponimo="VIA",
+            residenza_indirizzo="Manca",
+            residenza_civico="151",
+            note=[],
+        )
+
     monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.login", fake_login)
     monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.activate_app", fake_activate_app)
     monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.close", fake_close)
     monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.search_terreni", fake_search_terreni)
     monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.fetch_certificato", fake_fetch_certificato)
     monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.fetch_terreno_detail", fake_fetch_detail)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.fetch_anagrafica_history", fake_fetch_anagrafica_history)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.fetch_anagrafica_detail", fake_fetch_anagrafica_detail)
 
     response = client.post(
         "/elaborazioni/capacitas/involture/terreni/sync",
@@ -1029,11 +1170,17 @@ def test_capacitas_terreni_sync_updates_existing_person_with_snapshot(monkeypatc
     try:
         person = db.query(AnagraficaPerson).filter_by(codice_fiscale="LSADNL68S48L496D").one()
         assert person.comune_residenza == "TERRALBA"
-        assert person.indirizzo == "09098 TERRALBA (OR) - VIA Manca 151"
+        assert person.indirizzo == "VIA Manca 151"
         assert db.query(AnagraficaPersonSnapshot).count() == 1
         snapshot = db.query(AnagraficaPersonSnapshot).one()
         assert snapshot.comune_residenza == "URAS"
         assert db.query(CatCapacitasIntestatario).one().subject_id == person.subject_id
+        assert db.query(CatUtenzaIntestatario).count() == 1
+        utenza_intestatario = db.query(CatUtenzaIntestatario).one()
+        assert utenza_intestatario.subject_id == person.subject_id
+        assert utenza_intestatario.residenza == "VIA Manca 151"
+        assert utenza_intestatario.comune_residenza == "TERRALBA"
+        assert utenza_intestatario.cap == "09098"
     finally:
         db.close()
 

@@ -9,8 +9,10 @@ from bs4 import BeautifulSoup
 
 from app.modules.elaborazioni.bonifica_oristanese.parsers import clean_html_text
 from app.modules.elaborazioni.capacitas.models import (
+    CapacitasAnagraficaDetail,
     CapacitasLookupOption,
     CapacitasIntestatario,
+    CapacitasStoricoAnagraficaRow,
     CapacitasTerreniSearchResult,
     CapacitasTerrenoCertificato,
     CapacitasCertificatoTerreno,
@@ -22,6 +24,16 @@ from app.modules.elaborazioni.capacitas.models import (
 def parse_lookup_options(payload: str) -> list[CapacitasLookupOption]:
     rows = _parse_jsish_payload(payload, context="lookup_options")
     return parse_lookup_option_rows(rows)
+
+
+def parse_storico_anagrafica_rows(payload: str | list | dict) -> list[CapacitasStoricoAnagraficaRow]:
+    if isinstance(payload, list):
+        rows_raw = [row for row in payload if isinstance(row, dict)]
+    elif isinstance(payload, dict):
+        rows_raw = [payload]
+    else:
+        rows_raw = _parse_jsish_payload(payload, context="storico_anagrafica")
+    return [CapacitasStoricoAnagraficaRow.model_validate(row) for row in rows_raw]
 
 
 def parse_lookup_option_rows(rows: list[object]) -> list[CapacitasLookupOption]:
@@ -46,6 +58,62 @@ def parse_terreni_search_result(payload: str | list | dict) -> CapacitasTerreniS
         rows_raw = _parse_jsish_payload(payload, context="terreni_search_result")
     rows = [_normalize_terreno_row(row) for row in rows_raw]
     return CapacitasTerreniSearchResult(total=len(rows), rows=rows)
+
+
+def parse_anagrafica_detail_html(html: str) -> CapacitasAnagraficaDetail:
+    soup = BeautifulSoup(html, "html.parser")
+    return CapacitasAnagraficaDetail(
+        history_id=_extract_optional_from_url_or_html(html, "ID"),
+        idxana=_extract_optional_from_url_or_html(html, "IDXANA"),
+        idxesa=_extract_optional_from_url_or_html(html, "IDXEsa") or _extract_optional_from_url_or_html(html, "IDXESA"),
+        is_persona_fisica=_extract_checkbox_checked(soup, "cbFisicaDlg", default=True),
+        cognome=_extract_input_value(soup, "txtCognomeDlg"),
+        nome=_extract_input_value(soup, "txtNomeDlg"),
+        sesso=_extract_input_value(soup, "txtSessoDlg"),
+        data_nascita=_parse_date_value(_extract_input_value(soup, "txtDataDlg")),
+        denominazione=_extract_input_value(soup, "txtDenominazioneDlg"),
+        luogo_nascita=_extract_selected_or_input_value(soup, "ddlCittaDaDlg", "txtBelfioreDlg"),
+        luogo_nascita_belfiore=_extract_input_value(soup, "txtBelfioreDlg"),
+        luogo_nascita_provincia=_extract_input_value(soup, "txtProvDlg"),
+        codice_fiscale=_extract_input_value(soup, "txtCodFiscDlg"),
+        codice_fiscale_origine=_extract_input_value(soup, "txtOrigineDlg"),
+        partita_iva=_extract_input_value(soup, "txtPIvaDlg"),
+        partita_iva_origine=_extract_input_value(soup, "txtPIvaOrigineDlg"),
+        sede_belfiore=_extract_input_value(soup, "txtBelfioreSedeDlg"),
+        residenza_belfiore=_extract_input_value(soup, "txtResBelfDlg"),
+        residenza_provincia=_extract_input_value(soup, "txtResProvDlg"),
+        residenza_localita=_extract_input_value(soup, "txtResLocaDlg"),
+        residenza_toponimo=_extract_selected_text(soup, "ddlResToponDlg"),
+        residenza_indirizzo=_extract_input_value(soup, "txtResIndirDlg"),
+        residenza_civico=_extract_input_value(soup, "txtResCivDlg"),
+        residenza_sub=_extract_input_value(soup, "txtResSubDlg"),
+        residenza_cap=_extract_input_value(soup, "txtResCapDlg"),
+        domicilio_belfiore=_extract_input_value(soup, "txtDomBelfDlg"),
+        domicilio_provincia=_extract_input_value(soup, "txtDomProvDlg"),
+        domicilio_localita=_extract_input_value(soup, "txtDomLocaDlg"),
+        domicilio_toponimo=_extract_selected_text(soup, "ddlDomToponDlg"),
+        domicilio_indirizzo=_extract_input_value(soup, "txtDomIndirDlg"),
+        domicilio_civico=_extract_input_value(soup, "txtDomCivDlg"),
+        domicilio_sub=_extract_input_value(soup, "txtDomSubDlg"),
+        domicilio_cap=_extract_input_value(soup, "txtDomCapDlg"),
+        email=_extract_input_value(soup, "txtAltreInfoEmailDlg"),
+        pec=_extract_input_value(soup, "txtAltreInfoPecDlg"),
+        telefono=_extract_input_value(soup, "txtAltreInfoTelDlg"),
+        fax=_extract_input_value(soup, "txtAltreInfoFaxDlg"),
+        cellulare=_extract_input_value(soup, "txtAltreInfoCelDlg"),
+        ufficio=_extract_input_value(soup, "txtAltreInfoUffDlg"),
+        note=[
+            value
+            for value in [
+                _extract_input_value(soup, "txtAltreInfoNote1Dlg"),
+                _extract_input_value(soup, "txtAltreInfoNote2Dlg"),
+                _extract_input_value(soup, "txtAltreInfoNote3Dlg"),
+                _extract_input_value(soup, "txtAltreInfoNote4Dlg"),
+            ]
+            if value
+        ],
+        raw_html=html,
+    )
 
 
 def parse_certificato_html(html: str) -> CapacitasTerrenoCertificato:
@@ -287,6 +355,36 @@ def _extract_input_value(soup: BeautifulSoup, field_id: str) -> str | None:
     if field is None:
         return None
     return _strip_value(field.get("value"))
+
+
+def _extract_selected_text(soup: BeautifulSoup, field_id: str) -> str | None:
+    field = soup.select_one(f"#{field_id}")
+    if field is None:
+        return None
+    option = field.select_one("option[selected]")
+    if option is None:
+        return None
+    return _strip_value(clean_html_text(option))
+
+
+def _extract_selected_or_input_value(soup: BeautifulSoup, select_id: str, input_id: str) -> str | None:
+    return _extract_selected_text(soup, select_id) or _extract_input_value(soup, input_id)
+
+
+def _extract_checkbox_checked(soup: BeautifulSoup, field_id: str, *, default: bool = False) -> bool:
+    field = soup.select_one(f"#{field_id}")
+    if field is None:
+        return default
+    return field.has_attr("checked")
+
+
+def _parse_date_value(value: str | None) -> date | None:
+    if not value:
+        return None
+    try:
+        return datetime.strptime(value, "%d/%m/%Y").date()
+    except ValueError:
+        return None
 
 
 def _strip_value(value: str | None) -> str | None:
