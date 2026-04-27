@@ -1,7 +1,7 @@
 "use client";
 
 import * as XLSX from "xlsx";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 
 import { DataTable } from "@/components/table/data-table";
@@ -53,6 +53,17 @@ type BulkSummary = {
   error: number;
 };
 
+type BulkOperationHistoryItem = BulkSummary & {
+  id: string;
+  executedAt: string;
+  fileName: string | null;
+  kind: "CF_PIVA_PARTICELLE" | "COMUNE_FOGLIO_PARTICELLA_INTESTATARI" | null;
+  skippedRows: number;
+};
+
+const HISTORY_STORAGE_KEY = "gaia.catasto.elaborazioniMassive.history.v1";
+const HISTORY_LIMIT = 5;
+
 function buildSummary(results: CatAnagraficaBulkRowResult[]): BulkSummary {
   const s: BulkSummary = { total: results.length, found: 0, notFound: 0, multiple: 0, invalid: 0, error: 0 };
   for (const r of results) {
@@ -63,6 +74,30 @@ function buildSummary(results: CatAnagraficaBulkRowResult[]): BulkSummary {
     else if (r.esito === "ERROR") s.error += 1;
   }
   return s;
+}
+
+function formatOperationKind(kind: BulkOperationHistoryItem["kind"]): string {
+  if (kind === "CF_PIVA_PARTICELLE") return "CF/P.IVA -> Particelle";
+  if (kind === "COMUNE_FOGLIO_PARTICELLA_INTESTATARI") return "Particelle -> Intestatari";
+  return "Tipo non rilevato";
+}
+
+function loadHistory(): BulkOperationHistoryItem[] {
+  try {
+    const raw = window.localStorage.getItem(HISTORY_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.slice(0, HISTORY_LIMIT).filter((item): item is BulkOperationHistoryItem => {
+      return item && typeof item === "object" && typeof item.id === "string" && typeof item.executedAt === "string";
+    });
+  } catch {
+    return [];
+  }
+}
+
+function saveHistory(items: BulkOperationHistoryItem[]): void {
+  window.localStorage.setItem(HISTORY_STORAGE_KEY, JSON.stringify(items.slice(0, HISTORY_LIMIT)));
 }
 
 function inferKindFromHeaders(headers: string[]): "CF_PIVA_PARTICELLE" | "COMUNE_FOGLIO_PARTICELLA_INTESTATARI" {
@@ -193,8 +228,13 @@ export function AnagraficaBulkPanel() {
   const [results, setResults] = useState<CatAnagraficaBulkRowResult[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [operationHistory, setOperationHistory] = useState<BulkOperationHistoryItem[]>([]);
 
   const summary = useMemo(() => buildSummary(results), [results]);
+
+  useEffect(() => {
+    setOperationHistory(loadHistory());
+  }, []);
 
   const columns = useMemo<ColumnDef<CatAnagraficaBulkRowResult>[]>(
     () => [
@@ -312,7 +352,19 @@ export function AnagraficaBulkPanel() {
     setBusy(true);
     try {
       const response = await catastoBulkSearchAnagrafica(token, { kind: inferredKind ?? undefined, rows: parsedRows });
+      const nextSummary = buildSummary(response.results);
+      const historyItem: BulkOperationHistoryItem = {
+        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        executedAt: new Date().toISOString(),
+        fileName: sourceFile?.name ?? null,
+        kind: inferredKind,
+        skippedRows,
+        ...nextSummary,
+      };
+      const nextHistory = [historyItem, ...operationHistory].slice(0, HISTORY_LIMIT);
       setResults(response.results);
+      setOperationHistory(nextHistory);
+      saveHistory(nextHistory);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Errore elaborazione massiva");
@@ -765,6 +817,58 @@ export function AnagraficaBulkPanel() {
             Export Excel
           </button>
         </div>
+      </article>
+
+      <article className="panel-card">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium text-gray-900">Ultime operazioni</p>
+            <p className="mt-1 text-sm text-gray-500">Storico locale delle ultime 5 elaborazioni eseguite da questo browser.</p>
+          </div>
+          {operationHistory.length > 0 ? (
+            <button
+              type="button"
+              className="btn-secondary"
+              disabled={busy}
+              onClick={() => {
+                setOperationHistory([]);
+                saveHistory([]);
+              }}
+            >
+              Svuota storico
+            </button>
+          ) : null}
+        </div>
+        {operationHistory.length === 0 ? (
+          <p className="mt-4 text-sm text-gray-500">Nessuna operazione salvata.</p>
+        ) : (
+          <div className="mt-4 space-y-2">
+            {operationHistory.map((item) => (
+              <div key={item.id} className="rounded-xl border border-gray-100 bg-gray-50 p-3">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{item.fileName ?? "Elaborazione senza file"}</p>
+                    <p className="mt-1 text-xs text-gray-500">
+                      {new Intl.DateTimeFormat("it-IT", {
+                        dateStyle: "short",
+                        timeStyle: "short",
+                      }).format(new Date(item.executedAt))}{" "}
+                      · {formatOperationKind(item.kind)}
+                      {item.skippedRows ? ` · ${item.skippedRows} righe vuote saltate` : ""}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2 text-xs text-gray-700">
+                    <span className="rounded-full bg-white px-2.5 py-1">Totale: {item.total}</span>
+                    <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">FOUND: {item.found}</span>
+                    <span className="rounded-full bg-white px-2.5 py-1">NOT_FOUND: {item.notFound}</span>
+                    <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700">MULTIPLE: {item.multiple}</span>
+                    <span className="rounded-full bg-red-50 px-2.5 py-1 text-red-700">ERROR: {item.error}</span>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </article>
 
       <article className="panel-card">

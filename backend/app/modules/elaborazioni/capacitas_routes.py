@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from datetime import datetime, timezone
 from typing import Annotated
+from urllib.parse import urlencode
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy import select
@@ -757,7 +758,8 @@ async def get_rpt_certificato_link(
     cco: str = Query(..., min_length=1),
     credential_id: int | None = None,
 ) -> dict[str, str]:
-    """Return a direct authenticated URL to rptCertificato.aspx for a given CCO."""
+    """Return the browser-session URL to rptCertificato.aspx for a given CCO."""
+    _ = credential_id  # Backward-compatible query parameter; the link uses the browser's Capacitas session.
     cco = cco.strip()
 
     row = db.execute(
@@ -783,25 +785,13 @@ async def get_rpt_certificato_link(
     else:
         com, pvc, fra, ccs = row.com, row.pvc, row.fra, row.ccs
 
-    try:
-        credential, password = pick_credential(db, credential_id)
-    except RuntimeError as exc:
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
-
-    manager = CapacitasSessionManager(credential.username, password)
-    try:
-        await manager.login()
-        token = manager.get_token()
-        mark_credential_used(db, credential.id)
-    except Exception as exc:
-        logger.exception("Errore login Capacitas per direct link: cred_id=%d err=%s", credential.id, exc)
-        mark_credential_error(db, credential.id, str(exc))
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Errore autenticazione Capacitas: {exc}",
-        ) from exc
-    finally:
-        await manager.close()
-
-    params = f"CCO={cco}&COM={com or ''}&PVC={pvc or ''}&FRA={fra or ''}&CCS={ccs or '00000'}&BC=HomRicTer&token={token}&app=involture&tenant="
+    params = urlencode(
+        {
+            "CCO": cco,
+            "COM": com or "",
+            "PVC": pvc or "",
+            "FRA": fra or "",
+            "CCS": ccs or "00000",
+        }
+    )
     return {"url": f"{_RPT_CERTIFICATO_BASE}?{params}"}

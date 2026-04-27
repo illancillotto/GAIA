@@ -60,7 +60,6 @@ export function ParticellaDetailDialog({
   const [consorzio, setConsorzio] = useState<CatParticellaConsorzio | null>(null);
   const [utenze, setUtenze] = useState<CatUtenzaIrrigua[]>([]);
   const [geojson, setGeojson] = useState<GeoJSONFeature | null>(null);
-  const [capacitasModalCco, setCapacitasModalCco] = useState<string | null>(null);
   const [capacitasLinkBusy, setCapacitasLinkBusy] = useState(false);
   const [capacitasLinkError, setCapacitasLinkError] = useState<string | null>(null);
 
@@ -101,6 +100,21 @@ export function ParticellaDetailDialog({
 
     void load();
   }, [open, match]);
+
+  async function openCapacitasCertificato(cco: string): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) return;
+    setCapacitasLinkBusy(true);
+    setCapacitasLinkError(null);
+    try {
+      const { url } = await capacitasGetRptCertificatoLink(token, cco);
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (e) {
+      setCapacitasLinkError(e instanceof Error ? e.message : "Errore generazione link Capacitas");
+    } finally {
+      setCapacitasLinkBusy(false);
+    }
+  }
 
   if (!open || !match) return null;
 
@@ -316,6 +330,11 @@ export function ParticellaDetailDialog({
             </div>
             <p className="text-sm text-gray-500">{busy ? "Caricamento…" : `${utenze.length} righe`}</p>
           </div>
+          {capacitasLinkError ? (
+            <div className="mt-3 rounded-xl border border-red-100 bg-red-50 p-3 text-sm text-red-800">
+              {capacitasLinkError}
+            </div>
+          ) : null}
           <div className="mt-3 overflow-auto">
             {busy ? (
               <p className="text-sm text-gray-500">Caricamento…</p>
@@ -346,13 +365,14 @@ export function ParticellaDetailDialog({
                           <button
                             type="button"
                             className="flex items-center gap-1 text-xs font-medium text-[#1D4E35] hover:underline"
-                            onClick={() => setCapacitasModalCco(u.cco!)}
+                            disabled={capacitasLinkBusy}
+                            onClick={() => void openCapacitasCertificato(u.cco!)}
                           >
                             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">
                               <path d="M6.22 8.72a.75.75 0 0 0 1.06 1.06l5.22-5.22v1.69a.75.75 0 0 0 1.5 0v-3.5a.75.75 0 0 0-.75-.75h-3.5a.75.75 0 0 0 0 1.5h1.69L6.22 8.72Z" />
                               <path d="M3.5 6.75c0-.69.56-1.25 1.25-1.25H7A.75.75 0 0 0 7 4H4.75A2.75 2.75 0 0 0 2 6.75v4.5A2.75 2.75 0 0 0 4.75 14h4.5A2.75 2.75 0 0 0 12 11.25V9a.75.75 0 0 0-1.5 0v2.25c0 .69-.56 1.25-1.25 1.25h-4.5c-.69 0-1.25-.56-1.25-1.25v-4.5Z" />
                             </svg>
-                            Visualizza su Capacitas
+                            {capacitasLinkBusy ? "Apertura…" : "Visualizza su Capacitas"}
                           </button>
                         ) : null}
                       </td>
@@ -370,65 +390,6 @@ export function ParticellaDetailDialog({
           </a>
         </div>
       </div>
-
-      {capacitasModalCco ? (
-        <div
-          className="fixed inset-0 z-60 flex items-center justify-center bg-gray-900/50 px-4"
-          role="dialog"
-          aria-modal="true"
-          onMouseDown={(e) => {
-            if (e.target === e.currentTarget) {
-              setCapacitasModalCco(null);
-              setCapacitasLinkError(null);
-            }
-          }}
-        >
-          <div className="w-full max-w-md rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl">
-            <p className="text-sm font-semibold text-gray-900">Visualizza su Capacitas</p>
-            <p className="mt-1 text-xs text-gray-500">CCO: {capacitasModalCco}</p>
-            {capacitasLinkError ? (
-              <div className="mt-4 rounded-xl border border-red-100 bg-red-50 p-3 text-sm text-red-800">
-                {capacitasLinkError}
-              </div>
-            ) : null}
-            <div className="mt-4">
-              <button
-                type="button"
-                className="btn-primary w-full"
-                disabled={capacitasLinkBusy}
-                onClick={async () => {
-                  const token = getStoredAccessToken();
-                  if (!token) return;
-                  setCapacitasLinkBusy(true);
-                  setCapacitasLinkError(null);
-                  try {
-                    const { url } = await capacitasGetRptCertificatoLink(token, capacitasModalCco);
-                    window.open(url, "_blank", "noopener,noreferrer");
-                  } catch (e) {
-                    setCapacitasLinkError(e instanceof Error ? e.message : "Errore generazione link Capacitas");
-                  } finally {
-                    setCapacitasLinkBusy(false);
-                  }
-                }}
-              >
-                {capacitasLinkBusy ? "Apertura…" : "Apri su Capacitas"}
-              </button>
-            </div>
-            <div className="mt-3 flex justify-end">
-              <button
-                type="button"
-                className="btn-secondary"
-                onClick={() => {
-                  setCapacitasModalCco(null);
-                  setCapacitasLinkError(null);
-                }}
-              >
-                Chiudi
-              </button>
-            </div>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }

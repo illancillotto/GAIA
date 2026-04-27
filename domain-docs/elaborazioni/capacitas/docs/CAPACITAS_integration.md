@@ -20,6 +20,7 @@
 - `apps/registry.py` centralizza chiave logica app, host, alias e nomi cookie
 - ogni macro-modulo Capacitas vive sotto `apps/<app>/` e contiene i client e i sottomoduli specifici del servizio
 - `client.py` al root resta come shim di compatibilita per gli import esistenti di `InVoltureClient`
+- il link diretto a `rptCertificato.aspx` per le schede particella restituisce al frontend solo i parametri certificato (`CCO/COM/PVC/FRA/CCS`) e usa la sessione Capacitas gia presente nel browser; l'aggiunta di `token/app/tenant` puo forzare un rientro SSO e produrre "Sessione scaduta"
 
 Macro-moduli registrati ad oggi:
 
@@ -57,6 +58,7 @@ Implementato:
   - `GET /elaborazioni/capacitas/involture/particelle/jobs`
   - `GET /elaborazioni/capacitas/involture/particelle/jobs/{id}`
   - `POST /elaborazioni/capacitas/involture/particelle/jobs/{id}/run`
+  - `GET /elaborazioni/capacitas/involture/link/rpt-certificato?cco=...`
   - `POST /elaborazioni/capacitas/involture/anagrafica/storico/import`
   - `POST /elaborazioni/capacitas/involture/anagrafica/storico/import-file`
 - persistenza nel layer catasto consortile:

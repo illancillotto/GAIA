@@ -1119,6 +1119,56 @@ def test_capacitas_terreni_lookup_endpoints_return_options(monkeypatch: pytest.M
     assert fogli_response.json()[0]["id"] == "1"
 
 
+def test_capacitas_rpt_certificato_link_returns_browser_session_url(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    create_response = client.post(
+        "/elaborazioni/capacitas/credentials",
+        headers=auth_headers(),
+        json={"label": "Direct link", "username": "capacitas-user", "password": "capacitas-secret"},
+    )
+    credential_id = create_response.json()["id"]
+
+    db = TestingSessionLocal()
+    try:
+        db.add(
+            CatCapacitasTerrenoRow(
+                cco="0A1103877",
+                com="289",
+                pvc="097",
+                fra="38",
+                ccs="00000",
+                collected_at=datetime.now(timezone.utc),
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    async def fail_login(self):
+        raise AssertionError("Il link certificato deve usare la sessione browser, non il login backend")
+
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.login", fail_login)
+
+    response = client.get(
+        f"/elaborazioni/capacitas/involture/link/rpt-certificato?cco=0A1103877&credential_id={credential_id}",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 200
+    url = response.json()["url"]
+    assert "rptCertificato.aspx" in url
+    assert "CCO=0A1103877" in url
+    assert "COM=289" in url
+    assert "PVC=097" in url
+    assert "FRA=38" in url
+    assert "CCS=00000" in url
+    assert "token=" not in url
+    assert "app=" not in url
+    assert "tenant=" not in url
+    assert "BC=" not in url
+
+
 def test_capacitas_terreni_sync_persists_consorzio_snapshot(monkeypatch: pytest.MonkeyPatch) -> None:
     create_response = client.post(
         "/elaborazioni/capacitas/credentials",
