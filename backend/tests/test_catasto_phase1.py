@@ -26,7 +26,6 @@ from app.models.catasto_phase1 import (
     CatConsorzioUnitSegment,
     CatDistretto,
     CatImportBatch,
-    CatIntestatario,
     CatParticella,
     CatParticellaHistory,
     CatSchemaContributo,
@@ -211,14 +210,24 @@ def seed_phase1_lookup_data(db: Session) -> None:
             codice_fiscale_raw="Dnifse64c01l122y",
         )
     )
+    subject = AnagraficaSubject(
+        subject_type="person",
+        status="active",
+        source_system="capacitas",
+        source_external_id="seed-dnifse64c01l122y",
+        source_name_raw="Fenu Denise",
+        requires_review=False,
+    )
+    db.add(subject)
+    db.flush()
     db.add(
-        CatIntestatario(
-            codice_fiscale="DNIFSE64C01L122Y",
-            denominazione="Fenu Denise",
-            tipo="PF",
+        AnagraficaPerson(
+            subject_id=subject.id,
             cognome="Fenu",
             nome="Denise",
-            source="capacitas",
+            codice_fiscale="DNIFSE64C01L122Y",
+            comune_nascita="Terralba",
+            comune_residenza="Arborea",
         )
     )
     db.add(
@@ -926,6 +935,10 @@ def test_bulk_search_anagrafica_returns_mixed_row_outcomes() -> None:
     payload = response.json()["results"]
     assert payload[0]["esito"] == "FOUND"
     assert payload[0]["match"]["cod_comune_capacitas"] == 165
+    assert payload[0]["match"]["intestatari"][0]["codice_fiscale"] == "DNIFSE64C01L122Y"
+    assert payload[0]["match"]["intestatari"][0]["cognome"] == "Fenu"
+    assert payload[0]["match"]["intestatari"][0]["nome"] == "Denise"
+    assert payload[0]["match"]["intestatari"][0]["source"] == "capacitas"
     assert payload[1]["esito"] == "NOT_FOUND"
     assert payload[2]["esito"] == "INVALID_ROW"
 

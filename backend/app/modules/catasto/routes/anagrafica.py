@@ -10,7 +10,8 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_active_user
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
-from app.models.catasto_phase1 import CatAnomalia, CatComune, CatIntestatario, CatParticella, CatUtenzaIrrigua
+from app.models.catasto_phase1 import CatAnomalia, CatComune, CatParticella, CatUtenzaIrrigua
+from app.modules.utenze.models import AnagraficaPerson, AnagraficaSubject
 from app.schemas.catasto_phase1 import (
     CatAnagraficaBulkSearchRequest,
     CatAnagraficaBulkSearchResponse,
@@ -37,11 +38,41 @@ def _looks_like_int(value: str | None) -> bool:
     return v.isdigit()
 
 
-def _load_intestatari_by_cf(db: Session, cfs: set[str]) -> dict[str, CatIntestatario]:
+def _build_denominazione(cognome: str | None, nome: str | None) -> str | None:
+    value = " ".join(part for part in [cognome, nome] if part and part.strip()).strip()
+    return value or None
+
+
+def _load_intestatari_by_cf(db: Session, cfs: set[str]) -> dict[str, CatIntestatarioResponse]:
     if not cfs:
         return {}
-    rows = db.execute(select(CatIntestatario).where(CatIntestatario.codice_fiscale.in_(sorted(cfs)))).scalars().all()
-    return {r.codice_fiscale: r for r in rows}
+    rows = (
+        db.execute(
+            select(AnagraficaPerson, AnagraficaSubject)
+            .join(AnagraficaSubject, AnagraficaSubject.id == AnagraficaPerson.subject_id)
+            .where(AnagraficaPerson.codice_fiscale.in_(sorted(cfs)))
+        )
+        .all()
+    )
+    items: dict[str, CatIntestatarioResponse] = {}
+    for person, subject in rows:
+        if not person.codice_fiscale:
+            continue
+        items[person.codice_fiscale] = CatIntestatarioResponse(
+            id=person.subject_id,
+            codice_fiscale=person.codice_fiscale,
+            denominazione=_build_denominazione(person.cognome, person.nome),
+            tipo="PF",
+            cognome=person.cognome,
+            nome=person.nome,
+            data_nascita=person.data_nascita,
+            luogo_nascita=person.comune_nascita,
+            ragione_sociale=None,
+            source=subject.source_system,
+            last_verified_at=person.updated_at,
+            deceduto=None,
+        )
+    return items
 
 
 def _utenza_summary_from_record(u: CatUtenzaIrrigua | None) -> CatAnagraficaUtenzaSummary | None:
@@ -83,9 +114,7 @@ def _build_match(db: Session, p: CatParticella) -> CatAnagraficaMatch:
 
     cfs = {u.codice_fiscale.strip().upper() for u in utenze if u.codice_fiscale and u.codice_fiscale.strip()}
     intestatari_by_cf = _load_intestatari_by_cf(db, cfs)
-    intestatari: list[CatIntestatarioResponse] = [
-        CatIntestatarioResponse.model_validate(i) for i in intestatari_by_cf.values()
-    ]
+    intestatari: list[CatIntestatarioResponse] = list(intestatari_by_cf.values())
 
     anomalie_count = db.execute(
         select(func.count())
@@ -132,35 +161,131 @@ def bulk_search_anagrafica(
 ) -> CatAnagraficaBulkSearchResponse:
     results: list[CatAnagraficaBulkSearchRowResult] = []
 
+    def infer_kind() -> Literal["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"]:
+        if payload.kind in ("CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"):
+            return payload.kind
+        has_particella_keys = any((r.comune or r.foglio or r.particella or r.sub or r.sezione) for r in payload.rows)
+        has_tax_keys = any((r.codice_fiscale or r.partita_iva) for r in payload.rows)
+        if has_particella_keys and not has_tax_keys:
+            return "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"
+        if has_tax_keys and not has_particella_keys:
+            return "CF_PIVA_PARTICELLE"
+        if has_tax_keys and has_particella_keys:
+            # Prefer the cadastral flow; rows that contain only CF/P.IVA will be marked invalid.
+            return "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"
+        return "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"
+
+    kind: Literal["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"] = infer_kind()
+
     for row in payload.rows:
-        comune_norm = _norm_str(row.comune)
-        foglio_norm = _norm_str(row.foglio)
-        particella_norm = _norm_str(row.particella)
+        try:
+            if kind == "CF_PIVA_PARTICELLE":
+                cf_norm = _norm_str(row.codice_fiscale)
+                piva_norm = _norm_str(row.partita_iva)
+                tax_key = (cf_norm or piva_norm or "").upper()
 
-        if not foglio_norm or not particella_norm:
-            results.append(
-                CatAnagraficaBulkSearchRowResult(
-                    row_index=row.row_index,
-                    comune_input=row.comune,
-                    foglio_input=row.foglio,
-                    particella_input=row.particella,
-                    esito="INVALID_ROW",
-                    message="Campi obbligatori mancanti (foglio/particella).",
+                if not tax_key:
+                    results.append(
+                        CatAnagraficaBulkSearchRowResult(
+                            row_index=row.row_index,
+                            codice_fiscale_input=row.codice_fiscale,
+                            partita_iva_input=row.partita_iva,
+                            esito="INVALID_ROW",
+                            message="Campo obbligatorio mancante (codice_fiscale o partita_iva).",
+                        )
+                    )
+                    continue
+
+                utenze = (
+                    db.execute(
+                        select(CatUtenzaIrrigua.particella_id)
+                        .where(
+                            CatUtenzaIrrigua.particella_id.is_not(None),
+                            func.upper(func.coalesce(CatUtenzaIrrigua.codice_fiscale, "")) == tax_key,
+                        )
+                        .order_by(desc(CatUtenzaIrrigua.anno_campagna))
+                        .limit(200)
+                    )
+                    .scalars()
+                    .all()
                 )
-            )
-            continue
+                particella_ids = list(dict.fromkeys([pid for pid in utenze if pid is not None]))
+                if not particella_ids:
+                    results.append(
+                        CatAnagraficaBulkSearchRowResult(
+                            row_index=row.row_index,
+                            codice_fiscale_input=row.codice_fiscale,
+                            partita_iva_input=row.partita_iva,
+                            esito="NOT_FOUND",
+                            message="Nessuna particella associata trovata.",
+                            matches_count=0,
+                            matches=[],
+                        )
+                    )
+                    continue
 
-        query = (
-            select(CatParticella)
-            .outerjoin(CatComune, CatComune.id == CatParticella.comune_id)
-            .where(
-                CatParticella.is_current.is_(True),
-                CatParticella.foglio == foglio_norm,
-                CatParticella.particella == particella_norm,
+                particelle = (
+                    db.execute(
+                        select(CatParticella)
+                        .where(CatParticella.id.in_(particella_ids), CatParticella.is_current.is_(True))
+                        .limit(200)
+                    )
+                    .scalars()
+                    .all()
+                )
+                matches = [_build_match(db, p) for p in particelle]
+                results.append(
+                    CatAnagraficaBulkSearchRowResult(
+                        row_index=row.row_index,
+                        codice_fiscale_input=row.codice_fiscale,
+                        partita_iva_input=row.partita_iva,
+                        esito="FOUND" if matches else "NOT_FOUND",
+                        message="OK" if matches else "Nessuna particella associata trovata.",
+                        matches_count=len(matches),
+                        matches=matches,
+                        match=matches[0] if matches else None,
+                        particella_id=matches[0].particella_id if matches else None,
+                    )
+                )
+                continue
+
+            comune_norm = _norm_str(row.comune)
+            sezione_norm = _norm_str(row.sezione)
+            foglio_norm = _norm_str(row.foglio)
+            particella_norm = _norm_str(row.particella)
+            sub_norm = _norm_str(row.sub)
+
+            if not comune_norm or not foglio_norm or not particella_norm:
+                results.append(
+                    CatAnagraficaBulkSearchRowResult(
+                        row_index=row.row_index,
+                        comune_input=row.comune,
+                        sezione_input=row.sezione,
+                        foglio_input=row.foglio,
+                        particella_input=row.particella,
+                        sub_input=row.sub,
+                        esito="INVALID_ROW",
+                        message="Campi obbligatori mancanti (comune/foglio/particella).",
+                    )
+                )
+                continue
+
+            query = (
+                select(CatParticella)
+                .outerjoin(CatComune, CatComune.id == CatParticella.comune_id)
+                .where(
+                    CatParticella.is_current.is_(True),
+                    CatParticella.foglio == foglio_norm,
+                    CatParticella.particella == particella_norm,
+                )
+                .order_by(CatParticella.cod_comune_capacitas, CatParticella.foglio, CatParticella.particella)
             )
-            .order_by(CatParticella.cod_comune_capacitas, CatParticella.foglio, CatParticella.particella)
-        )
-        if comune_norm:
+
+            if sezione_norm:
+                query = query.where(CatParticella.sezione_catastale == sezione_norm)
+            if sub_norm:
+                query = query.where(CatParticella.subalterno == sub_norm)
+
             if _looks_like_int(comune_norm):
                 query = query.where(CatParticella.cod_comune_capacitas == int(comune_norm))
             else:
@@ -168,15 +293,16 @@ def bulk_search_anagrafica(
                     func.lower(func.coalesce(CatParticella.nome_comune, CatComune.nome_comune, "")) == comune_norm.lower()
                 )
 
-        try:
             items = db.execute(query.limit(50)).scalars().all()
             if len(items) == 0:
                 results.append(
                     CatAnagraficaBulkSearchRowResult(
                         row_index=row.row_index,
                         comune_input=row.comune,
+                        sezione_input=row.sezione,
                         foglio_input=row.foglio,
                         particella_input=row.particella,
+                        sub_input=row.sub,
                         esito="NOT_FOUND",
                         message="Nessuna particella trovata.",
                     )
@@ -189,10 +315,12 @@ def bulk_search_anagrafica(
                     CatAnagraficaBulkSearchRowResult(
                         row_index=row.row_index,
                         comune_input=row.comune,
+                        sezione_input=row.sezione,
                         foglio_input=row.foglio,
                         particella_input=row.particella,
+                        sub_input=row.sub,
                         esito="MULTIPLE_MATCHES",
-                        message=f"Trovate {len(items)} particelle. Specifica meglio il comune.",
+                        message=f"Trovate {len(items)} particelle. Specifica meglio comune/sezione/sub.",
                         particella_id=first.id,
                         match=_build_match(db, first),
                         matches_count=len(items),
@@ -205,8 +333,10 @@ def bulk_search_anagrafica(
                 CatAnagraficaBulkSearchRowResult(
                     row_index=row.row_index,
                     comune_input=row.comune,
+                    sezione_input=row.sezione,
                     foglio_input=row.foglio,
                     particella_input=row.particella,
+                    sub_input=row.sub,
                     esito="FOUND",
                     message="OK",
                     particella_id=match.particella_id,
@@ -219,8 +349,12 @@ def bulk_search_anagrafica(
                 CatAnagraficaBulkSearchRowResult(
                     row_index=row.row_index,
                     comune_input=row.comune,
+                    sezione_input=row.sezione,
                     foglio_input=row.foglio,
                     particella_input=row.particella,
+                    sub_input=row.sub,
+                    codice_fiscale_input=row.codice_fiscale,
+                    partita_iva_input=row.partita_iva,
                     esito="ERROR",
                     message=str(exc),
                 )
