@@ -87,7 +87,7 @@ export default function CatastoGisPage() {
         <div className="flex flex-col gap-3 border-b border-gray-100 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Catasto GIS</h2>
-            <p className="text-sm text-gray-500">Disegna un poligono in Sardegna per calcolare aggregazioni e preview particelle.</p>
+            <p className="text-sm text-gray-500">Vista centrata sul comprensorio consortile. Disegna un poligono per calcolare aggregazioni e preview particelle.</p>
           </div>
           <DrawingTools
             onDrawPolygon={() => setDrawSignal((value) => value + 1)}
@@ -104,8 +104,8 @@ export default function CatastoGisPage() {
           </div>
         ) : null}
 
-        <div className="grid flex-1 overflow-hidden lg:grid-cols-[1fr_360px]">
-          <div className="min-h-[560px] bg-gray-100 p-3">
+        <div className="grid flex-1 overflow-hidden lg:grid-cols-2">
+          <div className="min-h-[680px] bg-gray-100 p-3 lg:min-h-[calc(100vh-260px)]">
             <MapContainer
               token={token}
               onGeometryDrawn={handleGeometryDrawn}
@@ -117,7 +117,7 @@ export default function CatastoGisPage() {
             />
           </div>
 
-          <aside className="flex min-h-[360px] flex-col overflow-hidden border-t border-gray-100 bg-white lg:border-l lg:border-t-0">
+          <aside className="flex min-h-[360px] flex-col overflow-hidden border-t border-gray-100 bg-white lg:min-h-[calc(100vh-260px)] lg:border-l lg:border-t-0">
             <AnalysisPanel result={result} isLoading={isLoading} onExport={handleExport} />
             {result ? (
               <SelectionPanel particelle={result.particelle} truncated={result.truncated} nTotale={result.n_particelle} />

@@ -26,8 +26,14 @@ type DrawEvent = {
   features?: Array<GeoJSON.Feature<GeoJSON.Geometry>>;
 };
 
-const SARDINIA_CENTER: [number, number] = [8.85, 40.1];
-const SARDINIA_ZOOM = 9;
+const CONSORZIO_BOUNDS: [[number, number], [number, number]] = [
+  [8.39, 39.62],
+  [8.93, 40.13],
+];
+const CONSORZIO_MAX_BOUNDS: [[number, number], [number, number]] = [
+  [8.2, 39.45],
+  [9.1, 40.25],
+];
 
 function canCreateWebGLContext(): boolean {
   try {
@@ -90,8 +96,11 @@ export default function MapContainer({
             },
           ],
         },
-        center: SARDINIA_CENTER,
-        zoom: SARDINIA_ZOOM,
+        bounds: CONSORZIO_BOUNDS,
+        maxBounds: CONSORZIO_MAX_BOUNDS,
+        fitBoundsOptions: {
+          padding: 28,
+        },
       });
     } catch (error) {
       setMapError(error instanceof Error ? error.message : "Impossibile inizializzare il GIS WebGL.");
