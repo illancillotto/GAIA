@@ -1236,6 +1236,52 @@ export type CapacitasTerreniJob = {
   updated_at: string;
 };
 
+export type CapacitasParticelleSyncJobCreateInput = {
+  credential_id?: number | null;
+  only_due?: boolean;
+  limit?: number | null;
+  fetch_certificati?: boolean;
+  fetch_details?: boolean;
+};
+
+export type CapacitasParticelleSyncRecentItem = {
+  particella_id: string;
+  label: string;
+  status: string;
+  message: string;
+};
+
+export type CapacitasParticelleSyncJobResult = {
+  mode: string;
+  total_items: number;
+  processed_items: number;
+  success_items: number;
+  failed_items: number;
+  skipped_items: number;
+  progress_percent: number;
+  current_label?: string | null;
+  throttle_ms: number;
+  aggressive_window: boolean;
+  recheck_hours: number;
+  completed_at?: string | null;
+  recent_items: CapacitasParticelleSyncRecentItem[];
+};
+
+export type CapacitasParticelleSyncJob = {
+  id: number;
+  credential_id: number | null;
+  requested_by_user_id: number | null;
+  status: string;
+  mode: string;
+  payload_json: Record<string, unknown> | unknown[] | null;
+  result_json: CapacitasParticelleSyncJobResult | Record<string, unknown> | unknown[] | null;
+  error_detail: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type CatastoSingleVisuraPayload = {
   search_mode?: "immobile" | "soggetto";
   comune?: string;

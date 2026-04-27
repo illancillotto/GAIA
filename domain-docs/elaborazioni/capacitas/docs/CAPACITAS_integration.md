@@ -53,6 +53,10 @@ Implementato:
   - `GET /elaborazioni/capacitas/involture/terreni/jobs`
   - `GET /elaborazioni/capacitas/involture/terreni/jobs/{id}`
   - `POST /elaborazioni/capacitas/involture/terreni/jobs/{id}/run`
+  - `POST /elaborazioni/capacitas/involture/particelle/jobs`
+  - `GET /elaborazioni/capacitas/involture/particelle/jobs`
+  - `GET /elaborazioni/capacitas/involture/particelle/jobs/{id}`
+  - `POST /elaborazioni/capacitas/involture/particelle/jobs/{id}/run`
   - `POST /elaborazioni/capacitas/involture/anagrafica/storico/import`
   - `POST /elaborazioni/capacitas/involture/anagrafica/storico/import-file`
 - persistenza nel layer catasto consortile:
@@ -67,6 +71,7 @@ Implementato:
   - `capacitas_terreni_sync_jobs`
 - frontend workspace in `frontend/src/components/elaborazioni/capacitas-workspace.tsx` con:
   - ricerca anagrafica
+  - sync progressiva delle particelle GAIA con progress bar e monitor job
   - lookup guidato `frazioni -> sezioni -> fogli`
   - preview risultati Terreni
   - avvio job Terreni in background
@@ -221,6 +226,30 @@ Workflow batch aggiuntivo disponibile nel modulo `elaborazioni`:
   - report con `processed`, `imported`, `skipped`, `failed`
   - contatore `snapshot_records_imported`
   - dettaglio riga per riga con soggetto risolto e numero di record storici importati
+
+## Sync progressiva particelle GAIA
+
+Flusso applicativo aggiunto nel workspace `Elaborazioni / Capacitas`:
+
+- il job legge `cat_particelle` correnti (`is_current = true`, non soppresse)
+- ordina le particelle per `capacitas_last_sync_at` crescente, quindi aggiorna prima quelle mai sincronizzate o piu vecchie
+- usa la stessa logica Terreni gia presente per:
+  - risolvere `comune -> frazione Capacitas`
+  - interrogare `ricercaTerreni.aspx`
+  - aprire eventuali `rptCertificato.aspx`
+  - aprire eventuali `dettaglioTerreno.aspx`
+- salva su `cat_particelle` i metadati di tracking:
+  - `capacitas_last_sync_at`
+  - `capacitas_last_sync_status`
+  - `capacitas_last_sync_error`
+  - `capacitas_last_sync_job_id`
+- persiste il job in `capacitas_particelle_sync_jobs` con progressi incrementali in `result_json`
+
+Politica anti-aggressiva:
+
+- fascia diurna: throttle di default `1500 ms` tra particelle e riesame dei record solo se non sincronizzati nelle ultime `24h`
+- fascia serale dopo le `19:00` Europe/Rome: throttle ridotto a `350 ms` e riesame delle particelle gia dopo `6h`
+- il job puo comunque essere lanciato manualmente dall'operatore, con `only_due=true` come default per evitare re-scrape inutili
 
 ### Evidenze dai file locali
 

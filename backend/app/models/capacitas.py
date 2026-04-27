@@ -66,3 +66,37 @@ class CapacitasTerreniSyncJob(Base):
         onupdate=func.now(),
         nullable=False,
     )
+
+
+class CapacitasParticelleSyncJob(Base):
+    __tablename__ = "capacitas_particelle_sync_jobs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    credential_id: Mapped[int | None] = mapped_column(
+        ForeignKey("capacitas_credentials.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    requested_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    status: Mapped[str] = mapped_column(String(32), default="pending", nullable=False, index=True)
+    mode: Mapped[str] = mapped_column(String(32), default="progressive_catalog", nullable=False)
+    payload_json: Mapped[dict | list | None] = mapped_column(JSON, nullable=True)
+    result_json: Mapped[dict | list | None] = mapped_column(JSON, nullable=True)
+    error_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )

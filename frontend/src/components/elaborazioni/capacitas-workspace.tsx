@@ -15,12 +15,18 @@ import { ElaborazioneWorkspaceModal } from "@/components/elaborazioni/workspace-
 import { EmptyState } from "@/components/ui/empty-state";
 import { DocumentIcon, LockIcon, RefreshIcon, SearchIcon, ServerIcon, UsersIcon } from "@/components/ui/icons";
 import {
+  createCapacitasParticelleSyncJob,
   createCapacitasTerreniJob,
+  deleteCapacitasParticelleSyncJob,
   deleteCapacitasTerreniJob,
   getCapacitasFogli,
   getCapacitasSezioni,
+  importCapacitasAnagraficaHistory,
+  importCapacitasAnagraficaHistoryFile,
+  listCapacitasParticelleSyncJobs,
   listCapacitasCredentials,
   listCapacitasTerreniJobs,
+  rerunCapacitasParticelleSyncJob,
   rerunCapacitasTerreniJob,
   searchCapacitasFrazioni,
   searchCapacitasInvolture,
@@ -29,8 +35,11 @@ import {
 import { getStoredAccessToken } from "@/lib/auth";
 import type {
   CapacitasAnagrafica,
+  CapacitasAnagraficaHistoryImportItemInput,
+  CapacitasAnagraficaHistoryImportResult,
   CapacitasCredential,
   CapacitasLookupOption,
+  CapacitasParticelleSyncJob,
   CapacitasSearchResult,
   CapacitasTerreniBatchItemInput,
   CapacitasTerreniBatchItemResult,
@@ -345,6 +354,68 @@ function downloadTerreniTemplate(format: "csv" | "xlsx"): void {
   );
 }
 
+async function readAnagraficaHistoryBatchFile(
+  file: File,
+): Promise<{ items: CapacitasAnagraficaHistoryImportItemInput[]; skipped: number }> {
+  const ext = file.name.toLowerCase().split(".").pop() ?? "";
+  const workbook =
+    ext === "csv" ? XLSX.read(await file.text(), { type: "string" }) : XLSX.read(await file.arrayBuffer(), { type: "array" });
+  const firstSheetName = workbook.SheetNames[0];
+  if (!firstSheetName) return { items: [], skipped: 0 };
+
+  const worksheet = workbook.Sheets[firstSheetName];
+  const data = XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, { defval: null, raw: false });
+  if (data.length === 0) return { items: [], skipped: 0 };
+
+  const headers = Object.keys(data[0] ?? {}).map(normalizeImportHeader);
+  const headerMap = new Map<string, string>();
+  for (const rawKey of Object.keys(data[0] ?? {})) {
+    headerMap.set(normalizeImportHeader(rawKey), rawKey);
+  }
+
+  const subjectIdKey = pickImportColumn(headers, ["subject_id"]);
+  const idxanaKey = pickImportColumn(headers, ["idxana"]);
+  if (!subjectIdKey && !idxanaKey) {
+    throw new Error("Colonne minime mancanti. Richieste: subject_id e/o idxana.");
+  }
+
+  let skipped = 0;
+  const items: CapacitasAnagraficaHistoryImportItemInput[] = [];
+  for (let index = 0; index < data.length; index += 1) {
+    const record = data[index] ?? {};
+    const subject_id = subjectIdKey ? stringifyImportCell(record[headerMap.get(subjectIdKey) ?? subjectIdKey]) : "";
+    const idxana = idxanaKey ? stringifyImportCell(record[headerMap.get(idxanaKey) ?? idxanaKey]) : "";
+    if (!subject_id && !idxana) {
+      skipped += 1;
+      continue;
+    }
+    items.push({ subject_id: subject_id || null, idxana: idxana || null });
+  }
+
+  return { items, skipped };
+}
+
+function downloadAnagraficaHistoryTemplate(format: "csv" | "xlsx"): void {
+  const exampleRows = [
+    { subject_id: "550e8400-e29b-41d4-a716-446655440000", idxana: "" },
+    { subject_id: "", idxana: "48A9749E-96BF-4617-A019-046BF4CECA2B" },
+  ];
+
+  if (format === "csv") {
+    const csv = XLSX.utils.sheet_to_csv(XLSX.utils.json_to_sheet(exampleRows));
+    triggerDownload(new Blob([csv], { type: "text/csv;charset=utf-8" }), "capacitas-anagrafica-storico-template.csv");
+    return;
+  }
+
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(exampleRows), "storico");
+  const out = XLSX.write(workbook, { type: "array", bookType: "xlsx" });
+  triggerDownload(
+    new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+    "capacitas-anagrafica-storico-template.xlsx",
+  );
+}
+
 function isTerreniBatchResult(value: unknown): value is {
   processed_items: number;
   failed_items: number;
@@ -363,6 +434,29 @@ function isTerreniBatchResult(value: unknown): value is {
     typeof (value as { failed_items?: unknown }).failed_items === "number" &&
     typeof (value as { imported_rows?: unknown }).imported_rows === "number" &&
     typeof (value as { linked_units?: unknown }).linked_units === "number"
+  );
+}
+
+function isParticelleSyncJobResult(value: unknown): value is {
+  total_items: number;
+  processed_items: number;
+  success_items: number;
+  failed_items: number;
+  skipped_items: number;
+  progress_percent: number;
+  current_label?: string | null;
+  throttle_ms: number;
+  aggressive_window: boolean;
+  recheck_hours: number;
+  recent_items: Array<{ particella_id: string; label: string; status: string; message: string }>;
+} {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  return (
+    typeof (value as { total_items?: unknown }).total_items === "number" &&
+    typeof (value as { processed_items?: unknown }).processed_items === "number" &&
+    typeof (value as { progress_percent?: unknown }).progress_percent === "number"
   );
 }
 
@@ -395,6 +489,21 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
   const [terreniJobErrorsModal, setTerreniJobErrorsModal] = useState<CapacitasTerreniJob | null>(null);
   const [terreniCompletedJobModal, setTerreniCompletedJobModal] = useState<CapacitasTerreniJob | null>(null);
   const inFlightJobIds = useRef<Set<number>>(new Set());
+  const [particelleJobs, setParticelleJobs] = useState<CapacitasParticelleSyncJob[]>([]);
+  const [particelleJobsLoading, setParticelleJobsLoading] = useState(false);
+  const [particelleCreatingJob, setParticelleCreatingJob] = useState(false);
+  const [particelleJobBusyId, setParticelleJobBusyId] = useState<number | null>(null);
+  const [particelleDeletingJobId, setParticelleDeletingJobId] = useState<number | null>(null);
+  const particelleInFlightJobIds = useRef<Set<number>>(new Set());
+  const [particelleError, setParticelleError] = useState<string | null>(null);
+  const [particelleStatusMessage, setParticelleStatusMessage] = useState<string | null>(null);
+  const [particelleSyncForm, setParticelleSyncForm] = useState({
+    credential_id: "",
+    only_due: true,
+    limit: "",
+    fetch_certificati: true,
+    fetch_details: true,
+  });
   const [terreniCreatingJob, setTerreniCreatingJob] = useState(false);
   const [terreniError, setTerreniError] = useState<string | null>(null);
   const [terreniStatusMessage, setTerreniStatusMessage] = useState<string | null>(null);
@@ -418,6 +527,21 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
   const [terreniBatchFetchCertificati, setTerreniBatchFetchCertificati] = useState(true);
   const [terreniBatchFetchDetails, setTerreniBatchFetchDetails] = useState(true);
   const [terreniBatchError, setTerreniBatchError] = useState<string | null>(null);
+  const [historyMode, setHistoryMode] = useState<"manual" | "file">("manual");
+  const [historyForm, setHistoryForm] = useState({
+    credential_id: "",
+    subject_ids: "",
+    idxana_list: "",
+    continue_on_error: true,
+  });
+  const [historyBatchFile, setHistoryBatchFile] = useState<File | null>(null);
+  const [historyBatchItems, setHistoryBatchItems] = useState<CapacitasAnagraficaHistoryImportItemInput[]>([]);
+  const [historyBatchSkipped, setHistoryBatchSkipped] = useState(0);
+  const [historyBatchBusy, setHistoryBatchBusy] = useState(false);
+  const [historyImporting, setHistoryImporting] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
+  const [historyStatusMessage, setHistoryStatusMessage] = useState<string | null>(null);
+  const [historyResult, setHistoryResult] = useState<CapacitasAnagraficaHistoryImportResult | null>(null);
 
   const activeCredential = useMemo(
     () => credentials.find((credential) => String(credential.id) === formState.credential_id) ?? null,
@@ -429,10 +553,12 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
   );
   const activeCredentialsCount = credentials.filter((credential) => credential.active).length;
   const jobsInFlight = terreniJobs.some((job) => job.status === "pending" || job.status === "processing");
+  const particelleJobsInFlight = particelleJobs.some((job) => job.status === "pending" || job.status === "processing");
 
   useEffect(() => {
     void loadCredentials();
     void loadTerreniJobs();
+    void loadParticelleJobs();
   }, []);
 
   useEffect(() => {
@@ -456,6 +582,16 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
     return () => window.clearInterval(timer);
   }, [jobsInFlight]);
 
+  useEffect(() => {
+    if (!particelleJobsInFlight) return undefined;
+
+    const timer = window.setInterval(() => {
+      void loadParticelleJobs(true);
+    }, JOB_POLL_INTERVAL_MS);
+
+    return () => window.clearInterval(timer);
+  }, [particelleJobsInFlight]);
+
   async function loadCredentials(): Promise<void> {
     const token = getStoredAccessToken();
     if (!token) return;
@@ -470,6 +606,16 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
         credential_id: current.credential_id ? current.credential_id : nextCredentials.length === 1 ? String(nextCredentials[0].id) : "",
       }));
       setTerreniForm((current) => ({
+        ...current,
+        credential_id:
+          current.credential_id ? current.credential_id : nextCredentials.length === 1 ? String(nextCredentials[0].id) : "",
+      }));
+      setParticelleSyncForm((current) => ({
+        ...current,
+        credential_id:
+          current.credential_id ? current.credential_id : nextCredentials.length === 1 ? String(nextCredentials[0].id) : "",
+      }));
+      setHistoryForm((current) => ({
         ...current,
         credential_id:
           current.credential_id ? current.credential_id : nextCredentials.length === 1 ? String(nextCredentials[0].id) : "",
@@ -517,6 +663,40 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
     } finally {
       if (!silent) {
         setTerreniJobsLoading(false);
+      }
+    }
+  }
+
+  async function loadParticelleJobs(silent = false): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) return;
+
+    if (!silent) {
+      setParticelleJobsLoading(true);
+    }
+    try {
+      const nextJobs = await listCapacitasParticelleSyncJobs(token);
+      const prevInFlight = particelleInFlightJobIds.current;
+      const terminalStatuses = new Set(["succeeded", "completed_with_errors", "failed"]);
+
+      particelleInFlightJobIds.current = new Set(
+        nextJobs.filter((job) => job.status === "pending" || job.status === "processing").map((job) => job.id),
+      );
+
+      setParticelleJobs(nextJobs);
+      if (!silent && prevInFlight.size > 0 && nextJobs.some((job) => prevInFlight.has(job.id) && terminalStatuses.has(job.status))) {
+        setParticelleStatusMessage("Sync progressiva particelle aggiornata.");
+      }
+      if (!silent) {
+        setParticelleError(null);
+      }
+    } catch (loadError) {
+      if (!silent) {
+        setParticelleError(loadError instanceof Error ? loadError.message : "Errore caricamento job particelle");
+      }
+    } finally {
+      if (!silent) {
+        setParticelleJobsLoading(false);
       }
     }
   }
@@ -702,6 +882,63 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
     }
   }
 
+  async function handleCreateParticelleSyncJob(): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) return;
+
+    setParticelleCreatingJob(true);
+    try {
+      const job = await createCapacitasParticelleSyncJob(token, {
+        credential_id: particelleSyncForm.credential_id ? Number.parseInt(particelleSyncForm.credential_id, 10) : undefined,
+        only_due: particelleSyncForm.only_due,
+        limit: particelleSyncForm.limit.trim() ? Number.parseInt(particelleSyncForm.limit, 10) : undefined,
+        fetch_certificati: particelleSyncForm.fetch_certificati,
+        fetch_details: particelleSyncForm.fetch_details,
+      });
+      setParticelleStatusMessage(`Job progressivo particelle #${job.id} creato e avviato in background.`);
+      setParticelleError(null);
+      await loadParticelleJobs();
+    } catch (createError) {
+      setParticelleError(createError instanceof Error ? createError.message : "Errore avvio job particelle");
+    } finally {
+      setParticelleCreatingJob(false);
+    }
+  }
+
+  async function handleRerunParticelleJob(jobId: number): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) return;
+
+    setParticelleJobBusyId(jobId);
+    try {
+      await rerunCapacitasParticelleSyncJob(token, jobId);
+      setParticelleStatusMessage(`Job particelle #${jobId} rilanciato.`);
+      setParticelleError(null);
+      await loadParticelleJobs();
+    } catch (rerunError) {
+      setParticelleError(rerunError instanceof Error ? rerunError.message : "Errore rerun job particelle");
+    } finally {
+      setParticelleJobBusyId(null);
+    }
+  }
+
+  async function handleDeleteParticelleJob(jobId: number): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) return;
+
+    setParticelleDeletingJobId(jobId);
+    try {
+      await deleteCapacitasParticelleSyncJob(token, jobId);
+      setParticelleStatusMessage(`Job particelle #${jobId} eliminato.`);
+      setParticelleError(null);
+      setParticelleJobs((current) => current.filter((job) => job.id !== jobId));
+    } catch (deleteError) {
+      setParticelleError(deleteError instanceof Error ? deleteError.message : "Errore eliminazione job particelle");
+    } finally {
+      setParticelleDeletingJobId(null);
+    }
+  }
+
   async function handleParseTerreniBatchFile(file: File): Promise<void> {
     setTerreniBatchBusy(true);
     setTerreniBatchError(null);
@@ -742,6 +979,73 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
       setTerreniBatchError(createError instanceof Error ? createError.message : "Errore avvio job batch Terreni");
     } finally {
       setTerreniBatchCreatingJob(false);
+    }
+  }
+
+  function parseManualHistoryItems(): CapacitasAnagraficaHistoryImportItemInput[] {
+    const subjectIds = historyForm.subject_ids
+      .split(/[\n,;\t ]+/)
+      .map((value) => value.trim())
+      .filter(Boolean);
+    const idxanaList = historyForm.idxana_list
+      .split(/[\n,;\t ]+/)
+      .map((value) => value.trim())
+      .filter(Boolean);
+
+    return [
+      ...subjectIds.map((subject_id) => ({ subject_id, idxana: null })),
+      ...idxanaList.map((idxana) => ({ subject_id: null, idxana })),
+    ];
+  }
+
+  async function handleParseHistoryBatchFile(file: File): Promise<void> {
+    setHistoryBatchBusy(true);
+    setHistoryError(null);
+    try {
+      const parsed = await readAnagraficaHistoryBatchFile(file);
+      if (parsed.items.length === 0) {
+        throw new Error("File vuoto o senza righe valide per lo storico anagrafico.");
+      }
+      setHistoryBatchItems(parsed.items);
+      setHistoryBatchSkipped(parsed.skipped);
+      setHistoryStatusMessage(`File storico caricato: ${parsed.items.length} righe pronte per l'import.`);
+    } catch (parseError) {
+      setHistoryBatchItems([]);
+      setHistoryBatchSkipped(0);
+      setHistoryError(parseError instanceof Error ? parseError.message : "Errore parsing file storico anagrafico");
+    } finally {
+      setHistoryBatchBusy(false);
+    }
+  }
+
+  async function handleImportAnagraficaHistory(): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) return;
+
+    setHistoryImporting(true);
+    setHistoryError(null);
+    try {
+      const credentialId = historyForm.credential_id ? Number.parseInt(historyForm.credential_id, 10) : undefined;
+      const response =
+        historyMode === "file" && historyBatchFile
+          ? await importCapacitasAnagraficaHistoryFile(token, historyBatchFile, {
+              credentialId,
+              continueOnError: historyForm.continue_on_error,
+            })
+          : await importCapacitasAnagraficaHistory(token, {
+              credential_id: credentialId,
+              continue_on_error: historyForm.continue_on_error,
+              items: parseManualHistoryItems(),
+            });
+      setHistoryResult(response);
+      setHistoryStatusMessage(
+        `Storico completato: ${response.processed} processati, ${response.imported} importati, ${response.skipped} skipped, ${response.failed} falliti.`,
+      );
+    } catch (importError) {
+      setHistoryError(importError instanceof Error ? importError.message : "Errore import storico anagrafico");
+      setHistoryResult(null);
+    } finally {
+      setHistoryImporting(false);
     }
   }
 
@@ -881,6 +1185,216 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
           <ElaborazionePanelHeader
             badge={
               <>
+                <RefreshIcon className="h-3.5 w-3.5" />
+                Sync particelle
+              </>
+            }
+            title="Sincronizzazione progressiva particelle GAIA"
+            description="Rilegge progressivamente le particelle correnti gia presenti a database, traccia l'ultima data di sync e usa una politica piu aggressiva solo dopo le 19:00."
+            actions={
+              <button className="btn-secondary" disabled={particelleJobsLoading} onClick={() => void loadParticelleJobs()} type="button">
+                <RefreshIcon className="mr-2 h-4 w-4" />
+                Aggiorna job
+              </button>
+            }
+          />
+          <div className="space-y-6 p-6">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+              <label className="space-y-2">
+                <span className="label-caption">Credenziale</span>
+                <select
+                  className="form-control"
+                  value={particelleSyncForm.credential_id}
+                  onChange={(event) => setParticelleSyncForm((current) => ({ ...current, credential_id: event.target.value }))}
+                >
+                  <option value="">Auto-selezione backend</option>
+                  {credentials.map((credential) => (
+                    <option key={credential.id} value={credential.id}>
+                      {credential.label} · {credential.username}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="space-y-2">
+                <span className="label-caption">Limite run</span>
+                <input
+                  className="form-control"
+                  placeholder="Vuoto = tutte le dovute"
+                  value={particelleSyncForm.limit}
+                  onChange={(event) => setParticelleSyncForm((current) => ({ ...current, limit: event.target.value }))}
+                />
+              </label>
+              <label className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
+                <input
+                  checked={particelleSyncForm.only_due}
+                  className="h-4 w-4 accent-[#1D4E35]"
+                  type="checkbox"
+                  onChange={(event) => setParticelleSyncForm((current) => ({ ...current, only_due: event.target.checked }))}
+                />
+                <span className="text-sm text-gray-700">Solo particelle dovute</span>
+              </label>
+              <label className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
+                <input
+                  checked={particelleSyncForm.fetch_certificati}
+                  className="h-4 w-4 accent-[#1D4E35]"
+                  type="checkbox"
+                  onChange={(event) => setParticelleSyncForm((current) => ({ ...current, fetch_certificati: event.target.checked }))}
+                />
+                <span className="text-sm text-gray-700">Scarica certificati</span>
+              </label>
+              <label className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
+                <input
+                  checked={particelleSyncForm.fetch_details}
+                  className="h-4 w-4 accent-[#1D4E35]"
+                  type="checkbox"
+                  onChange={(event) => setParticelleSyncForm((current) => ({ ...current, fetch_details: event.target.checked }))}
+                />
+                <span className="text-sm text-gray-700">Scarica dettagli</span>
+              </label>
+            </div>
+
+            {particelleError ? (
+              <div className="rounded-2xl border border-rose-100 bg-rose-50/70 px-4 py-3 text-sm text-rose-800">{particelleError}</div>
+            ) : null}
+            {particelleStatusMessage ? (
+              <div className="rounded-2xl border border-emerald-100 bg-emerald-50/70 px-4 py-3 text-sm text-emerald-800">{particelleStatusMessage}</div>
+            ) : null}
+
+            <div className="flex flex-wrap items-center gap-3">
+              <button className="btn-primary" disabled={particelleCreatingJob} onClick={() => void handleCreateParticelleSyncJob()} type="button">
+                {particelleCreatingJob ? "Avvio..." : "Avvia sync progressiva"}
+              </button>
+              <span className="text-xs text-gray-500">
+                Di giorno rientrano soprattutto particelle non sincronizzate nelle ultime 24h. Dopo le 19:00 il runner accorcia la pausa tra richieste e riapre anche record piu recenti.
+              </span>
+            </div>
+          </div>
+        </article>
+
+        <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white p-0 shadow-panel">
+          <ElaborazionePanelHeader
+            badge={
+              <>
+                <ServerIcon className="h-3.5 w-3.5" />
+                Job particelle
+              </>
+            }
+            title="Monitor sync progressiva particelle"
+            description="Polling del job catalogo particelle con barra percentuale, finestra oraria attiva e dettaglio degli ultimi record processati."
+          />
+          {particelleJobsLoading ? (
+            <div className="p-5 text-sm text-gray-500">Caricamento job particelle...</div>
+          ) : particelleJobs.length === 0 ? (
+            <div className="p-5">
+              <EmptyState
+                icon={ServerIcon}
+                title="Nessun job particelle registrato"
+                description="Avvia la prima sync progressiva per popolare lo storico dei job e tenere in linea il catalogo particelle."
+              />
+            </div>
+          ) : (
+            <div className="space-y-4 p-6">
+              {particelleJobs.map((job) => {
+                const result = isParticelleSyncJobResult(job.result_json) ? job.result_json : null;
+                const tone = renderJobStatus(job.status);
+                return (
+                  <div className="rounded-[24px] border border-gray-100 bg-[#fbfcfb] p-5" key={job.id}>
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-semibold text-gray-900">Job #{job.id}</span>
+                          <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${tone.className}`}>
+                            {tone.label}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-xs text-gray-500">
+                          creato {formatDateTime(job.created_at)} · start {formatDateTime(job.started_at)} · end {formatDateTime(job.completed_at)}
+                        </p>
+                        {result ? (
+                          <p className="mt-2 text-sm text-gray-600">
+                            {result.aggressive_window ? "Fascia serale aggressiva" : "Fascia diurna conservativa"} · pausa {result.throttle_ms} ms · ricontrollo target {result.recheck_hours}h
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button className="btn-secondary" disabled={particelleJobBusyId === job.id} onClick={() => void handleRerunParticelleJob(job.id)} type="button">
+                          {particelleJobBusyId === job.id ? "Rerun..." : "Rilancia"}
+                        </button>
+                        <button
+                          className="btn-secondary"
+                          disabled={particelleDeletingJobId === job.id || job.status === "pending" || job.status === "processing"}
+                          onClick={() => void handleDeleteParticelleJob(job.id)}
+                          type="button"
+                        >
+                          {particelleDeletingJobId === job.id ? "Elimina..." : "Elimina"}
+                        </button>
+                      </div>
+                    </div>
+
+                    {result ? (
+                      <>
+                        <div className="mt-4 flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">
+                              <span className="font-semibold">{result.processed_items}</span> / {result.total_items} particelle processate
+                            </p>
+                            <p className="mt-1 text-xs text-gray-500">
+                              ok {result.success_items} · skipped {result.skipped_items} · failed {result.failed_items}
+                              {result.current_label ? ` · in corso: ${result.current_label}` : ""}
+                            </p>
+                          </div>
+                          <div className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-[#1D4E35] shadow-sm">{result.progress_percent}%</div>
+                        </div>
+                        <div className="mt-3 h-3 overflow-hidden rounded-full bg-[#dfe9df]">
+                          <div className="h-full rounded-full bg-[#1D4E35] transition-all duration-500" style={{ width: `${result.progress_percent}%` }} />
+                        </div>
+                        <div className="mt-4 overflow-x-auto">
+                          <table className="data-table">
+                            <thead>
+                              <tr>
+                                <th>Particella</th>
+                                <th>Stato</th>
+                                <th>Messaggio</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {result.recent_items.slice().reverse().slice(0, 8).map((item) => (
+                                <tr key={`${job.id}-${item.particella_id}-${item.label}`}>
+                                  <td className="font-medium text-gray-900">{item.label}</td>
+                                  <td>
+                                    <span
+                                      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${
+                                        item.status === "synced"
+                                          ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                                          : item.status === "failed"
+                                            ? "bg-rose-50 text-rose-700 ring-rose-200"
+                                            : "bg-amber-50 text-amber-700 ring-amber-200"
+                                      }`}
+                                    >
+                                      {item.status}
+                                    </span>
+                                  </td>
+                                  <td className="text-sm text-gray-700">{item.message}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </>
+                    ) : job.error_detail ? (
+                      <div className="mt-4 text-sm text-rose-700">{job.error_detail}</div>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </article>
+
+        <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white p-0 shadow-panel">
+          <ElaborazionePanelHeader
+            badge={
+              <>
                 <SearchIcon className="h-3.5 w-3.5" />
                 Risultati ricerca
               </>
@@ -935,6 +1449,251 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
                 </tbody>
               </table>
             </div>
+          )}
+        </article>
+
+        <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white p-0 shadow-panel">
+          <ElaborazionePanelHeader
+            badge={
+              <>
+                <UsersIcon className="h-3.5 w-3.5" />
+                Storico anagrafico
+              </>
+            }
+            title="Import storico anagrafiche Capacitas"
+            description="Recupera lo storico remoto Involture partendo da subject_id GAIA, IDXANA o file batch e persiste gli snapshot in anagrafica."
+          />
+          <div className="space-y-6 p-6">
+            <div className="flex flex-wrap gap-2">
+              <button className={historyMode === "manual" ? "btn-primary" : "btn-secondary"} onClick={() => setHistoryMode("manual")} type="button">
+                Manuale
+              </button>
+              <button className={historyMode === "file" ? "btn-primary" : "btn-secondary"} onClick={() => setHistoryMode("file")} type="button">
+                Batch da file
+              </button>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <label className="space-y-2">
+                <span className="label-caption">Credenziale</span>
+                <select
+                  className="form-control"
+                  value={historyForm.credential_id}
+                  onChange={(event) => setHistoryForm((current) => ({ ...current, credential_id: event.target.value }))}
+                >
+                  <option value="">Auto-selezione backend</option>
+                  {credentials.map((credential) => (
+                    <option key={credential.id} value={credential.id}>
+                      {credential.label} · {credential.username}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 xl:col-span-2">
+                <input
+                  checked={historyForm.continue_on_error}
+                  className="h-4 w-4 accent-[#1D4E35]"
+                  type="checkbox"
+                  onChange={(event) => setHistoryForm((current) => ({ ...current, continue_on_error: event.target.checked }))}
+                />
+                <span className="text-sm text-gray-700">Continua se una riga fallisce</span>
+              </label>
+              {historyMode === "file" ? (
+                <div className="flex flex-wrap gap-2 xl:justify-end">
+                  <button className="btn-secondary" onClick={() => downloadAnagraficaHistoryTemplate("xlsx")} type="button">
+                    Template Excel
+                  </button>
+                  <button className="btn-secondary" onClick={() => downloadAnagraficaHistoryTemplate("csv")} type="button">
+                    Template CSV
+                  </button>
+                </div>
+              ) : null}
+            </div>
+
+            {historyMode === "manual" ? (
+              <div className="grid gap-4 lg:grid-cols-2">
+                <label className="space-y-2">
+                  <span className="label-caption">Lista subject_id</span>
+                  <textarea
+                    className="form-control min-h-36"
+                    placeholder="Uno per riga o separati da virgola"
+                    value={historyForm.subject_ids}
+                    onChange={(event) => setHistoryForm((current) => ({ ...current, subject_ids: event.target.value }))}
+                  />
+                </label>
+                <label className="space-y-2">
+                  <span className="label-caption">Lista IDXANA</span>
+                  <textarea
+                    className="form-control min-h-36"
+                    placeholder="Uno per riga o separati da virgola"
+                    value={historyForm.idxana_list}
+                    onChange={(event) => setHistoryForm((current) => ({ ...current, idxana_list: event.target.value }))}
+                  />
+                </label>
+              </div>
+            ) : (
+              <div className="rounded-[24px] border border-dashed border-[#cfd8cf] bg-[#f8fbf8] p-5">
+                <div className="flex flex-wrap items-start justify-between gap-4">
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold text-gray-900">Import batch subject_id / idxana</p>
+                    <p className="text-sm text-gray-600">
+                      Carica un file Excel o CSV con colonne <span className="font-medium text-gray-900">subject_id</span> e/o <span className="font-medium text-gray-900">idxana</span>.
+                    </p>
+                  </div>
+                  <button
+                    className="btn-secondary"
+                    disabled={historyBatchBusy || historyBatchItems.length === 0}
+                    onClick={() => {
+                      setHistoryBatchFile(null);
+                      setHistoryBatchItems([]);
+                      setHistoryBatchSkipped(0);
+                      setHistoryError(null);
+                    }}
+                    type="button"
+                  >
+                    Reset
+                  </button>
+                </div>
+
+                <label className="mt-4 block space-y-2">
+                  <span className="label-caption">File batch</span>
+                  <input
+                    accept=".xlsx,.xls,.csv"
+                    className="form-control"
+                    disabled={historyBatchBusy}
+                    type="file"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] ?? null;
+                      setHistoryBatchFile(file);
+                      if (!file) {
+                        setHistoryBatchItems([]);
+                        setHistoryBatchSkipped(0);
+                        setHistoryError(null);
+                        return;
+                      }
+                      void handleParseHistoryBatchFile(file);
+                    }}
+                  />
+                </label>
+              </div>
+            )}
+
+            {historyError ? (
+              <div className="rounded-2xl border border-rose-100 bg-rose-50/70 px-4 py-3 text-sm text-rose-800">{historyError}</div>
+            ) : null}
+            {historyStatusMessage ? (
+              <div className="rounded-2xl border border-emerald-100 bg-emerald-50/70 px-4 py-3 text-sm text-emerald-800">{historyStatusMessage}</div>
+            ) : null}
+
+            <div className="flex flex-wrap items-center gap-3">
+              <button
+                className="btn-primary"
+                disabled={
+                  historyImporting ||
+                  (historyMode === "manual"
+                    ? parseManualHistoryItems().length === 0
+                    : historyBatchItems.length === 0 || historyBatchFile == null)
+                }
+                onClick={() => void handleImportAnagraficaHistory()}
+                type="button"
+              >
+                {historyImporting ? "Import in corso..." : "Avvia import storico"}
+              </button>
+              <span className="text-sm text-gray-500">
+                {historyMode === "manual"
+                  ? `${parseManualHistoryItems().length} righe pronte`
+                  : historyBatchFile
+                    ? `${historyBatchItems.length} righe pronte${historyBatchSkipped > 0 ? ` · ${historyBatchSkipped} vuote saltate` : ""}`
+                    : "Nessun file selezionato"}
+              </span>
+            </div>
+          </div>
+        </article>
+
+        <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white p-0 shadow-panel">
+          <ElaborazionePanelHeader
+            badge={
+              <>
+                <ServerIcon className="h-3.5 w-3.5" />
+                Report storico
+              </>
+            }
+            title={
+              historyResult == null
+                ? "Nessun report storico disponibile"
+                : `${historyResult.processed} processati · ${historyResult.snapshot_records_imported} snapshot importati`
+            }
+            description="Report aggregato dell'ultima importazione storico anagrafico eseguita dal workspace Capacitas."
+          />
+          {historyResult == null ? (
+            <div className="p-5">
+              <EmptyState
+                icon={ServerIcon}
+                title="Nessun report disponibile"
+                description="Esegui un'importazione manuale o batch per vedere conteggi e dettaglio dei record storici."
+              />
+            </div>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-px border-y border-gray-100 bg-gray-100 md:grid-cols-5">
+                {(
+                  [
+                    ["Processed", historyResult.processed],
+                    ["Imported", historyResult.imported],
+                    ["Skipped", historyResult.skipped],
+                    ["Failed", historyResult.failed],
+                    ["Snapshot", historyResult.snapshot_records_imported],
+                  ] as [string, number][]
+                ).map(([label, value]) => (
+                  <div className="bg-white px-6 py-3" key={label}>
+                    <p className="text-xs text-gray-500">{label}</p>
+                    <p className="mt-0.5 text-xl font-semibold text-gray-900">{value}</p>
+                  </div>
+                ))}
+              </div>
+              <div className="overflow-x-auto">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Input</th>
+                      <th>Soggetto risolto</th>
+                      <th>Stato</th>
+                      <th>Storico</th>
+                      <th>Messaggio</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {historyResult.items.map((item, index) => (
+                      <tr key={`${item.subject_id ?? "none"}-${item.idxana ?? "none"}-${index}`}>
+                        <td className="text-sm text-gray-700">
+                          <div className="font-medium text-gray-900">{item.subject_id ?? "—"}</div>
+                          <div className="text-xs text-gray-500">{item.idxana ?? "—"}</div>
+                        </td>
+                        <td className="text-xs text-gray-500">{item.resolved_subject_id ?? "—"}</td>
+                        <td>
+                          <span
+                            className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${
+                              item.status === "imported"
+                                ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                                : item.status === "failed"
+                                  ? "bg-rose-50 text-rose-700 ring-rose-200"
+                                  : "bg-amber-50 text-amber-700 ring-amber-200"
+                            }`}
+                          >
+                            {item.status}
+                          </span>
+                        </td>
+                        <td className="text-sm text-gray-700">
+                          {item.imported_records}/{item.history_records_total} importati
+                          {item.skipped_records > 0 ? ` · ${item.skipped_records} skipped` : ""}
+                        </td>
+                        <td className="text-sm text-gray-700">{item.error ?? item.message ?? "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
         </article>
 

@@ -338,6 +338,31 @@ class CapacitasTerreniJobOut(BaseModel):
     updated_at: datetime
 
 
+class CapacitasParticelleSyncJobCreateRequest(BaseModel):
+    credential_id: int | None = None
+    only_due: bool = True
+    limit: int | None = Field(default=None, ge=1, le=5000)
+    fetch_certificati: bool = True
+    fetch_details: bool = True
+
+
+class CapacitasParticelleSyncJobOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    credential_id: int | None
+    requested_by_user_id: int | None
+    status: str
+    mode: str
+    payload_json: dict | list | None
+    result_json: dict | list | None
+    error_detail: str | None
+    started_at: datetime | None
+    completed_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
+
+
 class CapacitasCredentialCreate(BaseModel):
     label: str = Field(min_length=1, max_length=120)
     username: str = Field(min_length=1, max_length=255)

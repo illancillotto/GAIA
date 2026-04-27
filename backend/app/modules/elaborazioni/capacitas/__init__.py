@@ -3,6 +3,8 @@ from app.modules.elaborazioni.capacitas.client import InVoltureClient
 from app.modules.elaborazioni.capacitas.models import (
     AnagraficaSearchRequest,
     CapacitasAnagrafica,
+    CapacitasParticelleSyncJobCreateRequest,
+    CapacitasParticelleSyncJobOut,
     CapacitasLookupOption,
     CapacitasTerreniBatchItem,
     CapacitasTerreniBatchItemResult,
@@ -29,6 +31,8 @@ __all__ = [
     "CAPACITAS_APPS",
     "AnagraficaSearchRequest",
     "CapacitasAnagrafica",
+    "CapacitasParticelleSyncJobCreateRequest",
+    "CapacitasParticelleSyncJobOut",
     "CapacitasLookupOption",
     "CapacitasTerreniBatchItem",
     "CapacitasTerreniBatchItemResult",

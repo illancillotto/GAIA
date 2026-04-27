@@ -40,6 +40,8 @@ import type {
   CapacitasAnagraficaHistoryImportInput,
   CapacitasAnagraficaHistoryImportResult,
   CapacitasLookupOption,
+  CapacitasParticelleSyncJob,
+  CapacitasParticelleSyncJobCreateInput,
   CapacitasSearchInput,
   CapacitasSearchResult,
   CapacitasTerreniJob,
@@ -1518,6 +1520,45 @@ export async function rerunCapacitasTerreniJob(token: string, jobId: number): Pr
 
 export async function deleteCapacitasTerreniJob(token: string, jobId: number): Promise<void> {
   await request<null>(`/elaborazioni/capacitas/involture/terreni/jobs/${jobId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function createCapacitasParticelleSyncJob(
+  token: string,
+  payload: CapacitasParticelleSyncJobCreateInput,
+): Promise<CapacitasParticelleSyncJob> {
+  return request<CapacitasParticelleSyncJob>("/elaborazioni/capacitas/involture/particelle/jobs", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function listCapacitasParticelleSyncJobs(token: string): Promise<CapacitasParticelleSyncJob[]> {
+  return request<CapacitasParticelleSyncJob[]>("/elaborazioni/capacitas/involture/particelle/jobs", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function rerunCapacitasParticelleSyncJob(token: string, jobId: number): Promise<CapacitasParticelleSyncJob> {
+  return request<CapacitasParticelleSyncJob>(`/elaborazioni/capacitas/involture/particelle/jobs/${jobId}/run`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function deleteCapacitasParticelleSyncJob(token: string, jobId: number): Promise<void> {
+  await request<null>(`/elaborazioni/capacitas/involture/particelle/jobs/${jobId}`, {
     method: "DELETE",
     headers: {
       Authorization: `Bearer ${token}`,

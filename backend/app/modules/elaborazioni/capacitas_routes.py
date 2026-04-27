@@ -17,6 +17,8 @@ from app.modules.elaborazioni.capacitas.models import (
     CapacitasAnagraficaHistoryImportRequest,
     CapacitasAnagraficaHistoryImportResponse,
     CapacitasLookupOption,
+    CapacitasParticelleSyncJobCreateRequest,
+    CapacitasParticelleSyncJobOut,
     CapacitasStoricoAnagraficaRow,
     CapacitasTerreniBatchRequest,
     CapacitasTerreniBatchResponse,
@@ -38,6 +40,14 @@ from app.services.elaborazioni_capacitas_anagrafica_history import (
     CapacitasAnagraficaHistoryImportError,
     import_anagrafica_history_batch,
     load_anagrafica_history_import_request,
+)
+from app.services.elaborazioni_capacitas_particelle_sync import (
+    create_particelle_sync_job,
+    delete_particelle_sync_job,
+    get_particelle_sync_job,
+    list_particelle_sync_jobs,
+    run_particelle_sync_job,
+    serialize_particelle_sync_job,
 )
 from app.services.elaborazioni_capacitas import (
     create_credential,
@@ -97,6 +107,48 @@ async def _run_terreni_job_background(job_id: int) -> None:
         if credential_id is not None:
             mark_credential_error(db, credential_id, str(exc))
         job = get_terreni_sync_job(db, job_id)
+        if job is not None and job.status not in {"succeeded", "completed_with_errors", "failed"}:
+            job.status = "failed"
+            job.error_detail = str(exc)
+            job.completed_at = datetime.now(timezone.utc)
+            db.commit()
+    finally:
+        if manager is not None:
+            await manager.close()
+        db.close()
+
+
+async def _run_particelle_job_background(job_id: int) -> None:
+    db = SessionLocal()
+    manager: CapacitasSessionManager | None = None
+    credential_id: int | None = None
+    try:
+        job = get_particelle_sync_job(db, job_id)
+        if job is None:
+            return
+
+        try:
+            credential, password = pick_credential(db, job.credential_id)
+        except RuntimeError as exc:
+            job.status = "failed"
+            job.error_detail = str(exc)
+            job.completed_at = datetime.now(timezone.utc)
+            db.commit()
+            return
+
+        credential_id = credential.id
+        manager = CapacitasSessionManager(credential.username, password)
+        await manager.login()
+        await manager.activate_app("involture")
+        client = InVoltureClient(manager)
+        await run_particelle_sync_job(db, client, job)
+        mark_credential_used(db, credential.id)
+    except Exception as exc:
+        logger.exception("Errore background job particelle Capacitas: job_id=%d err=%s", job_id, exc)
+        db.rollback()
+        if credential_id is not None:
+            mark_credential_error(db, credential_id, str(exc))
+        job = get_particelle_sync_job(db, job_id)
         if job is not None and job.status not in {"succeeded", "completed_with_errors", "failed"}:
             job.status = "failed"
             job.error_detail = str(exc)
@@ -599,6 +651,97 @@ async def run_terreni_job(
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail=f"Errore esecuzione job terreni inVOLTURE: {exc}",
+        ) from exc
+    finally:
+        await manager.close()
+
+
+@router.post("/involture/particelle/jobs", response_model=CapacitasParticelleSyncJobOut, status_code=status.HTTP_202_ACCEPTED)
+def create_particelle_job(
+    body: CapacitasParticelleSyncJobCreateRequest,
+    background_tasks: BackgroundTasks,
+    current_user: Annotated[ApplicationUser, Depends(require_admin_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> CapacitasParticelleSyncJobOut:
+    if body.credential_id is not None:
+        try:
+            pick_credential(db, body.credential_id)
+        except RuntimeError as exc:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+
+    job = create_particelle_sync_job(
+        db,
+        requested_by_user_id=current_user.id,
+        credential_id=body.credential_id,
+        payload=body,
+    )
+    background_tasks.add_task(_run_particelle_job_background, job.id)
+    return serialize_particelle_sync_job(job)
+
+
+@router.get("/involture/particelle/jobs", response_model=list[CapacitasParticelleSyncJobOut])
+def list_particelle_jobs(
+    _: Annotated[ApplicationUser, Depends(require_admin_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[CapacitasParticelleSyncJobOut]:
+    return [serialize_particelle_sync_job(job) for job in list_particelle_sync_jobs(db)]
+
+
+@router.get("/involture/particelle/jobs/{job_id}", response_model=CapacitasParticelleSyncJobOut)
+def get_particelle_job(
+    job_id: int,
+    _: Annotated[ApplicationUser, Depends(require_admin_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> CapacitasParticelleSyncJobOut:
+    job = get_particelle_sync_job(db, job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job non trovato")
+    return serialize_particelle_sync_job(job)
+
+
+@router.delete("/involture/particelle/jobs/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_particelle_job(
+    job_id: int,
+    _: Annotated[ApplicationUser, Depends(require_admin_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> None:
+    job = get_particelle_sync_job(db, job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job non trovato")
+    if job.status not in {"succeeded", "completed_with_errors", "failed"}:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Il job puo essere eliminato solo quando e terminato")
+    delete_particelle_sync_job(db, job)
+
+
+@router.post("/involture/particelle/jobs/{job_id}/run", response_model=CapacitasParticelleSyncJobOut)
+async def run_particelle_job(
+    job_id: int,
+    _: Annotated[ApplicationUser, Depends(require_admin_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> CapacitasParticelleSyncJobOut:
+    job = get_particelle_sync_job(db, job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job non trovato")
+
+    try:
+        credential, password = pick_credential(db, job.credential_id)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+
+    manager = CapacitasSessionManager(credential.username, password)
+    try:
+        await manager.login()
+        await manager.activate_app("involture")
+        client = InVoltureClient(manager)
+        result = await run_particelle_sync_job(db, client, job)
+        mark_credential_used(db, credential.id)
+        return serialize_particelle_sync_job(result)
+    except Exception as exc:
+        logger.exception("Errore run job particelle Capacitas: job_id=%d cred_id=%d err=%s", job_id, credential.id, exc)
+        mark_credential_error(db, credential.id, str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Errore esecuzione job particelle inVOLTURE: {exc}",
         ) from exc
     finally:
         await manager.close()

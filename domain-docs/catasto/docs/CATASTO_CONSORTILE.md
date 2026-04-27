@@ -91,7 +91,7 @@ Copertura reale di questo step:
 Non ancora implementato:
 
 - consolidamento multi-sorgente o deduplica avanzata
-- worker o scheduler dedicato per job massivi su portafogli di particelle
+- scheduler esterno o coda dedicata separata dal backend applicativo per job massivi su portafogli di particelle
 
 Aggiornamento operativo 27 aprile 2026:
 
@@ -101,6 +101,13 @@ Aggiornamento operativo 27 aprile 2026:
 - dagli intestatari del certificato usa `IDXANA` + `IDXESA` per aprire `dettaglioAnagrafica.aspx`
 - il risultato massivo restituisce quindi gli intestatari correnti anche se prima non erano presenti in `ana_persons`
 - il fallback live aggiorna l'anagrafica corrente locale; non importa automaticamente lo storico remoto completo, che resta un flusso separato
+- il modulo `elaborazioni` espone ora anche un job dedicato di sync progressiva delle particelle GAIA:
+  - fonte input: `cat_particelle` correnti gia presenti a DB
+  - persistenza job: `capacitas_particelle_sync_jobs`
+  - tracking per particella: `capacitas_last_sync_at`, `capacitas_last_sync_status`, `capacitas_last_sync_error`, `capacitas_last_sync_job_id`
+  - politica di riesame:
+    - di giorno rientrano soprattutto particelle non aggiornate nelle ultime `24h`
+    - dopo le `19:00` la finestra di riesame scende a `6h` e il throttle tra richieste si accorcia
 
 ## Regola Arborea / Terralba
 
