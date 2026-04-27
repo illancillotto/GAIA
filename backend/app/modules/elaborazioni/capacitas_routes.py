@@ -4,7 +4,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -13,7 +13,11 @@ from app.core.database import SessionLocal, get_db
 from app.modules.elaborazioni.capacitas.client import InVoltureClient
 from app.modules.elaborazioni.capacitas.models import (
     AnagraficaSearchRequest,
+    CapacitasAnagraficaDetail,
+    CapacitasAnagraficaHistoryImportRequest,
+    CapacitasAnagraficaHistoryImportResponse,
     CapacitasLookupOption,
+    CapacitasStoricoAnagraficaRow,
     CapacitasTerreniBatchRequest,
     CapacitasTerreniBatchResponse,
     CapacitasTerreniJobCreateRequest,
@@ -30,6 +34,11 @@ from app.modules.elaborazioni.capacitas.models import (
 from app.modules.elaborazioni.capacitas.session import CapacitasSessionManager
 from app.models.application_user import ApplicationUser
 from app.models.catasto_phase1 import CatCapacitasTerrenoRow, CatConsorzioOccupancy
+from app.services.elaborazioni_capacitas_anagrafica_history import (
+    CapacitasAnagraficaHistoryImportError,
+    import_anagrafica_history_batch,
+    load_anagrafica_history_import_request,
+)
 from app.services.elaborazioni_capacitas import (
     create_credential,
     delete_credential,
@@ -195,6 +204,127 @@ async def search_anagrafica(
         ) from exc
     finally:
         await manager.close()
+
+
+@router.get("/involture/anagrafica/{idxana}/storico", response_model=list[CapacitasStoricoAnagraficaRow])
+async def get_anagrafica_storico(
+    idxana: str,
+    _: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+    credential_id: int | None = None,
+) -> list[CapacitasStoricoAnagraficaRow]:
+    try:
+        credential, password = pick_credential(db, credential_id)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+
+    manager = CapacitasSessionManager(credential.username, password)
+    try:
+        await manager.login()
+        await manager.activate_app("involture")
+        client = InVoltureClient(manager)
+        result = await client.fetch_anagrafica_history(idxana=idxana)
+        mark_credential_used(db, credential.id)
+        return result
+    except Exception as exc:
+        logger.exception("Errore storico anagrafica Capacitas: cred_id=%d idxana=%s err=%s", credential.id, idxana, exc)
+        mark_credential_error(db, credential.id, str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Errore recupero storico anagrafica da inVOLTURE: {exc}",
+        ) from exc
+    finally:
+        await manager.close()
+
+
+@router.get("/involture/anagrafica/storico/{history_id}", response_model=CapacitasAnagraficaDetail)
+async def get_anagrafica_storico_detail(
+    history_id: str,
+    _: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+    credential_id: int | None = None,
+) -> CapacitasAnagraficaDetail:
+    try:
+        credential, password = pick_credential(db, credential_id)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+
+    manager = CapacitasSessionManager(credential.username, password)
+    try:
+        await manager.login()
+        await manager.activate_app("involture")
+        client = InVoltureClient(manager)
+        result = await client.fetch_anagrafica_detail(history_id=history_id)
+        mark_credential_used(db, credential.id)
+        return result
+    except Exception as exc:
+        logger.exception(
+            "Errore dettaglio storico anagrafica Capacitas: cred_id=%d history_id=%s err=%s",
+            credential.id,
+            history_id,
+            exc,
+        )
+        mark_credential_error(db, credential.id, str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Errore recupero dettaglio storico anagrafica da inVOLTURE: {exc}",
+        ) from exc
+    finally:
+        await manager.close()
+
+
+@router.post("/involture/anagrafica/storico/import", response_model=CapacitasAnagraficaHistoryImportResponse)
+async def import_anagrafica_storico(
+    body: CapacitasAnagraficaHistoryImportRequest,
+    _: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> CapacitasAnagraficaHistoryImportResponse:
+    try:
+        credential, password = pick_credential(db, body.credential_id)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+
+    manager = CapacitasSessionManager(credential.username, password)
+    try:
+        await manager.login()
+        await manager.activate_app("involture")
+        client = InVoltureClient(manager)
+        result = await import_anagrafica_history_batch(db, client, body)
+        mark_credential_used(db, credential.id)
+        return result
+    except CapacitasAnagraficaHistoryImportError as exc:
+        db.rollback()
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    except Exception as exc:
+        logger.exception("Errore import storico anagrafica Capacitas: cred_id=%d err=%s", credential.id, exc)
+        db.rollback()
+        mark_credential_error(db, credential.id, str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Errore import storico anagrafica da inVOLTURE: {exc}",
+        ) from exc
+    finally:
+        await manager.close()
+
+
+@router.post("/involture/anagrafica/storico/import-file", response_model=CapacitasAnagraficaHistoryImportResponse)
+async def import_anagrafica_storico_file(
+    file: Annotated[UploadFile, File()],
+    _: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+    credential_id: Annotated[int | None, Form()] = None,
+    continue_on_error: Annotated[bool, Form()] = True,
+) -> CapacitasAnagraficaHistoryImportResponse:
+    try:
+        payload = load_anagrafica_history_import_request(
+            filename=file.filename or "anagrafica-storico.csv",
+            content=await file.read(),
+            credential_id=credential_id,
+        )
+        payload.continue_on_error = continue_on_error
+    except CapacitasAnagraficaHistoryImportError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+    return await import_anagrafica_storico(payload, _, db)
 
 
 @router.get("/involture/frazioni", response_model=list[CapacitasLookupOption])

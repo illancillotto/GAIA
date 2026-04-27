@@ -373,6 +373,7 @@ def test_subjects_crud_search_and_stats() -> None:
     assert updated["requires_review"] is True
     assert updated["person"]["telefono"] == "0783123456"
     assert len(updated["person_snapshots"]) == 1
+    assert updated["person_snapshots"][0]["is_capacitas_history"] is False
     assert updated["person_snapshots"][0]["email"] == "mario.rossi@example.local"
     assert updated["person_snapshots"][0]["telefono"] is None
 

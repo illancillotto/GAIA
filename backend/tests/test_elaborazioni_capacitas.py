@@ -499,6 +499,250 @@ def test_capacitas_storico_anagrafica_parsers_extract_list_and_detail() -> None:
     assert detail.note == ["Storico importato"]
 
 
+def test_capacitas_anagrafica_history_import_by_subject_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    create_response = client.post(
+        "/elaborazioni/capacitas/credentials",
+        headers=auth_headers(),
+        json={"label": "Storico PF", "username": "capacitas-user", "password": "capacitas-secret"},
+    )
+    credential_id = create_response.json()["id"]
+
+    db = TestingSessionLocal()
+    subject = AnagraficaSubject(
+        subject_type="person",
+        status="active",
+        source_system="gaia",
+        source_name_raw="Cadoni Angelo Antioco",
+        requires_review=False,
+    )
+    db.add(subject)
+    db.flush()
+    db.add(
+        AnagraficaPerson(
+            subject_id=subject.id,
+            cognome="Cadoni",
+            nome="Angelo Antioco",
+            codice_fiscale="CDNNLN53M01G113C",
+        )
+    )
+    db.commit()
+    db.close()
+
+    async def fake_login(self):
+        from app.modules.elaborazioni.capacitas.session import CapacitasSession
+
+        self._session = CapacitasSession(token="123e4567-e89b-12d3-a456-426614174000")
+        return self._session
+
+    async def fake_activate_app(self, app_name: str) -> None:
+        return None
+
+    async def fake_close(self) -> None:
+        return None
+
+    async def fake_search_by_cf(self, codice_fiscale: str) -> CapacitasSearchResult:
+        assert codice_fiscale == "CDNNLN53M01G113C"
+        return CapacitasSearchResult(
+            total=1,
+            rows=[
+                CapacitasAnagrafica(
+                    IDXANA="IDX-CADONI",
+                    Denominazione="Cadoni Angelo Antioco",
+                    CodiceFiscale="CDNNLN53M01G113C",
+                )
+            ],
+        )
+
+    async def fake_fetch_anagrafica_history(self, *, idxana: str):
+        assert idxana == "IDX-CADONI"
+        return [
+            CapacitasStoricoAnagraficaRow(
+                ID="HIST-2014",
+                IDXANA=idxana,
+                DataAgg="14/01/2015 10:54:23",
+                Denominazione="Cadoni Angelo Antioco",
+                CodFisc="CDNNLN53M01G113C",
+                DataNascita="01/08/1953",
+                LuogoNascita="ORISTANO",
+                Anno="2014",
+            ),
+            CapacitasStoricoAnagraficaRow(
+                ID="HIST-2016",
+                IDXANA=idxana,
+                DataAgg="14/01/2017 10:54:23",
+                Denominazione="Cadoni Angelo Antioco",
+                CodFisc="CDNNLN53M01G113C",
+                DataNascita="01/08/1953",
+                LuogoNascita="ORISTANO",
+                Anno="2016",
+            ),
+        ]
+
+    async def fake_fetch_anagrafica_detail(self, *, history_id: str):
+        details = {
+            "HIST-2014": CapacitasAnagraficaDetail(
+                history_id="HIST-2014",
+                idxana="IDX-CADONI",
+                cognome="Cadoni",
+                nome="Angelo Antioco",
+                denominazione="Cadoni Angelo Antioco",
+                codice_fiscale="CDNNLN53M01G113C",
+                data_nascita=date(1953, 8, 1),
+                residenza_belfiore="PALMAS ARBOREA",
+                residenza_toponimo="VIA",
+                residenza_indirizzo="Mameli",
+                residenza_civico="18",
+                residenza_cap="09090",
+                note=["Storico 2014"],
+            ),
+            "HIST-2016": CapacitasAnagraficaDetail(
+                history_id="HIST-2016",
+                idxana="IDX-CADONI",
+                cognome="Cadoni",
+                nome="Angelo Antioco",
+                denominazione="Cadoni Angelo Antioco",
+                codice_fiscale="CDNNLN53M01G113C",
+                data_nascita=date(1953, 8, 1),
+                residenza_belfiore="PALMAS ARBOREA",
+                residenza_toponimo="VIA",
+                residenza_indirizzo="Garibaldi",
+                residenza_civico="22",
+                residenza_cap="09090",
+                note=["Storico 2016"],
+            ),
+        }
+        return details[history_id]
+
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.login", fake_login)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.activate_app", fake_activate_app)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.close", fake_close)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.search_by_cf", fake_search_by_cf)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.fetch_anagrafica_history", fake_fetch_anagrafica_history)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.fetch_anagrafica_detail", fake_fetch_anagrafica_detail)
+
+    response = client.post(
+        "/elaborazioni/capacitas/involture/anagrafica/storico/import",
+        headers=auth_headers(),
+        json={"credential_id": credential_id, "items": [{"subject_id": str(subject.id)}]},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["processed"] == 1
+    assert payload["imported"] == 1
+    assert payload["skipped"] == 0
+    assert payload["failed"] == 0
+    assert payload["snapshot_records_imported"] == 2
+    assert payload["items"][0]["idxana"] == "IDX-CADONI"
+    assert payload["items"][0]["imported_records"] == 2
+
+    db = TestingSessionLocal()
+    try:
+        updated_subject = db.get(AnagraficaSubject, subject.id)
+        snapshots = db.query(AnagraficaPersonSnapshot).filter_by(subject_id=subject.id).order_by(AnagraficaPersonSnapshot.source_ref.asc()).all()
+        assert updated_subject is not None
+        assert updated_subject.source_system == "capacitas"
+        assert updated_subject.source_external_id == "IDX-CADONI"
+        assert len(snapshots) == 2
+        assert all(item.is_capacitas_history for item in snapshots)
+        assert snapshots[0].source_ref == "HIST-2014"
+        assert snapshots[1].source_ref == "HIST-2016"
+    finally:
+        db.close()
+
+
+def test_capacitas_anagrafica_history_import_file_is_idempotent(monkeypatch: pytest.MonkeyPatch) -> None:
+    create_response = client.post(
+        "/elaborazioni/capacitas/credentials",
+        headers=auth_headers(),
+        json={"label": "Storico batch", "username": "capacitas-user", "password": "capacitas-secret"},
+    )
+    credential_id = create_response.json()["id"]
+
+    async def fake_login(self):
+        from app.modules.elaborazioni.capacitas.session import CapacitasSession
+
+        self._session = CapacitasSession(token="123e4567-e89b-12d3-a456-426614174000")
+        return self._session
+
+    async def fake_activate_app(self, app_name: str) -> None:
+        return None
+
+    async def fake_close(self) -> None:
+        return None
+
+    async def fake_fetch_anagrafica_history(self, *, idxana: str):
+        assert idxana == "IDX-BATCH-1"
+        return [
+            CapacitasStoricoAnagraficaRow(
+                ID="HIST-BATCH-1",
+                IDXANA=idxana,
+                DataAgg="01/02/2020 08:30:00",
+                Denominazione="Porcu Alessandro",
+                CodFisc="PRCLSN82R27B354B",
+                DataNascita="27/10/1982",
+                LuogoNascita="CAGLIARI",
+                Anno="2020",
+            )
+        ]
+
+    async def fake_fetch_anagrafica_detail(self, *, history_id: str):
+        assert history_id == "HIST-BATCH-1"
+        return CapacitasAnagraficaDetail(
+            history_id=history_id,
+            idxana="IDX-BATCH-1",
+            cognome="Porcu",
+            nome="Alessandro",
+            denominazione="Porcu Alessandro",
+            codice_fiscale="PRCLSN82R27B354B",
+            data_nascita=date(1982, 10, 27),
+            residenza_belfiore="ORISTANO",
+            residenza_toponimo="VIA",
+            residenza_indirizzo="Roma",
+            residenza_civico="10",
+            residenza_cap="09170",
+        )
+
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.login", fake_login)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.activate_app", fake_activate_app)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.close", fake_close)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.fetch_anagrafica_history", fake_fetch_anagrafica_history)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.fetch_anagrafica_detail", fake_fetch_anagrafica_detail)
+
+    files = {"file": ("storico.csv", b"idxana\nIDX-BATCH-1\n", "text/csv")}
+    data = {"credential_id": str(credential_id), "continue_on_error": "true"}
+
+    first_response = client.post(
+        "/elaborazioni/capacitas/involture/anagrafica/storico/import-file",
+        headers=auth_headers(),
+        files=files,
+        data=data,
+    )
+    second_response = client.post(
+        "/elaborazioni/capacitas/involture/anagrafica/storico/import-file",
+        headers=auth_headers(),
+        files=files,
+        data=data,
+    )
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+    assert first_response.json()["imported"] == 1
+    assert first_response.json()["snapshot_records_imported"] == 1
+    assert second_response.json()["imported"] == 0
+    assert second_response.json()["skipped"] == 1
+    assert second_response.json()["items"][0]["message"] == "Storico gia importato."
+
+    db = TestingSessionLocal()
+    try:
+        person = db.query(AnagraficaPerson).filter_by(codice_fiscale="PRCLSN82R27B354B").one()
+        snapshots = db.query(AnagraficaPersonSnapshot).filter_by(subject_id=person.subject_id).all()
+        assert len(snapshots) == 1
+        assert snapshots[0].source_ref == "HIST-BATCH-1"
+    finally:
+        db.close()
+
+
 def test_capacitas_credentials_crud_encrypts_password() -> None:
     create_response = client.post(
         "/elaborazioni/capacitas/credentials",
@@ -651,6 +895,105 @@ def test_capacitas_involture_search_uses_selected_credential_and_returns_rows(
         assert credential.last_error is None
         assert credential.last_used_at is not None
         assert credential.last_used_at.tzinfo is not None or credential.last_used_at == credential.last_used_at.replace(tzinfo=None)
+    finally:
+        db.close()
+
+
+def test_capacitas_anagrafica_storico_endpoints_return_rows_and_detail(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    create_response = client.post(
+        "/elaborazioni/capacitas/credentials",
+        headers=auth_headers(),
+        json={"label": "Storico Anagrafica", "username": "capacitas-user", "password": "capacitas-secret"},
+    )
+    credential_id = create_response.json()["id"]
+
+    async def fake_login(self):
+        from app.modules.elaborazioni.capacitas.session import CapacitasSession
+
+        self._session = CapacitasSession(token="123e4567-e89b-12d3-a456-426614174000")
+        return self._session
+
+    async def fake_activate_app(self, app_name: str) -> None:
+        return None
+
+    async def fake_close(self) -> None:
+        return None
+
+    async def fake_fetch_anagrafica_history(self, *, idxana: str) -> list[CapacitasStoricoAnagraficaRow]:
+        assert idxana == "d485ad5a-ccb4-493d-b868-414d321a9b2a"
+        return [
+            CapacitasStoricoAnagraficaRow(
+                ID="079a6609-2896-4bc8-99c1-5eed0030723a",
+                IDXANA=idxana,
+                Denominazione="Cadoni Angelo Antioco",
+                CodFisc="CDNNLN53M01G113C",
+                DataNascita="01/08/1953",
+                LuogoNascita="ORISTANO",
+                Sesso="M",
+                Anno="2014",
+                Voltura="999999",
+                Op="FIX",
+            )
+        ]
+
+    async def fake_fetch_anagrafica_detail(self, *, history_id: str) -> CapacitasAnagraficaDetail:
+        assert history_id == "079a6609-2896-4bc8-99c1-5eed0030723a"
+        return CapacitasAnagraficaDetail(
+            history_id=history_id,
+            idxana="d485ad5a-ccb4-493d-b868-414d321a9b2a",
+            is_persona_fisica=True,
+            cognome="Cadoni",
+            nome="Angelo Antioco",
+            denominazione="Cadoni Angelo Antioco",
+            codice_fiscale="CDNNLN53M01G113C",
+            data_nascita=date(1953, 8, 1),
+            luogo_nascita="ORISTANO",
+            residenza_belfiore="PALMAS ARBOREA",
+            residenza_provincia="OR",
+            residenza_toponimo="VIA",
+            residenza_indirizzo="Mameli",
+            residenza_civico="18",
+            residenza_cap="09090",
+            note=["Storico importato"],
+        )
+
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.login", fake_login)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.activate_app", fake_activate_app)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.close", fake_close)
+    monkeypatch.setattr(
+        "app.modules.elaborazioni.capacitas.client.InVoltureClient.fetch_anagrafica_history",
+        fake_fetch_anagrafica_history,
+    )
+    monkeypatch.setattr(
+        "app.modules.elaborazioni.capacitas.client.InVoltureClient.fetch_anagrafica_detail",
+        fake_fetch_anagrafica_detail,
+    )
+
+    storico_response = client.get(
+        f"/elaborazioni/capacitas/involture/anagrafica/d485ad5a-ccb4-493d-b868-414d321a9b2a/storico?credential_id={credential_id}",
+        headers=auth_headers(),
+    )
+    detail_response = client.get(
+        f"/elaborazioni/capacitas/involture/anagrafica/storico/079a6609-2896-4bc8-99c1-5eed0030723a?credential_id={credential_id}",
+        headers=auth_headers(),
+    )
+
+    assert storico_response.status_code == 200
+    assert storico_response.json()[0]["ID"] == "079a6609-2896-4bc8-99c1-5eed0030723a"
+    assert storico_response.json()[0]["Denominazione"] == "Cadoni Angelo Antioco"
+    assert detail_response.status_code == 200
+    assert detail_response.json()["history_id"] == "079a6609-2896-4bc8-99c1-5eed0030723a"
+    assert detail_response.json()["cognome"] == "Cadoni"
+    assert detail_response.json()["residenza_indirizzo"] == "Mameli"
+
+    db = TestingSessionLocal()
+    try:
+        credential = db.get(CapacitasCredential, credential_id)
+        assert credential is not None
+        assert credential.last_error is None
+        assert credential.last_used_at is not None
     finally:
         db.close()
 
@@ -1171,9 +1514,14 @@ def test_capacitas_terreni_sync_updates_existing_person_with_snapshot(monkeypatc
         person = db.query(AnagraficaPerson).filter_by(codice_fiscale="LSADNL68S48L496D").one()
         assert person.comune_residenza == "TERRALBA"
         assert person.indirizzo == "VIA Manca 151"
-        assert db.query(AnagraficaPersonSnapshot).count() == 1
-        snapshot = db.query(AnagraficaPersonSnapshot).one()
-        assert snapshot.comune_residenza == "URAS"
+        assert db.query(AnagraficaPersonSnapshot).count() == 2
+        snapshots = db.query(AnagraficaPersonSnapshot).order_by(AnagraficaPersonSnapshot.is_capacitas_history.desc()).all()
+        imported_snapshot = next(item for item in snapshots if item.is_capacitas_history)
+        delta_snapshot = next(item for item in snapshots if not item.is_capacitas_history)
+        assert imported_snapshot.source_ref == "HIST-1"
+        assert imported_snapshot.comune_residenza == "TERRALBA"
+        assert imported_snapshot.indirizzo == "VIA Manca 151"
+        assert delta_snapshot.comune_residenza == "URAS"
         assert db.query(CatCapacitasIntestatario).one().subject_id == person.subject_id
         assert db.query(CatUtenzaIntestatario).count() == 1
         utenza_intestatario = db.query(CatUtenzaIntestatario).one()

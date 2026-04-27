@@ -241,6 +241,10 @@ Note:
 - il match restituisce dati catastali, entrambe le superfici (`superficie_mq` catastale e `superficie_grafica_mq` GIS), ultima utenza, intestatari disponibili e top anomalie
 - la vista risultati anagrafica espone anche `CCO` e `denominazione` dell'ultima utenza quando disponibili
 - il filtro per nome comune usa l'anagrafica canonica `cat_comuni` come fallback applicativo e non dipende solo dal campo denormalizzato `cat_particelle.nome_comune`
+- la risoluzione intestatari e `locale-first`: legge prima `ana_persons` / `ana_subjects`
+- se l'intestatario manca localmente ma la particella ha riferimenti Capacitas ricostruibili, il backend usa un fallback live su `rptCertificato.aspx` e `dettaglioAnagrafica.aspx`
+- il fallback live aggiorna o crea l'anagrafica corrente locale dell'intestatario
+- il flusso massivo non recupera lo storico remoto completo Capacitas: quello resta nel modulo `elaborazioni/capacitas`
 
 Vincoli infrastrutturali:
 

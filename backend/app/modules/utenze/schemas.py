@@ -253,6 +253,7 @@ class AnagraficaPersonSnapshotResponse(AnagraficaPersonPayload):
 
     id: str
     subject_id: str
+    is_capacitas_history: bool = False
     source_system: str
     source_ref: str | None = None
     valid_from: datetime | None

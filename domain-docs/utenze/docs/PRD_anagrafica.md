@@ -190,7 +190,7 @@ Fallback:        Non classificato — richiede revisione manuale
 |---------|-------------|
 | `ana_subjects` | Anagrafica soggetti: `id, subject_type, status, source_system, source_external_id, nas_folder_path, nas_folder_letter, imported_at, created_at, updated_at` |
 | `ana_persons` | Dati persona fisica: `subject_id, cognome, nome, codice_fiscale, data_nascita, comune_nascita, indirizzo, comune_residenza, cap, email, telefono, note` |
-| `ana_person_snapshots` | Storico puntuale dei dati persona: `id, subject_id, source_system, source_ref, cognome, nome, codice_fiscale, data_nascita, comune_nascita, indirizzo, comune_residenza, cap, email, telefono, note, valid_from, collected_at` |
+| `ana_person_snapshots` | Storico puntuale dei dati persona: `id, subject_id, is_capacitas_history, source_system, source_ref, cognome, nome, codice_fiscale, data_nascita, comune_nascita, indirizzo, comune_residenza, cap, email, telefono, note, valid_from, collected_at` |
 | `ana_companies` | Dati persona giuridica: `subject_id, ragione_sociale, partita_iva, codice_fiscale, forma_giuridica, sede_legale, comune_sede, cap, email_pec, telefono, note` |
 | `ana_documents` | Documenti: `id, subject_id, doc_type, filename, nas_path, file_size_bytes, file_modified_at, classification_source, storage_type, local_path, uploaded_at, notes` |
 | `ana_import_jobs` | Job di import NAS: `id, letter, status, started_at, completed_at, total_folders, imported_ok, imported_errors, log_json` |
@@ -231,9 +231,28 @@ Per essere coerente con l'architettura reale del repository, il modulo richiede 
 Per il dominio Catasto/Capacitas valgono queste regole:
 
 - il primo scrape utile da Capacitas costituisce la baseline iniziale del profilo in `ana_persons`
-- gli scrape successivi che modificano il profilo corrente scrivono prima uno snapshot in `ana_person_snapshots`
+- ogni record storico remoto Capacitas importato viene salvato anche in `ana_person_snapshots` con `is_capacitas_history = true` e `source_ref = history_id`, cosi GAIA conserva lo storico completo importato
+- gli scrape successivi che modificano il profilo corrente scrivono inoltre uno snapshot differenziale in `ana_person_snapshots` con `is_capacitas_history = false`
 - il dato corrente mostrato da Catasto deve uscire da `ana_persons`, non dalle tabelle snapshot Capacitas
 - le tabelle Capacitas collegate al catasto consortile (`cat_capacitas_intestatari`, `cat_utenza_intestatari`) non sostituiscono l'anagrafica GAIA: la arricchiscono e la collegano al contesto particella/annualita
+- per lo storico anagrafico remoto Involture il flusso canonico e `IDXANA -> GET /elaborazioni/capacitas/involture/anagrafica/{idxana}/storico -> history_id -> GET /elaborazioni/capacitas/involture/anagrafica/storico/{history_id}`; il primo endpoint puo restituire lista vuota quando Capacitas segnala assenza di storico
+- per il recupero massivo dello storico e disponibile anche il workflow batch:
+  - `POST /elaborazioni/capacitas/involture/anagrafica/storico/import`
+  - `POST /elaborazioni/capacitas/involture/anagrafica/storico/import-file`
+- input supportati dal workflow batch:
+  - lista di `subject_id`
+  - lista di `idxana`
+  - file `.csv` / `.xlsx` con colonne `subject_id` e/o `idxana`
+- comportamento del workflow batch:
+  - risoluzione `IDXANA` dal soggetto GAIA quando possibile, con fallback su ricerca Capacitas per codice fiscale
+  - fetch lista storico per `IDXANA`
+  - fetch dettaglio per ogni `history_id`
+  - persistenza idempotente dei record in `ana_person_snapshots` con `is_capacitas_history = true`
+  - creazione automatica del soggetto persona solo se l'input parte da `idxana` e Capacitas restituisce un codice fiscale valido non ancora censito
+- output del workflow batch:
+  - report con conteggi `processed`, `imported`, `skipped`, `failed`
+  - contatore aggiuntivo `snapshot_records_imported`
+  - dettaglio per riga con `resolved_subject_id`, `idxana`, `history_records_total`, `imported_records`, `skipped_records`
 
 ---
 
@@ -373,7 +392,7 @@ PATTERNS = {
 
 | Modulo | Integrazione |
 |--------|-------------|
-| GAIA Catasto | Collegamento `ana_subjects.id` ↔ `catasto_visure_requests` tramite codice fiscale/P.IVA — ricerca incrociata nella scheda soggetto |
+| GAIA Catasto | Collegamento `ana_subjects.id` ↔ `catasto_visure_requests` tramite codice fiscale/P.IVA — ricerca incrociata nella scheda soggetto; interrogazione storico remoto Involture tramite endpoint `elaborazioni/capacitas` basati su `IDXANA` e `history_id` |
 | GAIA Accessi | Correlazione opzionale `ana_subjects.codice_fiscale` ↔ utente NAS per audit accessi |
 | GAIA Inventario | Nessuna integrazione diretta nel MVP |
 | GAIA Rete | Nessuna integrazione diretta nel MVP |

@@ -1094,6 +1094,38 @@ export type CapacitasSearchResult = {
   rows: CapacitasAnagrafica[];
 };
 
+export type CapacitasAnagraficaHistoryImportItemInput = {
+  subject_id?: string | null;
+  idxana?: string | null;
+};
+
+export type CapacitasAnagraficaHistoryImportInput = {
+  items: CapacitasAnagraficaHistoryImportItemInput[];
+  credential_id?: number | null;
+  continue_on_error?: boolean;
+};
+
+export type CapacitasAnagraficaHistoryImportItemResult = {
+  subject_id?: string | null;
+  resolved_subject_id?: string | null;
+  idxana?: string | null;
+  status: string;
+  history_records_total: number;
+  imported_records: number;
+  skipped_records: number;
+  message?: string | null;
+  error?: string | null;
+};
+
+export type CapacitasAnagraficaHistoryImportResult = {
+  items: CapacitasAnagraficaHistoryImportItemResult[];
+  processed: number;
+  imported: number;
+  skipped: number;
+  failed: number;
+  snapshot_records_imported: number;
+};
+
 export type CapacitasLookupOption = {
   id: string;
   display: string;

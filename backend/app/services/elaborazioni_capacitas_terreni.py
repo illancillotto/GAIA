@@ -22,7 +22,7 @@ from app.models.catasto_phase1 import (
     CatUtenzaIrrigua,
 )
 from app.modules.utenze.models import AnagraficaPerson, AnagraficaSubject, AnagraficaSubjectStatus, AnagraficaSubjectType
-from app.modules.utenze.services.person_history_service import snapshot_person_if_changed
+from app.modules.utenze.services.person_history_service import persist_person_source_snapshot, snapshot_person_if_changed
 from app.models.capacitas import CapacitasTerreniSyncJob
 from app.modules.elaborazioni.capacitas.apps.involture.client import InVoltureClient
 from app.modules.elaborazioni.capacitas.models import (
@@ -476,12 +476,26 @@ async def _match_or_create_subject_from_history_row(
         db.flush()
         person = AnagraficaPerson(subject_id=subject.id, **person_data)
         db.add(person)
+        _persist_capacitas_history_person_snapshot(
+            db,
+            person,
+            person_data,
+            history_row,
+            collected_at=collected_at,
+        )
         return subject
 
     subject = db.get(AnagraficaSubject, person.subject_id)
     if subject is None:
         return None
 
+    _persist_capacitas_history_person_snapshot(
+        db,
+        person,
+        person_data,
+        history_row,
+        collected_at=collected_at,
+    )
     snapshot_person_if_changed(
         db,
         person,
@@ -513,6 +527,26 @@ def _build_residenza_from_detail(detail: CapacitasAnagraficaDetail, intestatario
     if comune:
         residenza = f"{(cap + ' ') if cap else ''}{comune} - {indirizzo or ''}".strip(" -")
     return residenza or intestatario.residenza, comune, cap
+
+
+def _persist_capacitas_history_person_snapshot(
+    db: Session,
+    person: AnagraficaPerson,
+    person_data: dict[str, object | None],
+    history_row: CapacitasStoricoAnagraficaRow,
+    *,
+    collected_at: datetime,
+) -> None:
+    persist_person_source_snapshot(
+        db,
+        person,
+        person_data,
+        source_system="capacitas",
+        source_ref=history_row.history_id,
+        collected_at=collected_at,
+        valid_from=collected_at,
+        is_capacitas_history=True,
+    )
 
 
 def _build_person_payload_from_history(

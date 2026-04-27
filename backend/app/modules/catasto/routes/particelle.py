@@ -213,6 +213,7 @@ def get_particella_consorzio(
                                 {
                                     "id": str(snapshot.id),
                                     "subject_id": str(snapshot.subject_id),
+                                    "is_capacitas_history": snapshot.is_capacitas_history,
                                     "source_system": snapshot.source_system,
                                     "source_ref": snapshot.source_ref,
                                     "cognome": snapshot.cognome,

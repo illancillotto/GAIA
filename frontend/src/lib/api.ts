@@ -37,6 +37,8 @@ import type {
   CapacitasCredentialCreateInput,
   CapacitasCredentialTestResult as CapacitasCredentialProbeResult,
   CapacitasCredentialUpdateInput,
+  CapacitasAnagraficaHistoryImportInput,
+  CapacitasAnagraficaHistoryImportResult,
   CapacitasLookupOption,
   CapacitasSearchInput,
   CapacitasSearchResult,
@@ -1383,6 +1385,41 @@ export async function searchCapacitasInvolture(
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(payload),
+  });
+}
+
+export async function importCapacitasAnagraficaHistory(
+  token: string,
+  payload: CapacitasAnagraficaHistoryImportInput,
+): Promise<CapacitasAnagraficaHistoryImportResult> {
+  return request<CapacitasAnagraficaHistoryImportResult>("/elaborazioni/capacitas/involture/anagrafica/storico/import", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function importCapacitasAnagraficaHistoryFile(
+  token: string,
+  file: File,
+  options?: { credentialId?: number | null; continueOnError?: boolean },
+): Promise<CapacitasAnagraficaHistoryImportResult> {
+  const formData = new FormData();
+  formData.append("file", file);
+  if (options?.credentialId != null) {
+    formData.append("credential_id", String(options.credentialId));
+  }
+  if (options?.continueOnError != null) {
+    formData.append("continue_on_error", String(options.continueOnError));
+  }
+  return request<CapacitasAnagraficaHistoryImportResult>("/elaborazioni/capacitas/involture/anagrafica/storico/import-file", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
   });
 }
 

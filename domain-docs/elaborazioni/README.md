@@ -42,6 +42,7 @@ La pagina `/elaborazioni` usa una struttura a sezioni stabili:
 ## Struttura
 
 - `docs/`: documentazione canonica del modulo `elaborazioni`
+- `capacitas/docs/CAPACITAS_DATA_RECOVERY.md`: guida operativa completa per recupero dati, storico anagrafico, Terreni e persistenza Capacitas
 - `GAIA_VISURE_PROMPT_1_ANALISI.md`
 - `GAIA_VISURE_PROMPT_2_IMPLEMENTAZIONE.md`
 - `GAIA_VISURE_PROMPT_3_REVIEW.md`

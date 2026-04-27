@@ -1,6 +1,7 @@
 from collections.abc import Generator
 from datetime import date, datetime, timezone
 from decimal import Decimal
+from types import SimpleNamespace
 
 from fastapi.testclient import TestClient
 import pandas as pd
@@ -37,6 +38,7 @@ from app.modules.utenze.models import AnagraficaPerson, AnagraficaPersonSnapshot
 from app.modules.catasto.routes import import_routes as import_routes_module
 from app.modules.catasto.services.import_capacitas import CapacitasImportDuplicateError, import_capacitas_excel
 from app.modules.catasto.services.comuni_reference import load_comuni_reference
+from app.modules.elaborazioni.capacitas.models import CapacitasAnagraficaDetail, CapacitasIntestatario, CapacitasTerrenoCertificato
 from app.modules.catasto.services.validation import (
     validate_codice_fiscale,
     validate_comune,
@@ -941,6 +943,145 @@ def test_bulk_search_anagrafica_returns_mixed_row_outcomes() -> None:
     assert payload[0]["match"]["intestatari"][0]["source"] == "capacitas"
     assert payload[1]["esito"] == "NOT_FOUND"
     assert payload[2]["esito"] == "INVALID_ROW"
+
+
+def test_bulk_search_anagrafica_falls_back_to_live_capacitas_for_missing_intestatario(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db = TestingSessionLocal()
+    try:
+        seed_anomalie_workflow_data(db)
+        particella = db.query(CatParticella).filter(CatParticella.foglio == "5", CatParticella.particella == "120").one()
+        utenza = (
+            db.query(CatUtenzaIrrigua)
+            .filter(CatUtenzaIrrigua.cco == "UT-ANOM-10-2025")
+            .one()
+        )
+        utenza.anno_campagna = 2026
+        unit = CatConsorzioUnit(
+            particella_id=particella.id,
+            cod_comune_capacitas=165,
+            foglio="5",
+            particella="120",
+            subalterno="1",
+            descrizione="Unit test live lookup",
+        )
+        db.add(unit)
+        db.flush()
+        db.add(
+            CatConsorzioOccupancy(
+                unit_id=unit.id,
+                utenza_id=utenza.id,
+                cco="UT-ANOM-10-2025",
+                fra="38",
+                ccs="00000",
+                pvc="097",
+                com="289",
+                source_type="capacitas_terreni",
+                relationship_type="utilizzatore_reale",
+                valid_from=date(2025, 1, 1),
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    async def fake_login(self) -> None:
+        return None
+
+    async def fake_activate_app(self, app_name: str) -> None:
+        assert app_name == "involture"
+
+    async def fake_close(self) -> None:
+        return None
+
+    async def fake_fetch_certificato(self, **kwargs) -> CapacitasTerrenoCertificato:
+        assert kwargs["cco"] == "UT-ANOM-10-2025"
+        return CapacitasTerrenoCertificato(
+            cco=kwargs["cco"],
+            com=kwargs["com"],
+            pvc=kwargs["pvc"],
+            fra=kwargs["fra"],
+            ccs=kwargs["ccs"],
+            intestatari=[
+                CapacitasIntestatario(
+                    idxana="IDX-LIVE-001",
+                    idxesa="IDX-ESA-LIVE-001",
+                    codice_fiscale="RSSMRA80A01H501U",
+                    denominazione="Rossi Mario",
+                    comune_residenza="Oristano",
+                    cap="09170",
+                    residenza="09170 Oristano (OR) - Via Roma 1",
+                )
+            ],
+        )
+
+    async def fake_fetch_current_anagrafica_detail(self, *, idxana: str, idxesa: str) -> CapacitasAnagraficaDetail:
+        assert idxana == "IDX-LIVE-001"
+        assert idxesa == "IDX-ESA-LIVE-001"
+        return CapacitasAnagraficaDetail(
+            idxana=idxana,
+            idxesa=idxesa,
+            cognome="Rossi",
+            nome="Mario",
+            denominazione="Rossi Mario",
+            codice_fiscale="RSSMRA80A01H501U",
+            luogo_nascita="Oristano",
+            data_nascita=date(1980, 1, 1),
+            residenza_belfiore="Oristano",
+            residenza_localita="Oristano",
+            residenza_toponimo="Via",
+            residenza_indirizzo="Roma",
+            residenza_civico="1",
+            residenza_cap="09170",
+            telefono="0783000000",
+            email="mario.rossi@example.local",
+        )
+
+    monkeypatch.setattr("app.modules.catasto.routes.anagrafica.pick_credential", lambda db, credential_id: (SimpleNamespace(id=1, username="live-user"), "secret"))
+    monkeypatch.setattr("app.modules.catasto.routes.anagrafica.mark_credential_used", lambda db, credential_id: None)
+    monkeypatch.setattr("app.modules.catasto.routes.anagrafica.mark_credential_error", lambda db, credential_id, error: None)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.login", fake_login)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.activate_app", fake_activate_app)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.close", fake_close)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.apps.involture.client.InVoltureClient.fetch_certificato", fake_fetch_certificato)
+    monkeypatch.setattr(
+        "app.modules.elaborazioni.capacitas.apps.involture.client.InVoltureClient.fetch_current_anagrafica_detail",
+        fake_fetch_current_anagrafica_detail,
+    )
+
+    response = client.post(
+        "/catasto/elaborazioni-massive/particelle",
+        headers=auth_headers(),
+        json={"rows": [{"row_index": 1, "comune": "165", "foglio": "5", "particella": "120", "sub": "1"}]},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["results"][0]
+    assert payload["esito"] == "FOUND"
+    assert payload["match"]["intestatari"][0]["codice_fiscale"] == "RSSMRA80A01H501U"
+    assert payload["match"]["intestatari"][0]["cognome"] == "Rossi"
+    assert payload["match"]["intestatari"][0]["nome"] == "Mario"
+    assert payload["match"]["intestatari"][0]["source"] == "capacitas"
+
+    db = TestingSessionLocal()
+    try:
+        subject = (
+            db.query(AnagraficaSubject)
+            .filter(
+                AnagraficaSubject.source_system == "capacitas",
+                AnagraficaSubject.source_external_id == "IDX-LIVE-001",
+            )
+            .one()
+        )
+        person = db.query(AnagraficaPerson).filter(AnagraficaPerson.subject_id == subject.id).one()
+        assert person.codice_fiscale == "RSSMRA80A01H501U"
+        assert person.cognome == "Rossi"
+        assert person.nome == "Mario"
+        assert person.indirizzo == "Via Roma 1"
+        assert person.comune_residenza == "Oristano"
+    finally:
+        db.close()
 
 
 def test_import_history_and_report_endpoints_return_batch_data() -> None:

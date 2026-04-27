@@ -153,6 +153,8 @@ def test_can_persist_person_snapshot(db_session: Session) -> None:
     db_session.commit()
 
     assert db_session.query(AnagraficaPersonSnapshot).count() == 1
+    snapshot = db_session.query(AnagraficaPersonSnapshot).one()
+    assert snapshot.is_capacitas_history is False
 
 
 def test_import_job_can_reference_application_user(db_session: Session) -> None:

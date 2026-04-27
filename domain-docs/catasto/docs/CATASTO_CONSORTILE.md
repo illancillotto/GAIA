@@ -77,7 +77,8 @@ Copertura reale di questo step:
 - salvataggio intestatari del certificato in snapshot strutturato con link opzionale a `ana_subjects`
 - popolamento di `cat_utenza_intestatari` per tenere traccia di tutti gli intestatari proprietari collegati a una specifica `cat_utenze_irrigue` in una determinata annualita
 - aggiornamento dell'anagrafica corrente direttamente su `ana_persons` quando lo storico Capacitas espone dati piu ricchi del certificato sintetico
-- scrittura di `ana_person_snapshots` quando lo scrape storico modifica il profilo corrente
+- salvataggio di ogni record storico remoto Capacitas in `ana_person_snapshots` con flag `is_capacitas_history`
+- scrittura di snapshot differenziali aggiuntivi in `ana_person_snapshots` quando lo scrape storico modifica il profilo corrente
 - esposizione lato Catasto del dato anagrafico corrente da `ana_persons` e dello storico da `ana_person_snapshots` quando esiste il collegamento
 - tracciamento del comune sorgente Capacitas separato dal comune canonico GAIA
 - esposizione nel dettaglio frontend della particella di:
@@ -91,6 +92,15 @@ Non ancora implementato:
 
 - consolidamento multi-sorgente o deduplica avanzata
 - worker o scheduler dedicato per job massivi su portafogli di particelle
+
+Aggiornamento operativo 27 aprile 2026:
+
+- `POST /catasto/elaborazioni-massive/particelle` non e piu solo un lookup locale
+- il flusso rimane locale-first su `cat_particelle`, `cat_utenze_irrigue`, `ana_subjects`, `ana_persons`
+- quando una particella ha parametri Capacitas ricostruibili (`CCO`, `COM`, `PVC`, `FRA`, `CCS`) ma l'intestatario non e presente localmente, il backend apre live `rptCertificato.aspx`
+- dagli intestatari del certificato usa `IDXANA` + `IDXESA` per aprire `dettaglioAnagrafica.aspx`
+- il risultato massivo restituisce quindi gli intestatari correnti anche se prima non erano presenti in `ana_persons`
+- il fallback live aggiorna l'anagrafica corrente locale; non importa automaticamente lo storico remoto completo, che resta un flusso separato
 
 ## Regola Arborea / Terralba
 

@@ -8,9 +8,9 @@ import { DataTable } from "@/components/table/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { AlertBanner } from "@/components/ui/alert-banner";
 import { DocumentIcon, RefreshIcon } from "@/components/ui/icons";
-import { catastoBulkSearchAnagrafica } from "@/lib/api/catasto";
+import { catastoBulkSearchAnagrafica, catastoGetParticellaUtenze } from "@/lib/api/catasto";
 import { getStoredAccessToken } from "@/lib/auth";
-import type { CatAnagraficaBulkRowInput, CatAnagraficaBulkRowResult } from "@/types/catasto";
+import type { CatAnagraficaBulkRowInput, CatAnagraficaBulkRowResult, CatUtenzaIrrigua } from "@/types/catasto";
 
 function triggerDownload(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
@@ -65,7 +65,23 @@ function buildSummary(results: CatAnagraficaBulkRowResult[]): BulkSummary {
   return s;
 }
 
-async function readFileToRows(file: File): Promise<{ rows: CatAnagraficaBulkRowInput[]; skipped: number }> {
+function inferKindFromHeaders(headers: string[]): "CF_PIVA_PARTICELLE" | "COMUNE_FOGLIO_PARTICELLA_INTESTATARI" {
+  const comuneKey = pickColumn(headers, ["comune", "codice_comune", "nome_comune"]);
+  const foglioKey = pickColumn(headers, ["foglio"]);
+  const particellaKey = pickColumn(headers, ["particella", "mappale"]);
+  const cfKey = pickColumn(headers, ["codice_fiscale", "cf"]);
+  const pivaKey = pickColumn(headers, ["partita_iva", "piva", "iva"]);
+
+  const hasCadastral = Boolean(comuneKey && foglioKey && particellaKey);
+  const hasTax = Boolean(cfKey || pivaKey);
+
+  if (hasTax && !hasCadastral) return "CF_PIVA_PARTICELLE";
+  return "COMUNE_FOGLIO_PARTICELLA_INTESTATARI";
+}
+
+async function readFileToRows(
+  file: File,
+): Promise<{ kind: "CF_PIVA_PARTICELLE" | "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"; rows: CatAnagraficaBulkRowInput[]; skipped: number }> {
   const ext = file.name.toLowerCase().split(".").pop() ?? "";
 
   const toJsonRows = (worksheet: XLSX.WorkSheet): Record<string, unknown>[] => {
@@ -83,56 +99,94 @@ async function readFileToRows(file: File): Promise<{ rows: CatAnagraficaBulkRowI
 
   const firstSheetName = workbook.SheetNames[0];
   if (!firstSheetName) {
-    return { rows: [], skipped: 0 };
+    return { kind: "COMUNE_FOGLIO_PARTICELLA_INTESTATARI", rows: [], skipped: 0 };
   }
   const sheet = workbook.Sheets[firstSheetName];
   const data = toJsonRows(sheet);
   if (data.length === 0) {
-    return { rows: [], skipped: 0 };
+    return { kind: "COMUNE_FOGLIO_PARTICELLA_INTESTATARI", rows: [], skipped: 0 };
   }
 
   const headers = Object.keys(data[0] ?? {}).map(normHeader);
+  const kind = inferKindFromHeaders(headers);
   const headerMap = new Map<string, string>();
   for (const rawKey of Object.keys(data[0] ?? {})) {
     headerMap.set(normHeader(rawKey), rawKey);
   }
 
   const comuneKey = pickColumn(headers, ["comune", "codice_comune", "nome_comune"]);
+  const sezioneKey = pickColumn(headers, ["sezione", "sez", "sezione_catastale"]);
   const foglioKey = pickColumn(headers, ["foglio"]);
   const particellaKey = pickColumn(headers, ["particella", "mappale"]);
+  const subKey = pickColumn(headers, ["sub", "subalterno"]);
+  const cfKey = pickColumn(headers, ["codice_fiscale", "cf"]);
+  const pivaKey = pickColumn(headers, ["partita_iva", "piva", "iva"]);
 
-  if (!foglioKey || !particellaKey) {
-    throw new Error("Colonne minime mancanti. Richieste: foglio, particella (opzionale: comune).");
+  if (kind === "CF_PIVA_PARTICELLE") {
+    if (!cfKey && !pivaKey) {
+      throw new Error("Colonne minime mancanti. Richieste: codice_fiscale oppure partita_iva.");
+    }
+  } else {
+    if (!comuneKey || !foglioKey || !particellaKey) {
+      throw new Error("Colonne minime mancanti. Richieste: comune, foglio, particella (opzionali: sezione, sub).");
+    }
   }
 
   let skipped = 0;
   const rows: CatAnagraficaBulkRowInput[] = [];
   for (let i = 0; i < data.length; i += 1) {
     const record = data[i] ?? {};
-    const comuneRaw = comuneKey ? record[headerMap.get(comuneKey) ?? comuneKey] : null;
-    const foglioRaw = record[headerMap.get(foglioKey) ?? foglioKey];
-    const particellaRaw = record[headerMap.get(particellaKey) ?? particellaKey];
+    if (kind === "CF_PIVA_PARTICELLE") {
+      const cfRaw = cfKey ? record[headerMap.get(cfKey) ?? cfKey] : null;
+      const pivaRaw = pivaKey ? record[headerMap.get(pivaKey) ?? pivaKey] : null;
+      const cf = cfRaw != null ? String(cfRaw).trim() : "";
+      const piva = pivaRaw != null ? String(pivaRaw).trim() : "";
 
-    const comune = comuneRaw != null ? String(comuneRaw).trim() : "";
-    const foglio = foglioRaw != null ? String(foglioRaw).trim() : "";
-    const particella = particellaRaw != null ? String(particellaRaw).trim() : "";
+      if (!cf && !piva) {
+        skipped += 1;
+        continue;
+      }
 
-    if (!comune && !foglio && !particella) {
-      skipped += 1;
-      continue;
+      rows.push({
+        row_index: i + 2,
+        codice_fiscale: cf || null,
+        partita_iva: piva || null,
+      });
+    } else {
+      const comuneRaw = comuneKey ? record[headerMap.get(comuneKey) ?? comuneKey] : null;
+      const sezioneRaw = sezioneKey ? record[headerMap.get(sezioneKey) ?? sezioneKey] : null;
+      const foglioRaw = foglioKey ? record[headerMap.get(foglioKey) ?? foglioKey] : null;
+      const particellaRaw = particellaKey ? record[headerMap.get(particellaKey) ?? particellaKey] : null;
+      const subRaw = subKey ? record[headerMap.get(subKey) ?? subKey] : null;
+
+      const comune = comuneRaw != null ? String(comuneRaw).trim() : "";
+      const sezione = sezioneRaw != null ? String(sezioneRaw).trim() : "";
+      const foglio = foglioRaw != null ? String(foglioRaw).trim() : "";
+      const particella = particellaRaw != null ? String(particellaRaw).trim() : "";
+      const sub = subRaw != null ? String(subRaw).trim() : "";
+
+      if (!comune && !foglio && !particella && !sub && !sezione) {
+        skipped += 1;
+        continue;
+      }
+
+      rows.push({
+        row_index: i + 2,
+        comune: comune || null,
+        sezione: sezione || null,
+        foglio: foglio || null,
+        particella: particella || null,
+        sub: sub || null,
+      });
     }
-
-    rows.push({
-      row_index: i + 2,
-      comune: comune || null,
-      foglio: foglio || null,
-      particella: particella || null,
-    });
   }
-  return { rows, skipped };
+  return { kind, rows, skipped };
 }
 
 export function AnagraficaBulkPanel() {
+  const [inferredKind, setInferredKind] = useState<"CF_PIVA_PARTICELLE" | "COMUNE_FOGLIO_PARTICELLA_INTESTATARI" | null>(
+    null,
+  );
   const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [parsedRows, setParsedRows] = useState<CatAnagraficaBulkRowInput[]>([]);
   const [skippedRows, setSkippedRows] = useState(0);
@@ -150,10 +204,21 @@ export function AnagraficaBulkPanel() {
         id: "input",
         cell: ({ row }) => (
           <div className="text-sm text-gray-700">
-            <p className="font-medium">{row.original.comune_input ?? "—"}</p>
-            <p className="text-xs text-gray-500">
-              Fg.{row.original.foglio_input ?? "—"} Part.{row.original.particella_input ?? "—"}
-            </p>
+            {inferredKind === "CF_PIVA_PARTICELLE" ? (
+              <>
+                <p className="font-medium">{row.original.codice_fiscale_input ?? row.original.partita_iva_input ?? "—"}</p>
+                <p className="text-xs text-gray-500">CF/P.IVA</p>
+              </>
+            ) : (
+              <>
+                <p className="font-medium">{row.original.comune_input ?? "—"}</p>
+                <p className="text-xs text-gray-500">
+                  {row.original.sezione_input ? `Sez.${row.original.sezione_input} ` : ""}
+                  Fg.{row.original.foglio_input ?? "—"} Part.{row.original.particella_input ?? "—"}
+                  {row.original.sub_input ? ` Sub.${row.original.sub_input}` : ""}
+                </p>
+              </>
+            )}
           </div>
         ),
       },
@@ -192,12 +257,26 @@ export function AnagraficaBulkPanel() {
               <p className="text-xs text-gray-500">
                 Distretto: {m.num_distretto ?? "—"} · Sup. cat.: {formatHaFromMq(m.superficie_mq)}
               </p>
+              {inferredKind !== "CF_PIVA_PARTICELLE" && m.intestatari.length > 0 ? (
+                <p className="mt-1 text-xs text-gray-500">
+                  Intestatari:{" "}
+                  {m.intestatari
+                    .slice(0, 3)
+                    .map((i) => i.denominazione ?? i.ragione_sociale ?? [i.cognome, i.nome].filter(Boolean).join(" "))
+                    .filter(Boolean)
+                    .join(" · ")}
+                  {m.intestatari.length > 3 ? ` (+${m.intestatari.length - 3})` : ""}
+                </p>
+              ) : null}
+              {inferredKind === "CF_PIVA_PARTICELLE" && (row.original.matches_count ?? 0) > 1 ? (
+                <p className="mt-1 text-xs text-gray-500">Particelle trovate: {row.original.matches_count}</p>
+              ) : null}
             </div>
           );
         },
       },
     ],
-    [],
+    [inferredKind],
   );
 
   async function parseSelectedFile(file: File): Promise<void> {
@@ -208,10 +287,12 @@ export function AnagraficaBulkPanel() {
       if (parsed.rows.length === 0) {
         throw new Error("File vuoto o senza righe valide.");
       }
+      setInferredKind(parsed.kind);
       setParsedRows(parsed.rows);
       setSkippedRows(parsed.skipped);
       setResults([]);
     } catch (e) {
+      setInferredKind(null);
       setParsedRows([]);
       setSkippedRows(0);
       setResults([]);
@@ -230,7 +311,7 @@ export function AnagraficaBulkPanel() {
     }
     setBusy(true);
     try {
-      const response = await catastoBulkSearchAnagrafica(token, { rows: parsedRows });
+      const response = await catastoBulkSearchAnagrafica(token, { kind: inferredKind ?? undefined, rows: parsedRows });
       setResults(response.results);
       setError(null);
     } catch (e) {
@@ -240,79 +321,298 @@ export function AnagraficaBulkPanel() {
     }
   }
 
-  function exportCsv(): void {
-    if (results.length === 0) return;
-    const flat = results.map((r) => {
-      const m = r.match;
-      const u = m?.utenza_latest;
-      const intest = (m?.intestatari ?? [])
-        .map((i) => (i.denominazione ?? i.ragione_sociale ?? [i.cognome, i.nome].filter(Boolean).join(" ")) || "")
-        .filter(Boolean);
-      return {
-        row_index: r.row_index,
-        comune_input: r.comune_input ?? "",
-        foglio_input: r.foglio_input ?? "",
-        particella_input: r.particella_input ?? "",
-        esito: r.esito,
-        message: r.message,
-        particella_id: r.particella_id ?? "",
-        intestatari: intest.join(" | "),
-        utenza_id: u?.id ?? "",
-        utenza_anno: u?.anno_campagna ?? "",
-        utenza_distretto: u?.num_distretto ?? "",
-        utenza_sup_irrigabile_mq: u?.sup_irrigabile_mq ?? "",
-        anomalie_count: m?.anomalie_count ?? "",
-        dettaglio_particella_url: r.particella_id ? `/catasto/particelle/${r.particella_id}` : "",
-      };
-    });
-    const sheet = XLSX.utils.json_to_sheet(flat);
-    const csv = XLSX.utils.sheet_to_csv(sheet);
-    triggerDownload(new Blob([csv], { type: "text/csv;charset=utf-8" }), "catasto-anagrafica-export.csv");
+  async function exportCsv(): Promise<void> {
+    if (results.length === 0 || !inferredKind) return;
+    const token = getStoredAccessToken();
+    if (!token) return;
+
+    setBusy(true);
+    try {
+      if (inferredKind === "COMUNE_FOGLIO_PARTICELLA_INTESTATARI") {
+        const particellaIds = Array.from(
+          new Set(results.map((r) => r.particella_id).filter((id): id is string => Boolean(id))),
+        );
+
+        const utenzeByParticella = new Map<string, CatUtenzaIrrigua[]>();
+        await Promise.all(
+          particellaIds.map(async (id) => {
+            try {
+              const utenze = await catastoGetParticellaUtenze(token, id);
+              utenzeByParticella.set(id, utenze ?? []);
+            } catch {
+              utenzeByParticella.set(id, []);
+            }
+          }),
+        );
+
+        const flat: Record<string, unknown>[] = [];
+        for (const r of results) {
+          const m = r.match;
+          const intest = (m?.intestatari ?? [])
+            .map((i) => (i.denominazione ?? i.ragione_sociale ?? [i.cognome, i.nome].filter(Boolean).join(" ")) || "")
+            .filter(Boolean)
+            .join(" | ");
+
+          const utenze = r.particella_id ? (utenzeByParticella.get(r.particella_id) ?? []) : [];
+          if (utenze.length === 0) {
+            flat.push({
+              row_index: r.row_index,
+              kind: inferredKind,
+              comune_input: r.comune_input ?? "",
+              sezione_input: r.sezione_input ?? "",
+              foglio_input: r.foglio_input ?? "",
+              particella_input: r.particella_input ?? "",
+              sub_input: r.sub_input ?? "",
+              esito: r.esito,
+              message: r.message,
+              particella_id: r.particella_id ?? "",
+              intestatari: intest,
+              particella_comune: m?.comune ?? "",
+              particella_cod_comune_capacitas: m?.cod_comune_capacitas ?? "",
+              particella_foglio: m?.foglio ?? "",
+              particella_particella: m?.particella ?? "",
+              particella_subalterno: m?.subalterno ?? "",
+              particella_num_distretto: m?.num_distretto ?? "",
+              particella_nome_distretto: m?.nome_distretto ?? "",
+              particella_superficie_mq: m?.superficie_mq ?? "",
+              particella_superficie_grafica_mq: m?.superficie_grafica_mq ?? "",
+              dettaglio_particella_url: r.particella_id ? `/catasto/particelle/${r.particella_id}` : "",
+            });
+            continue;
+          }
+
+          for (const u of utenze) {
+            flat.push({
+              row_index: r.row_index,
+              kind: inferredKind,
+              comune_input: r.comune_input ?? "",
+              sezione_input: r.sezione_input ?? "",
+              foglio_input: r.foglio_input ?? "",
+              particella_input: r.particella_input ?? "",
+              sub_input: r.sub_input ?? "",
+              esito: r.esito,
+              message: r.message,
+              particella_id: r.particella_id ?? "",
+              intestatari: intest,
+              dettaglio_particella_url: r.particella_id ? `/catasto/particelle/${r.particella_id}` : "",
+              // flatten utenza (tutti i campi disponibili dal tipo)
+              utenza_id: u.id,
+              utenza_import_batch_id: u.import_batch_id,
+              utenza_anno_campagna: u.anno_campagna,
+              utenza_cco: u.cco ?? "",
+              utenza_comune_id: u.comune_id ?? "",
+              utenza_cod_provincia: u.cod_provincia ?? "",
+              utenza_cod_comune_capacitas: u.cod_comune_capacitas ?? "",
+              utenza_cod_frazione: u.cod_frazione ?? "",
+              utenza_num_distretto: u.num_distretto ?? "",
+              utenza_nome_distretto_loc: u.nome_distretto_loc ?? "",
+              utenza_nome_comune: u.nome_comune ?? "",
+              utenza_sezione_catastale: u.sezione_catastale ?? "",
+              utenza_foglio: u.foglio ?? "",
+              utenza_particella: u.particella ?? "",
+              utenza_subalterno: u.subalterno ?? "",
+              utenza_particella_id: u.particella_id ?? "",
+              utenza_sup_catastale_mq: u.sup_catastale_mq ?? "",
+              utenza_sup_irrigabile_mq: u.sup_irrigabile_mq ?? "",
+              utenza_ind_spese_fisse: u.ind_spese_fisse ?? "",
+              utenza_imponibile_sf: u.imponibile_sf ?? "",
+              utenza_esente_0648: u.esente_0648,
+              utenza_aliquota_0648: u.aliquota_0648 ?? "",
+              utenza_importo_0648: u.importo_0648 ?? "",
+              utenza_aliquota_0985: u.aliquota_0985 ?? "",
+              utenza_importo_0985: u.importo_0985 ?? "",
+              utenza_denominazione: u.denominazione ?? "",
+              utenza_codice_fiscale: u.codice_fiscale ?? "",
+              utenza_codice_fiscale_raw: u.codice_fiscale_raw ?? "",
+              utenza_anomalia_superficie: u.anomalia_superficie,
+              utenza_anomalia_cf_invalido: u.anomalia_cf_invalido,
+              utenza_anomalia_cf_mancante: u.anomalia_cf_mancante,
+              utenza_anomalia_comune_invalido: u.anomalia_comune_invalido,
+              utenza_anomalia_particella_assente: u.anomalia_particella_assente,
+              utenza_anomalia_imponibile: u.anomalia_imponibile,
+              utenza_anomalia_importi: u.anomalia_importi,
+              utenza_created_at: u.created_at,
+            });
+          }
+        }
+
+        const sheet = XLSX.utils.json_to_sheet(flat);
+        const csv = XLSX.utils.sheet_to_csv(sheet);
+        triggerDownload(new Blob([csv], { type: "text/csv;charset=utf-8" }), "catasto-elaborazione-massiva-utenze.csv");
+        return;
+      }
+
+      // CF/PIVA -> Particelle (una riga per particella trovata)
+      const flat = results.flatMap((r) => {
+        const matches = r.matches ?? (r.match ? [r.match] : []);
+        if (matches.length === 0) {
+          return [
+            {
+              row_index: r.row_index,
+              kind: inferredKind,
+              codice_fiscale_input: r.codice_fiscale_input ?? "",
+              partita_iva_input: r.partita_iva_input ?? "",
+              esito: r.esito,
+              message: r.message,
+              matches_count: r.matches_count ?? "",
+            },
+          ];
+        }
+        return matches.map((m) => ({
+          row_index: r.row_index,
+          kind: inferredKind,
+          codice_fiscale_input: r.codice_fiscale_input ?? "",
+          partita_iva_input: r.partita_iva_input ?? "",
+          esito: r.esito,
+          message: r.message,
+          matches_count: r.matches_count ?? "",
+          particella_id: m.particella_id,
+          comune: m.comune ?? "",
+          cod_comune_capacitas: m.cod_comune_capacitas ?? "",
+          codice_catastale: m.codice_catastale ?? "",
+          foglio: m.foglio ?? "",
+          particella: m.particella ?? "",
+          subalterno: m.subalterno ?? "",
+          num_distretto: m.num_distretto ?? "",
+          nome_distretto: m.nome_distretto ?? "",
+          superficie_mq: m.superficie_mq ?? "",
+          superficie_grafica_mq: m.superficie_grafica_mq ?? "",
+          dettaglio_particella_url: m.particella_id ? `/catasto/particelle/${m.particella_id}` : "",
+        }));
+      });
+
+      const sheet = XLSX.utils.json_to_sheet(flat);
+      const csv = XLSX.utils.sheet_to_csv(sheet);
+      triggerDownload(new Blob([csv], { type: "text/csv;charset=utf-8" }), "catasto-elaborazione-massiva-particelle.csv");
+    } finally {
+      setBusy(false);
+    }
   }
 
-  function exportXlsx(): void {
-    if (results.length === 0) return;
-    const flat = results.map((r) => {
-      const m = r.match;
-      const u = m?.utenza_latest;
-      const intest = (m?.intestatari ?? [])
-        .map((i) => (i.denominazione ?? i.ragione_sociale ?? [i.cognome, i.nome].filter(Boolean).join(" ")) || "")
-        .filter(Boolean);
-      return {
-        row_index: r.row_index,
-        comune_input: r.comune_input ?? "",
-        foglio_input: r.foglio_input ?? "",
-        particella_input: r.particella_input ?? "",
-        esito: r.esito,
-        message: r.message,
-        particella_id: r.particella_id ?? "",
-        intestatari: intest.join(" | "),
-        utenza_id: u?.id ?? "",
-        utenza_anno: u?.anno_campagna ?? "",
-        utenza_distretto: u?.num_distretto ?? "",
-        utenza_sup_irrigabile_mq: u?.sup_irrigabile_mq ?? "",
-        anomalie_count: m?.anomalie_count ?? "",
-        dettaglio_particella_url: r.particella_id ? `/catasto/particelle/${r.particella_id}` : "",
-      };
-    });
+  async function exportXlsx(): Promise<void> {
+    if (results.length === 0 || !inferredKind) return;
+    const token = getStoredAccessToken();
+    if (!token) return;
 
-    const wb = XLSX.utils.book_new();
-    const sheetResults = XLSX.utils.json_to_sheet(flat);
-    XLSX.utils.book_append_sheet(wb, sheetResults, "risultati");
+    setBusy(true);
+    try {
+      const wb = XLSX.utils.book_new();
 
-    const sheetSummary = XLSX.utils.json_to_sheet([
-      { key: "totale_righe", value: summary.total },
-      { key: "trovate", value: summary.found },
-      { key: "non_trovate", value: summary.notFound },
-      { key: "multiple", value: summary.multiple },
-      { key: "righe_invalide", value: summary.invalid },
-      { key: "errori", value: summary.error },
-      { key: "righe_saltate_vuote", value: skippedRows },
-    ]);
-    XLSX.utils.book_append_sheet(wb, sheetSummary, "summary");
+      if (inferredKind === "COMUNE_FOGLIO_PARTICELLA_INTESTATARI") {
+        const particellaIds = Array.from(
+          new Set(results.map((r) => r.particella_id).filter((id): id is string => Boolean(id))),
+        );
+        const utenzeRows: Record<string, unknown>[] = [];
 
-    const out = XLSX.write(wb, { type: "array", bookType: "xlsx" });
-    triggerDownload(new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), "catasto-anagrafica-export.xlsx");
+        const utenzeByParticella = new Map<string, CatUtenzaIrrigua[]>();
+        await Promise.all(
+          particellaIds.map(async (id) => {
+            try {
+              const utenze = await catastoGetParticellaUtenze(token, id);
+              utenzeByParticella.set(id, utenze ?? []);
+            } catch {
+              utenzeByParticella.set(id, []);
+            }
+          }),
+        );
+
+        const particelleSheetRows = results.map((r) => {
+          const m = r.match;
+          const intest = (m?.intestatari ?? [])
+            .map((i) => (i.denominazione ?? i.ragione_sociale ?? [i.cognome, i.nome].filter(Boolean).join(" ")) || "")
+            .filter(Boolean)
+            .join(" | ");
+
+          const utenze = r.particella_id ? (utenzeByParticella.get(r.particella_id) ?? []) : [];
+          for (const u of utenze) {
+            utenzeRows.push({
+              row_index: r.row_index,
+              input_particella_id: r.particella_id ?? "",
+              comune_input: r.comune_input ?? "",
+              sezione_input: r.sezione_input ?? "",
+              foglio_input: r.foglio_input ?? "",
+              particella_input: r.particella_input ?? "",
+              sub_input: r.sub_input ?? "",
+              esito: r.esito,
+              message: r.message,
+              // utenza full
+              ...u,
+            });
+          }
+
+          return {
+            row_index: r.row_index,
+            kind: inferredKind,
+            comune_input: r.comune_input ?? "",
+            sezione_input: r.sezione_input ?? "",
+            foglio_input: r.foglio_input ?? "",
+            particella_input: r.particella_input ?? "",
+            sub_input: r.sub_input ?? "",
+            esito: r.esito,
+            message: r.message,
+            particella_id: r.particella_id ?? "",
+            intestatari: intest,
+            utenze_count: utenze.length,
+            dettaglio_particella_url: r.particella_id ? `/catasto/particelle/${r.particella_id}` : "",
+          };
+        });
+
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(particelleSheetRows), "particelle");
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(utenzeRows), "utenze");
+      } else {
+        const particelleRows = results.flatMap((r) => {
+          const matches = r.matches ?? (r.match ? [r.match] : []);
+          if (matches.length === 0) {
+            return [
+              {
+                row_index: r.row_index,
+                kind: inferredKind,
+                codice_fiscale_input: r.codice_fiscale_input ?? "",
+                partita_iva_input: r.partita_iva_input ?? "",
+                esito: r.esito,
+                message: r.message,
+                matches_count: r.matches_count ?? "",
+              },
+            ];
+          }
+          return matches.map((m) => ({
+            row_index: r.row_index,
+            kind: inferredKind,
+            codice_fiscale_input: r.codice_fiscale_input ?? "",
+            partita_iva_input: r.partita_iva_input ?? "",
+            esito: r.esito,
+            message: r.message,
+            matches_count: r.matches_count ?? "",
+            ...m,
+            dettaglio_particella_url: m.particella_id ? `/catasto/particelle/${m.particella_id}` : "",
+          }));
+        });
+
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(particelleRows), "particelle");
+      }
+
+      const sheetSummary = XLSX.utils.json_to_sheet([
+        { key: "tipo_rilevato", value: inferredKind },
+        { key: "totale_righe", value: summary.total },
+        { key: "trovate", value: summary.found },
+        { key: "non_trovate", value: summary.notFound },
+        { key: "multiple", value: summary.multiple },
+        { key: "righe_invalide", value: summary.invalid },
+        { key: "errori", value: summary.error },
+        { key: "righe_saltate_vuote", value: skippedRows },
+      ]);
+      XLSX.utils.book_append_sheet(wb, sheetSummary, "summary");
+
+      const out = XLSX.write(wb, { type: "array", bookType: "xlsx" });
+      triggerDownload(
+        new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+        inferredKind === "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"
+          ? "catasto-elaborazione-massiva-particelle-utenze.xlsx"
+          : "catasto-elaborazione-massiva-particelle.xlsx",
+      );
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -326,9 +626,10 @@ export function AnagraficaBulkPanel() {
       <article className="panel-card">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-sm font-medium text-gray-900">Upload file</p>
+            <p className="text-sm font-medium text-gray-900">Template ed upload</p>
             <p className="mt-1 text-sm text-gray-500">
-              Carica un file <span className="font-medium">.xlsx</span> o <span className="font-medium">.csv</span> con colonne: comune (opz.), foglio, particella.
+              Seleziona un template, scarica l’esempio e carica un file <span className="font-medium">.xlsx</span> o{" "}
+              <span className="font-medium">.csv</span> con le colonne richieste.
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -346,6 +647,76 @@ export function AnagraficaBulkPanel() {
             >
               Reset
             </button>
+          </div>
+        </div>
+
+        <div className="mt-4 grid gap-4 md:grid-cols-2">
+          <div className="space-y-2">
+            <span className="label-caption">Template CF/P.IVA → Particelle</span>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={busy}
+                onClick={() => {
+                  const sheet = XLSX.utils.json_to_sheet([{ codice_fiscale: "RSSMRA80A01H501U", partita_iva: "" }]);
+                  const csv = XLSX.utils.sheet_to_csv(sheet);
+                  triggerDownload(new Blob([csv], { type: "text/csv;charset=utf-8" }), "template-cf-piva-particelle.csv");
+                }}
+              >
+                Template CSV
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={busy}
+                onClick={() => {
+                  const wb = XLSX.utils.book_new();
+                  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([{ codice_fiscale: "RSSMRA80A01H501U", partita_iva: "" }]), "template");
+                  const out = XLSX.write(wb, { type: "array", bookType: "xlsx" });
+                  triggerDownload(
+                    new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+                    "template-cf-piva-particelle.xlsx",
+                  );
+                }}
+              >
+                Template Excel
+              </button>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <span className="label-caption">Template Particelle → Intestatari</span>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={busy}
+                onClick={() => {
+                  const sheet = XLSX.utils.json_to_sheet([{ comune: "165", sezione: "", foglio: "5", particella: "120", sub: "" }]);
+                  const csv = XLSX.utils.sheet_to_csv(sheet);
+                  triggerDownload(new Blob([csv], { type: "text/csv;charset=utf-8" }), "template-particelle-intestatari.csv");
+                }}
+              >
+                Template CSV
+              </button>
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={busy}
+                onClick={() => {
+                  const wb = XLSX.utils.book_new();
+                  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([{ comune: "165", sezione: "", foglio: "5", particella: "120", sub: "" }]), "template");
+                  const out = XLSX.write(wb, { type: "array", bookType: "xlsx" });
+                  triggerDownload(
+                    new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+                    "template-particelle-intestatari.xlsx",
+                  );
+                }}
+              >
+                Template Excel
+              </button>
+            </div>
           </div>
         </div>
 
@@ -367,6 +738,12 @@ export function AnagraficaBulkPanel() {
               <>
                 <span className="font-medium text-gray-800">{sourceFile.name}</span> · {parsedRows.length} righe pronte
                 {skippedRows ? <span className="text-gray-400"> · {skippedRows} vuote saltate</span> : null}
+                {inferredKind ? (
+                  <span className="text-gray-400">
+                    {" "}
+                    · tipo rilevato: {inferredKind === "CF_PIVA_PARTICELLE" ? "CF/P.IVA → Particelle" : "Particelle → Intestatari"}
+                  </span>
+                ) : null}
               </>
             ) : (
               "Nessun file selezionato"
@@ -379,11 +756,11 @@ export function AnagraficaBulkPanel() {
             <RefreshIcon className="h-4 w-4" />
             {busy ? "Elaborazione…" : "Elabora righe"}
           </button>
-          <button className="btn-secondary" type="button" disabled={busy || results.length === 0} onClick={exportCsv}>
+          <button className="btn-secondary" type="button" disabled={busy || results.length === 0} onClick={() => void exportCsv()}>
             <DocumentIcon className="h-4 w-4" />
             Export CSV
           </button>
-          <button className="btn-secondary" type="button" disabled={busy || results.length === 0} onClick={exportXlsx}>
+          <button className="btn-secondary" type="button" disabled={busy || results.length === 0} onClick={() => void exportXlsx()}>
             <DocumentIcon className="h-4 w-4" />
             Export Excel
           </button>

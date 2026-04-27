@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, Field
+from uuid import UUID
 
 
 class CapacitasAnagrafica(BaseModel):
@@ -103,6 +104,38 @@ class CapacitasAnagraficaDetail(BaseModel):
     ufficio: str | None = None
     note: list[str] = Field(default_factory=list)
     raw_html: str | None = None
+
+
+class CapacitasAnagraficaHistoryImportItem(BaseModel):
+    subject_id: UUID | None = None
+    idxana: str | None = Field(default=None, min_length=1)
+
+
+class CapacitasAnagraficaHistoryImportRequest(BaseModel):
+    items: list[CapacitasAnagraficaHistoryImportItem] = Field(min_length=1)
+    credential_id: int | None = None
+    continue_on_error: bool = True
+
+
+class CapacitasAnagraficaHistoryImportItemResult(BaseModel):
+    subject_id: str | None = None
+    resolved_subject_id: str | None = None
+    idxana: str | None = None
+    status: str
+    history_records_total: int = 0
+    imported_records: int = 0
+    skipped_records: int = 0
+    message: str | None = None
+    error: str | None = None
+
+
+class CapacitasAnagraficaHistoryImportResponse(BaseModel):
+    items: list[CapacitasAnagraficaHistoryImportItemResult]
+    processed: int
+    imported: int
+    skipped: int
+    failed: int
+    snapshot_records_imported: int = 0
 
 
 class CapacitasLookupOption(BaseModel):

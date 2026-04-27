@@ -58,3 +58,17 @@ def test_person_snapshot_migration_creates_history_table() -> None:
     assert '"ana_person_snapshots"' in migration
     assert '"ix_ana_person_snapshots_subject_id"' in migration
     assert '"ix_ana_person_snapshots_collected_at"' in migration
+
+
+def test_person_snapshot_capacitas_history_flag_migration_exists() -> None:
+    migration = (
+        ROOT
+        / "backend"
+        / "alembic"
+        / "versions"
+        / "20260427_0064_add_capacitas_history_flag_to_person_snapshots.py"
+    ).read_text(encoding="utf-8")
+
+    assert '"ana_person_snapshots"' in migration
+    assert '"is_capacitas_history"' in migration
+    assert '"ix_ana_person_snapshots_is_capacitas_history"' in migration

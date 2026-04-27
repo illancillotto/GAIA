@@ -41,6 +41,7 @@ DETTAGLIO_TERRENO_URL = f"{INVOLTURE_APP.base_url}/pages/dettaglioTerreno.aspx"
 AJAX_STORICO_URL = f"{INVOLTURE_APP.base_url}/pages/ajax/ajaxStorico.aspx"
 DLG_STORICO_ANAG_URL = f"{INVOLTURE_APP.base_url}/pages/dialog/dlgStoricoAnag.aspx"
 DLG_DETTAGLIO_ANAG_URL = f"{INVOLTURE_APP.base_url}/pages/dialog/dlgNuovaAnagrafica.aspx"
+DETTAGLIO_ANAG_URL = f"{INVOLTURE_APP.base_url}/pages/dettaglioAnagrafica.aspx"
 
 _AJAX_HEADERS = {
     "Accept": "*/*",
@@ -201,6 +202,16 @@ class InVoltureClient:
         response = await http.get(
             DLG_DETTAGLIO_ANAG_URL,
             params={"ID": history_id, "storica": "1", "token": token, "app": "involture", "tenant": ""},
+        )
+        response.raise_for_status()
+        return parse_anagrafica_detail_html(response.text)
+
+    async def fetch_current_anagrafica_detail(self, *, idxana: str, idxesa: str) -> CapacitasAnagraficaDetail:
+        http = self._manager.get_http_client()
+        token = self._manager.get_token()
+        response = await http.get(
+            DETTAGLIO_ANAG_URL,
+            params={"IDXANA": idxana, "IDXEsa": idxesa, "token": token, "app": "involture", "tenant": ""},
         )
         response.raise_for_status()
         return parse_anagrafica_detail_html(response.text)

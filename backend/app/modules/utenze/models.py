@@ -133,6 +133,7 @@ class AnagraficaPersonSnapshot(Base):
         nullable=False,
         index=True,
     )
+    is_capacitas_history: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False, index=True)
     source_system: Mapped[str] = mapped_column(String(32), nullable=False, index=True)
     source_ref: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
     cognome: Mapped[str] = mapped_column(String(255), nullable=False, index=True)

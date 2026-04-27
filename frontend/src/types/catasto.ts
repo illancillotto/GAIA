@@ -147,6 +147,7 @@ export type CatCapacitasIntestatario = {
   person_snapshots: Array<{
     id: string;
     subject_id: string;
+    is_capacitas_history: boolean;
     source_system: string;
     source_ref: string | null;
     cognome: string;

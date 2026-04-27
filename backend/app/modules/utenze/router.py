@@ -1710,6 +1710,7 @@ def _build_subject_detail(db: Session, subject_id: uuid.UUID) -> AnagraficaSubje
                 {
                     "id": str(item.id),
                     "subject_id": str(item.subject_id),
+                    "is_capacitas_history": item.is_capacitas_history,
                     "source_system": item.source_system,
                     "source_ref": item.source_ref,
                     "cognome": item.cognome,

@@ -3,6 +3,7 @@
 > Stato documento
 > Documento importato e riallineato al repository GAIA il 2 aprile 2026.
 > La sorgente primaria resta il codice runtime in `backend/app/...`.
+> Per la guida operativa completa di recupero dati, parsing, persistenza e manutenzione continua usare anche `domain-docs/elaborazioni/capacitas/docs/CAPACITAS_DATA_RECOVERY.md`.
 
 ## Stato
 
@@ -52,6 +53,8 @@ Implementato:
   - `GET /elaborazioni/capacitas/involture/terreni/jobs`
   - `GET /elaborazioni/capacitas/involture/terreni/jobs/{id}`
   - `POST /elaborazioni/capacitas/involture/terreni/jobs/{id}/run`
+  - `POST /elaborazioni/capacitas/involture/anagrafica/storico/import`
+  - `POST /elaborazioni/capacitas/involture/anagrafica/storico/import-file`
 - persistenza nel layer catasto consortile:
   - `cat_consorzio_units`
   - `cat_consorzio_unit_segments`
@@ -203,6 +206,21 @@ Uso in GAIA:
   - `ana_person_snapshots` quando il profilo cambia
   - `cat_utenza_intestatari` per collegare tutti gli intestatari proprietari alla singola `cat_utenze_irrigue` dell'anno
 - se Capacitas non espone storico per quel soggetto, il sync usa il dato sintetico del certificato come fallback e non fallisce
+
+Workflow batch aggiuntivo disponibile nel modulo `elaborazioni`:
+
+- input:
+  - body JSON con lista di `subject_id` e/o `idxana`
+  - upload `.csv` / `.xlsx` con colonne `subject_id` e/o `idxana`
+- comportamento:
+  - se parte da `subject_id`, GAIA tenta prima `subject.source_external_id`, poi fallback `search_by_cf`
+  - per ogni `IDXANA` recupera la lista storico e il dettaglio di ogni `history_id`
+  - importa in modo idempotente gli snapshot remoti in `ana_person_snapshots`
+  - se il soggetto GAIA non esiste ancora ma Capacitas espone un CF valido, crea automaticamente `ana_subjects` + `ana_persons`
+- output:
+  - report con `processed`, `imported`, `skipped`, `failed`
+  - contatore `snapshot_records_imported`
+  - dettaglio riga per riga con soggetto risolto e numero di record storici importati
 
 ### Evidenze dai file locali
 

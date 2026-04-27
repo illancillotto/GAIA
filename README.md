@@ -210,6 +210,7 @@ Se la variabile e vuota/non impostata, la password non viene richiesta.
 - GAIA Utenze Plan: `domain-docs/utenze/docs/EXECUTION_PLAN.md`
 - GAIA Rete PRD: `domain-docs/network/docs/PRD_network.md`
 - GAIA Rete Prompt: `domain-docs/network/docs/PROMPT_CODEX_network.md`
+- GAIA Capacitas Data Recovery: `domain-docs/elaborazioni/capacitas/docs/CAPACITAS_DATA_RECOVERY.md`
 - Backend monolite modulare: `backend/app/MONOLITH_MODULAR.md`
 - GAIA Inventario PRD: `domain-docs/inventory/docs/PRD_inventory.md`
 - GAIA Inventario Prompt: `domain-docs/inventory/docs/PROMPT_CODEX_inventory.md`

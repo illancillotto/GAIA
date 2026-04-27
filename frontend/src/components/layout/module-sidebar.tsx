@@ -88,7 +88,7 @@ export function ModuleSidebar({
         <NavItem
           href="/catasto/elaborazioni-massive"
           icon={UserIcon}
-          label="Elaborazioni massiva"
+          label="Elaborazione massiva"
           match="prefix"
         />
         <NavItem href="/catasto/import" icon={RefreshIcon} label="Import" match="prefix" />

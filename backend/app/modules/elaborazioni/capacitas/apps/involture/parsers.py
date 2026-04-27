@@ -72,7 +72,8 @@ def parse_anagrafica_detail_html(html: str) -> CapacitasAnagraficaDetail:
         sesso=_extract_input_value(soup, "txtSessoDlg"),
         data_nascita=_parse_date_value(_extract_input_value(soup, "txtDataDlg")),
         denominazione=_extract_input_value(soup, "txtDenominazioneDlg"),
-        luogo_nascita=_extract_selected_or_input_value(soup, "ddlCittaDaDlg", "txtBelfioreDlg"),
+        luogo_nascita=_extract_selected_or_input_value(soup, "ddlCittaDaDlg", "txtCittaDaDlg")
+        or _extract_input_value(soup, "txtBelfioreDlg"),
         luogo_nascita_belfiore=_extract_input_value(soup, "txtBelfioreDlg"),
         luogo_nascita_provincia=_extract_input_value(soup, "txtProvDlg"),
         codice_fiscale=_extract_input_value(soup, "txtCodFiscDlg"),
@@ -82,16 +83,16 @@ def parse_anagrafica_detail_html(html: str) -> CapacitasAnagraficaDetail:
         sede_belfiore=_extract_input_value(soup, "txtBelfioreSedeDlg"),
         residenza_belfiore=_extract_input_value(soup, "txtResBelfDlg"),
         residenza_provincia=_extract_input_value(soup, "txtResProvDlg"),
-        residenza_localita=_extract_input_value(soup, "txtResLocaDlg"),
-        residenza_toponimo=_extract_selected_text(soup, "ddlResToponDlg"),
+        residenza_localita=_extract_input_value(soup, "txtResCittaDlg") or _extract_input_value(soup, "txtResLocaDlg"),
+        residenza_toponimo=_extract_selected_or_input_value(soup, "ddlResToponDlg", "txtResToponDlg"),
         residenza_indirizzo=_extract_input_value(soup, "txtResIndirDlg"),
         residenza_civico=_extract_input_value(soup, "txtResCivDlg"),
         residenza_sub=_extract_input_value(soup, "txtResSubDlg"),
         residenza_cap=_extract_input_value(soup, "txtResCapDlg"),
         domicilio_belfiore=_extract_input_value(soup, "txtDomBelfDlg"),
         domicilio_provincia=_extract_input_value(soup, "txtDomProvDlg"),
-        domicilio_localita=_extract_input_value(soup, "txtDomLocaDlg"),
-        domicilio_toponimo=_extract_selected_text(soup, "ddlDomToponDlg"),
+        domicilio_localita=_extract_input_value(soup, "txtDomCittaDlg") or _extract_input_value(soup, "txtDomLocaDlg"),
+        domicilio_toponimo=_extract_selected_or_input_value(soup, "ddlDomToponDlg", "txtDomToponDlg"),
         domicilio_indirizzo=_extract_input_value(soup, "txtDomIndirDlg"),
         domicilio_civico=_extract_input_value(soup, "txtDomCivDlg"),
         domicilio_sub=_extract_input_value(soup, "txtDomSubDlg"),
@@ -350,21 +351,38 @@ def _extract_optional_from_url_or_html(html: str, param: str) -> str | None:
     return match.group(1)
 
 
+def _candidate_field_ids(field_id: str) -> list[str]:
+    candidates: list[str] = []
+    bases = [field_id]
+    if field_id.endswith("Dlg"):
+        bases.append(field_id[:-3])
+    else:
+        bases.append(f"{field_id}Dlg")
+
+    for base in bases:
+        for candidate in (base, f"Capacitas_ContentMain_{base}"):
+            if candidate not in candidates:
+                candidates.append(candidate)
+    return candidates
+
+
 def _extract_input_value(soup: BeautifulSoup, field_id: str) -> str | None:
-    field = soup.select_one(f"#{field_id}")
-    if field is None:
-        return None
-    return _strip_value(field.get("value"))
+    for candidate in _candidate_field_ids(field_id):
+        field = soup.select_one(f"#{candidate}")
+        if field is not None:
+            return _strip_value(field.get("value"))
+    return None
 
 
 def _extract_selected_text(soup: BeautifulSoup, field_id: str) -> str | None:
-    field = soup.select_one(f"#{field_id}")
-    if field is None:
-        return None
-    option = field.select_one("option[selected]")
-    if option is None:
-        return None
-    return _strip_value(clean_html_text(option))
+    for candidate in _candidate_field_ids(field_id):
+        field = soup.select_one(f"#{candidate}")
+        if field is None:
+            continue
+        option = field.select_one("option[selected]")
+        if option is not None:
+            return _strip_value(clean_html_text(option))
+    return None
 
 
 def _extract_selected_or_input_value(soup: BeautifulSoup, select_id: str, input_id: str) -> str | None:
@@ -372,10 +390,11 @@ def _extract_selected_or_input_value(soup: BeautifulSoup, select_id: str, input_
 
 
 def _extract_checkbox_checked(soup: BeautifulSoup, field_id: str, *, default: bool = False) -> bool:
-    field = soup.select_one(f"#{field_id}")
-    if field is None:
-        return default
-    return field.has_attr("checked")
+    for candidate in _candidate_field_ids(field_id):
+        field = soup.select_one(f"#{candidate}")
+        if field is not None:
+            return field.has_attr("checked")
+    return default
 
 
 def _parse_date_value(value: str | None) -> date | None:
