@@ -121,7 +121,7 @@ async def _run_terreni_job_background(job_id: int) -> None:
 
 async def _run_particelle_job_background(job_id: int) -> None:
     db = SessionLocal()
-    manager: CapacitasSessionManager | None = None
+    managers: list[CapacitasSessionManager] = []
     credential_id: int | None = None
     try:
         job = get_particelle_sync_job(db, job_id)
@@ -138,11 +138,14 @@ async def _run_particelle_job_background(job_id: int) -> None:
             return
 
         credential_id = credential.id
-        manager = CapacitasSessionManager(credential.username, password)
-        await manager.login()
-        await manager.activate_app("involture")
-        client = InVoltureClient(manager)
-        await run_particelle_sync_job(db, client, job)
+        payload = CapacitasParticelleSyncJobCreateRequest.model_validate(job.payload_json or {})
+        for _ in range(payload.parallel_workers):
+            manager = CapacitasSessionManager(credential.username, password)
+            await manager.login()
+            await manager.activate_app("involture")
+            managers.append(manager)
+        clients = [InVoltureClient(manager) for manager in managers]
+        await run_particelle_sync_job(db, clients[0], job, session_factory=SessionLocal, clients=clients)
         mark_credential_used(db, credential.id)
     except Exception as exc:
         logger.exception("Errore background job particelle Capacitas: job_id=%d err=%s", job_id, exc)
@@ -156,7 +159,7 @@ async def _run_particelle_job_background(job_id: int) -> None:
             job.completed_at = datetime.now(timezone.utc)
             db.commit()
     finally:
-        if manager is not None:
+        for manager in managers:
             await manager.close()
         db.close()
 
@@ -729,12 +732,16 @@ async def run_particelle_job(
     except RuntimeError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
 
-    manager = CapacitasSessionManager(credential.username, password)
+    managers: list[CapacitasSessionManager] = []
     try:
-        await manager.login()
-        await manager.activate_app("involture")
-        client = InVoltureClient(manager)
-        result = await run_particelle_sync_job(db, client, job)
+        payload = CapacitasParticelleSyncJobCreateRequest.model_validate(job.payload_json or {})
+        for _ in range(payload.parallel_workers):
+            manager = CapacitasSessionManager(credential.username, password)
+            await manager.login()
+            await manager.activate_app("involture")
+            managers.append(manager)
+        clients = [InVoltureClient(manager) for manager in managers]
+        result = await run_particelle_sync_job(db, clients[0], job, session_factory=SessionLocal, clients=clients)
         mark_credential_used(db, credential.id)
         return serialize_particelle_sync_job(result)
     except Exception as exc:
@@ -745,7 +752,8 @@ async def run_particelle_job(
             detail=f"Errore esecuzione job particelle inVOLTURE: {exc}",
         ) from exc
     finally:
-        await manager.close()
+        for manager in managers:
+            await manager.close()
 
 
 _RPT_CERTIFICATO_BASE = "https://involture1.servizicapacitas.com/pages/rptCertificato.aspx"

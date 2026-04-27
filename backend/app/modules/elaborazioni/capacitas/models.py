@@ -344,6 +344,8 @@ class CapacitasParticelleSyncJobCreateRequest(BaseModel):
     limit: int | None = Field(default=None, ge=1, le=5000)
     fetch_certificati: bool = True
     fetch_details: bool = True
+    double_speed: bool = False
+    parallel_workers: int = Field(default=1, ge=1, le=2)
 
 
 class CapacitasParticelleSyncJobOut(BaseModel):

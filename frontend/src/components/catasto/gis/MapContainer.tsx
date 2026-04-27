@@ -15,6 +15,8 @@ interface MapContainerProps {
   filters: GisFilters;
   drawSignal: number;
   clearSignal: number;
+  resizeSignal?: number;
+  className?: string;
 }
 
 type DrawControl = InstanceType<typeof MapboxDraw> & {
@@ -52,6 +54,8 @@ export default function MapContainer({
   filters,
   drawSignal,
   clearSignal,
+  resizeSignal,
+  className,
 }: MapContainerProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -59,6 +63,7 @@ export default function MapContainer({
   const popupRef = useRef<maplibregl.Popup | null>(null);
   const handlersRef = useRef({ onGeometryDrawn, onSelectionCleared, token });
   const [mapError, setMapError] = useState<string | null>(null);
+  const resizeRafRef = useRef<number | null>(null);
 
   useEffect(() => {
     handlersRef.current = { onGeometryDrawn, onSelectionCleared, token };
@@ -229,10 +234,40 @@ export default function MapContainer({
     mapRef.current = map;
 
     return () => {
+      if (resizeRafRef.current != null) {
+        window.cancelAnimationFrame(resizeRafRef.current);
+        resizeRafRef.current = null;
+      }
       popupRef.current?.remove();
       map.remove();
       mapRef.current = null;
       drawRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!mapContainerRef.current) return;
+    const map = mapRef.current;
+    if (!map) return;
+
+    const container = mapContainerRef.current;
+    const resize = () => {
+      if (resizeRafRef.current != null) window.cancelAnimationFrame(resizeRafRef.current);
+      resizeRafRef.current = window.requestAnimationFrame(() => {
+        map.resize();
+      });
+    };
+
+    resize();
+
+    const observer = new ResizeObserver(() => resize());
+    observer.observe(container);
+    return () => {
+      observer.disconnect();
+      if (resizeRafRef.current != null) {
+        window.cancelAnimationFrame(resizeRafRef.current);
+        resizeRafRef.current = null;
+      }
     };
   }, []);
 
@@ -246,6 +281,11 @@ export default function MapContainer({
     drawRef.current?.deleteAll();
     popupRef.current?.remove();
   }, [clearSignal]);
+
+  useEffect(() => {
+    if (!resizeSignal) return;
+    mapRef.current?.resize();
+  }, [resizeSignal]);
 
   useEffect(() => {
     // Keep these props observed so future highlight/filter behavior can be added
@@ -269,7 +309,12 @@ export default function MapContainer({
     );
   }
 
-  return <div ref={mapContainerRef} className="h-full min-h-[560px] w-full overflow-hidden rounded-2xl" />;
+  return (
+    <div
+      ref={mapContainerRef}
+      className={`maplibregl-map relative h-full min-h-[560px] w-full overflow-hidden rounded-2xl ${className ?? ""}`.trim()}
+    />
+  );
 }
 
 function buildPopupHtml(data: ParticellaPopupData): string {

@@ -250,8 +250,10 @@ Flusso applicativo aggiunto nel workspace `Elaborazioni / Capacitas`:
 
 Politica anti-aggressiva:
 
-- fascia diurna: throttle di default `1500 ms` tra particelle e riesame dei record solo se non sincronizzati nelle ultime `24h`
+- fascia diurna: throttle di default `900 ms` tra particelle e riesame dei record solo se non sincronizzati nelle ultime `24h`
 - fascia serale dopo le `19:00` Europe/Rome: throttle ridotto a `350 ms` e riesame delle particelle gia dopo `6h`
+- il workspace espone un pulsante `Doppia velocita` per il singolo job: il payload salva `double_speed=true` e dimezza la pausa calcolata (`450 ms` di giorno, `175 ms` in fascia serale)
+- il workspace espone anche `Parallelo x2`: il payload salva `parallel_workers=2`, il backend apre due sessioni Capacitas dedicate e divide la coda particelle tra due worker con progresso condiviso sul job
 - il job puo comunque essere lanciato manualmente dall'operatore, con `only_due=true` come default per evitare re-scrape inutili
 
 ### Evidenze dai file locali

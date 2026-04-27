@@ -201,6 +201,37 @@ def auth_headers() -> dict[str, str]:
     return {"Authorization": f"Bearer {token}"}
 
 
+def test_particelle_sync_policy_uses_900ms_daytime_default() -> None:
+    from app.services.elaborazioni_capacitas_particelle_sync import compute_sync_policy
+
+    policy = compute_sync_policy(datetime(2026, 4, 27, 10, 0, tzinfo=timezone.utc))
+
+    assert policy.aggressive_window is False
+    assert policy.throttle_ms == 900
+    assert policy.speed_multiplier == 1
+    assert policy.parallel_workers == 1
+
+
+def test_particelle_sync_policy_double_speed_halves_throttle() -> None:
+    from app.services.elaborazioni_capacitas_particelle_sync import compute_sync_policy
+
+    daytime_policy = compute_sync_policy(datetime(2026, 4, 27, 10, 0, tzinfo=timezone.utc), double_speed=True)
+    evening_policy = compute_sync_policy(datetime(2026, 4, 27, 18, 0, tzinfo=timezone.utc), double_speed=True)
+
+    assert daytime_policy.throttle_ms == 450
+    assert daytime_policy.speed_multiplier == 2
+    assert evening_policy.aggressive_window is True
+    assert evening_policy.throttle_ms == 175
+
+
+def test_particelle_sync_policy_caps_parallel_workers() -> None:
+    from app.services.elaborazioni_capacitas_particelle_sync import compute_sync_policy
+
+    policy = compute_sync_policy(datetime(2026, 4, 27, 10, 0, tzinfo=timezone.utc), parallel_workers=5)
+
+    assert policy.parallel_workers == 2
+
+
 def test_capacitas_decoder_decodes_real_payload() -> None:
     from app.modules.elaborazioni.capacitas.decoder import decode_response
 

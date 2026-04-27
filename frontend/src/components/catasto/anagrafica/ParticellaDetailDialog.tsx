@@ -67,6 +67,18 @@ export function ParticellaDetailDialog({
   const centroid = useMemo(() => extractLonLat(geojson), [geojson]);
 
   useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose, open]);
+
+  useEffect(() => {
     if (!open || !match) return;
     const currentMatch = match;
 

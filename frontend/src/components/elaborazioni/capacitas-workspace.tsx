@@ -448,6 +448,8 @@ function isParticelleSyncJobResult(value: unknown): value is {
   throttle_ms: number;
   aggressive_window: boolean;
   recheck_hours: number;
+  speed_multiplier?: number;
+  parallel_workers?: number;
   recent_items: Array<{ particella_id: string; label: string; status: string; message: string }>;
 } {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -503,6 +505,8 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
     limit: "",
     fetch_certificati: true,
     fetch_details: true,
+    double_speed: false,
+    parallel_workers: 1,
   });
   const [terreniCreatingJob, setTerreniCreatingJob] = useState(false);
   const [terreniError, setTerreniError] = useState<string | null>(null);
@@ -894,8 +898,12 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
         limit: particelleSyncForm.limit.trim() ? Number.parseInt(particelleSyncForm.limit, 10) : undefined,
         fetch_certificati: particelleSyncForm.fetch_certificati,
         fetch_details: particelleSyncForm.fetch_details,
+        double_speed: particelleSyncForm.double_speed,
+        parallel_workers: particelleSyncForm.parallel_workers,
       });
-      setParticelleStatusMessage(`Job progressivo particelle #${job.id} creato e avviato in background.`);
+      setParticelleStatusMessage(
+        `Job progressivo particelle #${job.id} creato in ${particelleSyncForm.double_speed ? "doppia velocita" : "velocita standard"} con ${particelleSyncForm.parallel_workers} worker e avviato in background.`,
+      );
       setParticelleError(null);
       await loadParticelleJobs();
     } catch (createError) {
@@ -1199,7 +1207,7 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
             }
           />
           <div className="space-y-6 p-6">
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-7">
               <label className="space-y-2">
                 <span className="label-caption">Credenziale</span>
                 <select
@@ -1251,6 +1259,39 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
                 />
                 <span className="text-sm text-gray-700">Scarica dettagli</span>
               </label>
+              <button
+                className={
+                  particelleSyncForm.double_speed
+                    ? "rounded-lg border border-[#1D4E35] bg-[#eef7ef] px-4 py-3 text-left text-sm font-semibold text-[#1D4E35]"
+                    : "rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 text-left text-sm font-semibold text-gray-700 transition hover:border-[#1D4E35]/30 hover:bg-[#f5faf5]"
+                }
+                onClick={() => setParticelleSyncForm((current) => ({ ...current, double_speed: !current.double_speed }))}
+                type="button"
+              >
+                <span className="block">{particelleSyncForm.double_speed ? "Doppia velocita attiva" : "Doppia velocita"}</span>
+                <span className="mt-1 block text-xs font-normal text-gray-500">
+                  {particelleSyncForm.double_speed ? "Pausa dimezzata per questo job." : "Porta la pausa diurna da 900ms a 450ms."}
+                </span>
+              </button>
+              <button
+                className={
+                  particelleSyncForm.parallel_workers > 1
+                    ? "rounded-lg border border-[#1D4E35] bg-[#eef7ef] px-4 py-3 text-left text-sm font-semibold text-[#1D4E35]"
+                    : "rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 text-left text-sm font-semibold text-gray-700 transition hover:border-[#1D4E35]/30 hover:bg-[#f5faf5]"
+                }
+                onClick={() =>
+                  setParticelleSyncForm((current) => ({
+                    ...current,
+                    parallel_workers: current.parallel_workers > 1 ? 1 : 2,
+                  }))
+                }
+                type="button"
+              >
+                <span className="block">{particelleSyncForm.parallel_workers > 1 ? "Parallelo x2 attivo" : "Parallelo x2"}</span>
+                <span className="mt-1 block text-xs font-normal text-gray-500">
+                  {particelleSyncForm.parallel_workers > 1 ? "Usa 2 sessioni Capacitas dedicate." : "Divide il job su 2 worker."}
+                </span>
+              </button>
             </div>
 
             {particelleError ? (
@@ -1265,7 +1306,7 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
                 {particelleCreatingJob ? "Avvio..." : "Avvia sync progressiva"}
               </button>
               <span className="text-xs text-gray-500">
-                Di giorno rientrano soprattutto particelle non sincronizzate nelle ultime 24h. Dopo le 19:00 il runner accorcia la pausa tra richieste e riapre anche record piu recenti.
+                Di giorno rientrano soprattutto particelle non sincronizzate nelle ultime 24h. La pausa base e 900ms; con doppia velocita diventa 450ms. Il parallelo x2 apre due sessioni Capacitas dedicate e divide la coda.
               </span>
             </div>
           </div>
@@ -1312,7 +1353,8 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
                         </p>
                         {result ? (
                           <p className="mt-2 text-sm text-gray-600">
-                            {result.aggressive_window ? "Fascia serale aggressiva" : "Fascia diurna conservativa"} · pausa {result.throttle_ms} ms · ricontrollo target {result.recheck_hours}h
+                            {result.aggressive_window ? "Fascia serale aggressiva" : "Fascia diurna conservativa"} · pausa {result.throttle_ms} ms
+                            {result.speed_multiplier && result.speed_multiplier > 1 ? ` · velocita x${result.speed_multiplier}` : ""} · worker {result.parallel_workers ?? 1} · ricontrollo target {result.recheck_hours}h
                           </p>
                         ) : null}
                       </div>

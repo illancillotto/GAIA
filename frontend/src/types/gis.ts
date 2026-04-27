@@ -25,6 +25,8 @@ export interface ParticellaGisSummary {
   superficie_grafica_mq?: number | null;
   num_distretto?: string | null;
   nome_distretto?: string | null;
+  utenza_cf?: string | null;
+  utenza_denominazione?: string | null;
   ha_anomalie: boolean;
 }
 

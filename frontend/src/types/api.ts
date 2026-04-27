@@ -1242,6 +1242,8 @@ export type CapacitasParticelleSyncJobCreateInput = {
   limit?: number | null;
   fetch_certificati?: boolean;
   fetch_details?: boolean;
+  double_speed?: boolean;
+  parallel_workers?: number;
 };
 
 export type CapacitasParticelleSyncRecentItem = {
@@ -1263,6 +1265,8 @@ export type CapacitasParticelleSyncJobResult = {
   throttle_ms: number;
   aggressive_window: boolean;
   recheck_hours: number;
+  speed_multiplier?: number;
+  parallel_workers?: number;
   completed_at?: string | null;
   recent_items: CapacitasParticelleSyncRecentItem[];
 };
