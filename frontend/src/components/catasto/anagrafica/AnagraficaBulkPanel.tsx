@@ -382,7 +382,12 @@ export function AnagraficaBulkPanel() {
     try {
       if (inferredKind === "COMUNE_FOGLIO_PARTICELLA_INTESTATARI") {
         const particellaIds = Array.from(
-          new Set(results.map((r) => r.particella_id).filter((id): id is string => Boolean(id))),
+          new Set(
+            results
+              .flatMap((r) => r.matches ?? (r.match ? [r.match] : []))
+              .map((m) => m.particella_id)
+              .filter((id): id is string => Boolean(id)),
+          ),
         );
 
         const utenzeByParticella = new Map<string, CatUtenzaIrrigua[]>();
@@ -399,14 +404,9 @@ export function AnagraficaBulkPanel() {
 
         const flat: Record<string, unknown>[] = [];
         for (const r of results) {
-          const m = r.match;
-          const intest = (m?.intestatari ?? [])
-            .map((i) => (i.denominazione ?? i.ragione_sociale ?? [i.cognome, i.nome].filter(Boolean).join(" ")) || "")
-            .filter(Boolean)
-            .join(" | ");
+          const matches = r.matches ?? (r.match ? [r.match] : []);
 
-          const utenze = r.particella_id ? (utenzeByParticella.get(r.particella_id) ?? []) : [];
-          if (utenze.length === 0) {
+          if (matches.length === 0) {
             flat.push({
               row_index: r.row_index,
               kind: inferredKind,
@@ -417,24 +417,19 @@ export function AnagraficaBulkPanel() {
               sub_input: r.sub_input ?? "",
               esito: r.esito,
               message: r.message,
-              particella_id: r.particella_id ?? "",
-              intestatari: intest,
-              particella_comune: m?.comune ?? "",
-              particella_cod_comune_capacitas: m?.cod_comune_capacitas ?? "",
-              particella_foglio: m?.foglio ?? "",
-              particella_particella: m?.particella ?? "",
-              particella_subalterno: m?.subalterno ?? "",
-              particella_num_distretto: m?.num_distretto ?? "",
-              particella_nome_distretto: m?.nome_distretto ?? "",
-              particella_superficie_mq: m?.superficie_mq ?? "",
-              particella_superficie_grafica_mq: m?.superficie_grafica_mq ?? "",
-              dettaglio_particella_url: r.particella_id ? `/catasto/particelle/${r.particella_id}` : "",
+              matches_count: r.matches_count ?? "",
             });
             continue;
           }
 
-          for (const u of utenze) {
-            flat.push({
+          for (let index = 0; index < matches.length; index += 1) {
+            const m = matches[index];
+            const intest = (m.intestatari ?? [])
+              .map((i) => (i.denominazione ?? i.ragione_sociale ?? [i.cognome, i.nome].filter(Boolean).join(" ")) || "")
+              .filter(Boolean)
+              .join(" | ");
+            const utenze = utenzeByParticella.get(m.particella_id) ?? [];
+            const baseRow = {
               row_index: r.row_index,
               kind: inferredKind,
               comune_input: r.comune_input ?? "",
@@ -444,47 +439,67 @@ export function AnagraficaBulkPanel() {
               sub_input: r.sub_input ?? "",
               esito: r.esito,
               message: r.message,
-              particella_id: r.particella_id ?? "",
+              matches_count: r.matches_count ?? matches.length,
+              match_rank: index + 1,
+              particella_id: m.particella_id,
               intestatari: intest,
-              dettaglio_particella_url: r.particella_id ? `/catasto/particelle/${r.particella_id}` : "",
-              // flatten utenza (tutti i campi disponibili dal tipo)
-              utenza_id: u.id,
-              utenza_import_batch_id: u.import_batch_id,
-              utenza_anno_campagna: u.anno_campagna,
-              utenza_cco: u.cco ?? "",
-              utenza_comune_id: u.comune_id ?? "",
-              utenza_cod_provincia: u.cod_provincia ?? "",
-              utenza_cod_comune_capacitas: u.cod_comune_capacitas ?? "",
-              utenza_cod_frazione: u.cod_frazione ?? "",
-              utenza_num_distretto: u.num_distretto ?? "",
-              utenza_nome_distretto_loc: u.nome_distretto_loc ?? "",
-              utenza_nome_comune: u.nome_comune ?? "",
-              utenza_sezione_catastale: u.sezione_catastale ?? "",
-              utenza_foglio: u.foglio ?? "",
-              utenza_particella: u.particella ?? "",
-              utenza_subalterno: u.subalterno ?? "",
-              utenza_particella_id: u.particella_id ?? "",
-              utenza_sup_catastale_mq: u.sup_catastale_mq ?? "",
-              utenza_sup_irrigabile_mq: u.sup_irrigabile_mq ?? "",
-              utenza_ind_spese_fisse: u.ind_spese_fisse ?? "",
-              utenza_imponibile_sf: u.imponibile_sf ?? "",
-              utenza_esente_0648: u.esente_0648,
-              utenza_aliquota_0648: u.aliquota_0648 ?? "",
-              utenza_importo_0648: u.importo_0648 ?? "",
-              utenza_aliquota_0985: u.aliquota_0985 ?? "",
-              utenza_importo_0985: u.importo_0985 ?? "",
-              utenza_denominazione: u.denominazione ?? "",
-              utenza_codice_fiscale: u.codice_fiscale ?? "",
-              utenza_codice_fiscale_raw: u.codice_fiscale_raw ?? "",
-              utenza_anomalia_superficie: u.anomalia_superficie,
-              utenza_anomalia_cf_invalido: u.anomalia_cf_invalido,
-              utenza_anomalia_cf_mancante: u.anomalia_cf_mancante,
-              utenza_anomalia_comune_invalido: u.anomalia_comune_invalido,
-              utenza_anomalia_particella_assente: u.anomalia_particella_assente,
-              utenza_anomalia_imponibile: u.anomalia_imponibile,
-              utenza_anomalia_importi: u.anomalia_importi,
-              utenza_created_at: u.created_at,
-            });
+              particella_comune: m.comune ?? "",
+              particella_cod_comune_capacitas: m.cod_comune_capacitas ?? "",
+              particella_foglio: m.foglio ?? "",
+              particella_particella: m.particella ?? "",
+              particella_subalterno: m.subalterno ?? "",
+              particella_num_distretto: m.num_distretto ?? "",
+              particella_nome_distretto: m.nome_distretto ?? "",
+              particella_superficie_mq: m.superficie_mq ?? "",
+              particella_superficie_grafica_mq: m.superficie_grafica_mq ?? "",
+              dettaglio_particella_url: `/catasto/particelle/${m.particella_id}`,
+            };
+            if (utenze.length === 0) {
+              flat.push(baseRow);
+              continue;
+            }
+            for (const u of utenze) {
+              flat.push({
+                ...baseRow,
+                // flatten utenza (tutti i campi disponibili dal tipo)
+                utenza_id: u.id,
+                utenza_import_batch_id: u.import_batch_id,
+                utenza_anno_campagna: u.anno_campagna,
+                utenza_cco: u.cco ?? "",
+                utenza_comune_id: u.comune_id ?? "",
+                utenza_cod_provincia: u.cod_provincia ?? "",
+                utenza_cod_comune_capacitas: u.cod_comune_capacitas ?? "",
+                utenza_cod_frazione: u.cod_frazione ?? "",
+                utenza_num_distretto: u.num_distretto ?? "",
+                utenza_nome_distretto_loc: u.nome_distretto_loc ?? "",
+                utenza_nome_comune: u.nome_comune ?? "",
+                utenza_sezione_catastale: u.sezione_catastale ?? "",
+                utenza_foglio: u.foglio ?? "",
+                utenza_particella: u.particella ?? "",
+                utenza_subalterno: u.subalterno ?? "",
+                utenza_particella_id: u.particella_id ?? "",
+                utenza_sup_catastale_mq: u.sup_catastale_mq ?? "",
+                utenza_sup_irrigabile_mq: u.sup_irrigabile_mq ?? "",
+                utenza_ind_spese_fisse: u.ind_spese_fisse ?? "",
+                utenza_imponibile_sf: u.imponibile_sf ?? "",
+                utenza_esente_0648: u.esente_0648,
+                utenza_aliquota_0648: u.aliquota_0648 ?? "",
+                utenza_importo_0648: u.importo_0648 ?? "",
+                utenza_aliquota_0985: u.aliquota_0985 ?? "",
+                utenza_importo_0985: u.importo_0985 ?? "",
+                utenza_denominazione: u.denominazione ?? "",
+                utenza_codice_fiscale: u.codice_fiscale ?? "",
+                utenza_codice_fiscale_raw: u.codice_fiscale_raw ?? "",
+                utenza_anomalia_superficie: u.anomalia_superficie,
+                utenza_anomalia_cf_invalido: u.anomalia_cf_invalido,
+                utenza_anomalia_cf_mancante: u.anomalia_cf_mancante,
+                utenza_anomalia_comune_invalido: u.anomalia_comune_invalido,
+                utenza_anomalia_particella_assente: u.anomalia_particella_assente,
+                utenza_anomalia_imponibile: u.anomalia_imponibile,
+                utenza_anomalia_importi: u.anomalia_importi,
+                utenza_created_at: u.created_at,
+              });
+            }
           }
         }
 
@@ -552,7 +567,12 @@ export function AnagraficaBulkPanel() {
 
       if (inferredKind === "COMUNE_FOGLIO_PARTICELLA_INTESTATARI") {
         const particellaIds = Array.from(
-          new Set(results.map((r) => r.particella_id).filter((id): id is string => Boolean(id))),
+          new Set(
+            results
+              .flatMap((r) => r.matches ?? (r.match ? [r.match] : []))
+              .map((m) => m.particella_id)
+              .filter((id): id is string => Boolean(id)),
+          ),
         );
         const utenzeRows: Record<string, unknown>[] = [];
 
@@ -568,18 +588,54 @@ export function AnagraficaBulkPanel() {
           }),
         );
 
-        const particelleSheetRows = results.map((r) => {
-          const m = r.match;
-          const intest = (m?.intestatari ?? [])
-            .map((i) => (i.denominazione ?? i.ragione_sociale ?? [i.cognome, i.nome].filter(Boolean).join(" ")) || "")
-            .filter(Boolean)
-            .join(" | ");
+        const particelleSheetRows = results.flatMap((r) => {
+          const matches = r.matches ?? (r.match ? [r.match] : []);
+          if (matches.length === 0) {
+            return [
+              {
+                row_index: r.row_index,
+                kind: inferredKind,
+                comune_input: r.comune_input ?? "",
+                sezione_input: r.sezione_input ?? "",
+                foglio_input: r.foglio_input ?? "",
+                particella_input: r.particella_input ?? "",
+                sub_input: r.sub_input ?? "",
+                esito: r.esito,
+                message: r.message,
+                matches_count: r.matches_count ?? "",
+              },
+            ];
+          }
 
-          const utenze = r.particella_id ? (utenzeByParticella.get(r.particella_id) ?? []) : [];
-          for (const u of utenze) {
-            utenzeRows.push({
+          return matches.map((m, index) => {
+            const intest = (m.intestatari ?? [])
+              .map((i) => (i.denominazione ?? i.ragione_sociale ?? [i.cognome, i.nome].filter(Boolean).join(" ")) || "")
+              .filter(Boolean)
+              .join(" | ");
+
+            const utenze = utenzeByParticella.get(m.particella_id) ?? [];
+            for (const u of utenze) {
+              utenzeRows.push({
+                row_index: r.row_index,
+                input_particella_id: m.particella_id,
+                comune_input: r.comune_input ?? "",
+                sezione_input: r.sezione_input ?? "",
+                foglio_input: r.foglio_input ?? "",
+                particella_input: r.particella_input ?? "",
+                sub_input: r.sub_input ?? "",
+                esito: r.esito,
+                message: r.message,
+                matches_count: r.matches_count ?? matches.length,
+                match_rank: index + 1,
+                dettaglio_particella_url: `/catasto/particelle/${m.particella_id}`,
+                // utenza full
+                ...u,
+              });
+            }
+
+            return {
               row_index: r.row_index,
-              input_particella_id: r.particella_id ?? "",
+              kind: inferredKind,
               comune_input: r.comune_input ?? "",
               sezione_input: r.sezione_input ?? "",
               foglio_input: r.foglio_input ?? "",
@@ -587,26 +643,21 @@ export function AnagraficaBulkPanel() {
               sub_input: r.sub_input ?? "",
               esito: r.esito,
               message: r.message,
-              // utenza full
-              ...u,
-            });
-          }
-
-          return {
-            row_index: r.row_index,
-            kind: inferredKind,
-            comune_input: r.comune_input ?? "",
-            sezione_input: r.sezione_input ?? "",
-            foglio_input: r.foglio_input ?? "",
-            particella_input: r.particella_input ?? "",
-            sub_input: r.sub_input ?? "",
-            esito: r.esito,
-            message: r.message,
-            particella_id: r.particella_id ?? "",
-            intestatari: intest,
-            utenze_count: utenze.length,
-            dettaglio_particella_url: r.particella_id ? `/catasto/particelle/${r.particella_id}` : "",
-          };
+              matches_count: r.matches_count ?? matches.length,
+              match_rank: index + 1,
+              particella_id: m.particella_id,
+              intestatari: intest,
+              utenze_count: utenze.length,
+              particella_comune: m.comune ?? "",
+              particella_cod_comune_capacitas: m.cod_comune_capacitas ?? "",
+              particella_foglio: m.foglio ?? "",
+              particella_particella: m.particella ?? "",
+              particella_subalterno: m.subalterno ?? "",
+              particella_num_distretto: m.num_distretto ?? "",
+              particella_nome_distretto: m.nome_distretto ?? "",
+              dettaglio_particella_url: `/catasto/particelle/${m.particella_id}`,
+            };
+          });
         });
 
         XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(particelleSheetRows), "particelle");

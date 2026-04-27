@@ -945,6 +945,46 @@ def test_bulk_search_anagrafica_returns_mixed_row_outcomes() -> None:
     assert payload[2]["esito"] == "INVALID_ROW"
 
 
+def test_bulk_search_anagrafica_multiple_matches_does_not_pick_first_particella() -> None:
+    db = TestingSessionLocal()
+    try:
+        comune = db.query(CatComune).filter(CatComune.cod_comune_capacitas == 165).one()
+        db.add(
+            CatParticella(
+                comune=comune,
+                cod_comune_capacitas=165,
+                codice_catastale="A357",
+                nome_comune="Arborea",
+                foglio="5",
+                particella="120",
+                subalterno="2",
+                num_distretto="10",
+                nome_distretto="Distretto 10",
+                is_current=True,
+                superficie_mq=1100,
+                superficie_grafica_mq=1090,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.post(
+        "/catasto/elaborazioni-massive/particelle",
+        headers=auth_headers(),
+        json={"rows": [{"row_index": 2, "comune": "165", "foglio": "5", "particella": "120"}]},
+    )
+
+    assert response.status_code == 200
+    row = response.json()["results"][0]
+    assert row["esito"] == "MULTIPLE_MATCHES"
+    assert row["matches_count"] == 2
+    assert row["particella_id"] is None
+    assert row["match"] is None
+    assert len(row["matches"]) == 2
+    assert sorted(match["subalterno"] for match in row["matches"]) == ["1", "2"]
+
+
 def test_bulk_search_anagrafica_falls_back_to_live_capacitas_for_missing_intestatario(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

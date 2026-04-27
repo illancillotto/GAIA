@@ -667,9 +667,11 @@ async def bulk_search_anagrafica(
                     continue
 
                 if len(items) > 1:
-                    first = items[0]
-                    first_match = _build_match(db, first)
-                    first_match = await live_resolver.enrich_match(first, first_match)
+                    matches: list[CatAnagraficaMatch] = []
+                    for item in items:
+                        candidate = _build_match(db, item)
+                        candidate = await live_resolver.enrich_match(item, candidate)
+                        matches.append(candidate)
                     results.append(
                         CatAnagraficaBulkSearchRowResult(
                             row_index=row.row_index,
@@ -680,9 +682,8 @@ async def bulk_search_anagrafica(
                             sub_input=row.sub,
                             esito="MULTIPLE_MATCHES",
                             message=f"Trovate {len(items)} particelle. Specifica meglio comune/sezione/sub.",
-                            particella_id=first.id,
-                            match=first_match,
                             matches_count=len(items),
+                            matches=matches,
                         )
                     )
                     if live_resolver.dirty:
