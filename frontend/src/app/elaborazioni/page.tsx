@@ -19,6 +19,7 @@ import {
   getElaborazioneCredentials,
   getBonificaSyncStatus,
   listBonificaOristaneseCredentials,
+  listCapacitasParticelleSyncJobs,
   listCapacitasCredentials,
   retryFailedElaborazioneBatch,
   startElaborazioneBatch,
@@ -29,6 +30,8 @@ import type {
   BonificaOristaneseCredential,
   BonificaSyncStatusResponse,
   CapacitasCredential,
+  CapacitasParticelleSyncJob,
+  CapacitasParticelleSyncJobResult,
   ElaborazioneBatch,
   ElaborazioneCaptchaSummary,
   ElaborazioneCredentialStatus,
@@ -70,7 +73,7 @@ type DashboardRunningOperation = {
   detail: string;
   startedAt: string | null;
   tone: "default" | "warning" | "success";
-  kind: "batch" | "bonifica";
+  kind: "batch" | "bonifica" | "particelle-sync";
   bonifica?: {
     entity: string;
     records_synced: number | null;
@@ -79,13 +82,30 @@ type DashboardRunningOperation = {
     error_detail: string | null;
     last_finished_at: string | null;
   };
+  particelleSync?: {
+    status: string;
+    progress_percent: number | null;
+    total_items: number | null;
+    processed_items: number | null;
+    success_items: number | null;
+    skipped_items: number | null;
+    failed_items: number | null;
+    current_label: string | null;
+    aggressive_window: boolean | null;
+    throttle_ms: number | null;
+  };
 };
+
+function isParticelleSyncJobResult(value: CapacitasParticelleSyncJob["result_json"]): value is CapacitasParticelleSyncJobResult {
+  return value != null && !Array.isArray(value) && typeof value === "object" && "progress_percent" in value;
+}
 
 export default function ElaborazioniPage() {
   const [batches, setBatches] = useState<ElaborazioneBatch[]>([]);
   const [credentialStatus, setCredentialStatus] = useState<ElaborazioneCredentialStatus | null>(null);
   const [captchaSummary, setCaptchaSummary] = useState<ElaborazioneCaptchaSummary | null>(null);
   const [capacitasCredentials, setCapacitasCredentials] = useState<CapacitasCredential[]>([]);
+  const [particelleSyncJobs, setParticelleSyncJobs] = useState<CapacitasParticelleSyncJob[]>([]);
   const [bonificaCredentials, setBonificaCredentials] = useState<BonificaOristaneseCredential[]>([]);
   const [bonificaSyncStatus, setBonificaSyncStatus] = useState<BonificaSyncStatusResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -97,11 +117,20 @@ export default function ElaborazioniPage() {
     if (!token) return;
 
     try {
-      const [credentialsResult, batchesResult, captchaSummaryResult, capacitasResult, bonificaResult, bonificaSyncResult] = await Promise.all([
+      const [
+        credentialsResult,
+        batchesResult,
+        captchaSummaryResult,
+        capacitasResult,
+        particelleSyncResult,
+        bonificaResult,
+        bonificaSyncResult,
+      ] = await Promise.all([
         getElaborazioneCredentials(token),
         getElaborazioneBatches(token),
         getElaborazioneCaptchaSummary(token),
         listCapacitasCredentials(token),
+        listCapacitasParticelleSyncJobs(token),
         listBonificaOristaneseCredentials(token),
         getBonificaSyncStatus(token),
       ]);
@@ -109,6 +138,7 @@ export default function ElaborazioniPage() {
       setBatches(batchesResult.slice(0, 6));
       setCaptchaSummary(captchaSummaryResult);
       setCapacitasCredentials(capacitasResult);
+      setParticelleSyncJobs(particelleSyncResult);
       setBonificaCredentials(bonificaResult);
       setBonificaSyncStatus(bonificaSyncResult);
       setError(null);
@@ -234,6 +264,40 @@ export default function ElaborazioniPage() {
       });
     }
 
+    for (const job of particelleSyncJobs) {
+      if (!["pending", "processing"].includes(job.status)) continue;
+      const result = isParticelleSyncJobResult(job.result_json) ? job.result_json : null;
+      const progress = result?.progress_percent ?? null;
+      const currentLabel = result?.current_label ?? null;
+      const processedItems = result?.processed_items ?? null;
+      const totalItems = result?.total_items ?? null;
+      items.push({
+        id: `particelle-sync-${job.id}`,
+        area: "Capacitas particelle",
+        title: `Sync progressiva #${job.id}`,
+        detail: currentLabel
+          ? `In corso: ${currentLabel}`
+          : job.status === "pending"
+            ? "Job in coda per la sync progressiva particelle"
+            : "Monitor sync progressiva particelle in esecuzione",
+        startedAt: job.started_at ?? job.created_at,
+        tone: job.status === "processing" ? "warning" : "default",
+        kind: "particelle-sync",
+        particelleSync: {
+          status: job.status,
+          progress_percent: progress,
+          total_items: totalItems,
+          processed_items: processedItems,
+          success_items: result?.success_items ?? null,
+          skipped_items: result?.skipped_items ?? null,
+          failed_items: result?.failed_items ?? null,
+          current_label: currentLabel,
+          aggressive_window: result?.aggressive_window ?? null,
+          throttle_ms: result?.throttle_ms ?? null,
+        },
+      });
+    }
+
     for (const [entityKey, entity] of Object.entries(bonificaSyncStatus?.entities ?? {})) {
       if (entity.status !== "running") continue;
       items.push({
@@ -260,7 +324,7 @@ export default function ElaborazioniPage() {
       const rightTime = right.startedAt ? Date.parse(right.startedAt) : 0;
       return rightTime - leftTime;
     });
-  }, [batches, bonificaSyncStatus]);
+  }, [batches, bonificaSyncStatus, particelleSyncJobs]);
 
   function openWorkspaceModal(href: string, title: string, description?: string): void {
     setModalState({ href, title, description });
@@ -376,11 +440,11 @@ export default function ElaborazioniPage() {
             </>
           }
           title="Esecuzioni attive aggregate"
-          description="Vista unica delle operazioni attualmente in lavorazione: batch runtime e sync WhiteCompany ancora aperte."
+          description="Vista unica delle operazioni attualmente in lavorazione: batch runtime, sync WhiteCompany e sync progressiva particelle ancora aperte."
         />
         <div className="p-6">
           {runningOperations.length === 0 ? (
-            <EmptyState icon={RefreshIcon} title="Nessuna operazione attiva" description="Al momento non risultano batch in processing o sync WhiteCompany in esecuzione." />
+            <EmptyState icon={RefreshIcon} title="Nessuna operazione attiva" description="Al momento non risultano batch, sync WhiteCompany o job particelle in esecuzione." />
           ) : (
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
               {runningOperations.map((operation) => (
@@ -438,6 +502,51 @@ export default function ElaborazioniPage() {
                             </div>
                           </div>
                         ) : null}
+                      </div>
+                    ) : null}
+
+                    {operation.kind === "particelle-sync" && operation.particelleSync ? (
+                      <div className="mt-4 space-y-3">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">
+                              {operation.particelleSync.processed_items ?? "—"} / {operation.particelleSync.total_items ?? "—"} particelle
+                            </p>
+                            <p className="mt-1 text-xs text-gray-500">
+                              ok {operation.particelleSync.success_items ?? "—"} · skipped {operation.particelleSync.skipped_items ?? "—"} · failed{" "}
+                              {operation.particelleSync.failed_items ?? "—"}
+                            </p>
+                          </div>
+                          <span className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-[#1D4E35] shadow-sm">
+                            {operation.particelleSync.progress_percent != null ? `${operation.particelleSync.progress_percent}%` : operation.particelleSync.status}
+                          </span>
+                        </div>
+                        {operation.particelleSync.progress_percent != null ? (
+                          <div className="h-3 overflow-hidden rounded-full bg-[#dfe9df]">
+                            <div
+                              className="h-full rounded-full bg-[#1D4E35] transition-all duration-500"
+                              style={{ width: `${operation.particelleSync.progress_percent}%` }}
+                            />
+                          </div>
+                        ) : null}
+                        <div className="grid gap-2 text-xs text-gray-600 sm:grid-cols-2">
+                          <div className="rounded-2xl bg-white px-3 py-2 ring-1 ring-gray-100">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Finestra</p>
+                            <p className="mt-1 text-sm font-semibold text-gray-900">
+                              {operation.particelleSync.aggressive_window == null
+                                ? "—"
+                                : operation.particelleSync.aggressive_window
+                                  ? "Serale aggressiva"
+                                  : "Diurna conservativa"}
+                            </p>
+                          </div>
+                          <div className="rounded-2xl bg-white px-3 py-2 ring-1 ring-gray-100">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Pausa</p>
+                            <p className="mt-1 text-sm font-semibold text-gray-900">
+                              {operation.particelleSync.throttle_ms != null ? `${operation.particelleSync.throttle_ms} ms` : "—"}
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     ) : null}
                   </div>

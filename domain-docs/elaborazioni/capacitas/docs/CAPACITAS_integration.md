@@ -74,6 +74,7 @@ Implementato:
 - frontend workspace in `frontend/src/components/elaborazioni/capacitas-workspace.tsx` con:
   - ricerca anagrafica
   - sync progressiva delle particelle GAIA con progress bar e monitor job
+  - dashboard `/elaborazioni` con vista aggregata delle esecuzioni attive, inclusi i job aperti della sync progressiva particelle
   - lookup guidato `frazioni -> sezioni -> fogli`
   - preview risultati Terreni
   - avvio job Terreni in background

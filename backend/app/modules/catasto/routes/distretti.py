@@ -5,7 +5,7 @@ from decimal import Decimal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import case, func, select
+from sqlalchemy import case, false, func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user
@@ -17,9 +17,21 @@ from app.schemas.catasto_phase1 import CatDistrettoKpiResponse, CatDistrettoResp
 router = APIRouter(prefix="/catasto/distretti", tags=["catasto-distretti"])
 
 
+def _capacitas_distretto_num(num_distretto: str) -> int | None:
+    special_codes = {
+        "29a": 291,
+        "29b": 292,
+        "29c": 293,
+    }
+    normalized = num_distretto.strip()
+    if normalized in special_codes:
+        return special_codes[normalized]
+    return int(normalized) if normalized.isdigit() else None
+
+
 def _build_kpi(db: Session, distretto: CatDistretto, anno: int | None) -> CatDistrettoKpiResponse:
-    num_distretto_int = int(distretto.num_distretto) if distretto.num_distretto.isdigit() else None
-    utenze_filters = [CatUtenzaIrrigua.num_distretto == num_distretto_int] if num_distretto_int is not None else []
+    num_distretto_int = _capacitas_distretto_num(distretto.num_distretto)
+    utenze_filters = [CatUtenzaIrrigua.num_distretto == num_distretto_int] if num_distretto_int is not None else [false()]
     if anno is not None:
         utenze_filters.append(CatUtenzaIrrigua.anno_campagna == anno)
 

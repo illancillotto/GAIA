@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import MapboxDraw from "maplibre-gl-draw";
 
@@ -29,6 +29,15 @@ type DrawEvent = {
 const SARDINIA_CENTER: [number, number] = [8.85, 40.1];
 const SARDINIA_ZOOM = 9;
 
+function canCreateWebGLContext(): boolean {
+  try {
+    const canvas = window.document.createElement("canvas");
+    return Boolean(canvas.getContext("webgl2") ?? canvas.getContext("webgl") ?? canvas.getContext("experimental-webgl"));
+  } catch {
+    return false;
+  }
+}
+
 export default function MapContainer({
   token,
   onGeometryDrawn,
@@ -43,6 +52,7 @@ export default function MapContainer({
   const drawRef = useRef<DrawControl | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
   const handlersRef = useRef({ onGeometryDrawn, onSelectionCleared, token });
+  const [mapError, setMapError] = useState<string | null>(null);
 
   useEffect(() => {
     handlersRef.current = { onGeometryDrawn, onSelectionCleared, token };
@@ -51,30 +61,48 @@ export default function MapContainer({
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
 
-    const map = new maplibregl.Map({
-      container: mapContainerRef.current,
-      style: {
-        version: 8,
-        sources: {
-          osm: {
-            type: "raster",
-            tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
-            tileSize: 256,
-            attribution: "OpenStreetMap contributors",
+    if (!canCreateWebGLContext()) {
+      setMapError("WebGL non e disponibile in questo browser o in questa sessione. La mappa GIS richiede WebGL attivo.");
+      return;
+    }
+
+    let map: maplibregl.Map;
+    try {
+      map = new maplibregl.Map({
+        container: mapContainerRef.current,
+        style: {
+          version: 8,
+          sources: {
+            osm: {
+              type: "raster",
+              tiles: ["https://tile.openstreetmap.org/{z}/{x}/{y}.png"],
+              tileSize: 256,
+              attribution: "OpenStreetMap contributors",
+            },
           },
+          layers: [
+            {
+              id: "osm-tiles",
+              type: "raster",
+              source: "osm",
+              minzoom: 0,
+              maxzoom: 19,
+            },
+          ],
         },
-        layers: [
-          {
-            id: "osm-tiles",
-            type: "raster",
-            source: "osm",
-            minzoom: 0,
-            maxzoom: 19,
-          },
-        ],
-      },
-      center: SARDINIA_CENTER,
-      zoom: SARDINIA_ZOOM,
+        center: SARDINIA_CENTER,
+        zoom: SARDINIA_ZOOM,
+      });
+    } catch (error) {
+      setMapError(error instanceof Error ? error.message : "Impossibile inizializzare la mappa WebGL.");
+      return;
+    }
+
+    map.on("error", (event) => {
+      const message = event.error?.message;
+      if (message?.toLowerCase().includes("webgl")) {
+        setMapError(message);
+      }
     });
 
     map.addControl(new maplibregl.NavigationControl(), "top-right");
@@ -216,6 +244,21 @@ export default function MapContainer({
     void selectedIds;
     void filters;
   }, [filters, selectedIds]);
+
+  if (mapError) {
+    return (
+      <div className="flex h-full min-h-[560px] w-full items-center justify-center rounded-2xl border border-amber-200 bg-amber-50 p-8 text-center">
+        <div className="max-w-xl">
+          <p className="text-base font-semibold text-amber-900">Mappa GIS non disponibile</p>
+          <p className="mt-2 text-sm leading-6 text-amber-800">{mapError}</p>
+          <p className="mt-4 text-xs leading-5 text-amber-700">
+            Abilita accelerazione hardware/WebGL nel browser o apri GAIA in una sessione non sandboxata. Le API GIS e le tiles restano disponibili, ma
+            MapLibre non puo renderizzare senza WebGL.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return <div ref={mapContainerRef} className="h-full min-h-[560px] w-full overflow-hidden rounded-2xl" />;
 }
