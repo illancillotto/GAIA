@@ -1,4 +1,4 @@
-import { createQueryString, request, requestFormDataWithUploadProgress } from "@/lib/api";
+import { createQueryString, request, requestBlob, requestFormDataWithUploadProgress } from "@/lib/api";
 import type {
   CatAnomaliaListResponse,
   CatAnomalia,
@@ -18,9 +18,39 @@ import type {
   GeoJSONFeature,
   UUID,
 } from "@/types/catasto";
+import type { GisFilters, GisSelectResult, ParticellaPopupData } from "@/types/gis";
 
 function authHeaders(token: string): Record<string, string> {
   return { Authorization: `Bearer ${token}` };
+}
+
+export async function catastoGisSelect(
+  token: string,
+  geometry: GeoJSON.Geometry,
+  filters?: GisFilters,
+): Promise<GisSelectResult> {
+  return request<GisSelectResult>("/catasto/gis/select", {
+    method: "POST",
+    headers: { ...authHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify({ geometry, filters }),
+  });
+}
+
+export async function catastoGisGetPopup(token: string, id: string): Promise<ParticellaPopupData> {
+  return request<ParticellaPopupData>(`/catasto/gis/particella/${id}/popup`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function catastoGisExport(
+  token: string,
+  ids: string[],
+  format: "csv" | "geojson",
+): Promise<Blob> {
+  const query = new URLSearchParams({ ids: ids.join(","), format });
+  return requestBlob(`/catasto/gis/export?${query.toString()}`, {
+    headers: authHeaders(token),
+  });
 }
 
 export async function catastoUploadCapacitas(

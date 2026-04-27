@@ -8,7 +8,7 @@
 | Fase | Descrizione | Status | Note |
 |---|---|---|---|
 | **1** | Foundation: DB, import, API, frontend tabellare | 🟡 In corso (core pronto) | Backend+frontend Fase 1 implementati; restano ottimizzazioni/performance e alcune rifiniture UX |
-| **2** | GIS Map UI: MapLibre + Martin | 🔴 Non iniziato | Dipende da Fase 1 |
+| **2** | GIS Map UI: MapLibre + Martin | 🟢 Completato | Estensione GIS implementata su modulo `catasto` esistente |
 | **3** | Sister integration per intestatari | 🔴 Non iniziato | Dipende da Fase 1 |
 | **4** | Sentinel-2 NDVI + classificazione | 🔴 Non iniziato | Dipende da Fase 2 |
 | **5** | Wizard anomalie completo + segnalazioni | 🔴 Non iniziato | Dipende da Fase 1, 4 |
@@ -90,15 +90,15 @@ Legend: 🔴 Non iniziato · 🟡 In corso · 🟢 Completato · ⚫ Bloccato
 
 | # | Task | Status | File | Note |
 |---|---|---|---|---|
-| 2.1 | Container Martin in docker-compose | 🔴 | `docker-compose.yml` | |
-| 2.2 | Config `martin.toml` | 🔴 | `config/martin.toml` | |
-| 2.3 | Proxy nginx `/tiles/` | 🔴 | `nginx/nginx.conf` | |
-| 2.4 | Endpoints GeoJSON distretti + particelle | 🔴 | `routes/distretti.py` | |
-| 2.5 | `npm install maplibre-gl` | 🔴 | `frontend/package.json` | |
-| 2.6 | Pagina mappa `/catasto/mappa` | 🔴 | `app/catasto/mappa/page.tsx` | |
-| 2.7 | Layer distretti MVT cliccabili | 🔴 | | |
-| 2.8 | Layer particelle GeoJSON on-demand | 🔴 | | |
-| 2.9 | Popup particella con link scheda | 🔴 | | |
+| 2.1 | Container Martin in docker-compose | 🟢 | `docker-compose.yml` | Servizio interno, non esposto su porta host |
+| 2.2 | Config Martin | 🟢 | `config/martin.toml` | Config YAML compatibile con Martin v1.7, montata come `/config.toml` |
+| 2.3 | Proxy nginx `/tiles/` | 🟢 | `nginx/nginx.conf` | `/tiles/catalog` e tile distretti verificati via nginx |
+| 2.4 | View particelle correnti per Martin | 🟢 | `backend/alembic/versions/20260427_0066_catasto_gis_view.py` | `cat_particelle_current` con `geometry` e `ha_anomalie` |
+| 2.5 | Endpoint GIS backend | 🟢 | `backend/app/modules/catasto/routes/gis.py` + `services/gis_service.py` | Select spaziale, export CSV/GeoJSON, popup particella |
+| 2.6 | Dipendenze MapLibre/Draw | 🟢 | `frontend/package.json` | `maplibre-gl` già presente; aggiunto `maplibre-gl-draw` |
+| 2.7 | Pagina mappa `/catasto/mappa` | 🟢 | `frontend/src/app/catasto/mappa/page.tsx` | Layout mappa + pannello analisi |
+| 2.8 | Layer distretti e particelle MVT | 🟢 | `frontend/src/components/catasto/gis/MapContainer.tsx` | Distretti zoom 7+, particelle correnti zoom 13+ |
+| 2.9 | Popup particella con link scheda | 🟢 | `frontend/src/components/catasto/gis/MapContainer.tsx` | Fetch dati leggeri da `/catasto/gis/particella/{id}/popup` |
 
 ---
 

@@ -80,7 +80,7 @@ nginx/
 
 ---
 
-## 4. Database — nessuna migration necessaria
+## 4. Database — view per tiles correnti
 
 Le tabelle esistenti sono sufficienti. L'indice GIST critico è già presente:
 
@@ -89,6 +89,8 @@ Le tabelle esistenti sono sufficienti. L'indice GIST critico è già presente:
 CREATE INDEX idx_cat_part_geom ON cat_particelle USING GIST (geometry) WHERE is_current;
 CREATE INDEX idx_cat_distretti_geom ON cat_distretti USING GIST (geometry);
 ```
+
+Per Martin è stata aggiunta una migration dedicata che crea la view `cat_particelle_current`, filtrata su `is_current = TRUE` e arricchita con `ha_anomalie`. La view evita di pubblicare nei tiles lo storico particelle non corrente.
 
 L'unica verifica da fare è che PostGIS sia abilitato con `ST_Transform` disponibile (richiede PROJ). Questo è garantito dall'immagine Docker `postgis/postgis` già usata in GAIA.
 
@@ -118,6 +120,8 @@ martin:
 Martin non espone porte pubbliche: le tiles transitano esclusivamente via nginx.
 
 ### 5.2 config/martin.toml
+
+Nota implementativa: Martin v1.7 legge il file di configurazione in formato YAML anche se il mount mantiene il nome `config/martin.toml` previsto dal piano.
 
 ```toml
 [postgres]

@@ -1,0 +1,55 @@
+# Martin tile server configuration.
+# Martin v1.7 reads YAML config even if the mounted filename has .toml.
+
+cache_size_mb: 512
+
+postgres:
+  connection_string: "${DATABASE_URL}"
+  default_srid: 4326
+  auto_bounds: quick
+  tables:
+    cat_distretti:
+      schema: public
+      table: cat_distretti
+      layer_id: cat_distretti
+      srid: 4326
+      geometry_column: geometry
+      id_column: ~
+      minzoom: 7
+      maxzoom: 16
+      extent: 4096
+      buffer: 64
+      clip_geom: true
+      geometry_type: MULTIPOLYGON
+      properties:
+        id: uuid
+        num_distretto: text
+        nome_distretto: text
+        attivo: bool
+
+    cat_particelle_current:
+      schema: public
+      table: cat_particelle_current
+      layer_id: cat_particelle_current
+      srid: 4326
+      geometry_column: geometry
+      id_column: ~
+      minzoom: 13
+      maxzoom: 20
+      extent: 4096
+      buffer: 64
+      clip_geom: true
+      geometry_type: MULTIPOLYGON
+      properties:
+        id: uuid
+        cfm: text
+        foglio: text
+        particella: text
+        subalterno: text
+        cod_comune_capacitas: int4
+        cod_comune_istat: int4
+        codice_catastale: text
+        num_distretto: text
+        superficie_mq: numeric
+        superficie_grafica_mq: numeric
+        ha_anomalie: bool

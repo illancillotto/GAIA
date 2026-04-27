@@ -82,6 +82,7 @@ export function ModuleSidebar({
         <NavItem href="/catasto" icon={GridIcon} label="Dashboard" />
 
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Catasto operativo</p>
+        <NavItem href="/catasto/mappa" icon={GridIcon} label="Mappa GIS" match="prefix" />
         <NavItem href="/catasto/distretti" icon={SearchIcon} label="Distretti" match="prefix" />
         <NavItem href="/catasto/particelle" icon={FolderIcon} label="Particelle" match="prefix" />
         <NavItem href="/catasto/anomalie" icon={AlertTriangleIcon} label="Anomalie" match="prefix" />
