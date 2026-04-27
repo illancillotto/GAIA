@@ -20,6 +20,7 @@ class AnalyticsSummary(BaseModel):
     total_liters: float
     total_fuel_cost: float
     total_work_hours: float
+    work_hours_source: str = "activity"  # "activity" | "session"
     active_sessions: int
     anomaly_count: int
     avg_consumption_l_per_100km: float | None

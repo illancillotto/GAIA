@@ -191,7 +191,9 @@ def analytics_summary(
     total_liters = sum(float(f.liters or 0) for f in fuel_logs)
     total_cost = sum(float(f.total_cost or 0) for f in fuel_logs)
 
-    # Work hours from activities (use calculated if available, else declared)
+    # Work hours: prefer OperatorActivity (submitted/approved timesheets).
+    # Fall back to vehicle session duration when no activities exist in the period
+    # (module not yet in use — sessions are a reliable proxy).
     activities = db.scalars(
         select(OperatorActivity).where(
             OperatorActivity.started_at >= dt_from,
@@ -203,7 +205,17 @@ def analytics_summary(
         int(a.duration_minutes_calculated or a.duration_minutes_declared or 0)
         for a in activities
     )
-    total_work_hours = round(total_minutes / 60, 1)
+    if total_minutes > 0:
+        total_work_hours = round(total_minutes / 60, 1)
+        work_hours_source = "activity"
+    else:
+        session_seconds = sum(
+            (s.ended_at - s.started_at).total_seconds()
+            for s in sessions
+            if s.status != "open" and s.ended_at is not None and s.started_at is not None
+        )
+        total_work_hours = round(session_seconds / 3600, 1)
+        work_hours_source = "session"
 
     # Active sessions (currently open)
     active_sessions = db.scalar(
@@ -243,6 +255,7 @@ def analytics_summary(
         total_liters=round(total_liters, 2),
         total_fuel_cost=round(total_cost, 2),
         total_work_hours=total_work_hours,
+        work_hours_source=work_hours_source,
         active_sessions=active_sessions,
         anomaly_count=anomaly_count,
         avg_consumption_l_per_100km=avg_consumption,

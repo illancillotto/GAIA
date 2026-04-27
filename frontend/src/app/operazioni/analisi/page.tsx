@@ -64,8 +64,8 @@ interface AnomalyItem { id: string; type: string; severity: string; description:
 
 interface Summary {
   period_label: string; total_km: number; total_liters: number;
-  total_fuel_cost: number; total_work_hours: number; active_sessions: number;
-  anomaly_count: number; avg_consumption_l_per_100km: number | null;
+  total_fuel_cost: number; total_work_hours: number; work_hours_source?: string;
+  active_sessions: number; anomaly_count: number; avg_consumption_l_per_100km: number | null;
 }
 interface FuelData { time_series: TimeSeriesPoint[]; cost_series: TimeSeriesPoint[]; top_vehicles: FuelTopItem[]; top_operators: FuelTopItem[]; total_liters: number; total_cost: number; avg_liters_per_refuel: number; storno_count?: number; storno_liters?: number; storno_cost?: number }
 interface KmSessionExtremeItem { session_id: string; vehicle_label: string; operator_label?: string | null; started_at: string; ended_at: string; duration_minutes: number; km: number }
@@ -943,6 +943,43 @@ function CarburantePanel({ params }: { params: { from_date?: string; to_date?: s
         <MetricCard label="Media per rifornimento" value={`${data.avg_liters_per_refuel} L`} sub="Litri medi (solo positivi)" />
       </div>
 
+      {/* ── Nota storica rettifiche PAIROFF Q8 ─────────────────────────────────
+           Il 27/04/2026 sono state rimosse 518 righe (259 coppie neg+pos) marcate
+           N.Fatt.="PAIROFF" importate da file Excel Q8 dei trimestri 2025–Q1 2026.
+           Queste righe erano rettifiche inter-periodo di prezzo: ogni coppia aveva
+           effetto netto zero sui litri e sui costi (confermato: delta = 0,00 L e 0,00 €).
+           L'import è stato corretto per ignorare i PAIROFF dai file futuri.
+      ─────────────────────────────────────────────────────────────────────────── */}
+      <div className="rounded-[20px] border border-[#d9dfd6] bg-[#f7f9f6] px-4 py-3">
+        <div className="flex flex-wrap items-start gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#5f6d61]">
+              Nota — Rettifiche PAIROFF Q8 rimosse il 27/04/2026
+            </p>
+            <p className="mt-1 text-xs leading-5 text-gray-600">
+              Eliminati 518 fuel log (259 coppie negativo/positivo, periodo feb&nbsp;2025 – gen&nbsp;2026)
+              prodotti dal sistema Q8 come rettifiche di prezzo inter-trimestre (<em>N.&nbsp;Fatt.&nbsp;= PAIROFF</em>).
+              Ogni coppia aveva effetto netto zero su litri e costi — i totali non sono variati.
+              L&apos;import è stato aggiornato: i PAIROFF vengono ora ignorati automaticamente.
+            </p>
+          </div>
+          <div className="shrink-0 grid grid-cols-3 gap-3 text-center">
+            <div>
+              <p className="text-base font-semibold text-gray-800">518</p>
+              <p className="text-[10px] text-gray-500">righe rimosse</p>
+            </div>
+            <div>
+              <p className="text-base font-semibold text-gray-800">259</p>
+              <p className="text-[10px] text-gray-500">coppie PAIROFF</p>
+            </div>
+            <div>
+              <p className="text-base font-semibold text-[#1D4E35]">0,00 L</p>
+              <p className="text-[10px] text-gray-500">delta netto</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {(data.storno_count ?? 0) > 0 && (
         <div className="grid gap-4 md:grid-cols-3">
           <div className="rounded-[20px] border border-amber-200 bg-amber-50 px-4 py-3">
@@ -1575,7 +1612,11 @@ function AnalisiContent() {
             <MetricCard label="Km totali" value={`${summary.total_km.toLocaleString("it-IT")} km`} />
             <MetricCard label="Litri totali" value={`${summary.total_liters.toLocaleString("it-IT")} L`} />
             <MetricCard label="Spesa carburante" value={`€ ${summary.total_fuel_cost.toLocaleString("it-IT", { minimumFractionDigits: 0 })}`} variant="info" />
-            <MetricCard label="Ore lavoro" value={`${summary.total_work_hours.toLocaleString("it-IT")} h`} />
+            <MetricCard
+              label="Ore lavoro"
+              value={`${summary.total_work_hours.toLocaleString("it-IT")} h`}
+              sub={summary.work_hours_source === "session" ? "Da sessioni veicolo" : undefined}
+            />
             <MetricCard label="Sessioni attive" value={summary.active_sessions} variant={summary.active_sessions > 0 ? "warning" : "default"} />
             <MetricCard label="Anomalie" value={summary.anomaly_count} variant={summary.anomaly_count > 0 ? "danger" : "success"} />
             <MetricCard
