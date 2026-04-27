@@ -62,7 +62,7 @@ export default function MapContainer({
     if (!mapContainerRef.current || mapRef.current) return;
 
     if (!canCreateWebGLContext()) {
-      setMapError("WebGL non e disponibile in questo browser o in questa sessione. La mappa GIS richiede WebGL attivo.");
+      setMapError("WebGL non e disponibile in questo browser o in questa sessione. Il GIS richiede WebGL attivo.");
       return;
     }
 
@@ -94,7 +94,7 @@ export default function MapContainer({
         zoom: SARDINIA_ZOOM,
       });
     } catch (error) {
-      setMapError(error instanceof Error ? error.message : "Impossibile inizializzare la mappa WebGL.");
+      setMapError(error instanceof Error ? error.message : "Impossibile inizializzare il GIS WebGL.");
       return;
     }
 
@@ -249,7 +249,7 @@ export default function MapContainer({
     return (
       <div className="flex h-full min-h-[560px] w-full items-center justify-center rounded-2xl border border-amber-200 bg-amber-50 p-8 text-center">
         <div className="max-w-xl">
-          <p className="text-base font-semibold text-amber-900">Mappa GIS non disponibile</p>
+          <p className="text-base font-semibold text-amber-900">GIS non disponibile</p>
           <p className="mt-2 text-sm leading-6 text-amber-800">{mapError}</p>
           <p className="mt-4 text-xs leading-5 text-amber-700">
             Abilita accelerazione hardware/WebGL nel browser o apri GAIA in una sessione non sandboxata. Le API GIS e le tiles restano disponibili, ma

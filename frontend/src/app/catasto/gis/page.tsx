@@ -16,7 +16,7 @@ const MapContainer = dynamic(() => import("@/components/catasto/gis/MapContainer
   ssr: false,
   loading: () => (
     <div className="flex h-full min-h-[560px] items-center justify-center rounded-2xl bg-gray-100 text-sm text-gray-400">
-      Caricamento mappa...
+      Caricamento GIS...
     </div>
   ),
 });
@@ -30,7 +30,7 @@ function triggerDownload(blob: Blob, filename: string): void {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export default function CatastoMappaPage() {
+export default function CatastoGisPage() {
   const [token, setToken] = useState<string | null>(null);
   const [hasDrawing, setHasDrawing] = useState(false);
   const [drawSignal, setDrawSignal] = useState(0);
@@ -78,9 +78,9 @@ export default function CatastoMappaPage() {
 
   return (
     <CatastoPage
-      title="Mappa GIS"
-      description="Analisi spaziale delle particelle catastali con layer MVT e selezione su mappa."
-      breadcrumb="Catasto / Mappa GIS"
+      title="GIS"
+      description="Analisi spaziale delle particelle catastali con layer MVT e selezione GIS."
+      breadcrumb="Catasto / GIS"
       requiredModule="catasto"
     >
       <div className="flex min-h-[calc(100vh-190px)] flex-col overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">

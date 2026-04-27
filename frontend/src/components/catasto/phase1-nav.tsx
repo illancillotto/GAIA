@@ -7,7 +7,7 @@ import { cn } from "@/lib/cn";
 
 const links: { href: string; label: string; match?: "exact" | "prefix" }[] = [
   { href: "/catasto", label: "Dashboard", match: "exact" },
-  { href: "/catasto/mappa", label: "Mappa GIS", match: "prefix" },
+  { href: "/catasto/gis", label: "GIS", match: "prefix" },
   { href: "/catasto/distretti", label: "Distretti", match: "prefix" },
   { href: "/catasto/particelle", label: "Particelle", match: "prefix" },
   { href: "/catasto/anomalie", label: "Anomalie", match: "prefix" },

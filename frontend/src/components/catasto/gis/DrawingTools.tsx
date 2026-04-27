@@ -43,7 +43,7 @@ export default function DrawingTools({
             {nParticelle.toLocaleString("it-IT")} particelle selezionate
           </span>
         ) : (
-          <span className="text-gray-400">Disegna un&apos;area sulla mappa</span>
+          <span className="text-gray-400">Disegna un&apos;area nel GIS</span>
         )}
       </div>
     </div>

@@ -32,7 +32,7 @@ export default function AnalysisPanel({ result, isLoading, onExport }: AnalysisP
   if (!result) {
     return (
       <div className="p-6 text-center text-sm text-gray-400">
-        Disegna un&apos;area sulla mappa per avviare l&apos;analisi spaziale.
+        Disegna un&apos;area nel GIS per avviare l&apos;analisi spaziale.
       </div>
     );
   }

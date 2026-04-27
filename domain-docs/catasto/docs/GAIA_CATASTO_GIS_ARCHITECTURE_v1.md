@@ -16,7 +16,7 @@ Il GIS è un'**estensione del modulo catasto**, non un modulo separato. Non intr
 Aggiunge:
 - `backend/app/modules/catasto/routes/gis.py` — nuove route analisi spaziale
 - `backend/app/modules/catasto/services/gis_service.py` — logica PostGIS
-- `frontend/src/app/catasto/mappa/` — pagina mappa (già pianificata Fase 2, da estendere)
+- `frontend/src/app/catasto/gis/` — pagina GIS (già pianificata Fase 2, da estendere)
 - `frontend/src/components/catasto/gis/` — componenti GIS (DrawingTools, SelectionPanel, AnalysisPanel)
 
 ---
@@ -348,10 +348,10 @@ async def select_by_geometry(
 
 ## 7. Frontend — struttura componenti
 
-### 7.1 Pagina mappa — `/catasto/mappa`
+### 7.1 Pagina GIS — `/catasto/gis`
 
 ```
-frontend/src/app/catasto/mappa/
+frontend/src/app/catasto/gis/
 └── page.tsx
 ```
 
