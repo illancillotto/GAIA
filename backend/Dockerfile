@@ -6,7 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends build-essential nmap iproute2 avahi-utils samba-common-bin \
+    && apt-get install -y --no-install-recommends build-essential gdal-bin nmap iproute2 avahi-utils samba-common-bin \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .

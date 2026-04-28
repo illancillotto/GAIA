@@ -11,7 +11,7 @@ from app.core.database import SessionLocal, get_db
 from app.models.application_user import ApplicationUser
 from app.models.catasto_phase1 import CatAnomalia, CatImportBatch, CatUtenzaIrrigua
 from app.modules.catasto.services.import_capacitas import CapacitasImportDuplicateError, import_capacitas_excel
-from app.modules.catasto.services.import_shapefile import finalize_shapefile_import, load_zip_to_staging
+from app.modules.catasto.services.import_shapefile import drop_staging_table, finalize_shapefile_import, load_zip_to_staging
 from app.schemas.catasto_phase1 import (
     CatAnomaliaListResponse,
     CatAnomaliaResponse,
@@ -203,6 +203,7 @@ def _run_shapefile_import(
     source_srid: int,
 ) -> None:
     db = SessionLocal()
+    staging_table = "cat_particelle_staging"
     try:
         _append_step(batch_id, "Estrazione archivio ZIP in corso…")
 
@@ -226,6 +227,7 @@ def _run_shapefile_import(
             db,
             zip_bytes=zip_bytes,
             source_srid=source_srid,
+            staging_table=staging_table,
             progress_callback=staging_progress,
         )
         _append_step(batch_id, f"Staging completato — {actual_filename}")
@@ -237,6 +239,7 @@ def _run_shapefile_import(
             batch_id=batch_id,
             filename=actual_filename,
             log_callback=lambda msg: _append_step(batch_id, msg),
+            cleanup_staging=False,
         )
     except Exception as exc:
         _append_step(batch_id, f"Errore: {exc}")
@@ -252,6 +255,10 @@ def _run_shapefile_import(
         finally:
             db2.close()
     finally:
+        try:
+            drop_staging_table(db, staging_table)
+        except Exception:
+            db.rollback()
         db.close()
 
 
@@ -299,6 +306,7 @@ def upload_shapefile(
 
 @router.post("/shapefile/finalize")
 def finalize_shapefile(
+    cleanup_staging: bool = Query(True),
     db: Session = Depends(get_db),
     current_user: ApplicationUser = Depends(require_admin_user),
 ):
@@ -307,6 +315,6 @@ def finalize_shapefile(
     Crea un batch di tipo 'shapefile' e aggiorna cat_particelle + cat_distretti.
     """
     try:
-        return finalize_shapefile_import(db, created_by=current_user.id)
+        return finalize_shapefile_import(db, created_by=current_user.id, cleanup_staging=cleanup_staging)
     except ValueError as exc:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

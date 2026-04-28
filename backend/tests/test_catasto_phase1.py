@@ -1643,10 +1643,17 @@ def test_catasto_capacitas_snapshots_can_be_persisted() -> None:
 
 
 def test_finalize_shapefile_route_returns_service_payload(monkeypatch: pytest.MonkeyPatch) -> None:
-    captured: dict[str, int] = {}
+    captured: dict[str, object] = {}
 
-    def fake_finalize_shapefile_import(db: Session, *, created_by: int, **_: object) -> dict[str, object]:
+    def fake_finalize_shapefile_import(
+        db: Session,
+        *,
+        created_by: int,
+        cleanup_staging: bool,
+        **_: object,
+    ) -> dict[str, object]:
         captured["created_by"] = created_by
+        captured["cleanup_staging"] = cleanup_staging
         return {"status": "completed", "inserted_current": 3, "updated_history": 1}
 
     monkeypatch.setattr(import_routes_module, "finalize_shapefile_import", fake_finalize_shapefile_import)
@@ -1656,3 +1663,4 @@ def test_finalize_shapefile_route_returns_service_payload(monkeypatch: pytest.Mo
     assert response.status_code == 200
     assert response.json()["status"] == "completed"
     assert captured["created_by"] > 0
+    assert captured["cleanup_staging"] is True

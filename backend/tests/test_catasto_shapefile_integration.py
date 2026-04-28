@@ -176,6 +176,115 @@ def test_finalize_shapefile_import_inserts_current_particelle_and_distretti(db_s
         assert inserted[0].num_distretto == num_distretto
         assert distretto is not None
         assert distretto.nome_distretto == f"Distretto test {suffix}"
+        assert db_session.execute(text("SELECT to_regclass(:table_name)"), {"table_name": staging_table}).scalar_one() is None
+    finally:
+        _cleanup_shapefile_artifacts(
+            db_session,
+            staging_table=staging_table,
+            num_distretto=num_distretto,
+            foglio=foglio,
+            particella=particella,
+        )
+
+
+def test_finalize_shapefile_import_allows_progress_updates_from_separate_session(db_session: Session, engine) -> None:
+    suffix = uuid4().hex[:8]
+    staging_table = f"cat_particelle_staging_it_{suffix}"
+    num_distretto = f"2{suffix[:3]}"
+    foglio = f"4{suffix[:2]}"
+    particella = f"5{suffix[2:5]}"
+
+    _cleanup_shapefile_artifacts(
+        db_session,
+        staging_table=staging_table,
+        num_distretto=num_distretto,
+        foglio=foglio,
+        particella=particella,
+    )
+
+    db_session.execute(
+        text(
+            f'''
+            CREATE TABLE "{staging_table}" (
+              nume_fogl text,
+              nume_part text,
+              suba_part text,
+              cfm text,
+              supe_part text,
+              num_dist text,
+              nome_dist text,
+              wkb_geometry geometry(MULTIPOLYGON, 4326)
+            )
+            '''
+        )
+    )
+    db_session.execute(
+        text(
+            f'''
+            INSERT INTO "{staging_table}" (
+              nume_fogl, nume_part, suba_part, cfm, supe_part, num_dist, nome_dist, wkb_geometry
+            ) VALUES (
+              :foglio, :particella, '1', 'A357-LOCKTEST', '250.00', :num_distretto, 'Distretto lock test',
+              ST_GeomFromText(:wkt, 4326)
+            )
+            '''
+        ),
+        {
+            "foglio": foglio,
+            "particella": particella,
+            "num_distretto": num_distretto,
+            "wkt": _polygon_wkt(8.605, 39.805),
+        },
+    )
+    batch = CatImportBatch(
+        filename=staging_table,
+        tipo="shapefile",
+        status="processing",
+        righe_totali=1,
+        righe_importate=0,
+        righe_anomalie=0,
+        created_by=_created_by(db_session),
+    )
+    db_session.add(batch)
+    db_session.commit()
+
+    seen_messages: list[str] = []
+
+    def progress_logger(msg: str) -> None:
+        seen_messages.append(msg)
+        with Session(engine) as db2:
+            db2.execute(text("SET lock_timeout = '200ms'"))
+            current_batch = db2.get(CatImportBatch, batch.id)
+            assert current_batch is not None
+            report_json = dict(current_batch.report_json or {})
+            steps = list(report_json.get("steps", []))
+            steps.append({"msg": msg})
+            report_json["steps"] = steps
+            current_batch.report_json = report_json
+            db2.add(current_batch)
+            db2.commit()
+
+    try:
+        result = finalize_shapefile_import(
+            db_session,
+            created_by=_created_by(db_session),
+            staging_table=staging_table,
+            batch_id=batch.id,
+            filename=staging_table,
+            log_callback=progress_logger,
+        )
+
+        db_session.expire_all()
+        persisted_batch = db_session.get(CatImportBatch, batch.id)
+
+        assert result["status"] == "completed"
+        assert len(seen_messages) >= 2
+        assert persisted_batch is not None
+        assert persisted_batch.status == "completed"
+        assert isinstance(persisted_batch.report_json, dict)
+        assert persisted_batch.report_json["records_inserted_current"] == 1
+        assert len(persisted_batch.report_json.get("steps", [])) >= len(seen_messages)
+        assert db_session.execute(text("SELECT to_regclass(:table_name)"), {"table_name": staging_table}).scalar_one() is None
     finally:
         _cleanup_shapefile_artifacts(
             db_session,

@@ -3,6 +3,34 @@ services:
     image: postgis/postgis:16-3.4-alpine
     container_name: gaia-postgres
     restart: unless-stopped
+    command:
+      - postgres
+      - -c
+      - shared_buffers=8GB
+      - -c
+      - effective_cache_size=24GB
+      - -c
+      - work_mem=128MB
+      - -c
+      - maintenance_work_mem=2GB
+      - -c
+      - temp_buffers=256MB
+      - -c
+      - effective_io_concurrency=200
+      - -c
+      - random_page_cost=1.1
+      - -c
+      - seq_page_cost=1.0
+      - -c
+      - max_worker_processes=16
+      - -c
+      - max_parallel_workers=16
+      - -c
+      - max_parallel_workers_per_gather=8
+      - -c
+      - max_parallel_maintenance_workers=6
+      - -c
+      - jit=off
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}

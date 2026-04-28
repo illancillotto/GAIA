@@ -52,9 +52,9 @@ Legend: 🔴 Non iniziato · 🟡 In corso · 🟢 Completato · ⚫ Bloccato
 | 4.3 | `import_capacitas()` — bulk insert + report_json | 🟡 | `backend/app/modules/catasto/services/import_capacitas.py` | Implementato ma non ottimizzato per 90k (manca COPY/bulk spinto) |
 | 4.4 | `import_capacitas()` — idempotenza + force | 🟢 | `backend/app/modules/catasto/services/import_capacitas.py` | |
 | 4.5 | `import_capacitas()` — upsert coefficienti e aliquote | 🟡 | `backend/app/modules/catasto/services/import_capacitas.py` | Da completare/allineare a execution plan (upsert automatici) |
-| 5.1 | `finalize_shapefile_import()` — upsert SCD Type 2 | 🟢 | `backend/app/modules/catasto/services/import_shapefile.py` | SCD2 + history |
+| 5.1 | `finalize_shapefile_import()` — upsert SCD Type 2 | 🟢 | `backend/app/modules/catasto/services/import_shapefile.py` | SCD2 + history; update finale del batch differito a fine transazione per evitare lock tra finalize e progress logger su `cat_import_batches`; fast path DB vuoto ora materializza dedup, inserisce a chunk con step progressivi e alza il parallelismo SQL di sessione in modo aggressivo (`work_mem`, `temp_buffers`, `max_parallel_workers_per_gather`, costi planner, I/O concurrency) |
 | 5.2 | `finalize_shapefile_import()` — deriva distretti via ST_Union | 🟢 | `backend/app/modules/catasto/services/import_shapefile.py` | Upsert `cat_distretti` |
-| 5.3 | Script bash `import_shapefile_catasto.sh` | 🟢 | `scripts/import_shapefile_catasto.sh` | `ogr2ogr` → staging + finalize API |
+| 5.3 | Script bash `import_shapefile_catasto.sh` | 🟢 | `scripts/import_shapefile_catasto.sh` | `ogr2ogr` → staging + finalize API; backend upload ZIP ora usa `ogr2ogr` anche lato servizio con `PG_USE_COPY=YES` e droppa `cat_particelle_staging` a fine finalize/errore |
 
 ### Backend — Routes
 
