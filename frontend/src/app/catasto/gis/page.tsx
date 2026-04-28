@@ -40,6 +40,7 @@ export default function CatastoGisPage() {
   const [isExpanded, setIsExpanded] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
   const [gisError, setGisError] = useState<string | null>(null);
+  const [gisInfo, setGisInfo] = useState<string | null>(null);
   const [showDistretti, setShowDistretti] = useState(true);
   const [showParticelle, setShowParticelle] = useState(true);
   const [highlightSelected, setHighlightSelected] = useState(true);
@@ -123,6 +124,7 @@ export default function CatastoGisPage() {
 
       setExportError(null);
       setGisError(null);
+      setGisInfo(null);
       try {
         const blob = await catastoGisExport(
           token,
@@ -149,6 +151,7 @@ export default function CatastoGisPage() {
 
     setXlsxBusy(true);
     setGisError(null);
+    setGisInfo(null);
     try {
       const buffer = await xlsxFile.arrayBuffer();
       const workbook = XLSX.read(buffer, { type: "array" });
@@ -168,11 +171,22 @@ export default function CatastoGisPage() {
       const resolved = await catastoGisResolveRefs(token, items, { includeGeometry: true });
       setUploadedGeojson(resolved.geojson ?? null);
 
-      if (resolved.not_found + resolved.multiple + resolved.invalid > 0) {
-        setGisError(
-          `Import completato: trovate ${resolved.found}/${resolved.processed}. ` +
-            `Non trovate: ${resolved.not_found}, multiple: ${resolved.multiple}, righe invalide: ${resolved.invalid}.`,
-        );
+      const withGeometry = resolved.geojson?.features.filter((f) => f.geometry != null).length ?? 0;
+
+      if (resolved.found === 0) {
+        setGisError(`Nessuna particella trovata su ${resolved.processed} righe.`);
+      } else {
+        if (withGeometry === 0) {
+          setGisError(
+            `Trovate ${resolved.found} particelle ma nessuna ha geometria: controlla che lo shapefile sia stato importato.`,
+          );
+        } else if (resolved.not_found + resolved.multiple + resolved.invalid > 0) {
+          const parts: string[] = [`Import completato: trovate ${resolved.found}/${resolved.processed}.`];
+          if (resolved.not_found > 0) parts.push(`Non trovate: ${resolved.not_found}.`);
+          if (resolved.multiple > 0) parts.push(`Multiple: ${resolved.multiple}.`);
+          if (resolved.invalid > 0) parts.push(`Righe invalide: ${resolved.invalid}.`);
+          setGisInfo(parts.join(" "));
+        }
       }
     } catch (e) {
       setGisError(e instanceof Error ? e.message : "Import Excel fallito");
@@ -188,7 +202,7 @@ export default function CatastoGisPage() {
       breadcrumb="Catasto / GIS"
       requiredModule="catasto"
     >
-      <div className="flex min-h-[calc(100vh-190px)] flex-col overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
+      <div className="flex h-[calc(100vh-190px)] min-h-[560px] flex-col overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
         <div className="flex flex-col gap-3 border-b border-gray-100 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Catasto GIS</h2>
@@ -216,14 +230,18 @@ export default function CatastoGisPage() {
           <div className="mx-4 mt-3 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
             {error || exportError || gisError}
           </div>
+        ) : gisInfo ? (
+          <div className="mx-4 mt-3 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+            {gisInfo}
+          </div>
         ) : null}
 
-        <div className={`grid flex-1 overflow-hidden ${isExpanded ? "lg:grid-cols-1" : "lg:grid-cols-2"}`}>
+        <div className={`grid min-h-0 flex-1 overflow-hidden ${isExpanded ? "lg:grid-cols-1" : "lg:grid-cols-2"}`}>
           <div
             className={
               isExpanded
                 ? "fixed inset-0 z-50 flex flex-col"
-                : "min-h-[680px] bg-gray-100 p-3 lg:min-h-[calc(100vh-260px)]"
+                : "h-full bg-gray-100 p-3"
             }
           >
             {isExpanded ? (
@@ -255,79 +273,14 @@ export default function CatastoGisPage() {
               </div>
             ) : null}
 
-            <div className={isExpanded ? "relative pointer-events-none flex min-h-0 flex-1 p-3" : ""}>
+            <div className={isExpanded ? "relative pointer-events-none flex min-h-0 flex-1 p-3" : "h-full"}>
               <div
                 className={
                   isExpanded
                     ? "pointer-events-auto min-h-0 w-full overflow-hidden rounded-2xl bg-gray-100 shadow-2xl ring-1 ring-white/10"
-                    : ""
+                    : "h-full"
                 }
               >
-                <div className={isExpanded ? "pointer-events-auto px-1 pb-2" : "px-1 pb-2"}>
-                  <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
-                    <div className="flex items-center gap-2">
-                      <label className="flex items-center gap-2 text-sm text-gray-700">
-                        <input type="checkbox" checked={showDistretti} onChange={(e) => setShowDistretti(e.target.checked)} />
-                        Distretti
-                      </label>
-                      <label className="flex items-center gap-2 text-sm text-gray-700">
-                        <input type="checkbox" checked={showParticelle} onChange={(e) => setShowParticelle(e.target.checked)} />
-                        Particelle
-                      </label>
-                      <label className="flex items-center gap-2 text-sm text-gray-700">
-                        <input type="checkbox" checked={highlightSelected} onChange={(e) => setHighlightSelected(e.target.checked)} />
-                        Evidenzia selezione
-                      </label>
-                    </div>
-
-                    <div className="flex items-end gap-2">
-                      <div>
-                        <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Distretto</div>
-                        <input
-                          value={distrettoLayer}
-                          onChange={(e) => setDistrettoLayer(e.target.value)}
-                          placeholder="es. 03"
-                          className="mt-1 w-28 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900"
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
-                        onClick={() => setDistrettoLayer("")}
-                      >
-                        Reset
-                      </button>
-                    </div>
-
-                    <div className="flex flex-1 flex-wrap items-end justify-end gap-2">
-                      <div>
-                        <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Import Excel</div>
-                        <input
-                          type="file"
-                          accept=".xlsx,.xls"
-                          onChange={(e) => setXlsxFile(e.target.files?.[0] ?? null)}
-                          className="mt-1 block w-full text-sm text-gray-700"
-                          disabled={xlsxBusy}
-                        />
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => void handleImportXlsx()}
-                        disabled={!xlsxFile || xlsxBusy}
-                        className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-300"
-                      >
-                        {xlsxBusy ? "Caricamento…" : "Visualizza particelle"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setUploadedGeojson(null)}
-                        className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
-                      >
-                        Pulisci import
-                      </button>
-                    </div>
-                  </div>
-                </div>
                 <MapContainer
                   token={token}
                   onGeometryDrawn={handleGeometryDrawn}
@@ -351,7 +304,133 @@ export default function CatastoGisPage() {
           </div>
 
           {!isExpanded ? (
-            <aside className="flex min-h-[360px] flex-col overflow-hidden border-t border-gray-100 bg-white lg:min-h-[calc(100vh-260px)] lg:border-l lg:border-t-0">
+            <aside className="flex h-full flex-col overflow-hidden border-t border-gray-100 bg-white lg:border-l lg:border-t-0">
+
+              {/* ── Controls ── */}
+              <div className="flex flex-col gap-4 border-b border-gray-100 px-4 py-4">
+
+                {/* Layer toggles */}
+                <div>
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-gray-400">Layer visibili</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(
+                      [
+                        { label: "Distretti", active: showDistretti, onToggle: () => setShowDistretti((v) => !v), activeClass: "border-blue-200 bg-blue-50 text-blue-700", dotClass: "bg-blue-400" },
+                        { label: "Particelle", active: showParticelle, onToggle: () => setShowParticelle((v) => !v), activeClass: "border-indigo-200 bg-indigo-50 text-indigo-700", dotClass: "bg-indigo-400" },
+                        { label: "Evidenzia sel.", active: highlightSelected, onToggle: () => setHighlightSelected((v) => !v), activeClass: "border-amber-200 bg-amber-50 text-amber-700", dotClass: "bg-amber-400" },
+                      ] as const
+                    ).map(({ label, active, onToggle, activeClass, dotClass }) => (
+                      <button
+                        key={label}
+                        type="button"
+                        onClick={onToggle}
+                        className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all ${active ? activeClass : "border-gray-200 bg-white text-gray-400 hover:border-gray-300 hover:text-gray-600"}`}
+                      >
+                        <span className={`h-1.5 w-1.5 rounded-full transition-colors ${active ? dotClass : "bg-gray-300"}`} />
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Distretto filter */}
+                <div>
+                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-gray-400">Filtro distretto</p>
+                  <div className="flex items-center gap-2">
+                    <input
+                      value={distrettoLayer}
+                      onChange={(e) => setDistrettoLayer(e.target.value)}
+                      placeholder="es. 03"
+                      className="w-24 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm text-gray-900 placeholder-gray-400 transition focus:border-indigo-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                    />
+                    {distrettoLayer ? (
+                      <button
+                        type="button"
+                        onClick={() => setDistrettoLayer("")}
+                        className="flex h-7 w-7 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
+                        title="Rimuovi filtro"
+                      >
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+
+                {/* Excel import */}
+                <div>
+                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-gray-400">Import da Excel</p>
+                  <label
+                    className={`group flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed px-4 py-5 text-center transition-all ${
+                      xlsxBusy
+                        ? "cursor-wait border-gray-200 bg-gray-50 opacity-60"
+                        : xlsxFile
+                          ? "border-emerald-300 bg-emerald-50/60 hover:bg-emerald-50"
+                          : "border-gray-200 bg-gray-50/60 hover:border-indigo-300 hover:bg-indigo-50/30"
+                    }`}
+                  >
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls"
+                      className="sr-only"
+                      onChange={(e) => setXlsxFile(e.target.files?.[0] ?? null)}
+                      disabled={xlsxBusy}
+                    />
+                    {xlsxFile ? (
+                      <>
+                        <svg className="h-7 w-7 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+                        </svg>
+                        <span className="max-w-full truncate text-sm font-semibold text-emerald-700">{xlsxFile.name}</span>
+                        <span className="text-[11px] text-emerald-500">Clicca per cambiare file</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg className="h-7 w-7 text-gray-400 transition group-hover:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                        </svg>
+                        <span className="text-sm font-medium text-gray-600 transition group-hover:text-indigo-600">Clicca per selezionare</span>
+                        <span className="text-[11px] text-gray-400">.xlsx · .xls · max 5 000 righe</span>
+                      </>
+                    )}
+                  </label>
+                  <div className="mt-2.5 flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void handleImportXlsx()}
+                      disabled={!xlsxFile || xlsxBusy}
+                      className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-200 disabled:text-emerald-400"
+                    >
+                      {xlsxBusy ? (
+                        <>
+                          <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                          </svg>
+                          Caricamento…
+                        </>
+                      ) : (
+                        "Visualizza particelle"
+                      )}
+                    </button>
+                    {uploadedGeojson ? (
+                      <button
+                        type="button"
+                        onClick={() => setUploadedGeojson(null)}
+                        title="Rimuovi layer dalla mappa"
+                        className="flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-400 transition hover:bg-gray-50 hover:text-gray-600"
+                      >
+                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+
+              </div>
+
               <AnalysisPanel result={result} isLoading={isLoading} onExport={handleExport} />
               {result ? (
                 <SelectionPanel particelle={result.particelle} truncated={result.truncated} nTotale={result.n_particelle} />

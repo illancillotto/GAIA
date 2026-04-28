@@ -392,3 +392,29 @@ export type CatAnagraficaBulkRowResult = {
 export type CatAnagraficaBulkSearchResponse = {
   results: CatAnagraficaBulkRowResult[];
 };
+
+export type CatAnagraficaBulkJobSummary = {
+  total: number;
+  found: number;
+  notFound: number;
+  multiple: number;
+  invalid: number;
+  error: number;
+};
+
+export type CatAnagraficaBulkJobItem = {
+  id: UUID;
+  created_at: string;
+  source_filename: string | null;
+  kind: "CF_PIVA_PARTICELLE" | "COMUNE_FOGLIO_PARTICELLA_INTESTATARI";
+  skipped_rows: number;
+  summary: CatAnagraficaBulkJobSummary;
+};
+
+export type CatAnagraficaBulkJobDetail = CatAnagraficaBulkJobItem & {
+  results: CatAnagraficaBulkRowResult[];
+};
+
+export type CatAnagraficaBulkJobListResponse = {
+  items: CatAnagraficaBulkJobItem[];
+};

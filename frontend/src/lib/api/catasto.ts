@@ -4,6 +4,8 @@ import type {
   CatAnomalia,
   CatAnagraficaBulkSearchRequest,
   CatAnagraficaBulkSearchResponse,
+  CatAnagraficaBulkJobDetail,
+  CatAnagraficaBulkJobListResponse,
   CatDistretto,
   CatDistrettoKpi,
   CatImportBatch,
@@ -333,5 +335,32 @@ export async function catastoBulkSearchAnagrafica(
     method: "POST",
     headers: { ...authHeaders(token), "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+  });
+}
+
+export async function catastoCreateElaborazioneMassivaJob(
+  token: string,
+  payload: { source_filename?: string | null; skipped_rows?: number; payload: CatAnagraficaBulkSearchRequest },
+): Promise<CatAnagraficaBulkJobDetail> {
+  return request<CatAnagraficaBulkJobDetail>("/catasto/elaborazioni-massive/particelle/jobs", {
+    method: "POST",
+    headers: { ...authHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function catastoListElaborazioniMassiveJobs(
+  token: string,
+  params?: { limit?: number },
+): Promise<CatAnagraficaBulkJobListResponse> {
+  const query = createQueryString({ limit: params?.limit != null ? String(params.limit) : undefined });
+  return request<CatAnagraficaBulkJobListResponse>(`/catasto/elaborazioni-massive/particelle/jobs${query}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function catastoGetElaborazioneMassivaJob(token: string, jobId: UUID): Promise<CatAnagraficaBulkJobDetail> {
+  return request<CatAnagraficaBulkJobDetail>(`/catasto/elaborazioni-massive/particelle/jobs/${jobId}`, {
+    headers: authHeaders(token),
   });
 }

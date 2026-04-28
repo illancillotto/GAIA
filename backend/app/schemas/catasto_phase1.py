@@ -405,3 +405,37 @@ class CatAnagraficaBulkSearchRowResult(BaseModel):
 
 class CatAnagraficaBulkSearchResponse(BaseModel):
     results: list[CatAnagraficaBulkSearchRowResult]
+
+
+class CatAnagraficaBulkJobCreateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source_filename: str | None = None
+    skipped_rows: int = 0
+    payload: CatAnagraficaBulkSearchRequest
+
+
+class CatAnagraficaBulkJobSummary(BaseModel):
+    total: int
+    found: int
+    notFound: int
+    multiple: int
+    invalid: int
+    error: int
+
+
+class CatAnagraficaBulkJobItem(BaseModel):
+    id: UUID
+    created_at: datetime
+    source_filename: str | None = None
+    kind: Literal["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"]
+    skipped_rows: int = 0
+    summary: CatAnagraficaBulkJobSummary
+
+
+class CatAnagraficaBulkJobDetail(CatAnagraficaBulkJobItem):
+    results: list[CatAnagraficaBulkSearchRowResult]
+
+
+class CatAnagraficaBulkJobListResponse(BaseModel):
+    items: list[CatAnagraficaBulkJobItem]

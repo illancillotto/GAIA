@@ -10,7 +10,7 @@ except ImportError:
     class StrEnum(str, Enum):
         pass
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, LargeBinary, Numeric, String, Text, UniqueConstraint, Uuid, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, JSON, LargeBinary, Numeric, String, Text, UniqueConstraint, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -259,6 +259,24 @@ class CatastoCaptchaLog(Base):
         server_default=func.now(),
         nullable=False,
     )
+
+
+class CatastoElaborazioniMassiveJob(Base):
+    __tablename__ = "catasto_elaborazioni_massive_jobs"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("application_users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    kind: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    source_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    skipped_rows: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    payload_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    results_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    summary_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
 
 
 class CatastoComune(Base):

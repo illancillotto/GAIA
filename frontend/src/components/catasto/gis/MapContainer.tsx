@@ -380,26 +380,38 @@ export default function MapContainer({
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) return;
-    const source = map.getSource("uploaded-particelle-source") as maplibregl.GeoJSONSource | undefined;
-    if (!source) return;
-    source.setData(uploadedGeojson ?? { type: "FeatureCollection", features: [] });
+    if (!map) return;
 
-    if (uploadedGeojson && uploadedGeojson.features.length > 0) {
-      try {
-        const bounds = new maplibregl.LngLatBounds();
-        for (const feature of uploadedGeojson.features) {
-          const geom = feature.geometry;
-          if (!geom) continue;
-          const rings = getGeometryRings(geom);
-          for (const ring of rings) {
-            for (const point of ring) bounds.extend([point[0], point[1]]);
+    const apply = () => {
+      const source = map.getSource("uploaded-particelle-source") as maplibregl.GeoJSONSource | undefined;
+      if (!source) return;
+      source.setData(uploadedGeojson ?? { type: "FeatureCollection", features: [] });
+
+      if (uploadedGeojson && uploadedGeojson.features.length > 0) {
+        try {
+          const bounds = new maplibregl.LngLatBounds();
+          for (const feature of uploadedGeojson.features) {
+            const geom = feature.geometry;
+            if (!geom) continue;
+            const rings = getGeometryRings(geom);
+            for (const ring of rings) {
+              for (const point of ring) bounds.extend([point[0], point[1]]);
+            }
           }
+          if (!bounds.isEmpty()) map.fitBounds(bounds, { padding: 40, duration: 600 });
+        } catch {
+          // Fit bounds is best-effort.
         }
-        if (!bounds.isEmpty()) map.fitBounds(bounds, { padding: 40, duration: 600 });
-      } catch {
-        // Fit bounds is best-effort.
       }
+    };
+
+    if (map.isStyleLoaded()) {
+      apply();
+    } else {
+      map.once("load", apply);
+      return () => {
+        map.off("load", apply);
+      };
     }
   }, [uploadedGeojson]);
 

@@ -6,12 +6,14 @@ from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends
+from fastapi import HTTPException, Query, status
 from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
+from app.models.catasto import CatastoElaborazioniMassiveJob
 from app.models.catasto_phase1 import (
     CatAnomalia,
     CatCapacitasCertificato,
@@ -30,6 +32,11 @@ from app.modules.utenze.services.person_history_service import snapshot_person_i
 from app.schemas.catasto_phase1 import (
     CatAnagraficaBulkSearchRequest,
     CatAnagraficaBulkSearchResponse,
+    CatAnagraficaBulkJobCreateRequest,
+    CatAnagraficaBulkJobDetail,
+    CatAnagraficaBulkJobItem,
+    CatAnagraficaBulkJobListResponse,
+    CatAnagraficaBulkJobSummary,
     CatAnagraficaBulkSearchRowResult,
     CatAnagraficaMatch,
     CatAnagraficaUtenzaSummary,
@@ -63,6 +70,22 @@ def _build_denominazione(cognome: str | None, nome: str | None) -> str | None:
 def _normalize_cf(value: str | None) -> str | None:
     normalized = _norm_str(value)
     return normalized.upper() if normalized else None
+
+
+def _build_summary(results: list[CatAnagraficaBulkSearchRowResult]) -> dict[str, int]:
+    s = {"total": len(results), "found": 0, "notFound": 0, "multiple": 0, "invalid": 0, "error": 0}
+    for r in results:
+        if r.esito == "FOUND":
+            s["found"] += 1
+        elif r.esito == "NOT_FOUND":
+            s["notFound"] += 1
+        elif r.esito == "MULTIPLE_MATCHES":
+            s["multiple"] += 1
+        elif r.esito == "INVALID_ROW":
+            s["invalid"] += 1
+        elif r.esito == "ERROR":
+            s["error"] += 1
+    return s
 
 
 def _split_denominazione(value: str | None, *, fallback_cognome: str | None = None, fallback_nome: str | None = None) -> tuple[str, str]:
@@ -733,3 +756,118 @@ async def bulk_search_anagrafica(
         await live_resolver.close()
 
     return CatAnagraficaBulkSearchResponse(results=results)
+
+
+@router.post("/jobs", response_model=CatAnagraficaBulkJobDetail)
+async def create_bulk_search_job(
+    request: CatAnagraficaBulkJobCreateRequest = Body(...),
+    db: Session = Depends(get_db),
+    user: ApplicationUser = Depends(require_active_user),
+) -> CatAnagraficaBulkJobDetail:
+    payload = request.payload
+    # Determine the effective kind exactly like the search endpoint.
+    def infer_kind() -> Literal["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"]:
+        if payload.kind in ("CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"):
+            return payload.kind
+        has_particella_keys = any((r.comune or r.foglio or r.particella or r.sub or r.sezione) for r in payload.rows)
+        has_tax_keys = any((r.codice_fiscale or r.partita_iva) for r in payload.rows)
+        if has_particella_keys and not has_tax_keys:
+            return "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"
+        if has_tax_keys and not has_particella_keys:
+            return "CF_PIVA_PARTICELLE"
+        if has_tax_keys and has_particella_keys:
+            return "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"
+        return "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"
+
+    kind: Literal["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"] = infer_kind()
+
+    response = await bulk_search_anagrafica(payload=payload, db=db, _=user)
+
+    summary = _build_summary(response.results)
+    job = CatastoElaborazioniMassiveJob(
+        user_id=user.id,
+        kind=str(kind),
+        source_filename=_norm_str(request.source_filename),
+        skipped_rows=max(int(request.skipped_rows or 0), 0),
+        payload_json=payload.model_dump(),
+        results_json={"results": [r.model_dump() for r in response.results]},
+        summary_json=summary,
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    return CatAnagraficaBulkJobDetail(
+        id=job.id,
+        created_at=job.created_at,
+        source_filename=job.source_filename,
+        kind=job.kind,  # type: ignore[arg-type]
+        skipped_rows=job.skipped_rows,
+        summary=CatAnagraficaBulkJobSummary(**job.summary_json),
+        results=response.results,
+    )
+
+
+@router.get("/jobs", response_model=CatAnagraficaBulkJobListResponse)
+async def list_bulk_search_jobs(
+    db: Session = Depends(get_db),
+    user: ApplicationUser = Depends(require_active_user),
+    limit: int = Query(5, ge=1, le=20),
+) -> CatAnagraficaBulkJobListResponse:
+    rows = (
+        db.execute(
+            select(CatastoElaborazioniMassiveJob)
+            .where(CatastoElaborazioniMassiveJob.user_id == user.id)
+            .order_by(desc(CatastoElaborazioniMassiveJob.created_at))
+            .limit(limit)
+        )
+        .scalars()
+        .all()
+    )
+
+    items: list[CatAnagraficaBulkJobItem] = []
+    for job in rows:
+        items.append(
+            CatAnagraficaBulkJobItem(
+                id=job.id,
+                created_at=job.created_at,
+                source_filename=job.source_filename,
+                kind=job.kind,  # type: ignore[arg-type]
+                skipped_rows=job.skipped_rows,
+                summary=CatAnagraficaBulkJobSummary(**job.summary_json),
+            )
+        )
+
+    return CatAnagraficaBulkJobListResponse(items=items)
+
+
+@router.get("/jobs/{job_id}", response_model=CatAnagraficaBulkJobDetail)
+async def get_bulk_search_job(
+    job_id: UUID,
+    db: Session = Depends(get_db),
+    user: ApplicationUser = Depends(require_active_user),
+) -> CatAnagraficaBulkJobDetail:
+    job = (
+        db.execute(
+            select(CatastoElaborazioniMassiveJob)
+            .where(CatastoElaborazioniMassiveJob.id == job_id)
+            .where(CatastoElaborazioniMassiveJob.user_id == user.id)
+            .limit(1)
+        )
+        .scalars()
+        .one_or_none()
+    )
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job non trovato")
+
+    raw_results = job.results_json.get("results") if isinstance(job.results_json, dict) else None
+    results = [CatAnagraficaBulkSearchRowResult.model_validate(r) for r in (raw_results or [])]
+    return CatAnagraficaBulkJobDetail(
+        id=job.id,
+        created_at=job.created_at,
+        source_filename=job.source_filename,
+        kind=job.kind,  # type: ignore[arg-type]
+        skipped_rows=job.skipped_rows,
+        summary=CatAnagraficaBulkJobSummary(**job.summary_json),
+        results=results,
+    )
