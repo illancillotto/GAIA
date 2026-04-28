@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import logging
+import threading
 from datetime import datetime, timezone
 from typing import Annotated
 from urllib.parse import urlencode
@@ -75,6 +77,23 @@ from app.services.elaborazioni_capacitas_terreni import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/elaborazioni/capacitas", tags=["elaborazioni-capacitas"])
+
+def _run_async_detached(coro: "asyncio.Future[None] | asyncio.Task[None] | asyncio.coroutines") -> None:
+    """
+    Run an async coroutine in a detached daemon thread.
+
+    Starlette/FastAPI BackgroundTasks run inside the server event loop thread.
+    Capacitas sync jobs are long-running and do synchronous DB work; running them
+    directly would starve the event loop and make the API appear "pending".
+    """
+
+    def _runner() -> None:
+        try:
+            asyncio.run(coro)  # creates a private event loop for this thread
+        except Exception:
+            logger.exception("Errore esecuzione job Capacitas in thread separato")
+
+    threading.Thread(target=_runner, daemon=True).start()
 
 
 async def _run_terreni_job_background(job_id: int) -> None:
@@ -585,7 +604,7 @@ def create_terreni_job(
         credential_id=body.credential_id,
         payload=body,
     )
-    background_tasks.add_task(_run_terreni_job_background, job.id)
+    background_tasks.add_task(_run_async_detached, _run_terreni_job_background(job.id))
     return serialize_terreni_sync_job(job)
 
 
@@ -679,7 +698,7 @@ def create_particelle_job(
         credential_id=body.credential_id,
         payload=body,
     )
-    background_tasks.add_task(_run_particelle_job_background, job.id)
+    background_tasks.add_task(_run_async_detached, _run_particelle_job_background(job.id))
     return serialize_particelle_sync_job(job)
 
 

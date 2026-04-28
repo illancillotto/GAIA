@@ -68,3 +68,34 @@ export interface ParticellaPopupData {
   nome_distretto?: string | null;
   n_anomalie_aperte: number;
 }
+
+export interface GisParticellaRef {
+  comune?: string | null;
+  sezione?: string | null;
+  foglio?: string | null;
+  particella?: string | null;
+  sub?: string | null;
+  row_index?: number | null;
+}
+
+export interface GisResolveItemResult {
+  row_index?: number | null;
+  comune_input?: string | null;
+  sezione_input?: string | null;
+  foglio_input?: string | null;
+  particella_input?: string | null;
+  sub_input?: string | null;
+  esito: "FOUND" | "NOT_FOUND" | "MULTIPLE_MATCHES" | "INVALID_ROW" | string;
+  message: string;
+  particella_id?: string | null;
+}
+
+export interface GisResolveRefsResponse {
+  processed: number;
+  found: number;
+  not_found: number;
+  multiple: number;
+  invalid: number;
+  results: GisResolveItemResult[];
+  geojson?: GeoJSON.FeatureCollection | null;
+}

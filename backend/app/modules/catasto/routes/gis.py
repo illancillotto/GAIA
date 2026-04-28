@@ -8,6 +8,8 @@ from app.core.database import get_db
 from app.models.application_user import ApplicationUser
 from app.modules.catasto.schemas.gis_schemas import (
     GisExportFormat,
+    GisResolveRefsRequest,
+    GisResolveRefsResponse,
     GisSelectRequest,
     GisSelectResult,
     ParticellaPopupData,
@@ -62,3 +64,20 @@ def get_particella_popup(
     _: ApplicationUser = Depends(require_active_user),
 ) -> ParticellaPopupData:
     return gis_service.get_popup_data(db, particella_id)
+
+
+@router.post(
+    "/resolve-refs",
+    response_model=GisResolveRefsResponse,
+    summary="Risolvi particelle da riferimenti catastali",
+    description=(
+        "Riceve una lista di riferimenti (comune/sezione/foglio/particella/sub) e prova a risolvere "
+        "le particelle correnti. Opzionalmente restituisce un GeoJSON FeatureCollection per visualizzazione su mappa."
+    ),
+)
+def resolve_particelle_refs(
+    body: GisResolveRefsRequest,
+    db: Session = Depends(get_db),
+    _: ApplicationUser = Depends(require_active_user),
+) -> GisResolveRefsResponse:
+    return gis_service.resolve_particelle_refs(db, body)

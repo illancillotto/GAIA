@@ -13,8 +13,6 @@ interface SelectionPanelProps {
 }
 
 export default function SelectionPanel({ particelle, truncated, nTotale }: SelectionPanelProps) {
-  if (particelle.length === 0) return null;
-
   const [selected, setSelected] = useState<ParticellaGisSummary | null>(null);
   const match = useMemo<CatAnagraficaMatch | null>(() => {
     if (!selected) return null;
@@ -37,6 +35,8 @@ export default function SelectionPanel({ particelle, truncated, nTotale }: Selec
       anomalie_top: [],
     };
   }, [selected]);
+
+  if (particelle.length === 0) return null;
 
   return (
     <>

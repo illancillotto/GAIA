@@ -18,7 +18,7 @@ import type {
   GeoJSONFeature,
   UUID,
 } from "@/types/catasto";
-import type { GisFilters, GisSelectResult, ParticellaPopupData } from "@/types/gis";
+import type { GisFilters, GisParticellaRef, GisResolveRefsResponse, GisSelectResult, ParticellaPopupData } from "@/types/gis";
 
 function authHeaders(token: string): Record<string, string> {
   return { Authorization: `Bearer ${token}` };
@@ -51,6 +51,39 @@ export async function catastoGisExport(
   return requestBlob(`/catasto/gis/export?${query.toString()}`, {
     headers: authHeaders(token),
   });
+}
+
+export async function catastoGisResolveRefs(
+  token: string,
+  items: GisParticellaRef[],
+  params?: { includeGeometry?: boolean },
+): Promise<GisResolveRefsResponse> {
+  return request<GisResolveRefsResponse>("/catasto/gis/resolve-refs", {
+    method: "POST",
+    headers: { ...authHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify({
+      items,
+      include_geometry: params?.includeGeometry ?? true,
+    }),
+  });
+}
+
+export async function catastoUploadShapefile(
+  token: string,
+  file: File,
+  params?: { sourceSrid?: number; onProgress?: (percent: number) => void },
+): Promise<CatImportStartResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const query = new URLSearchParams();
+  if (params?.sourceSrid != null) query.set("source_srid", String(params.sourceSrid));
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return requestFormDataWithUploadProgress<CatImportStartResponse>(
+    `/catasto/import/shapefile/upload${suffix}`,
+    formData,
+    token,
+    params?.onProgress,
+  );
 }
 
 export async function catastoUploadCapacitas(

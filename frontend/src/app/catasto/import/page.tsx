@@ -15,11 +15,14 @@ import {
   catastoGetImportStatus,
   catastoGetImportSummary,
   catastoUploadCapacitas,
+  catastoUploadShapefile,
 } from "@/lib/api/catasto";
+import { ApiError, isAuthError } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import type { CatAnomaliaListResponse, CatImportBatch, CatImportSummary, UUID } from "@/types/catasto";
 
 type StepKey = "upload" | "progress" | "report";
+type ImportType = "capacitas" | "shapefile";
 
 type PreviewAnomalia = {
   riga?: number;
@@ -50,8 +53,10 @@ function formatDateTime(value: string | null): string {
 
 export default function CatastoImportPage() {
   const [step, setStep] = useState<StepKey>("upload");
+  const [importType, setImportType] = useState<ImportType>("capacitas");
   const [file, setFile] = useState<File | null>(null);
   const [force, setForce] = useState(false);
+  const [sourceSrid, setSourceSrid] = useState(4326);
   const [uploadProgress, setUploadProgress] = useState(0);
 
   const [batchId, setBatchId] = useState<UUID | null>(null);
@@ -111,17 +116,26 @@ export default function CatastoImportPage() {
 
   async function startUpload(): Promise<void> {
     const token = getStoredAccessToken();
-    if (!token) return;
+    if (!token) {
+      setError("Sessione non disponibile o scaduta. Accedi di nuovo.");
+      return;
+    }
     if (!file) return;
 
     setBusy(true);
     setError(null);
     setUploadProgress(0);
     try {
-      const result = await catastoUploadCapacitas(token, file, {
-        force,
-        onProgress: (p) => setUploadProgress(p),
-      });
+      const result =
+        importType === "shapefile"
+          ? await catastoUploadShapefile(token, file, {
+              sourceSrid,
+              onProgress: (p) => setUploadProgress(p),
+            })
+          : await catastoUploadCapacitas(token, file, {
+              force,
+              onProgress: (p) => setUploadProgress(p),
+            });
       setBatchId(result.batch_id);
       setBatch(null);
       setReport(null);
@@ -129,7 +143,17 @@ export default function CatastoImportPage() {
       setReportPage(1);
       setStep("progress");
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Errore upload");
+      if (isAuthError(e)) {
+        setError(
+          e.status === 403
+            ? "Permessi insufficienti: l’import richiede ruolo admin/super_admin."
+            : "Sessione scaduta o non valida. Accedi di nuovo e riprova.",
+        );
+      } else if (e instanceof ApiError) {
+        setError(e.message);
+      } else {
+        setError(e instanceof Error ? e.message : "Errore upload");
+      }
     } finally {
       setBusy(false);
     }
@@ -233,7 +257,44 @@ export default function CatastoImportPage() {
     setStep("report");
   }
 
+  const shapefileSteps = useMemo<{ ts: string; msg: string }[]>(() => {
+    if (!batch?.report_json || typeof batch.report_json !== "object") return [];
+    const s = (batch.report_json as Record<string, unknown>)["steps"];
+    return Array.isArray(s) ? (s as { ts: string; msg: string }[]) : [];
+  }, [batch?.report_json]);
+
+  const uploadPercent = Math.min(100, Math.max(0, uploadProgress));
+  const processPercent =
+    batch && batch.righe_totali > 0
+      ? Math.min(100, Math.round((batch.righe_importate / batch.righe_totali) * 100))
+      : 0;
+
   return (
+    <>
+      {busy ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-8 shadow-2xl">
+            <p className="text-sm font-semibold text-gray-900">
+              {importType === "shapefile" ? "Caricamento shapefile…" : "Caricamento Excel…"}
+            </p>
+            <p className="mt-1 truncate text-sm text-gray-400">{file?.name ?? ""}</p>
+            <div className="mt-6">
+              <div className="h-2.5 w-full overflow-hidden rounded-full bg-gray-100">
+                <div
+                  className="h-full rounded-full bg-[#1D4E35] transition-all duration-300"
+                  style={{ width: `${uploadPercent}%` }}
+                />
+              </div>
+              <p className="mt-2 text-right text-sm font-semibold tabular-nums text-gray-700">
+                {uploadPercent}%
+              </p>
+            </div>
+            <p className="mt-4 text-center text-xs text-gray-400">
+              Al termine il sistema elaborerà i dati in background
+            </p>
+          </div>
+        </div>
+      ) : null}
     <CatastoPage
       title="Import"
       description="Wizard import Capacitas (Ruoli) con polling stato e report anomalie."
@@ -398,30 +459,70 @@ export default function CatastoImportPage() {
                 <p className="mt-1 text-sm text-gray-500">Solo admin/super admin.</p>
               </div>
             </div>
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <label className="text-sm font-medium text-gray-700">
-                File Excel
-                <input
-                  className="form-control mt-1"
-                  type="file"
-                  accept=".xlsx,.xls"
-                  onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                />
-              </label>
-              <label className="flex items-center gap-2 rounded-xl border border-gray-100 bg-white px-4 py-3 text-sm text-gray-700">
-                <input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} />
-                Force re-import (sostituisce batch precedente con stesso hash)
-              </label>
+
+            <div className="mt-4 flex gap-1 rounded-xl border border-gray-100 bg-gray-50 p-1">
+              <button
+                type="button"
+                className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition ${importType === "capacitas" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                onClick={() => { setImportType("capacitas"); setFile(null); }}
+              >
+                Capacitas (Excel)
+              </button>
+              <button
+                type="button"
+                className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition ${importType === "shapefile" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                onClick={() => { setImportType("shapefile"); setFile(null); }}
+              >
+                Catasto (Shapefile ZIP)
+              </button>
             </div>
+
+            {importType === "capacitas" ? (
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <label className="text-sm font-medium text-gray-700">
+                  File Excel
+                  <input
+                    className="form-control mt-1"
+                    type="file"
+                    accept=".xlsx,.xls"
+                    onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                  />
+                </label>
+                <label className="flex items-center gap-2 rounded-xl border border-gray-100 bg-white px-4 py-3 text-sm text-gray-700">
+                  <input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} />
+                  Force re-import (sostituisce batch precedente con stesso hash)
+                </label>
+              </div>
+            ) : (
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <label className="text-sm font-medium text-gray-700">
+                  Archivio ZIP
+                  <input
+                    className="form-control mt-1"
+                    type="file"
+                    accept=".zip"
+                    onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                  />
+                  <p className="mt-1 text-xs text-gray-400">ZIP contenente .shp, .dbf e .shx</p>
+                </label>
+                <label className="text-sm font-medium text-gray-700">
+                  SRID sorgente
+                  <select className="form-control mt-1" value={String(sourceSrid)} onChange={(e) => setSourceSrid(Number(e.target.value))}>
+                    <option value="4326">4326 — WGS 84 (default)</option>
+                    <option value="3003">3003 — Monte Mario / Italy zone 1</option>
+                    <option value="32632">32632 — WGS 84 / UTM zone 32N</option>
+                    <option value="6707">6707 — RDN2008 / Italy zone 12</option>
+                  </select>
+                </label>
+              </div>
+            )}
 
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <button className="btn-primary" type="button" disabled={busy || !file} onClick={() => void startUpload()}>
                 <RefreshIcon className="h-4 w-4" />
                 {busy ? "Upload…" : "Avvia import"}
               </button>
-              <p className="text-sm text-gray-500">
-                Upload: {uploadProgress}%
-              </p>
+              <p className="text-sm text-gray-500">Upload: {uploadProgress}%</p>
             </div>
           </article>
         ) : null}
@@ -430,38 +531,130 @@ export default function CatastoImportPage() {
           <article className="panel-card">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-medium text-gray-900">Stato import</p>
-                <p className="mt-1 text-sm text-gray-500">Batch: {batchId ?? "—"}</p>
+                <p className="text-sm font-medium text-gray-900">Elaborazione in corso</p>
+                <p className="mt-1 truncate text-sm text-gray-500">{batch?.filename ?? batchId ?? "—"}</p>
               </div>
               {batch ? <ImportStatusBadge status={batch.status} /> : null}
             </div>
 
             {!batch ? (
-              <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 p-4 text-sm text-gray-500">Caricamento stato…</div>
-            ) : (
-              <div className="mt-4 grid gap-3 md:grid-cols-4">
-                <div className="rounded-xl border border-gray-100 bg-white p-4">
-                  <p className="text-xs uppercase tracking-wide text-gray-400">Righe totali</p>
-                  <p className="mt-1 text-lg font-semibold text-gray-900">{batch.righe_totali}</p>
-                </div>
-                <div className="rounded-xl border border-gray-100 bg-white p-4">
-                  <p className="text-xs uppercase tracking-wide text-gray-400">Importate</p>
-                  <p className="mt-1 text-lg font-semibold text-gray-900">{batch.righe_importate}</p>
-                </div>
-                <div className="rounded-xl border border-gray-100 bg-white p-4">
-                  <p className="text-xs uppercase tracking-wide text-gray-400">Con anomalie</p>
-                  <p className="mt-1 text-lg font-semibold text-gray-900">{batch.righe_anomalie}</p>
-                </div>
-                <div className="rounded-xl border border-gray-100 bg-white p-4">
-                  <p className="text-xs uppercase tracking-wide text-gray-400">File</p>
-                  <p className="mt-1 truncate text-sm font-medium text-gray-900">{batch.filename}</p>
-                </div>
+              <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 p-4 text-sm text-gray-500">
+                Caricamento stato…
               </div>
+            ) : (
+              <>
+                <div className="mt-5">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
+                      Particelle elaborate
+                    </p>
+                    <p className="tabular-nums text-sm font-semibold text-gray-800">
+                      {batch.righe_importate.toLocaleString("it-IT")}
+                      {batch.righe_totali > 0 ? (
+                        <span className="font-normal text-gray-400">
+                          {" "}/ {batch.righe_totali.toLocaleString("it-IT")}
+                        </span>
+                      ) : null}
+                    </p>
+                  </div>
+                  <div className="mt-2 h-2.5 w-full overflow-hidden rounded-full bg-gray-100">
+                    <div
+                      className="h-full rounded-full bg-[#1D4E35] transition-all duration-500"
+                      style={{ width: batch.righe_totali > 0 ? `${processPercent}%` : "0%" }}
+                    />
+                  </div>
+                  {batch.righe_totali > 0 ? (
+                    <p className="mt-1 text-right text-xs text-gray-400">{processPercent}%</p>
+                  ) : null}
+                </div>
+
+                {shapefileSteps.length > 0 ? (
+                  <div className="mt-5">
+                    <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
+                      Log operazioni
+                    </p>
+                    <div className="mt-2 max-h-56 overflow-y-auto rounded-xl border border-gray-100 bg-gray-50 p-3 font-mono text-xs leading-relaxed text-gray-600">
+                      {shapefileSteps.map((s, i) => (
+                        <div key={i} className="flex gap-2">
+                          <span className="shrink-0 text-gray-400">{s.ts}</span>
+                          <span>{s.msg}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="mt-4 grid gap-3 md:grid-cols-3">
+                  <div className="rounded-xl border border-gray-100 bg-white p-4">
+                    <p className="text-xs uppercase tracking-wide text-gray-400">Totale righe</p>
+                    <p className="mt-1 text-lg font-semibold text-gray-900">
+                      {batch.righe_totali.toLocaleString("it-IT")}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-gray-100 bg-white p-4">
+                    <p className="text-xs uppercase tracking-wide text-gray-400">Elaborate</p>
+                    <p className="mt-1 text-lg font-semibold text-gray-900">
+                      {batch.righe_importate.toLocaleString("it-IT")}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-gray-100 bg-white p-4">
+                    <p className="text-xs uppercase tracking-wide text-gray-400">Anomalie</p>
+                    <p className="mt-1 text-lg font-semibold text-gray-900">{batch.righe_anomalie}</p>
+                  </div>
+                </div>
+              </>
             )}
           </article>
         ) : null}
 
-        {step === "report" ? (
+        {step === "report" && batch?.tipo === "shapefile" ? (
+          <article className="panel-card">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-gray-900">Risultato import shapefile</p>
+                <p className="mt-1 text-sm text-gray-500">{batch.filename}</p>
+              </div>
+              <ImportStatusBadge status={batch.status} />
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-4">
+              <div className="rounded-xl border border-gray-100 bg-white p-4">
+                <p className="text-xs uppercase tracking-wide text-gray-400">Righe staging</p>
+                <p className="mt-1 text-lg font-semibold text-gray-900">
+                  {safeNumber((batch.report_json as Record<string, unknown> | null)?.["righe_staging"])}
+                </p>
+              </div>
+              <div className="rounded-xl border border-gray-100 bg-white p-4">
+                <p className="text-xs uppercase tracking-wide text-gray-400">Particelle inserite</p>
+                <p className="mt-1 text-lg font-semibold text-gray-900">
+                  {safeNumber((batch.report_json as Record<string, unknown> | null)?.["records_inserted_current"])}
+                </p>
+              </div>
+              <div className="rounded-xl border border-gray-100 bg-white p-4">
+                <p className="text-xs uppercase tracking-wide text-gray-400">Storico aggiornato</p>
+                <p className="mt-1 text-lg font-semibold text-gray-900">
+                  {safeNumber((batch.report_json as Record<string, unknown> | null)?.["records_history_written"])}
+                </p>
+              </div>
+              <div className="rounded-xl border border-gray-100 bg-white p-4">
+                <p className="text-xs uppercase tracking-wide text-gray-400">Distretti upserted</p>
+                <p className="mt-1 text-lg font-semibold text-gray-900">
+                  {safeNumber((batch.report_json as Record<string, unknown> | null)?.["distretti_upserted"])}
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 flex">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => { setStep("upload"); setFile(null); }}
+              >
+                Nuovo import
+              </button>
+            </div>
+          </article>
+        ) : null}
+
+        {step === "report" && batch?.tipo !== "shapefile" ? (
           <div className="grid gap-6 xl:grid-cols-2">
             <article className="panel-card xl:col-span-2">
               <div className="flex items-start justify-between gap-4">
@@ -658,5 +851,7 @@ export default function CatastoImportPage() {
         ) : null}
       </div>
     </CatastoPage>
+    </>
   );
 }
+

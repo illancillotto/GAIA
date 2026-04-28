@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import date, datetime, timezone
 from typing import Any
 from uuid import UUID, uuid4
@@ -14,6 +15,125 @@ from app.modules.catasto.services.comuni_reference import (
 )
 
 
+def load_zip_to_staging(
+    db: Session,
+    *,
+    zip_bytes: bytes,
+    source_srid: int = 4326,
+    staging_table: str = "cat_particelle_staging",
+    progress_callback: Callable[[int, int], None] | None = None,
+) -> str:
+    """
+    Estrae uno ZIP contenente .shp/.dbf/.shx e carica i dati in cat_particelle_staging.
+    Restituisce il nome del file .shp trovato nell'archivio.
+    """
+    import io
+    import os
+    import tempfile
+    import zipfile
+
+    import shapefile as pyshp
+    from shapely.geometry import shape as shapely_shape
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+            zf.extractall(tmpdir)
+
+        shp_path: str | None = None
+        for root, _, files in os.walk(tmpdir):
+            for fname in files:
+                if fname.lower().endswith(".shp"):
+                    shp_path = os.path.join(root, fname)
+                    break
+            if shp_path:
+                break
+
+        if not shp_path:
+            raise ValueError(
+                "Nessun file .shp trovato nel ZIP. "
+                "L'archivio deve contenere i file .shp, .dbf e .shx."
+            )
+
+        shp_filename = os.path.basename(shp_path)
+
+        shape_records: list[Any] = []
+        field_names: list[str] = []
+        for enc in ("utf-8", "latin-1"):
+            try:
+                with pyshp.Reader(shp_path, encoding=enc) as sf:
+                    field_names = [f[0].lower() for f in sf.fields[1:]]
+                    shape_records = list(sf.shapeRecords())
+                break
+            except Exception:
+                if enc == "latin-1":
+                    raise
+
+        # Speed optimizations:
+        # - UNLOGGED staging table (faster inserts; safe for ephemeral staging)
+        # - larger insert batches to reduce roundtrips
+        # - geometries inserted as WKB (faster than WKT parsing)
+        db.execute(text(f"DROP TABLE IF EXISTS {staging_table}"))  # nosec
+        col_defs = ",\n    ".join(f'"{fn}" TEXT' for fn in field_names)
+        db.execute(
+            text(
+                f"CREATE UNLOGGED TABLE {staging_table} (\n"  # nosec
+                f"    {col_defs},\n"
+                f"    wkb_geometry geometry(Geometry, {int(source_srid)})\n"
+                f")"
+            )
+        )
+        # Best-effort local setting for faster bulk load.
+        db.execute(text("SET LOCAL synchronous_commit TO OFF"))
+
+        total = len(shape_records)
+        if progress_callback:
+            progress_callback(0, total)
+
+        if shape_records:
+            col_sql = ", ".join(f'"{fn}"' for fn in field_names)
+            val_sql = ", ".join(f":p{i}" for i in range(len(field_names)))
+            insert_sql = text(
+                f"INSERT INTO {staging_table} ({col_sql}, wkb_geometry) "  # nosec
+                f"VALUES ("
+                f"{val_sql}, "
+                f"ST_SetSRID(ST_GeomFromWKB(decode(CAST(:geom_wkb_hex AS text), 'hex')), {int(source_srid)})"
+                f")"  # nosec
+            )
+
+            BATCH_SIZE = 5000
+            params_list: list[dict[str, Any]] = []
+            processed = 0
+            for sr in shape_records:
+                row: dict[str, Any] = {
+                    f"p{i}": (str(v) if v is not None else None)
+                    for i, v in enumerate(sr.record)
+                }
+                try:
+                    if getattr(sr.shape, "shapeType", 0) != 0 and getattr(sr.shape, "points", None):
+                        geom = shapely_shape(sr.shape.__geo_interface__)
+                        # Use WKB hex to avoid heavy WKT parsing in PostGIS.
+                        row["geom_wkb_hex"] = geom.wkb_hex
+                    else:
+                        row["geom_wkb_hex"] = None
+                except Exception:
+                    row["geom_wkb_hex"] = None
+                params_list.append(row)
+                if len(params_list) >= BATCH_SIZE:
+                    db.execute(insert_sql, params_list)
+                    processed += len(params_list)
+                    params_list = []
+                    if progress_callback:
+                        progress_callback(processed, total)
+            if params_list:
+                db.execute(insert_sql, params_list)
+                processed += len(params_list)
+                if progress_callback:
+                    progress_callback(processed, total)
+
+        db.commit()
+        return shp_filename
+
+
 def _escape_sql_string(value: str) -> str:
     return value.replace("'", "''")
 
@@ -24,6 +144,9 @@ def finalize_shapefile_import(
     created_by: int,
     source_srid: int | None = 4326,
     staging_table: str = "cat_particelle_staging",
+    batch_id: UUID | None = None,
+    filename: str | None = None,
+    log_callback: Callable[[str], None] | None = None,
 ) -> dict[str, Any]:
     """
     Finalizza l'import shapefile caricato via ogr2ogr in `cat_particelle_staging`.
@@ -40,7 +163,8 @@ def finalize_shapefile_import(
     - il mapping da `codice catastale` a questo codice deve sempre passare dal
       dataset di riferimento `comuni_istat.csv`, mai da CASE hardcoded nel SQL
     """
-    batch_id = uuid4()
+    if batch_id is None:
+        batch_id = uuid4()
     now = datetime.now(timezone.utc)
     codice_by_catastale = get_capacitas_code_by_catastale()
     nome_by_catastale = get_official_name_by_catastale()
@@ -66,20 +190,33 @@ def finalize_shapefile_import(
         db.execute(text(f"SELECT COUNT(*) FROM {staging_table}")).scalar_one()  # nosec - controlled internal table name
     )
 
-    batch = CatImportBatch(
-        id=batch_id,
-        filename=f"{staging_table}",
-        tipo="shapefile",
-        anno_campagna=None,
-        hash_file=None,
-        righe_totali=righe_staging,
-        righe_importate=0,
-        righe_anomalie=0,
-        status="processing",
-        created_by=created_by,
-        created_at=now,
-    )
-    db.add(batch)
+    def _log(msg: str) -> None:
+        if log_callback:
+            log_callback(msg)
+
+    _log(f"Staging: {righe_staging:,} righe trovate — avvio SCD2…")
+
+    existing_batch = db.get(CatImportBatch, batch_id)
+    if existing_batch is None:
+        batch = CatImportBatch(
+            id=batch_id,
+            filename=filename or staging_table,
+            tipo="shapefile",
+            anno_campagna=None,
+            hash_file=None,
+            righe_totali=righe_staging,
+            righe_importate=0,
+            righe_anomalie=0,
+            status="processing",
+            created_by=created_by,
+            created_at=now,
+        )
+        db.add(batch)
+    else:
+        batch = existing_batch
+        if filename:
+            batch.filename = filename
+        batch.righe_totali = righe_staging
     db.flush()
 
     # Detect geometry column name in staging (usually wkb_geometry from ogr2ogr)
@@ -100,9 +237,8 @@ def finalize_shapefile_import(
     if not geom_col:
         raise ValueError(f"Nessuna colonna geometry trovata nella staging: {staging_table}")
 
-    # Normalizza geometria se necessario (assumiamo che ogr2ogr abbia già trasformato in 4326,
-    # ma manteniamo una guardia per import "grezzo")
     if source_srid and int(source_srid) != 4326:
+        _log(f"Trasformazione geometrie da SRID {source_srid} → 4326…")
         db.execute(
             text(
                 f"""
@@ -126,7 +262,7 @@ def finalize_shapefile_import(
         {mapping_rows_sql}
       ) AS m(codice_catastale, cod_comune_capacitas, nome_comune)
     ),
-    staged AS (
+    raw_staged AS (
       SELECT
         c.cod_catastale AS codice_catastale,
         cc.id AS comune_id,
@@ -173,11 +309,177 @@ def finalize_shapefile_import(
         ON m.codice_catastale = c.cod_catastale
       LEFT JOIN cat_comuni cc
         ON cc.codice_catastale = c.cod_catastale
+    ),
+    staged AS (
+      -- Deduplica frammenti con stessa chiave operativa (es. particelle spezzate da overlay con distretti).
+      -- Geometria: ST_Union di tutti i frammenti. Distretto: quello del frammento con area maggiore.
+      SELECT
+        MAX(codice_catastale)                                                          AS codice_catastale,
+        (array_agg(comune_id ORDER BY comune_id NULLS LAST))[1]                       AS comune_id,
+        cod_comune_capacitas,
+        foglio,
+        particella,
+        subalterno,
+        MAX(national_code)                                                             AS national_code,
+        MAX(nome_comune)                                                               AS nome_comune,
+        MAX(sezione_catastale)                                                         AS sezione_catastale,
+        MAX(cfm)                                                                       AS cfm,
+        SUM(superficie_mq)                                                             AS superficie_mq,
+        SUM(superficie_grafica_mq)                                                     AS superficie_grafica_mq,
+        (array_agg(num_distretto  ORDER BY superficie_grafica_mq DESC NULLS LAST))[1] AS num_distretto,
+        (array_agg(nome_distretto ORDER BY superficie_grafica_mq DESC NULLS LAST))[1] AS nome_distretto,
+        BOOL_OR(suppressed)                                                            AS suppressed,
+        ST_Multi(ST_Union(geometry))                                                   AS geometry
+      FROM raw_staged
+      GROUP BY cod_comune_capacitas, foglio, particella, subalterno
     )
     """
 
+    db.execute(text("SET LOCAL work_mem = '512MB'"))
+    current_particelle_count = int(
+        db.execute(text("SELECT COUNT(*) FROM cat_particelle WHERE is_current = true")).scalar_one()
+    )
+
+    if current_particelle_count == 0:
+        _log("Fast path DB vuoto: inserimento diretto particelle deduplicate…")
+        inserted_current = db.execute(
+            text(
+                staged_rows_cte
+                + """
+                INSERT INTO cat_particelle (
+                  id,
+                  comune_id,
+                  national_code,
+                  cod_comune_capacitas,
+                  codice_catastale,
+                  nome_comune,
+                  sezione_catastale,
+                  foglio,
+                  particella,
+                  subalterno,
+                  cfm,
+                  superficie_mq,
+                  superficie_grafica_mq,
+                  num_distretto,
+                  nome_distretto,
+                  geometry,
+                  source_type,
+                  import_batch_id,
+                  valid_from,
+                  valid_to,
+                  is_current,
+                  suppressed,
+                  created_at,
+                  updated_at
+                )
+                SELECT
+                  gen_random_uuid(),
+                  s.comune_id,
+                  s.national_code,
+                  s.cod_comune_capacitas,
+                  s.codice_catastale,
+                  s.nome_comune,
+                  s.sezione_catastale,
+                  s.foglio,
+                  s.particella,
+                  s.subalterno,
+                  s.cfm,
+                  s.superficie_mq,
+                  s.superficie_grafica_mq,
+                  s.num_distretto,
+                  s.nome_distretto,
+                  s.geometry,
+                  'shapefile',
+                  :batch_id,
+                  CURRENT_DATE,
+                  NULL,
+                  true,
+                  s.suppressed,
+                  now(),
+                  now()
+                FROM staged s
+                RETURNING id
+                """
+            ),
+            {"batch_id": str(batch_id)},
+        ).rowcount or 0
+        _log(f"Fast path DB vuoto: {inserted_current:,} particelle inserite")
+
+        _log("SCD2 [4/4]: derivazione e upsert distretti via ST_Union…")
+        upserted_distretti = db.execute(
+            text(
+                """
+                WITH src AS (
+                  SELECT
+                    num_distretto,
+                    MAX(nome_distretto) AS nome_distretto,
+                    ST_Multi(ST_Union(geometry)) AS geom
+                  FROM cat_particelle
+                  WHERE is_current = true
+                    AND geometry IS NOT NULL
+                    AND num_distretto IS NOT NULL
+                    AND num_distretto <> 'FD'
+                  GROUP BY num_distretto
+                )
+                INSERT INTO cat_distretti (
+                  id,
+                  num_distretto,
+                  nome_distretto,
+                  geometry,
+                  attivo,
+                  created_at,
+                  updated_at
+                )
+                SELECT
+                  gen_random_uuid(),
+                  src.num_distretto,
+                  src.nome_distretto,
+                  src.geom,
+                  true,
+                  now(),
+                  now()
+                FROM src
+                ON CONFLICT (num_distretto) DO UPDATE
+                SET
+                  nome_distretto = EXCLUDED.nome_distretto,
+                  geometry = EXCLUDED.geometry,
+                  updated_at = now()
+                RETURNING id
+                """
+            )
+        ).rowcount or 0
+
+        _log(f"SCD2 [4/4]: {upserted_distretti} distretti aggiornati — commit in corso…")
+
+        batch.righe_importate = int(inserted_current)
+        batch.righe_anomalie = 0
+        batch.status = "completed"
+        batch.completed_at = now
+        report_json = dict(batch.report_json or {})
+        report_json.update(
+            {
+                "staging_table": staging_table,
+                "righe_staging": righe_staging,
+                "records_history_written": 0,
+                "records_inserted_current": int(inserted_current),
+                "distretti_upserted": int(upserted_distretti),
+                "fast_path_empty_db": True,
+                "completed_at": now.isoformat(),
+                "valid_from": date.today().isoformat(),
+            }
+        )
+        batch.report_json = report_json
+        db.add(batch)
+        db.commit()
+
+        return {
+            "batch_id": str(batch_id),
+            "status": batch.status,
+            "report": batch.report_json,
+        }
+
     # 1) Inserisci nello storico tutte le particelle correnti che cambiano (SCD2)
-    # Consideriamo "cambiamento" quando uno dei campi canonici o geometria differiscono.
+    _log("SCD2 [1/4]: scrittura record modificati in storico…")
     moved_to_history = db.execute(
         text(
             staged_rows_cte
@@ -249,7 +551,10 @@ def finalize_shapefile_import(
         )
     ).rowcount or 0
 
+    _log(f"SCD2 [1/4]: {moved_to_history:,} record spostati in storico")
+
     # 2) Chiudi i record correnti che cambiano (valid_to + is_current=false)
+    _log("SCD2 [2/4]: chiusura record correnti modificati…")
     db.execute(
         text(
             staged_rows_cte
@@ -285,6 +590,7 @@ def finalize_shapefile_import(
     )
 
     # 3) Inserisci nuovi record correnti per righe staging che non hanno un current corrispondente
+    _log("SCD2 [3/4]: inserimento nuove particelle correnti…")
     inserted_current = db.execute(
         text(
             staged_rows_cte
@@ -354,8 +660,10 @@ def finalize_shapefile_import(
         {"batch_id": str(batch_id)},
     ).rowcount or 0
 
+    _log(f"SCD2 [3/4]: {inserted_current:,} particelle inserite")
+
     # 4) Deriva distretti via ST_Union e upsert
-    # Usiamo num_distretto + nome_distretto della particella corrente come fonte.
+    _log("SCD2 [4/4]: derivazione e upsert distretti via ST_Union…")
     upserted_distretti = db.execute(
         text(
             """
@@ -399,20 +707,27 @@ def finalize_shapefile_import(
         )
     ).rowcount or 0
 
+    _log(f"SCD2 [4/4]: {upserted_distretti} distretti aggiornati — commit in corso…")
+
     # 5) Report e chiusura batch
     batch.righe_importate = int(inserted_current)
     batch.righe_anomalie = 0
     batch.status = "completed"
     batch.completed_at = now
-    batch.report_json = {
-        "staging_table": staging_table,
-        "righe_staging": righe_staging,
-        "records_history_written": int(moved_to_history),
-        "records_inserted_current": int(inserted_current),
-        "distretti_upserted": int(upserted_distretti),
-        "completed_at": now.isoformat(),
-        "valid_from": date.today().isoformat(),
-    }
+    report_json = dict(batch.report_json or {})
+    report_json.update(
+        {
+            "staging_table": staging_table,
+            "righe_staging": righe_staging,
+            "records_history_written": int(moved_to_history),
+            "records_inserted_current": int(inserted_current),
+            "distretti_upserted": int(upserted_distretti),
+            "fast_path_empty_db": False,
+            "completed_at": now.isoformat(),
+            "valid_from": date.today().isoformat(),
+        }
+    )
+    batch.report_json = report_json
     db.add(batch)
     db.commit()
 

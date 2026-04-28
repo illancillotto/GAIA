@@ -11,7 +11,7 @@ from app.core.database import SessionLocal, get_db
 from app.models.application_user import ApplicationUser
 from app.models.catasto_phase1 import CatAnomalia, CatImportBatch, CatUtenzaIrrigua
 from app.modules.catasto.services.import_capacitas import CapacitasImportDuplicateError, import_capacitas_excel
-from app.modules.catasto.services.import_shapefile import finalize_shapefile_import
+from app.modules.catasto.services.import_shapefile import finalize_shapefile_import, load_zip_to_staging
 from app.schemas.catasto_phase1 import (
     CatAnomaliaListResponse,
     CatAnomaliaResponse,
@@ -163,6 +163,138 @@ def get_import_summary(
         replaced_batch=int(counts[4] or 0),
         ultimo_completed_at=counts[5],
     )
+
+
+def _append_step(
+    batch_id: uuid.UUID,
+    msg: str,
+    righe_elaborate: int | None = None,
+    righe_totali: int | None = None,
+) -> None:
+    """Aggiunge un log step a report_json usando una sessione separata (non-transazionale)."""
+    from datetime import datetime, timezone as _tz
+
+    db2 = SessionLocal()
+    try:
+        batch = db2.get(CatImportBatch, batch_id)
+        if batch is None:
+            return
+        rj: dict = dict(batch.report_json or {})
+        steps: list = list(rj.get("steps", []))
+        steps.append({"ts": datetime.now(_tz.utc).strftime("%H:%M:%S"), "msg": msg})
+        rj["steps"] = steps
+        if righe_elaborate is not None:
+            batch.righe_importate = righe_elaborate
+        if righe_totali is not None:
+            batch.righe_totali = righe_totali
+        batch.report_json = rj
+        db2.commit()
+    except Exception:
+        db2.rollback()
+    finally:
+        db2.close()
+
+
+def _run_shapefile_import(
+    batch_id: uuid.UUID,
+    zip_bytes: bytes,
+    shp_filename: str,
+    created_by: int,
+    source_srid: int,
+) -> None:
+    db = SessionLocal()
+    try:
+        _append_step(batch_id, "Estrazione archivio ZIP in corso…")
+
+        last_pct: list[float] = [0.0]
+
+        def staging_progress(done: int, total: int) -> None:
+            if done == 0:
+                _append_step(batch_id, f"Avvio caricamento: {total:,} righe nel file", righe_totali=total)
+                return
+            pct = done / total if total else 0
+            if pct >= last_pct[0] + 0.10 or done == total:
+                last_pct[0] = pct
+                _append_step(
+                    batch_id,
+                    f"Staging: {done:,} / {total:,} righe ({int(pct * 100)}%)",
+                    righe_elaborate=done,
+                    righe_totali=total,
+                )
+
+        actual_filename = load_zip_to_staging(
+            db,
+            zip_bytes=zip_bytes,
+            source_srid=source_srid,
+            progress_callback=staging_progress,
+        )
+        _append_step(batch_id, f"Staging completato — {actual_filename}")
+
+        finalize_shapefile_import(
+            db,
+            created_by=created_by,
+            source_srid=source_srid,
+            batch_id=batch_id,
+            filename=actual_filename,
+            log_callback=lambda msg: _append_step(batch_id, msg),
+        )
+    except Exception as exc:
+        _append_step(batch_id, f"Errore: {exc}")
+        db2 = SessionLocal()
+        try:
+            batch = db2.get(CatImportBatch, batch_id)
+            if batch is not None:
+                batch.status = "failed"
+                batch.errore = str(exc)
+                db2.commit()
+        except Exception:
+            db2.rollback()
+        finally:
+            db2.close()
+    finally:
+        db.close()
+
+
+@router.post("/shapefile/upload", response_model=CatImportStartResponse, status_code=status.HTTP_202_ACCEPTED)
+def upload_shapefile(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    source_srid: int = Query(4326),
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(require_admin_user),
+) -> CatImportStartResponse:
+    """
+    Upload di un archivio ZIP contenente i file shapefile (.shp, .dbf, .shx).
+    Carica i dati in staging e avvia la finalizzazione SCD2 in background.
+    """
+    if not (file.filename or "").lower().endswith(".zip"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Il file deve essere un archivio ZIP (.zip) contenente .shp, .dbf e .shx.",
+        )
+    zip_bytes = file.file.read()
+    batch_id = uuid.uuid4()
+    placeholder = CatImportBatch(
+        id=batch_id,
+        filename=file.filename or "shapefile.zip",
+        tipo="shapefile",
+        status="processing",
+        righe_totali=0,
+        righe_importate=0,
+        righe_anomalie=0,
+        created_by=current_user.id,
+    )
+    db.add(placeholder)
+    db.commit()
+    background_tasks.add_task(
+        _run_shapefile_import,
+        batch_id,
+        zip_bytes,
+        file.filename or "shapefile.zip",
+        current_user.id,
+        source_srid,
+    )
+    return CatImportStartResponse(batch_id=batch_id, status="processing")
 
 
 @router.post("/shapefile/finalize")

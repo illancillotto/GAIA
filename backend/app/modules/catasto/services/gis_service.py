@@ -8,7 +8,7 @@ from typing import Any
 from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
 from shapely.geometry import shape
-from sqlalchemy import text
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 
 from app.modules.catasto.schemas.gis_schemas import (
@@ -16,10 +16,14 @@ from app.modules.catasto.schemas.gis_schemas import (
     FoglioAggr,
     GisExportFormat,
     GisFilters,
+    GisResolveItemResult,
+    GisResolveRefsRequest,
+    GisResolveRefsResponse,
     GisSelectResult,
     ParticellaGisSummary,
     ParticellaPopupData,
 )
+from app.models.catasto_phase1 import CatComune, CatParticella
 
 
 SARDINIA_BBOX = {
@@ -30,6 +34,21 @@ SARDINIA_BBOX = {
 }
 PREVIEW_LIMIT = 200
 MAX_EXPORT_IDS = 10000
+
+
+def _norm_str(value: Any) -> str | None:
+    if value is None:
+        return None
+    s = str(value).strip()
+    return s if s else None
+
+
+def _looks_like_int(value: str) -> bool:
+    try:
+        int(value)
+        return True
+    except Exception:
+        return False
 
 
 def _validate_geometry_bbox(geometry: dict[str, Any]) -> None:
@@ -343,3 +362,154 @@ def _parse_preview(data: list[dict[str, Any]] | None) -> list[ParticellaGisSumma
     if not data:
         return []
     return [ParticellaGisSummary(**row) for row in data]
+
+
+def resolve_particelle_refs(db: Session, body: GisResolveRefsRequest) -> GisResolveRefsResponse:
+    items = body.items[: body.limit]
+    results: list[GisResolveItemResult] = []
+    found_ids: list[str] = []
+
+    for idx, row in enumerate(items):
+        comune_norm = _norm_str(row.comune)
+        sezione_norm = _norm_str(row.sezione)
+        foglio_norm = _norm_str(row.foglio)
+        particella_norm = _norm_str(row.particella)
+        sub_norm = _norm_str(row.sub)
+
+        if not comune_norm or not foglio_norm or not particella_norm:
+            results.append(
+                GisResolveItemResult(
+                    row_index=row.row_index if row.row_index is not None else idx,
+                    comune_input=row.comune,
+                    sezione_input=row.sezione,
+                    foglio_input=row.foglio,
+                    particella_input=row.particella,
+                    sub_input=row.sub,
+                    esito="INVALID_ROW",
+                    message="Campi obbligatori mancanti (comune/foglio/particella).",
+                )
+            )
+            continue
+
+        query = (
+            db.query(CatParticella)
+            .outerjoin(CatComune, CatComune.id == CatParticella.comune_id)
+            .filter(
+                CatParticella.is_current.is_(True),
+                CatParticella.foglio == foglio_norm,
+                CatParticella.particella == particella_norm,
+            )
+            .order_by(CatParticella.cod_comune_capacitas, CatParticella.foglio, CatParticella.particella)
+        )
+
+        if sezione_norm:
+            query = query.filter(CatParticella.sezione_catastale == sezione_norm)
+        if sub_norm:
+            query = query.filter(CatParticella.subalterno == sub_norm)
+
+        if _looks_like_int(comune_norm):
+            query = query.filter(CatParticella.cod_comune_capacitas == int(comune_norm))
+        else:
+            query = query.filter(
+                func.lower(func.coalesce(CatParticella.nome_comune, CatComune.nome_comune, "")) == comune_norm.lower()
+            )
+
+        matches = query.limit(50).all()
+        if len(matches) == 0:
+            results.append(
+                GisResolveItemResult(
+                    row_index=row.row_index if row.row_index is not None else idx,
+                    comune_input=row.comune,
+                    sezione_input=row.sezione,
+                    foglio_input=row.foglio,
+                    particella_input=row.particella,
+                    sub_input=row.sub,
+                    esito="NOT_FOUND",
+                    message="Nessuna particella trovata.",
+                )
+            )
+            continue
+
+        if len(matches) > 1:
+            results.append(
+                GisResolveItemResult(
+                    row_index=row.row_index if row.row_index is not None else idx,
+                    comune_input=row.comune,
+                    sezione_input=row.sezione,
+                    foglio_input=row.foglio,
+                    particella_input=row.particella,
+                    sub_input=row.sub,
+                    esito="MULTIPLE_MATCHES",
+                    message=f"Trovate {len(matches)} particelle. Specifica meglio comune/sezione/sub.",
+                )
+            )
+            continue
+
+        pid = str(matches[0].id)
+        found_ids.append(pid)
+        results.append(
+            GisResolveItemResult(
+                row_index=row.row_index if row.row_index is not None else idx,
+                comune_input=row.comune,
+                sezione_input=row.sezione,
+                foglio_input=row.foglio,
+                particella_input=row.particella,
+                sub_input=row.sub,
+                esito="FOUND",
+                message="OK",
+                particella_id=pid,
+            )
+        )
+
+    geojson: dict[str, Any] | None = None
+    if body.include_geometry and found_ids:
+        db.execute(text("SET LOCAL statement_timeout = '15000'"))
+        sql = text(
+            """
+            SELECT
+                id::text,
+                cfm,
+                cod_comune_capacitas,
+                codice_catastale,
+                nome_comune,
+                sezione_catastale,
+                foglio,
+                particella,
+                subalterno,
+                num_distretto,
+                nome_distretto,
+                ST_AsGeoJSON(geometry)::json AS geometry_json,
+                ST_Extent(geometry) OVER () AS extent_wkb
+            FROM cat_particelle
+            WHERE id::text = ANY(:ids)
+              AND is_current = TRUE
+            ORDER BY codice_catastale, foglio, particella, subalterno
+            """
+        )
+        rows = db.execute(sql, {"ids": list(dict.fromkeys(found_ids))}).mappings().all()
+        features: list[dict[str, Any]] = []
+        for r in rows:
+            props = dict(r)
+            geometry = props.pop("geometry_json")
+            props.pop("extent_wkb", None)
+            features.append({"type": "Feature", "geometry": geometry, "properties": props})
+        geojson = {"type": "FeatureCollection", "features": features}
+
+    counts = {
+        "FOUND": 0,
+        "NOT_FOUND": 0,
+        "MULTIPLE_MATCHES": 0,
+        "INVALID_ROW": 0,
+    }
+    for r in results:
+        counts[r.esito] = counts.get(r.esito, 0) + 1
+
+    return GisResolveRefsResponse(
+        processed=len(items),
+        found=counts.get("FOUND", 0),
+        not_found=counts.get("NOT_FOUND", 0),
+        multiple=counts.get("MULTIPLE_MATCHES", 0),
+        invalid=counts.get("INVALID_ROW", 0),
+        results=results,
+        geojson=geojson,
+    )

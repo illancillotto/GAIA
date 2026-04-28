@@ -13,6 +13,13 @@ interface MapContainerProps {
   onSelectionCleared: () => void;
   selectedIds: string[];
   filters: GisFilters;
+  mapLayers?: {
+    showDistretti: boolean;
+    showParticelle: boolean;
+    distretto?: string | null;
+    highlightSelected?: boolean;
+  };
+  uploadedGeojson?: GeoJSON.FeatureCollection | null;
   drawSignal: number;
   clearSignal: number;
   resizeSignal?: number;
@@ -27,6 +34,11 @@ type DrawControl = InstanceType<typeof MapboxDraw> & {
 type DrawEvent = {
   features?: Array<GeoJSON.Feature<GeoJSON.Geometry>>;
 };
+
+type Position = [number, number] | [number, number, number];
+type LinearRing = Position[];
+type PolygonCoords = LinearRing[];
+type MultiPolygonCoords = PolygonCoords[];
 
 const CONSORZIO_BOUNDS: [[number, number], [number, number]] = [
   [8.39, 39.62],
@@ -46,12 +58,20 @@ function canCreateWebGLContext(): boolean {
   }
 }
 
+function getGeometryRings(geom: GeoJSON.Geometry): PolygonCoords {
+  if (geom.type === "Polygon") return geom.coordinates as unknown as PolygonCoords;
+  if (geom.type === "MultiPolygon") return (geom.coordinates as unknown as MultiPolygonCoords).flat();
+  return [];
+}
+
 export default function MapContainer({
   token,
   onGeometryDrawn,
   onSelectionCleared,
   selectedIds,
   filters,
+  mapLayers,
+  uploadedGeojson,
   drawSignal,
   clearSignal,
   resizeSignal,
@@ -192,6 +212,42 @@ export default function MapContainer({
         },
       });
 
+      map.addLayer({
+        id: "particelle-selected-outline",
+        type: "line",
+        source: "particelle-source",
+        "source-layer": "cat_particelle_current",
+        minzoom: 13,
+        paint: {
+          "line-color": "#F59E0B",
+          "line-width": 2.5,
+        },
+        filter: ["in", ["get", "id"], ["literal", []]],
+      });
+
+      map.addSource("uploaded-particelle-source", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
+      map.addLayer({
+        id: "uploaded-particelle-outline",
+        type: "line",
+        source: "uploaded-particelle-source",
+        paint: {
+          "line-color": "#10B981",
+          "line-width": 3,
+        },
+      });
+      map.addLayer({
+        id: "uploaded-particelle-fill",
+        type: "fill",
+        source: "uploaded-particelle-source",
+        paint: {
+          "fill-color": "#10B981",
+          "fill-opacity": 0.15,
+        },
+      });
+
       map.on("click", "particelle-fill", async (event) => {
         const feature = event.features?.[0];
         const id = feature?.properties?.id;
@@ -288,11 +344,64 @@ export default function MapContainer({
   }, [resizeSignal]);
 
   useEffect(() => {
-    // Keep these props observed so future highlight/filter behavior can be added
-    // without changing the page contract.
-    void selectedIds;
-    void filters;
-  }, [filters, selectedIds]);
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+
+    const showDistretti = mapLayers?.showDistretti ?? true;
+    const showParticelle = mapLayers?.showParticelle ?? true;
+
+    for (const layerId of ["distretti-fill", "distretti-outline"]) {
+      if (map.getLayer(layerId)) map.setLayoutProperty(layerId, "visibility", showDistretti ? "visible" : "none");
+    }
+    for (const layerId of ["particelle-fill", "particelle-outline"]) {
+      if (map.getLayer(layerId)) map.setLayoutProperty(layerId, "visibility", showParticelle ? "visible" : "none");
+    }
+
+    const distretto = (mapLayers?.distretto ?? filters.num_distretto ?? null) || null;
+    if (map.getLayer("distretti-fill")) {
+      map.setFilter("distretti-fill", distretto ? ["==", ["get", "num_distretto"], distretto] : null);
+      map.setFilter("distretti-outline", distretto ? ["==", ["get", "num_distretto"], distretto] : null);
+    }
+
+    if (map.getLayer("particelle-fill")) {
+      map.setFilter("particelle-fill", distretto ? ["==", ["get", "num_distretto"], distretto] : null);
+      map.setFilter("particelle-outline", distretto ? ["==", ["get", "num_distretto"], distretto] : null);
+    }
+
+    const highlight = mapLayers?.highlightSelected ?? true;
+    if (map.getLayer("particelle-selected-outline")) {
+      map.setLayoutProperty("particelle-selected-outline", "visibility", highlight ? "visible" : "none");
+      map.setFilter(
+        "particelle-selected-outline",
+        selectedIds.length > 0 ? ["in", ["get", "id"], ["literal", selectedIds]] : ["in", ["get", "id"], ["literal", []]],
+      );
+    }
+  }, [filters.num_distretto, mapLayers, selectedIds]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+    const source = map.getSource("uploaded-particelle-source") as maplibregl.GeoJSONSource | undefined;
+    if (!source) return;
+    source.setData(uploadedGeojson ?? { type: "FeatureCollection", features: [] });
+
+    if (uploadedGeojson && uploadedGeojson.features.length > 0) {
+      try {
+        const bounds = new maplibregl.LngLatBounds();
+        for (const feature of uploadedGeojson.features) {
+          const geom = feature.geometry;
+          if (!geom) continue;
+          const rings = getGeometryRings(geom);
+          for (const ring of rings) {
+            for (const point of ring) bounds.extend([point[0], point[1]]);
+          }
+        }
+        if (!bounds.isEmpty()) map.fitBounds(bounds, { padding: 40, duration: 600 });
+      } catch {
+        // Fit bounds is best-effort.
+      }
+    }
+  }, [uploadedGeojson]);
 
   if (mapError) {
     return (

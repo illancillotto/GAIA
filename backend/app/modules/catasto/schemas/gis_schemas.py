@@ -91,3 +91,40 @@ class ParticellaPopupData(BaseModel):
     n_anomalie_aperte: int = 0
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class GisParticellaRef(BaseModel):
+    comune: str | None = Field(default=None, description="Nome comune oppure cod_comune_capacitas (numero in stringa)")
+    sezione: str | None = Field(default=None, description="Sezione catastale (opzionale)")
+    foglio: str | None = Field(default=None, description="Foglio (obbligatorio)")
+    particella: str | None = Field(default=None, description="Particella (obbligatorio)")
+    sub: str | None = Field(default=None, description="Subalterno (opzionale)")
+    row_index: int | None = Field(default=None, description="Indice riga origine (es. da Excel)")
+
+
+class GisResolveRefsRequest(BaseModel):
+    items: list[GisParticellaRef] = Field(..., description="Lista riferimenti particella (comune/sezione/foglio/particella/sub)")
+    include_geometry: bool = Field(default=True, description="Se true ritorna GeoJSON FeatureCollection per i match univoci")
+    limit: int = Field(default=2000, ge=1, le=10000, description="Massimo righe accettate in input")
+
+
+class GisResolveItemResult(BaseModel):
+    row_index: int | None = None
+    comune_input: str | None = None
+    sezione_input: str | None = None
+    foglio_input: str | None = None
+    particella_input: str | None = None
+    sub_input: str | None = None
+    esito: str
+    message: str
+    particella_id: str | None = None
+
+
+class GisResolveRefsResponse(BaseModel):
+    processed: int
+    found: int
+    not_found: int
+    multiple: int
+    invalid: int
+    results: list[GisResolveItemResult] = Field(default_factory=list)
+    geojson: dict[str, Any] | None = Field(default=None, description="FeatureCollection con le particelle trovate (se include_geometry)")

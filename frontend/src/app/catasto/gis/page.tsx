@@ -2,15 +2,16 @@
 
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import * as XLSX from "xlsx";
 
 import AnalysisPanel from "@/components/catasto/gis/AnalysisPanel";
 import DrawingTools from "@/components/catasto/gis/DrawingTools";
 import SelectionPanel from "@/components/catasto/gis/SelectionPanel";
 import { CatastoPage } from "@/components/catasto/catasto-page";
-import { catastoGisExport } from "@/lib/api/catasto";
+import { catastoGisExport, catastoGisResolveRefs } from "@/lib/api/catasto";
 import { getStoredAccessToken } from "@/lib/auth";
 import { useGisSelection } from "@/hooks/useGisSelection";
-import type { GisFilters } from "@/types/gis";
+import type { GisFilters, GisParticellaRef } from "@/types/gis";
 
 const MapContainer = dynamic(() => import("@/components/catasto/gis/MapContainer"), {
   ssr: false,
@@ -38,6 +39,14 @@ export default function CatastoGisPage() {
   const [resizeSignal, setResizeSignal] = useState(0);
   const [isExpanded, setIsExpanded] = useState(false);
   const [exportError, setExportError] = useState<string | null>(null);
+  const [gisError, setGisError] = useState<string | null>(null);
+  const [showDistretti, setShowDistretti] = useState(true);
+  const [showParticelle, setShowParticelle] = useState(true);
+  const [highlightSelected, setHighlightSelected] = useState(true);
+  const [distrettoLayer, setDistrettoLayer] = useState<string>("");
+  const [xlsxFile, setXlsxFile] = useState<File | null>(null);
+  const [xlsxBusy, setXlsxBusy] = useState(false);
+  const [uploadedGeojson, setUploadedGeojson] = useState<GeoJSON.FeatureCollection | null>(null);
   const activeFilters = useMemo<GisFilters>(() => ({}), []);
   const { result, isLoading, error, runSelection, clearSelection } = useGisSelection(token);
 
@@ -113,6 +122,7 @@ export default function CatastoGisPage() {
       if (!token || !result || result.particelle.length === 0) return;
 
       setExportError(null);
+      setGisError(null);
       try {
         const blob = await catastoGisExport(
           token,
@@ -126,6 +136,50 @@ export default function CatastoGisPage() {
     },
     [result, token],
   );
+
+  const handleImportXlsx = useCallback(async () => {
+    if (!token) {
+      setGisError("Sessione non disponibile. Accedi di nuovo.");
+      return;
+    }
+    if (!xlsxFile) {
+      setGisError("Seleziona un file Excel (.xlsx/.xls) con colonne: comune, sezione, foglio, particella, sub.");
+      return;
+    }
+
+    setXlsxBusy(true);
+    setGisError(null);
+    try {
+      const buffer = await xlsxFile.arrayBuffer();
+      const workbook = XLSX.read(buffer, { type: "array" });
+      const sheetName = workbook.SheetNames[0];
+      const ws = workbook.Sheets[sheetName];
+      const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: null });
+
+      const items: GisParticellaRef[] = rows.slice(0, 5000).map((r, i) => ({
+        row_index: i + 2, // assume header row
+        comune: (r["comune"] ?? r["Comune"] ?? r["COMUNE"] ?? null) as string | null,
+        sezione: (r["sezione"] ?? r["Sezione"] ?? r["SEZIONE"] ?? null) as string | null,
+        foglio: (r["foglio"] ?? r["Foglio"] ?? r["FOGLIO"] ?? null) as string | null,
+        particella: (r["particella"] ?? r["Particella"] ?? r["PARTICELLA"] ?? null) as string | null,
+        sub: (r["sub"] ?? r["Sub"] ?? r["SUB"] ?? r["subalterno"] ?? r["Subalterno"] ?? null) as string | null,
+      }));
+
+      const resolved = await catastoGisResolveRefs(token, items, { includeGeometry: true });
+      setUploadedGeojson(resolved.geojson ?? null);
+
+      if (resolved.not_found + resolved.multiple + resolved.invalid > 0) {
+        setGisError(
+          `Import completato: trovate ${resolved.found}/${resolved.processed}. ` +
+            `Non trovate: ${resolved.not_found}, multiple: ${resolved.multiple}, righe invalide: ${resolved.invalid}.`,
+        );
+      }
+    } catch (e) {
+      setGisError(e instanceof Error ? e.message : "Import Excel fallito");
+    } finally {
+      setXlsxBusy(false);
+    }
+  }, [token, xlsxFile]);
 
   return (
     <CatastoPage
@@ -158,9 +212,9 @@ export default function CatastoGisPage() {
           </div>
         </div>
 
-        {error || exportError ? (
+        {error || exportError || gisError ? (
           <div className="mx-4 mt-3 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
-            {error || exportError}
+            {error || exportError || gisError}
           </div>
         ) : null}
 
@@ -209,12 +263,84 @@ export default function CatastoGisPage() {
                     : ""
                 }
               >
+                <div className={isExpanded ? "pointer-events-auto px-1 pb-2" : "px-1 pb-2"}>
+                  <div className="flex flex-wrap items-end gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+                    <div className="flex items-center gap-2">
+                      <label className="flex items-center gap-2 text-sm text-gray-700">
+                        <input type="checkbox" checked={showDistretti} onChange={(e) => setShowDistretti(e.target.checked)} />
+                        Distretti
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-gray-700">
+                        <input type="checkbox" checked={showParticelle} onChange={(e) => setShowParticelle(e.target.checked)} />
+                        Particelle
+                      </label>
+                      <label className="flex items-center gap-2 text-sm text-gray-700">
+                        <input type="checkbox" checked={highlightSelected} onChange={(e) => setHighlightSelected(e.target.checked)} />
+                        Evidenzia selezione
+                      </label>
+                    </div>
+
+                    <div className="flex items-end gap-2">
+                      <div>
+                        <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Distretto</div>
+                        <input
+                          value={distrettoLayer}
+                          onChange={(e) => setDistrettoLayer(e.target.value)}
+                          placeholder="es. 03"
+                          className="mt-1 w-28 rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
+                        onClick={() => setDistrettoLayer("")}
+                      >
+                        Reset
+                      </button>
+                    </div>
+
+                    <div className="flex flex-1 flex-wrap items-end justify-end gap-2">
+                      <div>
+                        <div className="text-[11px] font-semibold uppercase tracking-wide text-gray-500">Import Excel</div>
+                        <input
+                          type="file"
+                          accept=".xlsx,.xls"
+                          onChange={(e) => setXlsxFile(e.target.files?.[0] ?? null)}
+                          className="mt-1 block w-full text-sm text-gray-700"
+                          disabled={xlsxBusy}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => void handleImportXlsx()}
+                        disabled={!xlsxFile || xlsxBusy}
+                        className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-300"
+                      >
+                        {xlsxBusy ? "Caricamento…" : "Visualizza particelle"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setUploadedGeojson(null)}
+                        className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold text-gray-900 hover:bg-gray-50"
+                      >
+                        Pulisci import
+                      </button>
+                    </div>
+                  </div>
+                </div>
                 <MapContainer
                   token={token}
                   onGeometryDrawn={handleGeometryDrawn}
                   onSelectionCleared={handleClearSelection}
                   selectedIds={result?.particelle.map((particella) => particella.id) ?? []}
                   filters={activeFilters}
+                  mapLayers={{
+                    showDistretti,
+                    showParticelle,
+                    distretto: distrettoLayer.trim() ? distrettoLayer.trim() : null,
+                    highlightSelected,
+                  }}
+                  uploadedGeojson={uploadedGeojson}
                   drawSignal={drawSignal}
                   clearSignal={clearSignal}
                   resizeSignal={resizeSignal}
