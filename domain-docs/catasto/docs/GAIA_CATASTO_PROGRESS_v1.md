@@ -153,5 +153,7 @@ Legend: 🔴 Non iniziato · 🟡 In corso · 🟢 Completato · ⚫ Bloccato
 - PostGIS da abilitare prima di eseguire la migration Fase 1
 - Lo shapefile deve essere copiato in un path accessibile dal server GAIA prima dello script `import_shapefile_catasto.sh`
 - Martin si avvia automaticamente con `docker compose up` dopo aggiunta al compose
+- Workspace `Elaborazioni > Capacitas > Terreni`: resta solo il flusso massivo da file; i job espongono `double_speed`, `parallel_workers` e `throttle_ms`; il backend usa i parametri sia nel job batch sia nel rerun, con parallelo fino a 2 sessioni Capacitas e pausa applicata tra righe/item Terreni
+- `Catasto > Particelle`: la sync singola Capacitas è disponibile direttamente nella dialog/lista particelle e nella scheda dettaglio, con label di ultimo aggiornamento (`capacitas_last_sync_at/status/error`) e route dedicata `POST /catasto/particelle/{id}/capacitas-sync`
 - `codicefiscale` Python su PyPI: https://pypi.org/project/codicefiscale/
 - Copernicus Data Space gratuito per enti EU: https://dataspace.copernicus.eu

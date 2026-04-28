@@ -135,6 +135,34 @@ def _build_initial_result(total_items: int, policy: ParticelleSyncPolicy) -> dic
     }
 
 
+def _finalize_single_item_result(
+    *,
+    mode: str,
+    policy: ParticelleSyncPolicy,
+    item_result: dict[str, object],
+) -> tuple[str, dict[str, object]]:
+    status = str(item_result.get("status") or "failed")
+    result_json = {
+        "mode": mode,
+        "total_items": 1,
+        "processed_items": 1,
+        "success_items": 1 if status == "synced" else 0,
+        "failed_items": 1 if status == "failed" else 0,
+        "skipped_items": 1 if status == "skipped" else 0,
+        "progress_percent": 100,
+        "current_label": None,
+        "throttle_ms": policy.throttle_ms,
+        "aggressive_window": policy.aggressive_window,
+        "recheck_hours": policy.recheck_hours,
+        "speed_multiplier": policy.speed_multiplier,
+        "parallel_workers": 1,
+        "recent_items": [item_result],
+        "completed_at": datetime.now(UTC).isoformat(),
+    }
+    job_status = "succeeded" if status == "synced" else "completed_with_errors"
+    return job_status, result_json
+
+
 def _append_recent_item(result_json: dict[str, object], item: dict[str, object]) -> None:
     recent_items = result_json.get("recent_items")
     if not isinstance(recent_items, list):
@@ -310,6 +338,79 @@ async def _sync_particella_item(
             "status": "failed",
             "message": str(exc),
         }
+
+
+async def sync_single_particella(
+    db: Session,
+    client: InVoltureClient,
+    *,
+    particella_id: UUID,
+    requested_by_user_id: int | None,
+    credential_id: int | None,
+    fetch_certificati: bool = True,
+    fetch_details: bool = True,
+) -> tuple[CapacitasParticelleSyncJob, dict[str, object], CatParticella]:
+    particella = db.get(CatParticella, particella_id)
+    if particella is None:
+        raise RuntimeError("Particella non trovata.")
+
+    items = _build_sync_items(db, [particella])
+    if not items:
+        raise RuntimeError("Particella non sincronizzabile.")
+
+    payload = CapacitasParticelleSyncJobCreateRequest(
+        credential_id=credential_id,
+        only_due=False,
+        limit=1,
+        fetch_certificati=fetch_certificati,
+        fetch_details=fetch_details,
+        double_speed=False,
+        parallel_workers=1,
+    )
+    policy = compute_sync_policy(double_speed=payload.double_speed, parallel_workers=payload.parallel_workers)
+    job = CapacitasParticelleSyncJob(
+        requested_by_user_id=requested_by_user_id,
+        credential_id=credential_id,
+        status="processing",
+        mode="single_particella",
+        payload_json=payload.model_dump(exclude_none=True, mode="json"),
+        result_json=_build_initial_result(1, policy),
+        started_at=datetime.now(UTC),
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    try:
+        item_result = await _sync_particella_item(
+            db,
+            client,
+            job_id=job.id,
+            credential_id=credential_id,
+            payload=payload,
+            item=items[0],
+        )
+        job = db.get(CapacitasParticelleSyncJob, job.id)
+        assert job is not None
+        final_status, final_result = _finalize_single_item_result(mode="single_particella", policy=policy, item_result=item_result)
+        job.status = final_status
+        job.result_json = final_result
+        job.completed_at = datetime.now(UTC)
+        db.commit()
+        db.refresh(job)
+        particella = db.get(CatParticella, particella_id)
+        assert particella is not None
+        return job, item_result, particella
+    except Exception as exc:
+        db.rollback()
+        job = db.get(CapacitasParticelleSyncJob, job.id)
+        assert job is not None
+        job.status = "failed"
+        job.error_detail = str(exc)
+        job.completed_at = datetime.now(UTC)
+        db.commit()
+        db.refresh(job)
+        raise
 
 
 def _apply_item_progress(

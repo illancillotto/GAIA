@@ -290,6 +290,9 @@ class CapacitasTerreniBatchRequest(BaseModel):
     credential_id: int | None = None
     fetch_certificati: bool = True
     fetch_details: bool = True
+    double_speed: bool = False
+    parallel_workers: int = Field(default=1, ge=1, le=2)
+    throttle_ms: int | None = Field(default=None, ge=0, le=5000)
 
 
 class CapacitasTerreniBatchItemResult(BaseModel):

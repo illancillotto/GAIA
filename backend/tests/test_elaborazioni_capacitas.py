@@ -7,7 +7,7 @@ from decimal import Decimal
 from cryptography.fernet import Fernet
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -17,7 +17,7 @@ from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.models.capacitas import CapacitasCredential
-from app.models.capacitas import CapacitasTerreniSyncJob
+from app.models.capacitas import CapacitasParticelleSyncJob, CapacitasTerreniSyncJob
 from app.models.catasto_phase1 import (
     CatCapacitasCertificato,
     CatCapacitasIntestatario,
@@ -1220,6 +1220,9 @@ def test_capacitas_terreni_sync_persists_consorzio_snapshot(monkeypatch: pytest.
     async def fake_close(self) -> None:
         return None
 
+    async def fake_search_frazioni(self, query: str):
+        return [CapacitasLookupOption(id="38", display="38 URAS")]
+
     async def fake_search_terreni(self, request) -> CapacitasTerreniSearchResult:
         return CapacitasTerreniSearchResult(
             total=1,
@@ -1290,6 +1293,7 @@ def test_capacitas_terreni_sync_persists_consorzio_snapshot(monkeypatch: pytest.
     monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.login", fake_login)
     monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.activate_app", fake_activate_app)
     monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.close", fake_close)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.search_frazioni", fake_search_frazioni)
     monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.search_terreni", fake_search_terreni)
     monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.fetch_certificato", fake_fetch_certificato)
     monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.fetch_terreno_detail", fake_fetch_detail)
@@ -1328,6 +1332,113 @@ def test_capacitas_terreni_sync_persists_consorzio_snapshot(monkeypatch: pytest.
         person = db.query(AnagraficaPerson).one()
         assert person.codice_fiscale == "LSADNL68S48L496D"
         assert person.comune_residenza == "TERRALBA"
+    finally:
+        db.close()
+
+
+def test_catasto_particella_capacitas_sync_route_updates_last_sync(monkeypatch: pytest.MonkeyPatch) -> None:
+    create_response = client.post(
+        "/elaborazioni/capacitas/credentials",
+        headers=auth_headers(),
+        json={"label": "Particella Sync", "username": "capacitas-user", "password": "capacitas-secret"},
+    )
+    credential_id = create_response.json()["id"]
+
+    async def fake_login(self):
+        from app.modules.elaborazioni.capacitas.session import CapacitasSession
+
+        self._session = CapacitasSession(token="123e4567-e89b-12d3-a456-426614174000")
+        return self._session
+
+    async def fake_activate_app(self, app_name: str) -> None:
+        return None
+
+    async def fake_close(self) -> None:
+        return None
+
+    async def fake_search_frazioni(self, query: str):
+        return [CapacitasLookupOption(id="38", display="38 URAS")]
+
+    async def fake_search_terreni(self, request) -> CapacitasTerreniSearchResult:
+        return CapacitasTerreniSearchResult(
+            total=1,
+            rows=[
+                {
+                    "ID": "single-row-1",
+                    "PVC": "097",
+                    "COM": "289",
+                    "CCO": "0A1103877",
+                    "FRA": "38",
+                    "CCS": "00000",
+                    "Foglio": "1",
+                    "Partic": "680",
+                    "Anno": "2026",
+                    "Belfiore": "L496",
+                    "Ta_ext": " 9",
+                }
+            ],
+        )
+
+    async def fake_fetch_certificato(self, **kwargs) -> CapacitasTerrenoCertificato:
+        return CapacitasTerrenoCertificato(
+            cco="0A1103877",
+            fra="38",
+            ccs="00000",
+            pvc="097",
+            com="289",
+            partita_code="0A1103877/38/00000",
+            raw_html="<html>certificato</html>",
+        )
+
+    async def fake_fetch_detail(self, **kwargs) -> CapacitasTerrenoDetail:
+        return CapacitasTerrenoDetail(
+            external_row_id="single-row-1",
+            foglio="1",
+            particella="680",
+            raw_html="<html>dettaglio</html>",
+        )
+
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.login", fake_login)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.activate_app", fake_activate_app)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.close", fake_close)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.search_frazioni", fake_search_frazioni)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.search_terreni", fake_search_terreni)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.fetch_certificato", fake_fetch_certificato)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.fetch_terreno_detail", fake_fetch_detail)
+
+    db = TestingSessionLocal()
+    try:
+        particella = db.scalar(select(CatParticella).where(CatParticella.foglio == "1", CatParticella.particella == "680"))
+        assert particella is not None
+        particella_id = str(particella.id)
+    finally:
+        db.close()
+
+    response = client.post(
+        f"/catasto/particelle/{particella_id}/capacitas-sync",
+        headers=auth_headers(),
+        json={"credential_id": credential_id, "fetch_certificati": True, "fetch_details": True},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "synced"
+    assert payload["particella"]["capacitas_last_sync_status"] == "synced"
+    assert payload["particella"]["capacitas_last_sync_at"] is not None
+    assert payload["job_id"] is not None
+
+    db = TestingSessionLocal()
+    try:
+        refreshed = db.get(CatParticella, particella.id)
+        assert refreshed is not None
+        assert refreshed.capacitas_last_sync_status == "synced"
+        assert refreshed.capacitas_last_sync_at is not None
+        assert refreshed.capacitas_last_sync_job_id is not None
+
+        job = db.get(CapacitasParticelleSyncJob, refreshed.capacitas_last_sync_job_id)
+        assert job is not None
+        assert job.mode == "single_particella"
+        assert job.status == "succeeded"
     finally:
         db.close()
 

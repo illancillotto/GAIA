@@ -4,7 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 
 import type { CatAnagraficaMatch, CatParticellaConsorzio, CatParticellaDetail, CatUtenzaIrrigua, GeoJSONFeature } from "@/types/catasto";
 import { getStoredAccessToken } from "@/lib/auth";
-import { capacitasGetRptCertificatoLink, catastoGetParticella, catastoGetParticellaConsorzio, catastoGetParticellaGeojson, catastoGetParticellaUtenze } from "@/lib/api/catasto";
+import {
+  capacitasGetRptCertificatoLink,
+  catastoGetParticella,
+  catastoGetParticellaConsorzio,
+  catastoGetParticellaGeojson,
+  catastoGetParticellaUtenze,
+  catastoSyncParticellaCapacitas,
+} from "@/lib/api/catasto";
 
 function formatHaFromMq(value: string | number | null | undefined): string {
   if (value == null) return "—";
@@ -45,6 +52,13 @@ function renderResolutionLabel(mode: string | null | undefined): string {
   }
 }
 
+function formatDateTime(value: string | null | undefined): string {
+  if (!value) return "Mai";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("it-IT");
+}
+
 export function ParticellaDetailDialog({
   open,
   match,
@@ -62,6 +76,8 @@ export function ParticellaDetailDialog({
   const [geojson, setGeojson] = useState<GeoJSONFeature | null>(null);
   const [capacitasLinkBusy, setCapacitasLinkBusy] = useState(false);
   const [capacitasLinkError, setCapacitasLinkError] = useState<string | null>(null);
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   const reference = useMemo(() => (match ? formatRef(match) : "Particella"), [match]);
   const centroid = useMemo(() => extractLonLat(geojson), [geojson]);
@@ -113,6 +129,51 @@ export function ParticellaDetailDialog({
     void load();
   }, [open, match]);
 
+  async function reloadCurrentParticella(): Promise<void> {
+    if (!match) return;
+    const token = getStoredAccessToken();
+    if (!token) return;
+
+    setBusy(true);
+    setError(null);
+    try {
+      const [p, c, u, g] = await Promise.all([
+        catastoGetParticella(token, match.particella_id),
+        catastoGetParticellaConsorzio(token, match.particella_id),
+        catastoGetParticellaUtenze(token, match.particella_id),
+        catastoGetParticellaGeojson(token, match.particella_id),
+      ]);
+      setParticella(p);
+      setConsorzio(c);
+      setUtenze(u);
+      setGeojson(g);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Errore caricamento dettagli particella");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function handleSyncParticella(): Promise<void> {
+    if (!match) return;
+    const token = getStoredAccessToken();
+    if (!token) return;
+
+    setSyncBusy(true);
+    setSyncMessage(null);
+    setError(null);
+    try {
+      const response = await catastoSyncParticellaCapacitas(token, match.particella_id);
+      setParticella(response.particella);
+      setSyncMessage(response.message);
+      await reloadCurrentParticella();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Errore sync particella Capacitas");
+    } finally {
+      setSyncBusy(false);
+    }
+  }
+
   async function openCapacitasCertificato(cco: string): Promise<void> {
     const token = getStoredAccessToken();
     if (!token) return;
@@ -151,10 +212,25 @@ export function ParticellaDetailDialog({
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <button type="button" className="btn-primary" disabled={busy || syncBusy} onClick={() => void handleSyncParticella()}>
+              {syncBusy ? "Sincronizzazione…" : "Sincronizza con Capacitas"}
+            </button>
             <button type="button" className="btn-secondary" onClick={onClose}>
               Chiudi
             </button>
           </div>
+        </div>
+
+        <div className="mt-3 rounded-xl border border-[#d9e7dc] bg-[#f5faf5] px-4 py-3 text-sm text-gray-700">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="font-medium text-gray-900">Ultimo aggiornamento Capacitas:</span>
+            <span>{formatDateTime(particella?.capacitas_last_sync_at)}</span>
+            {particella?.capacitas_last_sync_status ? (
+              <span className="rounded-full bg-white px-2 py-0.5 text-xs font-medium text-[#1D4E35]">{particella.capacitas_last_sync_status}</span>
+            ) : null}
+          </div>
+          {syncMessage ? <p className="mt-1 text-sm text-[#1D4E35]">{syncMessage}</p> : null}
+          {particella?.capacitas_last_sync_error ? <p className="mt-1 text-sm text-amber-700">{particella.capacitas_last_sync_error}</p> : null}
         </div>
 
         {error ? (

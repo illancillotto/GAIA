@@ -64,6 +64,7 @@ from app.services.elaborazioni_capacitas import (
     update_credential,
 )
 from app.services.elaborazioni_capacitas_terreni import (
+    compute_terreni_sync_policy,
     create_terreni_sync_job,
     delete_terreni_sync_job,
     get_terreni_sync_job,
@@ -98,7 +99,7 @@ def _run_async_detached(coro: "asyncio.Future[None] | asyncio.Task[None] | async
 
 async def _run_terreni_job_background(job_id: int) -> None:
     db = SessionLocal()
-    manager: CapacitasSessionManager | None = None
+    managers: list[CapacitasSessionManager] = []
     credential_id: int | None = None
     try:
         job = get_terreni_sync_job(db, job_id)
@@ -115,11 +116,16 @@ async def _run_terreni_job_background(job_id: int) -> None:
             return
 
         credential_id = credential.id
-        manager = CapacitasSessionManager(credential.username, password)
-        await manager.login()
-        await manager.activate_app("involture")
-        client = InVoltureClient(manager)
-        await run_terreni_sync_job(db, client, job)
+        payload = CapacitasTerreniJobCreateRequest.model_validate(job.payload_json or {})
+        session_count = min(payload.parallel_workers, max(1, len(payload.items)))
+        for _ in range(session_count):
+            manager = CapacitasSessionManager(credential.username, password)
+            await manager.login()
+            await manager.activate_app("involture")
+            managers.append(manager)
+        client = InVoltureClient(managers[0])
+        clients = [InVoltureClient(active_manager) for active_manager in managers]
+        await run_terreni_sync_job(db, client, job, session_factory=SessionLocal, clients=clients)
         mark_credential_used(db, credential.id)
     except Exception as exc:
         logger.exception("Errore background job terreni Capacitas: job_id=%d err=%s", job_id, exc)
@@ -133,7 +139,7 @@ async def _run_terreni_job_background(job_id: int) -> None:
             job.completed_at = datetime.now(timezone.utc)
             db.commit()
     finally:
-        if manager is not None:
+        for manager in managers:
             await manager.close()
         db.close()
 
@@ -570,7 +576,16 @@ async def sync_terreni_batch_route(
         await manager.login()
         await manager.activate_app("involture")
         client = InVoltureClient(manager)
-        result = await sync_terreni_batch(db, client, body)
+        result = await sync_terreni_batch(
+            db,
+            client,
+            body,
+            policy=compute_terreni_sync_policy(
+                double_speed=body.double_speed,
+                parallel_workers=body.parallel_workers,
+                throttle_ms=body.throttle_ms,
+            ),
+        )
         mark_credential_used(db, credential.id)
         return result
     except Exception as exc:
@@ -660,12 +675,18 @@ async def run_terreni_job(
     except RuntimeError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
 
-    manager = CapacitasSessionManager(credential.username, password)
+    payload = CapacitasTerreniJobCreateRequest.model_validate(job.payload_json or {})
+    managers: list[CapacitasSessionManager] = []
     try:
-        await manager.login()
-        await manager.activate_app("involture")
-        client = InVoltureClient(manager)
-        result = await run_terreni_sync_job(db, client, job)
+        session_count = min(payload.parallel_workers, max(1, len(payload.items)))
+        for _ in range(session_count):
+            manager = CapacitasSessionManager(credential.username, password)
+            await manager.login()
+            await manager.activate_app("involture")
+            managers.append(manager)
+        client = InVoltureClient(managers[0])
+        clients = [InVoltureClient(active_manager) for active_manager in managers]
+        result = await run_terreni_sync_job(db, client, job, session_factory=SessionLocal, clients=clients)
         mark_credential_used(db, credential.id)
         return serialize_terreni_sync_job(result)
     except Exception as exc:
@@ -676,7 +697,8 @@ async def run_terreni_job(
             detail=f"Errore esecuzione job terreni inVOLTURE: {exc}",
         ) from exc
     finally:
-        await manager.close()
+        for manager in managers:
+            await manager.close()
 
 
 @router.post("/involture/particelle/jobs", response_model=CapacitasParticelleSyncJobOut, status_code=status.HTTP_202_ACCEPTED)

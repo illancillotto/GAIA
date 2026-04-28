@@ -20,9 +20,15 @@ from app.models.catasto_phase1 import (
     CatUtenzaIntestatario,
     CatUtenzaIrrigua,
 )
+from app.modules.elaborazioni.capacitas.client import InVoltureClient
+from app.modules.elaborazioni.capacitas.session import CapacitasSessionManager
+from app.services.elaborazioni_capacitas import mark_credential_error, mark_credential_used, pick_credential
+from app.services.elaborazioni_capacitas_particelle_sync import sync_single_particella
 from app.modules.utenze.models import AnagraficaPerson, AnagraficaPersonSnapshot
 from app.schemas.catasto_phase1 import (
     CatAnomaliaResponse,
+    CatParticellaCapacitasSyncInput,
+    CatParticellaCapacitasSyncResponse,
     CatConsorzioOccupancyResponse,
     CatConsorzioUnitSummaryResponse,
     CatParticellaDetailResponse,
@@ -128,6 +134,53 @@ def get_particella(particella_id: UUID, db: Session = Depends(get_db), _: Applic
     payload = CatParticellaDetailResponse.model_validate(item)
     payload.fuori_distretto = item.fuori_distretto
     return payload
+
+
+@router.post("/{particella_id}/capacitas-sync", response_model=CatParticellaCapacitasSyncResponse)
+async def sync_particella_capacitas(
+    particella_id: UUID,
+    body: CatParticellaCapacitasSyncInput,
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(require_active_user),
+) -> CatParticellaCapacitasSyncResponse:
+    item = db.get(CatParticella, particella_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Particella not found")
+
+    try:
+        credential, password = pick_credential(db, body.credential_id)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    manager = CapacitasSessionManager(credential.username, password)
+    try:
+        await manager.login()
+        await manager.activate_app("involture")
+        client = InVoltureClient(manager)
+        job, item_result, refreshed = await sync_single_particella(
+            db,
+            client,
+            particella_id=particella_id,
+            requested_by_user_id=current_user.id,
+            credential_id=credential.id,
+            fetch_certificati=body.fetch_certificati,
+            fetch_details=body.fetch_details,
+        )
+        mark_credential_used(db, credential.id)
+        payload = CatParticellaDetailResponse.model_validate(refreshed)
+        payload.fuori_distretto = refreshed.fuori_distretto
+        return CatParticellaCapacitasSyncResponse(
+            particella=payload,
+            status=str(item_result.get("status") or refreshed.capacitas_last_sync_status or "failed"),
+            message=str(item_result.get("message") or "Sync completata."),
+            job_id=job.id,
+        )
+    except Exception as exc:
+        db.rollback()
+        mark_credential_error(db, credential.id, str(exc))
+        raise HTTPException(status_code=502, detail=f"Errore sync particella Capacitas: {exc}") from exc
+    finally:
+        await manager.close()
 
 
 @router.get("/{particella_id}/consorzio", response_model=CatParticellaConsorzioResponse)

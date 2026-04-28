@@ -83,7 +83,7 @@ Implementato:
   - risoluzione backend `comune -> frazione_id Capacitas` durante il batch
   - se un comune ha piu frazioni candidate con match sul nome (`Arborea`, `Santa Giusta`, ecc.), il batch prova i candidati in sequenza e usa quello che restituisce davvero la particella
   - flag globali di avvio job per `fetch_certificati` e `fetch_details`, non piu richiesti per ogni riga file
-  - monitor job con refresh, rerun manuale ed eliminazione dei job terminati
+  - monitor job con refresh, avanzamento incrementale in `result_json`, rerun manuale ed eliminazione dei job terminati
 
 Limitazioni deliberate di questo step:
 

@@ -15,6 +15,7 @@ import {
   catastoGetParticellaAnomalie,
   catastoGetParticellaConsorzio,
   catastoGetParticellaHistory,
+  catastoSyncParticellaCapacitas,
   catastoGetParticellaUtenze,
   catastoUpdateAnomalia,
 } from "@/lib/api/catasto";
@@ -42,6 +43,13 @@ function renderResolutionLabel(mode: string | null | undefined): string {
   }
 }
 
+function formatDateTime(value: string | null | undefined): string {
+  if (!value) return "Mai";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleString("it-IT");
+}
+
 export default function CatastoParticellaDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -56,6 +64,8 @@ export default function CatastoParticellaDetailPage() {
   const [utenze, setUtenze] = useState<CatUtenzaIrrigua[]>([]);
   const [anomalie, setAnomalie] = useState<CatAnomalia[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [syncBusy, setSyncBusy] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -106,6 +116,34 @@ export default function CatastoParticellaDetailPage() {
     }
     void load();
   }, [anno, particellaId]);
+
+  async function handleSyncParticella(): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) return;
+
+    setSyncBusy(true);
+    setSyncMessage(null);
+    setError(null);
+    try {
+      const response = await catastoSyncParticellaCapacitas(token, particellaId);
+      setItem(response.particella);
+      setSyncMessage(response.message);
+      const [c, h, u, a] = await Promise.all([
+        catastoGetParticellaConsorzio(token, particellaId),
+        catastoGetParticellaHistory(token, particellaId),
+        catastoGetParticellaUtenze(token, particellaId, { anno }),
+        catastoGetParticellaAnomalie(token, particellaId, { anno }),
+      ]);
+      setConsorzio(c);
+      setHistory(h);
+      setUtenze(u);
+      setAnomalie(a);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Errore sync particella Capacitas");
+    } finally {
+      setSyncBusy(false);
+    }
+  }
 
   const columns = useMemo<ColumnDef<CatParticellaHistory>[]>(
     () => [
@@ -279,7 +317,19 @@ export default function CatastoParticellaDetailPage() {
                     {item.fuori_distretto ? <span className="ml-2 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">Fuori distretto</span> : null}
                   </p>
                 </div>
+                <div className="flex flex-col items-end gap-2">
+                  <button type="button" className="btn-primary" disabled={isLoading || syncBusy} onClick={() => void handleSyncParticella()}>
+                    {syncBusy ? "Sincronizzazione…" : "Sincronizza con Capacitas"}
+                  </button>
+                  <p className="text-xs text-gray-500">
+                    Ultimo aggiornamento: {formatDateTime(item.capacitas_last_sync_at)}
+                    {item.capacitas_last_sync_status ? ` · ${item.capacitas_last_sync_status}` : ""}
+                  </p>
+                </div>
               </div>
+
+              {syncMessage ? <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-800">{syncMessage}</div> : null}
+              {item.capacitas_last_sync_error ? <div className="mt-3 rounded-xl border border-amber-100 bg-amber-50 p-3 text-sm text-amber-800">{item.capacitas_last_sync_error}</div> : null}
 
               <div className="mt-4 grid gap-3 md:grid-cols-4">
                 <MetricCard label="Sup. catastale (ha)" value={item.superficie_mq ? `${formatHaFromMq(item.superficie_mq)} ha` : "—"} />

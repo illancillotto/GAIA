@@ -10,6 +10,7 @@ import type {
   CatImportStartResponse,
   CatImportSummary,
   CatParticella,
+  CatParticellaCapacitasSyncResponse,
   CatParticellaConsorzio,
   CatParticellaDetail,
   CatParticellaHistory,
@@ -213,6 +214,22 @@ export async function catastoListParticelle(
 export async function catastoGetParticella(token: string, id: UUID): Promise<CatParticellaDetail> {
   return request<CatParticellaDetail>(`/catasto/particelle/${id}`, {
     headers: authHeaders(token),
+  });
+}
+
+export async function catastoSyncParticellaCapacitas(
+  token: string,
+  id: UUID,
+  options?: { credentialId?: number | null; fetchCertificati?: boolean; fetchDetails?: boolean },
+): Promise<CatParticellaCapacitasSyncResponse> {
+  return request<CatParticellaCapacitasSyncResponse>(`/catasto/particelle/${id}/capacitas-sync`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify({
+      credential_id: options?.credentialId ?? null,
+      fetch_certificati: options?.fetchCertificati ?? true,
+      fetch_details: options?.fetchDetails ?? true,
+    }),
   });
 }
 

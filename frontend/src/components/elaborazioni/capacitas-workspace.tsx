@@ -19,8 +19,6 @@ import {
   createCapacitasTerreniJob,
   deleteCapacitasParticelleSyncJob,
   deleteCapacitasTerreniJob,
-  getCapacitasFogli,
-  getCapacitasSezioni,
   importCapacitasAnagraficaHistory,
   importCapacitasAnagraficaHistoryFile,
   listCapacitasParticelleSyncJobs,
@@ -28,9 +26,7 @@ import {
   listCapacitasTerreniJobs,
   rerunCapacitasParticelleSyncJob,
   rerunCapacitasTerreniJob,
-  searchCapacitasFrazioni,
   searchCapacitasInvolture,
-  searchCapacitasTerreni,
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import type {
@@ -38,14 +34,11 @@ import type {
   CapacitasAnagraficaHistoryImportItemInput,
   CapacitasAnagraficaHistoryImportResult,
   CapacitasCredential,
-  CapacitasLookupOption,
   CapacitasParticelleSyncJob,
   CapacitasSearchResult,
   CapacitasTerreniBatchItemInput,
-  CapacitasTerreniBatchItemResult,
+  CapacitasTerreniBatchResult,
   CapacitasTerreniJob,
-  CapacitasTerreniSearchResult,
-  CapacitasTerrenoRow,
 } from "@/types/api";
 
 const SEARCH_TYPE_OPTIONS = [
@@ -77,13 +70,6 @@ function formatDateTime(value: string | null | undefined): string {
   return date.toLocaleString("it-IT");
 }
 
-function renderTerrenoLabel(row: CapacitasTerrenoRow): string {
-  const foglio = row.Foglio ?? "—";
-  const particella = row.Partic ?? "—";
-  const sub = row.Sub?.trim();
-  return `${foglio}/${particella}${sub ? `/${sub}` : ""}`;
-}
-
 function renderJobStatus(status: string): { label: string; className: string } {
   switch (status) {
     case "succeeded":
@@ -110,6 +96,7 @@ function TerreniJobCompletionModal({
 }) {
   const result = isTerreniBatchResult(job.result_json) ? job.result_json : null;
   const tone = renderJobStatus(job.status);
+  const isTerminal = job.status === "succeeded" || job.status === "completed_with_errors" || job.status === "failed";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/35 px-4">
@@ -117,7 +104,9 @@ function TerreniJobCompletionModal({
         <div className="px-6 pt-6">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-gray-400">Job #{job.id} completato</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-gray-400">
+                Job #{job.id} {isTerminal ? "completato" : "in corso"}
+              </p>
               <h3 className="mt-1 text-lg font-semibold text-gray-900">Report elaborazione Terreni</h3>
             </div>
             <button
@@ -416,16 +405,7 @@ function downloadAnagraficaHistoryTemplate(format: "csv" | "xlsx"): void {
   );
 }
 
-function isTerreniBatchResult(value: unknown): value is {
-  processed_items: number;
-  failed_items: number;
-  imported_rows: number;
-  linked_units: number;
-  linked_occupancies: number;
-  imported_certificati: number;
-  imported_details: number;
-  items: CapacitasTerreniBatchItemResult[];
-} {
+function isTerreniBatchResult(value: unknown): value is CapacitasTerreniBatchResult {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     return false;
   }
@@ -477,14 +457,7 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
     credential_id: "",
   });
 
-  const [territoryQuery, setTerritoryQuery] = useState("");
-  const [frazioni, setFrazioni] = useState<CapacitasLookupOption[]>([]);
-  const [sezioni, setSezioni] = useState<CapacitasLookupOption[]>([]);
-  const [fogli, setFogli] = useState<CapacitasLookupOption[]>([]);
-  const [terreniResults, setTerreniResults] = useState<CapacitasTerreniSearchResult | null>(null);
   const [terreniJobs, setTerreniJobs] = useState<CapacitasTerreniJob[]>([]);
-  const [terreniLookupBusy, setTerreniLookupBusy] = useState(false);
-  const [terreniSearching, setTerreniSearching] = useState(false);
   const [terreniJobsLoading, setTerreniJobsLoading] = useState(false);
   const [terreniJobBusyId, setTerreniJobBusyId] = useState<number | null>(null);
   const [terreniDeletingJobId, setTerreniDeletingJobId] = useState<number | null>(null);
@@ -508,19 +481,15 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
     double_speed: false,
     parallel_workers: 1,
   });
-  const [terreniCreatingJob, setTerreniCreatingJob] = useState(false);
   const [terreniError, setTerreniError] = useState<string | null>(null);
   const [terreniStatusMessage, setTerreniStatusMessage] = useState<string | null>(null);
-  const [terreniMode, setTerreniMode] = useState<"manual" | "massive">("manual");
   const [terreniForm, setTerreniForm] = useState({
     credential_id: "",
-    frazione_id: "",
-    sezione: "",
-    foglio: "",
-    particella: "",
-    sub: "",
-    fetch_certificati: true,
-    fetch_details: true,
+  });
+  const [terreniExecutionForm, setTerreniExecutionForm] = useState({
+    double_speed: false,
+    parallel_workers: 1,
+    throttle_ms: "",
   });
   const [terreniBatchFile, setTerreniBatchFile] = useState<File | null>(null);
   const [terreniBatchItems, setTerreniBatchItems] = useState<CapacitasTerreniBatchItemInput[]>([]);
@@ -551,13 +520,15 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
     () => credentials.find((credential) => String(credential.id) === formState.credential_id) ?? null,
     [credentials, formState.credential_id],
   );
-  const activeTerreniCredential = useMemo(
-    () => credentials.find((credential) => String(credential.id) === terreniForm.credential_id) ?? null,
-    [credentials, terreniForm.credential_id],
-  );
   const activeCredentialsCount = credentials.filter((credential) => credential.active).length;
   const jobsInFlight = terreniJobs.some((job) => job.status === "pending" || job.status === "processing");
   const particelleJobsInFlight = particelleJobs.some((job) => job.status === "pending" || job.status === "processing");
+  const terreniReportJob = terreniCompletedJobModal
+    ? terreniJobs.find((job) => job.id === terreniCompletedJobModal.id) ?? terreniCompletedJobModal
+    : null;
+  const terreniErrorsJob = terreniJobErrorsModal
+    ? terreniJobs.find((job) => job.id === terreniJobErrorsModal.id) ?? terreniJobErrorsModal
+    : null;
 
   useEffect(() => {
     void loadCredentials();
@@ -728,130 +699,6 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
     }
   }
 
-  async function handleLookupFrazioni(): Promise<void> {
-    const token = getStoredAccessToken();
-    if (!token || !territoryQuery.trim()) return;
-
-    setTerreniLookupBusy(true);
-    try {
-      const options = await searchCapacitasFrazioni(
-        token,
-        territoryQuery.trim(),
-        terreniForm.credential_id ? Number.parseInt(terreniForm.credential_id, 10) : undefined,
-      );
-      setFrazioni(options);
-      setTerreniError(null);
-      setTerreniStatusMessage(options.length > 0 ? `${options.length} frazioni trovate.` : "Nessuna frazione trovata.");
-      if (options.length === 1) {
-        await applyFrazioneSelection(options[0].id);
-      }
-    } catch (lookupError) {
-      setTerreniError(lookupError instanceof Error ? lookupError.message : "Errore lookup frazioni Capacitas");
-    } finally {
-      setTerreniLookupBusy(false);
-    }
-  }
-
-  async function loadSezioniAndFogli(frazioneId: string, sezioneValue = ""): Promise<void> {
-    const token = getStoredAccessToken();
-    if (!token || !frazioneId) return;
-
-    const credentialId = terreniForm.credential_id ? Number.parseInt(terreniForm.credential_id, 10) : undefined;
-    const [nextSezioni, nextFogli] = await Promise.all([
-      getCapacitasSezioni(token, frazioneId, credentialId),
-      getCapacitasFogli(token, frazioneId, sezioneValue, credentialId),
-    ]);
-    setSezioni(nextSezioni);
-    setFogli(nextFogli);
-  }
-
-  async function applyFrazioneSelection(frazioneId: string): Promise<void> {
-    setTerreniForm((current) => ({
-      ...current,
-      frazione_id: frazioneId,
-      sezione: "",
-      foglio: "",
-    }));
-    setSezioni([]);
-    setFogli([]);
-    try {
-      await loadSezioniAndFogli(frazioneId);
-    } catch (lookupError) {
-      setTerreniError(lookupError instanceof Error ? lookupError.message : "Errore caricamento sezioni e fogli");
-    }
-  }
-
-  async function handleSezioneChange(nextSezione: string): Promise<void> {
-    setTerreniForm((current) => ({ ...current, sezione: nextSezione, foglio: "" }));
-    if (!terreniForm.frazione_id) return;
-    try {
-      const token = getStoredAccessToken();
-      if (!token) return;
-      const credentialId = terreniForm.credential_id ? Number.parseInt(terreniForm.credential_id, 10) : undefined;
-      const nextFogli = await getCapacitasFogli(token, terreniForm.frazione_id, nextSezione, credentialId);
-      setFogli(nextFogli);
-      setTerreniError(null);
-    } catch (lookupError) {
-      setTerreniError(lookupError instanceof Error ? lookupError.message : "Errore caricamento fogli");
-    }
-  }
-
-  async function handleSearchTerreni(): Promise<void> {
-    const token = getStoredAccessToken();
-    if (!token || !terreniForm.frazione_id) return;
-
-    setTerreniSearching(true);
-    try {
-      const response = await searchCapacitasTerreni(token, {
-        frazione_id: terreniForm.frazione_id,
-        sezione: terreniForm.sezione || "",
-        foglio: terreniForm.foglio || "",
-        particella: terreniForm.particella.trim(),
-        sub: terreniForm.sub.trim(),
-        credential_id: terreniForm.credential_id ? Number.parseInt(terreniForm.credential_id, 10) : undefined,
-      });
-      setTerreniResults(response);
-      setTerreniError(null);
-      setTerreniStatusMessage(`Preview aggiornata: ${response.total} righe trovate.`);
-    } catch (searchError) {
-      setTerreniResults(null);
-      setTerreniError(searchError instanceof Error ? searchError.message : "Errore ricerca Terreni");
-    } finally {
-      setTerreniSearching(false);
-    }
-  }
-
-  async function handleCreateTerreniJob(): Promise<void> {
-    const token = getStoredAccessToken();
-    if (!token || !terreniForm.frazione_id || !terreniForm.particella.trim()) return;
-
-    setTerreniCreatingJob(true);
-    try {
-      const job = await createCapacitasTerreniJob(token, {
-        credential_id: terreniForm.credential_id ? Number.parseInt(terreniForm.credential_id, 10) : undefined,
-        items: [
-          {
-            label: `${terreniForm.foglio || "?"}/${terreniForm.particella.trim()}${terreniForm.sub.trim() ? `/${terreniForm.sub.trim()}` : ""}`,
-            frazione_id: terreniForm.frazione_id,
-            sezione: terreniForm.sezione || "",
-            foglio: terreniForm.foglio || "",
-            particella: terreniForm.particella.trim(),
-            sub: terreniForm.sub.trim(),
-            fetch_certificati: terreniForm.fetch_certificati,
-            fetch_details: terreniForm.fetch_details,
-          },
-        ],
-      });
-      setTerreniStatusMessage(`Job #${job.id} creato e avviato in background.`);
-      setTerreniError(null);
-      await loadTerreniJobs();
-    } catch (createError) {
-      setTerreniError(createError instanceof Error ? createError.message : "Errore avvio job Terreni");
-    } finally {
-      setTerreniCreatingJob(false);
-    }
-  }
-
   async function handleRerunJob(jobId: number): Promise<void> {
     const token = getStoredAccessToken();
     if (!token) return;
@@ -979,9 +826,14 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
         continue_on_error: terreniBatchContinueOnError,
         fetch_certificati: terreniBatchFetchCertificati,
         fetch_details: terreniBatchFetchDetails,
+        double_speed: terreniExecutionForm.double_speed,
+        parallel_workers: terreniExecutionForm.parallel_workers,
+        throttle_ms: terreniExecutionForm.throttle_ms.trim() ? Number.parseInt(terreniExecutionForm.throttle_ms, 10) : undefined,
         items: terreniBatchItems,
       });
-      setTerreniStatusMessage(`Job batch #${job.id} creato con ${terreniBatchItems.length} righe e avviato in background.`);
+      setTerreniStatusMessage(
+        `Job batch #${job.id} creato con ${terreniBatchItems.length} righe in ${terreniExecutionForm.double_speed ? "doppia velocita" : "velocita standard"} e ${terreniExecutionForm.parallel_workers} worker${terreniExecutionForm.throttle_ms.trim() ? ` · pausa ${terreniExecutionForm.throttle_ms.trim()}ms` : ""}.`,
+      );
       await loadTerreniJobs();
     } catch (createError) {
       setTerreniBatchError(createError instanceof Error ? createError.message : "Errore avvio job batch Terreni");
@@ -1094,7 +946,7 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
           <div className="grid gap-3 sm:grid-cols-4">
             <ElaborazioneMiniStat compact={embedded} eyebrow="Pool" value={`${activeCredentialsCount}/${credentials.length}`} description="Account attivi sul totale configurato." />
             <ElaborazioneMiniStat compact={embedded} eyebrow="Ricerca anagrafica" value={results?.total ?? 0} description="Record restituiti dall'ultima ricerca." tone={results && results.total > 0 ? "success" : "default"} />
-            <ElaborazioneMiniStat compact={embedded} eyebrow="Preview Terreni" value={terreniResults?.total ?? 0} description="Righe Terreni dell'ultima preview." tone={terreniResults && terreniResults.total > 0 ? "success" : "default"} />
+            <ElaborazioneMiniStat compact={embedded} eyebrow="Preview Terreni" value={terreniBatchItems.length} description="Righe Terreni dell'ultima preview." tone={terreniBatchItems.length > 0 ? "success" : "default"} />
             <ElaborazioneMiniStat compact={embedded} eyebrow="Job Terreni" value={terreniJobs.length} description={jobsInFlight ? "Sono presenti job in corso." : "Nessun job in esecuzione."} tone={jobsInFlight ? "warning" : "default"} />
           </div>
         </ElaborazioneHero>
@@ -1748,7 +1600,7 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
               </>
             }
             title="Lookup territorio e sync Terreni"
-            description="Lavora in modalita manuale oppure carica un file Excel/CSV per creare un job batch Terreni senza compilare le righe una per una."
+            description="Carica un file Excel/CSV per creare un job batch Terreni; la sync singola ora vive direttamente nella scheda particella del Catasto."
             actions={
               <button className="btn-secondary" disabled={terreniJobsLoading} onClick={() => void loadTerreniJobs()} type="button">
                 <RefreshIcon className="mr-2 h-4 w-4" />
@@ -1757,164 +1609,7 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
             }
           />
           <div className="space-y-6 p-6">
-            <div className="flex flex-wrap gap-2">
-              <button className={terreniMode === "manual" ? "btn-primary" : "btn-secondary"} onClick={() => setTerreniMode("manual")} type="button">
-                Manuale
-              </button>
-              <button className={terreniMode === "massive" ? "btn-primary" : "btn-secondary"} onClick={() => setTerreniMode("massive")} type="button">
-                Massiva da file
-              </button>
-            </div>
-
-            {terreniMode === "manual" ? (
-              <>
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-                  <label className="space-y-2 xl:col-span-2">
-                    <span className="label-caption">Comune / frazione Capacitas</span>
-                    <div className="flex gap-2">
-                      <input
-                        className="form-control"
-                        placeholder="es. Uras, Oristano, Massama..."
-                        value={territoryQuery}
-                        onChange={(event) => setTerritoryQuery(event.target.value)}
-                      />
-                      <button className="btn-secondary shrink-0" disabled={terreniLookupBusy || !territoryQuery.trim()} onClick={() => void handleLookupFrazioni()} type="button">
-                        {terreniLookupBusy ? "Lookup..." : "Cerca"}
-                      </button>
-                    </div>
-                  </label>
-                  <label className="space-y-2">
-                    <span className="label-caption">Credenziale</span>
-                    <select
-                      className="form-control"
-                      value={terreniForm.credential_id}
-                      onChange={(event) => setTerreniForm((current) => ({ ...current, credential_id: event.target.value }))}
-                    >
-                      <option value="">Auto-selezione backend</option>
-                      {credentials.map((credential) => (
-                        <option key={credential.id} value={credential.id}>
-                          {credential.label} · {credential.username}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="space-y-2">
-                    <span className="label-caption">Frazione selezionata</span>
-                    <select
-                      className="form-control"
-                      value={terreniForm.frazione_id}
-                      onChange={(event) => void applyFrazioneSelection(event.target.value)}
-                    >
-                      <option value="">Seleziona frazione</option>
-                      {frazioni.map((option) => (
-                        <option key={option.id} value={option.id}>
-                          {option.display}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="space-y-2">
-                    <span className="label-caption">Sezione</span>
-                    <select
-                      className="form-control"
-                      disabled={!terreniForm.frazione_id}
-                      value={terreniForm.sezione}
-                      onChange={(event) => void handleSezioneChange(event.target.value)}
-                    >
-                      <option value="">Tutte</option>
-                      {sezioni.map((option) => (
-                        <option key={option.id} value={option.id}>
-                          {option.display}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-                  <label className="space-y-2">
-                    <span className="label-caption">Foglio</span>
-                    <select
-                      className="form-control"
-                      disabled={!terreniForm.frazione_id}
-                      value={terreniForm.foglio}
-                      onChange={(event) => setTerreniForm((current) => ({ ...current, foglio: event.target.value }))}
-                    >
-                      <option value="">Tutti</option>
-                      {fogli.map((option) => (
-                        <option key={option.id} value={option.id}>
-                          {option.display}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  <label className="space-y-2">
-                    <span className="label-caption">Particella</span>
-                    <input
-                      className="form-control"
-                      placeholder="680"
-                      value={terreniForm.particella}
-                      onChange={(event) => setTerreniForm((current) => ({ ...current, particella: event.target.value }))}
-                    />
-                  </label>
-                  <label className="space-y-2">
-                    <span className="label-caption">Sub</span>
-                    <input
-                      className="form-control"
-                      placeholder="facoltativo"
-                      value={terreniForm.sub}
-                      onChange={(event) => setTerreniForm((current) => ({ ...current, sub: event.target.value }))}
-                    />
-                  </label>
-                  <label className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
-                    <input
-                      checked={terreniForm.fetch_certificati}
-                      className="h-4 w-4 accent-[#1D4E35]"
-                      type="checkbox"
-                      onChange={(event) => setTerreniForm((current) => ({ ...current, fetch_certificati: event.target.checked }))}
-                    />
-                    <span className="text-sm text-gray-700">Scarica certificati</span>
-                  </label>
-                  <label className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
-                    <input
-                      checked={terreniForm.fetch_details}
-                      className="h-4 w-4 accent-[#1D4E35]"
-                      type="checkbox"
-                      onChange={(event) => setTerreniForm((current) => ({ ...current, fetch_details: event.target.checked }))}
-                    />
-                    <span className="text-sm text-gray-700">Scarica dettagli terreno</span>
-                  </label>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-3">
-                  <button
-                    className="btn-secondary"
-                    disabled={terreniSearching || !terreniForm.frazione_id}
-                    onClick={() => void handleSearchTerreni()}
-                    type="button"
-                  >
-                    {terreniSearching ? "Preview..." : "Preview Terreni"}
-                  </button>
-                  <button
-                    className="btn-primary"
-                    disabled={terreniCreatingJob || !terreniForm.frazione_id || !terreniForm.particella.trim()}
-                    onClick={() => void handleCreateTerreniJob()}
-                    type="button"
-                  >
-                    {terreniCreatingJob ? "Avvio..." : "Avvia sync in background"}
-                  </button>
-                  {activeTerreniCredential ? (
-                    <span className="text-xs text-gray-500">
-                      Credenziale forzata: {activeTerreniCredential.label} · fascia {activeTerreniCredential.allowed_hours_start}:00-
-                      {activeTerreniCredential.allowed_hours_end}:00
-                    </span>
-                  ) : (
-                    <span className="text-xs text-gray-500">Anche per Terreni il backend puo selezionare automaticamente un account disponibile.</span>
-                  )}
-                </div>
-              </>
-            ) : (
-              <div className="rounded-[24px] border border-dashed border-[#cfd8cf] bg-[#f8fbf8] p-5">
+            <div className="rounded-[24px] border border-dashed border-[#cfd8cf] bg-[#f8fbf8] p-5">
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div className="space-y-2">
                     <p className="text-sm font-semibold text-gray-900">Import massivo da Excel o CSV</p>
@@ -2041,7 +1736,54 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
                   </span>
                 </div>
               </div>
-            )}
+
+            <div className="grid gap-4 xl:grid-cols-3">
+              <button
+                className={
+                  terreniExecutionForm.double_speed
+                    ? "rounded-lg border border-[#1D4E35] bg-[#eef7ef] px-4 py-3 text-left text-sm font-semibold text-[#1D4E35]"
+                    : "rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 text-left text-sm font-semibold text-gray-700 transition hover:border-[#1D4E35]/30 hover:bg-[#f5faf5]"
+                }
+                onClick={() => setTerreniExecutionForm((current) => ({ ...current, double_speed: !current.double_speed }))}
+                type="button"
+              >
+                <span className="block">{terreniExecutionForm.double_speed ? "Doppia velocita attiva" : "Doppia velocita"}</span>
+                <span className="mt-1 block text-xs font-normal text-gray-500">
+                  {terreniExecutionForm.double_speed ? "Riduce la pausa automatica del job Terreni." : "Usa una pausa piu aggressiva tra richieste e righe."}
+                </span>
+              </button>
+              <button
+                className={
+                  terreniExecutionForm.parallel_workers > 1
+                    ? "rounded-lg border border-[#1D4E35] bg-[#eef7ef] px-4 py-3 text-left text-sm font-semibold text-[#1D4E35]"
+                    : "rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 text-left text-sm font-semibold text-gray-700 transition hover:border-[#1D4E35]/30 hover:bg-[#f5faf5]"
+                }
+                onClick={() =>
+                  setTerreniExecutionForm((current) => ({
+                    ...current,
+                    parallel_workers: current.parallel_workers > 1 ? 1 : 2,
+                  }))
+                }
+                type="button"
+              >
+                <span className="block">{terreniExecutionForm.parallel_workers > 1 ? "Parallelo x2 attivo" : "Parallelo x2"}</span>
+                <span className="mt-1 block text-xs font-normal text-gray-500">
+                  {terreniExecutionForm.parallel_workers > 1 ? "Apre 2 sessioni Capacitas dedicate per il job." : "Divide il batch su due worker concorrenti."}
+                </span>
+              </button>
+              <label className="space-y-2 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
+                <span className="label-caption">Pausa richieste (ms)</span>
+                <input
+                  className="form-control"
+                  inputMode="numeric"
+                  min={0}
+                  placeholder="Auto"
+                  value={terreniExecutionForm.throttle_ms}
+                  onChange={(event) => setTerreniExecutionForm((current) => ({ ...current, throttle_ms: event.target.value.replace(/[^\d]/g, "") }))}
+                />
+                <span className="block text-xs text-gray-500">Vuoto = automatico. Valori piu bassi spingono di piu il portale.</span>
+              </label>
+            </div>
 
             {terreniStatusMessage ? (
               <div className="rounded-2xl border border-emerald-100 bg-emerald-50/70 px-4 py-3 text-sm text-emerald-800">
@@ -2051,122 +1793,54 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
           </div>
         </article>
 
-        {terreniMode === "manual" ? (
-          <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white p-0 shadow-panel">
-            <ElaborazionePanelHeader
-              badge={
-                <>
-                  <SearchIcon className="h-3.5 w-3.5" />
-                  Preview Terreni
-                </>
-              }
-              title={terreniResults == null ? "Nessuna preview Terreni" : `${terreniResults.total} righe restituite da ricercaTerreni`}
-              description="La preview consente di validare frazione, foglio e particella prima di creare il job di import."
-            />
-            {terreniResults == null ? (
-              <div className="p-5">
-                <EmptyState
-                  icon={DocumentIcon}
-                  title="Nessuna preview Terreni"
-                  description="Esegui prima il lookup frazioni e poi lancia una preview per verificare le righe Terreni."
-                />
-              </div>
-            ) : terreniResults.rows.length === 0 ? (
-              <div className="p-5">
-                <EmptyState
-                  icon={SearchIcon}
-                  title="Nessuna riga trovata"
-                  description="La combinazione selezionata non ha prodotto risultati sulla griglia Terreni."
-                />
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Particella</th>
-                      <th>CCO</th>
-                      <th>Anno</th>
-                      <th>Superficie</th>
-                      <th>Riordino / stato</th>
-                      <th>Meta</th>
+        <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white p-0 shadow-panel">
+          <ElaborazionePanelHeader
+            badge={
+              <>
+                <DocumentIcon className="h-3.5 w-3.5" />
+                Preview file
+              </>
+            }
+            title={terreniBatchItems.length === 0 ? "Nessun file batch caricato" : `${terreniBatchItems.length} righe pronte per il job`}
+            description={`Preview locale del file importato. Certificati: ${terreniBatchFetchCertificati ? "si" : "no"} · Dettagli: ${terreniBatchFetchDetails ? "si" : "no"}.`}
+          />
+          {terreniBatchItems.length === 0 ? (
+            <div className="p-5">
+              <EmptyState
+                icon={DocumentIcon}
+                title="Carica un file batch"
+                description="Scarica il template, compila le righe e carica il file per vedere la preview locale."
+              />
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Label</th>
+                    <th>Comune</th>
+                    <th>Sezione</th>
+                    <th>Foglio</th>
+                    <th>Particella</th>
+                    <th>Sub</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {terreniBatchItems.slice(0, 100).map((item, index) => (
+                    <tr key={`${item.comune ?? ""}-${item.foglio}-${item.particella}-${item.sub ?? ""}-${index}`}>
+                      <td className="font-medium text-gray-900">{item.label ?? "—"}</td>
+                      <td>{item.comune ?? "—"}</td>
+                      <td>{item.sezione || "—"}</td>
+                      <td>{item.foglio}</td>
+                      <td>{item.particella}</td>
+                      <td>{item.sub || "—"}</td>
                     </tr>
-                  </thead>
-                  <tbody>
-                    {terreniResults.rows.map((row, index) => (
-                      <tr key={`${row.ID ?? row.CCO ?? index}`}>
-                        <td className="font-medium text-gray-900">{renderTerrenoLabel(row)}</td>
-                        <td>{row.CCO ?? "—"}</td>
-                        <td>{row.Anno ?? "—"}</td>
-                        <td>{row.Superficie ?? "—"}</td>
-                        <td>
-                          <div className="flex flex-wrap items-center gap-2">
-                            {row.BacDescr ? <span className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700">{row.BacDescr}</span> : null}
-                            {row.row_visual_state ? (
-                              <span className="rounded-full bg-[#eef5f1] px-2.5 py-1 text-xs text-[#1D4E35]">{row.row_visual_state}</span>
-                            ) : null}
-                          </div>
-                        </td>
-                        <td className="text-xs text-gray-500">
-                          {row.COM ?? "—"} · {row.FRA ?? "—"} · {row.ID ?? "n/d"}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </article>
-        ) : (
-          <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white p-0 shadow-panel">
-            <ElaborazionePanelHeader
-              badge={
-                <>
-                  <DocumentIcon className="h-3.5 w-3.5" />
-                  Preview file
-                </>
-              }
-              title={terreniBatchItems.length === 0 ? "Nessun file batch caricato" : `${terreniBatchItems.length} righe pronte per il job`}
-              description={`Preview locale del file importato. Certificati: ${terreniBatchFetchCertificati ? "si" : "no"} · Dettagli: ${terreniBatchFetchDetails ? "si" : "no"}.`}
-            />
-            {terreniBatchItems.length === 0 ? (
-              <div className="p-5">
-                <EmptyState
-                  icon={DocumentIcon}
-                  title="Carica un file batch"
-                  description="Scarica il template, compila le righe e carica il file per vedere la preview locale."
-                />
-              </div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="data-table">
-                  <thead>
-                    <tr>
-                      <th>Label</th>
-                      <th>Comune</th>
-                      <th>Sezione</th>
-                      <th>Foglio</th>
-                      <th>Particella</th>
-                      <th>Sub</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {terreniBatchItems.slice(0, 100).map((item, index) => (
-                      <tr key={`${item.comune ?? ""}-${item.foglio}-${item.particella}-${item.sub ?? ""}-${index}`}>
-                        <td className="font-medium text-gray-900">{item.label ?? "—"}</td>
-                        <td>{item.comune ?? "—"}</td>
-                        <td>{item.sezione || "—"}</td>
-                        <td>{item.foglio}</td>
-                        <td>{item.particella}</td>
-                        <td>{item.sub || "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </article>
-        )}
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </article>
 
         <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white p-0 shadow-panel">
           <ElaborazionePanelHeader
@@ -2231,6 +1905,11 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
                               <div>
                                 {result.processed_items} item · {result.imported_rows} righe · {result.linked_units} unità
                               </div>
+                              <div className="text-xs text-gray-500">
+                                worker {result.parallel_workers ?? 1}
+                                {result.speed_multiplier && result.speed_multiplier > 1 ? ` · velocita x${result.speed_multiplier}` : ""}
+                                {typeof result.throttle_ms === "number" ? ` · pausa ${result.throttle_ms}ms` : ""}
+                              </div>
                               {result.failed_items > 0 ? <div className="text-amber-700">{result.failed_items} item con errore</div> : null}
                             </div>
                           ) : job.error_detail ? (
@@ -2280,12 +1959,12 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
         open={settingsModalOpen}
         title="Credenziali"
       />
-      {terreniJobErrorsModal ? (
-        <TerreniJobErrorsModal job={terreniJobErrorsModal} onClose={() => setTerreniJobErrorsModal(null)} />
+      {terreniErrorsJob ? (
+        <TerreniJobErrorsModal job={terreniErrorsJob} onClose={() => setTerreniJobErrorsModal(null)} />
       ) : null}
-      {terreniCompletedJobModal ? (
+      {terreniReportJob ? (
         <TerreniJobCompletionModal
-          job={terreniCompletedJobModal}
+          job={terreniReportJob}
           onClose={() => setTerreniCompletedJobModal(null)}
           onShowErrors={(job) => {
             setTerreniCompletedJobModal(null);

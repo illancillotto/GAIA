@@ -78,6 +78,10 @@ export type CatParticella = {
   num_distretto: string | null;
   nome_distretto: string | null;
   source_type: string;
+  capacitas_last_sync_at: string | null;
+  capacitas_last_sync_status: string | null;
+  capacitas_last_sync_error: string | null;
+  capacitas_last_sync_job_id: number | null;
   valid_from: string;
   valid_to: string | null;
   is_current: boolean;
@@ -90,6 +94,13 @@ export type CatParticella = {
 
 export type CatParticellaDetail = CatParticella & {
   fuori_distretto: boolean;
+};
+
+export type CatParticellaCapacitasSyncResponse = {
+  particella: CatParticellaDetail;
+  status: string;
+  message: string;
+  job_id: number | null;
 };
 
 export type CatConsorzioOccupancy = {

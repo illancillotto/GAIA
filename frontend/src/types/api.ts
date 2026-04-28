@@ -1194,6 +1194,9 @@ export type CapacitasTerreniJobCreateInput = {
   credential_id?: number | null;
   fetch_certificati?: boolean;
   fetch_details?: boolean;
+  double_speed?: boolean;
+  parallel_workers?: number;
+  throttle_ms?: number | null;
 };
 
 export type CapacitasTerreniBatchItemResult = {
@@ -1219,6 +1222,11 @@ export type CapacitasTerreniBatchResult = {
   imported_details: number;
   linked_units: number;
   linked_occupancies: number;
+  total_items?: number;
+  current_label?: string | null;
+  throttle_ms?: number;
+  speed_multiplier?: number;
+  parallel_workers?: number;
 };
 
 export type CapacitasTerreniJob = {

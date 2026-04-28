@@ -95,6 +95,10 @@ class CatParticellaResponse(BaseModel):
     num_distretto: str | None
     nome_distretto: str | None
     source_type: str
+    capacitas_last_sync_at: datetime | None
+    capacitas_last_sync_status: str | None
+    capacitas_last_sync_error: str | None
+    capacitas_last_sync_job_id: int | None
     valid_from: date
     valid_to: date | None
     is_current: bool
@@ -107,6 +111,19 @@ class CatParticellaResponse(BaseModel):
 
 class CatParticellaDetailResponse(CatParticellaResponse):
     fuori_distretto: bool
+
+
+class CatParticellaCapacitasSyncInput(BaseModel):
+    credential_id: int | None = None
+    fetch_certificati: bool = True
+    fetch_details: bool = True
+
+
+class CatParticellaCapacitasSyncResponse(BaseModel):
+    particella: CatParticellaDetailResponse
+    status: str
+    message: str
+    job_id: int | None
 
 
 class CatConsorzioOccupancyResponse(BaseModel):

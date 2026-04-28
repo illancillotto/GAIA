@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from decimal import Decimal, InvalidOperation
 import re
+from typing import Awaitable, Callable, Sequence
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -32,7 +34,6 @@ from app.modules.elaborazioni.capacitas.models import (
     CapacitasTerreniBatchItemResult,
     CapacitasTerreniBatchRequest,
     CapacitasTerreniBatchResponse,
-    CapacitasTerreniJobCreateRequest,
     CapacitasTerreniJobOut,
     CapacitasTerreniSearchRequest,
     CapacitasTerreniSyncResponse,
@@ -42,10 +43,17 @@ from app.modules.elaborazioni.capacitas.models import (
     CapacitasTerrenoRow,
 )
 
+
+TerreniItemProgressCallback = Callable[[CapacitasTerreniBatchItemResult], Awaitable[None]]
+
 _COMUNE_SWAP_CODES: dict[int, int] = {
     165: 280,  # Arborea -> Terralba
     280: 165,  # Terralba -> Arborea
 }
+
+BASE_TERRENI_THROTTLE_MS = 300
+DOUBLE_SPEED_MULTIPLIER = 2
+MAX_TERRENI_PARALLEL_WORKERS = 2
 
 
 @dataclass(slots=True)
@@ -61,6 +69,32 @@ class SyncCounters:
             self.units = set()
 
 
+@dataclass(slots=True)
+class TerreniSyncPolicy:
+    throttle_ms: int
+    speed_multiplier: int
+    parallel_workers: int
+
+
+def compute_terreni_sync_policy(
+    *,
+    double_speed: bool = False,
+    parallel_workers: int = 1,
+    throttle_ms: int | None = None,
+) -> TerreniSyncPolicy:
+    speed_multiplier = DOUBLE_SPEED_MULTIPLIER if double_speed else 1
+    effective_throttle_ms = max(
+        0,
+        throttle_ms if throttle_ms is not None else round(BASE_TERRENI_THROTTLE_MS / speed_multiplier),
+    )
+    worker_count = max(1, min(MAX_TERRENI_PARALLEL_WORKERS, parallel_workers))
+    return TerreniSyncPolicy(
+        throttle_ms=effective_throttle_ms,
+        speed_multiplier=speed_multiplier,
+        parallel_workers=worker_count,
+    )
+
+
 async def sync_terreni_for_request(
     db: Session,
     client: InVoltureClient,
@@ -68,6 +102,7 @@ async def sync_terreni_for_request(
     *,
     fetch_certificati: bool = True,
     fetch_details: bool = True,
+    throttle_ms: int = 0,
 ) -> CapacitasTerreniSyncResponse:
     result = await client.search_terreni(request)
     collected_at = datetime.now(timezone.utc)
@@ -77,7 +112,7 @@ async def sync_terreni_for_request(
     storico_cache: dict[str, list[CapacitasStoricoAnagraficaRow]] = {}
     anagrafica_detail_cache: dict[str, CapacitasAnagraficaDetail] = {}
 
-    for row in result.rows:
+    for index, row in enumerate(result.rows, start=1):
         unit = _find_or_create_unit(db, row)
         if unit is not None:
             counters.units.add(str(unit.id))
@@ -175,6 +210,9 @@ async def sync_terreni_for_request(
                 )
             )
 
+        if index < len(result.rows) and throttle_ms > 0:
+            await asyncio.sleep(throttle_ms / 1000)
+
     db.commit()
     return CapacitasTerreniSyncResponse(
         total_rows=result.total,
@@ -191,6 +229,9 @@ async def sync_terreni_batch(
     db: Session,
     client: InVoltureClient,
     request: CapacitasTerreniBatchRequest,
+    *,
+    policy: TerreniSyncPolicy | None = None,
+    progress_callback: TerreniItemProgressCallback | None = None,
 ) -> CapacitasTerreniBatchResponse:
     item_results: list[CapacitasTerreniBatchItemResult] = []
     totals = {
@@ -213,21 +254,27 @@ async def sync_terreni_batch(
         )
         search_key = ""
         try:
-            result = await _sync_batch_item_with_candidates(db, client, request, item, frazione_candidates)
-            search_key = result.search_key
-            item_results.append(
-                CapacitasTerreniBatchItemResult(
-                    label=item.label,
-                    search_key=result.search_key,
-                    ok=True,
-                    total_rows=result.total_rows,
-                    imported_rows=result.imported_rows,
-                    imported_certificati=result.imported_certificati,
-                    imported_details=result.imported_details,
-                    linked_units=result.linked_units,
-                    linked_occupancies=result.linked_occupancies,
-                )
+            result = await _sync_batch_item_with_candidates(
+                db,
+                client,
+                request,
+                item,
+                frazione_candidates,
+                throttle_ms=policy.throttle_ms if policy is not None else 0,
             )
+            search_key = result.search_key
+            item_result = CapacitasTerreniBatchItemResult(
+                label=item.label,
+                search_key=result.search_key,
+                ok=True,
+                total_rows=result.total_rows,
+                imported_rows=result.imported_rows,
+                imported_certificati=result.imported_certificati,
+                imported_details=result.imported_details,
+                linked_units=result.linked_units,
+                linked_occupancies=result.linked_occupancies,
+            )
+            item_results.append(item_result)
             totals["processed_items"] += 1
             totals["total_rows"] += result.total_rows
             totals["imported_rows"] += result.imported_rows
@@ -235,6 +282,8 @@ async def sync_terreni_batch(
             totals["imported_details"] += result.imported_details
             totals["linked_units"] += result.linked_units
             totals["linked_occupancies"] += result.linked_occupancies
+            if progress_callback is not None:
+                await progress_callback(item_result)
         except Exception as exc:
             db.rollback()
             if not search_key:
@@ -254,18 +303,22 @@ async def sync_terreni_batch(
                         credential_id=item.credential_id if item.credential_id is not None else request.credential_id,
                     )
                 )
-            item_results.append(
-                CapacitasTerreniBatchItemResult(
-                    label=item.label,
-                    search_key=search_key,
-                    ok=False,
-                    error=str(exc),
-                )
+            item_result = CapacitasTerreniBatchItemResult(
+                label=item.label,
+                search_key=search_key,
+                ok=False,
+                error=str(exc),
             )
+            item_results.append(item_result)
             totals["processed_items"] += 1
             totals["failed_items"] += 1
+            if progress_callback is not None:
+                await progress_callback(item_result)
             if not request.continue_on_error:
                 break
+
+        if totals["processed_items"] < len(request.items) and policy is not None and policy.throttle_ms > 0:
+            await asyncio.sleep(policy.throttle_ms / 1000)
 
     return CapacitasTerreniBatchResponse(items=item_results, **totals)
 
@@ -833,6 +886,8 @@ async def _sync_batch_item_with_candidates(
     batch_request: CapacitasTerreniBatchRequest,
     item: CapacitasTerreniBatchItem,
     frazione_candidates: list[str],
+    *,
+    throttle_ms: int = 0,
 ) -> CapacitasTerreniSyncResponse:
     attempted_errors: list[str] = []
 
@@ -858,6 +913,7 @@ async def _sync_batch_item_with_candidates(
                 sync_request,
                 fetch_certificati=item.fetch_certificati if item.fetch_certificati is not None else batch_request.fetch_certificati,
                 fetch_details=item.fetch_details if item.fetch_details is not None else batch_request.fetch_details,
+                throttle_ms=throttle_ms,
             )
         except RuntimeError as exc:
             db.rollback()
@@ -1025,22 +1081,188 @@ def serialize_terreni_sync_job(job: CapacitasTerreniSyncJob) -> CapacitasTerreni
     return CapacitasTerreniJobOut.model_validate(job)
 
 
+def _build_initial_terreni_job_result(
+    payload: CapacitasTerreniBatchRequest,
+    *,
+    policy: TerreniSyncPolicy,
+    parallel_workers: int,
+) -> dict[str, object]:
+    return {
+        "items": [],
+        "processed_items": 0,
+        "failed_items": 0,
+        "total_rows": 0,
+        "imported_rows": 0,
+        "imported_certificati": 0,
+        "imported_details": 0,
+        "linked_units": 0,
+        "linked_occupancies": 0,
+        "total_items": len(payload.items),
+        "current_label": None,
+        "speed_multiplier": policy.speed_multiplier,
+        "parallel_workers": parallel_workers,
+        "throttle_ms": policy.throttle_ms,
+    }
+
+
+def _record_terreni_job_item_progress(
+    db: Session,
+    *,
+    job_id: int,
+    item_result: CapacitasTerreniBatchItemResult,
+) -> None:
+    job = db.scalar(
+        select(CapacitasTerreniSyncJob)
+        .where(CapacitasTerreniSyncJob.id == job_id)
+        .with_for_update()
+    )
+    if job is None:
+        return
+
+    current_result = dict(job.result_json or {})
+    items = current_result.get("items")
+    if not isinstance(items, list):
+        items = []
+        current_result["items"] = items
+
+    item_payload = item_result.model_dump(exclude_none=True, mode="json")
+    items.append(item_payload)
+    current_result["processed_items"] = int(current_result.get("processed_items", 0)) + 1
+    current_result["failed_items"] = int(current_result.get("failed_items", 0)) + (0 if item_result.ok else 1)
+    current_result["total_rows"] = int(current_result.get("total_rows", 0)) + item_result.total_rows
+    current_result["imported_rows"] = int(current_result.get("imported_rows", 0)) + item_result.imported_rows
+    current_result["imported_certificati"] = int(current_result.get("imported_certificati", 0)) + item_result.imported_certificati
+    current_result["imported_details"] = int(current_result.get("imported_details", 0)) + item_result.imported_details
+    current_result["linked_units"] = int(current_result.get("linked_units", 0)) + item_result.linked_units
+    current_result["linked_occupancies"] = int(current_result.get("linked_occupancies", 0)) + item_result.linked_occupancies
+    total_items = int(current_result.get("total_items", 0) or 0)
+    if total_items > 0:
+        current_result["progress_percent"] = min(
+            100,
+            round((int(current_result["processed_items"]) / total_items) * 100, 2),
+        )
+    current_result["current_label"] = None if int(current_result["processed_items"]) >= total_items else item_result.label or item_result.search_key
+
+    job.result_json = current_result
+    db.commit()
+
+
+def _merge_terreni_batch_responses(responses: Sequence[CapacitasTerreniBatchResponse]) -> CapacitasTerreniBatchResponse:
+    items: list[CapacitasTerreniBatchItemResult] = []
+    totals = {
+        "processed_items": 0,
+        "failed_items": 0,
+        "total_rows": 0,
+        "imported_rows": 0,
+        "imported_certificati": 0,
+        "imported_details": 0,
+        "linked_units": 0,
+        "linked_occupancies": 0,
+    }
+
+    for response in responses:
+        items.extend(response.items)
+        totals["processed_items"] += response.processed_items
+        totals["failed_items"] += response.failed_items
+        totals["total_rows"] += response.total_rows
+        totals["imported_rows"] += response.imported_rows
+        totals["imported_certificati"] += response.imported_certificati
+        totals["imported_details"] += response.imported_details
+        totals["linked_units"] += response.linked_units
+        totals["linked_occupancies"] += response.linked_occupancies
+
+    return CapacitasTerreniBatchResponse(items=items, **totals)
+
+
+async def _run_terreni_sync_parallel(
+    *,
+    session_factory: Callable[[], Session],
+    clients: Sequence[InVoltureClient],
+    payload: CapacitasTerreniBatchRequest,
+    policy: TerreniSyncPolicy,
+    progress_callback: TerreniItemProgressCallback | None = None,
+) -> CapacitasTerreniBatchResponse:
+    item_groups = [payload.items[index::len(clients)] for index in range(len(clients))]
+
+    async def worker(client: InVoltureClient, items: list[CapacitasTerreniBatchItem]) -> CapacitasTerreniBatchResponse:
+        worker_db = session_factory()
+        try:
+            return await sync_terreni_batch(
+                worker_db,
+                client,
+                CapacitasTerreniBatchRequest(
+                    items=items,
+                    continue_on_error=payload.continue_on_error,
+                    credential_id=payload.credential_id,
+                    fetch_certificati=payload.fetch_certificati,
+                    fetch_details=payload.fetch_details,
+                    double_speed=payload.double_speed,
+                    parallel_workers=payload.parallel_workers,
+                    throttle_ms=payload.throttle_ms,
+                ),
+                policy=policy,
+                progress_callback=progress_callback,
+            )
+        finally:
+            worker_db.close()
+
+    responses = await asyncio.gather(
+        *(worker(client, items) for client, items in zip(clients, item_groups, strict=False) if items)
+    )
+    return _merge_terreni_batch_responses(responses)
+
+
 async def run_terreni_sync_job(
     db: Session,
     client: InVoltureClient,
     job: CapacitasTerreniSyncJob,
+    *,
+    session_factory: Callable[[], Session] | None = None,
+    clients: Sequence[InVoltureClient] | None = None,
 ) -> CapacitasTerreniSyncJob:
     payload = CapacitasTerreniBatchRequest.model_validate(job.payload_json or {})
     job.status = "processing"
     job.started_at = datetime.now(timezone.utc)
     job.error_detail = None
+    policy = compute_terreni_sync_policy(
+        double_speed=payload.double_speed,
+        parallel_workers=payload.parallel_workers,
+        throttle_ms=payload.throttle_ms,
+    )
+    client_pool = list(clients or [client])
+    parallel_workers = min(policy.parallel_workers, len(client_pool), max(1, len(payload.items)))
+    job.result_json = _build_initial_terreni_job_result(payload, policy=policy, parallel_workers=parallel_workers)
     db.commit()
     db.refresh(job)
 
+    async def record_progress(item_result: CapacitasTerreniBatchItemResult) -> None:
+        if session_factory is None:
+            _record_terreni_job_item_progress(db, job_id=job.id, item_result=item_result)
+            return
+
+        progress_db = session_factory()
+        try:
+            _record_terreni_job_item_progress(progress_db, job_id=job.id, item_result=item_result)
+        finally:
+            progress_db.close()
+
     try:
-        result = await sync_terreni_batch(db, client, payload)
+        if parallel_workers > 1 and session_factory is not None:
+            result = await _run_terreni_sync_parallel(
+                session_factory=session_factory,
+                clients=client_pool[:parallel_workers],
+                payload=payload,
+                policy=policy,
+                progress_callback=record_progress,
+            )
+        else:
+            result = await sync_terreni_batch(db, client, payload, policy=policy, progress_callback=record_progress)
         job.status = "succeeded" if result.failed_items == 0 else "completed_with_errors"
-        job.result_json = result.model_dump(exclude_none=True, mode="json")
+        final_result = result.model_dump(exclude_none=True, mode="json")
+        final_result["speed_multiplier"] = policy.speed_multiplier
+        final_result["parallel_workers"] = parallel_workers
+        final_result["throttle_ms"] = policy.throttle_ms
+        job.result_json = final_result
         job.completed_at = datetime.now(timezone.utc)
         db.commit()
         db.refresh(job)
