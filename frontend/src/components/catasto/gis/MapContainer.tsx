@@ -248,11 +248,17 @@ export default function MapContainer({
         },
       });
 
-      map.on("click", "particelle-fill", async (event) => {
-        const feature = event.features?.[0];
-        const id = feature?.properties?.id;
+      map.on("click", async (event) => {
         const currentToken = handlersRef.current.token;
-        if (!id || !currentToken) return;
+        if (!currentToken) return;
+
+        // Query in priority order: uploaded (green) > MVT particelle
+        const clickableLayers = ["uploaded-particelle-fill", "particelle-fill"].filter(
+          (l) => map.getLayer(l) != null,
+        );
+        const features = map.queryRenderedFeatures(event.point, { layers: clickableLayers });
+        const id = features[0]?.properties?.id;
+        if (!id) return;
 
         popupRef.current?.remove();
         try {
@@ -266,7 +272,7 @@ export default function MapContainer({
         }
       });
 
-      for (const layerId of ["particelle-fill", "distretti-fill"]) {
+      for (const layerId of ["particelle-fill", "uploaded-particelle-fill", "distretti-fill"]) {
         map.on("mouseenter", layerId, () => {
           map.getCanvas().style.cursor = "pointer";
         });
@@ -399,15 +405,7 @@ export default function MapContainer({
             }
           }
           if (!bounds.isEmpty()) {
-            // cameraForBounds tells us what zoom fitBounds would produce.
-            // At zoom < 13 individual parcels are sub-pixel, so we instead
-            // fly to the centre of the dataset at a legible zoom level.
-            const camera = map.cameraForBounds(bounds, { padding: 40 });
-            if (camera && (camera.zoom ?? 0) < 13) {
-              map.flyTo({ center: bounds.getCenter(), zoom: 13, duration: 600 });
-            } else {
-              map.fitBounds(bounds, { padding: 40, duration: 600 });
-            }
+            map.fitBounds(bounds, { padding: 40, duration: 600, maxZoom: 16 });
           }
         } catch {
           // Fit bounds is best-effort.
