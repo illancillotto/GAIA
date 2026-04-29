@@ -139,13 +139,9 @@ export default function CatastoGisPage() {
     [result, token],
   );
 
-  const handleImportXlsx = useCallback(async () => {
+  const handleImportXlsx = useCallback(async (file: File) => {
     if (!token) {
       setGisError("Sessione non disponibile. Accedi di nuovo.");
-      return;
-    }
-    if (!xlsxFile) {
-      setGisError("Seleziona un file Excel (.xlsx/.xls) con colonne: comune, sezione, foglio, particella, sub.");
       return;
     }
 
@@ -153,7 +149,7 @@ export default function CatastoGisPage() {
     setGisError(null);
     setGisInfo(null);
     try {
-      const buffer = await xlsxFile.arrayBuffer();
+      const buffer = await file.arrayBuffer();
       const workbook = XLSX.read(buffer, { type: "array" });
       const sheetName = workbook.SheetNames[0];
       const ws = workbook.Sheets[sheetName];
@@ -193,7 +189,7 @@ export default function CatastoGisPage() {
     } finally {
       setXlsxBusy(false);
     }
-  }, [token, xlsxFile]);
+  }, [token]);
 
   return (
     <CatastoPage
@@ -374,10 +370,22 @@ export default function CatastoGisPage() {
                       type="file"
                       accept=".xlsx,.xls"
                       className="sr-only"
-                      onChange={(e) => setXlsxFile(e.target.files?.[0] ?? null)}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0] ?? null;
+                        setXlsxFile(file);
+                        if (file) void handleImportXlsx(file);
+                      }}
                       disabled={xlsxBusy}
                     />
-                    {xlsxFile ? (
+                    {xlsxBusy ? (
+                      <>
+                        <svg className="h-7 w-7 animate-spin text-emerald-500" fill="none" viewBox="0 0 24 24">
+                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                        </svg>
+                        <span className="text-sm font-medium text-emerald-600">Caricamento…</span>
+                      </>
+                    ) : xlsxFile ? (
                       <>
                         <svg className="h-7 w-7 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
@@ -395,38 +403,20 @@ export default function CatastoGisPage() {
                       </>
                     )}
                   </label>
-                  <div className="mt-2.5 flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => void handleImportXlsx()}
-                      disabled={!xlsxFile || xlsxBusy}
-                      className="flex flex-1 items-center justify-center gap-1.5 rounded-lg bg-emerald-600 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-emerald-200 disabled:text-emerald-400"
-                    >
-                      {xlsxBusy ? (
-                        <>
-                          <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                          </svg>
-                          Caricamento…
-                        </>
-                      ) : (
-                        "Visualizza particelle"
-                      )}
-                    </button>
-                    {uploadedGeojson ? (
+                  {uploadedGeojson ? (
+                    <div className="mt-2">
                       <button
                         type="button"
-                        onClick={() => setUploadedGeojson(null)}
-                        title="Rimuovi layer dalla mappa"
-                        className="flex items-center justify-center rounded-lg border border-gray-200 bg-white px-3 py-2 text-gray-400 transition hover:bg-gray-50 hover:text-gray-600"
+                        onClick={() => { setUploadedGeojson(null); setXlsxFile(null); setGisInfo(null); setGisError(null); }}
+                        className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white py-2 text-sm text-gray-500 transition hover:bg-gray-50 hover:text-gray-700"
                       >
-                        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
                         </svg>
+                        Rimuovi dalla mappa
                       </button>
-                    ) : null}
-                  </div>
+                    </div>
+                  ) : null}
                 </div>
 
               </div>
