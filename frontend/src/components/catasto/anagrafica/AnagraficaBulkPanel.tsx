@@ -344,6 +344,7 @@ export function AnagraficaBulkPanel() {
   const [operationHistory, setOperationHistory] = useState<BulkOperationHistoryItem[]>([]);
   const [exportFieldsParticelle, setExportFieldsParticelle] = useState<string[]>([]);
   const [exportFieldsUtenze, setExportFieldsUtenze] = useState<string[]>([]);
+  const [exportMode, setExportMode] = useState<"veloce" | "avanzato">("veloce");
 
   const summary = useMemo(() => buildSummary(results), [results]);
 
@@ -729,6 +730,69 @@ export function AnagraficaBulkPanel() {
       const sheet = XLSX.utils.json_to_sheet(exportRows);
       const csv = XLSX.utils.sheet_to_csv(sheet);
       triggerDownload(new Blob([csv], { type: "text/csv;charset=utf-8" }), "catasto-elaborazione-massiva-particelle.csv");
+  }
+
+  async function exportVeloce(format: "csv" | "xlsx"): Promise<void> {
+    if (results.length === 0 || !inferredKind) return;
+    const token = getStoredAccessToken();
+    if (!token) return;
+    setBusy(true);
+    try {
+      const rows: Record<string, unknown>[] = [];
+      for (const r of results) {
+        const matches = r.matches ?? (r.match ? [r.match] : []);
+        const buildBase = (m?: (typeof matches)[0]) =>
+          inferredKind === "CF_PIVA_PARTICELLE"
+            ? { cf_input: r.codice_fiscale_input ?? "", piva_input: r.partita_iva_input ?? "", comune: m?.comune ?? "", foglio: m?.foglio ?? "", particella: m?.particella ?? "", sub: m?.subalterno ?? "", esito: r.esito }
+            : { comune: m?.comune ?? r.comune_input ?? "", sezione: r.sezione_input ?? "", foglio: m?.foglio ?? r.foglio_input ?? "", particella: m?.particella ?? r.particella_input ?? "", sub: m?.subalterno ?? r.sub_input ?? "", esito: r.esito };
+
+        const emptyInt = { n_intestatari: 0, rank: "", cf: "", tipo: "", cognome: "", nome: "", denominazione: "", ragione_sociale: "", data_nascita: "", luogo_nascita: "", deceduto: "" };
+
+        if (matches.length === 0) {
+          rows.push({ ...buildBase(), ...emptyInt });
+          continue;
+        }
+        for (const m of matches) {
+          const intestatari = m.intestatari ?? [];
+          const n = intestatari.length;
+          const base = buildBase(m);
+          if (n === 0) {
+            rows.push({ ...base, ...emptyInt });
+            continue;
+          }
+          for (let i = 0; i < n; i++) {
+            const int = intestatari[i];
+            rows.push({
+              ...base,
+              n_intestatari: n,
+              rank: `${i + 1}/${n}`,
+              cf: int.codice_fiscale ?? "",
+              tipo: int.tipo ?? "",
+              cognome: int.cognome ?? "",
+              nome: int.nome ?? "",
+              denominazione: int.denominazione ?? "",
+              ragione_sociale: int.ragione_sociale ?? "",
+              data_nascita: int.data_nascita ?? "",
+              luogo_nascita: int.luogo_nascita ?? "",
+              deceduto: String(int.deceduto ?? ""),
+            });
+          }
+        }
+      }
+
+      const basename = inferredKind === "CF_PIVA_PARTICELLE" ? "catasto-intestatari-da-cf" : "catasto-intestatari";
+      if (format === "csv") {
+        const csv = XLSX.utils.sheet_to_csv(XLSX.utils.json_to_sheet(rows));
+        triggerDownload(new Blob([csv], { type: "text/csv;charset=utf-8" }), `${basename}.csv`);
+      } else {
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "intestatari");
+        const out = XLSX.write(wb, { type: "array", bookType: "xlsx" });
+        triggerDownload(new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), `${basename}.xlsx`);
+      }
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function exportCsv(): Promise<void> {
@@ -1129,133 +1193,170 @@ export function AnagraficaBulkPanel() {
 
         {inferredKind ? (
           <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 p-4">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium text-gray-900">Campi da esportare</p>
-                <p className="mt-1 text-sm text-gray-600">Seleziona le colonne incluse nell’export CSV/Excel.</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  disabled={busy}
-                  onClick={() => {
-                    if (inferredKind === "CF_PIVA_PARTICELLE") {
-                      setExportFieldsParticelle(EXPORT_FIELD_DEFS_CF_PARTICELLE.map((f) => f.key));
-                      setExportFieldsUtenze([]);
-                      return;
-                    }
-                    setExportFieldsParticelle(EXPORT_FIELD_DEFS_PARTICELLE_INTESTATARI.map((f) => f.key));
-                    setExportFieldsUtenze(EXPORT_FIELD_DEFS_UTENZE.map((f) => f.key));
-                  }}
-                >
-                  Seleziona tutto
-                </button>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  disabled={busy}
-                  onClick={() => {
-                    setExportFieldsParticelle([]);
-                    setExportFieldsUtenze([]);
-                  }}
-                >
-                  Nessuno
-                </button>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm font-medium text-gray-900">Esportazione</p>
+              <div className="flex rounded-lg bg-gray-200/60 p-0.5 text-sm">
+                {(["veloce", "avanzato"] as const).map((mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => setExportMode(mode)}
+                    className={`rounded-md px-3 py-1.5 font-medium capitalize transition ${
+                      exportMode === mode ? "bg-white shadow-sm text-gray-900" : "text-gray-500 hover:text-gray-700"
+                    }`}
+                  >
+                    {mode}
+                  </button>
+                ))}
               </div>
             </div>
 
-            <div className="mt-4 grid gap-4 md:grid-cols-2">
-              <div className="rounded-xl border border-gray-100 bg-white p-3">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Particelle</p>
-                  <div className="flex gap-2">
+            {exportMode === "veloce" ? (
+              <div className="mt-4 space-y-3">
+                <p className="text-sm text-gray-500">
+                  Una riga per intestatario.{" "}
+                  {inferredKind === "CF_PIVA_PARTICELLE"
+                    ? "Colonne: CF input · P.IVA input · Comune · Foglio · Particella · Sub"
+                    : "Colonne: Comune · Sezione · Foglio · Particella · Sub"}{" "}
+                  · Esito · N intestatari · Rank (1/n) · CF · Tipo · Cognome · Nome · Denominazione · Ragione Sociale · Data Nascita · Luogo Nascita · Deceduto
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button className="btn-secondary" type="button" disabled={busy || results.length === 0} onClick={() => void exportVeloce("csv")}>
+                    <DocumentIcon className="h-4 w-4" />
+                    Export CSV
+                  </button>
+                  <button className="btn-secondary" type="button" disabled={busy || results.length === 0} onClick={() => void exportVeloce("xlsx")}>
+                    <DocumentIcon className="h-4 w-4" />
+                    Export Excel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="mt-4 flex flex-wrap items-start justify-between gap-3">
+                  <p className="text-sm text-gray-600">Seleziona le colonne incluse nell’export CSV/Excel.</p>
+                  <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
                       className="btn-secondary"
                       disabled={busy}
                       onClick={() => {
-                        const all =
-                          inferredKind === "CF_PIVA_PARTICELLE"
-                            ? EXPORT_FIELD_DEFS_CF_PARTICELLE.map((f) => f.key)
-                            : EXPORT_FIELD_DEFS_PARTICELLE_INTESTATARI.map((f) => f.key);
-                        setExportFieldsParticelle(all);
+                        if (inferredKind === "CF_PIVA_PARTICELLE") {
+                          setExportFieldsParticelle(EXPORT_FIELD_DEFS_CF_PARTICELLE.map((f) => f.key));
+                          setExportFieldsUtenze([]);
+                          return;
+                        }
+                        setExportFieldsParticelle(EXPORT_FIELD_DEFS_PARTICELLE_INTESTATARI.map((f) => f.key));
+                        setExportFieldsUtenze(EXPORT_FIELD_DEFS_UTENZE.map((f) => f.key));
                       }}
                     >
-                      Tutti
+                      Seleziona tutto
                     </button>
-                    <button type="button" className="btn-secondary" disabled={busy} onClick={() => setExportFieldsParticelle([])}>
+                    <button
+                      type="button"
+                      className="btn-secondary"
+                      disabled={busy}
+                      onClick={() => {
+                        setExportFieldsParticelle([]);
+                        setExportFieldsUtenze([]);
+                      }}
+                    >
                       Nessuno
                     </button>
                   </div>
                 </div>
 
-                <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                  {(inferredKind === "CF_PIVA_PARTICELLE" ? EXPORT_FIELD_DEFS_CF_PARTICELLE : EXPORT_FIELD_DEFS_PARTICELLE_INTESTATARI).map((f) => (
-                    <label key={f.key} className="flex items-center gap-2 text-sm text-gray-700">
-                      <input
-                        type="checkbox"
-                        checked={exportFieldsParticelle.includes(f.key)}
-                        disabled={busy}
-                        onChange={(e) => {
-                          const checked = e.target.checked;
-                          setExportFieldsParticelle((prev) => {
-                            if (checked) return prev.includes(f.key) ? prev : [...prev, f.key];
-                            return prev.filter((k) => k !== f.key);
-                          });
-                        }}
-                      />
-                      <span className="truncate" title={f.key}>
-                        {f.label}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </div>
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <div className="rounded-xl border border-gray-100 bg-white p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Particelle</p>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          className="btn-secondary"
+                          disabled={busy}
+                          onClick={() => {
+                            const all =
+                              inferredKind === "CF_PIVA_PARTICELLE"
+                                ? EXPORT_FIELD_DEFS_CF_PARTICELLE.map((f) => f.key)
+                                : EXPORT_FIELD_DEFS_PARTICELLE_INTESTATARI.map((f) => f.key);
+                            setExportFieldsParticelle(all);
+                          }}
+                        >
+                          Tutti
+                        </button>
+                        <button type="button" className="btn-secondary" disabled={busy} onClick={() => setExportFieldsParticelle([])}>
+                          Nessuno
+                        </button>
+                      </div>
+                    </div>
 
-              {inferredKind === "COMUNE_FOGLIO_PARTICELLA_INTESTATARI" ? (
-                <div className="rounded-xl border border-gray-100 bg-white p-3">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Utenze</p>
-                    <div className="flex gap-2">
-                      <button
-                        type="button"
-                        className="btn-secondary"
-                        disabled={busy}
-                        onClick={() => setExportFieldsUtenze(EXPORT_FIELD_DEFS_UTENZE.map((f) => f.key))}
-                      >
-                        Tutti
-                      </button>
-                      <button type="button" className="btn-secondary" disabled={busy} onClick={() => setExportFieldsUtenze([])}>
-                        Nessuno
-                      </button>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                      {(inferredKind === "CF_PIVA_PARTICELLE" ? EXPORT_FIELD_DEFS_CF_PARTICELLE : EXPORT_FIELD_DEFS_PARTICELLE_INTESTATARI).map((f) => (
+                        <label key={f.key} className="flex items-center gap-2 text-sm text-gray-700">
+                          <input
+                            type="checkbox"
+                            checked={exportFieldsParticelle.includes(f.key)}
+                            disabled={busy}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              setExportFieldsParticelle((prev) => {
+                                if (checked) return prev.includes(f.key) ? prev : [...prev, f.key];
+                                return prev.filter((k) => k !== f.key);
+                              });
+                            }}
+                          />
+                          <span className="truncate" title={f.key}>{f.label}</span>
+                        </label>
+                      ))}
                     </div>
                   </div>
 
-                  <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                    {EXPORT_FIELD_DEFS_UTENZE.map((f) => (
-                      <label key={f.key} className="flex items-center gap-2 text-sm text-gray-700">
-                        <input
-                          type="checkbox"
-                          checked={exportFieldsUtenze.includes(f.key)}
-                          disabled={busy}
-                          onChange={(e) => {
-                            const checked = e.target.checked;
-                            setExportFieldsUtenze((prev) => {
-                              if (checked) return prev.includes(f.key) ? prev : [...prev, f.key];
-                              return prev.filter((k) => k !== f.key);
-                            });
-                          }}
-                        />
-                        <span className="truncate" title={f.key}>
-                          {f.label}
-                        </span>
-                      </label>
-                    ))}
-                  </div>
+                  {inferredKind === "COMUNE_FOGLIO_PARTICELLA_INTESTATARI" ? (
+                    <div className="rounded-xl border border-gray-100 bg-white p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-semibold uppercase tracking-widest text-gray-400">Utenze</p>
+                        <div className="flex gap-2">
+                          <button type="button" className="btn-secondary" disabled={busy} onClick={() => setExportFieldsUtenze(EXPORT_FIELD_DEFS_UTENZE.map((f) => f.key))}>Tutti</button>
+                          <button type="button" className="btn-secondary" disabled={busy} onClick={() => setExportFieldsUtenze([])}>Nessuno</button>
+                        </div>
+                      </div>
+
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        {EXPORT_FIELD_DEFS_UTENZE.map((f) => (
+                          <label key={f.key} className="flex items-center gap-2 text-sm text-gray-700">
+                            <input
+                              type="checkbox"
+                              checked={exportFieldsUtenze.includes(f.key)}
+                              disabled={busy}
+                              onChange={(e) => {
+                                const checked = e.target.checked;
+                                setExportFieldsUtenze((prev) => {
+                                  if (checked) return prev.includes(f.key) ? prev : [...prev, f.key];
+                                  return prev.filter((k) => k !== f.key);
+                                });
+                              }}
+                            />
+                            <span className="truncate" title={f.key}>{f.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
                 </div>
-              ) : null}
-            </div>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button className="btn-secondary" type="button" disabled={busy || results.length === 0} onClick={() => void exportCsv()}>
+                    <DocumentIcon className="h-4 w-4" />
+                    Export CSV
+                  </button>
+                  <button className="btn-secondary" type="button" disabled={busy || results.length === 0} onClick={() => void exportXlsx()}>
+                    <DocumentIcon className="h-4 w-4" />
+                    Export Excel
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         ) : null}
 
@@ -1263,14 +1364,6 @@ export function AnagraficaBulkPanel() {
           <button className="btn-primary" type="button" disabled={busy || parsedRows.length === 0} onClick={() => void runBulkSearch()}>
             <RefreshIcon className="h-4 w-4" />
             {busy ? "Elaborazione…" : "Elabora righe"}
-          </button>
-          <button className="btn-secondary" type="button" disabled={busy || results.length === 0} onClick={() => void exportCsv()}>
-            <DocumentIcon className="h-4 w-4" />
-            Export CSV
-          </button>
-          <button className="btn-secondary" type="button" disabled={busy || results.length === 0} onClick={() => void exportXlsx()}>
-            <DocumentIcon className="h-4 w-4" />
-            Export Excel
           </button>
         </div>
       </article>
