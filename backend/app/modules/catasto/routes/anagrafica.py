@@ -38,6 +38,7 @@ from app.schemas.catasto_phase1 import (
     CatAnagraficaBulkJobDetail,
     CatAnagraficaBulkJobItem,
     CatAnagraficaBulkJobListResponse,
+    CatAnagraficaBulkJobSaveRequest,
     CatAnagraficaBulkJobSummary,
     CatAnagraficaBulkSearchRowResult,
     CatAnagraficaMatch,
@@ -983,6 +984,51 @@ async def create_bulk_search_job(
     )
 
 
+@router.post("/jobs/save", response_model=CatAnagraficaBulkJobDetail)
+async def save_bulk_search_job(
+    request: CatAnagraficaBulkJobSaveRequest = Body(...),
+    db: Session = Depends(get_db),
+    user: ApplicationUser = Depends(require_active_user),
+) -> CatAnagraficaBulkJobDetail:
+    payload = request.payload
+
+    def infer_kind() -> Literal["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"]:
+        if payload.kind in ("CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"):
+            return payload.kind
+        has_particella_keys = any((r.comune or r.foglio or r.particella or r.sub or r.sezione) for r in payload.rows)
+        has_tax_keys = any((r.codice_fiscale or r.partita_iva) for r in payload.rows)
+        if has_particella_keys and not has_tax_keys:
+            return "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"
+        if has_tax_keys and not has_particella_keys:
+            return "CF_PIVA_PARTICELLE"
+        return "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"
+
+    kind = infer_kind()
+    summary = _build_summary(request.results)
+    job = CatastoElaborazioniMassiveJob(
+        user_id=user.id,
+        kind=str(kind),
+        source_filename=_norm_str(request.source_filename),
+        skipped_rows=max(int(request.skipped_rows or 0), 0),
+        payload_json=payload.model_dump(mode="json"),
+        results_json={"results": [r.model_dump(mode="json") for r in request.results]},
+        summary_json=summary,
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    return CatAnagraficaBulkJobDetail(
+        id=job.id,
+        created_at=job.created_at,
+        source_filename=job.source_filename,
+        kind=job.kind,  # type: ignore[arg-type]
+        skipped_rows=job.skipped_rows,
+        summary=CatAnagraficaBulkJobSummary(**job.summary_json),
+        results=request.results,
+    )
+
+
 @router.get("/jobs", response_model=CatAnagraficaBulkJobListResponse)
 async def list_bulk_search_jobs(
     db: Session = Depends(get_db),
@@ -1057,7 +1103,11 @@ async def get_bulk_search_job(
     raw_results = job.results_json.get("results") if isinstance(job.results_json, dict) else None
     results = [CatAnagraficaBulkSearchRowResult.model_validate(r) for r in (raw_results or [])]
 
-    if job.kind == "COMUNE_FOGLIO_PARTICELLA_INTESTATARI":
+    payload_has_live_results = (
+        isinstance(job.payload_json, dict)
+        and bool(job.payload_json.get("include_capacitas_live"))
+    )
+    if job.kind == "COMUNE_FOGLIO_PARTICELLA_INTESTATARI" and not payload_has_live_results:
         results = _refresh_saved_particelle_matches(db, results)
         job.results_json = {"results": [r.model_dump(mode="json") for r in results]}
         job.summary_json = _build_summary(results)

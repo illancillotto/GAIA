@@ -8,7 +8,7 @@ import { DataTable } from "@/components/table/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { AlertBanner } from "@/components/ui/alert-banner";
 import { DocumentIcon, RefreshIcon } from "@/components/ui/icons";
-import { capacitasGetRptCertificatoLink, catastoBulkSearchAnagrafica, catastoCreateElaborazioneMassivaJob, catastoDeleteElaborazioniMassiveJobs, catastoGetElaborazioneMassivaJob, catastoListElaborazioniMassiveJobs } from "@/lib/api/catasto";
+import { capacitasGetRptCertificatoLink, catastoBulkSearchAnagrafica, catastoDeleteElaborazioniMassiveJobs, catastoGetElaborazioneMassivaJob, catastoListElaborazioniMassiveJobs, catastoSaveElaborazioneMassivaJob } from "@/lib/api/catasto";
 import { getStoredAccessToken } from "@/lib/auth";
 import type { CatAnagraficaBulkJobItem, CatAnagraficaBulkRowInput, CatAnagraficaBulkRowResult, CatIntestatario } from "@/types/catasto";
 
@@ -89,6 +89,14 @@ type BulkSummary = {
 };
 
 type BulkOperationHistoryItem = CatAnagraficaBulkJobItem;
+
+type BulkProgressState = {
+  open: boolean;
+  processed: number;
+  total: number;
+  currentLabel: string;
+  phase: "idle" | "processing" | "saving" | "completed" | "error";
+};
 
 function buildSummary(results: CatAnagraficaBulkRowResult[]): BulkSummary {
   const s: BulkSummary = { total: results.length, found: 0, notFound: 0, multiple: 0, invalid: 0, error: 0 };
@@ -239,6 +247,13 @@ export function AnagraficaBulkPanel() {
   const [error, setError] = useState<string | null>(null);
   const [operationHistory, setOperationHistory] = useState<BulkOperationHistoryItem[]>([]);
   const [showDeleteHistoryConfirm, setShowDeleteHistoryConfirm] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState<BulkProgressState>({
+    open: false,
+    processed: 0,
+    total: 0,
+    currentLabel: "",
+    phase: "idle",
+  });
 
   const summary = useMemo(() => buildSummary(results), [results]);
 
@@ -270,6 +285,20 @@ export function AnagraficaBulkPanel() {
     } finally {
       setBusy(false);
     }
+  }
+
+  function progressRowLabel(row: CatAnagraficaBulkRowInput): string {
+    if (inferredKind === "CF_PIVA_PARTICELLE") {
+      return row.codice_fiscale ?? row.partita_iva ?? `Riga ${row.row_index}`;
+    }
+    return [
+      row.comune ?? "Comune n/d",
+      row.foglio ? `Fg. ${row.foglio}` : null,
+      row.particella ? `Part. ${row.particella}` : null,
+      row.sub ? `Sub. ${row.sub}` : null,
+    ]
+      .filter(Boolean)
+      .join(" · ");
   }
 
   const columns = useMemo<ColumnDef<CatAnagraficaBulkRowResult>[]>(
@@ -368,12 +397,14 @@ export function AnagraficaBulkPanel() {
       setSkippedRows(parsed.skipped);
       setResults([]);
       setActiveJobId(null);
+      setBulkProgress((prev) => ({ ...prev, open: false }));
     } catch (e) {
       setInferredKind(null);
       setParsedRows([]);
       setSkippedRows(0);
       setResults([]);
       setActiveJobId(null);
+      setBulkProgress((prev) => ({ ...prev, open: false }));
       setError(e instanceof Error ? e.message : "Errore parsing file");
     } finally {
       setBusy(false);
@@ -388,24 +419,68 @@ export function AnagraficaBulkPanel() {
       return;
     }
     setBusy(true);
+    setResults([]);
+    setActiveJobId(null);
+    setBulkProgress({
+      open: true,
+      processed: 0,
+      total: parsedRows.length,
+      currentLabel: "Preparazione elaborazione...",
+      phase: "processing",
+    });
     try {
-      try {
-        const job = await catastoCreateElaborazioneMassivaJob(token, {
-          source_filename: sourceFile?.name ?? null,
-          skipped_rows: skippedRows,
-          payload: { kind: inferredKind ?? undefined, include_capacitas_live: false, rows: parsedRows },
+      const includeCapacitasLive = inferredKind === "COMUNE_FOGLIO_PARTICELLA_INTESTATARI";
+      const chunkSize = includeCapacitasLive ? 5 : 25;
+      const collectedResults: CatAnagraficaBulkRowResult[] = [];
+
+      for (let start = 0; start < parsedRows.length; start += chunkSize) {
+        const chunk = parsedRows.slice(start, start + chunkSize);
+        const firstRow = chunk[0];
+        setBulkProgress((prev) => ({
+          ...prev,
+          currentLabel: firstRow ? progressRowLabel(firstRow) : "Preparazione...",
+          phase: "processing",
+        }));
+        const response = await catastoBulkSearchAnagrafica(token, {
+          kind: inferredKind ?? undefined,
+          include_capacitas_live: includeCapacitasLive,
+          rows: chunk,
         });
-        setResults(job.results);
-        setActiveJobId(job.id);
-        setOperationHistory((prev) => [job, ...prev].slice(0, 5));
-      } catch {
-        // Backward-compatible fallback if the jobs API is not available yet.
-        const response = await catastoBulkSearchAnagrafica(token, { kind: inferredKind ?? undefined, include_capacitas_live: false, rows: parsedRows });
-        setResults(response.results);
-        setActiveJobId(null);
+        collectedResults.push(...response.results);
+        setResults([...collectedResults]);
+        setBulkProgress((prev) => ({
+          ...prev,
+          processed: Math.min(start + chunk.length, parsedRows.length),
+        }));
       }
+
+      setBulkProgress((prev) => ({
+        ...prev,
+        currentLabel: "Salvataggio nello storico...",
+        phase: "saving",
+      }));
+      const job = await catastoSaveElaborazioneMassivaJob(token, {
+        source_filename: sourceFile?.name ?? null,
+        skipped_rows: skippedRows,
+        payload: { kind: inferredKind ?? undefined, include_capacitas_live: includeCapacitasLive, rows: parsedRows },
+        results: collectedResults,
+      });
+      setResults(job.results);
+      setActiveJobId(job.id);
+      setOperationHistory((prev) => [job, ...prev].slice(0, 5));
+      setBulkProgress((prev) => ({
+        ...prev,
+        processed: parsedRows.length,
+        currentLabel: "Elaborazione completata.",
+        phase: "completed",
+      }));
       setError(null);
     } catch (e) {
+      setBulkProgress((prev) => ({
+        ...prev,
+        currentLabel: e instanceof Error ? e.message : "Errore elaborazione massiva",
+        phase: "error",
+      }));
       setError(e instanceof Error ? e.message : "Errore elaborazione massiva");
     } finally {
       setBusy(false);
@@ -521,6 +596,10 @@ export function AnagraficaBulkPanel() {
     }
   }
 
+  const progressPercent =
+    bulkProgress.total > 0 ? Math.round((bulkProgress.processed / bulkProgress.total) * 100) : 0;
+  const canCloseProgress = bulkProgress.phase === "completed" || bulkProgress.phase === "error";
+
   return (
     <div className="page-stack">
       {error ? (
@@ -548,6 +627,61 @@ export function AnagraficaBulkPanel() {
         </div>
       ) : null}
 
+      {bulkProgress.open ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 p-4">
+          <div className="w-full max-w-lg rounded-2xl bg-white p-6 shadow-xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-lg font-semibold text-gray-900">
+                  {bulkProgress.phase === "completed" ? "Elaborazione completata" : bulkProgress.phase === "error" ? "Elaborazione interrotta" : "Elaborazione in corso"}
+                </p>
+                <p className="mt-1 text-sm text-gray-600">
+                  {bulkProgress.phase === "saving"
+                    ? "Salvataggio dei risultati nello storico."
+                    : bulkProgress.phase === "completed"
+                      ? "Elaborazione completata."
+                      : bulkProgress.phase === "error"
+                        ? "L'elaborazione si e interrotta."
+                        : "Sto processando le righe del file a blocchi."}
+                </p>
+              </div>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-700">
+                {progressPercent}%
+              </span>
+            </div>
+
+            <div className="mt-5">
+              <div className="mb-2 flex items-center justify-between text-sm text-gray-600">
+                <span>
+                  {bulkProgress.processed} di {bulkProgress.total} righe
+                </span>
+                <span>{bulkProgress.phase === "saving" ? "Salvataggio" : bulkProgress.phase === "completed" ? "Completato" : "Elaborazione"}</span>
+              </div>
+              <div className="h-3 overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className={[
+                    "h-full rounded-full transition-all duration-300",
+                    bulkProgress.phase === "error" ? "bg-red-500" : bulkProgress.phase === "completed" ? "bg-emerald-500" : "bg-blue-600",
+                  ].join(" ")}
+                  style={{ width: `${Math.max(progressPercent, bulkProgress.phase === "processing" ? 4 : 0)}%` }}
+                />
+              </div>
+              <p className="mt-3 text-sm text-gray-700">
+                Riga corrente: <span className="font-medium">{bulkProgress.currentLabel || "Preparazione..."}</span>
+              </p>
+            </div>
+
+            {canCloseProgress ? (
+              <div className="mt-5 flex justify-end">
+                <button type="button" className="btn-primary" onClick={() => setBulkProgress((prev) => ({ ...prev, open: false }))}>
+                  Chiudi
+                </button>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      ) : null}
+
       <article className="panel-card">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -568,6 +702,7 @@ export function AnagraficaBulkPanel() {
                 setSkippedRows(0);
                 setResults([]);
                 setActiveJobId(null);
+                setBulkProgress((prev) => ({ ...prev, open: false }));
                 setError(null);
               }}
             >

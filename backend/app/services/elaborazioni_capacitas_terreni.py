@@ -111,7 +111,7 @@ async def sync_terreni_for_request(
     collected_at = datetime.now(timezone.utc)
     search_key = build_search_key(request)
     counters = SyncCounters()
-    certificato_cache: dict[tuple[str, str, str, str, str], CapacitasTerrenoCertificato] = {}
+    certificato_cache: dict[tuple[str, str, str, str, str], tuple[CapacitasTerrenoCertificato, CatCapacitasCertificato]] = {}
     storico_cache: dict[str, list[CapacitasStoricoAnagraficaRow]] = {}
     anagrafica_detail_cache: dict[str, CapacitasAnagraficaDetail] = {}
 
@@ -158,8 +158,10 @@ async def sync_terreni_for_request(
 
         if fetch_certificati and row.cco and row.com and row.pvc and row.fra is not None and row.ccs is not None:
             cache_key = (row.cco, row.com, row.pvc, row.fra or "", row.ccs or "")
-            certificato = certificato_cache.get(cache_key)
-            if certificato is None:
+            cached_certificato = certificato_cache.get(cache_key)
+            should_persist_snapshot_intestatari = False
+            target_utenza = _find_utenza_for_terreno_row(db, row)
+            if cached_certificato is None:
                 certificato = await client.fetch_certificato(
                     cco=row.cco,
                     com=row.com,
@@ -167,7 +169,6 @@ async def sync_terreni_for_request(
                     fra=row.fra or "",
                     ccs=row.ccs or "",
                 )
-                certificato_cache[cache_key] = certificato
                 counters.certificati += 1
                 certificato_snapshot = CatCapacitasCertificato(
                     cco=certificato.cco or row.cco,
@@ -185,15 +186,22 @@ async def sync_terreni_for_request(
                 )
                 db.add(certificato_snapshot)
                 db.flush()
-                await _persist_capacitas_intestatari(
-                    db,
-                    client,
-                    certificato_snapshot,
-                    certificato,
-                    collected_at,
-                    storico_cache=storico_cache,
-                    anagrafica_detail_cache=anagrafica_detail_cache,
-                )
+                certificato_cache[cache_key] = (certificato, certificato_snapshot)
+                should_persist_snapshot_intestatari = True
+            else:
+                certificato, certificato_snapshot = cached_certificato
+
+            await _persist_capacitas_intestatari(
+                db,
+                client,
+                certificato_snapshot,
+                certificato,
+                collected_at,
+                target_utenze=[target_utenza] if target_utenza is not None else [],
+                persist_snapshot_intestatari=should_persist_snapshot_intestatari,
+                storico_cache=storico_cache,
+                anagrafica_detail_cache=anagrafica_detail_cache,
+            )
 
         if detail is not None:
             db.add(
@@ -349,11 +357,13 @@ async def _persist_capacitas_intestatari(
     certificato: CapacitasTerrenoCertificato,
     collected_at: datetime,
     *,
+    target_utenze: list[CatUtenzaIrrigua] | None = None,
+    persist_snapshot_intestatari: bool = True,
     storico_cache: dict[str, list[CapacitasStoricoAnagraficaRow]],
     anagrafica_detail_cache: dict[str, CapacitasAnagraficaDetail],
 ) -> None:
-    utenze = []
-    if certificato.cco:
+    utenze = target_utenze or []
+    if target_utenze is None and certificato.cco:
         utenze = list(
             db.scalars(select(CatUtenzaIrrigua).where(CatUtenzaIrrigua.cco == certificato.cco)).all()
         )
@@ -385,25 +395,26 @@ async def _persist_capacitas_intestatari(
             prefetched_history_rows=history_rows,
         )
         subject = resolved_subject or subject
-        db.add(
-            CatCapacitasIntestatario(
-                certificato_id=certificato_snapshot.id,
-                subject_id=subject.id if subject else None,
-                idxana=intestatario.idxana,
-                idxesa=intestatario.idxesa,
-                codice_fiscale=intestatario.codice_fiscale,
-                denominazione=intestatario.denominazione,
-                data_nascita=intestatario.data_nascita,
-                luogo_nascita=intestatario.luogo_nascita,
-                residenza=intestatario.residenza,
-                comune_residenza=intestatario.comune_residenza,
-                cap=intestatario.cap,
-                titoli=intestatario.titoli,
-                deceduto=intestatario.deceduto,
-                raw_payload_json=intestatario.model_dump(exclude_none=True, mode="json"),
-                collected_at=collected_at,
+        if persist_snapshot_intestatari:
+            db.add(
+                CatCapacitasIntestatario(
+                    certificato_id=certificato_snapshot.id,
+                    subject_id=subject.id if subject else None,
+                    idxana=intestatario.idxana,
+                    idxesa=intestatario.idxesa,
+                    codice_fiscale=intestatario.codice_fiscale,
+                    denominazione=intestatario.denominazione,
+                    data_nascita=intestatario.data_nascita,
+                    luogo_nascita=intestatario.luogo_nascita,
+                    residenza=intestatario.residenza,
+                    comune_residenza=intestatario.comune_residenza,
+                    cap=intestatario.cap,
+                    titoli=intestatario.titoli,
+                    deceduto=intestatario.deceduto,
+                    raw_payload_json=intestatario.model_dump(exclude_none=True, mode="json"),
+                    collected_at=collected_at,
+                )
             )
-        )
 
 
 async def _persist_utenza_intestatari_from_history(
@@ -1446,12 +1457,7 @@ def _find_or_create_occupancy(
 
     utenza = None
     if anno:
-        utenza = db.scalar(
-            select(CatUtenzaIrrigua).where(
-                CatUtenzaIrrigua.cco == row.cco,
-                CatUtenzaIrrigua.anno_campagna == anno,
-            )
-        )
+        utenza = _find_utenza_for_terreno_row(db, row)
 
     db.add(
         CatConsorzioOccupancy(
@@ -1473,6 +1479,44 @@ def _find_or_create_occupancy(
         )
     )
     return True
+
+
+def _same_optional_text(left: str | None, right: str | None) -> bool:
+    return (left or "").strip() == (right or "").strip()
+
+
+def _find_utenza_for_terreno_row(db: Session, row: CapacitasTerrenoRow) -> CatUtenzaIrrigua | None:
+    anno = _to_int(row.anno)
+    if not row.cco or anno is None:
+        return None
+
+    candidates = list(
+        db.scalars(
+            select(CatUtenzaIrrigua).where(
+                CatUtenzaIrrigua.cco == row.cco,
+                CatUtenzaIrrigua.anno_campagna == anno,
+            )
+        ).all()
+    )
+    if not candidates:
+        return None
+
+    row_com = _to_int(row.com)
+    row_fra = _to_int(row.fra)
+    for candidate in candidates:
+        if row_com is not None and candidate.cod_comune_capacitas != row_com:
+            continue
+        if row_fra is not None and candidate.cod_frazione != row_fra:
+            continue
+        if row.foglio and not _same_optional_text(candidate.foglio, row.foglio):
+            continue
+        if row.particella and not _same_optional_text(candidate.particella, row.particella):
+            continue
+        if row.sub is not None and not _same_optional_text(candidate.subalterno, row.sub):
+            continue
+        return candidate
+
+    return None
 
 
 def _find_source_comune(db: Session, row: CapacitasTerrenoRow) -> CatComune | None:

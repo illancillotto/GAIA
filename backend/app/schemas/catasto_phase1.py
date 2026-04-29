@@ -421,6 +421,10 @@ class CatAnagraficaBulkJobCreateRequest(BaseModel):
     payload: CatAnagraficaBulkSearchRequest
 
 
+class CatAnagraficaBulkJobSaveRequest(CatAnagraficaBulkJobCreateRequest):
+    results: list[CatAnagraficaBulkSearchRowResult]
+
+
 class CatAnagraficaBulkJobSummary(BaseModel):
     total: int
     found: int

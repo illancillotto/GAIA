@@ -184,6 +184,7 @@ def setup_database(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, Non
             cco="0A1103877",
             comune_id=comune_uras.id,
             cod_comune_capacitas=289,
+            cod_frazione=38,
             nome_comune="Uras",
             foglio="1",
             particella="680",
@@ -1584,6 +1585,26 @@ def test_capacitas_terreni_sync_updates_existing_person_with_snapshot(monkeypatc
                 indirizzo="VIA Vecchia 1",
             )
         )
+        batch = db.query(CatImportBatch).filter_by(filename="seed-terreni.xlsx").one()
+        unrelated_particella = db.query(CatParticella).filter_by(codice_catastale="L122", foglio="14", particella="330").one()
+        db.add(
+            CatUtenzaIrrigua(
+                import_batch_id=batch.id,
+                anno_campagna=2026,
+                cco="0A1103877",
+                comune_id=unrelated_particella.comune_id,
+                cod_comune_capacitas=280,
+                cod_frazione=12,
+                nome_comune="Terralba",
+                foglio="14",
+                particella="330",
+                particella_id=unrelated_particella.id,
+                sup_catastale_mq=Decimal("2100.00"),
+                sup_irrigabile_mq=Decimal("2100.00"),
+                codice_fiscale="RSSMRA80A01H501U",
+                codice_fiscale_raw="RSSMRA80A01H501U",
+            )
+        )
         db.commit()
     finally:
         db.close()
@@ -1726,6 +1747,8 @@ def test_capacitas_terreni_sync_updates_existing_person_with_snapshot(monkeypatc
         assert db.query(CatCapacitasIntestatario).one().subject_id == person.subject_id
         assert db.query(CatUtenzaIntestatario).count() == 1
         utenza_intestatario = db.query(CatUtenzaIntestatario).one()
+        assert utenza_intestatario.utenza_record.foglio == "1"
+        assert utenza_intestatario.utenza_record.particella == "680"
         assert utenza_intestatario.subject_id == person.subject_id
         assert utenza_intestatario.residenza == "VIA Manca 151"
         assert utenza_intestatario.comune_residenza == "TERRALBA"

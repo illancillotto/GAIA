@@ -401,6 +401,17 @@ export async function catastoCreateElaborazioneMassivaJob(
   });
 }
 
+export async function catastoSaveElaborazioneMassivaJob(
+  token: string,
+  payload: { source_filename?: string | null; skipped_rows?: number; payload: CatAnagraficaBulkSearchRequest; results: CatAnagraficaBulkSearchResponse["results"] },
+): Promise<CatAnagraficaBulkJobDetail> {
+  return request<CatAnagraficaBulkJobDetail>("/catasto/elaborazioni-massive/particelle/jobs/save", {
+    method: "POST",
+    headers: { ...authHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function catastoListElaborazioniMassiveJobs(
   token: string,
   params?: { limit?: number },
