@@ -135,7 +135,7 @@ export default function ElaborazioniPage() {
         getBonificaSyncStatus(token),
       ]);
       setCredentialStatus(credentialsResult);
-      setBatches(batchesResult.slice(0, 6));
+      setBatches(batchesResult.slice(0, 50));
       setCaptchaSummary(captchaSummaryResult);
       setCapacitasCredentials(capacitasResult);
       setParticelleSyncJobs(particelleSyncResult);
@@ -327,6 +327,21 @@ export default function ElaborazioniPage() {
       return rightTime - leftTime;
     });
   }, [batches, bonificaSyncStatus, particelleSyncJobs]);
+
+  const batchesForTable = useMemo(() => {
+    const isRunning = (status: ElaborazioneBatch["status"]): boolean => status === "pending" || status === "processing";
+
+    return [...batches]
+      .sort((left, right) => {
+        const runningDelta = Number(isRunning(right.status)) - Number(isRunning(left.status));
+        if (runningDelta !== 0) return runningDelta;
+
+        const leftTime = Date.parse(left.created_at);
+        const rightTime = Date.parse(right.created_at);
+        return rightTime - leftTime;
+      })
+      .slice(0, 6);
+  }, [batches]);
 
   function openWorkspaceModal(href: string, title: string, description?: string): void {
     setModalState({ href, title, description });
@@ -588,7 +603,7 @@ export default function ElaborazioniPage() {
                 </tr>
               </thead>
               <tbody>
-                {batches.map((batch) => (
+                {batchesForTable.map((batch) => (
                   <tr key={batch.id}>
                     <td>
                       <button

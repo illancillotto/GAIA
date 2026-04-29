@@ -195,6 +195,9 @@ Vincoli:
 - tutte le validazioni e i mapping shapefile devono dipendere dallo stesso dataset
 - nelle response API e nel frontend preferire `cod_comune_capacitas` per evitare l'equivoco con il codice ISTAT ufficiale
 - nell'import shapefile il codice catastale comune va letto prima da `CODI_FISC` o varianti equivalenti del layer sorgente; `CFM` e `NATIONALCA` restano solo fallback di compatibilita
+- i confini di `cat_distretti` non devono essere derivati automaticamente dalle particelle correnti: da aprile 2026 il governo geometrico del distretto e autonomo tramite import shapefile dedicato dei distretti
+- `cat_particelle.num_distretto` resta un attributo informativo di classificazione territoriale della particella, ma non e piu la sorgente di verita per la geometria di `cat_distretti`
+- le modifiche dei confini distrettuali devono essere tracciate in storico geometrico dedicato, mantenendo stabile l'identita applicativa del distretto (`cat_distretti.id`)
 
 ## API di dominio correnti
 
@@ -319,6 +322,7 @@ Stato sintetico del modulo `catasto` sul perimetro oggi presente nel repository:
 
 - Fase 1
   completata: import Capacitas, distretti, particelle, anomalie, wizard import e basi geospaziali PostGIS
+  nota evolutiva: l'import shapefile particelle e l'import shapefile distretti sono ora due flussi distinti; il secondo governa in autonomia `cat_distretti` e lo storico dei confini
 - Fase 2
   completata sul perimetro attuale: hardening tecnico, integrazione shapefile/PostGIS, fixture workbook e smoke frontend
 - Fase 3

@@ -9,13 +9,13 @@
 ## 1. Principio architetturale
 
 Il GIS è un'**estensione del modulo catasto**, non un modulo separato. Non introduce:
-- nuove tabelle database (usa `cat_particelle`, `cat_distretti` esistenti)
 - nuovi container applicativi (usa Martin come da piano Catasto Fase 2)
 - nuova logica auth (usa JWT GAIA esistente)
 
 Aggiunge:
 - `backend/app/modules/catasto/routes/gis.py` — nuove route analisi spaziale
 - `backend/app/modules/catasto/services/gis_service.py` — logica PostGIS
+- `cat_distretti_geometry_versions` — storico geometrico dei confini distrettuali importati autonomamente
 - `frontend/src/app/catasto/gis/` — pagina GIS (già pianificata Fase 2, da estendere)
 - `frontend/src/components/catasto/gis/` — componenti GIS (DrawingTools, SelectionPanel, AnalysisPanel)
 
@@ -82,13 +82,15 @@ nginx/
 
 ## 4. Database — view per tiles correnti
 
-Le tabelle esistenti sono sufficienti. L'indice GIST critico è già presente:
+Il layer GIS continua a leggere `cat_distretti.geometry` come geometria corrente, ma il governo dei confini è separato da `cat_particelle` e versionato in `cat_distretti_geometry_versions`. Gli indici GIST critici sono:
 
 ```sql
 -- Già creato in migration Fase 1
 CREATE INDEX idx_cat_part_geom ON cat_particelle USING GIST (geometry) WHERE is_current;
 CREATE INDEX idx_cat_distretti_geom ON cat_distretti USING GIST (geometry);
 ```
+
+I batch shapefile delle particelle non devono più eseguire `ST_Union` per popolare `cat_distretti`: il ricalcolo dei confini avviene solo tramite import shapefile distretti dedicato (`/catasto/import/distretti/*`), che aggiorna `cat_distretti` e scrive una nuova versione geometrica corrente.
 
 Per Martin è stata aggiunta una migration dedicata che crea la view `cat_particelle_current`, filtrata su `is_current = TRUE` e arricchita con `ha_anomalie`. La view evita di pubblicare nei tiles lo storico particelle non corrente.
 

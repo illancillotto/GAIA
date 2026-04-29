@@ -349,10 +349,14 @@ async def finalize_shapefile_import(db: AsyncSession, created_by: int) -> CatImp
          se geometry o superficie cambiano: archivia vecchio in cat_particelle_history,
          aggiorna is_current=True con nuovi valori
        - Record nuovo: insert con is_current=True
-    3. Deriva cat_distretti via ST_Union per num_distretto
-    4. Aggiorna/crea CatImportBatch
+    3. Aggiorna/crea CatImportBatch
     """
 ```
+
+Aggiornamento architetturale successivo:
+- `finalize_shapefile_import()` governa solo `cat_particelle` e `cat_particelle_history`
+- i confini distrettuali sono importati tramite un finalize separato dedicato ai distretti
+- `cat_distretti` resta la tabella corrente usata dal GIS, ma la tracciabilita delle geometrie va mantenuta in `cat_distretti_geometry_versions`
 
 **Nota**: La tabella `cat_particelle_staging` viene creata da ogr2ogr e ha le stesse colonne dello shapefile. Il mapping colonne shapefile → `cat_particelle` va documentato qui con i nomi esatti delle colonne QGIS.
 
@@ -385,7 +389,8 @@ curl -s -X POST http://localhost:8000/catasto/import/shapefile/finalize \
 - [ ] Script shell eseguibile e documentato
 - [ ] Endpoint `/catasto/import/shapefile/finalize` funzionante
 - [ ] Dopo import: `cat_particelle` popolata con geometrie valide
-- [ ] `cat_distretti` creata/aggiornata con poligoni per ogni `NUM_DIST` != 'FD'
+- [ ] `cat_distretti` non viene alterata dall'import particelle
+- [ ] Confini distrettuali gestiti dal flusso `/catasto/import/distretti/*` con storico geometrico dedicato
 
 ---
 

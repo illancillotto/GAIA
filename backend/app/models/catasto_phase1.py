@@ -93,6 +93,31 @@ class CatDistretto(Base):
     coefficienti: Mapped[list["CatDistrettoCoefficiente"]] = relationship(
         back_populates="distretto", cascade="all, delete-orphan"
     )
+    geometry_versions: Mapped[list["CatDistrettoGeometryVersion"]] = relationship(
+        back_populates="distretto", cascade="all, delete-orphan"
+    )
+
+
+class CatDistrettoGeometryVersion(Base):
+    __tablename__ = "cat_distretti_geometry_versions"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    distretto_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("cat_distretti.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    source_batch_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cat_import_batches.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    source_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    num_distretto: Mapped[str] = mapped_column(String(10), nullable=False, index=True)
+    nome_distretto: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    geometry: Mapped[object] = mapped_column(MULTIPOLYGON_4326, nullable=False)
+    valid_from: Mapped[date] = mapped_column(Date, nullable=False, default=date.today)
+    valid_to: Mapped[date | None] = mapped_column(Date, nullable=True)
+    is_current: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+    distretto: Mapped["CatDistretto"] = relationship(back_populates="geometry_versions")
 
 
 class CatDistrettoCoefficiente(Base):
@@ -612,6 +637,7 @@ __all__ = [
     "CatCapacitasTerrenoDetail",
     "CatCapacitasTerrenoRow",
     "CatDistretto",
+    "CatDistrettoGeometryVersion",
     "CatDistrettoCoefficiente",
     "CatGisSavedSelection",
     "CatGisSavedSelectionItem",

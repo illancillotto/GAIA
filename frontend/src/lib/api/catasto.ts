@@ -141,6 +141,24 @@ export async function catastoUploadShapefile(
   );
 }
 
+export async function catastoUploadDistrettiShapefile(
+  token: string,
+  file: File,
+  params?: { sourceSrid?: number; onProgress?: (percent: number) => void },
+): Promise<CatImportStartResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const query = new URLSearchParams();
+  if (params?.sourceSrid != null) query.set("source_srid", String(params.sourceSrid));
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return requestFormDataWithUploadProgress<CatImportStartResponse>(
+    `/catasto/import/distretti/upload${suffix}`,
+    formData,
+    token,
+    params?.onProgress,
+  );
+}
+
 export async function catastoUploadCapacitas(
   token: string,
   file: File,

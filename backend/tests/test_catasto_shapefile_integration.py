@@ -11,8 +11,9 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.application_user import ApplicationUser
-from app.models.catasto_phase1 import CatDistretto, CatImportBatch, CatParticella, CatParticellaHistory
+from app.models.catasto_phase1 import CatDistretto, CatDistrettoGeometryVersion, CatImportBatch, CatParticella, CatParticellaHistory
 from app.modules.catasto.routes.distretti import get_distretto_geojson
+from app.modules.catasto.services.import_distretti import finalize_distretti_shapefile_import
 from app.modules.catasto.services.import_shapefile import finalize_shapefile_import
 
 
@@ -67,6 +68,16 @@ def _created_by(db: Session) -> int:
 
 def _cleanup_shapefile_artifacts(db: Session, *, staging_table: str, num_distretto: str, foglio: str, particella: str) -> None:
     db.execute(text(f'DROP TABLE IF EXISTS "{staging_table}"'))  # nosec - generated local test table
+    if db.execute(text("SELECT to_regclass('public.cat_distretti_geometry_versions')")).scalar_one() is not None:
+        db.execute(
+            text(
+                """
+                DELETE FROM cat_distretti_geometry_versions
+                WHERE num_distretto = :num_distretto
+                """
+            ),
+            {"num_distretto": num_distretto},
+        )
     db.execute(
         delete_stmt := text(
             """
@@ -92,7 +103,7 @@ def _cleanup_shapefile_artifacts(db: Session, *, staging_table: str, num_distret
     db.commit()
 
 
-def test_finalize_shapefile_import_inserts_current_particelle_and_distretti(db_session: Session) -> None:
+def test_finalize_shapefile_import_inserts_current_particelle_without_touching_distretti(db_session: Session) -> None:
     suffix = uuid4().hex[:8]
     staging_table = f"cat_particelle_staging_it_{suffix}"
     num_distretto = f"9{suffix[:3]}"
@@ -157,9 +168,6 @@ def test_finalize_shapefile_import_inserts_current_particelle_and_distretti(db_s
         inserted = db_session.execute(
             select(CatParticella).where(CatParticella.import_batch_id == batch_id, CatParticella.is_current.is_(True))
         ).scalars().all()
-        distretto = db_session.execute(
-            select(CatDistretto).where(CatDistretto.num_distretto == num_distretto)
-        ).scalar_one_or_none()
         expected_graphical_area = _expected_graphical_area(db_session, geometry_wkt)
 
         assert result["status"] == "completed"
@@ -174,8 +182,10 @@ def test_finalize_shapefile_import_inserts_current_particelle_and_distretti(db_s
         assert inserted[0].particella == particella
         assert str(inserted[0].superficie_grafica_mq) == expected_graphical_area
         assert inserted[0].num_distretto == num_distretto
-        assert distretto is not None
-        assert distretto.nome_distretto == f"Distretto test {suffix}"
+        distretto = db_session.execute(
+            select(CatDistretto).where(CatDistretto.num_distretto == num_distretto)
+        ).scalar_one_or_none()
+        assert distretto is None
         assert db_session.execute(text("SELECT to_regclass(:table_name)"), {"table_name": staging_table}).scalar_one() is None
     finally:
         _cleanup_shapefile_artifacts(
@@ -184,6 +194,230 @@ def test_finalize_shapefile_import_inserts_current_particelle_and_distretti(db_s
             num_distretto=num_distretto,
             foglio=foglio,
             particella=particella,
+        )
+
+
+def test_finalize_distretti_shapefile_import_upserts_current_geometry_and_versions_history(db_session: Session) -> None:
+    suffix = uuid4().hex[:8]
+    staging_table = f"cat_distretti_staging_it_{suffix}"
+    num_distretto = f"3{suffix[:3]}"
+
+    _cleanup_shapefile_artifacts(
+        db_session,
+        staging_table=staging_table,
+        num_distretto=num_distretto,
+        foglio=f"zz{suffix[:2]}",
+        particella=f"yy{suffix[2:5]}",
+    )
+    db_session.execute(
+        text(
+            """
+            CREATE TABLE IF NOT EXISTS cat_distretti_geometry_versions (
+              id uuid PRIMARY KEY,
+              distretto_id uuid NOT NULL REFERENCES cat_distretti(id) ON DELETE CASCADE,
+              source_batch_id uuid NULL REFERENCES cat_import_batches(id) ON DELETE SET NULL,
+              source_filename varchar(255) NULL,
+              num_distretto varchar(10) NOT NULL,
+              nome_distretto varchar(200) NULL,
+              geometry geometry(MULTIPOLYGON, 4326) NOT NULL,
+              valid_from date NOT NULL,
+              valid_to date NULL,
+              is_current boolean NOT NULL DEFAULT true,
+              created_at timestamptz NOT NULL DEFAULT now()
+            )
+            """
+        )
+    )
+
+    existing_distretto = CatDistretto(
+        num_distretto=num_distretto,
+        nome_distretto=f"Distretto old {suffix}",
+        geometry=f"SRID=4326;{_polygon_wkt(8.67, 39.87)}",
+        attivo=True,
+    )
+    db_session.add(existing_distretto)
+    db_session.commit()
+    existing_id = existing_distretto.id
+
+    db_session.execute(
+        text(
+            """
+            INSERT INTO cat_distretti_geometry_versions (
+              id, distretto_id, source_batch_id, source_filename, num_distretto, nome_distretto, geometry,
+              valid_from, valid_to, is_current, created_at
+            ) VALUES (
+              gen_random_uuid(), :distretto_id, NULL, 'seed', :num_distretto, :nome_distretto,
+              ST_GeomFromText(:wkt, 4326), CURRENT_DATE - 10, NULL, true, now()
+            )
+            """
+        ),
+        {
+            "distretto_id": str(existing_id),
+            "num_distretto": num_distretto,
+            "nome_distretto": existing_distretto.nome_distretto,
+            "wkt": _polygon_wkt(8.67, 39.87),
+        },
+    )
+    db_session.execute(
+        text(
+            f'''
+            CREATE TABLE "{staging_table}" (
+              num_dist text,
+              nome_dist text,
+              wkb_geometry geometry(MULTIPOLYGON, 4326)
+            )
+            '''
+        )
+    )
+    db_session.execute(
+        text(
+            f'''
+            INSERT INTO "{staging_table}" (num_dist, nome_dist, wkb_geometry)
+            VALUES (:num_distretto, :nome_distretto, ST_GeomFromText(:wkt, 4326))
+            '''
+        ),
+        {
+            "num_distretto": num_distretto,
+            "nome_distretto": f"Distretto new {suffix}",
+            "wkt": _polygon_wkt(8.68, 39.88),
+        },
+    )
+    db_session.commit()
+
+    try:
+        result = finalize_distretti_shapefile_import(
+            db_session,
+            created_by=_created_by(db_session),
+            staging_table=staging_table,
+        )
+
+        batch_id = UUID(result["batch_id"])
+        batch = db_session.get(CatImportBatch, batch_id)
+        distretto = db_session.execute(select(CatDistretto).where(CatDistretto.id == existing_id)).scalar_one()
+        versions = db_session.execute(
+            select(CatDistrettoGeometryVersion)
+            .where(CatDistrettoGeometryVersion.distretto_id == existing_id)
+            .order_by(CatDistrettoGeometryVersion.created_at)
+        ).scalars().all()
+
+        assert result["status"] == "completed"
+        assert batch is not None
+        assert batch.tipo == "shapefile_distretti"
+        assert distretto.nome_distretto == f"Distretto new {suffix}"
+        assert len(versions) == 2
+        assert versions[0].is_current is False
+        assert versions[0].valid_to == date.today()
+        assert versions[1].is_current is True
+        assert versions[1].source_batch_id == batch_id
+        assert versions[1].nome_distretto == f"Distretto new {suffix}"
+        assert batch.report_json["distretti_aggiornati"] == 1
+        assert batch.report_json["distretti_versionati"] == 1
+    finally:
+        _cleanup_shapefile_artifacts(
+            db_session,
+            staging_table=staging_table,
+            num_distretto=num_distretto,
+            foglio=f"zz{suffix[:2]}",
+            particella=f"yy{suffix[2:5]}",
+        )
+
+
+def test_finalize_distretti_shapefile_import_inserts_new_distretto_and_tracks_missing_snapshot(db_session: Session) -> None:
+    suffix = uuid4().hex[:8]
+    staging_table = f"cat_distretti_staging_it_{suffix}"
+    new_num_distretto = f"4{suffix[:3]}"
+    missing_num_distretto = f"5{suffix[:3]}"
+
+    _cleanup_shapefile_artifacts(
+        db_session,
+        staging_table=staging_table,
+        num_distretto=new_num_distretto,
+        foglio=f"aa{suffix[:2]}",
+        particella=f"bb{suffix[2:5]}",
+    )
+    _cleanup_shapefile_artifacts(
+        db_session,
+        staging_table=f"{staging_table}_missing",
+        num_distretto=missing_num_distretto,
+        foglio=f"cc{suffix[:2]}",
+        particella=f"dd{suffix[2:5]}",
+    )
+
+    db_session.add(
+        CatDistretto(
+            num_distretto=missing_num_distretto,
+            nome_distretto=f"Distretto missing {suffix}",
+            geometry=f"SRID=4326;{_polygon_wkt(8.69, 39.89)}",
+            attivo=True,
+        )
+    )
+    db_session.commit()
+
+    db_session.execute(
+        text(
+            f'''
+            CREATE TABLE "{staging_table}" (
+              num_dist text,
+              nome_dist text,
+              wkb_geometry geometry(MULTIPOLYGON, 4326)
+            )
+            '''
+        )
+    )
+    db_session.execute(
+        text(
+            f'''
+            INSERT INTO "{staging_table}" (num_dist, nome_dist, wkb_geometry)
+            VALUES (:num_distretto, :nome_distretto, ST_GeomFromText(:wkt, 4326))
+            '''
+        ),
+        {
+            "num_distretto": new_num_distretto,
+            "nome_distretto": f"Distretto inserted {suffix}",
+            "wkt": _polygon_wkt(8.70, 39.90),
+        },
+    )
+    db_session.commit()
+
+    try:
+        result = finalize_distretti_shapefile_import(
+            db_session,
+            created_by=_created_by(db_session),
+            staging_table=staging_table,
+        )
+
+        batch_id = UUID(result["batch_id"])
+        batch = db_session.get(CatImportBatch, batch_id)
+        inserted = db_session.execute(
+            select(CatDistretto).where(CatDistretto.num_distretto == new_num_distretto)
+        ).scalar_one_or_none()
+        inserted_versions = db_session.execute(
+            select(CatDistrettoGeometryVersion).where(CatDistrettoGeometryVersion.num_distretto == new_num_distretto)
+        ).scalars().all()
+
+        assert batch is not None
+        assert batch.tipo == "shapefile_distretti"
+        assert inserted is not None
+        assert inserted.nome_distretto == f"Distretto inserted {suffix}"
+        assert len(inserted_versions) == 1
+        assert inserted_versions[0].is_current is True
+        assert batch.report_json["distretti_inseriti"] == 1
+        assert batch.report_json["distretti_aggiornati"] == 0
+        assert batch.report_json["distretti_assenti_nello_snapshot"] >= 1
+    finally:
+        _cleanup_shapefile_artifacts(
+            db_session,
+            staging_table=staging_table,
+            num_distretto=new_num_distretto,
+            foglio=f"aa{suffix[:2]}",
+            particella=f"bb{suffix[2:5]}",
+        )
+        _cleanup_shapefile_artifacts(
+            db_session,
+            staging_table=f"{staging_table}_missing",
+            num_distretto=missing_num_distretto,
+            foglio=f"cc{suffix[:2]}",
+            particella=f"dd{suffix[2:5]}",
         )
 
 
@@ -331,6 +565,7 @@ def test_finalize_shapefile_import_writes_history_on_changed_particella(db_sessi
     db_session.commit()
     existing_id = existing.id
     old_geometry_wkt = _polygon_wkt(8.585, 39.785)
+    new_geometry_wkt = _polygon_wkt(8.675, 39.875)
     old_graphical_area = _expected_graphical_area(db_session, old_geometry_wkt)
     db_session.execute(
         text(

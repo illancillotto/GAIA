@@ -160,6 +160,14 @@ def _escape_sql_string(value: str) -> str:
     return value.replace("'", "''")
 
 
+def _apply_best_effort_local_settings(db: Session, statements: list[str]) -> None:
+    for statement in statements:
+        try:
+            db.execute(text(statement))
+        except Exception:
+            db.rollback()
+
+
 def finalize_shapefile_import(
     db: Session,
     *,
@@ -177,7 +185,6 @@ def finalize_shapefile_import(
     Operazioni:
     - SCD Type 2 verso `cat_particelle` (chiave operativa: cod_comune_capacitas,foglio,particella,subalterno)
     - Inserisce storico in `cat_particelle_history` per record cambiati
-    - Deriva e upserta `cat_distretti` via ST_Union sulle particelle correnti
     - Crea `cat_import_batches` con tipo='shapefile' e report_json con conteggi
 
     Nota importante:
@@ -337,15 +344,20 @@ def finalize_shapefile_import(
     )
     """
 
-    db.execute(text("SET LOCAL work_mem = '1GB'"))
-    db.execute(text("SET LOCAL maintenance_work_mem = '4GB'"))
-    db.execute(text("SET LOCAL temp_buffers = '512MB'"))
-    db.execute(text("SET LOCAL max_parallel_workers_per_gather = 8"))
-    db.execute(text("SET LOCAL parallel_setup_cost = 100"))
-    db.execute(text("SET LOCAL parallel_tuple_cost = 0.01"))
-    db.execute(text("SET LOCAL effective_io_concurrency = 200"))
-    db.execute(text("SET LOCAL random_page_cost = 1.1"))
-    db.execute(text("SET LOCAL jit = off"))
+    _apply_best_effort_local_settings(
+        db,
+        [
+            "SET LOCAL work_mem = '1GB'",
+            "SET LOCAL maintenance_work_mem = '4GB'",
+            "SET LOCAL temp_buffers = '512MB'",
+            "SET LOCAL max_parallel_workers_per_gather = 8",
+            "SET LOCAL parallel_setup_cost = 100",
+            "SET LOCAL parallel_tuple_cost = 0.01",
+            "SET LOCAL effective_io_concurrency = 200",
+            "SET LOCAL random_page_cost = 1.1",
+            "SET LOCAL jit = off",
+        ],
+    )
     current_particelle_count = int(
         db.execute(text("SELECT COUNT(*) FROM cat_particelle WHERE is_current = true")).scalar_one()
     )
@@ -393,7 +405,6 @@ def finalize_shapefile_import(
 
     if current_particelle_count == 0:
         fast_stage_table = f"cat_particelle_fast_stage_{batch_id.hex[:8]}"
-        fast_distretti_table = f"cat_distretti_fast_stage_{batch_id.hex[:8]}"
         chunk_size = 50_000
 
         _log("Fast path DB vuoto [1/4]: materializzazione particelle deduplicate…")
@@ -486,59 +497,7 @@ def finalize_shapefile_import(
                 f"Fast path DB vuoto [2/4]: {inserted_current:,} / {deduped_count:,} particelle inserite"
             )
 
-        _log("Fast path DB vuoto [3/4]: derivazione distretti da particelle deduplicate…")
-        db.execute(
-            text(
-                f"""
-                CREATE TEMP TABLE "{fast_distretti_table}" ON COMMIT DROP AS
-                SELECT
-                  num_distretto,
-                  MAX(nome_distretto) AS nome_distretto,
-                  ST_Multi(ST_Union(geometry)) AS geom
-                FROM "{fast_stage_table}"
-                WHERE geometry IS NOT NULL
-                  AND num_distretto IS NOT NULL
-                  AND num_distretto <> 'FD'
-                GROUP BY num_distretto
-                """
-            )
-        )
-        derived_distretti = int(db.execute(text(f'SELECT COUNT(*) FROM "{fast_distretti_table}"')).scalar_one())
-        _log(f"Fast path DB vuoto [3/4]: {derived_distretti:,} distretti derivati")
-
-        _log("Fast path DB vuoto [4/4]: upsert distretti…")
-        upserted_distretti = db.execute(
-            text(
-                f"""
-                INSERT INTO cat_distretti (
-                  id,
-                  num_distretto,
-                  nome_distretto,
-                  geometry,
-                  attivo,
-                  created_at,
-                  updated_at
-                )
-                SELECT
-                  gen_random_uuid(),
-                  src.num_distretto,
-                  src.nome_distretto,
-                  src.geom,
-                  true,
-                  now(),
-                  now()
-                FROM "{fast_distretti_table}" src
-                ON CONFLICT (num_distretto) DO UPDATE
-                SET
-                  nome_distretto = EXCLUDED.nome_distretto,
-                  geometry = EXCLUDED.geometry,
-                  updated_at = now()
-                RETURNING id
-                """
-            )
-        ).rowcount or 0
-
-        _log(f"Fast path DB vuoto [4/4]: {upserted_distretti} distretti aggiornati — commit in corso…")
+        _log("Fast path DB vuoto [3/3]: commit import particelle in corso…")
 
         batch = _store_completed_batch(
             righe_importate=int(inserted_current),
@@ -548,7 +507,6 @@ def finalize_shapefile_import(
                 "records_deduped_unique": int(deduped_count),
                 "records_history_written": 0,
                 "records_inserted_current": int(inserted_current),
-                "distretti_upserted": int(upserted_distretti),
                 "fast_path_empty_db": True,
                 "completed_at": now.isoformat(),
                 "valid_from": date.today().isoformat(),
@@ -745,52 +703,7 @@ def finalize_shapefile_import(
 
     _log(f"SCD2 [3/4]: {inserted_current:,} particelle inserite")
 
-    # 4) Deriva distretti via ST_Union e upsert
-    _log("SCD2 [4/4]: derivazione e upsert distretti via ST_Union…")
-    upserted_distretti = db.execute(
-        text(
-            """
-            WITH src AS (
-              SELECT
-                num_distretto,
-                MAX(nome_distretto) AS nome_distretto,
-                ST_Multi(ST_Union(geometry)) AS geom
-              FROM cat_particelle
-              WHERE is_current = true
-                AND geometry IS NOT NULL
-                AND num_distretto IS NOT NULL
-                AND num_distretto <> 'FD'
-              GROUP BY num_distretto
-            )
-            INSERT INTO cat_distretti (
-              id,
-              num_distretto,
-              nome_distretto,
-              geometry,
-              attivo,
-              created_at,
-              updated_at
-            )
-            SELECT
-              gen_random_uuid(),
-              src.num_distretto,
-              src.nome_distretto,
-              src.geom,
-              true,
-              now(),
-              now()
-            FROM src
-            ON CONFLICT (num_distretto) DO UPDATE
-            SET
-              nome_distretto = EXCLUDED.nome_distretto,
-              geometry = EXCLUDED.geometry,
-              updated_at = now()
-            RETURNING id
-            """
-        )
-    ).rowcount or 0
-
-    _log(f"SCD2 [4/4]: {upserted_distretti} distretti aggiornati — commit in corso…")
+    _log("SCD2 [4/4]: commit import particelle in corso…")
 
     batch = _store_completed_batch(
         righe_importate=int(inserted_current),
@@ -799,7 +712,6 @@ def finalize_shapefile_import(
             "righe_staging": righe_staging,
             "records_history_written": int(moved_to_history),
             "records_inserted_current": int(inserted_current),
-            "distretti_upserted": int(upserted_distretti),
             "fast_path_empty_db": False,
             "completed_at": now.isoformat(),
             "valid_from": date.today().isoformat(),

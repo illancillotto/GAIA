@@ -2,6 +2,7 @@ from collections.abc import Generator
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from types import SimpleNamespace
+from uuid import UUID
 
 from fastapi.testclient import TestClient
 import pandas as pd
@@ -1345,6 +1346,61 @@ def test_import_summary_endpoint_returns_status_counters() -> None:
     assert payload["ultimo_completed_at"] is not None
 
 
+def test_import_history_and_summary_support_shapefile_distretti_batches() -> None:
+    db = TestingSessionLocal()
+    try:
+        completed_at = datetime.now(timezone.utc)
+        db.add_all(
+            [
+                CatImportBatch(
+                    filename="distretti-ok.zip",
+                    tipo="shapefile_distretti",
+                    anno_campagna=None,
+                    hash_file="distretti-ok",
+                    status="completed",
+                    righe_totali=4,
+                    righe_importate=3,
+                    righe_anomalie=1,
+                    created_by=1,
+                    completed_at=completed_at,
+                    report_json={"distretti_aggiornati": 2},
+                ),
+                CatImportBatch(
+                    filename="distretti-failed.zip",
+                    tipo="shapefile_distretti",
+                    anno_campagna=None,
+                    hash_file="distretti-failed",
+                    status="failed",
+                    righe_totali=4,
+                    righe_importate=0,
+                    righe_anomalie=0,
+                    created_by=1,
+                    errore="Shape non valido",
+                ),
+            ]
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    history_response = client.get("/catasto/import/history?tipo=shapefile_distretti&limit=10", headers=auth_headers())
+    summary_response = client.get("/catasto/import/summary?tipo=shapefile_distretti", headers=auth_headers())
+
+    assert history_response.status_code == 200
+    history_payload = history_response.json()
+    assert len(history_payload) == 2
+    assert {item["status"] for item in history_payload} == {"completed", "failed"}
+    assert all(item["tipo"] == "shapefile_distretti" for item in history_payload)
+
+    assert summary_response.status_code == 200
+    summary_payload = summary_response.json()
+    assert summary_payload["tipo"] == "shapefile_distretti"
+    assert summary_payload["totale_batch"] == 2
+    assert summary_payload["completed_batch"] == 1
+    assert summary_payload["failed_batch"] == 1
+    assert summary_payload["ultimo_completed_at"] is not None
+
+
 def test_import_capacitas_excel_creates_batch_and_normalizes_cf(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "app.modules.catasto.services.import_capacitas.pd.read_excel",
@@ -1732,6 +1788,83 @@ def test_finalize_shapefile_route_returns_service_payload(monkeypatch: pytest.Mo
     monkeypatch.setattr(import_routes_module, "finalize_shapefile_import", fake_finalize_shapefile_import)
 
     response = client.post("/catasto/import/shapefile/finalize", headers=auth_headers())
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "completed"
+    assert captured["created_by"] > 0
+    assert captured["cleanup_staging"] is True
+
+
+def test_upload_distretti_shapefile_creates_processing_batch(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run_distretti_import(
+        batch_id,
+        zip_bytes: bytes,
+        shp_filename: str,
+        created_by: int,
+        source_srid: int,
+    ) -> None:
+        captured["batch_id"] = str(batch_id)
+        captured["zip_size"] = len(zip_bytes)
+        captured["filename"] = shp_filename
+        captured["created_by"] = created_by
+        captured["source_srid"] = source_srid
+
+    monkeypatch.setattr(import_routes_module, "_run_distretti_shapefile_import", fake_run_distretti_import)
+
+    response = client.post(
+        "/catasto/import/distretti/upload?source_srid=3003",
+        headers=auth_headers(),
+        files={"file": ("distretti.zip", b"PK\x03\x04fakezip", "application/zip")},
+    )
+
+    assert response.status_code == 202
+    payload = response.json()
+    assert payload["status"] == "processing"
+    assert captured["filename"] == "distretti.zip"
+    assert captured["zip_size"] > 0
+    assert captured["source_srid"] == 3003
+
+    db = TestingSessionLocal()
+    try:
+        batch = db.get(CatImportBatch, UUID(payload["batch_id"]))
+        assert batch is not None
+        assert batch.tipo == "shapefile_distretti"
+        assert batch.status == "processing"
+        assert batch.filename == "distretti.zip"
+    finally:
+        db.close()
+
+
+def test_upload_distretti_shapefile_rejects_non_zip() -> None:
+    response = client.post(
+        "/catasto/import/distretti/upload",
+        headers=auth_headers(),
+        files={"file": ("distretti.txt", b"not-a-zip", "text/plain")},
+    )
+
+    assert response.status_code == 400
+    assert "ZIP" in response.json()["detail"]
+
+
+def test_finalize_distretti_shapefile_route_returns_service_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_finalize_distretti_shapefile_import(
+        db: Session,
+        *,
+        created_by: int,
+        cleanup_staging: bool,
+        **_: object,
+    ) -> dict[str, object]:
+        captured["created_by"] = created_by
+        captured["cleanup_staging"] = cleanup_staging
+        return {"status": "completed", "distretti_aggiornati": 2}
+
+    monkeypatch.setattr(import_routes_module, "finalize_distretti_shapefile_import", fake_finalize_distretti_shapefile_import)
+
+    response = client.post("/catasto/import/distretti/finalize", headers=auth_headers())
 
     assert response.status_code == 200
     assert response.json()["status"] == "completed"
