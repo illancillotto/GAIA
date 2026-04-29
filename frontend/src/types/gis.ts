@@ -99,3 +99,38 @@ export interface GisResolveRefsResponse {
   results: GisResolveItemResult[];
   geojson?: GeoJSON.FeatureCollection | null;
 }
+
+export interface GisSavedSelectionItemInput {
+  particella_id: string;
+  source_row_index?: number | null;
+  source_ref?: Record<string, unknown> | null;
+}
+
+export interface GisSavedSelectionCreate {
+  name: string;
+  color: string;
+  source_filename?: string | null;
+  import_summary?: Record<string, unknown> | null;
+  items: GisSavedSelectionItemInput[];
+}
+
+export interface GisSavedSelectionUpdate {
+  name?: string;
+  color?: string;
+}
+
+export interface GisSavedSelectionSummary {
+  id: string;
+  name: string;
+  color: string;
+  source_filename?: string | null;
+  n_particelle: number;
+  n_with_geometry: number;
+  import_summary?: Record<string, unknown> | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface GisSavedSelectionDetail extends GisSavedSelectionSummary {
+  geojson?: GeoJSON.FeatureCollection | null;
+}

@@ -160,10 +160,60 @@ class CatParticella(Base):
     anomalie: Mapped[list["CatAnomalia"]] = relationship(back_populates="particella")
     consorzio_units: Mapped[list["CatConsorzioUnit"]] = relationship(back_populates="particella_record")
     comune: Mapped["CatComune | None"] = relationship(foreign_keys=[comune_id])
+    gis_saved_selection_items: Mapped[list["CatGisSavedSelectionItem"]] = relationship(
+        back_populates="particella_record"
+    )
 
     @property
     def fuori_distretto(self) -> bool:
         return self.num_distretto == "FD"
+
+
+class CatGisSavedSelection(Base):
+    __tablename__ = "cat_gis_saved_selections"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    color: Mapped[str] = mapped_column(String(16), default="#10B981", nullable=False)
+    source_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    n_particelle: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    n_with_geometry: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    import_summary: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    created_by: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    items: Mapped[list["CatGisSavedSelectionItem"]] = relationship(
+        back_populates="selection",
+        cascade="all, delete-orphan",
+        order_by="CatGisSavedSelectionItem.position",
+    )
+
+
+class CatGisSavedSelectionItem(Base):
+    __tablename__ = "cat_gis_saved_selection_items"
+    __table_args__ = (
+        UniqueConstraint("selection_id", "particella_id", name="uq_cat_gis_saved_selection_particella"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    selection_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("cat_gis_saved_selections.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    particella_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("cat_particelle.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    source_row_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source_ref: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+
+    selection: Mapped["CatGisSavedSelection"] = relationship(back_populates="items")
+    particella_record: Mapped["CatParticella"] = relationship(back_populates="gis_saved_selection_items")
+
 
 class CatParticellaHistory(Base):
     __tablename__ = "cat_particelle_history"
@@ -563,6 +613,8 @@ __all__ = [
     "CatCapacitasTerrenoRow",
     "CatDistretto",
     "CatDistrettoCoefficiente",
+    "CatGisSavedSelection",
+    "CatGisSavedSelectionItem",
     "CatConsorzioOccupancy",
     "CatConsorzioUnit",
     "CatConsorzioUnitSegment",

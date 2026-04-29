@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import uuid
 from typing import Any
 
 from fastapi import HTTPException
@@ -19,11 +20,15 @@ from app.modules.catasto.schemas.gis_schemas import (
     GisResolveItemResult,
     GisResolveRefsRequest,
     GisResolveRefsResponse,
+    GisSavedSelectionCreate,
+    GisSavedSelectionDetail,
+    GisSavedSelectionSummary,
+    GisSavedSelectionUpdate,
     GisSelectResult,
     ParticellaGisSummary,
     ParticellaPopupData,
 )
-from app.models.catasto_phase1 import CatComune, CatParticella
+from app.models.catasto_phase1 import CatComune, CatGisSavedSelection, CatGisSavedSelectionItem, CatParticella
 
 
 SARDINIA_BBOX = {
@@ -43,12 +48,30 @@ def _norm_str(value: Any) -> str | None:
     return s if s else None
 
 
+def _norm_catasto_num(value: Any) -> str | None:
+    """Normalize a catasto foglio/particella: strip whitespace and leading zeros for numeric values."""
+    s = _norm_str(value)
+    if s is None:
+        return None
+    try:
+        return str(int(s))
+    except ValueError:
+        return s
+
+
 def _looks_like_int(value: str) -> bool:
     try:
         int(value)
         return True
     except Exception:
         return False
+
+
+def _parse_uuid(value: str, field_name: str = "id") -> uuid.UUID:
+    try:
+        return uuid.UUID(str(value))
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=400, detail=f"{field_name} non valido") from exc
 
 
 def _validate_geometry_bbox(geometry: dict[str, Any]) -> None:
@@ -239,6 +262,180 @@ def get_popup_data(db: Session, particella_id: str) -> ParticellaPopupData:
     return ParticellaPopupData(**dict(row))
 
 
+def list_saved_selections(db: Session, user_id: int) -> list[GisSavedSelectionSummary]:
+    rows = (
+        db.query(CatGisSavedSelection)
+        .filter(CatGisSavedSelection.created_by == user_id)
+        .order_by(CatGisSavedSelection.updated_at.desc(), CatGisSavedSelection.created_at.desc())
+        .all()
+    )
+    return [_serialize_saved_selection(row) for row in rows]
+
+
+def create_saved_selection(
+    db: Session,
+    payload: GisSavedSelectionCreate,
+    user_id: int,
+) -> GisSavedSelectionDetail:
+    deduped_items: list[tuple[uuid.UUID, int | None, dict[str, Any] | None]] = []
+    seen: set[uuid.UUID] = set()
+    for item in payload.items:
+        particella_id = _parse_uuid(item.particella_id, "particella_id")
+        if particella_id in seen:
+            continue
+        seen.add(particella_id)
+        deduped_items.append((particella_id, item.source_row_index, item.source_ref))
+
+    if not deduped_items:
+        raise HTTPException(status_code=400, detail="La selezione non contiene particelle valide")
+
+    existing_ids = {
+        row[0]
+        for row in db.query(CatParticella.id)
+        .filter(CatParticella.id.in_([item[0] for item in deduped_items]), CatParticella.is_current.is_(True))
+        .all()
+    }
+    if not existing_ids:
+        raise HTTPException(status_code=400, detail="Nessuna particella corrente trovata per la selezione")
+
+    selection = CatGisSavedSelection(
+        name=payload.name.strip(),
+        color=payload.color,
+        source_filename=payload.source_filename,
+        n_particelle=len(existing_ids),
+        n_with_geometry=_count_particelle_with_geometry(db, [str(item_id) for item_id in existing_ids]),
+        import_summary=payload.import_summary,
+        created_by=user_id,
+    )
+    db.add(selection)
+    db.flush()
+
+    position = 0
+    for particella_id, source_row_index, source_ref in deduped_items:
+        if particella_id not in existing_ids:
+            continue
+        selection.items.append(
+            CatGisSavedSelectionItem(
+                particella_id=particella_id,
+                position=position,
+                source_row_index=source_row_index,
+                source_ref=source_ref,
+            )
+        )
+        position += 1
+
+    db.commit()
+    db.refresh(selection)
+    return get_saved_selection(db, str(selection.id), user_id)
+
+
+def get_saved_selection(db: Session, selection_id: str, user_id: int) -> GisSavedSelectionDetail:
+    selection = _get_user_saved_selection(db, selection_id, user_id)
+    id_list = [str(item.particella_id) for item in selection.items]
+    geojson = _build_particelle_feature_collection(db, id_list) if id_list else None
+    summary = _serialize_saved_selection(selection)
+    return GisSavedSelectionDetail(**summary.model_dump(), geojson=geojson)
+
+
+def update_saved_selection(
+    db: Session,
+    selection_id: str,
+    payload: GisSavedSelectionUpdate,
+    user_id: int,
+) -> GisSavedSelectionSummary:
+    selection = _get_user_saved_selection(db, selection_id, user_id)
+    if payload.name is not None:
+        selection.name = payload.name.strip()
+    if payload.color is not None:
+        selection.color = payload.color
+    db.commit()
+    db.refresh(selection)
+    return _serialize_saved_selection(selection)
+
+
+def delete_saved_selection(db: Session, selection_id: str, user_id: int) -> None:
+    selection = _get_user_saved_selection(db, selection_id, user_id)
+    db.delete(selection)
+    db.commit()
+
+
+def _get_user_saved_selection(db: Session, selection_id: str, user_id: int) -> CatGisSavedSelection:
+    selection_uuid = _parse_uuid(selection_id, "selection_id")
+    selection = (
+        db.query(CatGisSavedSelection)
+        .filter(CatGisSavedSelection.id == selection_uuid, CatGisSavedSelection.created_by == user_id)
+        .first()
+    )
+    if selection is None:
+        raise HTTPException(status_code=404, detail="Selezione GIS non trovata")
+    return selection
+
+
+def _serialize_saved_selection(selection: CatGisSavedSelection) -> GisSavedSelectionSummary:
+    return GisSavedSelectionSummary(
+        id=str(selection.id),
+        name=selection.name,
+        color=selection.color,
+        source_filename=selection.source_filename,
+        n_particelle=selection.n_particelle,
+        n_with_geometry=selection.n_with_geometry,
+        import_summary=selection.import_summary,
+        created_at=selection.created_at,
+        updated_at=selection.updated_at,
+    )
+
+
+def _count_particelle_with_geometry(db: Session, id_list: list[str]) -> int:
+    if not id_list:
+        return 0
+    row = db.execute(
+        text(
+            """
+            SELECT COUNT(*) AS n
+            FROM cat_particelle
+            WHERE id::text = ANY(:ids)
+              AND is_current = TRUE
+              AND geometry IS NOT NULL
+            """
+        ),
+        {"ids": id_list},
+    ).mappings().first()
+    return int(row["n"] or 0) if row else 0
+
+
+def _build_particelle_feature_collection(db: Session, id_list: list[str]) -> dict[str, Any]:
+    sql = text(
+        """
+        SELECT
+            id::text,
+            cfm,
+            cod_comune_capacitas,
+            cod_comune_capacitas AS cod_comune_istat,
+            codice_catastale,
+            nome_comune,
+            foglio,
+            particella,
+            subalterno,
+            superficie_mq,
+            superficie_grafica_mq,
+            num_distretto,
+            nome_distretto,
+            ST_AsGeoJSON(geometry)::json AS geometry_json
+        FROM cat_particelle
+        WHERE id::text = ANY(:ids)
+          AND is_current = TRUE
+        ORDER BY array_position(:ids, id::text)
+        """
+    )
+    rows = db.execute(sql, {"ids": id_list}).mappings().all()
+    features = []
+    for row in rows:
+        properties = dict(row)
+        geometry = properties.pop("geometry_json")
+        features.append({"type": "Feature", "geometry": geometry, "properties": properties})
+    return {"type": "FeatureCollection", "features": features}
+
+
 def _export_geojson(db: Session, id_list: list[str]) -> StreamingResponse:
     sql = text(
         """
@@ -372,9 +569,9 @@ def resolve_particelle_refs(db: Session, body: GisResolveRefsRequest) -> GisReso
     for idx, row in enumerate(items):
         comune_norm = _norm_str(row.comune)
         sezione_norm = _norm_str(row.sezione)
-        foglio_norm = _norm_str(row.foglio)
-        particella_norm = _norm_str(row.particella)
-        sub_norm = _norm_str(row.sub)
+        foglio_norm = _norm_catasto_num(row.foglio)
+        particella_norm = _norm_catasto_num(row.particella)
+        sub_norm = _norm_catasto_num(row.sub)
 
         if not comune_norm or not foglio_norm or not particella_norm:
             results.append(

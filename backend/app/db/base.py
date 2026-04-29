@@ -17,6 +17,8 @@ from app.modules.catasto.models import (
     CatConsorzioOccupancy,
     CatConsorzioUnit,
     CatConsorzioUnitSegment,
+    CatGisSavedSelection,
+    CatGisSavedSelectionItem,
     CatUtenzaIntestatario,
 )
 from app.modules.accessi.wc_org_charts import WCOrgChart, WCOrgChartEntry
@@ -112,6 +114,8 @@ __all__ = [
     "CatConsorzioOccupancy",
     "CatConsorzioUnit",
     "CatConsorzioUnitSegment",
+    "CatGisSavedSelection",
+    "CatGisSavedSelectionItem",
     "CatUtenzaIntestatario",
     "DeviceInventoryLink",
     "DevicePosition",

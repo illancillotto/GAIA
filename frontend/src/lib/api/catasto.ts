@@ -21,7 +21,17 @@ import type {
   GeoJSONFeature,
   UUID,
 } from "@/types/catasto";
-import type { GisFilters, GisParticellaRef, GisResolveRefsResponse, GisSelectResult, ParticellaPopupData } from "@/types/gis";
+import type {
+  GisFilters,
+  GisParticellaRef,
+  GisResolveRefsResponse,
+  GisSavedSelectionCreate,
+  GisSavedSelectionDetail,
+  GisSavedSelectionSummary,
+  GisSavedSelectionUpdate,
+  GisSelectResult,
+  ParticellaPopupData,
+} from "@/types/gis";
 
 function authHeaders(token: string): Record<string, string> {
   return { Authorization: `Bearer ${token}` };
@@ -68,6 +78,48 @@ export async function catastoGisResolveRefs(
       items,
       include_geometry: params?.includeGeometry ?? true,
     }),
+  });
+}
+
+export async function catastoGisListSavedSelections(token: string): Promise<GisSavedSelectionSummary[]> {
+  return request<GisSavedSelectionSummary[]>("/catasto/gis/saved-selections", {
+    headers: authHeaders(token),
+  });
+}
+
+export async function catastoGisGetSavedSelection(token: string, id: string): Promise<GisSavedSelectionDetail> {
+  return request<GisSavedSelectionDetail>(`/catasto/gis/saved-selections/${id}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function catastoGisCreateSavedSelection(
+  token: string,
+  payload: GisSavedSelectionCreate,
+): Promise<GisSavedSelectionDetail> {
+  return request<GisSavedSelectionDetail>("/catasto/gis/saved-selections", {
+    method: "POST",
+    headers: { ...authHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function catastoGisUpdateSavedSelection(
+  token: string,
+  id: string,
+  payload: GisSavedSelectionUpdate,
+): Promise<GisSavedSelectionSummary> {
+  return request<GisSavedSelectionSummary>(`/catasto/gis/saved-selections/${id}`, {
+    method: "PATCH",
+    headers: { ...authHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function catastoGisDeleteSavedSelection(token: string, id: string): Promise<void> {
+  await request<void>(`/catasto/gis/saved-selections/${id}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
   });
 }
 

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user
@@ -10,6 +10,10 @@ from app.modules.catasto.schemas.gis_schemas import (
     GisExportFormat,
     GisResolveRefsRequest,
     GisResolveRefsResponse,
+    GisSavedSelectionCreate,
+    GisSavedSelectionDetail,
+    GisSavedSelectionSummary,
+    GisSavedSelectionUpdate,
     GisSelectRequest,
     GisSelectResult,
     ParticellaPopupData,
@@ -81,3 +85,70 @@ def resolve_particelle_refs(
     _: ApplicationUser = Depends(require_active_user),
 ) -> GisResolveRefsResponse:
     return gis_service.resolve_particelle_refs(db, body)
+
+
+@router.get(
+    "/saved-selections",
+    response_model=list[GisSavedSelectionSummary],
+    summary="Lista selezioni GIS salvate",
+)
+def list_saved_selections(
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(require_active_user),
+) -> list[GisSavedSelectionSummary]:
+    return gis_service.list_saved_selections(db, current_user.id)
+
+
+@router.post(
+    "/saved-selections",
+    response_model=GisSavedSelectionDetail,
+    status_code=status.HTTP_201_CREATED,
+    summary="Salva una selezione GIS",
+)
+def create_saved_selection(
+    body: GisSavedSelectionCreate,
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(require_active_user),
+) -> GisSavedSelectionDetail:
+    return gis_service.create_saved_selection(db, body, current_user.id)
+
+
+@router.get(
+    "/saved-selections/{selection_id}",
+    response_model=GisSavedSelectionDetail,
+    summary="Dettaglio selezione GIS salvata",
+)
+def get_saved_selection(
+    selection_id: str,
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(require_active_user),
+) -> GisSavedSelectionDetail:
+    return gis_service.get_saved_selection(db, selection_id, current_user.id)
+
+
+@router.patch(
+    "/saved-selections/{selection_id}",
+    response_model=GisSavedSelectionSummary,
+    summary="Aggiorna metadati selezione GIS salvata",
+)
+def update_saved_selection(
+    selection_id: str,
+    body: GisSavedSelectionUpdate,
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(require_active_user),
+) -> GisSavedSelectionSummary:
+    return gis_service.update_saved_selection(db, selection_id, body, current_user.id)
+
+
+@router.delete(
+    "/saved-selections/{selection_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Elimina selezione GIS salvata",
+)
+def delete_saved_selection(
+    selection_id: str,
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(require_active_user),
+) -> Response:
+    gis_service.delete_saved_selection(db, selection_id, current_user.id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

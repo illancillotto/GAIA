@@ -38,6 +38,7 @@ Legend: 🔴 Non iniziato · 🟡 In corso · 🟢 Completato · ⚫ Bloccato
 | 2.4 | Modello `CatUtenzeIrrigua` | 🟢 | `backend/app/models/catasto_phase1.py` | |
 | 2.5 | Modello `CatAnomalia` | 🟢 | `backend/app/models/catasto_phase1.py` | |
 | 2.6 | Modelli rimanenti (distretto_coeff, schemi, aliquote, intestatari) | 🟢 | `backend/app/models/catasto_phase1.py` | |
+| 2.7 | Selezioni GIS salvate | 🟢 | `backend/app/models/catasto_phase1.py` + `backend/alembic/versions/20260429_0069_add_cat_gis_saved_selections.py` | Persistenza per utente di selezioni importate da Excel con colore e riferimenti particella |
 
 ### Backend — Services
 
@@ -95,11 +96,12 @@ Legend: 🔴 Non iniziato · 🟡 In corso · 🟢 Completato · ⚫ Bloccato
 | 2.2 | Config Martin | 🟢 | `config/martin.toml` | Config YAML compatibile con Martin v1.7, montata come `/config.toml` |
 | 2.3 | Proxy nginx `/tiles/` | 🟢 | `nginx/nginx.conf` | `/tiles/catalog` e tile distretti verificati via nginx |
 | 2.4 | View particelle correnti per Martin | 🟢 | `backend/alembic/versions/20260427_0066_catasto_gis_view.py` | `cat_particelle_current` con `geometry` e `ha_anomalie` |
-| 2.5 | Endpoint GIS backend | 🟢 | `backend/app/modules/catasto/routes/gis.py` + `services/gis_service.py` | Select spaziale, export CSV/GeoJSON, popup particella |
+| 2.5 | Endpoint GIS backend | 🟢 | `backend/app/modules/catasto/routes/gis.py` + `services/gis_service.py` | Select spaziale, export CSV/GeoJSON, popup particella, resolve riferimenti Excel e CRUD selezioni salvate |
 | 2.6 | Dipendenze MapLibre/Draw | 🟢 | `frontend/package.json` | `maplibre-gl` già presente; aggiunto `maplibre-gl-draw` |
-| 2.7 | Pagina GIS `/catasto/gis` | 🟢 | `frontend/src/app/catasto/gis/page.tsx` | Layout GIS + pannello analisi |
+| 2.7 | Pagina GIS `/catasto/gis` | 🟢 | `frontend/src/app/catasto/gis/page.tsx` | Layout GIS + pannello analisi; import Excel con riepilogo, colore layer, salvataggio/caricamento selezioni e mappa più alta |
 | 2.8 | Layer distretti e particelle MVT | 🟢 | `frontend/src/components/catasto/gis/MapContainer.tsx` | Distretti zoom 7+, particelle correnti zoom 13+ |
 | 2.9 | Popup particella con link scheda | 🟢 | `frontend/src/components/catasto/gis/MapContainer.tsx` | Fetch dati leggeri da `/catasto/gis/particella/{id}/popup` |
+| 2.10 | Overlay import Excel persistente | 🟢 | `frontend/src/components/catasto/gis/MapContainer.tsx` + `frontend/src/lib/api/catasto.ts` | Layer GeoJSON importato applicato quando la source MapLibre è pronta, `fitBounds` automatico e colore configurabile |
 
 ---
 
@@ -159,5 +161,6 @@ Legend: 🔴 Non iniziato · 🟡 In corso · 🟢 Completato · ⚫ Bloccato
 - `Terreni` batch: supporta `auto_resume` esplicito per i job che devono essere ripianificati automaticamente dopo restart backend; i batch manuali senza flag restano recuperabili solo via monitor/rerun esplicito
 - `Storico anagrafica Capacitas`: ora usa un modello job persistente dedicato con monitor frontend, progress report incrementale, cleanup stale e auto-resume dopo restart backend
 - `Catasto > Particelle`: la sync singola Capacitas è disponibile direttamente nella dialog/lista particelle e nella scheda dettaglio, con label di ultimo aggiornamento (`capacitas_last_sync_at/status/error`) e route dedicata `POST /catasto/particelle/{id}/capacitas-sync`
+- `Catasto > GIS`: l'import Excel delle particelle usa `POST /catasto/gis/resolve-refs` per generare il layer GeoJSON temporaneo; le selezioni possono essere salvate lato backend con nome/colore, riaperte dalle sessioni successive e rigenerate dalle geometrie correnti delle particelle.
 - `codicefiscale` Python su PyPI: https://pypi.org/project/codicefiscale/
 - Copernicus Data Space gratuito per enti EU: https://dataspace.copernicus.eu

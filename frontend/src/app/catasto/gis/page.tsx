@@ -8,19 +8,36 @@ import AnalysisPanel from "@/components/catasto/gis/AnalysisPanel";
 import DrawingTools from "@/components/catasto/gis/DrawingTools";
 import SelectionPanel from "@/components/catasto/gis/SelectionPanel";
 import { CatastoPage } from "@/components/catasto/catasto-page";
-import { catastoGisExport, catastoGisResolveRefs } from "@/lib/api/catasto";
+import {
+  catastoGisCreateSavedSelection,
+  catastoGisDeleteSavedSelection,
+  catastoGisExport,
+  catastoGisGetSavedSelection,
+  catastoGisListSavedSelections,
+  catastoGisResolveRefs,
+  catastoGisUpdateSavedSelection,
+} from "@/lib/api/catasto";
 import { getStoredAccessToken } from "@/lib/auth";
 import { useGisSelection } from "@/hooks/useGisSelection";
-import type { GisFilters, GisParticellaRef } from "@/types/gis";
+import type { GisFilters, GisParticellaRef, GisSavedSelectionItemInput, GisSavedSelectionSummary } from "@/types/gis";
 
 const MapContainer = dynamic(() => import("@/components/catasto/gis/MapContainer"), {
   ssr: false,
   loading: () => (
-    <div className="flex h-full min-h-[560px] items-center justify-center rounded-2xl bg-gray-100 text-sm text-gray-400">
+    <div className="flex h-full min-h-[680px] items-center justify-center rounded-2xl bg-gray-100 text-sm text-gray-400">
       Caricamento GIS...
     </div>
   ),
 });
+
+interface ImportStats {
+  processed: number;
+  found: number;
+  notFound: number;
+  multiple: number;
+  invalid: number;
+  withGeometry: number;
+}
 
 function triggerDownload(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
@@ -48,12 +65,32 @@ export default function CatastoGisPage() {
   const [xlsxFile, setXlsxFile] = useState<File | null>(null);
   const [xlsxBusy, setXlsxBusy] = useState(false);
   const [uploadedGeojson, setUploadedGeojson] = useState<GeoJSON.FeatureCollection | null>(null);
+  const [uploadedColor, setUploadedColor] = useState("#10B981");
+  const [importStats, setImportStats] = useState<ImportStats | null>(null);
+  const [importedItems, setImportedItems] = useState<GisSavedSelectionItemInput[]>([]);
+  const [savedSelections, setSavedSelections] = useState<GisSavedSelectionSummary[]>([]);
+  const [savedBusy, setSavedBusy] = useState(false);
+  const [saveName, setSaveName] = useState("");
+  const [activeSavedSelectionId, setActiveSavedSelectionId] = useState<string | null>(null);
   const activeFilters = useMemo<GisFilters>(() => ({}), []);
   const { result, isLoading, error, runSelection, clearSelection } = useGisSelection(token);
 
   useEffect(() => {
     setToken(getStoredAccessToken());
   }, []);
+
+  const refreshSavedSelections = useCallback(async () => {
+    if (!token) return;
+    const selections = await catastoGisListSavedSelections(token);
+    setSavedSelections(selections);
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) return;
+    void refreshSavedSelections().catch((e) => {
+      setGisError(e instanceof Error ? e.message : "Caricamento selezioni salvate fallito");
+    });
+  }, [refreshSavedSelections, token]);
 
   useEffect(() => {
     if (!isExpanded) return;
@@ -109,6 +146,16 @@ export default function CatastoGisPage() {
     setClearSignal((value) => value + 1);
     clearSelection();
   }, [clearSelection]);
+
+  const handleClearImport = useCallback(() => {
+    setUploadedGeojson(null);
+    setXlsxFile(null);
+    setImportStats(null);
+    setImportedItems([]);
+    setActiveSavedSelectionId(null);
+    setGisInfo(null);
+    setGisError(null);
+  }, []);
 
   const openExpanded = useCallback(() => {
     setIsExpanded(true);
@@ -166,8 +213,32 @@ export default function CatastoGisPage() {
 
       const resolved = await catastoGisResolveRefs(token, items, { includeGeometry: true });
       setUploadedGeojson(resolved.geojson ?? null);
+      setActiveSavedSelectionId(null);
 
       const withGeometry = resolved.geojson?.features.filter((f) => f.geometry != null).length ?? 0;
+      const foundItems: GisSavedSelectionItemInput[] = resolved.results
+        .filter((row) => row.esito === "FOUND" && row.particella_id)
+        .map((row) => ({
+          particella_id: row.particella_id as string,
+          source_row_index: row.row_index ?? null,
+          source_ref: {
+            comune: row.comune_input,
+            sezione: row.sezione_input,
+            foglio: row.foglio_input,
+            particella: row.particella_input,
+            sub: row.sub_input,
+          },
+        }));
+      setImportedItems(foundItems);
+      setImportStats({
+        processed: resolved.processed,
+        found: resolved.found,
+        notFound: resolved.not_found,
+        multiple: resolved.multiple,
+        invalid: resolved.invalid,
+        withGeometry,
+      });
+      setSaveName(file.name.replace(/\.(xlsx|xls)$/i, ""));
 
       if (resolved.found === 0) {
         setGisError(`Nessuna particella trovata su ${resolved.processed} righe.`);
@@ -191,6 +262,110 @@ export default function CatastoGisPage() {
     }
   }, [token]);
 
+  const handleSaveImportedSelection = useCallback(async () => {
+    if (!token || importedItems.length === 0 || !importStats) return;
+    const trimmedName = saveName.trim();
+    if (!trimmedName) {
+      setGisError("Inserisci un nome per salvare la selezione.");
+      return;
+    }
+
+    setSavedBusy(true);
+    setGisError(null);
+    setGisInfo(null);
+    try {
+      const saved = await catastoGisCreateSavedSelection(token, {
+        name: trimmedName,
+        color: uploadedColor,
+        source_filename: xlsxFile?.name ?? null,
+        import_summary: importStats as unknown as Record<string, unknown>,
+        items: importedItems,
+      });
+      setActiveSavedSelectionId(saved.id);
+      setUploadedGeojson(saved.geojson ?? uploadedGeojson);
+      await refreshSavedSelections();
+      setGisInfo(`Selezione salvata: ${saved.name} (${saved.n_particelle.toLocaleString("it-IT")} particelle).`);
+    } catch (e) {
+      setGisError(e instanceof Error ? e.message : "Salvataggio selezione fallito");
+    } finally {
+      setSavedBusy(false);
+    }
+  }, [importStats, importedItems, refreshSavedSelections, saveName, token, uploadedColor, uploadedGeojson, xlsxFile]);
+
+  const handleLoadSavedSelection = useCallback(async (selectionId: string) => {
+    if (!token) return;
+    setSavedBusy(true);
+    setGisError(null);
+    setGisInfo(null);
+    try {
+      const detail = await catastoGisGetSavedSelection(token, selectionId);
+      setUploadedGeojson(detail.geojson ?? null);
+      setUploadedColor(detail.color);
+      setSaveName(detail.name);
+      setXlsxFile(null);
+      setImportedItems([]);
+      setActiveSavedSelectionId(detail.id);
+      const summary = detail.import_summary as Partial<ImportStats> | null | undefined;
+      setImportStats(
+        summary
+          ? {
+              processed: Number(summary.processed ?? detail.n_particelle),
+              found: Number(summary.found ?? detail.n_particelle),
+              notFound: Number(summary.notFound ?? 0),
+              multiple: Number(summary.multiple ?? 0),
+              invalid: Number(summary.invalid ?? 0),
+              withGeometry: detail.n_with_geometry,
+            }
+          : {
+              processed: detail.n_particelle,
+              found: detail.n_particelle,
+              notFound: 0,
+              multiple: 0,
+              invalid: 0,
+              withGeometry: detail.n_with_geometry,
+            },
+      );
+      setGisInfo(`Selezione caricata: ${detail.name}.`);
+    } catch (e) {
+      setGisError(e instanceof Error ? e.message : "Caricamento selezione fallito");
+    } finally {
+      setSavedBusy(false);
+    }
+  }, [token]);
+
+  const handleUpdateSavedColor = useCallback(async () => {
+    if (!token || !activeSavedSelectionId) return;
+    setSavedBusy(true);
+    setGisError(null);
+    setGisInfo(null);
+    try {
+      await catastoGisUpdateSavedSelection(token, activeSavedSelectionId, { name: saveName.trim() || undefined, color: uploadedColor });
+      await refreshSavedSelections();
+      setGisInfo("Selezione salvata aggiornata.");
+    } catch (e) {
+      setGisError(e instanceof Error ? e.message : "Aggiornamento selezione fallito");
+    } finally {
+      setSavedBusy(false);
+    }
+  }, [activeSavedSelectionId, refreshSavedSelections, saveName, token, uploadedColor]);
+
+  const handleDeleteSavedSelection = useCallback(async (selectionId: string) => {
+    if (!token) return;
+    setSavedBusy(true);
+    setGisError(null);
+    setGisInfo(null);
+    try {
+      await catastoGisDeleteSavedSelection(token, selectionId);
+      if (activeSavedSelectionId === selectionId) handleClearImport();
+      await refreshSavedSelections();
+      setGisInfo("Selezione salvata eliminata.");
+    } catch (e) {
+      setGisError(e instanceof Error ? e.message : "Eliminazione selezione fallita");
+    } finally {
+      setSavedBusy(false);
+    }
+  }, [activeSavedSelectionId, handleClearImport, refreshSavedSelections, token]);
+
   return (
     <CatastoPage
       title="GIS"
@@ -198,7 +373,7 @@ export default function CatastoGisPage() {
       breadcrumb="Catasto / GIS"
       requiredModule="catasto"
     >
-      <div className="flex h-[calc(100vh-190px)] min-h-[560px] flex-col overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
+      <div className="flex h-[calc(100vh-135px)] min-h-[720px] flex-col overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
         <div className="flex flex-col gap-3 border-b border-gray-100 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="text-lg font-semibold text-gray-900">Catasto GIS</h2>
@@ -232,7 +407,7 @@ export default function CatastoGisPage() {
           </div>
         ) : null}
 
-        <div className={`grid min-h-0 flex-1 overflow-hidden ${isExpanded ? "lg:grid-cols-1" : "lg:grid-cols-2"}`}>
+        <div className={`grid min-h-0 flex-1 overflow-hidden ${isExpanded ? "lg:grid-cols-1" : "lg:grid-cols-[minmax(0,1.55fr)_420px]"}`}>
           <div
             className={
               isExpanded
@@ -290,6 +465,7 @@ export default function CatastoGisPage() {
                     highlightSelected,
                   }}
                   uploadedGeojson={uploadedGeojson}
+                  uploadedColor={uploadedColor}
                   drawSignal={drawSignal}
                   clearSignal={clearSignal}
                   resizeSignal={resizeSignal}
@@ -355,8 +531,20 @@ export default function CatastoGisPage() {
                 </div>
 
                 {/* Excel import */}
-                <div>
-                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-gray-400">Import da Excel</p>
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/30 p-3">
+                  <div className="mb-2 flex items-center justify-between gap-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-emerald-700">Import da Excel</p>
+                    <label className="inline-flex items-center gap-2 text-[11px] font-medium text-gray-500">
+                      Colore
+                      <input
+                        type="color"
+                        value={uploadedColor}
+                        onChange={(e) => setUploadedColor(e.target.value.toUpperCase())}
+                        className="h-6 w-8 cursor-pointer rounded border border-gray-200 bg-white p-0.5"
+                        title="Colore selezione importata"
+                      />
+                    </label>
+                  </div>
                   <label
                     className={`group flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed px-4 py-5 text-center transition-all ${
                       xlsxBusy
@@ -403,20 +591,121 @@ export default function CatastoGisPage() {
                       </>
                     )}
                   </label>
+                  {importStats ? (
+                    <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[11px]">
+                      <div className="rounded-lg bg-white px-2 py-2 shadow-sm">
+                        <div className="font-semibold text-emerald-700">{importStats.found.toLocaleString("it-IT")}</div>
+                        <div className="text-gray-400">trovate</div>
+                      </div>
+                      <div className="rounded-lg bg-white px-2 py-2 shadow-sm">
+                        <div className="font-semibold text-indigo-700">{importStats.withGeometry.toLocaleString("it-IT")}</div>
+                        <div className="text-gray-400">in mappa</div>
+                      </div>
+                      <div className="rounded-lg bg-white px-2 py-2 shadow-sm">
+                        <div className="font-semibold text-amber-700">
+                          {(importStats.notFound + importStats.multiple + importStats.invalid).toLocaleString("it-IT")}
+                        </div>
+                        <div className="text-gray-400">scarti</div>
+                      </div>
+                    </div>
+                  ) : null}
                   {uploadedGeojson ? (
-                    <div className="mt-2">
+                    <div className="mt-3 space-y-2">
+                      <input
+                        value={saveName}
+                        onChange={(e) => setSaveName(e.target.value)}
+                        placeholder="Nome selezione"
+                        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                      />
+                      <div className="grid grid-cols-2 gap-2">
+                        <button
+                          type="button"
+                          onClick={activeSavedSelectionId ? handleUpdateSavedColor : handleSaveImportedSelection}
+                          disabled={savedBusy || (!activeSavedSelectionId && importedItems.length === 0)}
+                          className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+                        >
+                          {activeSavedSelectionId ? "Aggiorna" : "Salva selezione"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleClearImport}
+                          className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-500 transition hover:bg-gray-50 hover:text-gray-700"
+                        >
+                          Rimuovi
+                        </button>
+                      </div>
                       <button
                         type="button"
-                        onClick={() => { setUploadedGeojson(null); setXlsxFile(null); setGisInfo(null); setGisError(null); }}
-                        className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-gray-200 bg-white py-2 text-sm text-gray-500 transition hover:bg-gray-50 hover:text-gray-700"
+                        onClick={() => {
+                          if (uploadedGeojson) {
+                            setResizeSignal((value) => value + 1);
+                            setUploadedGeojson({ ...uploadedGeojson });
+                          }
+                        }}
+                        className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-emerald-100 bg-white py-2 text-xs font-medium text-emerald-700 transition hover:bg-emerald-50"
                       >
-                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                        Rimuovi dalla mappa
+                        Centra di nuovo in mappa
                       </button>
                     </div>
                   ) : null}
+                </div>
+
+                <div>
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Selezioni salvate</p>
+                    <button
+                      type="button"
+                      onClick={() => void refreshSavedSelections()}
+                      disabled={savedBusy}
+                      className="text-[11px] font-medium text-indigo-600 hover:text-indigo-800 disabled:text-gray-300"
+                    >
+                      Aggiorna
+                    </button>
+                  </div>
+                  <div className="max-h-44 space-y-2 overflow-y-auto pr-1">
+                    {savedSelections.length === 0 ? (
+                      <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-3 py-4 text-center text-xs text-gray-400">
+                        Nessuna selezione salvata.
+                      </div>
+                    ) : (
+                      savedSelections.map((selection) => (
+                        <div
+                          key={selection.id}
+                          className={`rounded-xl border bg-white p-2 shadow-sm ${
+                            activeSavedSelectionId === selection.id ? "border-emerald-200 ring-1 ring-emerald-100" : "border-gray-100"
+                          }`}
+                        >
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: selection.color }} />
+                                <p className="truncate text-sm font-semibold text-gray-800">{selection.name}</p>
+                              </div>
+                              <p className="mt-0.5 text-[11px] text-gray-400">
+                                {selection.n_particelle.toLocaleString("it-IT")} particelle · {selection.n_with_geometry.toLocaleString("it-IT")} in mappa
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => void handleDeleteSavedSelection(selection.id)}
+                              disabled={savedBusy}
+                              className="text-[11px] font-medium text-gray-400 hover:text-red-600 disabled:text-gray-300"
+                            >
+                              Elimina
+                            </button>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => void handleLoadSavedSelection(selection.id)}
+                            disabled={savedBusy}
+                            className="mt-2 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-indigo-50 hover:text-indigo-700 disabled:text-gray-300"
+                          >
+                            Carica in mappa
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
                 </div>
 
               </div>

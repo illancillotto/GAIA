@@ -20,6 +20,7 @@ interface MapContainerProps {
     highlightSelected?: boolean;
   };
   uploadedGeojson?: GeoJSON.FeatureCollection | null;
+  uploadedColor?: string;
   drawSignal: number;
   clearSignal: number;
   resizeSignal?: number;
@@ -72,6 +73,7 @@ export default function MapContainer({
   filters,
   mapLayers,
   uploadedGeojson,
+  uploadedColor = "#10B981",
   drawSignal,
   clearSignal,
   resizeSignal,
@@ -234,7 +236,7 @@ export default function MapContainer({
         type: "fill",
         source: "uploaded-particelle-source",
         paint: {
-          "fill-color": "#10B981",
+          "fill-color": uploadedColor,
           "fill-opacity": 0.35,
         },
       });
@@ -243,7 +245,7 @@ export default function MapContainer({
         type: "line",
         source: "uploaded-particelle-source",
         paint: {
-          "line-color": "#059669",
+          "line-color": uploadedColor,
           "line-width": 2,
         },
       });
@@ -386,11 +388,26 @@ export default function MapContainer({
 
   useEffect(() => {
     const map = mapRef.current;
+    if (!map || !map.isStyleLoaded()) return;
+
+    if (map.getLayer("uploaded-particelle-fill")) {
+      map.setPaintProperty("uploaded-particelle-fill", "fill-color", uploadedColor);
+    }
+    if (map.getLayer("uploaded-particelle-outline")) {
+      map.setPaintProperty("uploaded-particelle-outline", "line-color", uploadedColor);
+    }
+  }, [uploadedColor]);
+
+  useEffect(() => {
+    const map = mapRef.current;
     if (!map) return;
 
     const apply = () => {
       const source = map.getSource("uploaded-particelle-source") as maplibregl.GeoJSONSource | undefined;
-      if (!source) return;
+      if (!source) {
+        map.once("idle", apply);
+        return;
+      }
       source.setData(uploadedGeojson ?? { type: "FeatureCollection", features: [] });
 
       if (uploadedGeojson && uploadedGeojson.features.length > 0) {
@@ -419,6 +436,7 @@ export default function MapContainer({
       map.once("load", apply);
       return () => {
         map.off("load", apply);
+        map.off("idle", apply);
       };
     }
   }, [uploadedGeojson]);

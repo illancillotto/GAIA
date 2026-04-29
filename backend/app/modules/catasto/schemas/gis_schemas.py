@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from enum import Enum
 from typing import Any
 
@@ -128,3 +129,55 @@ class GisResolveRefsResponse(BaseModel):
     invalid: int
     results: list[GisResolveItemResult] = Field(default_factory=list)
     geojson: dict[str, Any] | None = Field(default=None, description="FeatureCollection con le particelle trovate (se include_geometry)")
+
+
+class GisSavedSelectionItemInput(BaseModel):
+    particella_id: str
+    source_row_index: int | None = None
+    source_ref: dict[str, Any] | None = None
+
+
+class GisSavedSelectionCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=120)
+    color: str = Field(default="#10B981", min_length=4, max_length=16)
+    source_filename: str | None = Field(default=None, max_length=255)
+    import_summary: dict[str, Any] | None = None
+    items: list[GisSavedSelectionItemInput] = Field(default_factory=list, max_length=10000)
+
+    @field_validator("color")
+    @classmethod
+    def validate_color(cls, value: str) -> str:
+        if not value.startswith("#") or len(value) not in {4, 7}:
+            raise ValueError("color deve essere un esadecimale CSS (#RGB o #RRGGBB)")
+        allowed = "0123456789abcdefABCDEF"
+        if any(ch not in allowed for ch in value[1:]):
+            raise ValueError("color contiene caratteri non esadecimali")
+        return value.upper()
+
+
+class GisSavedSelectionUpdate(BaseModel):
+    name: str | None = Field(default=None, min_length=1, max_length=120)
+    color: str | None = Field(default=None, min_length=4, max_length=16)
+
+    @field_validator("color")
+    @classmethod
+    def validate_color(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        return GisSavedSelectionCreate.validate_color(value)
+
+
+class GisSavedSelectionSummary(BaseModel):
+    id: str
+    name: str
+    color: str
+    source_filename: str | None = None
+    n_particelle: int
+    n_with_geometry: int
+    import_summary: dict[str, Any] | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class GisSavedSelectionDetail(GisSavedSelectionSummary):
+    geojson: dict[str, Any] | None = None
