@@ -5,7 +5,7 @@ import json
 import re
 import uuid
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime
+from datetime import date, datetime, timezone
 from typing import Any
 
 import openpyxl
@@ -25,6 +25,7 @@ from app.modules.utenze.models import (
 )
 from app.modules.utenze.services.person_history_service import snapshot_person_if_changed
 
+UTC = timezone.utc
 XLSX_SOURCE_SYSTEM = "xlsx_import"
 ANOMALIA_EXTERNAL_ID = "ANOMALIA-999"
 CHUNK_SIZE = 500

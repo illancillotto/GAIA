@@ -10,8 +10,9 @@ RUN apt-get update \
     && apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-ita \
     && rm -rf /var/lib/apt/lists/*
 
+COPY backend/requirements.txt /app/backend/requirements.txt
 COPY modules/elaborazioni/worker/requirements.txt /app/worker/requirements.txt
-RUN pip install --no-cache-dir -r /app/worker/requirements.txt
+RUN pip install --no-cache-dir -r /app/backend/requirements.txt -r /app/worker/requirements.txt
 
 COPY modules/elaborazioni/worker /app/worker
 COPY backend /app/backend

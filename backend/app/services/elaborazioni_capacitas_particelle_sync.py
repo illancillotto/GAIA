@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 from zoneinfo import ZoneInfo
 
@@ -31,8 +31,8 @@ DAY_RECHECK_HOURS = 24
 EVENING_RECHECK_HOURS = 6
 RECENT_ITEM_LIMIT = 200
 PARTICELLE_STALE_JOB_MINUTES = 30
-_BACKEND_PROCESS_STARTED_AT = datetime.now(UTC)
 AUTO_RESUME_COMPATIBLE_MODES = {"progressive_catalog"}
+UTC = timezone.utc
 
 
 @dataclass(slots=True)
@@ -126,7 +126,7 @@ def expire_stale_particelle_sync_jobs(db: Session) -> None:
     stale_cutoff = now - timedelta(minutes=PARTICELLE_STALE_JOB_MINUTES)
     jobs = db.scalars(
         select(CapacitasParticelleSyncJob).where(
-            CapacitasParticelleSyncJob.status.in_(("pending", "processing", "queued_resume")),
+            CapacitasParticelleSyncJob.status == "processing",
             CapacitasParticelleSyncJob.completed_at.is_(None),
         )
     ).all()
@@ -137,27 +137,14 @@ def expire_stale_particelle_sync_jobs(db: Session) -> None:
     for job in jobs:
         started_at = _normalize_job_datetime(job.started_at)
         updated_at = _normalize_job_datetime(job.updated_at)
-        created_at = _normalize_job_datetime(job.created_at)
-        reference_at = updated_at or started_at or created_at
-
-        if job.status == "processing" and started_at is not None and started_at < _BACKEND_PROCESS_STARTED_AT:
-            _mark_stale_particelle_job(
-                job,
-                completed_at=now,
-                detail=(
-                    "Job marcato come failed: backend riavviato mentre il job Capacitas era in stato "
-                    "processing; il task runtime originale non e piu attivo. Rilanciare dal monitor."
-                ),
-            )
-            changed = True
-            continue
+        reference_at = updated_at or started_at
 
         if reference_at is not None and reference_at < stale_cutoff:
             _mark_stale_particelle_job(
                 job,
                 completed_at=now,
                 detail=(
-                    "Job marcato come failed: nessun avanzamento registrato oltre la soglia di "
+                    "Job marcato come failed: worker Capacitas senza avanzamento oltre la soglia di "
                     f"{PARTICELLE_STALE_JOB_MINUTES} minuti."
                 ),
             )

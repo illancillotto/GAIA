@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, time
+from datetime import date, datetime, time, timezone
 from decimal import Decimal, InvalidOperation
 from io import BytesIO
 import re
@@ -20,6 +20,8 @@ from app.models.application_user import ApplicationUser
 from app.modules.operazioni.models.fuel_cards import FuelCard, FuelCardAssignmentHistory
 from app.modules.operazioni.models.vehicles import FleetUnresolvedTransaction, Vehicle, VehicleAssignment, VehicleFuelLog, WCRefuelEvent
 from app.modules.operazioni.models.wc_operator import WCOperator
+
+UTC = timezone.utc
 
 
 @dataclass

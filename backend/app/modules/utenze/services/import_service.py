@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 import mimetypes
 import os
 from pathlib import Path, PurePosixPath
@@ -32,6 +32,8 @@ from app.modules.utenze.services.classify_service import classify_filename
 from app.modules.utenze.services.person_history_service import snapshot_person_if_changed
 from app.modules.utenze.services.parser_service import parse_folder_name
 from app.services.nas_connector import NasConnectorError, get_nas_client
+
+UTC = timezone.utc
 
 
 class NasCommandRunner(Protocol):

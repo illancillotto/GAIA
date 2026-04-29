@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 import re
 from typing import Awaitable, Callable, Sequence
@@ -55,8 +55,8 @@ BASE_TERRENI_THROTTLE_MS = 300
 DOUBLE_SPEED_MULTIPLIER = 2
 MAX_TERRENI_PARALLEL_WORKERS = 2
 TERRENI_STALE_JOB_MINUTES = 30
-_BACKEND_PROCESS_STARTED_AT = datetime.now(UTC)
 AUTO_RESUME_TERRENI_MODES = {"batch"}
+UTC = timezone.utc
 
 
 @dataclass(slots=True)
@@ -1115,7 +1115,7 @@ def expire_stale_terreni_sync_jobs(db: Session) -> None:
     stale_cutoff = now - timedelta(minutes=TERRENI_STALE_JOB_MINUTES)
     jobs = db.scalars(
         select(CapacitasTerreniSyncJob).where(
-            CapacitasTerreniSyncJob.status.in_(("pending", "processing", "queued_resume")),
+            CapacitasTerreniSyncJob.status == "processing",
             CapacitasTerreniSyncJob.completed_at.is_(None),
         )
     ).all()
@@ -1126,27 +1126,14 @@ def expire_stale_terreni_sync_jobs(db: Session) -> None:
     for job in jobs:
         started_at = _normalize_job_datetime(job.started_at)
         updated_at = _normalize_job_datetime(job.updated_at)
-        created_at = _normalize_job_datetime(job.created_at)
-        reference_at = updated_at or started_at or created_at
-
-        if job.status == "processing" and started_at is not None and started_at < _BACKEND_PROCESS_STARTED_AT:
-            _mark_stale_terreni_job(
-                job,
-                completed_at=now,
-                detail=(
-                    "Job marcato come failed: backend riavviato mentre il job Capacitas era in stato "
-                    "processing; il task runtime originale non e piu attivo. Rilanciare dal monitor."
-                ),
-            )
-            changed = True
-            continue
+        reference_at = updated_at or started_at
 
         if reference_at is not None and reference_at < stale_cutoff:
             _mark_stale_terreni_job(
                 job,
                 completed_at=now,
                 detail=(
-                    "Job marcato come failed: nessun avanzamento registrato oltre la soglia di "
+                    "Job marcato come failed: worker Capacitas senza avanzamento oltre la soglia di "
                     f"{TERRENI_STALE_JOB_MINUTES} minuti."
                 ),
             )

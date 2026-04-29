@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import secrets
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Annotated
 from uuid import UUID
 
@@ -25,6 +25,7 @@ router = APIRouter(tags=["operazioni/operator-invitations"])
 public_router = APIRouter(prefix="/auth", tags=["auth/operator-activation"])
 
 INVITATION_EXPIRY_DAYS = 7
+UTC = timezone.utc
 
 
 # ─── schemas ──────────────────────────────────────────────────────────────────

@@ -12,6 +12,11 @@ import signal
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.models.capacitas import (
+    CapacitasAnagraficaHistoryImportJob,
+    CapacitasParticelleSyncJob,
+    CapacitasTerreniSyncJob,
+)
 from app.models.catasto import (
     CatastoBatch,
     CatastoBatchStatus,
@@ -22,6 +27,23 @@ from app.models.catasto import (
     CatastoDocument,
     CatastoVisuraRequest,
     CatastoVisuraRequestStatus,
+)
+from app.services.elaborazioni_capacitas_anagrafica_history import (
+    expire_stale_anagrafica_history_jobs,
+    prepare_anagrafica_history_jobs_for_recovery,
+)
+from app.services.elaborazioni_capacitas_particelle_sync import (
+    expire_stale_particelle_sync_jobs,
+    prepare_particelle_sync_jobs_for_recovery,
+)
+from app.services.elaborazioni_capacitas_runtime import (
+    run_anagrafica_history_job_by_id,
+    run_particelle_job_by_id,
+    run_terreni_job_by_id,
+)
+from app.services.elaborazioni_capacitas_terreni import (
+    expire_stale_terreni_sync_jobs,
+    prepare_terreni_sync_jobs_for_recovery,
 )
 from anti_captcha_client import AntiCaptchaClient
 from browser_session import BrowserSession, BrowserSessionConfig
@@ -97,6 +119,13 @@ class CatastoWorker:
                 await self._process_connection_test(connection_test_id)
                 continue
 
+            capacitas_job = self._next_capacitas_job()
+            if capacitas_job is not None:
+                job_kind, job_id = capacitas_job
+                logger.info("Job Capacitas %s %s prelevato dalla coda", job_kind, job_id)
+                await self._process_capacitas_job(job_kind, job_id)
+                continue
+
             batch_id = self._next_batch_id()
             if batch_id is None:
                 await asyncio.sleep(POLL_INTERVAL_SEC)
@@ -131,6 +160,16 @@ class CatastoWorker:
             for request in stuck_requests:
                 request.status = CatastoVisuraRequestStatus.PENDING.value
                 request.current_operation = "Recuperato dopo riavvio worker"
+
+            history_ids = prepare_anagrafica_history_jobs_for_recovery(db)
+            terreni_ids = prepare_terreni_sync_jobs_for_recovery(db)
+            particelle_ids = prepare_particelle_sync_jobs_for_recovery(db)
+            if history_ids:
+                logger.info("Recuperati %d job Capacitas storico anagrafica", len(history_ids))
+            if terreni_ids:
+                logger.info("Recuperati %d job Capacitas terreni", len(terreni_ids))
+            if particelle_ids:
+                logger.info("Recuperati %d job Capacitas particelle", len(particelle_ids))
             db.commit()
 
     def _next_connection_test_id(self):
@@ -141,6 +180,47 @@ class CatastoWorker:
                 .order_by(CatastoConnectionTest.created_at.asc())
             )
             return connection_test.id if connection_test is not None else None
+
+    def _next_capacitas_job(self) -> tuple[str, int] | None:
+        with SessionLocal() as db:
+            expire_stale_anagrafica_history_jobs(db)
+            expire_stale_terreni_sync_jobs(db)
+            expire_stale_particelle_sync_jobs(db)
+
+            for job_kind, model in (
+                ("anagrafica_history", CapacitasAnagraficaHistoryImportJob),
+                ("terreni", CapacitasTerreniSyncJob),
+                ("particelle", CapacitasParticelleSyncJob),
+            ):
+                job = db.scalar(
+                    select(model)
+                    .where(
+                        model.status.in_(("pending", "queued_resume")),
+                        model.completed_at.is_(None),
+                    )
+                    .order_by(model.created_at.asc())
+                    .with_for_update(skip_locked=True)
+                )
+                if job is None:
+                    continue
+                job.status = "processing"
+                job.started_at = datetime.now(timezone.utc)
+                job.error_detail = None
+                db.commit()
+                return job_kind, job.id
+        return None
+
+    async def _process_capacitas_job(self, job_kind: str, job_id: int) -> None:
+        if job_kind == "anagrafica_history":
+            await run_anagrafica_history_job_by_id(job_id)
+            return
+        if job_kind == "terreni":
+            await run_terreni_job_by_id(job_id)
+            return
+        if job_kind == "particelle":
+            await run_particelle_job_by_id(job_id)
+            return
+        logger.error("Tipo job Capacitas non riconosciuto: %s", job_kind)
 
     async def _process_connection_test(self, connection_test_id) -> None:
         browser = BrowserSession(

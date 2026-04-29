@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import ipaddress
 import json
 from urllib.parse import quote
@@ -52,6 +52,8 @@ try:
     )
 except ImportError:  # pragma: no cover
     CommunityData = ContextData = ObjectIdentity = ObjectType = SnmpEngine = UdpTransportTarget = get_cmd = None
+
+UTC = timezone.utc
 
 
 @dataclass

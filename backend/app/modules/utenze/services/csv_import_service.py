@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import csv
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime
+from datetime import date, datetime, timezone
 import io
 import re
 
@@ -18,6 +18,8 @@ from app.modules.utenze.models import (
     AnagraficaSubjectStatus,
 )
 from app.modules.utenze.services.person_history_service import snapshot_person_if_changed
+
+UTC = timezone.utc
 
 
 CSV_IMPORT_MARKER = "[CSV IMPORT]"

@@ -178,6 +178,9 @@ mantiene sempre un utente applicativo iniziale utilizzabile.
 All'avvio riallinea anche il catalogo `sections` e i default per ruolo dei moduli
 quando la tabella `sections` e disponibile, evitando `403` dovuti a nuove aree
 applicative presenti nel codice ma non ancora bootstrapate nel database locale.
+I job Capacitas monitorabili non vengono piu eseguiti nel processo web: le API
+creano o riaccodano record persistenti e il container `elaborazioni-worker`
+li preleva dal database, isolando le elaborazioni massive dai worker Uvicorn.
 
 Moduli logici attuali:
 - `accessi`
@@ -200,7 +203,7 @@ Stato del refactor:
 - `accessi` gia instradato tramite route canoniche sotto `app/modules/accessi/routes`
 
 Regola runtime per job monitorabili:
-- tutti i processi lunghi con stato esposto al frontend devono essere implementati preferibilmente come runtime task tracciati dal backend, o tramite coda equivalente con persistenza dello stato
+- tutti i processi lunghi con stato esposto al frontend devono essere implementati preferibilmente tramite coda persistente presa in carico da worker dedicato, o come runtime task tracciati solo quando il carico e compatibile con il processo API
 - evitare `BackgroundTasks` usati come scheduler principale per job di lunga durata e thread daemon non tracciati, perche dopo restart o riciclo del processo possono lasciare job in stato intermedio senza recovery
 - ogni job monitorabile deve prevedere almeno:
   - persistenza progressiva dello stato su DB

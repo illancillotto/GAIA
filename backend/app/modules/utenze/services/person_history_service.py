@@ -1,11 +1,13 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.modules.utenze.models import AnagraficaPerson, AnagraficaPersonSnapshot
+
+UTC = timezone.utc
 
 
 def person_to_snapshot_payload(person: AnagraficaPerson) -> dict[str, object | None]:

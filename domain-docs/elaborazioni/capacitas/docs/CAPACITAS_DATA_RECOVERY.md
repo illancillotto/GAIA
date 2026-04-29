@@ -30,6 +30,8 @@ Quando questo documento e in conflitto con il codice, prevale il codice runtime.
 - parser HTML/payload: `backend/app/modules/elaborazioni/capacitas/apps/involture/parsers.py`
 - DTO e modelli payload: `backend/app/modules/elaborazioni/capacitas/models.py`
 - API pubbliche backend: `backend/app/modules/elaborazioni/capacitas_routes.py`
+- runtime job worker: `backend/app/services/elaborazioni_capacitas_runtime.py`
+- poller operativo: `modules/elaborazioni/worker/worker.py`
 - persistenza e sync Terreni: `backend/app/services/elaborazioni_capacitas_terreni.py`
 - note di dominio catasto consortile: `domain-docs/catasto/docs/CATASTO_CONSORTILE.md`
 - regole anagrafiche collegate allo storico Capacitas: `domain-docs/utenze/docs/PRD_anagrafica.md`
@@ -57,6 +59,12 @@ Funzioni effettivamente implementate oggi:
 - apertura `rptCertificato.aspx`
 - apertura `dettaglioTerreno.aspx`
 - sync singola e massiva verso persistenza GAIA
+
+I job monitorabili di sync massiva (`Terreni`, sync progressiva particelle e
+import `Storico anagrafica`) vengono creati dalle API come record `pending` e
+prelevati dal container `elaborazioni-worker`. Il backend web resta responsabile
+di auth, validazione, creazione job e monitoraggio; l'esecuzione lunga con
+sessioni Capacitas e scritture DB avviene fuori dai worker Uvicorn.
 
 ## 4. Mappa endpoint esterni Capacitas
 

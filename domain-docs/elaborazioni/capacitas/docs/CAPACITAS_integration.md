@@ -11,7 +11,9 @@
 - Registry app Capacitas: `backend/app/modules/elaborazioni/capacitas/apps/registry.py`
 - Macro-moduli verticali: `backend/app/modules/elaborazioni/capacitas/apps/<app>/`
 - Service: `backend/app/services/elaborazioni_capacitas.py`
+- Runtime job worker: `backend/app/services/elaborazioni_capacitas_runtime.py`
 - Routes: `backend/app/modules/elaborazioni/capacitas_routes.py`
+- Poller dedicato: `modules/elaborazioni/worker/worker.py`
 - Migration: `backend/alembic/versions/20260402_0027_capacitas_credentials.py`
 
 ## Struttura runtime
@@ -21,6 +23,7 @@
 - ogni macro-modulo Capacitas vive sotto `apps/<app>/` e contiene i client e i sottomoduli specifici del servizio
 - `client.py` al root resta come shim di compatibilita per gli import esistenti di `InVoltureClient`
 - il link diretto a `rptCertificato.aspx` per le schede particella restituisce al frontend solo i parametri certificato (`CCO/COM/PVC/FRA/CCS`) e usa la sessione Capacitas gia presente nel browser; l'aggiunta di `token/app/tenant` puo forzare un rientro SSO e produrre "Sessione scaduta"
+- i job monitorabili Capacitas (`Terreni`, sync progressiva particelle e `Storico anagrafica`) sono record persistenti accodati dalle route e presi in carico dal container `elaborazioni-worker`; il backend API non esegue piu questi batch tramite `asyncio.create_task`
 
 Macro-moduli registrati ad oggi:
 
@@ -87,7 +90,7 @@ Implementato:
 
 Limitazioni deliberate di questo step:
 
-- il job massivo e persistito, parte subito in background dal backend applicativo e resta rilanciabile via API; non esiste ancora un worker dedicato separato o una coda esterna
+- il job massivo e persistito e viene prelevato dal poller `elaborazioni-worker`; non esiste ancora una coda esterna, ma l'esecuzione non grava piu sul processo web Uvicorn
 - la risoluzione `comune testuale -> frazione Capacitas` resta separata tramite endpoint lookup
 - il matching automatico con `ana_subjects` e ora introdotto solo per gli intestatari proprietari con `codice_fiscale` disponibile
 - quando e disponibile lo storico anagrafico Capacitas, il sync usa il dettaglio storico come fonte per aggiornare `ana_persons` e scrivere `ana_person_snapshots`

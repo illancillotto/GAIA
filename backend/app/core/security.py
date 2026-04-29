@@ -4,7 +4,7 @@ import base64
 import hashlib
 import hmac
 import secrets
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import jwt
 
@@ -12,6 +12,7 @@ from app.core.config import settings
 
 PASSWORD_SCHEME = "pbkdf2_sha256"
 PASSWORD_ITERATIONS = 390000
+UTC = timezone.utc
 
 
 def hash_password(password: str) -> str:

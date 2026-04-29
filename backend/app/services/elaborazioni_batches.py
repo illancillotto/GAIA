@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
 import re
@@ -62,6 +62,7 @@ ALLOWED_SEARCH_MODE = {"immobile", "soggetto"}
 ALLOWED_SUBJECT_KIND = {"PF", "PNF"}
 ALLOWED_REQUEST_TYPE = {"ATTUALITA", "STORICA"}
 IMMOBILE_REQUIRED_UPLOAD_COLUMNS = {"comune", "catasto", "foglio", "particella"}
+UTC = timezone.utc
 
 CF_PF_RE = re.compile(r"^[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]$")
 PIVA_RE = re.compile(r"^\d{11}$")

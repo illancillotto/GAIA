@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from io import BytesIO
 from pathlib import Path
 from uuid import UUID
@@ -39,6 +39,8 @@ from app.services.elaborazioni_capacitas_terreni import (
     _split_denominazione,
 )
 
+UTC = timezone.utc
+
 
 class CapacitasAnagraficaHistoryImportError(Exception):
     pass
@@ -47,7 +49,6 @@ class CapacitasAnagraficaHistoryImportError(Exception):
 HistoryItemProgressCallback = Callable[[CapacitasAnagraficaHistoryImportItemResult, dict[str, int]], Awaitable[None]]
 RECENT_HISTORY_ITEM_LIMIT = 100
 HISTORY_STALE_JOB_MINUTES = 30
-_BACKEND_PROCESS_STARTED_AT = datetime.now(UTC)
 
 
 @dataclass(slots=True)
@@ -199,7 +200,7 @@ def expire_stale_anagrafica_history_jobs(db: Session) -> None:
     now = datetime.now(UTC)
     jobs = db.scalars(
         select(CapacitasAnagraficaHistoryImportJob).where(
-            CapacitasAnagraficaHistoryImportJob.status.in_(("pending", "processing", "queued_resume")),
+            CapacitasAnagraficaHistoryImportJob.status == "processing",
             CapacitasAnagraficaHistoryImportJob.completed_at.is_(None),
         )
     ).all()
@@ -210,21 +211,12 @@ def expire_stale_anagrafica_history_jobs(db: Session) -> None:
     for job in jobs:
         started_at = _normalize_job_datetime(job.started_at)
         updated_at = _normalize_job_datetime(job.updated_at)
-        created_at = _normalize_job_datetime(job.created_at)
-        reference_at = updated_at or started_at or created_at
-        if job.status == "processing" and started_at is not None and started_at < _BACKEND_PROCESS_STARTED_AT:
-            _mark_stale_history_job(
-                job,
-                completed_at=now,
-                detail="Job marcato come failed: backend riavviato mentre il job storico anagrafica era in stato processing; il task runtime originale non e piu attivo. Rilanciare dal monitor.",
-            )
-            changed = True
-            continue
+        reference_at = updated_at or started_at
         if reference_at is not None and reference_at.timestamp() < stale_cutoff:
             _mark_stale_history_job(
                 job,
                 completed_at=now,
-                detail=f"Job marcato come failed: nessun avanzamento registrato oltre la soglia di {HISTORY_STALE_JOB_MINUTES} minuti.",
+                detail=f"Job marcato come failed: worker Capacitas senza avanzamento oltre la soglia di {HISTORY_STALE_JOB_MINUTES} minuti.",
             )
             changed = True
     if changed:

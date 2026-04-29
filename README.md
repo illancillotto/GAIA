@@ -48,13 +48,12 @@ con esiti diagnostici distinti `completed`, `failed`, `skipped`, `not_found`.
 Il dominio include anche una Fase 1 territoriale con import Capacitas,
 distretti, particelle, anomalie, storico import, ricerca anagrafica singola/massiva
 e dettaglio batch su base PostGIS.
-I processi lunghi monitorabili da frontend vengono progressivamente standardizzati
-su runtime task tracciati lato backend con stato persistito e recovery dopo restart,
-invece di dipendere da sessioni web o task effimeri non riconciliabili.
-Nel perimetro Capacitas questo vale gia per la sync progressiva particelle e,
-quando richiesto dal job, anche per i batch Terreni con `auto_resume`.
-Lo stesso modello copre anche l'import `Storico anagrafica`, ora esposto come job
-persistente con monitor frontend, cleanup stale e auto-resume dopo restart backend.
+I processi lunghi monitorabili da frontend sono standardizzati su job persistenti
+presi in carico dal container `elaborazioni-worker`, invece di dipendere da
+sessioni web o task effimeri nel processo API.
+Nel perimetro Capacitas il worker esegue sync progressiva particelle, batch
+Terreni e import `Storico anagrafica`, con monitor frontend, cleanup stale e
+auto-resume quando previsto dal payload del job.
 Stato: operativo avanzato sul perimetro corrente, con hardening backend/frontend e copertura E2E dei flussi principali Catasto.
 
 ### GAIA Utenze — Anagrafica soggetti
@@ -227,7 +226,7 @@ Se la variabile e vuota/non impostata, la password non viene richiesta.
 ## Catasto MVP
 
 - Runtime operativo backend esposto sotto `/elaborazioni`; `/catasto` resta area dominio/documenti/comuni
-- Worker dedicato `elaborazioni-worker` con Playwright e OCR CAPTCHA
+- Worker dedicato `elaborazioni-worker` con Playwright, OCR CAPTCHA e presa in carico dei job Capacitas persistenti
 - Volume Docker `catasto-data` per PDF e immagini CAPTCHA
 - Database locale Docker su `postgis/postgis:16-3.4-alpine` per supportare la Fase 1 geospaziale
 - Archivio documenti con download singolo e ZIP per batch
