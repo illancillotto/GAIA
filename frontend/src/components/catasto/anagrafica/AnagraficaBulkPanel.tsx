@@ -161,9 +161,19 @@ const EXPORT_FIELD_DEFS_UTENZE: ExportFieldDef[] = [
   { key: "utenza_anno_campagna", label: "Anno campagna" },
   { key: "utenza_cco", label: "CCO" },
   { key: "capacitas_rpt_certificato_url", label: "Link Capacitas (rptCertificato)" },
-  { key: "utenza_denominazione", label: "Denominazione" },
-  { key: "utenza_codice_fiscale", label: "Codice fiscale" },
-  { key: "utenza_codice_fiscale_raw", label: "Codice fiscale (raw)" },
+  { key: "utenza_denominazione", label: "Denominazione (Capacitas)" },
+  { key: "utenza_codice_fiscale", label: "Codice fiscale (Capacitas)" },
+  { key: "utenza_codice_fiscale_raw", label: "Codice fiscale raw (Capacitas)" },
+  { key: "intestatari_flatten", label: "Intestatari catasto (tutti)" },
+  { key: "intestatario_cf", label: "Intestatario: CF" },
+  { key: "intestatario_tipo", label: "Intestatario: tipo" },
+  { key: "intestatario_cognome", label: "Intestatario: cognome" },
+  { key: "intestatario_nome", label: "Intestatario: nome" },
+  { key: "intestatario_denominazione", label: "Intestatario: denominazione" },
+  { key: "intestatario_ragione_sociale", label: "Intestatario: ragione sociale" },
+  { key: "intestatario_data_nascita", label: "Intestatario: data nascita" },
+  { key: "intestatario_luogo_nascita", label: "Intestatario: luogo nascita" },
+  { key: "intestatario_deceduto", label: "Intestatario: deceduto" },
   { key: "utenza_cod_provincia", label: "Cod provincia" },
   { key: "utenza_cod_frazione", label: "Cod frazione" },
   { key: "utenza_sup_irrigabile_mq", label: "Sup irrigabile (mq)" },
@@ -557,6 +567,7 @@ export function AnagraficaBulkPanel() {
               .filter(Boolean)
               .join(" | ");
             const utenze = utenzeByParticella.get(m.particella_id) ?? [];
+            const firstInt = m.intestatari?.[0];
             const baseRow = {
               row_index: r.row_index,
               kind,
@@ -571,6 +582,16 @@ export function AnagraficaBulkPanel() {
               match_rank: index + 1,
               particella_id: m.particella_id,
               intestatari: intest,
+              intestatari_flatten: intest,
+              intestatario_cf: firstInt?.codice_fiscale ?? "",
+              intestatario_tipo: firstInt?.tipo ?? "",
+              intestatario_cognome: firstInt?.cognome ?? "",
+              intestatario_nome: firstInt?.nome ?? "",
+              intestatario_denominazione: firstInt?.denominazione ?? "",
+              intestatario_ragione_sociale: firstInt?.ragione_sociale ?? "",
+              intestatario_data_nascita: firstInt?.data_nascita ?? "",
+              intestatario_luogo_nascita: firstInt?.luogo_nascita ?? "",
+              intestatario_deceduto: String(firstInt?.deceduto ?? ""),
               particella_comune: m.comune ?? "",
               particella_cod_comune_capacitas: m.cod_comune_capacitas ?? "",
               particella_foglio: m.foglio ?? "",
@@ -777,6 +798,7 @@ export function AnagraficaBulkPanel() {
               .join(" | ");
 
             const utenze = utenzeByParticella.get(m.particella_id) ?? [];
+            const firstInt = m.intestatari?.[0];
             for (const u of utenze) {
               if (u.cco) ccos.push(u.cco);
               utenzeRows.push({
@@ -793,7 +815,16 @@ export function AnagraficaBulkPanel() {
                 match_rank: index + 1,
                 dettaglio_particella_url: `/catasto/particelle/${m.particella_id}`,
                 capacitas_rpt_certificato_url: "",
-                // utenza (prefisso) per selezione campi e compatibilità CSV
+                intestatari_flatten: intest,
+                intestatario_cf: firstInt?.codice_fiscale ?? "",
+                intestatario_tipo: firstInt?.tipo ?? "",
+                intestatario_cognome: firstInt?.cognome ?? "",
+                intestatario_nome: firstInt?.nome ?? "",
+                intestatario_denominazione: firstInt?.denominazione ?? "",
+                intestatario_ragione_sociale: firstInt?.ragione_sociale ?? "",
+                intestatario_data_nascita: firstInt?.data_nascita ?? "",
+                intestatario_luogo_nascita: firstInt?.luogo_nascita ?? "",
+                intestatario_deceduto: String(firstInt?.deceduto ?? ""),
                 utenza_id: u.id,
                 utenza_import_batch_id: u.import_batch_id,
                 utenza_anno_campagna: u.anno_campagna,
