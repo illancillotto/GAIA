@@ -230,21 +230,21 @@ export default function MapContainer({
         data: { type: "FeatureCollection", features: [] },
       });
       map.addLayer({
-        id: "uploaded-particelle-outline",
-        type: "line",
-        source: "uploaded-particelle-source",
-        paint: {
-          "line-color": "#10B981",
-          "line-width": 3,
-        },
-      });
-      map.addLayer({
         id: "uploaded-particelle-fill",
         type: "fill",
         source: "uploaded-particelle-source",
         paint: {
           "fill-color": "#10B981",
-          "fill-opacity": 0.15,
+          "fill-opacity": 0.35,
+        },
+      });
+      map.addLayer({
+        id: "uploaded-particelle-outline",
+        type: "line",
+        source: "uploaded-particelle-source",
+        paint: {
+          "line-color": "#059669",
+          "line-width": 2,
         },
       });
 
@@ -398,7 +398,17 @@ export default function MapContainer({
               for (const point of ring) bounds.extend([point[0], point[1]]);
             }
           }
-          if (!bounds.isEmpty()) map.fitBounds(bounds, { padding: 40, duration: 600 });
+          if (!bounds.isEmpty()) {
+            // cameraForBounds tells us what zoom fitBounds would produce.
+            // At zoom < 13 individual parcels are sub-pixel, so we instead
+            // fly to the centre of the dataset at a legible zoom level.
+            const camera = map.cameraForBounds(bounds, { padding: 40 });
+            if (camera && (camera.zoom ?? 0) < 13) {
+              map.flyTo({ center: bounds.getCenter(), zoom: 13, duration: 600 });
+            } else {
+              map.fitBounds(bounds, { padding: 40, duration: 600 });
+            }
+          }
         } catch {
           // Fit bounds is best-effort.
         }

@@ -495,13 +495,13 @@ export function AnagraficaBulkPanel() {
         const job = await catastoCreateElaborazioneMassivaJob(token, {
           source_filename: sourceFile?.name ?? null,
           skipped_rows: skippedRows,
-          payload: { kind: inferredKind ?? undefined, rows: parsedRows },
+          payload: { kind: inferredKind ?? undefined, include_capacitas_live: false, rows: parsedRows },
         });
         setResults(job.results);
         setOperationHistory((prev) => [job, ...prev].slice(0, 5));
       } catch {
         // Backward-compatible fallback if the jobs API is not available yet.
-        const response = await catastoBulkSearchAnagrafica(token, { kind: inferredKind ?? undefined, rows: parsedRows });
+        const response = await catastoBulkSearchAnagrafica(token, { kind: inferredKind ?? undefined, include_capacitas_live: false, rows: parsedRows });
         setResults(response.results);
       }
       setError(null);

@@ -383,6 +383,7 @@ class CatAnagraficaBulkSearchRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     kind: Literal["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"] | None = None
+    include_capacitas_live: bool = False
     rows: list[CatAnagraficaBulkSearchRow]
 
 

@@ -369,6 +369,7 @@ export type CatAnagraficaBulkRowInput = {
 
 export type CatAnagraficaBulkSearchRequest = {
   kind?: "CF_PIVA_PARTICELLE" | "COMUNE_FOGLIO_PARTICELLA_INTESTATARI";
+  include_capacitas_live?: boolean;
   rows: CatAnagraficaBulkRowInput[];
 };
 

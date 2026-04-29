@@ -530,7 +530,7 @@ async def bulk_search_anagrafica(
     _: ApplicationUser = Depends(require_active_user),
 ) -> CatAnagraficaBulkSearchResponse:
     results: list[CatAnagraficaBulkSearchRowResult] = []
-    live_resolver = _CapacitasLiveResolver(db)
+    live_resolver = _CapacitasLiveResolver(db) if payload.include_capacitas_live else None
 
     def infer_kind() -> Literal["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"]:
         if payload.kind in ("CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"):
@@ -608,7 +608,8 @@ async def bulk_search_anagrafica(
                     matches: list[CatAnagraficaMatch] = []
                     for p in particelle:
                         match = _build_match(db, p)
-                        match = await live_resolver.enrich_match(p, match)
+                        if live_resolver is not None:
+                            match = await live_resolver.enrich_match(p, match)
                         matches.append(match)
 
                     results.append(
@@ -624,7 +625,7 @@ async def bulk_search_anagrafica(
                             particella_id=matches[0].particella_id if matches else None,
                         )
                     )
-                    if live_resolver.dirty:
+                    if live_resolver is not None and live_resolver.dirty:
                         db.commit()
                         live_resolver.dirty = False
                     continue
@@ -693,7 +694,8 @@ async def bulk_search_anagrafica(
                     matches: list[CatAnagraficaMatch] = []
                     for item in items:
                         candidate = _build_match(db, item)
-                        candidate = await live_resolver.enrich_match(item, candidate)
+                        if live_resolver is not None:
+                            candidate = await live_resolver.enrich_match(item, candidate)
                         matches.append(candidate)
                     results.append(
                         CatAnagraficaBulkSearchRowResult(
@@ -709,13 +711,14 @@ async def bulk_search_anagrafica(
                             matches=matches,
                         )
                     )
-                    if live_resolver.dirty:
+                    if live_resolver is not None and live_resolver.dirty:
                         db.commit()
                         live_resolver.dirty = False
                     continue
 
                 match = _build_match(db, items[0])
-                match = await live_resolver.enrich_match(items[0], match)
+                if live_resolver is not None:
+                    match = await live_resolver.enrich_match(items[0], match)
                 results.append(
                     CatAnagraficaBulkSearchRowResult(
                         row_index=row.row_index,
@@ -731,11 +734,11 @@ async def bulk_search_anagrafica(
                         matches_count=1,
                     )
                 )
-                if live_resolver.dirty:
+                if live_resolver is not None and live_resolver.dirty:
                     db.commit()
                     live_resolver.dirty = False
             except Exception as exc:
-                if live_resolver.dirty:
+                if live_resolver is not None and live_resolver.dirty:
                     db.rollback()
                     live_resolver.dirty = False
                 results.append(
@@ -753,7 +756,8 @@ async def bulk_search_anagrafica(
                     )
                 )
     finally:
-        await live_resolver.close()
+        if live_resolver is not None:
+            await live_resolver.close()
 
     return CatAnagraficaBulkSearchResponse(results=results)
 
