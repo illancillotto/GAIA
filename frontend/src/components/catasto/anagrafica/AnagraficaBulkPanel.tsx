@@ -140,6 +140,7 @@ const EXPORT_FIELD_DEFS_PARTICELLE_INTESTATARI: ExportFieldDef[] = [
   { key: "match_rank", label: "Rank match" },
   { key: "particella_id", label: "Particella ID" },
   { key: "intestatari", label: "Intestatari (flatten)" },
+  { key: "intestatari_cf_flatten", label: "Codici fiscali intestatari" },
   { key: "utenze_count", label: "Utenze count" },
   { key: "particella_comune", label: "Comune" },
   { key: "particella_cod_comune_capacitas", label: "Cod. comune Capacitas" },
@@ -568,6 +569,7 @@ export function AnagraficaBulkPanel() {
               .join(" | ");
             const utenze = utenzeByParticella.get(m.particella_id) ?? [];
             const firstInt = m.intestatari?.[0];
+            const intestCf = (m.intestatari ?? []).map((i) => i.codice_fiscale).filter(Boolean).join(" | ");
             const baseRow = {
               row_index: r.row_index,
               kind,
@@ -582,6 +584,7 @@ export function AnagraficaBulkPanel() {
               match_rank: index + 1,
               particella_id: m.particella_id,
               intestatari: intest,
+              intestatari_cf_flatten: intestCf,
               intestatari_flatten: intest,
               intestatario_cf: firstInt?.codice_fiscale ?? "",
               intestatario_tipo: firstInt?.tipo ?? "",
@@ -799,6 +802,7 @@ export function AnagraficaBulkPanel() {
 
             const utenze = utenzeByParticella.get(m.particella_id) ?? [];
             const firstInt = m.intestatari?.[0];
+            const intestCf = (m.intestatari ?? []).map((i) => i.codice_fiscale).filter(Boolean).join(" | ");
             for (const u of utenze) {
               if (u.cco) ccos.push(u.cco);
               utenzeRows.push({
@@ -878,6 +882,7 @@ export function AnagraficaBulkPanel() {
               match_rank: index + 1,
               particella_id: m.particella_id,
               intestatari: intest,
+              intestatari_cf_flatten: intestCf,
               utenze_count: utenze.length,
               particella_comune: m.comune ?? "",
               particella_cod_comune_capacitas: m.cod_comune_capacitas ?? "",
