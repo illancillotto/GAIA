@@ -11,9 +11,12 @@
 - Registry app Capacitas: `backend/app/modules/elaborazioni/capacitas/apps/registry.py`
 - Macro-moduli verticali: `backend/app/modules/elaborazioni/capacitas/apps/<app>/`
 - Service: `backend/app/services/elaborazioni_capacitas.py`
-- Runtime job worker: `backend/app/services/elaborazioni_capacitas_runtime.py`
+- Runtime services job-aware:
+  - `backend/app/services/elaborazioni_capacitas_particelle_sync.py`
+  - `backend/app/services/elaborazioni_capacitas_terreni.py`
+  - `backend/app/services/elaborazioni_capacitas_anagrafica_history.py`
 - Routes: `backend/app/modules/elaborazioni/capacitas_routes.py`
-- Poller dedicato: `modules/elaborazioni/worker/worker.py`
+- Bootstrap recovery: `backend/app/main.py` -> `resume_capacitas_runtime_jobs_on_startup()`
 - Migration: `backend/alembic/versions/20260402_0027_capacitas_credentials.py`
 
 ## Struttura runtime
@@ -23,7 +26,9 @@
 - ogni macro-modulo Capacitas vive sotto `apps/<app>/` e contiene i client e i sottomoduli specifici del servizio
 - `client.py` al root resta come shim di compatibilita per gli import esistenti di `InVoltureClient`
 - il link diretto a `rptCertificato.aspx` per le schede particella restituisce al frontend solo i parametri certificato (`CCO/COM/PVC/FRA/CCS`) e usa la sessione Capacitas gia presente nel browser; l'aggiunta di `token/app/tenant` puo forzare un rientro SSO e produrre "Sessione scaduta"
-- i job monitorabili Capacitas (`Terreni`, sync progressiva particelle e `Storico anagrafica`) sono record persistenti accodati dalle route e presi in carico dal container `elaborazioni-worker`; il backend API non esegue piu questi batch tramite `asyncio.create_task`
+- i job monitorabili Capacitas (`Terreni`, sync progressiva particelle e `Storico anagrafica`) sono record persistenti con stato su DB, avviati dalle route e schedulati come runtime task tracciati nel backend API
+- il backend esegue startup recovery: marca stale/orfani, converte i job recuperabili in `queued_resume` e li rilancia automaticamente quando la policy del job lo consente
+- la scadenza della sessione GAIA ferma solo il monitor frontend; non e sinonimo di stop del task backend
 
 Macro-moduli registrati ad oggi:
 
@@ -57,13 +62,20 @@ Implementato:
   - `GET /elaborazioni/capacitas/involture/terreni/jobs`
   - `GET /elaborazioni/capacitas/involture/terreni/jobs/{id}`
   - `POST /elaborazioni/capacitas/involture/terreni/jobs/{id}/run`
+  - `DELETE /elaborazioni/capacitas/involture/terreni/jobs/{id}`
   - `POST /elaborazioni/capacitas/involture/particelle/jobs`
   - `GET /elaborazioni/capacitas/involture/particelle/jobs`
   - `GET /elaborazioni/capacitas/involture/particelle/jobs/{id}`
   - `POST /elaborazioni/capacitas/involture/particelle/jobs/{id}/run`
+  - `DELETE /elaborazioni/capacitas/involture/particelle/jobs/{id}`
   - `GET /elaborazioni/capacitas/involture/link/rpt-certificato?cco=...`
   - `POST /elaborazioni/capacitas/involture/anagrafica/storico/import`
   - `POST /elaborazioni/capacitas/involture/anagrafica/storico/import-file`
+  - `POST /elaborazioni/capacitas/involture/anagrafica/storico/jobs`
+  - `GET /elaborazioni/capacitas/involture/anagrafica/storico/jobs`
+  - `GET /elaborazioni/capacitas/involture/anagrafica/storico/jobs/{id}`
+  - `POST /elaborazioni/capacitas/involture/anagrafica/storico/jobs/{id}/run`
+  - `DELETE /elaborazioni/capacitas/involture/anagrafica/storico/jobs/{id}`
 - persistenza nel layer catasto consortile:
   - `cat_consorzio_units`
   - `cat_consorzio_unit_segments`
@@ -74,9 +86,12 @@ Implementato:
   - `cat_utenza_intestatari`
   - `cat_capacitas_terreno_details`
   - `capacitas_terreni_sync_jobs`
+  - `capacitas_particelle_sync_jobs`
+  - `capacitas_anagrafica_history_import_jobs`
 - frontend workspace in `frontend/src/components/elaborazioni/capacitas-workspace.tsx` con:
   - ricerca anagrafica
   - sync progressiva delle particelle GAIA con progress bar e monitor job
+  - monitor `Storico anagrafica` con job persistenti, rerun, delete e auto-resume
   - dashboard `/elaborazioni` con vista aggregata delle esecuzioni attive, inclusi i job aperti della sync progressiva particelle
   - lookup guidato `frazioni -> sezioni -> fogli`
   - preview risultati Terreni
@@ -86,11 +101,11 @@ Implementato:
   - risoluzione backend `comune -> frazione_id Capacitas` durante il batch
   - se un comune ha piu frazioni candidate con match sul nome (`Arborea`, `Santa Giusta`, ecc.), il batch prova i candidati in sequenza e usa quello che restituisce davvero la particella
   - flag globali di avvio job per `fetch_certificati` e `fetch_details`, non piu richiesti per ogni riga file
-  - monitor job con refresh, avanzamento incrementale in `result_json`, rerun manuale ed eliminazione dei job terminati
+  - monitor job con refresh, avanzamento incrementale in `result_json`, rerun manuale, eliminazione dei job terminati e segnalazione esplicita di sessione frontend scaduta
 
 Limitazioni deliberate di questo step:
 
-- il job massivo e persistito e viene prelevato dal poller `elaborazioni-worker`; non esiste ancora una coda esterna, ma l'esecuzione non grava piu sul processo web Uvicorn
+- i job massivi sono persistiti ma non usano ancora una coda esterna; l'esecuzione vive nel processo backend tramite runtime task tracciati e recovery su restart
 - la risoluzione `comune testuale -> frazione Capacitas` resta separata tramite endpoint lookup
 - il matching automatico con `ana_subjects` e ora introdotto solo per gli intestatari proprietari con `codice_fiscale` disponibile
 - quando e disponibile lo storico anagrafico Capacitas, il sync usa il dettaglio storico come fonte per aggiornare `ana_persons` e scrivere `ana_person_snapshots`
@@ -232,6 +247,10 @@ Workflow batch aggiuntivo disponibile nel modulo `elaborazioni`:
   - report con `processed`, `imported`, `skipped`, `failed`
   - contatore `snapshot_records_imported`
   - dettaglio riga per riga con soggetto risolto e numero di record storici importati
+- modalita runtime attuale:
+  - oltre alla route sincrona storica esiste un job persistente dedicato in `capacitas_anagrafica_history_import_jobs`
+  - il monitor frontend mostra progress percent, ultimi item processati, rerun, delete e stato `queued_resume`
+  - dopo restart backend i job con `auto_resume=true` vengono riconciliati e rilanciati automaticamente
 
 ## Sync progressiva particelle GAIA
 
@@ -250,6 +269,7 @@ Flusso applicativo aggiunto nel workspace `Elaborazioni / Capacitas`:
   - `capacitas_last_sync_error`
   - `capacitas_last_sync_job_id`
 - persiste il job in `capacitas_particelle_sync_jobs` con progressi incrementali in `result_json`
+- i job progressivi sono recoverable di default (`auto_resume=true`) e al restart backend vengono rimessi in coda come `queued_resume`
 
 Politica anti-aggressiva:
 
@@ -258,6 +278,19 @@ Politica anti-aggressiva:
 - il workspace espone un pulsante `Doppia velocita` per il singolo job: il payload salva `double_speed=true` e dimezza la pausa calcolata (`450 ms` di giorno, `175 ms` in fascia serale)
 - il workspace espone anche `Parallelo x2`: il payload salva `parallel_workers=2`, il backend apre due sessioni Capacitas dedicate e divide la coda particelle tra due worker con progresso condiviso sul job
 - il job puo comunque essere lanciato manualmente dall'operatore, con `only_due=true` come default per evitare re-scrape inutili
+
+## Policy runtime job
+
+- tutti i processi Capacitas monitorabili da frontend devono usare job persistenti con stato su DB
+- evitare `BackgroundTasks` o thread daemon come scheduler principale per processi lunghi
+- ogni job monitorabile deve prevedere:
+  - progress persistito in `result_json`
+  - cleanup stale/orfani dopo restart o inattivita prolungata
+  - distinzione esplicita tra stop del monitor frontend e stop del task backend
+  - policy di recovery coerente con il dominio:
+    - `particelle`: auto-resume attivo di default
+    - `terreni`: auto-resume opzionale via payload job
+    - `storico anagrafica`: auto-resume attivo di default
 
 ### Evidenze dai file locali
 
