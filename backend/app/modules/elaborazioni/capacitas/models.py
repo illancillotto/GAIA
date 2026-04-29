@@ -115,6 +115,7 @@ class CapacitasAnagraficaHistoryImportRequest(BaseModel):
     items: list[CapacitasAnagraficaHistoryImportItem] = Field(min_length=1)
     credential_id: int | None = None
     continue_on_error: bool = True
+    auto_resume: bool = True
 
 
 class CapacitasAnagraficaHistoryImportItemResult(BaseModel):
@@ -136,6 +137,27 @@ class CapacitasAnagraficaHistoryImportResponse(BaseModel):
     skipped: int
     failed: int
     snapshot_records_imported: int = 0
+
+
+class CapacitasAnagraficaHistoryImportJobCreateRequest(CapacitasAnagraficaHistoryImportRequest):
+    pass
+
+
+class CapacitasAnagraficaHistoryImportJobOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    credential_id: int | None
+    requested_by_user_id: int | None
+    status: str
+    mode: str
+    payload_json: dict | list | None
+    result_json: dict | list | None
+    error_detail: str | None
+    started_at: datetime | None
+    completed_at: datetime | None
+    created_at: datetime
+    updated_at: datetime
 
 
 class CapacitasLookupOption(BaseModel):
@@ -293,6 +315,7 @@ class CapacitasTerreniBatchRequest(BaseModel):
     double_speed: bool = False
     parallel_workers: int = Field(default=1, ge=1, le=2)
     throttle_ms: int | None = Field(default=None, ge=0, le=5000)
+    auto_resume: bool = False
 
 
 class CapacitasTerreniBatchItemResult(BaseModel):
@@ -349,6 +372,7 @@ class CapacitasParticelleSyncJobCreateRequest(BaseModel):
     fetch_details: bool = True
     double_speed: bool = False
     parallel_workers: int = Field(default=1, ge=1, le=2)
+    auto_resume: bool = True
 
 
 class CapacitasParticelleSyncJobOut(BaseModel):

@@ -11,6 +11,7 @@ from app.core.config import settings
 from app.core.database import SessionLocal, engine
 from app.core.logging import configure_logging
 from app.models.section_permission import Section
+from app.modules.elaborazioni.capacitas_routes import resume_capacitas_runtime_jobs_on_startup
 from app.scripts.bootstrap_sections import ensure_default_sections
 from app.services.bootstrap_admin import ensure_bootstrap_admin
 
@@ -66,6 +67,7 @@ def _ensure_sections_on_startup() -> None:
 async def lifespan(_: FastAPI):
     _ensure_bootstrap_admin_on_startup()
     _ensure_sections_on_startup()
+    await resume_capacitas_runtime_jobs_on_startup()
     yield
 
 app = FastAPI(

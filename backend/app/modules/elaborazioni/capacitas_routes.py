@@ -2,21 +2,23 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import threading
 from datetime import datetime, timezone
 from typing import Annotated
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile, status
-from sqlalchemy import select
+from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
+from sqlalchemy import inspect, select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user, require_admin_user
-from app.core.database import SessionLocal, get_db
+from app.core.database import SessionLocal, engine, get_db
 from app.modules.elaborazioni.capacitas.client import InVoltureClient
 from app.modules.elaborazioni.capacitas.models import (
     AnagraficaSearchRequest,
     CapacitasAnagraficaDetail,
+    CapacitasAnagraficaHistoryImportJobCreateRequest,
+    CapacitasAnagraficaHistoryImportJobOut,
     CapacitasAnagraficaHistoryImportRequest,
     CapacitasAnagraficaHistoryImportResponse,
     CapacitasLookupOption,
@@ -41,14 +43,24 @@ from app.models.application_user import ApplicationUser
 from app.models.catasto_phase1 import CatCapacitasTerrenoRow, CatConsorzioOccupancy
 from app.services.elaborazioni_capacitas_anagrafica_history import (
     CapacitasAnagraficaHistoryImportError,
+    create_anagrafica_history_job,
+    delete_anagrafica_history_job,
+    expire_stale_anagrafica_history_jobs,
+    get_anagrafica_history_job,
     import_anagrafica_history_batch,
+    list_anagrafica_history_jobs,
     load_anagrafica_history_import_request,
+    prepare_anagrafica_history_jobs_for_recovery,
+    run_anagrafica_history_job,
+    serialize_anagrafica_history_job,
 )
 from app.services.elaborazioni_capacitas_particelle_sync import (
     create_particelle_sync_job,
+    expire_stale_particelle_sync_jobs,
     delete_particelle_sync_job,
     get_particelle_sync_job,
     list_particelle_sync_jobs,
+    prepare_particelle_sync_jobs_for_recovery,
     run_particelle_sync_job,
     serialize_particelle_sync_job,
 )
@@ -66,9 +78,11 @@ from app.services.elaborazioni_capacitas import (
 from app.services.elaborazioni_capacitas_terreni import (
     compute_terreni_sync_policy,
     create_terreni_sync_job,
+    expire_stale_terreni_sync_jobs,
     delete_terreni_sync_job,
     get_terreni_sync_job,
     list_terreni_sync_jobs,
+    prepare_terreni_sync_jobs_for_recovery,
     run_terreni_sync_job,
     serialize_terreni_sync_job,
     sync_terreni_batch,
@@ -78,23 +92,52 @@ from app.services.elaborazioni_capacitas_terreni import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/elaborazioni/capacitas", tags=["elaborazioni-capacitas"])
+_runtime_tasks: set[asyncio.Task[None]] = set()
 
-def _run_async_detached(coro: "asyncio.Future[None] | asyncio.Task[None] | asyncio.coroutines") -> None:
-    """
-    Run an async coroutine in a detached daemon thread.
 
-    Starlette/FastAPI BackgroundTasks run inside the server event loop thread.
-    Capacitas sync jobs are long-running and do synchronous DB work; running them
-    directly would starve the event loop and make the API appear "pending".
-    """
+def _track_runtime_task(coro: "asyncio.Future[None] | asyncio.Task[None] | asyncio.coroutines") -> None:
+    task = asyncio.create_task(coro)
+    _runtime_tasks.add(task)
+    task.add_done_callback(_runtime_tasks.discard)
 
-    def _runner() -> None:
-        try:
-            asyncio.run(coro)  # creates a private event loop for this thread
-        except Exception:
-            logger.exception("Errore esecuzione job Capacitas in thread separato")
 
-    threading.Thread(target=_runner, daemon=True).start()
+async def resume_capacitas_runtime_jobs_on_startup() -> None:
+    try:
+        inspector = inspect(engine)
+        if not inspector.has_table("capacitas_anagrafica_history_import_jobs"):
+            logger.warning("Capacitas startup recovery skipped: table capacitas_anagrafica_history_import_jobs not available yet")
+            return
+        if not inspector.has_table("capacitas_particelle_sync_jobs"):
+            logger.warning("Capacitas startup recovery skipped: table capacitas_particelle_sync_jobs not available yet")
+            return
+        if not inspector.has_table("capacitas_terreni_sync_jobs"):
+            logger.warning("Capacitas startup recovery skipped: table capacitas_terreni_sync_jobs not available yet")
+            return
+    except SQLAlchemyError as exc:
+        logger.warning("Capacitas startup recovery skipped while checking schema availability: %s", exc)
+        return
+
+    db = SessionLocal()
+    try:
+        expire_stale_anagrafica_history_jobs(db)
+        expire_stale_terreni_sync_jobs(db)
+        history_job_ids = prepare_anagrafica_history_jobs_for_recovery(db)
+        terreni_job_ids = prepare_terreni_sync_jobs_for_recovery(db)
+        resumed_job_ids = prepare_particelle_sync_jobs_for_recovery(db)
+        if history_job_ids:
+            logger.info("Capacitas startup recovery: scheduling %d history job(s): %s", len(history_job_ids), history_job_ids)
+        for job_id in history_job_ids:
+            _track_runtime_task(_run_anagrafica_history_job_background(job_id))
+        if terreni_job_ids:
+            logger.info("Capacitas startup recovery: scheduling %d terreni job(s): %s", len(terreni_job_ids), terreni_job_ids)
+        for job_id in terreni_job_ids:
+            _track_runtime_task(_run_terreni_job_background(job_id))
+        if resumed_job_ids:
+            logger.info("Capacitas startup recovery: scheduling %d particelle job(s): %s", len(resumed_job_ids), resumed_job_ids)
+        for job_id in resumed_job_ids:
+            _track_runtime_task(_run_particelle_job_background(job_id))
+    finally:
+        db.close()
 
 
 async def _run_terreni_job_background(job_id: int) -> None:
@@ -185,6 +228,49 @@ async def _run_particelle_job_background(job_id: int) -> None:
             db.commit()
     finally:
         for manager in managers:
+            await manager.close()
+        db.close()
+
+
+async def _run_anagrafica_history_job_background(job_id: int) -> None:
+    db = SessionLocal()
+    manager: CapacitasSessionManager | None = None
+    credential_id: int | None = None
+    try:
+        job = get_anagrafica_history_job(db, job_id)
+        if job is None:
+            return
+
+        payload = CapacitasAnagraficaHistoryImportJobCreateRequest.model_validate(job.payload_json or {})
+        try:
+            credential, password = pick_credential(db, payload.credential_id or job.credential_id)
+        except RuntimeError as exc:
+            job.status = "failed"
+            job.error_detail = str(exc)
+            job.completed_at = datetime.now(timezone.utc)
+            db.commit()
+            return
+
+        credential_id = credential.id
+        manager = CapacitasSessionManager(credential.username, password)
+        await manager.login()
+        await manager.activate_app("involture")
+        client = InVoltureClient(manager)
+        await run_anagrafica_history_job(db, client, job)
+        mark_credential_used(db, credential.id)
+    except Exception as exc:
+        logger.exception("Errore background job storico anagrafica Capacitas: job_id=%d err=%s", job_id, exc)
+        db.rollback()
+        if credential_id is not None:
+            mark_credential_error(db, credential_id, str(exc))
+        job = get_anagrafica_history_job(db, job_id)
+        if job is not None and job.status not in {"succeeded", "completed_with_errors", "failed"}:
+            job.status = "failed"
+            job.error_detail = str(exc)
+            job.completed_at = datetime.now(timezone.utc)
+            db.commit()
+    finally:
+        if manager is not None:
             await manager.close()
         db.close()
 
@@ -408,6 +494,80 @@ async def import_anagrafica_storico_file(
     return await import_anagrafica_storico(payload, _, db)
 
 
+@router.post("/involture/anagrafica/storico/jobs", response_model=CapacitasAnagraficaHistoryImportJobOut, status_code=status.HTTP_202_ACCEPTED)
+async def create_anagrafica_history_import_job_route(
+    body: CapacitasAnagraficaHistoryImportJobCreateRequest,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> CapacitasAnagraficaHistoryImportJobOut:
+    expire_stale_anagrafica_history_jobs(db)
+    if body.credential_id is not None:
+        try:
+            pick_credential(db, body.credential_id)
+        except RuntimeError as exc:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+
+    job = create_anagrafica_history_job(
+        db,
+        requested_by_user_id=current_user.id,
+        credential_id=body.credential_id,
+        payload=body,
+    )
+    _track_runtime_task(_run_anagrafica_history_job_background(job.id))
+    return serialize_anagrafica_history_job(job)
+
+
+@router.get("/involture/anagrafica/storico/jobs", response_model=list[CapacitasAnagraficaHistoryImportJobOut])
+def list_anagrafica_history_import_jobs_route(
+    _: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[CapacitasAnagraficaHistoryImportJobOut]:
+    expire_stale_anagrafica_history_jobs(db)
+    return [serialize_anagrafica_history_job(job) for job in list_anagrafica_history_jobs(db)]
+
+
+@router.get("/involture/anagrafica/storico/jobs/{job_id}", response_model=CapacitasAnagraficaHistoryImportJobOut)
+def get_anagrafica_history_import_job_route(
+    job_id: int,
+    _: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> CapacitasAnagraficaHistoryImportJobOut:
+    expire_stale_anagrafica_history_jobs(db)
+    job = get_anagrafica_history_job(db, job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job non trovato")
+    return serialize_anagrafica_history_job(job)
+
+
+@router.delete("/involture/anagrafica/storico/jobs/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_anagrafica_history_import_job_route(
+    job_id: int,
+    _: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> None:
+    expire_stale_anagrafica_history_jobs(db)
+    job = get_anagrafica_history_job(db, job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job non trovato")
+    if job.status not in {"succeeded", "completed_with_errors", "failed"}:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Il job puo essere eliminato solo quando e terminato")
+    delete_anagrafica_history_job(db, job)
+
+
+@router.post("/involture/anagrafica/storico/jobs/{job_id}/run", response_model=CapacitasAnagraficaHistoryImportJobOut)
+async def run_anagrafica_history_import_job_route(
+    job_id: int,
+    _: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> CapacitasAnagraficaHistoryImportJobOut:
+    expire_stale_anagrafica_history_jobs(db)
+    job = get_anagrafica_history_job(db, job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job non trovato")
+    _track_runtime_task(_run_anagrafica_history_job_background(job.id))
+    return serialize_anagrafica_history_job(job)
+
+
 @router.get("/involture/frazioni", response_model=list[CapacitasLookupOption])
 async def search_frazioni(
     q: str,
@@ -601,12 +761,12 @@ async def sync_terreni_batch_route(
 
 
 @router.post("/involture/terreni/jobs", response_model=CapacitasTerreniJobOut, status_code=status.HTTP_202_ACCEPTED)
-def create_terreni_job(
+async def create_terreni_job(
     body: CapacitasTerreniJobCreateRequest,
-    background_tasks: BackgroundTasks,
     current_user: Annotated[ApplicationUser, Depends(require_admin_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> CapacitasTerreniJobOut:
+    expire_stale_terreni_sync_jobs(db)
     if body.credential_id is not None:
         try:
             pick_credential(db, body.credential_id)
@@ -619,7 +779,7 @@ def create_terreni_job(
         credential_id=body.credential_id,
         payload=body,
     )
-    background_tasks.add_task(_run_async_detached, _run_terreni_job_background(job.id))
+    _track_runtime_task(_run_terreni_job_background(job.id))
     return serialize_terreni_sync_job(job)
 
 
@@ -628,6 +788,7 @@ def list_terreni_jobs(
     _: Annotated[ApplicationUser, Depends(require_admin_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> list[CapacitasTerreniJobOut]:
+    expire_stale_terreni_sync_jobs(db)
     return [serialize_terreni_sync_job(job) for job in list_terreni_sync_jobs(db)]
 
 
@@ -637,6 +798,7 @@ def get_terreni_job(
     _: Annotated[ApplicationUser, Depends(require_admin_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> CapacitasTerreniJobOut:
+    expire_stale_terreni_sync_jobs(db)
     job = get_terreni_sync_job(db, job_id)
     if job is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job non trovato")
@@ -649,6 +811,7 @@ def delete_terreni_job(
     _: Annotated[ApplicationUser, Depends(require_admin_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> None:
+    expire_stale_terreni_sync_jobs(db)
     job = get_terreni_sync_job(db, job_id)
     if job is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job non trovato")
@@ -666,6 +829,7 @@ async def run_terreni_job(
     _: Annotated[ApplicationUser, Depends(require_admin_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> CapacitasTerreniJobOut:
+    expire_stale_terreni_sync_jobs(db)
     job = get_terreni_sync_job(db, job_id)
     if job is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job non trovato")
@@ -702,12 +866,12 @@ async def run_terreni_job(
 
 
 @router.post("/involture/particelle/jobs", response_model=CapacitasParticelleSyncJobOut, status_code=status.HTTP_202_ACCEPTED)
-def create_particelle_job(
+async def create_particelle_job(
     body: CapacitasParticelleSyncJobCreateRequest,
-    background_tasks: BackgroundTasks,
     current_user: Annotated[ApplicationUser, Depends(require_admin_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> CapacitasParticelleSyncJobOut:
+    expire_stale_particelle_sync_jobs(db)
     if body.credential_id is not None:
         try:
             pick_credential(db, body.credential_id)
@@ -720,7 +884,7 @@ def create_particelle_job(
         credential_id=body.credential_id,
         payload=body,
     )
-    background_tasks.add_task(_run_async_detached, _run_particelle_job_background(job.id))
+    _track_runtime_task(_run_particelle_job_background(job.id))
     return serialize_particelle_sync_job(job)
 
 
@@ -729,6 +893,7 @@ def list_particelle_jobs(
     _: Annotated[ApplicationUser, Depends(require_admin_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> list[CapacitasParticelleSyncJobOut]:
+    expire_stale_particelle_sync_jobs(db)
     return [serialize_particelle_sync_job(job) for job in list_particelle_sync_jobs(db)]
 
 
@@ -738,6 +903,7 @@ def get_particelle_job(
     _: Annotated[ApplicationUser, Depends(require_admin_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> CapacitasParticelleSyncJobOut:
+    expire_stale_particelle_sync_jobs(db)
     job = get_particelle_sync_job(db, job_id)
     if job is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job non trovato")
@@ -750,6 +916,7 @@ def delete_particelle_job(
     _: Annotated[ApplicationUser, Depends(require_admin_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> None:
+    expire_stale_particelle_sync_jobs(db)
     job = get_particelle_sync_job(db, job_id)
     if job is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job non trovato")
@@ -764,6 +931,7 @@ async def run_particelle_job(
     _: Annotated[ApplicationUser, Depends(require_admin_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> CapacitasParticelleSyncJobOut:
+    expire_stale_particelle_sync_jobs(db)
     job = get_particelle_sync_job(db, job_id)
     if job is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job non trovato")

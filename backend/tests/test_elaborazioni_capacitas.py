@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Generator
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 
 from cryptography.fernet import Fernet
@@ -17,7 +17,11 @@ from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.models.capacitas import CapacitasCredential
-from app.models.capacitas import CapacitasParticelleSyncJob, CapacitasTerreniSyncJob
+from app.models.capacitas import (
+    CapacitasAnagraficaHistoryImportJob,
+    CapacitasParticelleSyncJob,
+    CapacitasTerreniSyncJob,
+)
 from app.models.catasto_phase1 import (
     CatCapacitasCertificato,
     CatCapacitasIntestatario,
@@ -34,6 +38,7 @@ from app.models.catasto_phase1 import (
 )
 from app.modules.utenze.models import AnagraficaPerson, AnagraficaPersonSnapshot, AnagraficaSubject
 from app.modules.elaborazioni.capacitas.models import (
+    CapacitasAnagrafica,
     CapacitasAnagraficaDetail,
     CapacitasLookupOption,
     CapacitasStoricoAnagraficaRow,
@@ -43,6 +48,9 @@ from app.modules.elaborazioni.capacitas.models import (
     CapacitasTerrenoDetail,
 )
 from app.services.catasto_credentials import get_credential_fernet
+from app.services.elaborazioni_capacitas_anagrafica_history import prepare_anagrafica_history_jobs_for_recovery
+from app.services.elaborazioni_capacitas_particelle_sync import prepare_particelle_sync_jobs_for_recovery
+from app.services.elaborazioni_capacitas_terreni import prepare_terreni_sync_jobs_for_recovery
 
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
@@ -557,6 +565,7 @@ def test_capacitas_anagrafica_history_import_by_subject_id(monkeypatch: pytest.M
         )
     )
     db.commit()
+    subject_id = str(subject.id)
     db.close()
 
     async def fake_login(self):
@@ -654,7 +663,7 @@ def test_capacitas_anagrafica_history_import_by_subject_id(monkeypatch: pytest.M
     response = client.post(
         "/elaborazioni/capacitas/involture/anagrafica/storico/import",
         headers=auth_headers(),
-        json={"credential_id": credential_id, "items": [{"subject_id": str(subject.id)}]},
+        json={"credential_id": credential_id, "items": [{"subject_id": subject_id}]},
     )
 
     assert response.status_code == 200
@@ -2493,6 +2502,208 @@ def test_capacitas_terreni_job_delete_rejects_processing_job() -> None:
     response = client.delete(f"/elaborazioni/capacitas/involture/terreni/jobs/{job_id}", headers=auth_headers())
     assert response.status_code == 409
     assert "terminato" in response.json()["detail"]
+
+
+def test_capacitas_particelle_jobs_list_expires_stale_processing_job() -> None:
+    db = TestingSessionLocal()
+    try:
+        job = CapacitasParticelleSyncJob(
+            requested_by_user_id=1,
+            credential_id=None,
+            status="processing",
+            mode="progressive_catalog",
+            payload_json={"only_due": True},
+            result_json={"processed_items": 12, "current_label": "Cabras 28/1170"},
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+        stale_at = datetime.now(timezone.utc) - timedelta(minutes=45)
+        job.started_at = stale_at
+        job.updated_at = stale_at
+        db.commit()
+        job_id = job.id
+    finally:
+        db.close()
+
+    response = client.get("/elaborazioni/capacitas/involture/particelle/jobs", headers=auth_headers())
+    assert response.status_code == 200
+
+    payload = next(item for item in response.json() if item["id"] == job_id)
+    assert payload["status"] == "failed"
+    assert payload["error_detail"] is not None
+    assert "job marcato come failed" in payload["error_detail"].lower()
+
+    db = TestingSessionLocal()
+    try:
+        refreshed = db.get(CapacitasParticelleSyncJob, job_id)
+        assert refreshed is not None
+        assert refreshed.status == "failed"
+        assert refreshed.completed_at is not None
+    finally:
+        db.close()
+
+
+def test_prepare_particelle_sync_jobs_for_recovery_marks_progressive_jobs_as_queued_resume() -> None:
+    db = TestingSessionLocal()
+    try:
+        recoverable = CapacitasParticelleSyncJob(
+            requested_by_user_id=1,
+            credential_id=None,
+            status="processing",
+            mode="progressive_catalog",
+            payload_json={"only_due": True, "auto_resume": True},
+            result_json={"processed_items": 27},
+        )
+        not_recoverable = CapacitasParticelleSyncJob(
+            requested_by_user_id=1,
+            credential_id=None,
+            status="processing",
+            mode="single_particella",
+            payload_json={"auto_resume": True},
+            result_json={"processed_items": 1},
+        )
+        db.add(recoverable)
+        db.add(not_recoverable)
+        db.commit()
+        db.refresh(recoverable)
+        db.refresh(not_recoverable)
+
+        resumed_ids = prepare_particelle_sync_jobs_for_recovery(db)
+
+        assert resumed_ids == [recoverable.id]
+        db.refresh(recoverable)
+        db.refresh(not_recoverable)
+        assert recoverable.status == "queued_resume"
+        assert isinstance(recoverable.result_json, dict)
+        assert recoverable.result_json["resume_reason"] == "backend_restart"
+        assert recoverable.result_json["resume_count"] == 1
+        assert not_recoverable.status == "processing"
+    finally:
+        db.close()
+
+
+def test_prepare_anagrafica_history_jobs_for_recovery_marks_jobs_as_queued_resume() -> None:
+    db = TestingSessionLocal()
+    try:
+        recoverable = CapacitasAnagraficaHistoryImportJob(
+            requested_by_user_id=1,
+            credential_id=None,
+            status="processing",
+            mode="history_import",
+            payload_json={"items": [{"idxana": "IDX-1"}], "auto_resume": True},
+            result_json={"processed": 1},
+        )
+        not_recoverable = CapacitasAnagraficaHistoryImportJob(
+            requested_by_user_id=1,
+            credential_id=None,
+            status="processing",
+            mode="history_import",
+            payload_json={"items": [{"idxana": "IDX-2"}], "auto_resume": False},
+            result_json={"processed": 1},
+        )
+        db.add(recoverable)
+        db.add(not_recoverable)
+        db.commit()
+        db.refresh(recoverable)
+        db.refresh(not_recoverable)
+
+        resumed_ids = prepare_anagrafica_history_jobs_for_recovery(db)
+
+        assert resumed_ids == [recoverable.id]
+        db.refresh(recoverable)
+        db.refresh(not_recoverable)
+        assert recoverable.status == "queued_resume"
+        assert isinstance(recoverable.result_json, dict)
+        assert recoverable.result_json["resume_reason"] == "backend_restart"
+        assert not_recoverable.status == "processing"
+    finally:
+        db.close()
+
+
+def test_prepare_terreni_sync_jobs_for_recovery_marks_auto_resume_jobs_as_queued_resume() -> None:
+    db = TestingSessionLocal()
+    try:
+        recoverable = CapacitasTerreniSyncJob(
+            requested_by_user_id=1,
+            credential_id=None,
+            status="processing",
+            mode="batch",
+            payload_json={
+                "items": [{"comune": "Uras", "foglio": "1", "particella": "680"}],
+                "auto_resume": True,
+            },
+            result_json={"processed_items": 3},
+        )
+        not_recoverable = CapacitasTerreniSyncJob(
+            requested_by_user_id=1,
+            credential_id=None,
+            status="processing",
+            mode="batch",
+            payload_json={
+                "items": [{"comune": "Uras", "foglio": "1", "particella": "681"}],
+                "auto_resume": False,
+            },
+            result_json={"processed_items": 1},
+        )
+        db.add(recoverable)
+        db.add(not_recoverable)
+        db.commit()
+        db.refresh(recoverable)
+        db.refresh(not_recoverable)
+
+        resumed_ids = prepare_terreni_sync_jobs_for_recovery(db)
+
+        assert resumed_ids == [recoverable.id]
+        db.refresh(recoverable)
+        db.refresh(not_recoverable)
+        assert recoverable.status == "queued_resume"
+        assert isinstance(recoverable.result_json, dict)
+        assert recoverable.result_json["resume_reason"] == "backend_restart"
+        assert recoverable.result_json["resume_count"] == 1
+        assert not_recoverable.status == "processing"
+    finally:
+        db.close()
+
+
+def test_capacitas_terreni_jobs_list_expires_stale_processing_job() -> None:
+    db = TestingSessionLocal()
+    try:
+        job = CapacitasTerreniSyncJob(
+            requested_by_user_id=1,
+            credential_id=None,
+            status="processing",
+            mode="batch",
+            payload_json={"items": [{"comune": "Uras", "foglio": "1", "particella": "680"}]},
+            result_json={"processed_items": 1, "current_label": "Uras 1/680"},
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+        stale_at = datetime.now(timezone.utc) - timedelta(minutes=45)
+        job.started_at = stale_at
+        job.updated_at = stale_at
+        db.commit()
+        job_id = job.id
+    finally:
+        db.close()
+
+    response = client.get("/elaborazioni/capacitas/involture/terreni/jobs", headers=auth_headers())
+    assert response.status_code == 200
+
+    payload = next(item for item in response.json() if item["id"] == job_id)
+    assert payload["status"] == "failed"
+    assert payload["error_detail"] is not None
+    assert "job marcato come failed" in payload["error_detail"].lower()
+
+    db = TestingSessionLocal()
+    try:
+        refreshed = db.get(CapacitasTerreniSyncJob, job_id)
+        assert refreshed is not None
+        assert refreshed.status == "failed"
+        assert refreshed.completed_at is not None
+    finally:
+        db.close()
 
 
 def test_capacitas_credential_test_returns_diagnostic_detail_on_login_failure(

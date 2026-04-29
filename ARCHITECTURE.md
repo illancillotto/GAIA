@@ -198,6 +198,14 @@ Evoluzione pianificata di navigazione:
 Stato del refactor:
 - `network` gia in struttura canonica sotto `app/modules/network`
 - `accessi` gia instradato tramite route canoniche sotto `app/modules/accessi/routes`
+
+Regola runtime per job monitorabili:
+- tutti i processi lunghi con stato esposto al frontend devono essere implementati preferibilmente come runtime task tracciati dal backend, o tramite coda equivalente con persistenza dello stato
+- evitare `BackgroundTasks` usati come scheduler principale per job di lunga durata e thread daemon non tracciati, perche dopo restart o riciclo del processo possono lasciare job in stato intermedio senza recovery
+- ogni job monitorabile deve prevedere almeno:
+  - persistenza progressiva dello stato su DB
+  - cleanup degli orfani/stale job dopo restart backend o timeout di inattivita
+  - semantica chiara tra interruzione del monitor frontend e prosecuzione del task backend
 - `accessi` con entrypoint canonici di modulo per route, modelli, schemi e servizi
 - `inventory` presente nel monolite condiviso come modulo dedicato
 - il dominio anagrafico espone ancora superfici `anagrafica` e `utenze` per compatibilita

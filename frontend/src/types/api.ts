@@ -1103,6 +1103,7 @@ export type CapacitasAnagraficaHistoryImportInput = {
   items: CapacitasAnagraficaHistoryImportItemInput[];
   credential_id?: number | null;
   continue_on_error?: boolean;
+  auto_resume?: boolean;
 };
 
 export type CapacitasAnagraficaHistoryImportItemResult = {
@@ -1124,6 +1125,21 @@ export type CapacitasAnagraficaHistoryImportResult = {
   skipped: number;
   failed: number;
   snapshot_records_imported: number;
+};
+
+export type CapacitasAnagraficaHistoryImportJob = {
+  id: number;
+  credential_id: number | null;
+  requested_by_user_id: number | null;
+  status: string;
+  mode: string;
+  payload_json: Record<string, unknown> | unknown[] | null;
+  result_json: CapacitasAnagraficaHistoryImportResult | Record<string, unknown> | unknown[] | null;
+  error_detail: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
 };
 
 export type CapacitasLookupOption = {
@@ -1197,6 +1213,7 @@ export type CapacitasTerreniJobCreateInput = {
   double_speed?: boolean;
   parallel_workers?: number;
   throttle_ms?: number | null;
+  auto_resume?: boolean;
 };
 
 export type CapacitasTerreniBatchItemResult = {
@@ -1252,6 +1269,7 @@ export type CapacitasParticelleSyncJobCreateInput = {
   fetch_details?: boolean;
   double_speed?: boolean;
   parallel_workers?: number;
+  auto_resume?: boolean;
 };
 
 export type CapacitasParticelleSyncRecentItem = {

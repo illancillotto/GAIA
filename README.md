@@ -48,6 +48,13 @@ con esiti diagnostici distinti `completed`, `failed`, `skipped`, `not_found`.
 Il dominio include anche una Fase 1 territoriale con import Capacitas,
 distretti, particelle, anomalie, storico import, ricerca anagrafica singola/massiva
 e dettaglio batch su base PostGIS.
+I processi lunghi monitorabili da frontend vengono progressivamente standardizzati
+su runtime task tracciati lato backend con stato persistito e recovery dopo restart,
+invece di dipendere da sessioni web o task effimeri non riconciliabili.
+Nel perimetro Capacitas questo vale gia per la sync progressiva particelle e,
+quando richiesto dal job, anche per i batch Terreni con `auto_resume`.
+Lo stesso modello copre anche l'import `Storico anagrafica`, ora esposto come job
+persistente con monitor frontend, cleanup stale e auto-resume dopo restart backend.
 Stato: operativo avanzato sul perimetro corrente, con hardening backend/frontend e copertura E2E dei flussi principali Catasto.
 
 ### GAIA Utenze — Anagrafica soggetti

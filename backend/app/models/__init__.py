@@ -27,7 +27,12 @@ from app.models.catasto import (
     CatastoVisuraRequest,
     CatastoVisuraRequestStatus,
 )
-from app.models.capacitas import CapacitasCredential, CapacitasParticelleSyncJob, CapacitasTerreniSyncJob
+from app.models.capacitas import (
+    CapacitasAnagraficaHistoryImportJob,
+    CapacitasCredential,
+    CapacitasParticelleSyncJob,
+    CapacitasTerreniSyncJob,
+)
 from app.modules.catasto.models import (
     CatCapacitasCertificato,
     CatCapacitasIntestatario,
@@ -93,6 +98,7 @@ __all__ = [
     "CatConsorzioUnitSegment",
     "CatUtenzaIntestatario",
     "CapacitasCredential",
+    "CapacitasAnagraficaHistoryImportJob",
     "CapacitasParticelleSyncJob",
     "CapacitasTerreniSyncJob",
     "EffectivePermission",

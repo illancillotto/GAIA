@@ -704,12 +704,12 @@ export function AnagraficaBulkPanel() {
         }));
       });
 
-      const ccos = flat.map((r) => String(r.utenza_latest_cco ?? "")).filter(Boolean);
+      const ccos = flat.map((r) => String((r as Record<string, unknown>)["utenza_latest_cco"] ?? "")).filter(Boolean);
       const urlByCco = ccos.length ? await resolveCapacitasRptCertificatoUrls(token, ccos) : new Map<string, string>();
       const filteredKeys = normalizeSelectedFields(exportFieldsParticelle, EXPORT_FIELD_DEFS_CF_PARTICELLE.map((f) => f.key));
       const exportRows = flat.map((row) => {
-        const cco = String(row.utenza_latest_cco ?? "").trim();
-        if (cco) row.capacitas_rpt_certificato_url = urlByCco.get(cco) ?? "";
+        const cco = String((row as Record<string, unknown>)["utenza_latest_cco"] ?? "").trim();
+        if (cco) (row as Record<string, unknown>)["capacitas_rpt_certificato_url"] = urlByCco.get(cco) ?? "";
         return filteredKeys.length ? pickFields(row, filteredKeys) : row;
       });
 

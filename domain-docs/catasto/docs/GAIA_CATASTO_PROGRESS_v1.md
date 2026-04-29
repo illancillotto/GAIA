@@ -154,6 +154,10 @@ Legend: 🔴 Non iniziato · 🟡 In corso · 🟢 Completato · ⚫ Bloccato
 - Lo shapefile deve essere copiato in un path accessibile dal server GAIA prima dello script `import_shapefile_catasto.sh`
 - Martin si avvia automaticamente con `docker compose up` dopo aggiunta al compose
 - Workspace `Elaborazioni > Capacitas > Terreni`: resta solo il flusso massivo da file; i job espongono `double_speed`, `parallel_workers` e `throttle_ms`; il backend usa i parametri sia nel job batch sia nel rerun, con parallelo fino a 2 sessioni Capacitas e pausa applicata tra righe/item Terreni
+- Job Capacitas monitorabili da frontend (`Terreni` e `sync progressiva particelle`): avvio runtime con `asyncio.create_task(...)` tracciato lato backend, stato persistito su DB e recovery automatico degli orfani/stale job; la scadenza della sessione GAIA interrompe il polling UI ma non deve essere confusa con l'arresto del job backend
+- `sync progressiva particelle`: al bootstrap backend i job compatibili in stato `pending/processing` vengono riconciliati in `queued_resume` e rilanciati automaticamente; il resume e guidato dal dominio (`capacitas_last_sync_at/status`) e non dal vecchio thread runtime interrotto
+- `Terreni` batch: supporta `auto_resume` esplicito per i job che devono essere ripianificati automaticamente dopo restart backend; i batch manuali senza flag restano recuperabili solo via monitor/rerun esplicito
+- `Storico anagrafica Capacitas`: ora usa un modello job persistente dedicato con monitor frontend, progress report incrementale, cleanup stale e auto-resume dopo restart backend
 - `Catasto > Particelle`: la sync singola Capacitas è disponibile direttamente nella dialog/lista particelle e nella scheda dettaglio, con label di ultimo aggiornamento (`capacitas_last_sync_at/status/error`) e route dedicata `POST /catasto/particelle/{id}/capacitas-sync`
 - `codicefiscale` Python su PyPI: https://pypi.org/project/codicefiscale/
 - Copernicus Data Space gratuito per enti EU: https://dataspace.copernicus.eu

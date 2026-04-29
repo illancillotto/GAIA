@@ -38,6 +38,7 @@ import type {
   CapacitasCredentialTestResult as CapacitasCredentialProbeResult,
   CapacitasCredentialUpdateInput,
   CapacitasAnagraficaHistoryImportInput,
+  CapacitasAnagraficaHistoryImportJob,
   CapacitasAnagraficaHistoryImportResult,
   CapacitasLookupOption,
   CapacitasParticelleSyncJob,
@@ -1401,6 +1402,67 @@ export async function importCapacitasAnagraficaHistory(
     },
     body: JSON.stringify(payload),
   });
+}
+
+export async function createCapacitasAnagraficaHistoryJob(
+  token: string,
+  payload: CapacitasAnagraficaHistoryImportInput,
+): Promise<CapacitasAnagraficaHistoryImportJob> {
+  return request<CapacitasAnagraficaHistoryImportJob>("/elaborazioni/capacitas/involture/anagrafica/storico/jobs", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function listCapacitasAnagraficaHistoryJobs(token: string): Promise<CapacitasAnagraficaHistoryImportJob[]> {
+  return request<CapacitasAnagraficaHistoryImportJob[]>("/elaborazioni/capacitas/involture/anagrafica/storico/jobs", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function rerunCapacitasAnagraficaHistoryJob(
+  token: string,
+  jobId: number,
+): Promise<CapacitasAnagraficaHistoryImportJob> {
+  return request<CapacitasAnagraficaHistoryImportJob>(
+    `/elaborazioni/capacitas/involture/anagrafica/storico/jobs/${jobId}/run`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+}
+
+export async function deleteCapacitasAnagraficaHistoryJob(token: string, jobId: number): Promise<void> {
+  const response = await fetch(`${getApiBaseUrl()}/elaborazioni/capacitas/involture/anagrafica/storico/jobs/${jobId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    let detail = "Request failed";
+
+    try {
+      const payload = (await response.json()) as { detail?: unknown };
+      if (typeof payload.detail === "string") {
+        detail = payload.detail;
+      }
+    } catch {
+      detail = response.statusText || detail;
+    }
+
+    throw new ApiError(detail, undefined, response.status);
+  }
 }
 
 export async function importCapacitasAnagraficaHistoryFile(

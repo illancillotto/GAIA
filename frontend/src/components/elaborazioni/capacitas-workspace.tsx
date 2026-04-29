@@ -15,23 +15,27 @@ import { ElaborazioneWorkspaceModal } from "@/components/elaborazioni/workspace-
 import { EmptyState } from "@/components/ui/empty-state";
 import { DocumentIcon, LockIcon, RefreshIcon, SearchIcon, ServerIcon, UsersIcon } from "@/components/ui/icons";
 import {
+  createCapacitasAnagraficaHistoryJob,
   createCapacitasParticelleSyncJob,
   createCapacitasTerreniJob,
+  deleteCapacitasAnagraficaHistoryJob,
   deleteCapacitasParticelleSyncJob,
   deleteCapacitasTerreniJob,
-  importCapacitasAnagraficaHistory,
-  importCapacitasAnagraficaHistoryFile,
+  listCapacitasAnagraficaHistoryJobs,
   listCapacitasParticelleSyncJobs,
   listCapacitasCredentials,
   listCapacitasTerreniJobs,
+  rerunCapacitasAnagraficaHistoryJob,
   rerunCapacitasParticelleSyncJob,
   rerunCapacitasTerreniJob,
   searchCapacitasInvolture,
+  isAuthError,
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import type {
   CapacitasAnagrafica,
   CapacitasAnagraficaHistoryImportItemInput,
+  CapacitasAnagraficaHistoryImportJob,
   CapacitasAnagraficaHistoryImportResult,
   CapacitasCredential,
   CapacitasParticelleSyncJob,
@@ -80,6 +84,8 @@ function renderJobStatus(status: string): { label: string; className: string } {
       return { label: "Fallito", className: "bg-rose-50 text-rose-700 ring-rose-200" };
     case "processing":
       return { label: "In corso", className: "bg-sky-50 text-sky-700 ring-sky-200" };
+    case "queued_resume":
+      return { label: "Ripresa pianificata", className: "bg-violet-50 text-violet-700 ring-violet-200" };
     default:
       return { label: "In attesa", className: "bg-slate-50 text-slate-700 ring-slate-200" };
   }
@@ -442,6 +448,21 @@ function isParticelleSyncJobResult(value: unknown): value is {
   );
 }
 
+function isHistoryImportJobResult(value: unknown): value is CapacitasAnagraficaHistoryImportResult & {
+  progress_percent?: number;
+  current_label?: string | null;
+} {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  return (
+    typeof (value as { processed?: unknown }).processed === "number" &&
+    typeof (value as { imported?: unknown }).imported === "number" &&
+    typeof (value as { skipped?: unknown }).skipped === "number" &&
+    typeof (value as { failed?: unknown }).failed === "number"
+  );
+}
+
 export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?: boolean }) {
   const searchParams = useSearchParams();
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
@@ -463,12 +484,14 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
   const [terreniDeletingJobId, setTerreniDeletingJobId] = useState<number | null>(null);
   const [terreniJobErrorsModal, setTerreniJobErrorsModal] = useState<CapacitasTerreniJob | null>(null);
   const [terreniCompletedJobModal, setTerreniCompletedJobModal] = useState<CapacitasTerreniJob | null>(null);
+  const [terreniMonitorSessionExpired, setTerreniMonitorSessionExpired] = useState(false);
   const inFlightJobIds = useRef<Set<number>>(new Set());
   const [particelleJobs, setParticelleJobs] = useState<CapacitasParticelleSyncJob[]>([]);
   const [particelleJobsLoading, setParticelleJobsLoading] = useState(false);
   const [particelleCreatingJob, setParticelleCreatingJob] = useState(false);
   const [particelleJobBusyId, setParticelleJobBusyId] = useState<number | null>(null);
   const [particelleDeletingJobId, setParticelleDeletingJobId] = useState<number | null>(null);
+  const [particelleMonitorSessionExpired, setParticelleMonitorSessionExpired] = useState(false);
   const particelleInFlightJobIds = useRef<Set<number>>(new Set());
   const [particelleError, setParticelleError] = useState<string | null>(null);
   const [particelleStatusMessage, setParticelleStatusMessage] = useState<string | null>(null);
@@ -490,6 +513,7 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
     double_speed: false,
     parallel_workers: 1,
     throttle_ms: "",
+    auto_resume: false,
   });
   const [terreniBatchFile, setTerreniBatchFile] = useState<File | null>(null);
   const [terreniBatchItems, setTerreniBatchItems] = useState<CapacitasTerreniBatchItemInput[]>([]);
@@ -512,6 +536,12 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
   const [historyBatchSkipped, setHistoryBatchSkipped] = useState(0);
   const [historyBatchBusy, setHistoryBatchBusy] = useState(false);
   const [historyImporting, setHistoryImporting] = useState(false);
+  const [historyJobs, setHistoryJobs] = useState<CapacitasAnagraficaHistoryImportJob[]>([]);
+  const [historyJobsLoading, setHistoryJobsLoading] = useState(false);
+  const [historyJobBusyId, setHistoryJobBusyId] = useState<number | null>(null);
+  const [historyDeletingJobId, setHistoryDeletingJobId] = useState<number | null>(null);
+  const [historyMonitorSessionExpired, setHistoryMonitorSessionExpired] = useState(false);
+  const historyInFlightJobIds = useRef<Set<number>>(new Set());
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [historyStatusMessage, setHistoryStatusMessage] = useState<string | null>(null);
   const [historyResult, setHistoryResult] = useState<CapacitasAnagraficaHistoryImportResult | null>(null);
@@ -521,19 +551,29 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
     [credentials, formState.credential_id],
   );
   const activeCredentialsCount = credentials.filter((credential) => credential.active).length;
-  const jobsInFlight = terreniJobs.some((job) => job.status === "pending" || job.status === "processing");
-  const particelleJobsInFlight = particelleJobs.some((job) => job.status === "pending" || job.status === "processing");
+  const jobsInFlight =
+    !terreniMonitorSessionExpired &&
+    terreniJobs.some((job) => job.status === "pending" || job.status === "processing" || job.status === "queued_resume");
+  const particelleJobsInFlight =
+    !particelleMonitorSessionExpired &&
+    particelleJobs.some((job) => job.status === "pending" || job.status === "processing" || job.status === "queued_resume");
+  const historyJobsInFlight =
+    !historyMonitorSessionExpired &&
+    historyJobs.some((job) => job.status === "pending" || job.status === "processing" || job.status === "queued_resume");
   const terreniReportJob = terreniCompletedJobModal
     ? terreniJobs.find((job) => job.id === terreniCompletedJobModal.id) ?? terreniCompletedJobModal
     : null;
   const terreniErrorsJob = terreniJobErrorsModal
     ? terreniJobs.find((job) => job.id === terreniJobErrorsModal.id) ?? terreniJobErrorsModal
     : null;
+  const latestHistoryJob = historyJobs[0] ?? null;
+  const latestHistoryResult = latestHistoryJob && isHistoryImportJobResult(latestHistoryJob.result_json) ? latestHistoryJob.result_json : historyResult;
 
   useEffect(() => {
     void loadCredentials();
     void loadTerreniJobs();
     void loadParticelleJobs();
+    void loadHistoryJobs();
   }, []);
 
   useEffect(() => {
@@ -566,6 +606,16 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
 
     return () => window.clearInterval(timer);
   }, [particelleJobsInFlight]);
+
+  useEffect(() => {
+    if (!historyJobsInFlight) return undefined;
+
+    const timer = window.setInterval(() => {
+      void loadHistoryJobs(true);
+    }, JOB_POLL_INTERVAL_MS);
+
+    return () => window.clearInterval(timer);
+  }, [historyJobsInFlight]);
 
   async function loadCredentials(): Promise<void> {
     const token = getStoredAccessToken();
@@ -604,13 +654,19 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
 
   async function loadTerreniJobs(silent = false): Promise<void> {
     const token = getStoredAccessToken();
-    if (!token) return;
+    if (!token) {
+      setTerreniMonitorSessionExpired(true);
+      setTerreniError("Sessione GAIA scaduta: il monitor Terreni si ferma, ma i job backend gia avviati possono continuare.");
+      setTerreniStatusMessage("Rientra in GAIA per riprendere il polling del monitor Terreni.");
+      return;
+    }
 
     if (!silent) {
       setTerreniJobsLoading(true);
     }
     try {
       const nextJobs = await listCapacitasTerreniJobs(token);
+      setTerreniMonitorSessionExpired(false);
       const prevInFlight = inFlightJobIds.current;
       const terminalStatuses = new Set(["succeeded", "completed_with_errors", "failed"]);
 
@@ -624,7 +680,7 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
       }
 
       inFlightJobIds.current = new Set(
-        nextJobs.filter((j) => j.status === "pending" || j.status === "processing").map((j) => j.id),
+        nextJobs.filter((j) => j.status === "pending" || j.status === "processing" || j.status === "queued_resume").map((j) => j.id),
       );
 
       setTerreniJobs(nextJobs);
@@ -632,6 +688,12 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
         setTerreniError(null);
       }
     } catch (loadError) {
+      if (isAuthError(loadError)) {
+        setTerreniMonitorSessionExpired(true);
+        setTerreniError("Sessione GAIA scaduta: il monitor Terreni si ferma, ma i job backend gia avviati possono continuare.");
+        setTerreniStatusMessage("Rientra in GAIA per riprendere il polling del monitor Terreni.");
+        return;
+      }
       if (!silent) {
         setTerreniError(loadError instanceof Error ? loadError.message : "Errore caricamento job Terreni");
       }
@@ -644,18 +706,24 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
 
   async function loadParticelleJobs(silent = false): Promise<void> {
     const token = getStoredAccessToken();
-    if (!token) return;
+    if (!token) {
+      setParticelleMonitorSessionExpired(true);
+      setParticelleError("Sessione GAIA scaduta: il monitor particelle si ferma, ma i job backend gia avviati possono continuare.");
+      setParticelleStatusMessage("Rientra in GAIA per riprendere il polling della sync progressiva particelle.");
+      return;
+    }
 
     if (!silent) {
       setParticelleJobsLoading(true);
     }
     try {
       const nextJobs = await listCapacitasParticelleSyncJobs(token);
+      setParticelleMonitorSessionExpired(false);
       const prevInFlight = particelleInFlightJobIds.current;
       const terminalStatuses = new Set(["succeeded", "completed_with_errors", "failed"]);
 
       particelleInFlightJobIds.current = new Set(
-        nextJobs.filter((job) => job.status === "pending" || job.status === "processing").map((job) => job.id),
+        nextJobs.filter((job) => job.status === "pending" || job.status === "processing" || job.status === "queued_resume").map((job) => job.id),
       );
 
       setParticelleJobs(nextJobs);
@@ -666,12 +734,69 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
         setParticelleError(null);
       }
     } catch (loadError) {
+      if (isAuthError(loadError)) {
+        setParticelleMonitorSessionExpired(true);
+        setParticelleError("Sessione GAIA scaduta: il monitor particelle si ferma, ma i job backend gia avviati possono continuare.");
+        setParticelleStatusMessage("Rientra in GAIA per riprendere il polling della sync progressiva particelle.");
+        return;
+      }
       if (!silent) {
         setParticelleError(loadError instanceof Error ? loadError.message : "Errore caricamento job particelle");
       }
     } finally {
       if (!silent) {
         setParticelleJobsLoading(false);
+      }
+    }
+  }
+
+  async function loadHistoryJobs(silent = false): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) {
+      setHistoryMonitorSessionExpired(true);
+      setHistoryError("Sessione GAIA scaduta: il monitor storico si ferma, ma i job backend gia avviati possono continuare.");
+      setHistoryStatusMessage("Rientra in GAIA per riprendere il polling del monitor storico anagrafico.");
+      return;
+    }
+
+    if (!silent) {
+      setHistoryJobsLoading(true);
+    }
+    try {
+      const nextJobs = await listCapacitasAnagraficaHistoryJobs(token);
+      setHistoryMonitorSessionExpired(false);
+      const prevInFlight = historyInFlightJobIds.current;
+      const terminalStatuses = new Set(["succeeded", "completed_with_errors", "failed"]);
+
+      historyInFlightJobIds.current = new Set(
+        nextJobs.filter((job) => job.status === "pending" || job.status === "processing" || job.status === "queued_resume").map((job) => job.id),
+      );
+      setHistoryJobs(nextJobs);
+
+      const latestCompleted = nextJobs.find((job) => terminalStatuses.has(job.status) && isHistoryImportJobResult(job.result_json));
+      if (latestCompleted && isHistoryImportJobResult(latestCompleted.result_json)) {
+        setHistoryResult(latestCompleted.result_json);
+      }
+
+      if (!silent && prevInFlight.size > 0 && nextJobs.some((job) => prevInFlight.has(job.id) && terminalStatuses.has(job.status))) {
+        setHistoryStatusMessage("Storico anagrafico aggiornato.");
+      }
+      if (!silent) {
+        setHistoryError(null);
+      }
+    } catch (loadError) {
+      if (isAuthError(loadError)) {
+        setHistoryMonitorSessionExpired(true);
+        setHistoryError("Sessione GAIA scaduta: il monitor storico si ferma, ma i job backend gia avviati possono continuare.");
+        setHistoryStatusMessage("Rientra in GAIA per riprendere il polling del monitor storico anagrafico.");
+        return;
+      }
+      if (!silent) {
+        setHistoryError(loadError instanceof Error ? loadError.message : "Errore caricamento job storico anagrafico");
+      }
+    } finally {
+      if (!silent) {
+        setHistoryJobsLoading(false);
       }
     }
   }
@@ -706,6 +831,7 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
     setTerreniJobBusyId(jobId);
     try {
       await rerunCapacitasTerreniJob(token, jobId);
+      setTerreniMonitorSessionExpired(false);
       setTerreniStatusMessage(`Job #${jobId} rilanciato.`);
       setTerreniError(null);
       await loadTerreniJobs();
@@ -748,6 +874,7 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
         double_speed: particelleSyncForm.double_speed,
         parallel_workers: particelleSyncForm.parallel_workers,
       });
+      setParticelleMonitorSessionExpired(false);
       setParticelleStatusMessage(
         `Job progressivo particelle #${job.id} creato in ${particelleSyncForm.double_speed ? "doppia velocita" : "velocita standard"} con ${particelleSyncForm.parallel_workers} worker e avviato in background.`,
       );
@@ -767,6 +894,7 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
     setParticelleJobBusyId(jobId);
     try {
       await rerunCapacitasParticelleSyncJob(token, jobId);
+      setParticelleMonitorSessionExpired(false);
       setParticelleStatusMessage(`Job particelle #${jobId} rilanciato.`);
       setParticelleError(null);
       await loadParticelleJobs();
@@ -829,10 +957,12 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
         double_speed: terreniExecutionForm.double_speed,
         parallel_workers: terreniExecutionForm.parallel_workers,
         throttle_ms: terreniExecutionForm.throttle_ms.trim() ? Number.parseInt(terreniExecutionForm.throttle_ms, 10) : undefined,
+        auto_resume: terreniExecutionForm.auto_resume,
         items: terreniBatchItems,
       });
+      setTerreniMonitorSessionExpired(false);
       setTerreniStatusMessage(
-        `Job batch #${job.id} creato con ${terreniBatchItems.length} righe in ${terreniExecutionForm.double_speed ? "doppia velocita" : "velocita standard"} e ${terreniExecutionForm.parallel_workers} worker${terreniExecutionForm.throttle_ms.trim() ? ` · pausa ${terreniExecutionForm.throttle_ms.trim()}ms` : ""}.`,
+        `Job batch #${job.id} creato con ${terreniBatchItems.length} righe in ${terreniExecutionForm.double_speed ? "doppia velocita" : "velocita standard"} e ${terreniExecutionForm.parallel_workers} worker${terreniExecutionForm.throttle_ms.trim() ? ` · pausa ${terreniExecutionForm.throttle_ms.trim()}ms` : ""}${terreniExecutionForm.auto_resume ? " · auto-resume attivo" : ""}.`,
       );
       await loadTerreniJobs();
     } catch (createError) {
@@ -886,26 +1016,53 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
     setHistoryError(null);
     try {
       const credentialId = historyForm.credential_id ? Number.parseInt(historyForm.credential_id, 10) : undefined;
-      const response =
-        historyMode === "file" && historyBatchFile
-          ? await importCapacitasAnagraficaHistoryFile(token, historyBatchFile, {
-              credentialId,
-              continueOnError: historyForm.continue_on_error,
-            })
-          : await importCapacitasAnagraficaHistory(token, {
-              credential_id: credentialId,
-              continue_on_error: historyForm.continue_on_error,
-              items: parseManualHistoryItems(),
-            });
-      setHistoryResult(response);
-      setHistoryStatusMessage(
-        `Storico completato: ${response.processed} processati, ${response.imported} importati, ${response.skipped} skipped, ${response.failed} falliti.`,
-      );
+      const items = historyMode === "file" ? historyBatchItems : parseManualHistoryItems();
+      const job = await createCapacitasAnagraficaHistoryJob(token, {
+        credential_id: credentialId,
+        continue_on_error: historyForm.continue_on_error,
+        auto_resume: true,
+        items,
+      });
+      setHistoryMonitorSessionExpired(false);
+      setHistoryStatusMessage(`Job storico #${job.id} creato con ${items.length} righe e avviato in background.`);
+      await loadHistoryJobs();
     } catch (importError) {
       setHistoryError(importError instanceof Error ? importError.message : "Errore import storico anagrafico");
-      setHistoryResult(null);
     } finally {
       setHistoryImporting(false);
+    }
+  }
+
+  async function handleRerunHistoryJob(jobId: number): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) return;
+    setHistoryJobBusyId(jobId);
+    try {
+      await rerunCapacitasAnagraficaHistoryJob(token, jobId);
+      setHistoryMonitorSessionExpired(false);
+      setHistoryStatusMessage(`Job storico #${jobId} rilanciato.`);
+      setHistoryError(null);
+      await loadHistoryJobs();
+    } catch (rerunError) {
+      setHistoryError(rerunError instanceof Error ? rerunError.message : "Errore rerun job storico anagrafico");
+    } finally {
+      setHistoryJobBusyId(null);
+    }
+  }
+
+  async function handleDeleteHistoryJob(jobId: number): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) return;
+    setHistoryDeletingJobId(jobId);
+    try {
+      await deleteCapacitasAnagraficaHistoryJob(token, jobId);
+      setHistoryStatusMessage(`Job storico #${jobId} eliminato.`);
+      setHistoryError(null);
+      setHistoryJobs((current) => current.filter((job) => job.id !== jobId));
+    } catch (deleteError) {
+      setHistoryError(deleteError instanceof Error ? deleteError.message : "Errore eliminazione job storico anagrafico");
+    } finally {
+      setHistoryDeletingJobId(null);
     }
   }
 
@@ -1207,6 +1364,7 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
                           <p className="mt-2 text-sm text-gray-600">
                             {result.aggressive_window ? "Fascia serale aggressiva" : "Fascia diurna conservativa"} · pausa {result.throttle_ms} ms
                             {result.speed_multiplier && result.speed_multiplier > 1 ? ` · velocita x${result.speed_multiplier}` : ""} · worker {result.parallel_workers ?? 1} · ricontrollo target {result.recheck_hours}h
+                            {job.status === "queued_resume" ? " · resume automatico pianificato dopo restart backend" : ""}
                           </p>
                         ) : null}
                       </div>
@@ -1216,7 +1374,12 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
                         </button>
                         <button
                           className="btn-secondary"
-                          disabled={particelleDeletingJobId === job.id || job.status === "pending" || job.status === "processing"}
+                          disabled={
+                            particelleDeletingJobId === job.id ||
+                            job.status === "pending" ||
+                            job.status === "processing" ||
+                            job.status === "queued_resume"
+                          }
                           onClick={() => void handleDeleteParticelleJob(job.id)}
                           type="button"
                         >
@@ -1356,6 +1519,12 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
             }
             title="Import storico anagrafiche Capacitas"
             description="Recupera lo storico remoto Involture partendo da subject_id GAIA, IDXANA o file batch e persiste gli snapshot in anagrafica."
+            actions={
+              <button className="btn-secondary" disabled={historyJobsLoading} onClick={() => void loadHistoryJobs()} type="button">
+                <RefreshIcon className="mr-2 h-4 w-4" />
+                Aggiorna job
+              </button>
+            }
           />
           <div className="space-y-6 p-6">
             <div className="flex flex-wrap gap-2">
@@ -1509,17 +1678,115 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
             badge={
               <>
                 <ServerIcon className="h-3.5 w-3.5" />
+                Job storico
+              </>
+            }
+            title="Monitor import storico anagrafico"
+            description="Job persistenti con auto-resume dopo restart backend e report progressivo per lo storico anagrafiche Capacitas."
+          />
+          {historyJobsLoading ? (
+            <div className="p-5 text-sm text-gray-500">Caricamento job storico...</div>
+          ) : historyJobs.length === 0 ? (
+            <div className="p-5">
+              <EmptyState
+                icon={ServerIcon}
+                title="Nessun job storico registrato"
+                description="Avvia un import storico manuale o batch per popolare il monitor dei job persistenti."
+              />
+            </div>
+          ) : (
+            <div className="space-y-4 p-6">
+              {historyJobs.map((job) => {
+                const tone = renderJobStatus(job.status);
+                const result = isHistoryImportJobResult(job.result_json) ? job.result_json : null;
+                const payloadItems = Array.isArray((job.payload_json as { items?: unknown[] } | null)?.items)
+                  ? ((job.payload_json as { items?: unknown[] }).items?.length ?? 0)
+                  : 0;
+                const totalItems = payloadItems > 0 ? payloadItems : result ? Math.max(result.processed, 1) : 1;
+                const progress = typeof (job.result_json as { progress_percent?: unknown } | null)?.progress_percent === "number"
+                  ? Number((job.result_json as { progress_percent?: number }).progress_percent)
+                  : result
+                    ? Math.min(100, Math.max(0, Math.round((result.processed / totalItems) * 100)))
+                    : 0;
+                return (
+                  <div className="rounded-[24px] border border-gray-100 bg-[#fbfcfb] p-5" key={job.id}>
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-semibold text-gray-900">Job #{job.id}</span>
+                          <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${tone.className}`}>
+                            {tone.label}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-xs text-gray-500">
+                          creato {formatDateTime(job.created_at)} · start {formatDateTime(job.started_at)} · end {formatDateTime(job.completed_at)}
+                        </p>
+                        {job.status === "queued_resume" ? (
+                          <p className="mt-2 text-sm text-gray-600">Resume automatico pianificato dopo restart backend.</p>
+                        ) : null}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button className="btn-secondary" disabled={historyJobBusyId === job.id} onClick={() => void handleRerunHistoryJob(job.id)} type="button">
+                          {historyJobBusyId === job.id ? "Rerun..." : "Rilancia"}
+                        </button>
+                        <button
+                          className="btn-secondary"
+                          disabled={
+                            historyDeletingJobId === job.id ||
+                            job.status === "pending" ||
+                            job.status === "processing" ||
+                            job.status === "queued_resume"
+                          }
+                          onClick={() => void handleDeleteHistoryJob(job.id)}
+                          type="button"
+                        >
+                          {historyDeletingJobId === job.id ? "Elimina..." : "Elimina"}
+                        </button>
+                      </div>
+                    </div>
+                    {result ? (
+                      <>
+                        <div className="mt-4 flex items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">
+                              <span className="font-semibold">{result.processed}</span> processati · {result.snapshot_records_imported} snapshot
+                            </p>
+                            <p className="mt-1 text-xs text-gray-500">
+                              imported {result.imported} · skipped {result.skipped} · failed {result.failed}
+                            </p>
+                          </div>
+                          <div className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-[#1D4E35] shadow-sm">{progress}%</div>
+                        </div>
+                        <div className="mt-3 h-3 overflow-hidden rounded-full bg-[#dfe9df]">
+                          <div className="h-full rounded-full bg-[#1D4E35] transition-all duration-500" style={{ width: `${progress}%` }} />
+                        </div>
+                      </>
+                    ) : job.error_detail ? (
+                      <p className="mt-4 text-sm text-rose-700">{job.error_detail}</p>
+                    ) : null}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </article>
+
+        <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white p-0 shadow-panel">
+          <ElaborazionePanelHeader
+            badge={
+              <>
+                <ServerIcon className="h-3.5 w-3.5" />
                 Report storico
               </>
             }
             title={
-              historyResult == null
+              latestHistoryResult == null
                 ? "Nessun report storico disponibile"
-                : `${historyResult.processed} processati · ${historyResult.snapshot_records_imported} snapshot importati`
+                : `${latestHistoryResult.processed} processati · ${latestHistoryResult.snapshot_records_imported} snapshot importati`
             }
             description="Report aggregato dell'ultima importazione storico anagrafico eseguita dal workspace Capacitas."
           />
-          {historyResult == null ? (
+          {latestHistoryResult == null ? (
             <div className="p-5">
               <EmptyState
                 icon={ServerIcon}
@@ -1532,11 +1799,11 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
               <div className="grid grid-cols-2 gap-px border-y border-gray-100 bg-gray-100 md:grid-cols-5">
                 {(
                   [
-                    ["Processed", historyResult.processed],
-                    ["Imported", historyResult.imported],
-                    ["Skipped", historyResult.skipped],
-                    ["Failed", historyResult.failed],
-                    ["Snapshot", historyResult.snapshot_records_imported],
+                    ["Processed", latestHistoryResult.processed],
+                    ["Imported", latestHistoryResult.imported],
+                    ["Skipped", latestHistoryResult.skipped],
+                    ["Failed", latestHistoryResult.failed],
+                    ["Snapshot", latestHistoryResult.snapshot_records_imported],
                   ] as [string, number][]
                 ).map(([label, value]) => (
                   <div className="bg-white px-6 py-3" key={label}>
@@ -1557,7 +1824,7 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
                     </tr>
                   </thead>
                   <tbody>
-                    {historyResult.items.map((item, index) => (
+                    {latestHistoryResult.items.map((item, index) => (
                       <tr key={`${item.subject_id ?? "none"}-${item.idxana ?? "none"}-${index}`}>
                         <td className="text-sm text-gray-700">
                           <div className="font-medium text-gray-900">{item.subject_id ?? "—"}</div>
@@ -1737,7 +2004,7 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
                 </div>
               </div>
 
-            <div className="grid gap-4 xl:grid-cols-3">
+            <div className="grid gap-4 xl:grid-cols-4">
               <button
                 className={
                   terreniExecutionForm.double_speed
@@ -1783,6 +2050,22 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
                 />
                 <span className="block text-xs text-gray-500">Vuoto = automatico. Valori piu bassi spingono di piu il portale.</span>
               </label>
+              <button
+                className={
+                  terreniExecutionForm.auto_resume
+                    ? "rounded-lg border border-[#1D4E35] bg-[#eef7ef] px-4 py-3 text-left text-sm font-semibold text-[#1D4E35]"
+                    : "rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 text-left text-sm font-semibold text-gray-700 transition hover:border-[#1D4E35]/30 hover:bg-[#f5faf5]"
+                }
+                onClick={() => setTerreniExecutionForm((current) => ({ ...current, auto_resume: !current.auto_resume }))}
+                type="button"
+              >
+                <span className="block">{terreniExecutionForm.auto_resume ? "Auto-resume attivo" : "Auto-resume"}</span>
+                <span className="mt-1 block text-xs font-normal text-gray-500">
+                  {terreniExecutionForm.auto_resume
+                    ? "Il job batch viene ripianificato automaticamente dopo restart backend."
+                    : "Mantiene il batch recuperabile al riavvio del backend."}
+                </span>
+              </button>
             </div>
 
             {terreniStatusMessage ? (
@@ -1909,6 +2192,7 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
                                 worker {result.parallel_workers ?? 1}
                                 {result.speed_multiplier && result.speed_multiplier > 1 ? ` · velocita x${result.speed_multiplier}` : ""}
                                 {typeof result.throttle_ms === "number" ? ` · pausa ${result.throttle_ms}ms` : ""}
+                                {job.status === "queued_resume" ? " · resume automatico pianificato" : ""}
                               </div>
                               {result.failed_items > 0 ? <div className="text-amber-700">{result.failed_items} item con errore</div> : null}
                             </div>
@@ -1935,7 +2219,12 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
                             </button>
                             <button
                               className="btn-secondary"
-                              disabled={terreniDeletingJobId === job.id || job.status === "pending" || job.status === "processing"}
+                              disabled={
+                                terreniDeletingJobId === job.id ||
+                                job.status === "pending" ||
+                                job.status === "processing" ||
+                                job.status === "queued_resume"
+                              }
                               onClick={() => void handleDeleteJob(job.id)}
                               type="button"
                             >

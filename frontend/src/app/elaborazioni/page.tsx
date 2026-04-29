@@ -265,7 +265,7 @@ export default function ElaborazioniPage() {
     }
 
     for (const job of particelleSyncJobs) {
-      if (!["pending", "processing"].includes(job.status)) continue;
+      if (!["pending", "processing", "queued_resume"].includes(job.status)) continue;
       const result = isParticelleSyncJobResult(job.result_json) ? job.result_json : null;
       const progress = result?.progress_percent ?? null;
       const currentLabel = result?.current_label ?? null;
@@ -277,11 +277,13 @@ export default function ElaborazioniPage() {
         title: `Sync progressiva #${job.id}`,
         detail: currentLabel
           ? `In corso: ${currentLabel}`
+          : job.status === "queued_resume"
+            ? "Job in ripresa automatica dopo restart backend"
           : job.status === "pending"
             ? "Job in coda per la sync progressiva particelle"
             : "Monitor sync progressiva particelle in esecuzione",
         startedAt: job.started_at ?? job.created_at,
-        tone: job.status === "processing" ? "warning" : "default",
+        tone: job.status === "processing" || job.status === "queued_resume" ? "warning" : "default",
         kind: "particelle-sync",
         particelleSync: {
           status: job.status,

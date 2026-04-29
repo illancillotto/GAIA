@@ -30,6 +30,9 @@ MAX_PARALLEL_WORKERS = 2
 DAY_RECHECK_HOURS = 24
 EVENING_RECHECK_HOURS = 6
 RECENT_ITEM_LIMIT = 200
+PARTICELLE_STALE_JOB_MINUTES = 30
+_BACKEND_PROCESS_STARTED_AT = datetime.now(UTC)
+AUTO_RESUME_COMPATIBLE_MODES = {"progressive_catalog"}
 
 
 @dataclass(slots=True)
@@ -65,12 +68,14 @@ def create_particelle_sync_job(
     credential_id: int | None,
     payload: CapacitasParticelleSyncJobCreateRequest,
 ) -> CapacitasParticelleSyncJob:
+    payload_json = payload.model_dump(exclude_none=True, mode="json")
+    payload_json.setdefault("auto_resume", True)
     job = CapacitasParticelleSyncJob(
         requested_by_user_id=requested_by_user_id,
         credential_id=credential_id,
         status="pending",
         mode="progressive_catalog",
-        payload_json=payload.model_dump(exclude_none=True, mode="json"),
+        payload_json=payload_json,
         result_json=None,
     )
     db.add(job)
@@ -90,6 +95,112 @@ def get_particelle_sync_job(db: Session, job_id: int) -> CapacitasParticelleSync
 def delete_particelle_sync_job(db: Session, job: CapacitasParticelleSyncJob) -> None:
     db.delete(job)
     db.commit()
+
+
+def _normalize_job_datetime(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+def _mark_stale_particelle_job(
+    job: CapacitasParticelleSyncJob,
+    *,
+    completed_at: datetime,
+    detail: str,
+) -> None:
+    job.status = "failed"
+    job.completed_at = completed_at
+    job.error_detail = f"{job.error_detail}\n{detail}".strip() if job.error_detail else detail
+    if isinstance(job.result_json, dict):
+        result_json = dict(job.result_json)
+        result_json["current_label"] = None
+        result_json["completed_at"] = completed_at.isoformat()
+        job.result_json = result_json
+
+
+def expire_stale_particelle_sync_jobs(db: Session) -> None:
+    now = datetime.now(UTC)
+    stale_cutoff = now - timedelta(minutes=PARTICELLE_STALE_JOB_MINUTES)
+    jobs = db.scalars(
+        select(CapacitasParticelleSyncJob).where(
+            CapacitasParticelleSyncJob.status.in_(("pending", "processing", "queued_resume")),
+            CapacitasParticelleSyncJob.completed_at.is_(None),
+        )
+    ).all()
+    if not jobs:
+        return
+
+    changed = False
+    for job in jobs:
+        started_at = _normalize_job_datetime(job.started_at)
+        updated_at = _normalize_job_datetime(job.updated_at)
+        created_at = _normalize_job_datetime(job.created_at)
+        reference_at = updated_at or started_at or created_at
+
+        if job.status == "processing" and started_at is not None and started_at < _BACKEND_PROCESS_STARTED_AT:
+            _mark_stale_particelle_job(
+                job,
+                completed_at=now,
+                detail=(
+                    "Job marcato come failed: backend riavviato mentre il job Capacitas era in stato "
+                    "processing; il task runtime originale non e piu attivo. Rilanciare dal monitor."
+                ),
+            )
+            changed = True
+            continue
+
+        if reference_at is not None and reference_at < stale_cutoff:
+            _mark_stale_particelle_job(
+                job,
+                completed_at=now,
+                detail=(
+                    "Job marcato come failed: nessun avanzamento registrato oltre la soglia di "
+                    f"{PARTICELLE_STALE_JOB_MINUTES} minuti."
+                ),
+            )
+            changed = True
+
+    if changed:
+        db.commit()
+
+
+def prepare_particelle_sync_jobs_for_recovery(db: Session) -> list[int]:
+    now = datetime.now(UTC)
+    jobs = db.scalars(
+        select(CapacitasParticelleSyncJob).where(
+            CapacitasParticelleSyncJob.status.in_(("pending", "processing", "queued_resume")),
+            CapacitasParticelleSyncJob.completed_at.is_(None),
+        )
+    ).all()
+    if not jobs:
+        return []
+
+    recovered_ids: list[int] = []
+    changed = False
+    for job in jobs:
+        payload_json = dict(job.payload_json or {})
+        auto_resume = bool(payload_json.get("auto_resume", True))
+        if not auto_resume or job.mode not in AUTO_RESUME_COMPATIBLE_MODES:
+            continue
+
+        result_json = dict(job.result_json or {})
+        result_json["resume_reason"] = "backend_restart"
+        result_json["last_resume_at"] = now.isoformat()
+        result_json["resume_count"] = int(result_json.get("resume_count", 0)) + 1
+        result_json["current_label"] = None
+        job.result_json = result_json
+        job.error_detail = None
+        job.completed_at = None
+        job.status = "queued_resume"
+        recovered_ids.append(job.id)
+        changed = True
+
+    if changed:
+        db.commit()
+    return recovered_ids
 
 
 def compute_sync_policy(

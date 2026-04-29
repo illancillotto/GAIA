@@ -2,7 +2,12 @@ from app.core.database import Base
 from app.models.application_user import ApplicationUser
 from app.models.operator_invitation import OperatorInvitation
 from app.models.bonifica_oristanese import BonificaOristaneseCredential
-from app.models.capacitas import CapacitasCredential, CapacitasParticelleSyncJob, CapacitasTerreniSyncJob
+from app.models.capacitas import (
+    CapacitasAnagraficaHistoryImportJob,
+    CapacitasCredential,
+    CapacitasParticelleSyncJob,
+    CapacitasTerreniSyncJob,
+)
 from app.models.wc_sync_job import WCSyncJob
 from app.modules.catasto.models import (
     CatCapacitasCertificato,
@@ -90,6 +95,7 @@ __all__ = [
     "Base",
     "BonificaOristaneseCredential",
     "CapacitasCredential",
+    "CapacitasAnagraficaHistoryImportJob",
     "CapacitasParticelleSyncJob",
     "CapacitasTerreniSyncJob",
     "CatCapacitasCertificato",

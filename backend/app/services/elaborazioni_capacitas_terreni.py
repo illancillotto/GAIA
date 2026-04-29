@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 import re
 from typing import Awaitable, Callable, Sequence
@@ -54,6 +54,9 @@ _COMUNE_SWAP_CODES: dict[int, int] = {
 BASE_TERRENI_THROTTLE_MS = 300
 DOUBLE_SPEED_MULTIPLIER = 2
 MAX_TERRENI_PARALLEL_WORKERS = 2
+TERRENI_STALE_JOB_MINUTES = 30
+_BACKEND_PROCESS_STARTED_AT = datetime.now(UTC)
+AUTO_RESUME_TERRENI_MODES = {"batch"}
 
 
 @dataclass(slots=True)
@@ -1051,12 +1054,14 @@ def create_terreni_sync_job(
     credential_id: int | None,
     payload: CapacitasTerreniBatchRequest,
 ) -> CapacitasTerreniSyncJob:
+    payload_json = payload.model_dump(exclude_none=True, mode="json")
+    payload_json.setdefault("auto_resume", False)
     job = CapacitasTerreniSyncJob(
         requested_by_user_id=requested_by_user_id,
         credential_id=credential_id,
         status="pending",
         mode="batch",
-        payload_json=payload.model_dump(exclude_none=True, mode="json"),
+        payload_json=payload_json,
     )
     db.add(job)
     db.commit()
@@ -1079,6 +1084,112 @@ def delete_terreni_sync_job(db: Session, job: CapacitasTerreniSyncJob) -> None:
 
 def serialize_terreni_sync_job(job: CapacitasTerreniSyncJob) -> CapacitasTerreniJobOut:
     return CapacitasTerreniJobOut.model_validate(job)
+
+
+def _normalize_job_datetime(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+def _mark_stale_terreni_job(
+    job: CapacitasTerreniSyncJob,
+    *,
+    completed_at: datetime,
+    detail: str,
+) -> None:
+    job.status = "failed"
+    job.completed_at = completed_at
+    job.error_detail = f"{job.error_detail}\n{detail}".strip() if job.error_detail else detail
+    if isinstance(job.result_json, dict):
+        result_json = dict(job.result_json)
+        result_json["current_label"] = None
+        result_json["completed_at"] = completed_at.isoformat()
+        job.result_json = result_json
+
+
+def expire_stale_terreni_sync_jobs(db: Session) -> None:
+    now = datetime.now(UTC)
+    stale_cutoff = now - timedelta(minutes=TERRENI_STALE_JOB_MINUTES)
+    jobs = db.scalars(
+        select(CapacitasTerreniSyncJob).where(
+            CapacitasTerreniSyncJob.status.in_(("pending", "processing", "queued_resume")),
+            CapacitasTerreniSyncJob.completed_at.is_(None),
+        )
+    ).all()
+    if not jobs:
+        return
+
+    changed = False
+    for job in jobs:
+        started_at = _normalize_job_datetime(job.started_at)
+        updated_at = _normalize_job_datetime(job.updated_at)
+        created_at = _normalize_job_datetime(job.created_at)
+        reference_at = updated_at or started_at or created_at
+
+        if job.status == "processing" and started_at is not None and started_at < _BACKEND_PROCESS_STARTED_AT:
+            _mark_stale_terreni_job(
+                job,
+                completed_at=now,
+                detail=(
+                    "Job marcato come failed: backend riavviato mentre il job Capacitas era in stato "
+                    "processing; il task runtime originale non e piu attivo. Rilanciare dal monitor."
+                ),
+            )
+            changed = True
+            continue
+
+        if reference_at is not None and reference_at < stale_cutoff:
+            _mark_stale_terreni_job(
+                job,
+                completed_at=now,
+                detail=(
+                    "Job marcato come failed: nessun avanzamento registrato oltre la soglia di "
+                    f"{TERRENI_STALE_JOB_MINUTES} minuti."
+                ),
+            )
+            changed = True
+
+    if changed:
+        db.commit()
+
+
+def prepare_terreni_sync_jobs_for_recovery(db: Session) -> list[int]:
+    now = datetime.now(UTC)
+    jobs = db.scalars(
+        select(CapacitasTerreniSyncJob).where(
+            CapacitasTerreniSyncJob.status.in_(("pending", "processing", "queued_resume")),
+            CapacitasTerreniSyncJob.completed_at.is_(None),
+        )
+    ).all()
+    if not jobs:
+        return []
+
+    recovered_ids: list[int] = []
+    changed = False
+    for job in jobs:
+        payload_json = dict(job.payload_json or {})
+        auto_resume = bool(payload_json.get("auto_resume", False))
+        if not auto_resume or job.mode not in AUTO_RESUME_TERRENI_MODES:
+            continue
+
+        result_json = dict(job.result_json or {})
+        result_json["resume_reason"] = "backend_restart"
+        result_json["last_resume_at"] = now.isoformat()
+        result_json["resume_count"] = int(result_json.get("resume_count", 0)) + 1
+        result_json["current_label"] = None
+        job.result_json = result_json
+        job.error_detail = None
+        job.completed_at = None
+        job.status = "queued_resume"
+        recovered_ids.append(job.id)
+        changed = True
+
+    if changed:
+        db.commit()
+    return recovered_ids
 
 
 def _build_initial_terreni_job_result(
