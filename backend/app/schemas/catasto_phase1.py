@@ -323,6 +323,11 @@ class CatIntestatarioResponse(BaseModel):
     nome: str | None
     data_nascita: date | None
     luogo_nascita: str | None
+    indirizzo: str | None = None
+    comune_residenza: str | None = None
+    cap: str | None = None
+    email: str | None = None
+    telefono: str | None = None
     ragione_sociale: str | None
     source: str | None
     last_verified_at: datetime | None

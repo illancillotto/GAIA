@@ -314,6 +314,11 @@ export type CatIntestatario = {
   nome: string | null;
   data_nascita: string | null;
   luogo_nascita: string | null;
+  indirizzo: string | null;
+  comune_residenza: string | null;
+  cap: string | null;
+  email: string | null;
+  telefono: string | null;
   ragione_sociale: string | null;
   source: string | null;
   last_verified_at: string | null;

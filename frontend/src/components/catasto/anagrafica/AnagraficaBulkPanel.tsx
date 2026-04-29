@@ -398,7 +398,24 @@ export function AnagraficaBulkPanel() {
           ? { cf_input: r.codice_fiscale_input ?? "", piva_input: r.partita_iva_input ?? "", comune: m?.comune ?? "", foglio: m?.foglio ?? "", particella: m?.particella ?? "", sub: m?.subalterno ?? "", esito: r.esito }
           : { comune: m?.comune ?? r.comune_input ?? "", sezione: r.sezione_input ?? "", foglio: m?.foglio ?? r.foglio_input ?? "", particella: m?.particella ?? r.particella_input ?? "", sub: m?.subalterno ?? r.sub_input ?? "", esito: r.esito };
 
-      const emptyInt = { n_intestatari: 0, rank: "", cf: "", tipo: "", cognome: "", nome: "", denominazione: "", ragione_sociale: "", data_nascita: "", luogo_nascita: "", deceduto: "" };
+      const emptyInt = {
+        n_intestatari: 0,
+        rank: "",
+        cf: "",
+        tipo: "",
+        cognome: "",
+        nome: "",
+        denominazione: "",
+        ragione_sociale: "",
+        data_nascita: "",
+        luogo_nascita: "",
+        comune_residenza: "",
+        indirizzo: "",
+        cap: "",
+        telefono: "",
+        email: "",
+        deceduto: "",
+      };
 
       if (matches.length === 0) {
         rows.push({ ...buildBase(), ...emptyInt });
@@ -426,6 +443,11 @@ export function AnagraficaBulkPanel() {
             ragione_sociale: intestatario.ragione_sociale ?? "",
             data_nascita: intestatario.data_nascita ?? "",
             luogo_nascita: intestatario.luogo_nascita ?? "",
+            comune_residenza: intestatario.comune_residenza ?? "",
+            indirizzo: intestatario.indirizzo ?? "",
+            cap: intestatario.cap ?? "",
+            telefono: intestatario.telefono ?? "",
+            email: intestatario.email ?? "",
             deceduto: String(intestatario.deceduto ?? ""),
           });
         });
@@ -644,7 +666,7 @@ export function AnagraficaBulkPanel() {
               {inferredKind === "CF_PIVA_PARTICELLE"
                 ? "Colonne: CF input · P.IVA input · Comune · Foglio · Particella · Sub"
                 : "Colonne: Comune · Sezione · Foglio · Particella · Sub"}{" "}
-              · Esito · N intestatari · Rank intestatario (1/n) · CF · Tipo · Cognome · Nome · Denominazione · Ragione Sociale · Data Nascita · Luogo Nascita · Deceduto
+              · Esito · N intestatari · Rank intestatario (1/n) · CF · Tipo · Cognome · Nome · Denominazione · Ragione Sociale · Data Nascita · Luogo Nascita · Comune Residenza · Indirizzo · CAP · Telefono · Email · Deceduto
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               <button className="btn-secondary" type="button" disabled={busy || results.length === 0} onClick={() => void exportVeloce("csv")}>
