@@ -793,8 +793,8 @@ async def create_bulk_search_job(
         kind=str(kind),
         source_filename=_norm_str(request.source_filename),
         skipped_rows=max(int(request.skipped_rows or 0), 0),
-        payload_json=payload.model_dump(),
-        results_json={"results": [r.model_dump() for r in response.results]},
+        payload_json=payload.model_dump(mode="json"),
+        results_json={"results": [r.model_dump(mode="json") for r in response.results]},
         summary_json=summary,
     )
     db.add(job)

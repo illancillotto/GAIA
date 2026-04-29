@@ -738,6 +738,27 @@ export function AnagraficaBulkPanel() {
     if (!token) return;
     setBusy(true);
     try {
+      // Fetch all utenze per particella so we get one row per utenza (not per unique intestatario)
+      const particellaIds = Array.from(
+        new Set(
+          results
+            .flatMap((r) => r.matches ?? (r.match ? [r.match] : []))
+            .map((m) => m.particella_id)
+            .filter((id): id is string => Boolean(id)),
+        ),
+      );
+      const utenzeByParticella = new Map<string, CatUtenzaIrrigua[]>();
+      await Promise.all(
+        particellaIds.map(async (id) => {
+          try {
+            const utenze = await catastoGetParticellaUtenze(token, id);
+            utenzeByParticella.set(id, utenze ?? []);
+          } catch {
+            utenzeByParticella.set(id, []);
+          }
+        }),
+      );
+
       const rows: Record<string, unknown>[] = [];
       for (const r of results) {
         const matches = r.matches ?? (r.match ? [r.match] : []);
@@ -746,35 +767,40 @@ export function AnagraficaBulkPanel() {
             ? { cf_input: r.codice_fiscale_input ?? "", piva_input: r.partita_iva_input ?? "", comune: m?.comune ?? "", foglio: m?.foglio ?? "", particella: m?.particella ?? "", sub: m?.subalterno ?? "", esito: r.esito }
             : { comune: m?.comune ?? r.comune_input ?? "", sezione: r.sezione_input ?? "", foglio: m?.foglio ?? r.foglio_input ?? "", particella: m?.particella ?? r.particella_input ?? "", sub: m?.subalterno ?? r.sub_input ?? "", esito: r.esito };
 
-        const emptyInt = { n_intestatari: 0, rank: "", cf: "", tipo: "", cognome: "", nome: "", denominazione: "", ragione_sociale: "", data_nascita: "", luogo_nascita: "", deceduto: "" };
+        const emptyInt = { n_utenze: 0, rank: "", cf: "", tipo: "", cognome: "", nome: "", denominazione: "", ragione_sociale: "", data_nascita: "", luogo_nascita: "", deceduto: "" };
 
         if (matches.length === 0) {
           rows.push({ ...buildBase(), ...emptyInt });
           continue;
         }
         for (const m of matches) {
-          const intestatari = m.intestatari ?? [];
-          const n = intestatari.length;
+          const utenze = utenzeByParticella.get(m.particella_id) ?? [];
+          const n = utenze.length;
           const base = buildBase(m);
+          // Build CF→person lookup from intestatari (enrichment only — may not cover all utenze)
+          const intByCf = new Map(
+            (m.intestatari ?? []).map((p) => [p.codice_fiscale?.trim().toUpperCase() ?? "", p]),
+          );
           if (n === 0) {
             rows.push({ ...base, ...emptyInt });
             continue;
           }
           for (let i = 0; i < n; i++) {
-            const int = intestatari[i];
+            const u = utenze[i];
+            const person = intByCf.get(u.codice_fiscale?.trim().toUpperCase() ?? "");
             rows.push({
               ...base,
-              n_intestatari: n,
+              n_utenze: n,
               rank: `${i + 1}/${n}`,
-              cf: int.codice_fiscale ?? "",
-              tipo: int.tipo ?? "",
-              cognome: int.cognome ?? "",
-              nome: int.nome ?? "",
-              denominazione: int.denominazione ?? "",
-              ragione_sociale: int.ragione_sociale ?? "",
-              data_nascita: int.data_nascita ?? "",
-              luogo_nascita: int.luogo_nascita ?? "",
-              deceduto: String(int.deceduto ?? ""),
+              cf: u.codice_fiscale ?? "",
+              tipo: person?.tipo ?? "",
+              cognome: person?.cognome ?? "",
+              nome: person?.nome ?? "",
+              denominazione: person?.denominazione ?? u.denominazione ?? "",
+              ragione_sociale: person?.ragione_sociale ?? "",
+              data_nascita: person?.data_nascita ?? "",
+              luogo_nascita: person?.luogo_nascita ?? "",
+              deceduto: String(person?.deceduto ?? ""),
             });
           }
         }
@@ -1214,11 +1240,11 @@ export function AnagraficaBulkPanel() {
             {exportMode === "veloce" ? (
               <div className="mt-4 space-y-3">
                 <p className="text-sm text-gray-500">
-                  Una riga per intestatario.{" "}
+                  Una riga per utenza.{" "}
                   {inferredKind === "CF_PIVA_PARTICELLE"
                     ? "Colonne: CF input · P.IVA input · Comune · Foglio · Particella · Sub"
                     : "Colonne: Comune · Sezione · Foglio · Particella · Sub"}{" "}
-                  · Esito · N intestatari · Rank (1/n) · CF · Tipo · Cognome · Nome · Denominazione · Ragione Sociale · Data Nascita · Luogo Nascita · Deceduto
+                  · Esito · N utenze · Rank (1/n) · CF · Tipo · Cognome · Nome · Denominazione · Ragione Sociale · Data Nascita · Luogo Nascita · Deceduto
                 </p>
                 <div className="flex flex-wrap gap-2">
                   <button className="btn-secondary" type="button" disabled={busy || results.length === 0} onClick={() => void exportVeloce("csv")}>
