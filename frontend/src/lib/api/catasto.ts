@@ -416,3 +416,10 @@ export async function catastoGetElaborazioneMassivaJob(token: string, jobId: UUI
     headers: authHeaders(token),
   });
 }
+
+export async function catastoDeleteElaborazioniMassiveJobs(token: string): Promise<{ deleted: number }> {
+  return request<{ deleted: number }>("/catasto/elaborazioni-massive/particelle/jobs", {
+    method: "DELETE",
+    headers: authHeaders(token),
+  });
+}

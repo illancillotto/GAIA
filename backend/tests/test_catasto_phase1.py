@@ -945,6 +945,76 @@ def test_bulk_search_anagrafica_returns_mixed_row_outcomes() -> None:
     assert payload[2]["esito"] == "INVALID_ROW"
 
 
+def test_bulk_search_anagrafica_uses_all_particella_intestatari() -> None:
+    db = TestingSessionLocal()
+    try:
+        utenza = db.query(CatUtenzaIrrigua).filter(CatUtenzaIrrigua.cco == "UT-SEED-001").one()
+        now = datetime.now(timezone.utc)
+        db.add_all(
+            [
+                CatUtenzaIntestatario(
+                    utenza_id=utenza.id,
+                    subject_id=None,
+                    idxana="IDX-ANA-OWNER-1",
+                    idxesa="IDX-ESA-OWNER-1",
+                    history_id="HIST-OWNER-1",
+                    anno_riferimento=2025,
+                    data_agg=now,
+                    codice_fiscale="RSSMRA80A01H501U",
+                    denominazione="Rossi Mario",
+                    titoli="Proprieta` 1/3",
+                    deceduto=False,
+                    collected_at=now,
+                ),
+                CatUtenzaIntestatario(
+                    utenza_id=utenza.id,
+                    subject_id=None,
+                    idxana="IDX-ANA-OWNER-2",
+                    idxesa="IDX-ESA-OWNER-2",
+                    history_id="HIST-OWNER-2",
+                    anno_riferimento=2025,
+                    data_agg=now,
+                    codice_fiscale="VRDLGI80A01H501V",
+                    denominazione="Verdi Luigi",
+                    titoli="Proprieta` 1/3",
+                    deceduto=False,
+                    collected_at=now,
+                ),
+                CatUtenzaIntestatario(
+                    utenza_id=utenza.id,
+                    subject_id=None,
+                    idxana="IDX-ANA-OWNER-3",
+                    idxesa="IDX-ESA-OWNER-3",
+                    history_id="HIST-OWNER-3",
+                    anno_riferimento=2025,
+                    data_agg=now,
+                    codice_fiscale="BNCLRA80A01H501W",
+                    denominazione="Bianchi Laura",
+                    titoli="Proprieta` 1/3",
+                    deceduto=False,
+                    collected_at=now,
+                ),
+            ]
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.post(
+        "/catasto/elaborazioni-massive/particelle",
+        headers=auth_headers(),
+        json={"rows": [{"row_index": 2, "comune": "165", "foglio": "5", "particella": "120", "sub": "1"}]},
+    )
+
+    assert response.status_code == 200
+    intestatari = response.json()["results"][0]["match"]["intestatari"]
+    assert {item["codice_fiscale"] for item in intestatari} == {
+        "RSSMRA80A01H501U",
+        "VRDLGI80A01H501V",
+        "BNCLRA80A01H501W",
+    }
+
+
 def test_bulk_search_anagrafica_multiple_matches_does_not_pick_first_particella() -> None:
     db = TestingSessionLocal()
     try:
@@ -1093,7 +1163,10 @@ def test_bulk_search_anagrafica_falls_back_to_live_capacitas_for_missing_intesta
     response = client.post(
         "/catasto/elaborazioni-massive/particelle",
         headers=auth_headers(),
-        json={"rows": [{"row_index": 1, "comune": "165", "foglio": "5", "particella": "120", "sub": "1"}]},
+        json={
+            "include_capacitas_live": True,
+            "rows": [{"row_index": 1, "comune": "165", "foglio": "5", "particella": "120", "sub": "1"}],
+        },
     )
 
     assert response.status_code == 200

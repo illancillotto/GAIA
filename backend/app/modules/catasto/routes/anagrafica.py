@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Literal
 from uuid import UUID
@@ -22,6 +23,7 @@ from app.models.catasto_phase1 import (
     CatConsorzioOccupancy,
     CatConsorzioUnit,
     CatParticella,
+    CatUtenzaIntestatario,
     CatUtenzaIrrigua,
 )
 from app.modules.elaborazioni.capacitas.client import InVoltureClient
@@ -445,6 +447,69 @@ def _load_intestatari_by_cf(db: Session, cfs: set[str]) -> dict[str, CatIntestat
     return items
 
 
+def _intestatario_response_from_utenza_row(
+    db: Session,
+    row: CatUtenzaIntestatario,
+) -> CatIntestatarioResponse:
+    if row.subject_id is not None:
+        subject = db.get(AnagraficaSubject, row.subject_id)
+        person = db.get(AnagraficaPerson, row.subject_id)
+        if subject is not None and person is not None:
+            return _person_response_from_db(person, subject, deceduto=row.deceduto)
+
+    cognome, nome = _split_denominazione(row.denominazione)
+    codice_fiscale = _normalize_cf(row.codice_fiscale) or ""
+    return CatIntestatarioResponse(
+        id=row.subject_id or row.id,
+        codice_fiscale=codice_fiscale,
+        denominazione=row.denominazione,
+        tipo="PF" if len(codice_fiscale) == 16 else "PG" if codice_fiscale else None,
+        cognome=cognome if codice_fiscale else None,
+        nome=nome if codice_fiscale else None,
+        data_nascita=row.data_nascita,
+        luogo_nascita=row.luogo_nascita,
+        ragione_sociale=row.denominazione if codice_fiscale and len(codice_fiscale) != 16 else None,
+        source="capacitas",
+        last_verified_at=row.data_agg or row.collected_at,
+        deceduto=row.deceduto,
+    )
+
+
+def _load_intestatari_by_utenza_ids(db: Session, utenza_ids: list[UUID]) -> list[CatIntestatarioResponse]:
+    if not utenza_ids:
+        return []
+
+    rows = (
+        db.execute(
+            select(CatUtenzaIntestatario)
+            .where(CatUtenzaIntestatario.utenza_id.in_(utenza_ids))
+            .order_by(
+                desc(CatUtenzaIntestatario.anno_riferimento),
+                desc(CatUtenzaIntestatario.data_agg),
+                CatUtenzaIntestatario.denominazione.asc(),
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    items: list[CatIntestatarioResponse] = []
+    seen: set[str] = set()
+    for row in rows:
+        key = (
+            str(row.subject_id)
+            if row.subject_id
+            else _normalize_cf(row.codice_fiscale)
+            or row.idxana
+            or str(row.id)
+        )
+        if key in seen:
+            continue
+        seen.add(key)
+        items.append(_intestatario_response_from_utenza_row(db, row))
+    return items
+
+
 def _utenza_summary_from_record(u: CatUtenzaIrrigua | None) -> CatAnagraficaUtenzaSummary | None:
     if u is None:
         return None
@@ -482,9 +547,12 @@ def _build_match(db: Session, p: CatParticella) -> CatAnagraficaMatch:
         .limit(25)
     ).scalars().all()
 
-    cfs = {u.codice_fiscale.strip().upper() for u in utenze if u.codice_fiscale and u.codice_fiscale.strip()}
-    intestatari_by_cf = _load_intestatari_by_cf(db, cfs)
-    intestatari: list[CatIntestatarioResponse] = list(intestatari_by_cf.values())
+    utenza_ids = [u.id for u in utenze]
+    intestatari = _load_intestatari_by_utenza_ids(db, utenza_ids)
+    if not intestatari:
+        cfs = {u.codice_fiscale.strip().upper() for u in utenze if u.codice_fiscale and u.codice_fiscale.strip()}
+        intestatari_by_cf = _load_intestatari_by_cf(db, cfs)
+        intestatari = list(intestatari_by_cf.values())
 
     anomalie_count = db.execute(
         select(func.count())
@@ -521,6 +589,94 @@ def _build_match(db: Session, p: CatParticella) -> CatAnagraficaMatch:
         anomalie_count=int(anomalie_count or 0),
         anomalie_top=[{"tipo": t, "count": int(c or 0)} for (t, c) in anomalie_types],
     )
+
+
+def _load_intestatari_by_particella_ids(
+    db: Session,
+    particella_ids: set[UUID],
+) -> dict[UUID, list[CatIntestatarioResponse]]:
+    if not particella_ids:
+        return {}
+
+    utenze = db.execute(
+        select(CatUtenzaIrrigua.id, CatUtenzaIrrigua.particella_id)
+        .where(CatUtenzaIrrigua.particella_id.in_(particella_ids))
+        .order_by(CatUtenzaIrrigua.particella_id, desc(CatUtenzaIrrigua.anno_campagna))
+    ).all()
+
+    utenza_to_particella: dict[UUID, UUID] = {}
+    counts_by_particella: dict[UUID, int] = defaultdict(int)
+    for utenza_id, particella_id in utenze:
+        if particella_id is None or counts_by_particella[particella_id] >= 25:
+            continue
+        counts_by_particella[particella_id] += 1
+        utenza_to_particella[utenza_id] = particella_id
+
+    if not utenza_to_particella:
+        return {}
+
+    rows = (
+        db.execute(
+            select(CatUtenzaIntestatario)
+            .where(CatUtenzaIntestatario.utenza_id.in_(list(utenza_to_particella.keys())))
+            .order_by(
+                desc(CatUtenzaIntestatario.anno_riferimento),
+                desc(CatUtenzaIntestatario.data_agg),
+                CatUtenzaIntestatario.denominazione.asc(),
+            )
+        )
+        .scalars()
+        .all()
+    )
+
+    items: dict[UUID, list[CatIntestatarioResponse]] = defaultdict(list)
+    seen_by_particella: dict[UUID, set[str]] = defaultdict(set)
+    for row in rows:
+        particella_id = utenza_to_particella.get(row.utenza_id)
+        if particella_id is None:
+            continue
+        key = (
+            str(row.subject_id)
+            if row.subject_id
+            else _normalize_cf(row.codice_fiscale)
+            or row.idxana
+            or str(row.id)
+        )
+        if key in seen_by_particella[particella_id]:
+            continue
+        seen_by_particella[particella_id].add(key)
+        items[particella_id].append(_intestatario_response_from_utenza_row(db, row))
+
+    return dict(items)
+
+
+def _refresh_saved_particelle_matches(
+    db: Session,
+    results: list[CatAnagraficaBulkSearchRowResult],
+) -> list[CatAnagraficaBulkSearchRowResult]:
+    particella_ids: set[UUID] = set()
+    for row in results:
+        if row.match is not None:
+            particella_ids.add(row.match.particella_id)
+        if row.matches:
+            particella_ids.update(match.particella_id for match in row.matches)
+
+    intestatari_by_particella = _load_intestatari_by_particella_ids(db, particella_ids)
+
+    def refresh_match(match: CatAnagraficaMatch | None) -> CatAnagraficaMatch | None:
+        if match is None:
+            return None
+        intestatari = intestatari_by_particella.get(match.particella_id)
+        if intestatari:
+            match.intestatari = intestatari
+        return match
+
+    for row in results:
+        if row.match is not None:
+            row.match = refresh_match(row.match)
+        if row.matches:
+            row.matches = [refreshed for match in row.matches if (refreshed := refresh_match(match)) is not None]
+    return results
 
 
 @router.post("", response_model=CatAnagraficaBulkSearchResponse)
@@ -845,6 +1001,25 @@ async def list_bulk_search_jobs(
     return CatAnagraficaBulkJobListResponse(items=items)
 
 
+@router.delete("/jobs", response_model=dict[str, int])
+async def delete_bulk_search_jobs(
+    db: Session = Depends(get_db),
+    user: ApplicationUser = Depends(require_active_user),
+) -> dict[str, int]:
+    rows = (
+        db.execute(
+            select(CatastoElaborazioniMassiveJob).where(CatastoElaborazioniMassiveJob.user_id == user.id)
+        )
+        .scalars()
+        .all()
+    )
+    deleted = len(rows)
+    for job in rows:
+        db.delete(job)
+    db.commit()
+    return {"deleted": deleted}
+
+
 @router.get("/jobs/{job_id}", response_model=CatAnagraficaBulkJobDetail)
 async def get_bulk_search_job(
     job_id: UUID,
@@ -866,6 +1041,14 @@ async def get_bulk_search_job(
 
     raw_results = job.results_json.get("results") if isinstance(job.results_json, dict) else None
     results = [CatAnagraficaBulkSearchRowResult.model_validate(r) for r in (raw_results or [])]
+
+    if job.kind == "COMUNE_FOGLIO_PARTICELLA_INTESTATARI":
+        results = _refresh_saved_particelle_matches(db, results)
+        job.results_json = {"results": [r.model_dump(mode="json") for r in results]}
+        job.summary_json = _build_summary(results)
+        db.commit()
+        db.refresh(job)
+
     return CatAnagraficaBulkJobDetail(
         id=job.id,
         created_at=job.created_at,
