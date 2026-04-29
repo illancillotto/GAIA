@@ -387,6 +387,37 @@ export default function MapContainer({
         }
       });
 
+      // Nota runtime (readiness della mappa)
+      // ----------------------------------------------------------------
+      // L'effect che sincronizza il GeoJSON importato da Excel verso la
+      // `GeoJSONSource` MapLibre NON deve gating-are su `map.isStyleLoaded()`.
+      // Quando le sorgenti vector tile (`cat_distretti`, `cat_particelle_current`
+      // servite da Martin) sono ancora in fetch, `isStyleLoaded()` ritorna
+      // `false` anche se le `GeoJSONSource` per i poligoni uploadati sono
+      // gia' state aggiunte: in quel caso il fallback `map.once('load', ...)`
+      // non viene mai richiamato (l'evento `load` e' one-shot e si e' gia'
+      // emesso al boot) e i poligoni non compaiono mai sulla mappa.
+      //
+      // Soluzione adottata: un contatore di stato `mapReadyVersion` viene
+      // incrementato dentro l'handler `map.on('load', ...)` DOPO tutte le
+      // `addSource` / `addLayer`, e usato sia come dipendenza che come
+      // condizione di guardia (`if (mapReadyVersion === 0) return`) in tutti
+      // gli effect che parlano coi layer (sync GeoJSON, paint-color dei
+      // layer "uploaded-*", visibility/filtri dei layer MVT). E' un segnale
+      // affidabile che le sources/layer esistono, indipendente dallo stato
+      // di caricamento delle tiles MVT.
+      //
+      // Nota runtime (visibilita' a basso zoom)
+      // ----------------------------------------------------------------
+      // Per selezioni Excel molto diffuse sul comprensorio, i poligoni
+      // catastali possono risultare di fatto invisibili a scala ampia
+      // (zoom < 12). Il componente affianca al layer poligonale un secondo
+      // source/layer di centroidi (`uploaded-particelle-centroids-source`
+      // + layer `circle`) ricavato dal GeoJSON importato, con
+      // `circle-radius` interpolato per zoom (visibile a zoom 7-15, opacity
+      // a zero a zoom 16+). I centroidi vengono calcolati lato client come
+      // bounding-box-center delle ring di Polygon/MultiPolygon.
+
       // Click su particelle → popup
       map.on('click', 'particelle-fill', async (e) => {
         if (!e.features?.[0]) return;

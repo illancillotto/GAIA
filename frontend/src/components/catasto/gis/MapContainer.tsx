@@ -65,6 +65,52 @@ function getGeometryRings(geom: GeoJSON.Geometry): PolygonCoords {
   return [];
 }
 
+function getGeometryBoundsCenter(geom: GeoJSON.Geometry): [number, number] | null {
+  const rings = getGeometryRings(geom);
+  let minLng = Number.POSITIVE_INFINITY;
+  let minLat = Number.POSITIVE_INFINITY;
+  let maxLng = Number.NEGATIVE_INFINITY;
+  let maxLat = Number.NEGATIVE_INFINITY;
+
+  for (const ring of rings) {
+    for (const point of ring) {
+      minLng = Math.min(minLng, point[0]);
+      minLat = Math.min(minLat, point[1]);
+      maxLng = Math.max(maxLng, point[0]);
+      maxLat = Math.max(maxLat, point[1]);
+    }
+  }
+
+  if (!Number.isFinite(minLng) || !Number.isFinite(minLat) || !Number.isFinite(maxLng) || !Number.isFinite(maxLat)) {
+    return null;
+  }
+
+  return [(minLng + maxLng) / 2, (minLat + maxLat) / 2];
+}
+
+function buildCentroidFeatureCollection(collection: GeoJSON.FeatureCollection | null | undefined): GeoJSON.FeatureCollection {
+  if (!collection) return { type: "FeatureCollection", features: [] };
+
+  const features: GeoJSON.Feature[] = [];
+  for (const feature of collection.features) {
+    if (!feature.geometry) continue;
+    const center = getGeometryBoundsCenter(feature.geometry);
+    if (!center) continue;
+    features.push({
+      type: "Feature",
+      geometry: {
+        type: "Point",
+        coordinates: center,
+      },
+      properties: {
+        ...(feature.properties ?? {}),
+      },
+    });
+  }
+
+  return { type: "FeatureCollection", features };
+}
+
 export default function MapContainer({
   token,
   onGeometryDrawn,
@@ -84,7 +130,9 @@ export default function MapContainer({
   const drawRef = useRef<DrawControl | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
   const handlersRef = useRef({ onGeometryDrawn, onSelectionCleared, token });
+  const initialUploadedColorRef = useRef(uploadedColor);
   const [mapError, setMapError] = useState<string | null>(null);
+  const [mapReadyVersion, setMapReadyVersion] = useState(0);
   const resizeRafRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -231,13 +279,27 @@ export default function MapContainer({
         type: "geojson",
         data: { type: "FeatureCollection", features: [] },
       });
+      map.addSource("uploaded-particelle-centroids-source", {
+        type: "geojson",
+        data: { type: "FeatureCollection", features: [] },
+      });
       map.addLayer({
         id: "uploaded-particelle-fill",
         type: "fill",
         source: "uploaded-particelle-source",
         paint: {
-          "fill-color": uploadedColor,
-          "fill-opacity": 0.35,
+          "fill-color": initialUploadedColorRef.current,
+          "fill-opacity": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            8,
+            0.75,
+            11,
+            0.55,
+            14,
+            0.32,
+          ],
         },
       });
       map.addLayer({
@@ -245,8 +307,62 @@ export default function MapContainer({
         type: "line",
         source: "uploaded-particelle-source",
         paint: {
-          "line-color": uploadedColor,
-          "line-width": 2,
+          "line-color": initialUploadedColorRef.current,
+          "line-width": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            8,
+            2.5,
+            12,
+            2,
+            16,
+            1.25,
+          ],
+        },
+      });
+      map.addLayer({
+        id: "uploaded-particelle-centroids",
+        type: "circle",
+        source: "uploaded-particelle-centroids-source",
+        paint: {
+          "circle-color": initialUploadedColorRef.current,
+          "circle-radius": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            7,
+            4.5,
+            10,
+            4,
+            13,
+            3,
+            16,
+            0,
+          ],
+          "circle-opacity": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            7,
+            0.95,
+            12,
+            0.8,
+            16,
+            0,
+          ],
+          "circle-stroke-color": "#FFFFFF",
+          "circle-stroke-width": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            7,
+            1.2,
+            12,
+            0.8,
+            16,
+            0,
+          ],
         },
       });
 
@@ -282,6 +398,8 @@ export default function MapContainer({
           map.getCanvas().style.cursor = "";
         });
       }
+
+      setMapReadyVersion((value) => value + 1);
     });
 
     const drawEventTarget = map as unknown as {
@@ -353,7 +471,7 @@ export default function MapContainer({
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) return;
+    if (!map || mapReadyVersion === 0) return;
 
     const showDistretti = mapLayers?.showDistretti ?? true;
     const showParticelle = mapLayers?.showParticelle ?? true;
@@ -384,11 +502,11 @@ export default function MapContainer({
         selectedIds.length > 0 ? ["in", ["get", "id"], ["literal", selectedIds]] : ["in", ["get", "id"], ["literal", []]],
       );
     }
-  }, [filters.num_distretto, mapLayers, selectedIds]);
+  }, [filters.num_distretto, mapLayers, mapReadyVersion, selectedIds]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) return;
+    if (!map || mapReadyVersion === 0) return;
 
     if (map.getLayer("uploaded-particelle-fill")) {
       map.setPaintProperty("uploaded-particelle-fill", "fill-color", uploadedColor);
@@ -396,50 +514,41 @@ export default function MapContainer({
     if (map.getLayer("uploaded-particelle-outline")) {
       map.setPaintProperty("uploaded-particelle-outline", "line-color", uploadedColor);
     }
-  }, [uploadedColor]);
+    if (map.getLayer("uploaded-particelle-centroids")) {
+      map.setPaintProperty("uploaded-particelle-centroids", "circle-color", uploadedColor);
+    }
+  }, [mapReadyVersion, uploadedColor]);
 
   useEffect(() => {
     const map = mapRef.current;
-    if (!map) return;
+    if (!map || mapReadyVersion === 0) return;
 
-    const apply = () => {
-      const source = map.getSource("uploaded-particelle-source") as maplibregl.GeoJSONSource | undefined;
-      if (!source) {
-        map.once("idle", apply);
-        return;
-      }
-      source.setData(uploadedGeojson ?? { type: "FeatureCollection", features: [] });
+    const source = map.getSource("uploaded-particelle-source") as maplibregl.GeoJSONSource | undefined;
+    const centroidSource = map.getSource("uploaded-particelle-centroids-source") as maplibregl.GeoJSONSource | undefined;
+    if (!source || !centroidSource) return;
 
-      if (uploadedGeojson && uploadedGeojson.features.length > 0) {
-        try {
-          const bounds = new maplibregl.LngLatBounds();
-          for (const feature of uploadedGeojson.features) {
-            const geom = feature.geometry;
-            if (!geom) continue;
-            const rings = getGeometryRings(geom);
-            for (const ring of rings) {
-              for (const point of ring) bounds.extend([point[0], point[1]]);
-            }
+    source.setData(uploadedGeojson ?? { type: "FeatureCollection", features: [] });
+    centroidSource.setData(buildCentroidFeatureCollection(uploadedGeojson));
+
+    if (uploadedGeojson && uploadedGeojson.features.length > 0) {
+      try {
+        const bounds = new maplibregl.LngLatBounds();
+        for (const feature of uploadedGeojson.features) {
+          const geom = feature.geometry;
+          if (!geom) continue;
+          const rings = getGeometryRings(geom);
+          for (const ring of rings) {
+            for (const point of ring) bounds.extend([point[0], point[1]]);
           }
-          if (!bounds.isEmpty()) {
-            map.fitBounds(bounds, { padding: 40, duration: 600, maxZoom: 16 });
-          }
-        } catch {
-          // Fit bounds is best-effort.
         }
+        if (!bounds.isEmpty()) {
+          map.fitBounds(bounds, { padding: 40, duration: 600, maxZoom: 16 });
+        }
+      } catch {
+        // Fit bounds is best-effort.
       }
-    };
-
-    if (map.isStyleLoaded()) {
-      apply();
-    } else {
-      map.once("load", apply);
-      return () => {
-        map.off("load", apply);
-        map.off("idle", apply);
-      };
     }
-  }, [uploadedGeojson]);
+  }, [mapReadyVersion, uploadedGeojson]);
 
   if (mapError) {
     return (
