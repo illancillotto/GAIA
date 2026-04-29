@@ -109,9 +109,9 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   assert.match(read("src/components/elaborazioni/settings-workspace.tsx"), /updateCapacitasCredential/);
   assert.match(read("src/components/elaborazioni/settings-workspace.tsx"), /listCapacitasCredentials/);
   assert.match(elaborazioniCapacitasPage, /ElaborazioniCapacitasWorkspace/);
-  assert.match(read("src/components/elaborazioni/capacitas-workspace.tsx"), /searchCapacitasInvolture/);
   assert.match(read("src/components/elaborazioni/capacitas-workspace.tsx"), /listCapacitasCredentials/);
-  assert.match(read("src/components/elaborazioni/capacitas-workspace.tsx"), /Codice fiscale/);
+  assert.match(read("src/components/elaborazioni/capacitas-workspace.tsx"), /CAPACITAS_SECTIONS/);
+  assert.match(read("src/components/elaborazioni/capacitas-workspace.tsx"), /PREVIEW_ROWS_LIMIT/);
   assert.match(newBatchPage, /redirect\("\/elaborazioni\/new-batch"\)/);
   assert.match(newSinglePage, /redirect\("\/elaborazioni\/new-single"\)/);
   assert.match(importPage, /Polling ogni 2s/);

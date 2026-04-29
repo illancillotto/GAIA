@@ -8,7 +8,7 @@ import { DataTable } from "@/components/table/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { AlertBanner } from "@/components/ui/alert-banner";
 import { DocumentIcon, RefreshIcon } from "@/components/ui/icons";
-import { catastoBulkSearchAnagrafica, catastoCreateElaborazioneMassivaJob, catastoDeleteElaborazioniMassiveJobs, catastoGetElaborazioneMassivaJob, catastoListElaborazioniMassiveJobs } from "@/lib/api/catasto";
+import { capacitasGetRptCertificatoLink, catastoBulkSearchAnagrafica, catastoCreateElaborazioneMassivaJob, catastoDeleteElaborazioniMassiveJobs, catastoGetElaborazioneMassivaJob, catastoListElaborazioniMassiveJobs } from "@/lib/api/catasto";
 import { getStoredAccessToken } from "@/lib/auth";
 import type { CatAnagraficaBulkJobItem, CatAnagraficaBulkRowInput, CatAnagraficaBulkRowResult, CatIntestatario } from "@/types/catasto";
 
@@ -50,6 +50,33 @@ function intestatarioDisplayName(intestatario: CatIntestatario): string {
     intestatario.ragione_sociale ??
     [intestatario.cognome, intestatario.nome].filter(Boolean).join(" ")
   );
+}
+
+async function resolveCapacitasRptCertificatoUrls(
+  token: string,
+  ccos: string[],
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const unique = Array.from(new Set(ccos.map((c) => c.trim()).filter(Boolean)));
+  const concurrency = 8;
+  let idx = 0;
+
+  async function worker(): Promise<void> {
+    for (;;) {
+      const current = unique[idx];
+      idx += 1;
+      if (!current) return;
+      try {
+        const { url } = await capacitasGetRptCertificatoLink(token, current);
+        out.set(current, url);
+      } catch {
+        out.set(current, "");
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, unique.length) }, () => worker()));
+  return out;
 }
 
 type BulkSummary = {
@@ -386,17 +413,23 @@ export function AnagraficaBulkPanel() {
   }
 
   async function exportVeloceFrom(
+    token: string,
     kind: "CF_PIVA_PARTICELLE" | "COMUNE_FOGLIO_PARTICELLA_INTESTATARI",
     exportResults: CatAnagraficaBulkRowResult[],
     format: "csv" | "xlsx",
   ): Promise<void> {
+    const ccos = exportResults
+      .flatMap((r) => r.matches ?? (r.match ? [r.match] : []))
+      .map((m) => m.utenza_latest?.cco ?? "")
+      .filter(Boolean);
+    const urlByCco = ccos.length ? await resolveCapacitasRptCertificatoUrls(token, ccos) : new Map<string, string>();
     const rows: Record<string, unknown>[] = [];
     for (const r of exportResults) {
       const matches = r.matches ?? (r.match ? [r.match] : []);
       const buildBase = (m?: (typeof matches)[0]) =>
         kind === "CF_PIVA_PARTICELLE"
-          ? { cf_input: r.codice_fiscale_input ?? "", piva_input: r.partita_iva_input ?? "", comune: m?.comune ?? "", foglio: m?.foglio ?? "", particella: m?.particella ?? "", sub: m?.subalterno ?? "", esito: r.esito }
-          : { comune: m?.comune ?? r.comune_input ?? "", sezione: r.sezione_input ?? "", foglio: m?.foglio ?? r.foglio_input ?? "", particella: m?.particella ?? r.particella_input ?? "", sub: m?.subalterno ?? r.sub_input ?? "", esito: r.esito };
+          ? { cf_input: r.codice_fiscale_input ?? "", piva_input: r.partita_iva_input ?? "", comune: m?.comune ?? "", foglio: m?.foglio ?? "", particella: m?.particella ?? "", sub: m?.subalterno ?? "", esito: r.esito, link_involture: m?.utenza_latest?.cco ? urlByCco.get(m.utenza_latest.cco) ?? "" : "" }
+          : { comune: m?.comune ?? r.comune_input ?? "", sezione: r.sezione_input ?? "", foglio: m?.foglio ?? r.foglio_input ?? "", particella: m?.particella ?? r.particella_input ?? "", sub: m?.subalterno ?? r.sub_input ?? "", esito: r.esito, link_involture: m?.utenza_latest?.cco ? urlByCco.get(m.utenza_latest.cco) ?? "" : "" };
 
       const emptyInt = {
         n_intestatari: 0,
@@ -482,7 +515,7 @@ export function AnagraficaBulkPanel() {
         setResults(refreshedJob.results);
         setInferredKind(refreshedJob.kind);
       }
-      await exportVeloceFrom(exportKind, exportResults, format);
+      await exportVeloceFrom(token, exportKind, exportResults, format);
     } finally {
       setBusy(false);
     }
@@ -666,7 +699,7 @@ export function AnagraficaBulkPanel() {
               {inferredKind === "CF_PIVA_PARTICELLE"
                 ? "Colonne: CF input · P.IVA input · Comune · Foglio · Particella · Sub"
                 : "Colonne: Comune · Sezione · Foglio · Particella · Sub"}{" "}
-              · Esito · N intestatari · Rank intestatario (1/n) · CF · Tipo · Cognome · Nome · Denominazione · Ragione Sociale · Data Nascita · Luogo Nascita · Comune Residenza · Indirizzo · CAP · Telefono · Email · Deceduto
+              · Esito · Link InVolture · N intestatari · Rank intestatario (1/n) · CF · Tipo · Cognome · Nome · Denominazione · Ragione Sociale · Data Nascita · Luogo Nascita · Comune Residenza · Indirizzo · CAP · Telefono · Email · Deceduto
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               <button className="btn-secondary" type="button" disabled={busy || results.length === 0} onClick={() => void exportVeloce("csv")}>
@@ -765,7 +798,7 @@ export function AnagraficaBulkPanel() {
                       void (async () => {
                         try {
                           const job = await catastoGetElaborazioneMassivaJob(token, item.id);
-                          await exportVeloceFrom(job.kind, job.results, "csv");
+                          await exportVeloceFrom(token, job.kind, job.results, "csv");
                         } catch (e) {
                           setError(e instanceof Error ? e.message : "Errore export job");
                         }
@@ -784,7 +817,7 @@ export function AnagraficaBulkPanel() {
                       void (async () => {
                         try {
                           const job = await catastoGetElaborazioneMassivaJob(token, item.id);
-                          await exportVeloceFrom(job.kind, job.results, "xlsx");
+                          await exportVeloceFrom(token, job.kind, job.results, "xlsx");
                         } catch (e) {
                           setError(e instanceof Error ? e.message : "Errore export job");
                         }

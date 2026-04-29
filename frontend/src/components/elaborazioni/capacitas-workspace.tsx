@@ -1,8 +1,7 @@
 "use client";
 
 import * as XLSX from "xlsx";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useEffect, useRef, useState } from "react";
 
 import { ProtectedPage } from "@/components/app/protected-page";
 import {
@@ -13,7 +12,7 @@ import {
 } from "@/components/elaborazioni/module-chrome";
 import { ElaborazioneWorkspaceModal } from "@/components/elaborazioni/workspace-modal";
 import { EmptyState } from "@/components/ui/empty-state";
-import { DocumentIcon, LockIcon, RefreshIcon, SearchIcon, ServerIcon, UsersIcon } from "@/components/ui/icons";
+import { DocumentIcon, RefreshIcon, ServerIcon, UsersIcon } from "@/components/ui/icons";
 import {
   createCapacitasAnagraficaHistoryJob,
   createCapacitasParticelleSyncJob,
@@ -28,44 +27,30 @@ import {
   rerunCapacitasAnagraficaHistoryJob,
   rerunCapacitasParticelleSyncJob,
   rerunCapacitasTerreniJob,
-  searchCapacitasInvolture,
   isAuthError,
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import type {
-  CapacitasAnagrafica,
   CapacitasAnagraficaHistoryImportItemInput,
   CapacitasAnagraficaHistoryImportJob,
   CapacitasAnagraficaHistoryImportResult,
   CapacitasCredential,
   CapacitasParticelleSyncJob,
-  CapacitasSearchResult,
   CapacitasTerreniBatchItemInput,
   CapacitasTerreniBatchResult,
   CapacitasTerreniJob,
 } from "@/types/api";
 
-const SEARCH_TYPE_OPTIONS = [
-  { value: 0, label: "Denominazione esatta" },
-  { value: 1, label: "Denominazione inizia per" },
-  { value: 2, label: "Codice fiscale" },
-  { value: 3, label: "CCO / FRA / CCS" },
-  { value: 4, label: "Denominazione contiene" },
-  { value: 5, label: "Utenza" },
-  { value: 6, label: "Indirizzo" },
-  { value: 7, label: "Data di nascita" },
-  { value: 9, label: "Contiene storico" },
-  { value: 10, label: "Avviso" },
-  { value: 11, label: "Titolo" },
-  { value: 12, label: "Partita IVA" },
-  { value: 13, label: "Codice soggetto" },
-];
-
 const JOB_POLL_INTERVAL_MS = 5000;
+const PREVIEW_ROWS_LIMIT = 20;
 
-function renderIdentity(row: CapacitasAnagrafica): string {
-  return row.Denominazione ?? row.CodiceFiscale ?? row.PartitaIva ?? row.CCO ?? "Record";
-}
+type CapacitasSection = "particelle" | "storico" | "terreni";
+
+const CAPACITAS_SECTIONS: Array<{ id: CapacitasSection; label: string; description: string }> = [
+  { id: "particelle", label: "Sync particelle", description: "Riallinea il catalogo particelle GAIA" },
+  { id: "storico", label: "Storico anagrafico", description: "Importa snapshot storici da Capacitas" },
+  { id: "terreni", label: "Terreni batch", description: "Carica file e monitora i job Terreni" },
+];
 
 function formatDateTime(value: string | null | undefined): string {
   if (!value) return "—";
@@ -464,19 +449,9 @@ function isHistoryImportJobResult(value: unknown): value is CapacitasAnagraficaH
 }
 
 export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?: boolean }) {
-  const searchParams = useSearchParams();
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [credentials, setCredentials] = useState<CapacitasCredential[]>([]);
-  const [results, setResults] = useState<CapacitasSearchResult | null>(null);
-  const [loadingCredentials, setLoadingCredentials] = useState(false);
-  const [searching, setSearching] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [formState, setFormState] = useState({
-    q: "",
-    tipo_ricerca: 1,
-    solo_con_beni: false,
-    credential_id: "",
-  });
+  const [activeSection, setActiveSection] = useState<CapacitasSection>("terreni");
 
   const [terreniJobs, setTerreniJobs] = useState<CapacitasTerreniJob[]>([]);
   const [terreniJobsLoading, setTerreniJobsLoading] = useState(false);
@@ -546,10 +521,6 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
   const [historyStatusMessage, setHistoryStatusMessage] = useState<string | null>(null);
   const [historyResult, setHistoryResult] = useState<CapacitasAnagraficaHistoryImportResult | null>(null);
 
-  const activeCredential = useMemo(
-    () => credentials.find((credential) => String(credential.id) === formState.credential_id) ?? null,
-    [credentials, formState.credential_id],
-  );
   const activeCredentialsCount = credentials.filter((credential) => credential.active).length;
   const jobsInFlight =
     !terreniMonitorSessionExpired &&
@@ -568,6 +539,7 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
     : null;
   const latestHistoryJob = historyJobs[0] ?? null;
   const latestHistoryResult = latestHistoryJob && isHistoryImportJobResult(latestHistoryJob.result_json) ? latestHistoryJob.result_json : historyResult;
+  const operationalError = terreniError ?? particelleError ?? historyError ?? terreniBatchError;
 
   useEffect(() => {
     void loadCredentials();
@@ -575,17 +547,6 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
     void loadParticelleJobs();
     void loadHistoryJobs();
   }, []);
-
-  useEffect(() => {
-    const q = searchParams.get("q");
-    const tipo = searchParams.get("tipo");
-    if (!q) return;
-    setFormState((s) => ({
-      ...s,
-      q,
-      tipo_ricerca: tipo !== null && /^\d+$/.test(tipo) ? Number(tipo) : s.tipo_ricerca,
-    }));
-  }, [searchParams]);
 
   useEffect(() => {
     if (!jobsInFlight) return undefined;
@@ -621,15 +582,9 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
     const token = getStoredAccessToken();
     if (!token) return;
 
-    setLoadingCredentials(true);
     try {
       const nextCredentials = await listCapacitasCredentials(token);
       setCredentials(nextCredentials);
-      setError(null);
-      setFormState((current) => ({
-        ...current,
-        credential_id: current.credential_id ? current.credential_id : nextCredentials.length === 1 ? String(nextCredentials[0].id) : "",
-      }));
       setTerreniForm((current) => ({
         ...current,
         credential_id:
@@ -646,9 +601,7 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
           current.credential_id ? current.credential_id : nextCredentials.length === 1 ? String(nextCredentials[0].id) : "",
       }));
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "Errore caricamento credenziali Capacitas");
-    } finally {
-      setLoadingCredentials(false);
+      setTerreniError(loadError instanceof Error ? loadError.message : "Errore caricamento credenziali Capacitas");
     }
   }
 
@@ -798,29 +751,6 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
       if (!silent) {
         setHistoryJobsLoading(false);
       }
-    }
-  }
-
-  async function handleSearch(): Promise<void> {
-    const token = getStoredAccessToken();
-    if (!token) return;
-
-    setSearching(true);
-    try {
-      const payload = {
-        q: formState.q.trim(),
-        tipo_ricerca: formState.tipo_ricerca,
-        solo_con_beni: formState.solo_con_beni,
-        credential_id: formState.credential_id ? Number.parseInt(formState.credential_id, 10) : undefined,
-      };
-      const response = await searchCapacitasInvolture(token, payload);
-      setResults(response);
-      setError(null);
-    } catch (searchError) {
-      setError(searchError instanceof Error ? searchError.message : "Errore ricerca inVOLTURE");
-      setResults(null);
-    } finally {
-      setSearching(false);
     }
   }
 
@@ -1077,15 +1007,15 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
               Capacitas inVOLTURE
             </>
           }
-          title={embedded ? "Ricerca inVOLTURE" : "Ricerca anagrafica e Terreni sul portale inVOLTURE usando il pool account del modulo Elaborazioni."}
+          title={embedded ? "Capacitas" : "Sincronizzazioni Capacitas inVOLTURE per GAIA"}
           description={
             embedded
-              ? "Esegui ricerche anagrafiche o Terreni e controlla il risultato usando il pool credenziali."
-              : "La schermata mette in evidenza il pool disponibile, la credenziale effettiva selezionata e i nuovi job Terreni in background in un layout coerente con il resto del modulo."
+              ? "Avvia job di sincronizzazione e controlla lo stato usando il pool credenziali."
+              : "La ricerca anagrafica puntuale è stata rimossa da questa vista: il workspace ora concentra le operazioni di sync e import che popolano GAIA."
           }
           actions={
-            error || terreniError ? (
-              <ElaborazioneNoticeCard compact={embedded} title="Errore operativo" description={error ?? terreniError ?? "Errore sconosciuto"} tone="danger" />
+            operationalError ? (
+              <ElaborazioneNoticeCard compact={embedded} title="Errore operativo" description={operationalError} tone="danger" />
             ) : (
               <>
                 <ElaborazioneNoticeCard
@@ -1102,102 +1032,35 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
         >
           <div className="grid gap-3 sm:grid-cols-4">
             <ElaborazioneMiniStat compact={embedded} eyebrow="Pool" value={`${activeCredentialsCount}/${credentials.length}`} description="Account attivi sul totale configurato." />
-            <ElaborazioneMiniStat compact={embedded} eyebrow="Ricerca anagrafica" value={results?.total ?? 0} description="Record restituiti dall'ultima ricerca." tone={results && results.total > 0 ? "success" : "default"} />
-            <ElaborazioneMiniStat compact={embedded} eyebrow="Preview Terreni" value={terreniBatchItems.length} description="Righe Terreni dell'ultima preview." tone={terreniBatchItems.length > 0 ? "success" : "default"} />
-            <ElaborazioneMiniStat compact={embedded} eyebrow="Job Terreni" value={terreniJobs.length} description={jobsInFlight ? "Sono presenti job in corso." : "Nessun job in esecuzione."} tone={jobsInFlight ? "warning" : "default"} />
+            <ElaborazioneMiniStat compact={embedded} eyebrow="Sync particelle" value={particelleJobs.length} description={particelleJobsInFlight ? "Job particelle in corso." : "Job particelle registrati."} tone={particelleJobsInFlight ? "warning" : "default"} />
+            <ElaborazioneMiniStat compact={embedded} eyebrow="Storico" value={historyJobs.length} description={historyJobsInFlight ? "Import storico in corso." : "Job storico registrati."} tone={historyJobsInFlight ? "warning" : "default"} />
+            <ElaborazioneMiniStat compact={embedded} eyebrow="Terreni" value={terreniJobs.length} description={jobsInFlight ? "Job Terreni in corso." : `${terreniBatchItems.length} righe in preview.`} tone={jobsInFlight ? "warning" : terreniBatchItems.length > 0 ? "success" : "default"} />
           </div>
         </ElaborazioneHero>
 
-        <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white p-0 shadow-panel">
-          <ElaborazionePanelHeader
-            badge={
-              <>
-                <LockIcon className="h-3.5 w-3.5" />
-                Ricerca anagrafica
-              </>
-            }
-            title="Parametri della query inVOLTURE"
-            description="Usa Codice fiscale per ricerche puntuali oppure modalità lessicali sulla denominazione."
-          />
-          <div className="p-6">
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <label className="space-y-2 xl:col-span-2">
-                <span className="label-caption">Valore ricerca</span>
-                <input
-                  className="form-control"
-                  placeholder="Codice fiscale, denominazione, CCO~FRA~CCS..."
-                  value={formState.q}
-                  onChange={(event) => setFormState((current) => ({ ...current, q: event.target.value }))}
-                />
-              </label>
-              <label className="space-y-2">
-                <span className="label-caption">Tipo ricerca</span>
-                <select
-                  className="form-control"
-                  value={formState.tipo_ricerca}
-                  onChange={(event) =>
-                    setFormState((current) => ({
-                      ...current,
-                      tipo_ricerca: Number.parseInt(event.target.value, 10),
-                    }))
-                  }
-                >
-                  {SEARCH_TYPE_OPTIONS.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="space-y-2">
-                <span className="label-caption">Credenziale</span>
-                <select
-                  className="form-control"
-                  value={formState.credential_id}
-                  onChange={(event) => setFormState((current) => ({ ...current, credential_id: event.target.value }))}
-                >
-                  <option value="">Auto-selezione backend</option>
-                  {credentials.map((credential) => (
-                    <option key={credential.id} value={credential.id}>
-                      {credential.label} · {credential.username}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            </div>
-
-            <div className="mt-4 flex flex-wrap items-center gap-3">
-              <label className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
-                <input
-                  checked={formState.solo_con_beni}
-                  className="h-4 w-4 accent-[#1D4E35]"
-                  type="checkbox"
-                  onChange={(event) => setFormState((current) => ({ ...current, solo_con_beni: event.target.checked }))}
-                />
-                <span className="text-sm text-gray-700">Solo soggetti con beni</span>
-              </label>
+        <nav className="grid gap-3 md:grid-cols-3" aria-label="Sezioni Capacitas">
+          {CAPACITAS_SECTIONS.map((section) => {
+            const active = activeSection === section.id;
+            return (
               <button
-                className="btn-primary"
-                disabled={searching || !formState.q.trim() || loadingCredentials}
-                onClick={() => void handleSearch()}
+                className={
+                  active
+                    ? "rounded-2xl border border-[#1D4E35] bg-[#eef7ef] px-5 py-4 text-left shadow-sm"
+                    : "rounded-2xl border border-[#d9dfd6] bg-white px-5 py-4 text-left shadow-sm transition hover:border-[#1D4E35]/40 hover:bg-[#f8fbf8]"
+                }
+                key={section.id}
+                onClick={() => setActiveSection(section.id)}
                 type="button"
               >
-                {searching ? "Ricerca in corso..." : "Avvia ricerca"}
+                <span className={active ? "text-sm font-semibold text-[#1D4E35]" : "text-sm font-semibold text-gray-900"}>{section.label}</span>
+                <span className="mt-1 block text-xs text-gray-500">{section.description}</span>
               </button>
-              {activeCredential ? (
-                <span className="text-xs text-gray-500">
-                  Credenziale forzata: {activeCredential.label} · fascia {activeCredential.allowed_hours_start}:00-
-                  {activeCredential.allowed_hours_end}:00
-                </span>
-              ) : (
-                <span className="text-xs text-gray-500">
-                  Se non forzi un account, il backend seleziona automaticamente una credenziale attiva nella fascia oraria corrente.
-                </span>
-              )}
-            </div>
-          </div>
-        </article>
+            );
+          })}
+        </nav>
 
+        {activeSection === "particelle" ? (
+          <>
         <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white p-0 shadow-panel">
           <ElaborazionePanelHeader
             badge={
@@ -1447,68 +1310,11 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
             </div>
           )}
         </article>
+          </>
+        ) : null}
 
-        <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white p-0 shadow-panel">
-          <ElaborazionePanelHeader
-            badge={
-              <>
-                <SearchIcon className="h-3.5 w-3.5" />
-                Risultati ricerca
-              </>
-            }
-            title={results == null ? "Nessuna ricerca eseguita" : `${results.total} record restituiti dal portale`}
-            description="I risultati sono riportati così come esposti da inVOLTURE, senza reinterpretazione lato frontend."
-          />
-          {results == null ? (
-            <div className="p-5">
-              <EmptyState
-                icon={SearchIcon}
-                title="Avvia una ricerca Capacitas"
-                description="Inserisci un criterio e lancia una ricerca per vedere gli anagrafici restituiti da inVOLTURE."
-              />
-            </div>
-          ) : results.rows.length === 0 ? (
-            <div className="p-5">
-              <EmptyState
-                icon={SearchIcon}
-                title="Nessun risultato"
-                description="Il portale non ha restituito anagrafiche compatibili con i parametri selezionati."
-              />
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Nominativo</th>
-                    <th>Codice fiscale</th>
-                    <th>Partita IVA</th>
-                    <th>Comune</th>
-                    <th>CCO</th>
-                    <th>Patrimonio</th>
-                    <th>Meta</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {results.rows.map((row, index) => (
-                    <tr key={`${row.CCO ?? row.IDXANA ?? row.id ?? index}`}>
-                      <td className="font-medium text-gray-900">{renderIdentity(row)}</td>
-                      <td>{row.CodiceFiscale ?? "—"}</td>
-                      <td>{row.PartitaIva ?? "—"}</td>
-                      <td>{row.Comune ?? "—"}</td>
-                      <td>{row.CCO ?? "—"}</td>
-                      <td>{row.Patrimonio ?? "—"}</td>
-                      <td className="text-xs text-gray-500">
-                        {row.Stato ?? "—"} · {row.IDXANA ?? row.id ?? "n/d"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </article>
-
+        {activeSection === "storico" ? (
+          <>
         <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white p-0 shadow-panel">
           <ElaborazionePanelHeader
             badge={
@@ -1858,6 +1664,11 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
           )}
         </article>
 
+          </>
+        ) : null}
+
+        {activeSection === "terreni" ? (
+          <>
         <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white p-0 shadow-panel">
           <ElaborazionePanelHeader
             badge={
@@ -2077,52 +1888,70 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
         </article>
 
         <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white p-0 shadow-panel">
-          <ElaborazionePanelHeader
-            badge={
-              <>
-                <DocumentIcon className="h-3.5 w-3.5" />
-                Preview file
-              </>
-            }
-            title={terreniBatchItems.length === 0 ? "Nessun file batch caricato" : `${terreniBatchItems.length} righe pronte per il job`}
-            description={`Preview locale del file importato. Certificati: ${terreniBatchFetchCertificati ? "si" : "no"} · Dettagli: ${terreniBatchFetchDetails ? "si" : "no"}.`}
-          />
-          {terreniBatchItems.length === 0 ? (
-            <div className="p-5">
-              <EmptyState
-                icon={DocumentIcon}
-                title="Carica un file batch"
-                description="Scarica il template, compila le righe e carica il file per vedere la preview locale."
-              />
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Label</th>
-                    <th>Comune</th>
-                    <th>Sezione</th>
-                    <th>Foglio</th>
-                    <th>Particella</th>
-                    <th>Sub</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {terreniBatchItems.slice(0, 100).map((item, index) => (
-                    <tr key={`${item.comune ?? ""}-${item.foglio}-${item.particella}-${item.sub ?? ""}-${index}`}>
-                      <td className="font-medium text-gray-900">{item.label ?? "—"}</td>
-                      <td>{item.comune ?? "—"}</td>
-                      <td>{item.sezione || "—"}</td>
-                      <td>{item.foglio}</td>
-                      <td>{item.particella}</td>
-                      <td>{item.sub || "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
+          <details>
+            <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-3 px-6 py-5 marker:hidden">
+              <div className="flex items-start gap-3">
+                <DocumentIcon className="mt-0.5 h-4 w-4 text-[#1D4E35]" />
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#1D4E35]">Preview file</p>
+                  <h3 className="mt-1 text-lg font-semibold text-gray-900">
+                    {terreniBatchItems.length === 0 ? "Nessun file batch caricato" : `${terreniBatchItems.length} righe pronte per il job`}
+                  </h3>
+                  <p className="mt-1 text-sm text-gray-500">
+                    {terreniBatchItems.length === 0
+                      ? "Carica un file batch per vedere un controllo locale delle righe."
+                      : `Anteprima chiusa per non appesantire la pagina. Certificati: ${terreniBatchFetchCertificati ? "si" : "no"} · Dettagli: ${terreniBatchFetchDetails ? "si" : "no"}.`}
+                  </p>
+                </div>
+              </div>
+              <span className="rounded-full border border-[#d9dfd6] bg-white px-3 py-1 text-xs font-semibold text-gray-600">
+                {terreniBatchItems.length === 0 ? "Apri" : `Mostra prime ${Math.min(PREVIEW_ROWS_LIMIT, terreniBatchItems.length)}`}
+              </span>
+            </summary>
+            {terreniBatchItems.length === 0 ? (
+              <div className="border-t border-gray-100 p-5">
+                <EmptyState
+                  icon={DocumentIcon}
+                  title="Carica un file batch"
+                  description="Scarica il template, compila le righe e carica il file per vedere la preview locale."
+                />
+              </div>
+            ) : (
+              <div className="border-t border-gray-100">
+                <div className="max-h-[420px] overflow-auto">
+                  <table className="data-table">
+                    <thead>
+                      <tr>
+                        <th>Label</th>
+                        <th>Comune</th>
+                        <th>Sezione</th>
+                        <th>Foglio</th>
+                        <th>Particella</th>
+                        <th>Sub</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {terreniBatchItems.slice(0, PREVIEW_ROWS_LIMIT).map((item, index) => (
+                        <tr key={`${item.comune ?? ""}-${item.foglio}-${item.particella}-${item.sub ?? ""}-${index}`}>
+                          <td className="font-medium text-gray-900">{item.label ?? "—"}</td>
+                          <td>{item.comune ?? "—"}</td>
+                          <td>{item.sezione || "—"}</td>
+                          <td>{item.foglio}</td>
+                          <td>{item.particella}</td>
+                          <td>{item.sub || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                {terreniBatchItems.length > PREVIEW_ROWS_LIMIT ? (
+                  <div className="border-t border-gray-100 px-6 py-3 text-xs text-gray-500">
+                    Visualizzate {PREVIEW_ROWS_LIMIT} di {terreniBatchItems.length} righe. Il job usera comunque tutto il file importato.
+                  </div>
+                ) : null}
+              </div>
+            )}
+          </details>
         </article>
 
         <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white p-0 shadow-panel">
@@ -2240,6 +2069,8 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
             </div>
           )}
         </article>
+          </>
+        ) : null}
       </div>
       <ElaborazioneWorkspaceModal
         description="Configurazione credenziali aperta in modale per mantenere il contesto della ricerca Capacitas."
@@ -2271,7 +2102,7 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
   return (
     <ProtectedPage
       title="Capacitas inVOLTURE"
-      description="Ricerca anagrafica e workspace Terreni operativo sul portale inVOLTURE usando il pool credenziali Capacitas."
+      description="Workspace operativo per sincronizzazioni particelle, storico anagrafico e job Terreni sul portale inVOLTURE."
       breadcrumb="Elaborazioni / Capacitas"
       requiredModule="catasto"
     >
