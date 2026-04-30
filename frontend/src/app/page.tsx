@@ -478,9 +478,9 @@ export default function HomePage() {
     <div className="min-h-screen bg-surface text-on-surface font-body">
       {/* TopAppBar */}
       <header className="bg-surface fixed top-0 w-full z-50">
-        <div className="flex justify-between items-center w-full px-8 py-4 max-w-full">
+        <div className="flex justify-between items-center w-full px-8 py-3 max-w-full">
           <div className="flex items-center gap-12">
-            <span className="font-headline text-2xl font-bold italic text-primary">GAIA</span>
+            <span className="font-headline text-xl font-bold italic text-primary">GAIA</span>
             <nav className="hidden md:flex gap-8">
               {visibleModules
                 .filter((m) => m.status !== "coming")
@@ -566,24 +566,24 @@ export default function HomePage() {
       </header>
 
       {/* Main content */}
-      <main className="pt-24 pb-12 px-8 max-w-7xl mx-auto min-h-screen">
+      <main className="pt-24 pb-12 px-8 max-w-[90rem] mx-auto min-h-screen">
         {/* Hero */}
-        <section className="mb-16">
+        <section className="mb-12">
           <div>
-            <h1 className="text-6xl font-headline font-medium text-primary leading-tight mb-4">
+            <h1 className="text-5xl font-headline font-medium text-primary leading-tight mb-3">
               Hub operativo GAIA
             </h1>
-            <p className="text-xl font-body text-outline leading-relaxed">
+            <p className="text-lg font-body text-outline leading-relaxed">
               GAIA concentra oggi i moduli realmente operativi su accessi NAS e rete, mantenendo gli
               altri domini in evoluzione o non ancora avviati nello stesso ingresso applicativo.
             </p>
           </div>
         </section>
 
-        <section className="mb-16">
+        <section className="mb-12">
           <div className="mb-5 flex items-end justify-between gap-4">
             <div>
-              <h2 className="text-2xl font-headline text-primary">Cruscotto rapido</h2>
+              <h2 className="text-xl font-headline text-primary">Cruscotto rapido</h2>
               <p className="text-sm text-outline">Stato sintetico della piattaforma e del perimetro utente corrente.</p>
             </div>
           </div>
@@ -591,14 +591,14 @@ export default function HomePage() {
             {[...platformStats, ...operationalStats].map((stat) => (
               <div
                 key={`quick-${stat.label}`}
-                className="bg-surface-container-low p-5 rounded-xl flex flex-col justify-between min-h-[138px]"
+                className="bg-surface-container-low p-4 rounded-xl flex flex-col justify-between min-h-[120px]"
               >
                 <div className="flex justify-between items-start gap-3">
                   <span className="text-[11px] font-label tracking-[0.05em] uppercase text-outline">{stat.label}</span>
-                  <span className="material-symbols-outlined text-primary text-[20px]">{stat.icon}</span>
+                  <span className="material-symbols-outlined text-primary text-[18px]">{stat.icon}</span>
                 </div>
                 <div className="mt-3">
-                  <span className="text-3xl font-headline text-primary">{stat.value}</span>
+                  <span className="text-2xl font-headline text-primary">{stat.value}</span>
                   <p className="text-xs text-on-secondary-container mt-2 leading-relaxed">{stat.copy}</p>
                 </div>
               </div>
@@ -711,7 +711,7 @@ export default function HomePage() {
         </section>
       </main>
 
-      <footer className="px-8 py-6 border-t border-outline-variant/20 max-w-7xl mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs text-outline">
+      <footer className="px-8 py-6 border-t border-outline-variant/20 max-w-[90rem] mx-auto flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs text-outline">
         <p>© GAIA platform · Consorzio di Bonifica dell&apos;Oristanese</p>
         <p>Sessione attiva: {currentUser.username} · {currentUser.role}</p>
       </footer>
