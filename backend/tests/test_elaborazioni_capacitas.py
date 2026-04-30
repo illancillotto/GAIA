@@ -2767,3 +2767,429 @@ def test_capacitas_credential_test_returns_diagnostic_detail_on_login_failure(
     assert "token non trovato" in payload["detail"]
     assert "URL finale=" in payload["detail"]
     assert "cookies=" in payload["detail"]
+
+
+# ---------------------------------------------------------------------------
+# Session-expiry: detection, relogin, and retry logic
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.anyio
+async def test_involture_lookup_raises_session_expired_on_NOSessione_response() -> None:
+    import httpx
+
+    from app.modules.elaborazioni.capacitas.apps.involture.client import (
+        CapacitasSessionExpiredError,
+        InVoltureClient,
+    )
+    from app.modules.elaborazioni.capacitas.session import CapacitasSession, CapacitasSessionManager
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text="NOSessione scaduta")
+
+    transport = httpx.MockTransport(handler)
+    manager = CapacitasSessionManager("user", "pass")
+    manager._http = httpx.AsyncClient(transport=transport)
+    manager._session = CapacitasSession(token="tok-123")
+
+    involture = InVoltureClient(manager)
+    with pytest.raises(CapacitasSessionExpiredError, match="scaduta"):
+        await involture.search_frazioni("uras")
+
+    await manager.close()
+
+
+@pytest.mark.anyio
+async def test_involture_lookup_raises_session_expired_on_sessione_scaduta_variant() -> None:
+    import httpx
+
+    from app.modules.elaborazioni.capacitas.apps.involture.client import (
+        CapacitasSessionExpiredError,
+        InVoltureClient,
+    )
+    from app.modules.elaborazioni.capacitas.session import CapacitasSession, CapacitasSessionManager
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text="Sessione scaduta per inattività")
+
+    transport = httpx.MockTransport(handler)
+    manager = CapacitasSessionManager("user", "pass")
+    manager._http = httpx.AsyncClient(transport=transport)
+    manager._session = CapacitasSession(token="tok-123")
+
+    involture = InVoltureClient(manager)
+    with pytest.raises(CapacitasSessionExpiredError):
+        await involture.search_frazioni("uras")
+
+    await manager.close()
+
+
+@pytest.mark.anyio
+async def test_involture_lookup_raises_generic_error_for_unrecognized_non_session_payload() -> None:
+    import httpx
+
+    from app.modules.elaborazioni.capacitas.apps.involture.client import (
+        CapacitasSessionExpiredError,
+        InVoltureClient,
+    )
+    from app.modules.elaborazioni.capacitas.session import CapacitasSession, CapacitasSessionManager
+
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, text="Errore generico del server")
+
+    transport = httpx.MockTransport(handler)
+    manager = CapacitasSessionManager("user", "pass")
+    manager._http = httpx.AsyncClient(transport=transport)
+    manager._session = CapacitasSession(token="tok-123")
+
+    involture = InVoltureClient(manager)
+    with pytest.raises(RuntimeError) as exc_info:
+        await involture.search_frazioni("uras")
+    assert not isinstance(exc_info.value, CapacitasSessionExpiredError)
+    assert "payload non riconosciuto" in str(exc_info.value)
+
+    await manager.close()
+
+
+@pytest.mark.anyio
+async def test_involture_client_relogin_calls_login_then_activate_involture() -> None:
+    from app.modules.elaborazioni.capacitas.apps.involture.client import InVoltureClient
+    from app.modules.elaborazioni.capacitas.session import CapacitasSession, CapacitasSessionManager
+
+    login_calls: list[str] = []
+    activate_calls: list[str] = []
+
+    async def fake_login(self) -> CapacitasSession:
+        login_calls.append("login")
+        self._session = CapacitasSession(token="new-tok")
+        return self._session
+
+    async def fake_activate_app(self, app_name: str) -> None:
+        activate_calls.append(app_name)
+
+    manager = CapacitasSessionManager("user", "pass")
+    manager.login = fake_login.__get__(manager, CapacitasSessionManager)  # type: ignore[method-assign]
+    manager.activate_app = fake_activate_app.__get__(manager, CapacitasSessionManager)  # type: ignore[method-assign]
+
+    involture = InVoltureClient(manager)
+    await involture.relogin()
+
+    assert login_calls == ["login"]
+    assert activate_calls == ["involture"]
+
+
+@pytest.mark.anyio
+async def test_sync_particella_item_retries_once_after_session_expiry(monkeypatch: pytest.MonkeyPatch) -> None:
+    from uuid import uuid4
+
+    from app.modules.elaborazioni.capacitas.apps.involture.client import (
+        CapacitasSessionExpiredError,
+        InVoltureClient,
+    )
+    from app.modules.elaborazioni.capacitas.models import CapacitasParticelleSyncJobCreateRequest
+    from app.services.elaborazioni_capacitas_particelle_sync import (
+        ParticellaSyncItem,
+        _sync_particella_item,
+    )
+    from app.modules.elaborazioni.capacitas.models import (
+        CapacitasTerreniBatchItemResult,
+        CapacitasTerreniBatchResponse,
+    )
+
+    call_count = 0
+    relogin_calls: list[int] = []
+
+    async def fake_sync_terreni_batch(db, client, request):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise CapacitasSessionExpiredError("NOSessione scaduta")
+        return CapacitasTerreniBatchResponse(
+            processed_items=1,
+            imported_rows=1,
+            failed_items=0,
+            total_rows=1,
+            linked_units=0,
+            linked_occupancies=0,
+            imported_certificati=0,
+            imported_details=0,
+            items=[
+                CapacitasTerreniBatchItemResult(
+                    ok=True,
+                    label="Uras 1/680",
+                    search_key="Uras/1/680",
+                    total_rows=1,
+                    imported_rows=1,
+                    imported_certificati=0,
+                    imported_details=0,
+                )
+            ],
+        )
+
+    async def fake_relogin(self) -> None:
+        relogin_calls.append(1)
+
+    monkeypatch.setattr(
+        "app.services.elaborazioni_capacitas_particelle_sync.sync_terreni_batch",
+        fake_sync_terreni_batch,
+    )
+
+    db = TestingSessionLocal()
+    try:
+        from sqlalchemy import select as sa_select
+        particella = db.scalar(sa_select(CatParticella).where(CatParticella.foglio == "1", CatParticella.particella == "680"))
+        assert particella is not None
+
+        job = CapacitasParticelleSyncJob(
+            requested_by_user_id=1,
+            credential_id=None,
+            status="processing",
+            mode="progressive_catalog",
+            payload_json={"only_due": True},
+            result_json={"processed_items": 0},
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+
+        manager_stub = type("M", (), {})()
+        involture = InVoltureClient.__new__(InVoltureClient)
+        involture._manager = manager_stub  # type: ignore[attr-defined]
+        involture.relogin = fake_relogin.__get__(involture, InVoltureClient)  # type: ignore[method-assign]
+
+        item = ParticellaSyncItem(
+            index=1,
+            particella_id=particella.id,
+            label="Uras 1/680",
+            comune_label="Uras",
+            sezione="",
+            foglio="1",
+            particella="680",
+            sub="",
+        )
+
+        payload = CapacitasParticelleSyncJobCreateRequest(
+            only_due=False,
+            fetch_certificati=False,
+            fetch_details=False,
+        )
+
+        result = await _sync_particella_item(
+            db, involture, job_id=job.id, credential_id=None, payload=payload, item=item
+        )
+
+        assert result["status"] == "synced", f"expected synced, got {result}"
+        assert call_count == 2, "sync_terreni_batch deve essere chiamato due volte"
+        assert len(relogin_calls) == 1, "relogin deve essere chiamato esattamente una volta"
+    finally:
+        db.close()
+
+
+@pytest.mark.anyio
+async def test_sync_particella_item_marks_failed_if_retry_also_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.modules.elaborazioni.capacitas.apps.involture.client import (
+        CapacitasSessionExpiredError,
+        InVoltureClient,
+    )
+    from app.modules.elaborazioni.capacitas.models import CapacitasParticelleSyncJobCreateRequest
+    from app.services.elaborazioni_capacitas_particelle_sync import (
+        ParticellaSyncItem,
+        _sync_particella_item,
+    )
+
+    relogin_calls: list[int] = []
+
+    async def fake_sync_terreni_batch_always_fails(db, client, request):
+        raise CapacitasSessionExpiredError("NOSessione scaduta")
+
+    async def fake_relogin(self) -> None:
+        relogin_calls.append(1)
+
+    monkeypatch.setattr(
+        "app.services.elaborazioni_capacitas_particelle_sync.sync_terreni_batch",
+        fake_sync_terreni_batch_always_fails,
+    )
+
+    db = TestingSessionLocal()
+    try:
+        from sqlalchemy import select as sa_select
+        particella = db.scalar(sa_select(CatParticella).where(CatParticella.foglio == "1", CatParticella.particella == "680"))
+        assert particella is not None
+
+        job = CapacitasParticelleSyncJob(
+            requested_by_user_id=1,
+            credential_id=None,
+            status="processing",
+            mode="progressive_catalog",
+            payload_json={"only_due": True},
+            result_json={"processed_items": 0},
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+
+        involture = InVoltureClient.__new__(InVoltureClient)
+        involture._manager = type("M", (), {})()  # type: ignore[attr-defined]
+        involture.relogin = fake_relogin.__get__(involture, InVoltureClient)  # type: ignore[method-assign]
+
+        item = ParticellaSyncItem(
+            index=1,
+            particella_id=particella.id,
+            label="Uras 1/680",
+            comune_label="Uras",
+            sezione="",
+            foglio="1",
+            particella="680",
+            sub="",
+        )
+
+        payload = CapacitasParticelleSyncJobCreateRequest(only_due=False, fetch_certificati=False, fetch_details=False)
+
+        result = await _sync_particella_item(
+            db, involture, job_id=job.id, credential_id=None, payload=payload, item=item
+        )
+
+        assert result["status"] == "failed"
+        assert "scaduta" in result["message"].lower() or "NOSessione" in result["message"]
+        assert len(relogin_calls) == 1, "relogin deve essere tentato anche quando il retry fallisce"
+    finally:
+        db.close()
+
+
+@pytest.mark.anyio
+async def test_run_particelle_sync_job_sequential_relogins_and_retries(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.modules.elaborazioni.capacitas.apps.involture.client import (
+        CapacitasSessionExpiredError,
+        InVoltureClient,
+    )
+    from app.models.capacitas import CapacitasParticelleSyncJob
+    from app.modules.elaborazioni.capacitas.models import CapacitasParticelleSyncJobCreateRequest
+    from app.modules.elaborazioni.capacitas.models import (
+        CapacitasTerreniBatchItemResult,
+        CapacitasTerreniBatchResponse,
+    )
+    from app.services.elaborazioni_capacitas_particelle_sync import run_particelle_sync_job
+
+    call_count = 0
+    relogin_calls: list[int] = []
+
+    async def fake_sync_terreni_batch(db, client, request, **kwargs):
+        nonlocal call_count
+        call_count += 1
+        if call_count == 1:
+            raise CapacitasSessionExpiredError("NOSessione scaduta")
+        return CapacitasTerreniBatchResponse(
+            processed_items=1,
+            imported_rows=1,
+            failed_items=0,
+            total_rows=1,
+            linked_units=0,
+            linked_occupancies=0,
+            imported_certificati=0,
+            imported_details=0,
+            items=[
+                CapacitasTerreniBatchItemResult(
+                    ok=True,
+                    label="Uras 1/680",
+                    search_key="Uras/1/680",
+                    total_rows=1,
+                    imported_rows=1,
+                    imported_certificati=0,
+                    imported_details=0,
+                )
+            ],
+        )
+
+    async def fake_relogin(self) -> None:
+        relogin_calls.append(1)
+
+    monkeypatch.setattr(
+        "app.services.elaborazioni_capacitas_particelle_sync.sync_terreni_batch",
+        fake_sync_terreni_batch,
+    )
+
+    db = TestingSessionLocal()
+    try:
+        # limit=1 so exactly one particella is processed: 1 expiry + 1 retry = 2 calls total
+        job = CapacitasParticelleSyncJob(
+            requested_by_user_id=1,
+            credential_id=None,
+            status="pending",
+            mode="progressive_catalog",
+            payload_json={"only_due": False, "limit": 1, "fetch_certificati": False, "fetch_details": False},
+            result_json=None,
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+
+        involture = InVoltureClient.__new__(InVoltureClient)
+        involture._manager = type("M", (), {})()  # type: ignore[attr-defined]
+        involture.relogin = fake_relogin.__get__(involture, InVoltureClient)  # type: ignore[method-assign]
+
+        completed_job = await run_particelle_sync_job(db, involture, job)
+
+        assert completed_job.status in {"succeeded", "completed_with_errors"}, completed_job.status
+        assert call_count == 2, f"sync_terreni_batch chiamato {call_count} volte invece di 2 (expiry + retry)"
+        assert len(relogin_calls) == 1, f"relogin chiamato {len(relogin_calls)} volte invece di 1"
+        result = completed_job.result_json
+        assert isinstance(result, dict)
+        assert result.get("success_items", 0) >= 1
+    finally:
+        db.close()
+
+
+@pytest.mark.anyio
+async def test_run_particelle_sync_job_sequential_marks_failed_after_double_expiry(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.modules.elaborazioni.capacitas.apps.involture.client import (
+        CapacitasSessionExpiredError,
+        InVoltureClient,
+    )
+    from app.models.capacitas import CapacitasParticelleSyncJob
+    from app.services.elaborazioni_capacitas_particelle_sync import run_particelle_sync_job
+
+    relogin_calls: list[int] = []
+
+    async def fake_sync_terreni_batch_always_fails(db, client, request, **kwargs):
+        raise CapacitasSessionExpiredError("NOSessione scaduta")
+
+    async def fake_relogin(self) -> None:
+        relogin_calls.append(1)
+
+    monkeypatch.setattr(
+        "app.services.elaborazioni_capacitas_particelle_sync.sync_terreni_batch",
+        fake_sync_terreni_batch_always_fails,
+    )
+
+    db = TestingSessionLocal()
+    try:
+        job = CapacitasParticelleSyncJob(
+            requested_by_user_id=1,
+            credential_id=None,
+            status="pending",
+            mode="progressive_catalog",
+            payload_json={"only_due": False, "limit": 1, "fetch_certificati": False, "fetch_details": False},
+            result_json=None,
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+
+        involture = InVoltureClient.__new__(InVoltureClient)
+        involture._manager = type("M", (), {})()  # type: ignore[attr-defined]
+        involture.relogin = fake_relogin.__get__(involture, InVoltureClient)  # type: ignore[method-assign]
+
+        completed_job = await run_particelle_sync_job(db, involture, job)
+
+        assert completed_job.status == "completed_with_errors", completed_job.status
+        result = completed_job.result_json
+        assert isinstance(result, dict)
+        assert result.get("failed_items", 0) >= 1
+        assert len(relogin_calls) == 1, "relogin deve essere tentato esattamente una volta (non in loop)"
+        recent = result.get("recent_items", [])
+        assert any(
+            "scaduta" in (item.get("message") or "").lower() or "NOSessione" in (item.get("message") or "")
+            for item in recent
+        )
+    finally:
+        db.close()

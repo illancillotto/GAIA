@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -10,9 +11,11 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+logger = logging.getLogger(__name__)
+
 from app.models.capacitas import CapacitasParticelleSyncJob
 from app.models.catasto_phase1 import CatComune, CatParticella
-from app.modules.elaborazioni.capacitas.apps.involture.client import InVoltureClient
+from app.modules.elaborazioni.capacitas.apps.involture.client import CapacitasSessionExpiredError, InVoltureClient
 from app.modules.elaborazioni.capacitas.models import (
     CapacitasParticelleSyncJobCreateRequest,
     CapacitasParticelleSyncJobOut,
@@ -366,27 +369,31 @@ async def _sync_particella_item(
             "message": "Comune non disponibile sulla particella.",
         }
 
-    try:
-        sync_result = await sync_terreni_batch(
-            db,
-            client,
-            CapacitasTerreniBatchRequest(
-                items=[
-                    CapacitasTerreniBatchItem(
-                        label=item.label,
-                        comune=item.comune_label,
-                        sezione=item.sezione,
-                        foglio=item.foglio,
-                        particella=item.particella,
-                        sub=item.sub,
-                    ),
-                ],
-                continue_on_error=False,
-                credential_id=credential_id,
-                fetch_certificati=payload.fetch_certificati,
-                fetch_details=payload.fetch_details,
+    batch_request = CapacitasTerreniBatchRequest(
+        items=[
+            CapacitasTerreniBatchItem(
+                label=item.label,
+                comune=item.comune_label,
+                sezione=item.sezione,
+                foglio=item.foglio,
+                particella=item.particella,
+                sub=item.sub,
             ),
-        )
+        ],
+        continue_on_error=False,
+        credential_id=credential_id,
+        fetch_certificati=payload.fetch_certificati,
+        fetch_details=payload.fetch_details,
+    )
+
+    try:
+        try:
+            sync_result = await sync_terreni_batch(db, client, batch_request)
+        except CapacitasSessionExpiredError:
+            logger.warning("Sessione Capacitas scaduta per %s, re-login e retry", item.label)
+            await client.relogin()
+            sync_result = await sync_terreni_batch(db, client, batch_request)
+
         item_result = sync_result.items[0] if sync_result.items else None
         particella.capacitas_last_sync_at = current_time
         particella.capacitas_last_sync_job_id = job_id
@@ -678,26 +685,28 @@ async def run_particelle_sync_job(
                 continue
 
             try:
-                sync_result = await sync_terreni_batch(
-                    db,
-                    client,
-                    CapacitasTerreniBatchRequest(
-                        items=[
-                            CapacitasTerreniBatchItem(
-                                label=label,
-                                comune=comune_label,
-                                sezione=particella.sezione_catastale or "",
-                                foglio=particella.foglio,
-                                particella=particella.particella,
-                                sub=particella.subalterno or "",
-                            )
-                        ],
-                        continue_on_error=False,
-                        credential_id=job.credential_id,
-                        fetch_certificati=payload.fetch_certificati,
-                        fetch_details=payload.fetch_details,
-                    ),
+                _batch_req = CapacitasTerreniBatchRequest(
+                    items=[
+                        CapacitasTerreniBatchItem(
+                            label=label,
+                            comune=comune_label,
+                            sezione=particella.sezione_catastale or "",
+                            foglio=particella.foglio,
+                            particella=particella.particella,
+                            sub=particella.subalterno or "",
+                        )
+                    ],
+                    continue_on_error=False,
+                    credential_id=job.credential_id,
+                    fetch_certificati=payload.fetch_certificati,
+                    fetch_details=payload.fetch_details,
                 )
+                try:
+                    sync_result = await sync_terreni_batch(db, client, _batch_req)
+                except CapacitasSessionExpiredError:
+                    logger.warning("Sessione Capacitas scaduta per %s, re-login e retry", label)
+                    await client.relogin()
+                    sync_result = await sync_terreni_batch(db, client, _batch_req)
                 item_result = sync_result.items[0] if sync_result.items else None
                 particella.capacitas_last_sync_at = current_time
                 particella.capacitas_last_sync_job_id = job.id

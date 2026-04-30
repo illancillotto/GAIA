@@ -30,6 +30,10 @@ from app.modules.elaborazioni.capacitas.apps.involture.parsers import (
 logger = logging.getLogger(__name__)
 
 INVOLTURE_APP = get_capacitas_app("involture")
+
+
+class CapacitasSessionExpiredError(RuntimeError):
+    """Raised when Capacitas responds with a session-expired payload (e.g. 'NOSessione scaduta')."""
 AJAX_RICERCA_URL = f"{INVOLTURE_APP.base_url}/pages/ajax/ajaxRicerca.aspx"
 AJAX_FRAZIONI_URL = f"{INVOLTURE_APP.base_url}/pages/ajax/ajaxFrazioni.aspx"
 AJAX_SEZIONI_URL = f"{INVOLTURE_APP.base_url}/pages/ajax/ajaxSezioni.aspx"
@@ -56,6 +60,12 @@ _AJAX_HEADERS = {
 class InVoltureClient:
     def __init__(self, session_manager: CapacitasSessionManager) -> None:
         self._manager = session_manager
+
+    async def relogin(self) -> None:
+        logger.info("InVoltureClient: re-login Capacitas in corso")
+        await self._manager.login()
+        await self._manager.activate_app("involture")
+        logger.info("InVoltureClient: re-login completato")
 
     async def search_anagrafica(
         self,
@@ -238,6 +248,10 @@ class InVoltureClient:
             raise ValueError(f"lookup payload type inatteso: {type(decoded).__name__}")
         except Exception as exc:
             snippet = " ".join(response.text.strip().split())[:240]
+            if "NOSessione" in snippet or "sessione scaduta" in snippet.lower():
+                raise CapacitasSessionExpiredError(
+                    f"Sessione Capacitas scaduta su {url}. snippet={snippet}"
+                ) from exc
             raise RuntimeError(
                 f"Capacitas lookup fallito su {url}: payload non riconosciuto. "
                 f"final_url={response.url} snippet={snippet}"

@@ -1205,110 +1205,181 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
                 description="Avvia la prima sync progressiva per popolare lo storico dei job e tenere in linea il catalogo particelle."
               />
             </div>
-          ) : (
-            <div className="space-y-4 p-6">
-              {particelleJobs.map((job) => {
-                const result = isParticelleSyncJobResult(job.result_json) ? job.result_json : null;
-                const tone = renderJobStatus(job.status);
-                return (
-                  <div className="rounded-[24px] border border-gray-100 bg-[#fbfcfb] p-5" key={job.id}>
-                    <div className="flex flex-wrap items-start justify-between gap-4">
-                      <div>
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-sm font-semibold text-gray-900">Job #{job.id}</span>
-                          <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${tone.className}`}>
-                            {tone.label}
-                          </span>
-                        </div>
-                        <p className="mt-1 text-xs text-gray-500">
-                          creato {formatDateTime(job.created_at)} · start {formatDateTime(job.started_at)} · end {formatDateTime(job.completed_at)}
-                        </p>
-                        {result ? (
-                          <p className="mt-2 text-sm text-gray-600">
-                            {result.aggressive_window ? "Fascia serale aggressiva" : "Fascia diurna conservativa"} · pausa {result.throttle_ms} ms
-                            {result.speed_multiplier && result.speed_multiplier > 1 ? ` · velocita x${result.speed_multiplier}` : ""} · worker {result.parallel_workers ?? 1} · ricontrollo target {result.recheck_hours}h
-                            {job.status === "queued_resume" ? " · resume automatico pianificato dopo restart backend" : ""}
-                          </p>
-                        ) : null}
-                      </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <button className="btn-secondary" disabled={particelleJobBusyId === job.id} onClick={() => void handleRerunParticelleJob(job.id)} type="button">
-                          {particelleJobBusyId === job.id ? "Rerun..." : "Rilancia"}
-                        </button>
-                        <button
-                          className="btn-secondary"
-                          disabled={
-                            particelleDeletingJobId === job.id ||
-                            job.status === "pending" ||
-                            job.status === "processing" ||
-                            job.status === "queued_resume"
-                          }
-                          onClick={() => void handleDeleteParticelleJob(job.id)}
-                          type="button"
-                        >
-                          {particelleDeletingJobId === job.id ? "Elimina..." : "Elimina"}
-                        </button>
-                      </div>
-                    </div>
+          ) : (() => {
+            const activeStatuses = new Set(["pending", "processing", "queued_resume"]);
+            const activeJobs = particelleJobs.filter((j) => activeStatuses.has(j.status));
+            const doneJobs = particelleJobs.filter((j) => !activeStatuses.has(j.status));
 
-                    {result ? (
-                      <>
-                        <div className="mt-4 flex items-center justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-medium text-gray-900">
-                              <span className="font-semibold">{result.processed_items}</span> / {result.total_items} particelle processate
-                            </p>
-                            <p className="mt-1 text-xs text-gray-500">
-                              ok {result.success_items} · skipped {result.skipped_items} · failed {result.failed_items}
-                              {result.current_label ? ` · in corso: ${result.current_label}` : ""}
-                            </p>
-                          </div>
-                          <div className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-[#1D4E35] shadow-sm">{result.progress_percent}%</div>
-                        </div>
-                        <div className="mt-3 h-3 overflow-hidden rounded-full bg-[#dfe9df]">
-                          <div className="h-full rounded-full bg-[#1D4E35] transition-all duration-500" style={{ width: `${result.progress_percent}%` }} />
-                        </div>
-                        <div className="mt-4 overflow-x-auto">
-                          <table className="data-table">
-                            <thead>
-                              <tr>
-                                <th>Particella</th>
-                                <th>Stato</th>
-                                <th>Messaggio</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {result.recent_items.slice().reverse().slice(0, 8).map((item) => (
-                                <tr key={`${job.id}-${item.particella_id}-${item.label}`}>
-                                  <td className="font-medium text-gray-900">{item.label}</td>
-                                  <td>
-                                    <span
-                                      className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${
-                                        item.status === "synced"
-                                          ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
-                                          : item.status === "failed"
-                                            ? "bg-rose-50 text-rose-700 ring-rose-200"
-                                            : "bg-amber-50 text-amber-700 ring-amber-200"
-                                      }`}
-                                    >
-                                      {item.status}
-                                    </span>
-                                  </td>
-                                  <td className="text-sm text-gray-700">{item.message}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        </div>
-                      </>
-                    ) : job.error_detail ? (
-                      <div className="mt-4 text-sm text-rose-700">{job.error_detail}</div>
-                    ) : null}
+            const hasSessionExpired = particelleJobs.some((job) => {
+              const result = isParticelleSyncJobResult(job.result_json) ? job.result_json : null;
+              if (!result) return false;
+              return result.recent_items.some(
+                (item) => item.status === "failed" && (item.message.includes("NOSessione") || item.message.toLowerCase().includes("sessione scaduta")),
+              );
+            });
+
+            return (
+              <div className="space-y-6 p-6">
+                {hasSessionExpired ? (
+                  <div className="flex items-start gap-3 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
+                    <svg className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
+                      <path d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                    <div>
+                      <p className="text-sm font-semibold text-amber-800">Sessione Capacitas scaduta</p>
+                      <p className="mt-0.5 text-xs text-amber-700">
+                        Alcune particelle sono fallite con &quot;NOSessione scaduta&quot;. Il backend si è disconnesso da Capacitas. Rilancia il job oppure verifica le credenziali nelle impostazioni.
+                      </p>
+                    </div>
                   </div>
-                );
-              })}
-            </div>
-          )}
+                ) : null}
+
+                {activeJobs.length > 0 ? (
+                  <div className="space-y-3">
+                    {activeJobs.map((job) => {
+                      const result = isParticelleSyncJobResult(job.result_json) ? job.result_json : null;
+                      const tone = renderJobStatus(job.status);
+                      return (
+                        <div className="rounded-[24px] border border-sky-100 bg-sky-50/40 p-5" key={job.id}>
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-sm font-semibold text-gray-900">Job #{job.id}</span>
+                              <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${tone.className}`}>
+                                {tone.label}
+                              </span>
+                              {result ? (
+                                <span className="text-xs text-gray-500">
+                                  {result.processed_items}/{result.total_items}
+                                  {result.current_label ? ` · ${result.current_label}` : ""}
+                                </span>
+                              ) : null}
+                            </div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              {result ? (
+                                <span className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-[#1D4E35] shadow-sm">{result.progress_percent}%</span>
+                              ) : null}
+                              <button className="btn-secondary" disabled={particelleJobBusyId === job.id} onClick={() => void handleRerunParticelleJob(job.id)} type="button">
+                                {particelleJobBusyId === job.id ? "Rerun..." : "Rilancia"}
+                              </button>
+                              <button
+                                className="btn-secondary"
+                                disabled={particelleDeletingJobId === job.id || activeStatuses.has(job.status)}
+                                onClick={() => void handleDeleteParticelleJob(job.id)}
+                                type="button"
+                              >
+                                {particelleDeletingJobId === job.id ? "Elimina..." : "Elimina"}
+                              </button>
+                            </div>
+                          </div>
+                          {result ? (
+                            <>
+                              <div className="mt-3 h-2 overflow-hidden rounded-full bg-sky-100">
+                                <div className="h-full rounded-full bg-sky-500 transition-all duration-500" style={{ width: `${result.progress_percent}%` }} />
+                              </div>
+                              <div className="mt-2 flex flex-wrap gap-3 text-xs text-gray-500">
+                                <span>ok <span className="font-medium text-emerald-700">{result.success_items}</span></span>
+                                <span>skipped <span className="font-medium text-gray-600">{result.skipped_items}</span></span>
+                                <span>failed <span className="font-medium text-rose-600">{result.failed_items}</span></span>
+                                <span className="ml-auto text-gray-400">{result.aggressive_window ? "Fascia serale" : "Fascia diurna"} · {result.throttle_ms}ms{result.speed_multiplier && result.speed_multiplier > 1 ? ` · x${result.speed_multiplier}` : ""} · {result.parallel_workers ?? 1}w</span>
+                              </div>
+                              {result.recent_items.length > 0 ? (
+                                <div className="mt-3 overflow-x-auto">
+                                  <table className="data-table">
+                                    <thead>
+                                      <tr>
+                                        <th>Particella</th>
+                                        <th>Stato</th>
+                                        <th>Messaggio</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {result.recent_items.slice().reverse().slice(0, 8).map((item) => (
+                                        <tr key={`${job.id}-${item.particella_id}-${item.label}`}>
+                                          <td className="font-medium text-gray-900">{item.label}</td>
+                                          <td>
+                                            <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${item.status === "synced" ? "bg-emerald-50 text-emerald-700 ring-emerald-200" : item.status === "failed" ? "bg-rose-50 text-rose-700 ring-rose-200" : "bg-amber-50 text-amber-700 ring-amber-200"}`}>
+                                              {item.status}
+                                            </span>
+                                          </td>
+                                          <td className="text-sm text-gray-700">{item.message}</td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              ) : null}
+                            </>
+                          ) : job.error_detail ? (
+                            <div className="mt-3 text-sm text-rose-700">{job.error_detail}</div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
+
+                {doneJobs.length > 0 ? (
+                  <div>
+                    {activeJobs.length > 0 ? (
+                      <p className="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-gray-400">Completati</p>
+                    ) : null}
+                    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                      {doneJobs.map((job) => {
+                        const result = isParticelleSyncJobResult(job.result_json) ? job.result_json : null;
+                        const tone = renderJobStatus(job.status);
+                        return (
+                          <div className="rounded-[20px] border border-gray-100 bg-[#fbfcfb] p-4" key={job.id}>
+                            <div className="flex items-start justify-between gap-2">
+                              <div>
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <span className="text-sm font-semibold text-gray-900">Job #{job.id}</span>
+                                  <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold ring-1 ring-inset ${tone.className}`}>
+                                    {tone.label}
+                                  </span>
+                                </div>
+                                <p className="mt-1 text-xs text-gray-400">{formatDateTime(job.completed_at || job.started_at)}</p>
+                              </div>
+                              {result ? (
+                                <span className="shrink-0 rounded-full bg-white px-2.5 py-1 text-sm font-bold text-[#1D4E35] shadow-sm">{result.progress_percent}%</span>
+                              ) : null}
+                            </div>
+                            {result ? (
+                              <>
+                                <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-gray-100">
+                                  <div
+                                    className={`h-full rounded-full transition-all ${job.status === "succeeded" ? "bg-emerald-500" : job.status === "completed_with_errors" ? "bg-amber-400" : "bg-rose-400"}`}
+                                    style={{ width: `${result.progress_percent}%` }}
+                                  />
+                                </div>
+                                <div className="mt-2 text-xs text-gray-500">
+                                  <span className="font-medium text-gray-700">{result.processed_items}</span>/{result.total_items} · ok <span className="font-medium text-emerald-700">{result.success_items}</span> · failed <span className="font-medium text-rose-600">{result.failed_items}</span>
+                                </div>
+                              </>
+                            ) : job.error_detail ? (
+                              <p className="mt-2 text-xs text-rose-700 line-clamp-2">{job.error_detail}</p>
+                            ) : null}
+                            <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                              <button className="btn-secondary py-1 text-xs" disabled={particelleJobBusyId === job.id} onClick={() => void handleRerunParticelleJob(job.id)} type="button">
+                                {particelleJobBusyId === job.id ? "Rerun..." : "Rilancia"}
+                              </button>
+                              <button
+                                className="btn-secondary py-1 text-xs"
+                                disabled={particelleDeletingJobId === job.id}
+                                onClick={() => void handleDeleteParticelleJob(job.id)}
+                                type="button"
+                              >
+                                {particelleDeletingJobId === job.id ? "Elimina..." : "Elimina"}
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            );
+          })()}
         </article>
           </>
         ) : null}
