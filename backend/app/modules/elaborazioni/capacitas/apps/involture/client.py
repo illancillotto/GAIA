@@ -63,8 +63,10 @@ class InVoltureClient:
 
     async def relogin(self) -> None:
         logger.info("InVoltureClient: re-login Capacitas in corso")
+        self._manager.stop_keepalive("involture")
         await self._manager.login()
         await self._manager.activate_app("involture")
+        await self._manager.start_keepalive("involture")
         logger.info("InVoltureClient: re-login completato")
 
     async def search_anagrafica(

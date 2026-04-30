@@ -51,6 +51,7 @@ from app.services.elaborazioni_capacitas_anagrafica_history import (
     serialize_anagrafica_history_job,
 )
 from app.services.elaborazioni_capacitas_particelle_sync import (
+    cancel_particelle_sync_job,
     compute_sync_policy,
     create_particelle_sync_job,
     expire_stale_particelle_sync_jobs,
@@ -711,9 +712,23 @@ def delete_particelle_job(
     job = get_particelle_sync_job(db, job_id)
     if job is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job non trovato")
-    if job.status not in {"succeeded", "completed_with_errors", "failed"}:
+    if job.status not in {"succeeded", "completed_with_errors", "failed", "cancelled"}:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Il job puo essere eliminato solo quando e terminato")
     delete_particelle_sync_job(db, job)
+
+
+@router.post("/involture/particelle/jobs/{job_id}/stop", response_model=CapacitasParticelleSyncJobOut)
+def stop_particelle_job(
+    job_id: int,
+    _: Annotated[ApplicationUser, Depends(require_admin_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> CapacitasParticelleSyncJobOut:
+    job = get_particelle_sync_job(db, job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job non trovato")
+    if job.status in {"succeeded", "completed_with_errors", "failed", "cancelled"}:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Il job e gia terminato")
+    return serialize_particelle_sync_job(cancel_particelle_sync_job(db, job))
 
 
 @router.patch("/involture/particelle/jobs/{job_id}/speed", response_model=CapacitasParticelleSyncJobOut)

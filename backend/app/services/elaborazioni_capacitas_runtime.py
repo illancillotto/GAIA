@@ -46,6 +46,7 @@ async def run_terreni_job_by_id(job_id: int) -> None:
             manager = CapacitasSessionManager(credential.username, password)
             await manager.login()
             await manager.activate_app("involture")
+            await manager.start_keepalive("involture")
             managers.append(manager)
         client = InVoltureClient(managers[0])
         clients = [InVoltureClient(active_manager) for active_manager in managers]
@@ -92,6 +93,7 @@ async def run_particelle_job_by_id(job_id: int) -> None:
             manager = CapacitasSessionManager(credential.username, password)
             await manager.login()
             await manager.activate_app("involture")
+            await manager.start_keepalive("involture")
             managers.append(manager)
         clients = [InVoltureClient(manager) for manager in managers]
         await run_particelle_sync_job(db, clients[0], job, session_factory=SessionLocal, clients=clients)
@@ -136,6 +138,7 @@ async def run_anagrafica_history_job_by_id(job_id: int) -> None:
         manager = CapacitasSessionManager(credential.username, password)
         await manager.login()
         await manager.activate_app("involture")
+        await manager.start_keepalive("involture")
         client = InVoltureClient(manager)
         await run_anagrafica_history_job(db, client, job)
         mark_credential_used(db, credential.id)

@@ -30,8 +30,8 @@ EVENING_THROTTLE_MS = 350
 DOUBLE_SPEED_MULTIPLIER = 2
 MIN_THROTTLE_MS = 100
 MAX_PARALLEL_WORKERS = 2
-DAY_RECHECK_HOURS = 24
-EVENING_RECHECK_HOURS = 6
+DAY_RECHECK_HOURS = 72
+EVENING_RECHECK_HOURS = 12
 RECENT_ITEM_LIMIT = 200
 PARTICELLE_STALE_JOB_MINUTES = 30
 AUTO_RESUME_COMPATIBLE_MODES = {"progressive_catalog"}
@@ -98,6 +98,27 @@ def get_particelle_sync_job(db: Session, job_id: int) -> CapacitasParticelleSync
 def delete_particelle_sync_job(db: Session, job: CapacitasParticelleSyncJob) -> None:
     db.delete(job)
     db.commit()
+
+
+def cancel_particelle_sync_job(db: Session, job: CapacitasParticelleSyncJob) -> CapacitasParticelleSyncJob:
+    if job.status in {"pending", "queued_resume"}:
+        # No worker is running — cancel immediately
+        result_json = dict(job.result_json or {})
+        result_json["current_label"] = None
+        result_json["completed_at"] = datetime.now(UTC).isoformat()
+        job.result_json = result_json
+        job.status = "cancelled"
+        job.completed_at = datetime.now(UTC)
+    elif job.status == "processing":
+        # Signal the worker to stop at the next iteration
+        result_json = dict(job.result_json or {})
+        result_json["stop_requested"] = True
+        job.result_json = result_json
+        job.status = "cancelling"
+    # If already "cancelling" or terminal: no-op (idempotent)
+    db.commit()
+    db.refresh(job)
+    return job
 
 
 def _normalize_job_datetime(value: datetime | None) -> datetime | None:
@@ -568,6 +589,11 @@ async def _run_particelle_sync_parallel(
             except asyncio.QueueEmpty:
                 return
 
+            job_check = db.get(CapacitasParticelleSyncJob, job.id)
+            if job_check is not None and job_check.status == "cancelling":
+                queue.task_done()
+                return
+
             worker_db = session_factory()
             try:
                 item_result = await _sync_particella_item(
@@ -643,16 +669,22 @@ async def run_particelle_sync_job(
             assert job is not None
             final_result = dict(job.result_json or result_json)
             final_result["current_label"] = None
-            final_result["progress_percent"] = 100
             final_result["completed_at"] = datetime.now(UTC).isoformat()
             job.result_json = final_result
-            job.status = "succeeded" if int(final_result.get("failed_items", 0)) == 0 else "completed_with_errors"
+            if job.status == "cancelling":
+                job.status = "cancelled"
+            else:
+                final_result["progress_percent"] = 100
+                job.status = "succeeded" if int(final_result.get("failed_items", 0)) == 0 else "completed_with_errors"
             job.completed_at = datetime.now(UTC)
             db.commit()
             db.refresh(job)
             return job
 
         for index, particella in enumerate(particelle, start=1):
+            # job attributes are expired by SQLAlchemy after each commit, so status re-loads from DB
+            if job.status == "cancelling":
+                break
             current_time = datetime.now(UTC)
             current_result = dict(job.result_json or result_json)
             label = (
@@ -792,10 +824,13 @@ async def run_particelle_sync_job(
         assert job is not None
         final_result = dict(job.result_json or result_json)
         final_result["current_label"] = None
-        final_result["progress_percent"] = 100
         final_result["completed_at"] = datetime.now(UTC).isoformat()
         job.result_json = final_result
-        job.status = "succeeded" if int(final_result.get("failed_items", 0)) == 0 else "completed_with_errors"
+        if job.status == "cancelling":
+            job.status = "cancelled"
+        else:
+            final_result["progress_percent"] = 100
+            job.status = "succeeded" if int(final_result.get("failed_items", 0)) == 0 else "completed_with_errors"
         job.completed_at = datetime.now(UTC)
         db.commit()
         db.refresh(job)

@@ -18,6 +18,11 @@ import type {
   AnagraficaSubjectImportResult,
   AnagraficaSubjectListResponse,
   AnagraficaSubjectUpdateInput,
+  AnprJobTriggerResult,
+  AnprSyncConfig,
+  AnprSyncConfigUpdateInput,
+  AnprSubjectStatus,
+  AnprSyncResult,
   ApplicationUser,
   ApplicationUserCreateInput,
   ApplicationUserListResponse,
@@ -680,6 +685,49 @@ export async function getUtenzeXlsxImportBatches(token: string): Promise<XlsxImp
 
 export async function getUtenzeSubjectAuditLog(token: string, subjectId: string): Promise<UtenzeAuditLog[]> {
   return request<UtenzeAuditLog[]>(`/utenze/subjects/${subjectId}/audit-log`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function getUtenzeAnprStatus(token: string, subjectId: string): Promise<AnprSubjectStatus> {
+  return request<AnprSubjectStatus>(`/utenze/anpr/sync/${subjectId}/status`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function syncUtenzeAnprSubject(token: string, subjectId: string): Promise<AnprSyncResult> {
+  return request<AnprSyncResult>(`/utenze/anpr/sync/${subjectId}`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function getUtenzeAnprConfig(token: string): Promise<AnprSyncConfig> {
+  return request<AnprSyncConfig>("/utenze/anpr/config", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function updateUtenzeAnprConfig(
+  token: string,
+  payload: AnprSyncConfigUpdateInput,
+): Promise<AnprSyncConfig> {
+  return request<AnprSyncConfig>("/utenze/anpr/config", {
+    method: "PUT",
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getUtenzeAnprJobStatus(token: string): Promise<AnprJobTriggerResult> {
+  return request<AnprJobTriggerResult>("/utenze/anpr/job/status", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function triggerUtenzeAnprJob(token: string): Promise<AnprJobTriggerResult> {
+  return request<AnprJobTriggerResult>("/utenze/anpr/job/trigger", {
+    method: "POST",
     headers: { Authorization: `Bearer ${token}` },
   });
 }
@@ -1622,6 +1670,15 @@ export async function rerunCapacitasParticelleSyncJob(token: string, jobId: numb
 export async function deleteCapacitasParticelleSyncJob(token: string, jobId: number): Promise<void> {
   await request<null>(`/elaborazioni/capacitas/involture/particelle/jobs/${jobId}`, {
     method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function stopCapacitasParticelleSyncJob(token: string, jobId: number): Promise<CapacitasParticelleSyncJob> {
+  return request<CapacitasParticelleSyncJob>(`/elaborazioni/capacitas/involture/particelle/jobs/${jobId}/stop`, {
+    method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
     },

@@ -28,6 +28,7 @@ import {
   rerunCapacitasAnagraficaHistoryJob,
   rerunCapacitasParticelleSyncJob,
   rerunCapacitasTerreniJob,
+  stopCapacitasParticelleSyncJob,
   isAuthError,
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
@@ -72,6 +73,10 @@ function renderJobStatus(status: string): { label: string; className: string } {
       return { label: "In corso", className: "bg-sky-50 text-sky-700 ring-sky-200" };
     case "queued_resume":
       return { label: "Ripresa pianificata", className: "bg-violet-50 text-violet-700 ring-violet-200" };
+    case "cancelling":
+      return { label: "Fermando…", className: "bg-orange-50 text-orange-700 ring-orange-200" };
+    case "cancelled":
+      return { label: "Annullato", className: "bg-slate-50 text-slate-500 ring-slate-200" };
     default:
       return { label: "In attesa", className: "bg-slate-50 text-slate-700 ring-slate-200" };
   }
@@ -452,7 +457,7 @@ function isHistoryImportJobResult(value: unknown): value is CapacitasAnagraficaH
 export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?: boolean }) {
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [credentials, setCredentials] = useState<CapacitasCredential[]>([]);
-  const [activeSection, setActiveSection] = useState<CapacitasSection>("terreni");
+  const [activeSection, setActiveSection] = useState<CapacitasSection>("particelle");
 
   const [terreniJobs, setTerreniJobs] = useState<CapacitasTerreniJob[]>([]);
   const [terreniJobsLoading, setTerreniJobsLoading] = useState(false);
@@ -467,6 +472,7 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
   const [particelleCreatingJob, setParticelleCreatingJob] = useState(false);
   const [particelleJobBusyId, setParticelleJobBusyId] = useState<number | null>(null);
   const [particelleDeletingJobId, setParticelleDeletingJobId] = useState<number | null>(null);
+  const [particelleStoppingJobId, setParticelleStoppingJobId] = useState<number | null>(null);
   const [particelleMonitorSessionExpired, setParticelleMonitorSessionExpired] = useState(false);
   const [particelleSpeedBusyId, setParticelleSpeedBusyId] = useState<number | null>(null);
   const particelleInFlightJobIds = useRef<Set<number>>(new Set());
@@ -868,6 +874,20 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
     }
   }
 
+  async function handleStopParticelleJob(jobId: number): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) return;
+    setParticelleStoppingJobId(jobId);
+    try {
+      const updated = await stopCapacitasParticelleSyncJob(token, jobId);
+      setParticelleJobs((prev) => prev.map((j) => (j.id === updated.id ? updated : j)));
+    } catch (err) {
+      setParticelleError(err instanceof Error ? err.message : "Errore stop job");
+    } finally {
+      setParticelleStoppingJobId(null);
+    }
+  }
+
   async function handleParseTerreniBatchFile(file: File): Promise<void> {
     setTerreniBatchBusy(true);
     setTerreniBatchError(null);
@@ -1194,7 +1214,7 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
                 {particelleCreatingJob ? "Avvio..." : "Avvia sync progressiva"}
               </button>
               <span className="text-xs text-gray-500">
-                Di giorno rientrano soprattutto particelle non sincronizzate nelle ultime 24h. La pausa base e 900ms; con doppia velocita diventa 450ms. Il parallelo x2 apre due sessioni Capacitas dedicate e divide la coda.
+                Di giorno rientrano soprattutto particelle non sincronizzate nelle ultime 72h. La pausa base e 900ms; con doppia velocita diventa 450ms. Il parallelo x2 apre due sessioni Capacitas dedicate e divide la coda.
               </span>
             </div>
           </div>
@@ -1222,11 +1242,11 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
               />
             </div>
           ) : (() => {
-            const activeStatuses = new Set(["pending", "processing", "queued_resume"]);
+            const activeStatuses = new Set(["pending", "processing", "queued_resume", "cancelling"]);
             const activeJobs = particelleJobs.filter((j) => activeStatuses.has(j.status));
             const doneJobs = particelleJobs.filter((j) => !activeStatuses.has(j.status));
 
-            const hasSessionExpired = particelleJobs.some((job) => {
+            const hasSessionExpired = activeJobs.some((job) => {
               const result = isParticelleSyncJobResult(job.result_json) ? job.result_json : null;
               if (!result) return false;
               return result.recent_items.some(
@@ -1274,16 +1294,13 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
                               {result ? (
                                 <span className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-[#1D4E35] shadow-sm">{result.progress_percent}%</span>
                               ) : null}
-                              <button className="btn-secondary" disabled={particelleJobBusyId === job.id} onClick={() => void handleRerunParticelleJob(job.id)} type="button">
-                                {particelleJobBusyId === job.id ? "Rerun..." : "Rilancia"}
-                              </button>
                               <button
-                                className="btn-secondary"
-                                disabled={particelleDeletingJobId === job.id || activeStatuses.has(job.status)}
-                                onClick={() => void handleDeleteParticelleJob(job.id)}
+                                className="btn-secondary text-rose-600 hover:border-rose-300"
+                                disabled={particelleStoppingJobId === job.id || job.status === "cancelling"}
+                                onClick={() => void handleStopParticelleJob(job.id)}
                                 type="button"
                               >
-                                {particelleDeletingJobId === job.id ? "Elimina..." : "Elimina"}
+                                {job.status === "cancelling" ? "Fermando…" : particelleStoppingJobId === job.id ? "Stop..." : "Stop"}
                               </button>
                             </div>
                           </div>
@@ -1390,7 +1407,7 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
                               <>
                                 <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-gray-100">
                                   <div
-                                    className={`h-full rounded-full transition-all ${job.status === "succeeded" ? "bg-emerald-500" : job.status === "completed_with_errors" ? "bg-amber-400" : "bg-rose-400"}`}
+                                    className={`h-full rounded-full transition-all ${job.status === "succeeded" ? "bg-emerald-500" : job.status === "completed_with_errors" ? "bg-amber-400" : job.status === "cancelled" ? "bg-slate-300" : "bg-rose-400"}`}
                                     style={{ width: `${result.progress_percent}%` }}
                                   />
                                 </div>
