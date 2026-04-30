@@ -52,13 +52,24 @@ function intestatarioDisplayName(intestatario: CatIntestatario): string {
   );
 }
 
+function formatEsitoForExport(esito: string): string {
+  if (esito === "FOUND") return "Presente in Catasto";
+  if (esito === "NOT_FOUND") return "Non trovata in Catasto";
+  return esito;
+}
+
+function formatConsorzioEsitoForExport(presenteInConsorzio: boolean): string {
+  return presenteInConsorzio ? "Particella presente in Catasto Consorzio" : "Particella non presente in Catasto Consorzio";
+}
+
 async function resolveCapacitasRptCertificatoUrls(
   token: string,
   ccos: string[],
 ): Promise<Map<string, string>> {
   const out = new Map<string, string>();
   const unique = Array.from(new Set(ccos.map((c) => c.trim()).filter(Boolean)));
-  const concurrency = 8;
+  // Capacitas/InVolture può rate-limitare o essere instabile: preferiamo meno concorrenza e un retry leggero.
+  const concurrency = 3;
   let idx = 0;
 
   async function worker(): Promise<void> {
@@ -66,12 +77,18 @@ async function resolveCapacitasRptCertificatoUrls(
       const current = unique[idx];
       idx += 1;
       if (!current) return;
-      try {
-        const { url } = await capacitasGetRptCertificatoLink(token, current);
-        out.set(current, url);
-      } catch {
-        out.set(current, "");
+      let resolved = "";
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        try {
+          const { url } = await capacitasGetRptCertificatoLink(token, current);
+          resolved = url || "";
+          break;
+        } catch {
+          // backoff minimo prima del retry
+          await new Promise((r) => window.setTimeout(r, 250 + attempt * 300));
+        }
       }
+      out.set(current, resolved);
     }
   }
 
@@ -503,8 +520,31 @@ export function AnagraficaBulkPanel() {
       const matches = r.matches ?? (r.match ? [r.match] : []);
       const buildBase = (m?: (typeof matches)[0]) =>
         kind === "CF_PIVA_PARTICELLE"
-          ? { cf_input: r.codice_fiscale_input ?? "", piva_input: r.partita_iva_input ?? "", comune: m?.comune ?? "", foglio: m?.foglio ?? "", particella: m?.particella ?? "", sub: m?.subalterno ?? "", esito: r.esito, link_involture: m?.utenza_latest?.cco ? urlByCco.get(m.utenza_latest.cco) ?? "" : "" }
-          : { comune: m?.comune ?? r.comune_input ?? "", sezione: r.sezione_input ?? "", foglio: m?.foglio ?? r.foglio_input ?? "", particella: m?.particella ?? r.particella_input ?? "", sub: m?.subalterno ?? r.sub_input ?? "", esito: r.esito, link_involture: m?.utenza_latest?.cco ? urlByCco.get(m.utenza_latest.cco) ?? "" : "" };
+          ? {
+              cf_input: r.codice_fiscale_input ?? "",
+              piva_input: r.partita_iva_input ?? "",
+              comune: m?.comune ?? "",
+              foglio: m?.foglio ?? "",
+              particella: m?.particella ?? "",
+              sub: m?.subalterno ?? "",
+              esito: formatEsitoForExport(r.esito),
+              "trovato in esito consorzio": formatConsorzioEsitoForExport(Boolean(m?.presente_in_catasto_consorzio)),
+              cco: m?.utenza_latest?.cco ?? "",
+              link_involture: m?.utenza_latest?.cco ? urlByCco.get(m.utenza_latest.cco) ?? "" : "",
+              apri_involture: "",
+            }
+          : {
+              comune: m?.comune ?? r.comune_input ?? "",
+              sezione: r.sezione_input ?? "",
+              foglio: m?.foglio ?? r.foglio_input ?? "",
+              particella: m?.particella ?? r.particella_input ?? "",
+              sub: m?.subalterno ?? r.sub_input ?? "",
+              esito: formatEsitoForExport(r.esito),
+              "trovato in esito consorzio": formatConsorzioEsitoForExport(Boolean(m?.presente_in_catasto_consorzio)),
+              cco: m?.utenza_latest?.cco ?? "",
+              link_involture: m?.utenza_latest?.cco ? urlByCco.get(m.utenza_latest.cco) ?? "" : "",
+              apri_involture: "",
+            };
 
       const emptyInt = {
         n_intestatari: 0,
@@ -569,8 +609,26 @@ export function AnagraficaBulkPanel() {
       return;
     }
 
+    const ws = XLSX.utils.json_to_sheet(rows);
+    if (rows.length > 0) {
+      const headers = Object.keys(rows[0] ?? {});
+      const linkCol = headers.indexOf("link_involture");
+      const apriCol = headers.indexOf("apri_involture");
+      const ref = ws["!ref"];
+      if (linkCol >= 0 && apriCol >= 0 && ref) {
+        const range = XLSX.utils.decode_range(ref);
+        for (let r = range.s.r + 1; r <= range.e.r; r += 1) {
+          const linkA1 = XLSX.utils.encode_cell({ r, c: linkCol });
+          const apriA1 = XLSX.utils.encode_cell({ r, c: apriCol });
+          // Formula per riga: funziona in Excel; in Fogli Google resta valida dopo import xlsx.
+          // (ARRAYFORMULA è solo Fogli e non è supportata da Excel nello stesso modo.)
+          ws[apriA1] = { f: `IF(${linkA1}="","",HYPERLINK(${linkA1},"Clicca qui"))` };
+        }
+      }
+    }
+
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), "intestatari");
+    XLSX.utils.book_append_sheet(wb, ws, "intestatari");
     const out = XLSX.write(wb, { type: "array", bookType: "xlsx" });
     triggerDownload(new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), `${basename}.xlsx`);
   }
@@ -834,7 +892,7 @@ export function AnagraficaBulkPanel() {
               {inferredKind === "CF_PIVA_PARTICELLE"
                 ? "Colonne: CF input · P.IVA input · Comune · Foglio · Particella · Sub"
                 : "Colonne: Comune · Sezione · Foglio · Particella · Sub"}{" "}
-              · Esito · Link InVolture · N intestatari · Rank intestatario (1/n) · CF · Tipo · Cognome · Nome · Denominazione · Ragione Sociale · Data Nascita · Luogo Nascita · Comune Residenza · Indirizzo · CAP · Telefono · Email · Deceduto
+              · Esito · Trovato in esito consorzio · CCO · Link InVolture · Apri InVolture (link cliccabile nel .xlsx) · N intestatari · Rank intestatario (1/n) · CF · Tipo · Cognome · Nome · Denominazione · Ragione Sociale · Data Nascita · Luogo Nascita · Comune Residenza · Indirizzo · CAP · Telefono · Email · Deceduto
             </p>
             <div className="mt-4 flex flex-wrap gap-2">
               <button className="btn-secondary" type="button" disabled={busy || results.length === 0} onClick={() => void exportVeloce("csv")}>

@@ -361,6 +361,8 @@ class CatAnagraficaMatch(BaseModel):
     superficie_mq: Decimal | None = None
     superficie_grafica_mq: Decimal | None = None
 
+    presente_in_catasto_consorzio: bool = False
+
     utenza_latest: CatAnagraficaUtenzaSummary | None = None
     intestatari: list[CatIntestatarioResponse] = []
     anomalie_count: int = 0

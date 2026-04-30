@@ -101,6 +101,8 @@ Aggiornamento operativo 27 aprile 2026:
 - dagli intestatari del certificato usa `IDXANA` + `IDXESA` per aprire `dettaglioAnagrafica.aspx`
 - il risultato massivo restituisce quindi gli intestatari correnti anche se prima non erano presenti in `ana_persons`
 - il fallback live aggiorna l'anagrafica corrente locale; non importa automaticamente lo storico remoto completo, che resta un flusso separato
+- nel JSON di match / export, `presente_in_catasto_consorzio` e vero se la particella ha almeno un'unita consortile attiva **oppure** una utenza di campagna collegata **oppure** intestatari noti (incluso arricchimento live); evita l'export \"non presente\" quando comune/foglio/particella e nominativi sono gia valorizzati
+- export Excel elaborazioni massive: colonna `apri_involture` con formula `HYPERLINK` sulla stessa riga della URL in `link_involture` (testo \"Clicca qui\"); il CSV mantiene la colonna vuota (nessuna formula)
 - il modulo `elaborazioni` espone ora anche un job dedicato di sync progressiva delle particelle GAIA:
   - fonte input: `cat_particelle` correnti gia presenti a DB
   - persistenza job: `capacitas_particelle_sync_jobs`
@@ -374,6 +376,10 @@ Regola:
 Input:
 
 - ricerca `comune/frazione/sezione/foglio/particella`
+- nei comuni dove la sezione catastale non coincide in modo banale con la lookup Capacitas, il backend puo applicare un mapping esplicito `comune + sezione -> frazione Capacitas` prima dei fallback euristici su comune/frazione
+- caso storico `Terralba / sezione B`: la ricerca live Terreni su Capacitas deve poter interrogare `Arborea / frazione 31`, perche parte del catasto consortile risulta ancora registrato sul comune storico precedente
+- nelle elaborazioni massive anagrafiche, se la particella e presente in `cat_particelle` ma non ha ancora legami consortili locali, il fallback live puo eseguire una sync Terreni mirata e salvare subito snapshot, unita consortili, occupancy e certificato, cosi il dataset locale si riallinea all'esito Capacitas trovato in tempo reale
+- nelle elaborazioni massive anagrafiche, se una particella ha gia un `CCO` locale ma non esistono ancora le fonti minime per `link_involture`, il backend deve backfillare anche il certificato Capacitas e gli intestatari collegati, invece di limitarsi al solo match del `CCO`
 
 Output:
 

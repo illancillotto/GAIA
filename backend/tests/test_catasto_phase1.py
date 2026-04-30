@@ -40,6 +40,7 @@ from app.modules.catasto.routes import import_routes as import_routes_module
 from app.modules.catasto.services.import_capacitas import CapacitasImportDuplicateError, import_capacitas_excel
 from app.modules.catasto.services.comuni_reference import load_comuni_reference
 from app.modules.elaborazioni.capacitas.models import CapacitasAnagraficaDetail, CapacitasIntestatario, CapacitasTerrenoCertificato
+from app.modules.elaborazioni.capacitas.models import CapacitasLookupOption, CapacitasTerreniSearchResult
 from app.modules.catasto.services.validation import (
     validate_codice_fiscale,
     validate_comune,
@@ -993,6 +994,64 @@ def test_bulk_search_anagrafica_returns_mixed_row_outcomes() -> None:
     assert payload[2]["esito"] == "INVALID_ROW"
 
 
+def test_bulk_search_presente_consorzio_true_when_utenza_without_consorzio_unit() -> None:
+    """Senza CatConsorzioUnit ma con utenza di campagna il flag export non deve dire 'non presente'."""
+    db = TestingSessionLocal()
+    try:
+        batch = db.query(CatImportBatch).filter(CatImportBatch.hash_file == "seed-hash").one()
+        comune = db.query(CatComune).filter(CatComune.cod_comune_capacitas == 165).one()
+        particella = CatParticella(
+            comune=comune,
+            cod_comune_capacitas=165,
+            codice_catastale="A357",
+            nome_comune="Arborea",
+            foglio="99",
+            particella="777",
+            subalterno=None,
+            num_distretto="10",
+            nome_distretto="Distretto 10",
+            is_current=True,
+            superficie_mq=500,
+        )
+        db.add(particella)
+        db.flush()
+        db.add(
+            CatUtenzaIrrigua(
+                import_batch_id=batch.id,
+                anno_campagna=2025,
+                cco="UT-NO-UNIT-001",
+                comune=comune,
+                cod_comune_capacitas=165,
+                num_distretto=10,
+                nome_comune="Arborea",
+                foglio="99",
+                particella="777",
+                particella_id=particella.id,
+                sup_catastale_mq=500,
+                sup_irrigabile_mq=400,
+                imponibile_sf=600,
+                ind_spese_fisse=1.5,
+                aliquota_0648=0.1,
+                importo_0648=60,
+                aliquota_0985=0.2,
+                importo_0985=120,
+                codice_fiscale="BNCCCC80A01H501Z",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.post(
+        "/catasto/elaborazioni-massive/particelle",
+        headers=auth_headers(),
+        json={"rows": [{"row_index": 0, "comune": "165", "foglio": "99", "particella": "777"}]},
+    )
+    assert response.status_code == 200
+    match = response.json()["results"][0]["match"]
+    assert match["presente_in_catasto_consorzio"] is True
+
+
 def test_bulk_search_anagrafica_uses_all_particella_intestatari() -> None:
     db = TestingSessionLocal()
     try:
@@ -1241,6 +1300,510 @@ def test_bulk_search_anagrafica_falls_back_to_live_capacitas_for_missing_intesta
         assert person.nome == "Mario"
         assert person.indirizzo == "Via Roma 1"
         assert person.comune_residenza == "Oristano"
+    finally:
+        db.close()
+
+
+def test_bulk_search_anagrafica_syncs_live_terreni_and_persists_db(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db = TestingSessionLocal()
+    try:
+        comune_oristano = CatComune(
+            nome_comune="Oristano",
+            codice_catastale="G113",
+            cod_comune_capacitas=200,
+            codice_comune_formato_numerico=115057,
+            codice_comune_numerico_2017_2025=95038,
+            nome_comune_legacy="Oristano",
+            cod_provincia=115,
+            sigla_provincia="OR",
+            regione="Sardegna",
+        )
+        db.add(comune_oristano)
+        db.flush()
+        db.add(
+            CatParticella(
+                comune_id=comune_oristano.id,
+                cod_comune_capacitas=200,
+                codice_catastale="G113",
+                nome_comune="Oristano",
+                sezione_catastale="A",
+                foglio="24",
+                particella="191",
+                subalterno=None,
+                num_distretto="20",
+                nome_distretto="Distretto 20",
+                is_current=True,
+                superficie_mq=430,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    async def fake_login(self) -> None:
+        return None
+
+    async def fake_activate_app(self, app_name: str) -> None:
+        assert app_name == "involture"
+
+    async def fake_close(self) -> None:
+        return None
+
+    async def fake_search_frazioni(self, query: str) -> list[CapacitasLookupOption]:
+        assert query == "Oristano"
+        return [
+            CapacitasLookupOption(id="04", display="04 DONIGALA FENUGHEDU*ORISTANO"),
+            CapacitasLookupOption(id="11", display="11 ORISTANO*ORISTANO"),
+        ]
+
+    async def fake_search_terreni(self, request) -> CapacitasTerreniSearchResult:
+        assert request.foglio == "24"
+        assert request.particella == "191"
+        if request.frazione_id != "11":
+            raise RuntimeError("Particella non trovata")
+        if request.sezione == "A":
+            return CapacitasTerreniSearchResult(total=0, rows=[])
+        return CapacitasTerreniSearchResult(
+            total=1,
+            rows=[
+                {
+                    "ID": "or-live-row-191",
+                    "PVC": "097",
+                    "COM": "200",
+                    "CCO": "011000009",
+                    "FRA": "11",
+                    "CCS": "00000",
+                    "Foglio": "24",
+                    "Partic": "191",
+                    "Sub": "",
+                    "Sez": "A",
+                    "Anno": "2017",
+                    "Belfiore": "G113",
+                    "Ta_ext": " 7",
+                }
+            ],
+        )
+
+    async def fake_fetch_certificato(self, **kwargs) -> CapacitasTerrenoCertificato:
+        assert kwargs["cco"] == "011000009"
+        return CapacitasTerrenoCertificato(
+            cco="011000009",
+            com="200",
+            pvc="097",
+            fra="11",
+            ccs="00000",
+            intestatari=[
+                CapacitasIntestatario(
+                    idxana="IDX-OR-191",
+                    idxesa="IDX-ESA-OR-191",
+                    codice_fiscale="VRDLGI80A01G113Z",
+                    denominazione="Verdi Luigi",
+                    comune_residenza="Oristano",
+                    cap="09170",
+                    residenza="09170 Oristano (OR) - Via Cagliari 12",
+                )
+            ],
+        )
+
+    async def fake_fetch_current_anagrafica_detail(self, *, idxana: str, idxesa: str) -> CapacitasAnagraficaDetail:
+        assert idxana == "IDX-OR-191"
+        assert idxesa == "IDX-ESA-OR-191"
+        return CapacitasAnagraficaDetail(
+            idxana=idxana,
+            idxesa=idxesa,
+            cognome="Verdi",
+            nome="Luigi",
+            denominazione="Verdi Luigi",
+            codice_fiscale="VRDLGI80A01G113Z",
+            luogo_nascita="Oristano",
+            data_nascita=date(1980, 1, 1),
+            residenza_belfiore="Oristano",
+            residenza_localita="Oristano",
+            residenza_toponimo="Via",
+            residenza_indirizzo="Cagliari",
+            residenza_civico="12",
+            residenza_cap="09170",
+        )
+
+    monkeypatch.setattr("app.modules.catasto.routes.anagrafica.pick_credential", lambda db, credential_id: (SimpleNamespace(id=1, username="live-user"), "secret"))
+    monkeypatch.setattr("app.modules.catasto.routes.anagrafica.mark_credential_used", lambda db, credential_id: None)
+    monkeypatch.setattr("app.modules.catasto.routes.anagrafica.mark_credential_error", lambda db, credential_id, error: None)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.login", fake_login)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.activate_app", fake_activate_app)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.close", fake_close)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.search_frazioni", fake_search_frazioni)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.search_terreni", fake_search_terreni)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.apps.involture.client.InVoltureClient.fetch_certificato", fake_fetch_certificato)
+    monkeypatch.setattr(
+        "app.modules.elaborazioni.capacitas.apps.involture.client.InVoltureClient.fetch_current_anagrafica_detail",
+        fake_fetch_current_anagrafica_detail,
+    )
+
+    response = client.post(
+        "/catasto/elaborazioni-massive/particelle",
+        headers=auth_headers(),
+        json={
+            "include_capacitas_live": True,
+            "rows": [{"row_index": 1, "comune": "Oristano", "sezione": "A", "foglio": "24", "particella": "191"}],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["results"][0]
+    assert payload["esito"] == "FOUND"
+    assert payload["match"]["utenza_latest"]["cco"] == "011000009"
+    assert payload["match"]["presente_in_catasto_consorzio"] is True
+    assert payload["match"]["intestatari"][0]["codice_fiscale"] == "VRDLGI80A01G113Z"
+
+    db = TestingSessionLocal()
+    try:
+        particella = db.query(CatParticella).filter(
+            CatParticella.nome_comune == "Oristano",
+            CatParticella.sezione_catastale == "A",
+            CatParticella.foglio == "24",
+            CatParticella.particella == "191",
+        ).one()
+        unit = db.query(CatConsorzioUnit).filter(CatConsorzioUnit.particella_id == particella.id).one()
+        occupancy = db.query(CatConsorzioOccupancy).filter(CatConsorzioOccupancy.unit_id == unit.id).one()
+        terreno_row = db.query(CatCapacitasTerrenoRow).filter(CatCapacitasTerrenoRow.unit_id == unit.id).one()
+        certificato = db.query(CatCapacitasCertificato).filter(CatCapacitasCertificato.cco == "011000009").one()
+        assert occupancy.cco == "011000009"
+        assert occupancy.com == "200"
+        assert occupancy.fra == "11"
+        assert terreno_row.particella == "191"
+        assert certificato.com == "200"
+    finally:
+        db.close()
+
+
+def test_bulk_search_anagrafica_backfills_certificato_for_existing_cco_without_link_sources(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db = TestingSessionLocal()
+    try:
+        batch = db.query(CatImportBatch).filter(CatImportBatch.hash_file == "seed-hash").one()
+        comune_oristano = CatComune(
+            nome_comune="Oristano",
+            codice_catastale="G113",
+            cod_comune_capacitas=200,
+            codice_comune_formato_numerico=115057,
+            codice_comune_numerico_2017_2025=95038,
+            nome_comune_legacy="Oristano",
+            cod_provincia=115,
+            sigla_provincia="OR",
+            regione="Sardegna",
+        )
+        db.add(comune_oristano)
+        db.flush()
+        particella = CatParticella(
+            comune_id=comune_oristano.id,
+            cod_comune_capacitas=200,
+            codice_catastale="G113",
+            nome_comune="Oristano",
+            sezione_catastale="A",
+            foglio="24",
+            particella="10",
+            subalterno=None,
+            num_distretto="20",
+            nome_distretto="Distretto 20",
+            is_current=True,
+            superficie_mq=1200,
+        )
+        db.add(particella)
+        db.flush()
+        db.add(
+            CatUtenzaIrrigua(
+                import_batch_id=batch.id,
+                anno_campagna=2025,
+                cco="0A0980205",
+                comune_id=comune_oristano.id,
+                cod_comune_capacitas=200,
+                nome_comune="Oristano",
+                num_distretto=20,
+                foglio="24",
+                particella="10",
+                particella_id=particella.id,
+                sup_catastale_mq=1200,
+                sup_irrigabile_mq=1200,
+                imponibile_sf=100,
+                ind_spese_fisse=1,
+                aliquota_0648=0.1,
+                importo_0648=10,
+                aliquota_0985=0.2,
+                importo_0985=20,
+                codice_fiscale="RSSMRA80A01H501U",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    async def fake_login(self) -> None:
+        return None
+
+    async def fake_activate_app(self, app_name: str) -> None:
+        assert app_name == "involture"
+
+    async def fake_close(self) -> None:
+        return None
+
+    async def fake_search_frazioni(self, query: str) -> list[CapacitasLookupOption]:
+        assert query == "Oristano"
+        return [CapacitasLookupOption(id="11", display="11 ORISTANO*ORISTANO")]
+
+    async def fake_search_terreni(self, request) -> CapacitasTerreniSearchResult:
+        assert request.foglio == "24"
+        assert request.particella == "10"
+        if request.sezione == "A":
+            return CapacitasTerreniSearchResult(total=0, rows=[])
+        return CapacitasTerreniSearchResult(
+            total=1,
+            rows=[
+                {
+                    "ID": "or-live-row-10",
+                    "PVC": "097",
+                    "COM": "200",
+                    "CCO": "0A0980205",
+                    "FRA": "11",
+                    "CCS": "00000",
+                    "Foglio": "24",
+                    "Partic": "10",
+                    "Sub": "",
+                    "Sez": "A",
+                    "Anno": "2017",
+                    "Belfiore": "G113",
+                    "Ta_ext": " 9",
+                }
+            ],
+        )
+
+    async def fake_fetch_certificato(self, **kwargs) -> CapacitasTerrenoCertificato:
+        assert kwargs["cco"] == "0A0980205"
+        return CapacitasTerrenoCertificato(
+            cco="0A0980205",
+            com="200",
+            pvc="097",
+            fra="11",
+            ccs="00000",
+            intestatari=[
+                CapacitasIntestatario(
+                    idxana="IDX-OR-10",
+                    idxesa="IDX-ESA-OR-10",
+                    codice_fiscale="RSSMRA80A01H501U",
+                    denominazione="Rossi Mario",
+                    comune_residenza="Oristano",
+                    cap="09170",
+                    residenza="09170 Oristano (OR) - Via Roma 1",
+                )
+            ],
+        )
+
+    async def fake_fetch_current_anagrafica_detail(self, *, idxana: str, idxesa: str) -> CapacitasAnagraficaDetail:
+        assert idxana == "IDX-OR-10"
+        assert idxesa == "IDX-ESA-OR-10"
+        return CapacitasAnagraficaDetail(
+            idxana=idxana,
+            idxesa=idxesa,
+            cognome="Rossi",
+            nome="Mario",
+            denominazione="Rossi Mario",
+            codice_fiscale="RSSMRA80A01H501U",
+            luogo_nascita="Oristano",
+            data_nascita=date(1980, 1, 1),
+            residenza_belfiore="Oristano",
+            residenza_localita="Oristano",
+            residenza_toponimo="Via",
+            residenza_indirizzo="Roma",
+            residenza_civico="1",
+            residenza_cap="09170",
+        )
+
+    monkeypatch.setattr("app.modules.catasto.routes.anagrafica.pick_credential", lambda db, credential_id: (SimpleNamespace(id=1, username="live-user"), "secret"))
+    monkeypatch.setattr("app.modules.catasto.routes.anagrafica.mark_credential_used", lambda db, credential_id: None)
+    monkeypatch.setattr("app.modules.catasto.routes.anagrafica.mark_credential_error", lambda db, credential_id, error: None)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.login", fake_login)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.activate_app", fake_activate_app)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.close", fake_close)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.search_frazioni", fake_search_frazioni)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.search_terreni", fake_search_terreni)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.apps.involture.client.InVoltureClient.fetch_certificato", fake_fetch_certificato)
+    monkeypatch.setattr(
+        "app.modules.elaborazioni.capacitas.apps.involture.client.InVoltureClient.fetch_current_anagrafica_detail",
+        fake_fetch_current_anagrafica_detail,
+    )
+
+    response = client.post(
+        "/catasto/elaborazioni-massive/particelle",
+        headers=auth_headers(),
+        json={
+            "include_capacitas_live": True,
+            "rows": [{"row_index": 1, "comune": "Oristano", "sezione": "A", "foglio": "24", "particella": "10"}],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["results"][0]
+    assert payload["esito"] == "FOUND"
+    assert payload["match"]["utenza_latest"]["cco"] == "0A0980205"
+    assert payload["match"]["intestatari"][0]["codice_fiscale"] == "RSSMRA80A01H501U"
+
+    link_response = client.get(
+        "/elaborazioni/capacitas/involture/link/rpt-certificato",
+        headers=auth_headers(),
+        params={"cco": "0A0980205"},
+    )
+    assert link_response.status_code == 200
+    assert "CCO=0A0980205" in link_response.json()["url"]
+    assert "COM=200" in link_response.json()["url"]
+    assert "PVC=097" in link_response.json()["url"]
+    assert "FRA=11" in link_response.json()["url"]
+
+    db = TestingSessionLocal()
+    try:
+        certificato = db.query(CatCapacitasCertificato).filter(CatCapacitasCertificato.cco == "0A0980205").one()
+        intestatari = db.query(CatCapacitasIntestatario).filter(CatCapacitasIntestatario.certificato_id == certificato.id).all()
+        terreno_row = db.query(CatCapacitasTerrenoRow).filter(CatCapacitasTerrenoRow.cco == "0A0980205").one()
+        occupancy = db.query(CatConsorzioOccupancy).filter(CatConsorzioOccupancy.cco == "0A0980205").one()
+        assert certificato.com == "200"
+        assert certificato.pvc == "097"
+        assert certificato.fra == "11"
+        assert len(intestatari) == 1
+        assert terreno_row.particella == "10"
+        assert occupancy.com == "200"
+    finally:
+        db.close()
+
+
+def test_bulk_search_anagrafica_swapped_terralba_b_looks_up_arborea(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db = TestingSessionLocal()
+    try:
+        comune_arborea = db.query(CatComune).filter(CatComune.codice_catastale == "A357").one()
+        comune_terralba = CatComune(
+            nome_comune="Terralba",
+            codice_catastale="L122",
+            cod_comune_capacitas=280,
+            codice_comune_formato_numerico=115032,
+            codice_comune_numerico_2017_2025=95067,
+            nome_comune_legacy="Terralba",
+            cod_provincia=115,
+            sigla_provincia="OR",
+            regione="Sardegna",
+        )
+        db.add(comune_terralba)
+        db.flush()
+        db.add(
+            CatParticella(
+                comune_id=comune_terralba.id,
+                cod_comune_capacitas=280,
+                codice_catastale="L122",
+                nome_comune="Terralba",
+                sezione_catastale="B",
+                foglio="27",
+                particella="2",
+                subalterno=None,
+                is_current=True,
+                superficie_mq=35436,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    async def fake_login(self) -> None:
+        return None
+
+    async def fake_activate_app(self, app_name: str) -> None:
+        assert app_name == "involture"
+
+    async def fake_close(self) -> None:
+        return None
+
+    async def fake_search_frazioni(self, query: str) -> list[CapacitasLookupOption]:
+        assert query == "Arborea"
+        return [
+            CapacitasLookupOption(id="31", display="31 ARBOREA"),
+        ]
+
+    async def fake_search_terreni(self, request) -> CapacitasTerreniSearchResult:
+        assert request.foglio == "27"
+        assert request.particella == "2"
+        if request.sezione == "B":
+            return CapacitasTerreniSearchResult(total=0, rows=[])
+        return CapacitasTerreniSearchResult(
+            total=1,
+            rows=[
+                {
+                    "ID": "swap-live-row-27-2",
+                    "PVC": "097",
+                    "COM": "165",
+                    "CCO": "0A1022843",
+                    "FRA": "31",
+                    "CCS": "00000",
+                    "Foglio": "27",
+                    "Partic": "2",
+                    "Sub": "",
+                    "Sez": "",
+                    "Anno": "2017",
+                    "Belfiore": "A357",
+                    "Ta_ext": " 9",
+                }
+            ],
+        )
+
+    async def fake_fetch_certificato(self, **kwargs) -> CapacitasTerrenoCertificato:
+        assert kwargs["cco"] == "0A1022843"
+        return CapacitasTerrenoCertificato(
+            cco="0A1022843",
+            com="165",
+            pvc="097",
+            fra="31",
+            ccs="00000",
+            intestatari=[],
+        )
+
+    monkeypatch.setattr("app.modules.catasto.routes.anagrafica.pick_credential", lambda db, credential_id: (SimpleNamespace(id=1, username="live-user"), "secret"))
+    monkeypatch.setattr("app.modules.catasto.routes.anagrafica.mark_credential_used", lambda db, credential_id: None)
+    monkeypatch.setattr("app.modules.catasto.routes.anagrafica.mark_credential_error", lambda db, credential_id, error: None)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.login", fake_login)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.activate_app", fake_activate_app)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.close", fake_close)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.search_frazioni", fake_search_frazioni)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.search_terreni", fake_search_terreni)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.apps.involture.client.InVoltureClient.fetch_certificato", fake_fetch_certificato)
+
+    response = client.post(
+        "/catasto/elaborazioni-massive/particelle",
+        headers=auth_headers(),
+        json={
+            "include_capacitas_live": True,
+            "rows": [{"row_index": 1, "comune": "Terralba", "sezione": "B", "foglio": "27", "particella": "2"}],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["results"][0]
+    assert payload["esito"] == "FOUND"
+    assert payload["match"]["utenza_latest"]["cco"] == "0A1022843"
+    assert payload["match"]["presente_in_catasto_consorzio"] is True
+
+    db = TestingSessionLocal()
+    try:
+        particella = db.query(CatParticella).filter(
+            CatParticella.codice_catastale == "L122",
+            CatParticella.sezione_catastale == "B",
+            CatParticella.foglio == "27",
+            CatParticella.particella == "2",
+        ).one()
+        unit = db.query(CatConsorzioUnit).filter(CatConsorzioUnit.particella_id == particella.id).one()
+        occupancy = db.query(CatConsorzioOccupancy).filter(CatConsorzioOccupancy.unit_id == unit.id).one()
+        assert occupancy.cco == "0A1022843"
+        assert occupancy.com == "165"
+        assert occupancy.fra == "31"
+        assert unit.source_comune_label == "Arborea"
     finally:
         db.close()
 

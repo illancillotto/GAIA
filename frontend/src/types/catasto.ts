@@ -351,6 +351,7 @@ export type CatAnagraficaMatch = {
   nome_distretto: string | null;
   superficie_mq: string | null;
   superficie_grafica_mq: string | null;
+  presente_in_catasto_consorzio?: boolean;
   utenza_latest: CatAnagraficaUtenzaSummary | null;
   intestatari: CatIntestatario[];
   anomalie_count: number;

@@ -5,7 +5,7 @@ from typing import Annotated
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
-from sqlalchemy import select
+from sqlalchemy import desc, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user, require_admin_user
@@ -38,7 +38,7 @@ from app.modules.elaborazioni.capacitas.models import (
 )
 from app.modules.elaborazioni.capacitas.session import CapacitasSessionManager
 from app.models.application_user import ApplicationUser
-from app.models.catasto_phase1 import CatCapacitasTerrenoRow, CatConsorzioOccupancy
+from app.models.catasto_phase1 import CatCapacitasCertificato, CatCapacitasTerrenoRow, CatConsorzioOccupancy
 from app.services.elaborazioni_capacitas_anagrafica_history import (
     CapacitasAnagraficaHistoryImportError,
     create_anagrafica_history_job,
@@ -777,6 +777,21 @@ async def run_particelle_job(
 _RPT_CERTIFICATO_BASE = "https://involture1.servizicapacitas.com/pages/rptCertificato.aspx"
 
 
+def _normalize_link_param(value: str | None, *, default: str = "") -> str:
+    return (value or "").strip() or default
+
+
+def _missing_link_fields(*, com: str | None, pvc: str | None, fra: str | None) -> list[str]:
+    missing: list[str] = []
+    if not _normalize_link_param(com):
+        missing.append("COM")
+    if not _normalize_link_param(pvc):
+        missing.append("PVC")
+    if not _normalize_link_param(fra):
+        missing.append("FRA")
+    return missing
+
+
 @router.get("/involture/link/rpt-certificato")
 async def get_rpt_certificato_link(
     _: Annotated[ApplicationUser, Depends(require_active_user)],
@@ -788,36 +803,90 @@ async def get_rpt_certificato_link(
     _ = credential_id  # Backward-compatible query parameter; the link uses the browser's Capacitas session.
     cco = cco.strip()
 
+    certificato = db.execute(
+        select(CatCapacitasCertificato)
+        .where(CatCapacitasCertificato.cco == cco)
+        .order_by(desc(CatCapacitasCertificato.collected_at))
+        .limit(1)
+    ).scalar_one_or_none()
+    if certificato is not None:
+        missing = _missing_link_fields(com=certificato.com, pvc=certificato.pvc, fra=certificato.fra)
+        if not missing:
+            com, pvc, fra, ccs = certificato.com, certificato.pvc, certificato.fra, certificato.ccs
+            params = urlencode(
+                {
+                    "CCO": cco,
+                    "COM": _normalize_link_param(com),
+                    "PVC": _normalize_link_param(pvc),
+                    "FRA": _normalize_link_param(fra),
+                    "CCS": _normalize_link_param(ccs, default="00000"),
+                }
+            )
+            return {"url": f"{_RPT_CERTIFICATO_BASE}?{params}"}
+
+    occ = db.execute(
+        select(CatConsorzioOccupancy)
+        .where(CatConsorzioOccupancy.cco == cco)
+        .order_by(desc(CatConsorzioOccupancy.updated_at))
+        .limit(1)
+    ).scalar_one_or_none()
+    if occ is not None:
+        missing = _missing_link_fields(com=occ.com, pvc=occ.pvc, fra=occ.fra)
+        if not missing:
+            com, pvc, fra, ccs = occ.com, occ.pvc, occ.fra, occ.ccs
+            params = urlencode(
+                {
+                    "CCO": cco,
+                    "COM": _normalize_link_param(com),
+                    "PVC": _normalize_link_param(pvc),
+                    "FRA": _normalize_link_param(fra),
+                    "CCS": _normalize_link_param(ccs, default="00000"),
+                }
+            )
+            return {"url": f"{_RPT_CERTIFICATO_BASE}?{params}"}
+
     row = db.execute(
         select(CatCapacitasTerrenoRow)
         .where(CatCapacitasTerrenoRow.cco == cco)
-        .where(CatCapacitasTerrenoRow.com.is_not(None))
+        .order_by(desc(CatCapacitasTerrenoRow.collected_at))
         .limit(1)
     ).scalar_one_or_none()
-
-    if row is None:
-        occ = db.execute(
-            select(CatConsorzioOccupancy)
-            .where(CatConsorzioOccupancy.cco == cco)
-            .where(CatConsorzioOccupancy.com.is_not(None))
-            .limit(1)
-        ).scalar_one_or_none()
-        if occ is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"Parametri COM/PVC/FRA non trovati per CCO {cco}. Eseguire prima la sincronizzazione Capacitas.",
+    if row is not None:
+        missing = _missing_link_fields(com=row.com, pvc=row.pvc, fra=row.fra)
+        if not missing:
+            com, pvc, fra, ccs = row.com, row.pvc, row.fra, row.ccs
+            params = urlencode(
+                {
+                    "CCO": cco,
+                    "COM": _normalize_link_param(com),
+                    "PVC": _normalize_link_param(pvc),
+                    "FRA": _normalize_link_param(fra),
+                    "CCS": _normalize_link_param(ccs, default="00000"),
+                }
             )
-        com, pvc, fra, ccs = occ.com, occ.pvc, occ.fra, occ.ccs
-    else:
-        com, pvc, fra, ccs = row.com, row.pvc, row.fra, row.ccs
+            return {"url": f"{_RPT_CERTIFICATO_BASE}?{params}"}
 
-    params = urlencode(
-        {
-            "CCO": cco,
-            "COM": com or "",
-            "PVC": pvc or "",
-            "FRA": fra or "",
-            "CCS": ccs or "00000",
-        }
+    if certificato is not None:
+        missing = ", ".join(_missing_link_fields(com=certificato.com, pvc=certificato.pvc, fra=certificato.fra))
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"CCO {cco} presente in cat_capacitas_certificati ma incompleto: mancano {missing}.",
+        )
+    if occ is not None:
+        missing = ", ".join(_missing_link_fields(com=occ.com, pvc=occ.pvc, fra=occ.fra))
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"CCO {cco} presente in cat_consorzio_occupancies ma incompleto: mancano {missing}.",
+        )
+    if row is not None:
+        missing = ", ".join(_missing_link_fields(com=row.com, pvc=row.pvc, fra=row.fra))
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"CCO {cco} presente in cat_capacitas_terreni_rows ma incompleto: mancano {missing}.",
+        )
+
+    logger.info("Capacitas rpt-certificato link non risolto: cco=%s fonte_locale_assente", cco)
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail=f"CCO {cco} non presente nelle fonti locali Capacitas (certificati, occupancies, terreni).",
     )
-    return {"url": f"{_RPT_CERTIFICATO_BASE}?{params}"}

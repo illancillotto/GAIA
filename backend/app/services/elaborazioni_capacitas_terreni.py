@@ -7,7 +7,7 @@ from decimal import Decimal, InvalidOperation
 import re
 from typing import Awaitable, Callable, Sequence
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.catasto_phase1 import (
@@ -107,9 +107,18 @@ async def sync_terreni_for_request(
     fetch_details: bool = True,
     throttle_ms: int = 0,
 ) -> CapacitasTerreniSyncResponse:
-    result = await client.search_terreni(request)
+    effective_request = request
+    result = await client.search_terreni(effective_request)
+    if not result.rows and request.sezione.strip():
+        effective_request = request.model_copy(update={"sezione": ""})
+        result = await client.search_terreni(effective_request)
+    if not result.rows:
+        raise RuntimeError(
+            f"Particella {request.foglio}/{request.particella}"
+            f"{('/' + request.sub) if request.sub else ''} non trovata"
+        )
     collected_at = datetime.now(timezone.utc)
-    search_key = build_search_key(request)
+    search_key = build_search_key(effective_request)
     counters = SyncCounters()
     certificato_cache: dict[tuple[str, str, str, str, str], tuple[CapacitasTerrenoCertificato, CatCapacitasCertificato]] = {}
     storico_cache: dict[str, list[CapacitasStoricoAnagraficaRow]] = {}
@@ -158,50 +167,22 @@ async def sync_terreni_for_request(
 
         if fetch_certificati and row.cco and row.com and row.pvc and row.fra is not None and row.ccs is not None:
             cache_key = (row.cco, row.com, row.pvc, row.fra or "", row.ccs or "")
-            cached_certificato = certificato_cache.get(cache_key)
-            should_persist_snapshot_intestatari = False
-            target_utenza = _find_utenza_for_terreno_row(db, row)
-            if cached_certificato is None:
-                certificato = await client.fetch_certificato(
+            if cache_key not in certificato_cache:
+                target_utenza = _find_utenza_for_terreno_row(db, row)
+                certificato_cache[cache_key] = await sync_certificato_snapshot(
+                    db,
+                    client,
                     cco=row.cco,
                     com=row.com,
                     pvc=row.pvc,
                     fra=row.fra or "",
                     ccs=row.ccs or "",
+                    collected_at=collected_at,
+                    target_utenze=[target_utenza] if target_utenza is not None else None,
+                    storico_cache=storico_cache,
+                    anagrafica_detail_cache=anagrafica_detail_cache,
                 )
                 counters.certificati += 1
-                certificato_snapshot = CatCapacitasCertificato(
-                    cco=certificato.cco or row.cco,
-                    fra=certificato.fra or row.fra,
-                    ccs=certificato.ccs or row.ccs,
-                    pvc=certificato.pvc or row.pvc,
-                    com=certificato.com or row.com,
-                    partita_code=certificato.partita_code,
-                    utenza_code=certificato.utenza_code,
-                    utenza_status=certificato.utenza_status,
-                    ruolo_status=certificato.ruolo_status or certificato.partita_status,
-                    raw_html=certificato.raw_html,
-                    parsed_json=certificato.model_dump(exclude_none=True, mode="json"),
-                    collected_at=collected_at,
-                )
-                db.add(certificato_snapshot)
-                db.flush()
-                certificato_cache[cache_key] = (certificato, certificato_snapshot)
-                should_persist_snapshot_intestatari = True
-            else:
-                certificato, certificato_snapshot = cached_certificato
-
-            await _persist_capacitas_intestatari(
-                db,
-                client,
-                certificato_snapshot,
-                certificato,
-                collected_at,
-                target_utenze=[target_utenza] if target_utenza is not None else [],
-                persist_snapshot_intestatari=should_persist_snapshot_intestatari,
-                storico_cache=storico_cache,
-                anagrafica_detail_cache=anagrafica_detail_cache,
-            )
 
         if detail is not None:
             db.add(
@@ -236,6 +217,63 @@ async def sync_terreni_for_request(
     )
 
 
+async def sync_certificato_snapshot(
+    db: Session,
+    client: InVoltureClient,
+    *,
+    cco: str,
+    com: str,
+    pvc: str,
+    fra: str,
+    ccs: str,
+    collected_at: datetime | None = None,
+    target_utenze: list[CatUtenzaIrrigua] | None = None,
+    persist_snapshot_intestatari: bool = True,
+    storico_cache: dict[str, list[CapacitasStoricoAnagraficaRow]] | None = None,
+    anagrafica_detail_cache: dict[str, CapacitasAnagraficaDetail] | None = None,
+) -> tuple[CapacitasTerrenoCertificato, CatCapacitasCertificato]:
+    effective_collected_at = collected_at or datetime.now(timezone.utc)
+    effective_storico_cache = storico_cache if storico_cache is not None else {}
+    effective_anagrafica_detail_cache = anagrafica_detail_cache if anagrafica_detail_cache is not None else {}
+
+    certificato = await client.fetch_certificato(
+        cco=cco,
+        com=com,
+        pvc=pvc,
+        fra=fra,
+        ccs=ccs,
+    )
+    certificato_snapshot = CatCapacitasCertificato(
+        cco=certificato.cco or cco,
+        fra=certificato.fra or fra,
+        ccs=certificato.ccs or ccs,
+        pvc=certificato.pvc or pvc,
+        com=certificato.com or com,
+        partita_code=certificato.partita_code,
+        utenza_code=certificato.utenza_code,
+        utenza_status=certificato.utenza_status,
+        ruolo_status=certificato.ruolo_status or certificato.partita_status,
+        raw_html=certificato.raw_html,
+        parsed_json=certificato.model_dump(exclude_none=True, mode="json"),
+        collected_at=effective_collected_at,
+    )
+    db.add(certificato_snapshot)
+    db.flush()
+
+    await _persist_capacitas_intestatari(
+        db,
+        client,
+        certificato_snapshot,
+        certificato,
+        effective_collected_at,
+        target_utenze=target_utenze,
+        persist_snapshot_intestatari=persist_snapshot_intestatari,
+        storico_cache=effective_storico_cache,
+        anagrafica_detail_cache=effective_anagrafica_detail_cache,
+    )
+    return certificato, certificato_snapshot
+
+
 async def sync_terreni_batch(
     db: Session,
     client: InVoltureClient,
@@ -261,7 +299,7 @@ async def sync_terreni_batch(
         frazione_candidates = (
             [item.frazione_id]
             if item.frazione_id
-            else await _resolve_batch_frazione_candidates(client, item.comune, frazione_cache)
+            else await _resolve_batch_frazione_candidates(client, item.comune, item.sezione, frazione_cache)
         )
         search_key = ""
         try:
@@ -894,6 +932,48 @@ def _extract_lookup_suffix(value: str) -> str:
     return _extract_lookup_comune(value)
 
 
+_SECTION_FRAZIONE_HINTS: dict[tuple[str, str], list[str]] = {
+    ("oristano", "a"): ["11"],
+    ("oristano", "b"): ["04"],
+    ("oristano", "c"): ["05"],
+    ("oristano", "d"): ["09"],
+    ("oristano", "e"): ["18"],
+    ("cabras", "a"): ["03"],
+    ("cabras", "b"): ["20"],
+    ("simaxis", "a"): ["19", "10"],
+    ("simaxis", "b"): ["15"],
+}
+
+_SECTION_LOOKUP_COMUNE_OVERRIDES: dict[tuple[str, str], tuple[str, list[str]]] = {
+    ("terralba", "b"): ("Arborea", ["31"]),
+}
+
+
+def _apply_section_frazione_hints(
+    comune: str | None,
+    sezione: str | None,
+    candidate_ids: list[str],
+    *,
+    preferred_ids_override: list[str] | None = None,
+) -> list[str]:
+    comune_key = _normalize_lookup_label((comune or "").strip())
+    sezione_key = (sezione or "").strip().casefold()
+    normalized_candidates = [candidate.strip() for candidate in candidate_ids if candidate and candidate.strip()]
+    if not comune_key or not sezione_key or not normalized_candidates:
+        return normalized_candidates
+
+    preferred_ids = preferred_ids_override or _SECTION_FRAZIONE_HINTS.get((comune_key, sezione_key))
+    if not preferred_ids:
+        return normalized_candidates
+
+    preferred_present = [candidate_id for candidate_id in preferred_ids if candidate_id in normalized_candidates]
+    if not preferred_present:
+        return normalized_candidates
+
+    remainder = [candidate_id for candidate_id in normalized_candidates if candidate_id not in preferred_present]
+    return preferred_present + remainder
+
+
 async def _sync_batch_item_with_candidates(
     db: Session,
     client: InVoltureClient,
@@ -955,49 +1035,74 @@ def _is_retryable_missing_result_error(message: str) -> bool:
 async def _resolve_batch_frazione_candidates(
     client: InVoltureClient,
     comune: str | None,
+    sezione: str | None,
     cache: dict[str, list[str]],
 ) -> list[str]:
     comune_value = (comune or "").strip()
     if not comune_value:
         raise RuntimeError("Riga batch non valida: serve 'comune' oppure 'frazione_id'.")
 
-    cache_key = _normalize_lookup_label(comune_value)
+    override = _SECTION_LOOKUP_COMUNE_OVERRIDES.get((_normalize_lookup_label(comune_value), (sezione or "").strip().casefold()))
+    lookup_comune_value = override[0] if override is not None else comune_value
+    preferred_ids_override = override[1] if override is not None else None
+    cache_key = f"{_normalize_lookup_label(comune_value)}|{(sezione or '').strip().casefold()}"
     cached = cache.get(cache_key)
     if cached is not None:
         return cached
 
-    options = await client.search_frazioni(comune_value)
+    options = await client.search_frazioni(lookup_comune_value)
     if not options:
-        raise RuntimeError(f"Nessuna frazione Capacitas trovata per comune '{comune_value}'.")
+        raise RuntimeError(f"Nessuna frazione Capacitas trovata per comune '{lookup_comune_value}'.")
     if len(options) == 1:
-        cache[cache_key] = [options[0].id]
+        cache[cache_key] = _apply_section_frazione_hints(
+            comune_value,
+            sezione,
+            [options[0].id],
+            preferred_ids_override=preferred_ids_override,
+        )
         return cache[cache_key]
 
-    exact_matches = [option for option in options if _normalize_lookup_label(option.display) == cache_key]
+    lookup_comune_key = _normalize_lookup_label(lookup_comune_value)
+    exact_matches = [option for option in options if _normalize_lookup_label(option.display) == lookup_comune_key]
     if exact_matches:
-        cache[cache_key] = [option.id for option in exact_matches]
+        cache[cache_key] = _apply_section_frazione_hints(
+            comune_value,
+            sezione,
+            [option.id for option in exact_matches],
+            preferred_ids_override=preferred_ids_override,
+        )
         return cache[cache_key]
 
     # Match on the comune part (right of *, or label minus numeric prefix).
     # Handles "03 CABRAS" (no *) and "11 ORISTANO*ORISTANO" alike.
     comune_matches = [
-        option for option in options if _normalize_lookup_label(_extract_lookup_comune(option.display)) == cache_key
+        option for option in options if _normalize_lookup_label(_extract_lookup_comune(option.display)) == lookup_comune_key
     ]
     if comune_matches:
-        cache[cache_key] = [option.id for option in comune_matches]
+        cache[cache_key] = _apply_section_frazione_hints(
+            comune_value,
+            sezione,
+            [option.id for option in comune_matches],
+            preferred_ids_override=preferred_ids_override,
+        )
         return cache[cache_key]
 
     # Fallback: match on the frazione part (left of *, or label minus numeric prefix).
     # Covers the reverse lookup when the user inputs a frazione name rather than the comune.
     frazione_matches = [
-        option for option in options if _normalize_lookup_label(_extract_lookup_frazione(option.display)) == cache_key
+        option for option in options if _normalize_lookup_label(_extract_lookup_frazione(option.display)) == lookup_comune_key
     ]
     if frazione_matches:
-        cache[cache_key] = [option.id for option in frazione_matches]
+        cache[cache_key] = _apply_section_frazione_hints(
+            comune_value,
+            sezione,
+            [option.id for option in frazione_matches],
+            preferred_ids_override=preferred_ids_override,
+        )
         return cache[cache_key]
 
     raise RuntimeError(
-        f"Comune '{comune_value}' ambiguo in Capacitas: trovate {len(options)} frazioni. Usa un nome piu specifico oppure risolvi prima il lookup manuale."
+        f"Comune '{lookup_comune_value}' ambiguo in Capacitas: trovate {len(options)} frazioni. Usa un nome piu specifico oppure risolvi prima il lookup manuale."
     )
 
 
@@ -1005,13 +1110,14 @@ def _find_or_create_unit(db: Session, row: CapacitasTerrenoRow) -> CatConsorzioU
     if not row.foglio or not row.particella:
         return None
 
+    normalized_sub = (row.sub or "").strip() or None
     source_comune = _find_source_comune(db, row)
     comune, particella, resolution_mode = _resolve_real_comune_and_particella(db, row, source_comune)
     unit = db.scalar(
         select(CatConsorzioUnit).where(
             CatConsorzioUnit.foglio == row.foglio,
             CatConsorzioUnit.particella == row.particella,
-            CatConsorzioUnit.subalterno == row.sub,
+            CatConsorzioUnit.subalterno == normalized_sub,
             CatConsorzioUnit.sezione_catastale == row.sez,
         )
     )
@@ -1047,7 +1153,7 @@ def _find_or_create_unit(db: Session, row: CapacitasTerrenoRow) -> CatConsorzioU
         sezione_catastale=row.sez,
         foglio=row.foglio,
         particella=row.particella,
-        subalterno=row.sub,
+        subalterno=normalized_sub,
         descrizione=f"Capacitas {row.foglio}/{row.particella}" + (f"/{row.sub}" if row.sub else ""),
         source_first_seen=date.today(),
         source_last_seen=date.today(),
@@ -1530,12 +1636,16 @@ def _find_source_comune(db: Session, row: CapacitasTerrenoRow) -> CatComune | No
 
 
 def _find_particella(db: Session, comune: CatComune | None, row: CapacitasTerrenoRow) -> CatParticella | None:
+    normalized_sub = (row.sub or "").strip() or None
     stmt = select(CatParticella).where(
         CatParticella.foglio == row.foglio,
         CatParticella.particella == row.particella,
-        CatParticella.subalterno == row.sub,
         CatParticella.is_current.is_(True),
     )
+    if normalized_sub is None:
+        stmt = stmt.where(func.coalesce(CatParticella.subalterno, "") == "")
+    else:
+        stmt = stmt.where(CatParticella.subalterno == normalized_sub)
     if comune is not None:
         stmt = stmt.where(CatParticella.comune_id == comune.id)
     elif row.belfiore:

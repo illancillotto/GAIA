@@ -1,7 +1,7 @@
 # Martin tile server configuration.
 # Martin v1.7 reads YAML config even if the mounted filename has .toml.
 
-cache_size_mb: 512
+cache_size_mb: 32
 
 postgres:
   connection_string: "${DATABASE_URL}"

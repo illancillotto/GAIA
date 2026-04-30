@@ -644,7 +644,13 @@ async def run_particelle_sync_job(
         parallel_workers=payload.parallel_workers,
     )
     particelle = _select_particelle_for_job(db, payload=payload, policy=policy)
+    previous_result = dict(job.result_json or {}) if isinstance(job.result_json, dict) else {}
     result_json = _build_initial_result(len(particelle), policy)
+    # Preserve live speed overrides already written by the PATCH /speed endpoint.
+    if "throttle_ms" in previous_result:
+        result_json["throttle_ms"] = previous_result["throttle_ms"]
+    if "speed_multiplier" in previous_result:
+        result_json["speed_multiplier"] = previous_result["speed_multiplier"]
     client_pool = list(clients or [client])
     parallel_workers = min(policy.parallel_workers, len(client_pool), max(1, len(particelle)))
     result_json["parallel_workers"] = parallel_workers

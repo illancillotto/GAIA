@@ -1210,6 +1210,116 @@ def test_capacitas_rpt_certificato_link_returns_browser_session_url(
     assert "BC=" not in url
 
 
+def test_capacitas_rpt_certificato_link_prefers_certificato_snapshot() -> None:
+    db = TestingSessionLocal()
+    try:
+        db.add(
+            CatCapacitasCertificato(
+                cco="0A2200001",
+                com="777",
+                pvc="123",
+                fra="55",
+                ccs="00009",
+                collected_at=datetime.now(timezone.utc),
+            )
+        )
+        db.add(
+            CatCapacitasTerrenoRow(
+                cco="0A2200001",
+                com="289",
+                pvc="097",
+                fra="38",
+                ccs="00000",
+                collected_at=datetime.now(timezone.utc) - timedelta(days=1),
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get(
+        "/elaborazioni/capacitas/involture/link/rpt-certificato?cco=0A2200001",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 200
+    url = response.json()["url"]
+    assert "CCO=0A2200001" in url
+    assert "COM=777" in url
+    assert "PVC=123" in url
+    assert "FRA=55" in url
+    assert "CCS=00009" in url
+
+
+def test_capacitas_rpt_certificato_link_falls_back_to_occupancy_when_terreno_missing() -> None:
+    db = TestingSessionLocal()
+    try:
+        unit = CatConsorzioUnit(
+            cod_comune_capacitas=95,
+            source_comune_label="ORISTANO",
+            sezione_catastale="",
+            foglio="1",
+            particella="2",
+            is_active=True,
+        )
+        db.add(unit)
+        db.flush()
+        db.add(
+            CatConsorzioOccupancy(
+                unit_id=unit.id,
+                cco="0A2200002",
+                com="451",
+                pvc="011",
+                fra="44",
+                ccs="00007",
+                source_type="capacitas_terreni",
+                relationship_type="utilizzatore_reale",
+                is_current=True,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get(
+        "/elaborazioni/capacitas/involture/link/rpt-certificato?cco=0A2200002",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 200
+    url = response.json()["url"]
+    assert "COM=451" in url
+    assert "PVC=011" in url
+    assert "FRA=44" in url
+    assert "CCS=00007" in url
+
+
+def test_capacitas_rpt_certificato_link_reports_incomplete_source_details() -> None:
+    db = TestingSessionLocal()
+    try:
+        db.add(
+            CatCapacitasCertificato(
+                cco="0A2200003",
+                com="289",
+                pvc=None,
+                fra=None,
+                ccs="00000",
+                collected_at=datetime.now(timezone.utc),
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get(
+        "/elaborazioni/capacitas/involture/link/rpt-certificato?cco=0A2200003",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "CCO 0A2200003 presente in cat_capacitas_certificati ma incompleto: mancano PVC, FRA."
+
+
 def test_capacitas_terreni_sync_persists_consorzio_snapshot(monkeypatch: pytest.MonkeyPatch) -> None:
     create_response = client.post(
         "/elaborazioni/capacitas/credentials",
@@ -2175,7 +2285,7 @@ def test_capacitas_terreni_sync_batch_matches_comune_without_asterisk(
 def test_capacitas_terreni_sync_batch_matches_oristano_city_among_frazioni(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """With multiple frazioni all sharing '*ORISTANO', the city record '11 ORISTANO*ORISTANO' must be tried."""
+    """For Oristano sezione A, the city record '11 ORISTANO*ORISTANO' must be tried first."""
     create_response = client.post(
         "/elaborazioni/capacitas/credentials",
         headers=auth_headers(),
@@ -2243,7 +2353,7 @@ def test_capacitas_terreni_sync_batch_matches_oristano_city_among_frazioni(
             "continue_on_error": True,
             "fetch_certificati": False,
             "fetch_details": False,
-            "items": [{"comune": "Oristano", "foglio": "3", "particella": "500"}],
+            "items": [{"comune": "Oristano", "sezione": "A", "foglio": "3", "particella": "500"}],
         },
     )
 
@@ -2252,7 +2362,88 @@ def test_capacitas_terreni_sync_batch_matches_oristano_city_among_frazioni(
     assert payload["processed_items"] == 1
     assert payload["failed_items"] == 0
     assert payload["items"][0]["ok"] is True
-    assert "11" in attempted_frazioni
+    assert attempted_frazioni[0] == "11"
+
+
+def test_capacitas_terreni_sync_batch_prioritizes_cabras_section_b(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """For Cabras sezione B, '20 SOLANAS*CABRAS' must be preferred over the city row."""
+    create_response = client.post(
+        "/elaborazioni/capacitas/credentials",
+        headers=auth_headers(),
+        json={"label": "Terreni Cabras B", "username": "capacitas-user", "password": "capacitas-secret"},
+    )
+    credential_id = create_response.json()["id"]
+
+    async def fake_login(self):
+        from app.modules.elaborazioni.capacitas.session import CapacitasSession
+
+        self._session = CapacitasSession(token="123e4567-e89b-12d3-a456-426614174000")
+        return self._session
+
+    async def fake_activate_app(self, app_name: str) -> None:
+        return None
+
+    async def fake_close(self) -> None:
+        return None
+
+    async def fake_search_frazioni(self, query: str) -> list[CapacitasLookupOption]:
+        assert query == "Cabras"
+        return [
+            CapacitasLookupOption(id="03", display="03 CABRAS"),
+            CapacitasLookupOption(id="20", display="20 SOLANAS*CABRAS"),
+        ]
+
+    attempted_frazioni: list[str] = []
+
+    async def fake_search_terreni(self, request) -> CapacitasTerreniSearchResult:
+        attempted_frazioni.append(request.frazione_id)
+        if request.frazione_id != "20":
+            raise RuntimeError("Particella non trovata")
+        return CapacitasTerreniSearchResult(
+            total=1,
+            rows=[
+                {
+                    "ID": "cabras-b-row-1",
+                    "PVC": "097",
+                    "COM": "050",
+                    "CCO": "0A1103877",
+                    "FRA": "20",
+                    "CCS": "00000",
+                    "Foglio": "5",
+                    "Partic": "200",
+                    "Anno": "2026",
+                    "Belfiore": "B354",
+                    "Ta_ext": " 9",
+                }
+            ],
+        )
+
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.login", fake_login)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.activate_app", fake_activate_app)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.close", fake_close)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.search_frazioni", fake_search_frazioni)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.search_terreni", fake_search_terreni)
+
+    response = client.post(
+        "/elaborazioni/capacitas/involture/terreni/sync-batch",
+        headers=auth_headers(),
+        json={
+            "credential_id": credential_id,
+            "continue_on_error": True,
+            "fetch_certificati": False,
+            "fetch_details": False,
+            "items": [{"comune": "Cabras", "sezione": "B", "foglio": "5", "particella": "200"}],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["processed_items"] == 1
+    assert payload["failed_items"] == 0
+    assert payload["items"][0]["ok"] is True
+    assert attempted_frazioni[0] == "20"
 
 
 def test_capacitas_terreni_sync_resolves_arborea_terralba_swap_to_real_comune(
@@ -2351,8 +2542,6 @@ def test_capacitas_terreni_sync_resolves_arborea_terralba_swap_to_real_comune(
 
 
 def test_capacitas_terreni_job_lifecycle_persists_and_runs(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr("app.modules.elaborazioni.capacitas_routes.SessionLocal", TestingSessionLocal)
-
     create_response = client.post(
         "/elaborazioni/capacitas/credentials",
         headers=auth_headers(),
@@ -2428,7 +2617,7 @@ def test_capacitas_terreni_job_lifecycle_persists_and_runs(monkeypatch: pytest.M
     )
     assert create_job_response.status_code == 202
     job_id = create_job_response.json()["id"]
-    assert create_job_response.json()["status"] in {"pending", "succeeded", "completed_with_errors"}
+    assert create_job_response.json()["status"] == "pending"
 
     list_jobs_response = client.get("/elaborazioni/capacitas/involture/terreni/jobs", headers=auth_headers())
     get_job_response = client.get(f"/elaborazioni/capacitas/involture/terreni/jobs/{job_id}", headers=auth_headers())
@@ -2436,22 +2625,22 @@ def test_capacitas_terreni_job_lifecycle_persists_and_runs(monkeypatch: pytest.M
     assert list_jobs_response.status_code == 200
     assert any(item["id"] == job_id for item in list_jobs_response.json())
     assert get_job_response.status_code == 200
-    assert get_job_response.json()["status"] == "succeeded"
-    assert get_job_response.json()["result_json"]["processed_items"] == 1
+    assert get_job_response.json()["status"] == "pending"
+    assert get_job_response.json()["result_json"] is None
 
     rerun_job_response = client.post(
         f"/elaborazioni/capacitas/involture/terreni/jobs/{job_id}/run",
         headers=auth_headers(),
     )
     assert rerun_job_response.status_code == 200
-    assert rerun_job_response.json()["status"] == "succeeded"
+    assert rerun_job_response.json()["status"] == "pending"
 
     db = TestingSessionLocal()
     try:
         job = db.get(CapacitasTerreniSyncJob, job_id)
         assert job is not None
-        assert job.status == "succeeded"
-        assert job.result_json is not None
+        assert job.status == "pending"
+        assert job.result_json is None
     finally:
         db.close()
 

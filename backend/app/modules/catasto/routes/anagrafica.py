@@ -29,6 +29,7 @@ from app.models.catasto_phase1 import (
 from app.modules.elaborazioni.capacitas.client import InVoltureClient
 from app.modules.elaborazioni.capacitas.models import CapacitasAnagraficaDetail, CapacitasIntestatario, CapacitasTerrenoCertificato
 from app.modules.elaborazioni.capacitas.session import CapacitasSessionManager
+from app.modules.elaborazioni.capacitas.models import CapacitasTerreniSearchRequest
 from app.modules.utenze.models import AnagraficaPerson, AnagraficaSubject, AnagraficaSubjectStatus, AnagraficaSubjectType
 from app.modules.utenze.services.person_history_service import snapshot_person_if_changed
 from app.schemas.catasto_phase1 import (
@@ -46,6 +47,10 @@ from app.schemas.catasto_phase1 import (
     CatIntestatarioResponse,
 )
 from app.services.elaborazioni_capacitas import mark_credential_error, mark_credential_used, pick_credential
+from app.services.elaborazioni_capacitas_terreni import (
+    _resolve_batch_frazione_candidates,
+    sync_terreni_for_request,
+)
 
 router = APIRouter(prefix="/catasto/elaborazioni-massive/particelle", tags=["catasto-elaborazioni-massive"])
 logger = logging.getLogger(__name__)
@@ -180,6 +185,8 @@ class _CapacitasLiveResolver:
         self._disabled = False
         self._cert_cache: dict[tuple[str, str, str, str, str], CapacitasTerrenoCertificato] = {}
         self._detail_cache: dict[tuple[str, str], CapacitasAnagraficaDetail] = {}
+        self._frazione_cache: dict[str, list[str]] = {}
+        self._sync_attempted_particelle: set[UUID] = set()
         self.dirty = False
 
     async def close(self) -> None:
@@ -189,7 +196,25 @@ class _CapacitasLiveResolver:
             self._client = None
 
     async def enrich_match(self, p: CatParticella, match: CatAnagraficaMatch) -> CatAnagraficaMatch:
+        if match.utenza_latest is None:
+            synced = await self._sync_particella_from_live_terreni(p)
+            if synced:
+                match = _build_match(
+                    self._db,
+                    p,
+                    presente_in_catasto_consorzio=(p.id in _load_consorzio_presence_by_particella_ids(self._db, {p.id})),
+                )
+
         cert_params = self._resolve_cert_params(p, match.utenza_latest)
+        if cert_params is None:
+            synced = await self._sync_particella_from_live_terreni(p)
+            if synced:
+                match = _build_match(
+                    self._db,
+                    p,
+                    presente_in_catasto_consorzio=(p.id in _load_consorzio_presence_by_particella_ids(self._db, {p.id})),
+                )
+                cert_params = self._resolve_cert_params(p, match.utenza_latest)
         if cert_params is None:
             return match
 
@@ -211,7 +236,93 @@ class _CapacitasLiveResolver:
 
         if resolved:
             match.intestatari = resolved
+            match.presente_in_catasto_consorzio = True
         return match
+
+    async def _sync_particella_from_live_terreni(self, p: CatParticella) -> bool:
+        if p.id in self._sync_attempted_particelle:
+            return False
+        self._sync_attempted_particelle.add(p.id)
+
+        comune_value = _norm_str(p.nome_comune)
+        if not comune_value or not p.foglio or not p.particella:
+            return False
+
+        client = await self._ensure_client()
+        if client is None:
+            return False
+
+        try:
+            frazione_candidates = await _resolve_batch_frazione_candidates(
+                client,
+                comune_value,
+                p.sezione_catastale,
+                self._frazione_cache,
+            )
+        except Exception as exc:
+            logger.info(
+                "Capacitas live terreni lookup non risolto: particella_id=%s comune=%s sezione=%s foglio=%s particella=%s err=%s",
+                p.id,
+                comune_value,
+                p.sezione_catastale,
+                p.foglio,
+                p.particella,
+                exc,
+            )
+            return False
+
+        attempted_errors: list[str] = []
+        for frazione_id in frazione_candidates:
+            request = CapacitasTerreniSearchRequest(
+                frazione_id=frazione_id,
+                sezione=p.sezione_catastale or "",
+                foglio=p.foglio,
+                particella=p.particella,
+                sub=p.subalterno or "",
+            )
+            try:
+                await sync_terreni_for_request(
+                    self._db,
+                    client,
+                    request,
+                    fetch_certificati=True,
+                    fetch_details=False,
+                )
+                self.dirty = True
+                return True
+            except RuntimeError as exc:
+                self._db.rollback()
+                attempted_errors.append(str(exc))
+                normalized = str(exc).casefold()
+                if "non trov" not in normalized and "nessun" not in normalized and "no result" not in normalized:
+                    logger.info(
+                        "Capacitas live terreni sync interrotta: particella_id=%s frazione=%s err=%s",
+                        p.id,
+                        frazione_id,
+                        exc,
+                    )
+                    return False
+            except Exception as exc:
+                self._db.rollback()
+                logger.warning(
+                    "Capacitas live terreni sync fallita: particella_id=%s frazione=%s err=%s",
+                    p.id,
+                    frazione_id,
+                    exc,
+                )
+                return False
+
+        if attempted_errors:
+            logger.info(
+                "Capacitas live terreni nessun risultato: particella_id=%s comune=%s sezione=%s foglio=%s particella=%s tentativi=%s",
+                p.id,
+                comune_value,
+                p.sezione_catastale,
+                p.foglio,
+                p.particella,
+                frazione_candidates,
+            )
+        return False
 
     def _resolve_cert_params(
         self,
@@ -543,7 +654,57 @@ def _utenza_summary_from_record(u: CatUtenzaIrrigua | None) -> CatAnagraficaUten
     )
 
 
-def _build_match(db: Session, p: CatParticella) -> CatAnagraficaMatch:
+def _utenza_summary_from_occupancy(occupancy: CatConsorzioOccupancy | None) -> CatAnagraficaUtenzaSummary | None:
+    if occupancy is None or not occupancy.cco:
+        return None
+    return CatAnagraficaUtenzaSummary(
+        id=occupancy.utenza_id or occupancy.id,
+        cco=occupancy.cco,
+        anno_campagna=occupancy.valid_from.year if occupancy.valid_from else None,
+        stato="capacitas_terreni",
+        num_distretto=None,
+        nome_distretto=None,
+        sup_irrigabile_mq=None,
+        denominazione=None,
+        codice_fiscale=None,
+        ha_anomalie=None,
+    )
+
+
+def _load_consorzio_presence_by_particella_ids(db: Session, particella_ids: set[UUID]) -> set[UUID]:
+    if not particella_ids:
+        return set()
+    rows = db.execute(
+        select(CatConsorzioUnit.particella_id)
+        .where(
+            CatConsorzioUnit.particella_id.in_(sorted(particella_ids)),
+            CatConsorzioUnit.is_active.is_(True),
+        )
+        .distinct()
+    ).scalars().all()
+    return {pid for pid in rows if pid is not None}
+
+
+def _particelle_with_utenza_irrigua(db: Session, particella_ids: set[UUID]) -> set[UUID]:
+    """Particelle che hanno almeno una utenza di campagna (dati consortili operativi)."""
+    if not particella_ids:
+        return set()
+    rows = (
+        db.execute(
+            select(CatUtenzaIrrigua.particella_id)
+            .where(
+                CatUtenzaIrrigua.particella_id.in_(particella_ids),
+                CatUtenzaIrrigua.particella_id.is_not(None),
+            )
+            .distinct()
+        )
+        .scalars()
+        .all()
+    )
+    return {pid for pid in rows if pid is not None}
+
+
+def _build_match(db: Session, p: CatParticella, *, presente_in_catasto_consorzio: bool) -> CatAnagraficaMatch:
     comune_record = db.get(CatComune, p.comune_id) if p.comune_id else None
     latest_utenza = (
         db.execute(
@@ -555,6 +716,26 @@ def _build_match(db: Session, p: CatParticella) -> CatAnagraficaMatch:
         .scalars()
         .first()
     )
+    latest_occupancy = None
+    if latest_utenza is None:
+        latest_occupancy = (
+            db.execute(
+                select(CatConsorzioOccupancy)
+                .join(CatConsorzioUnit, CatConsorzioUnit.id == CatConsorzioOccupancy.unit_id)
+                .where(
+                    CatConsorzioUnit.particella_id == p.id,
+                    CatConsorzioOccupancy.cco.is_not(None),
+                )
+                .order_by(
+                    desc(CatConsorzioOccupancy.is_current),
+                    desc(CatConsorzioOccupancy.valid_from),
+                    desc(CatConsorzioOccupancy.updated_at),
+                )
+                .limit(1)
+            )
+            .scalars()
+            .first()
+        )
 
     utenze = db.execute(
         select(CatUtenzaIrrigua)
@@ -587,6 +768,15 @@ def _build_match(db: Session, p: CatParticella) -> CatAnagraficaMatch:
         .limit(5)
     ).all()
 
+    # Oltre all'anagrafe unità consortili (CatConsorzioUnit), conta come "presente"
+    # anche una utenza di campagna o intestatari già noti: altrimenti l'export mostra
+    # "non presente" pur avendo CF/particella/intestatari da database o live Capacitas.
+    presente_eff = (
+        presente_in_catasto_consorzio
+        or (latest_utenza is not None)
+        or bool(intestatari)
+    )
+
     return CatAnagraficaMatch(
         particella_id=p.id,
         comune=p.nome_comune or (comune_record.nome_comune if comune_record else None),
@@ -600,7 +790,8 @@ def _build_match(db: Session, p: CatParticella) -> CatAnagraficaMatch:
         nome_distretto=p.nome_distretto,
         superficie_mq=p.superficie_mq,
         superficie_grafica_mq=p.superficie_grafica_mq,
-        utenza_latest=_utenza_summary_from_record(latest_utenza),
+        presente_in_catasto_consorzio=presente_eff,
+        utenza_latest=_utenza_summary_from_record(latest_utenza) or _utenza_summary_from_occupancy(latest_occupancy),
         intestatari=intestatari,
         anomalie_count=int(anomalie_count or 0),
         anomalie_top=[{"tipo": t, "count": int(c or 0)} for (t, c) in anomalie_types],
@@ -677,6 +868,8 @@ def _refresh_saved_particelle_matches(
         if row.matches:
             particella_ids.update(match.particella_id for match in row.matches)
 
+    consorzio_unit_ids = _load_consorzio_presence_by_particella_ids(db, particella_ids)
+    particelle_con_utenza = _particelle_with_utenza_irrigua(db, particella_ids)
     intestatari_by_particella = _load_intestatari_by_particella_ids(db, particella_ids)
 
     def refresh_match(match: CatAnagraficaMatch | None) -> CatAnagraficaMatch | None:
@@ -685,6 +878,12 @@ def _refresh_saved_particelle_matches(
         intestatari = intestatari_by_particella.get(match.particella_id)
         if intestatari:
             match.intestatari = intestatari
+        pid = match.particella_id
+        match.presente_in_catasto_consorzio = (
+            pid in consorzio_unit_ids
+            or pid in particelle_con_utenza
+            or bool(match.intestatari)
+        )
         return match
 
     for row in results:
@@ -777,9 +976,12 @@ async def bulk_search_anagrafica(
                         .scalars()
                         .all()
                     )
+                    consorzio_present_ids = _load_consorzio_presence_by_particella_ids(
+                        db, {p.id for p in particelle if p.id is not None}
+                    )
                     matches: list[CatAnagraficaMatch] = []
                     for p in particelle:
-                        match = _build_match(db, p)
+                        match = _build_match(db, p, presente_in_catasto_consorzio=(p.id in consorzio_present_ids))
                         if live_resolver is not None:
                             match = await live_resolver.enrich_match(p, match)
                         matches.append(match)
@@ -863,9 +1065,16 @@ async def bulk_search_anagrafica(
                     continue
 
                 if len(items) > 1:
+                    consorzio_present_ids = _load_consorzio_presence_by_particella_ids(
+                        db, {p.id for p in items if p.id is not None}
+                    )
                     matches: list[CatAnagraficaMatch] = []
                     for item in items:
-                        candidate = _build_match(db, item)
+                        candidate = _build_match(
+                            db,
+                            item,
+                            presente_in_catasto_consorzio=(item.id in consorzio_present_ids),
+                        )
                         if live_resolver is not None:
                             candidate = await live_resolver.enrich_match(item, candidate)
                         matches.append(candidate)
@@ -888,7 +1097,14 @@ async def bulk_search_anagrafica(
                         live_resolver.dirty = False
                     continue
 
-                match = _build_match(db, items[0])
+                consorzio_present_ids = _load_consorzio_presence_by_particella_ids(
+                    db, {items[0].id} if items[0].id is not None else set()
+                )
+                match = _build_match(
+                    db,
+                    items[0],
+                    presente_in_catasto_consorzio=(items[0].id in consorzio_present_ids),
+                )
                 if live_resolver is not None:
                     match = await live_resolver.enrich_match(items[0], match)
                 results.append(
