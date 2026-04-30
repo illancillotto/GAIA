@@ -778,8 +778,15 @@ async def run_particelle_sync_job(
                 job.result_json = current_result
                 db.commit()
 
-            if index < len(particelle) and policy.throttle_ms > 0:
-                await asyncio.sleep(policy.throttle_ms / 1000)
+            if index < len(particelle):
+                # Re-read throttle_ms from result_json to pick up live speed overrides
+                job_now = db.get(CapacitasParticelleSyncJob, job.id)
+                effective_throttle = policy.throttle_ms
+                if job_now is not None and isinstance(job_now.result_json, dict):
+                    effective_throttle = int(job_now.result_json.get("throttle_ms", policy.throttle_ms))
+                effective_throttle = max(MIN_THROTTLE_MS, effective_throttle)
+                if effective_throttle > 0:
+                    await asyncio.sleep(effective_throttle / 1000)
 
         job = db.get(CapacitasParticelleSyncJob, job.id)
         assert job is not None

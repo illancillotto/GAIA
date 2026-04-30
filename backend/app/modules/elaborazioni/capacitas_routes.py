@@ -21,6 +21,7 @@ from app.modules.elaborazioni.capacitas.models import (
     CapacitasLookupOption,
     CapacitasParticelleSyncJobCreateRequest,
     CapacitasParticelleSyncJobOut,
+    CapacitasParticelleSyncJobSpeedPatch,
     CapacitasStoricoAnagraficaRow,
     CapacitasTerreniBatchRequest,
     CapacitasTerreniBatchResponse,
@@ -50,6 +51,7 @@ from app.services.elaborazioni_capacitas_anagrafica_history import (
     serialize_anagrafica_history_job,
 )
 from app.services.elaborazioni_capacitas_particelle_sync import (
+    compute_sync_policy,
     create_particelle_sync_job,
     expire_stale_particelle_sync_jobs,
     delete_particelle_sync_job,
@@ -712,6 +714,34 @@ def delete_particelle_job(
     if job.status not in {"succeeded", "completed_with_errors", "failed"}:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Il job puo essere eliminato solo quando e terminato")
     delete_particelle_sync_job(db, job)
+
+
+@router.patch("/involture/particelle/jobs/{job_id}/speed", response_model=CapacitasParticelleSyncJobOut)
+def patch_particelle_job_speed(
+    job_id: int,
+    body: CapacitasParticelleSyncJobSpeedPatch,
+    _: Annotated[ApplicationUser, Depends(require_admin_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> CapacitasParticelleSyncJobOut:
+    job = get_particelle_sync_job(db, job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job non trovato")
+    if job.status not in {"processing", "queued_resume"}:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="La velocita puo essere modificata solo su job in esecuzione")
+
+    new_policy = compute_sync_policy(double_speed=body.double_speed, parallel_workers=1)
+    result_json = dict(job.result_json or {})
+    result_json["throttle_ms"] = new_policy.throttle_ms
+    result_json["speed_multiplier"] = new_policy.speed_multiplier
+    job.result_json = result_json
+
+    payload_json = dict(job.payload_json or {})
+    payload_json["double_speed"] = body.double_speed
+    job.payload_json = payload_json
+
+    db.commit()
+    db.refresh(job)
+    return serialize_particelle_sync_job(job)
 
 
 @router.post("/involture/particelle/jobs/{job_id}/run", response_model=CapacitasParticelleSyncJobOut)

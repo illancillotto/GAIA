@@ -3193,3 +3193,198 @@ async def test_run_particelle_sync_job_sequential_marks_failed_after_double_expi
         )
     finally:
         db.close()
+
+
+# ---------------------------------------------------------------------------
+# Speed patch: PATCH /involture/particelle/jobs/{id}/speed
+# ---------------------------------------------------------------------------
+
+
+def test_patch_particelle_job_speed_updates_throttle_to_double() -> None:
+    from app.services.elaborazioni_capacitas_particelle_sync import DAY_THROTTLE_MS, DOUBLE_SPEED_MULTIPLIER
+
+    db = TestingSessionLocal()
+    try:
+        job = CapacitasParticelleSyncJob(
+            requested_by_user_id=1,
+            credential_id=None,
+            status="processing",
+            mode="progressive_catalog",
+            payload_json={"only_due": False, "double_speed": False},
+            result_json={"throttle_ms": DAY_THROTTLE_MS, "speed_multiplier": 1, "processed_items": 5},
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+        job_id = job.id
+    finally:
+        db.close()
+
+    response = client.patch(
+        f"/elaborazioni/capacitas/involture/particelle/jobs/{job_id}/speed",
+        headers=auth_headers(),
+        json={"double_speed": True},
+    )
+
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    result = payload["result_json"]
+    assert result["speed_multiplier"] == DOUBLE_SPEED_MULTIPLIER
+    assert result["throttle_ms"] < DAY_THROTTLE_MS
+
+    db = TestingSessionLocal()
+    try:
+        refreshed = db.get(CapacitasParticelleSyncJob, job_id)
+        assert refreshed is not None
+        assert isinstance(refreshed.result_json, dict)
+        assert refreshed.result_json["speed_multiplier"] == DOUBLE_SPEED_MULTIPLIER
+        assert isinstance(refreshed.payload_json, dict)
+        assert refreshed.payload_json["double_speed"] is True
+    finally:
+        db.close()
+
+
+def test_patch_particelle_job_speed_resets_to_standard() -> None:
+    from app.services.elaborazioni_capacitas_particelle_sync import DAY_THROTTLE_MS, DOUBLE_SPEED_MULTIPLIER, MIN_THROTTLE_MS
+
+    db = TestingSessionLocal()
+    try:
+        fast_throttle = max(MIN_THROTTLE_MS, DAY_THROTTLE_MS // DOUBLE_SPEED_MULTIPLIER)
+        job = CapacitasParticelleSyncJob(
+            requested_by_user_id=1,
+            credential_id=None,
+            status="processing",
+            mode="progressive_catalog",
+            payload_json={"only_due": False, "double_speed": True},
+            result_json={"throttle_ms": fast_throttle, "speed_multiplier": DOUBLE_SPEED_MULTIPLIER, "processed_items": 10},
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+        job_id = job.id
+    finally:
+        db.close()
+
+    response = client.patch(
+        f"/elaborazioni/capacitas/involture/particelle/jobs/{job_id}/speed",
+        headers=auth_headers(),
+        json={"double_speed": False},
+    )
+
+    assert response.status_code == 200, response.text
+    result = response.json()["result_json"]
+    assert result["speed_multiplier"] == 1
+    assert result["throttle_ms"] >= DAY_THROTTLE_MS // 2
+
+
+def test_patch_particelle_job_speed_rejects_terminal_job() -> None:
+    db = TestingSessionLocal()
+    try:
+        job = CapacitasParticelleSyncJob(
+            requested_by_user_id=1,
+            credential_id=None,
+            status="succeeded",
+            mode="progressive_catalog",
+            payload_json={"only_due": False},
+            result_json={"throttle_ms": 900, "speed_multiplier": 1},
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+        job_id = job.id
+    finally:
+        db.close()
+
+    response = client.patch(
+        f"/elaborazioni/capacitas/involture/particelle/jobs/{job_id}/speed",
+        headers=auth_headers(),
+        json={"double_speed": True},
+    )
+
+    assert response.status_code == 409
+
+
+def test_patch_particelle_job_speed_returns_404_for_missing_job() -> None:
+    response = client.patch(
+        "/elaborazioni/capacitas/involture/particelle/jobs/999999/speed",
+        headers=auth_headers(),
+        json={"double_speed": True},
+    )
+    assert response.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_run_particelle_sync_job_picks_up_live_throttle_override(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Worker uses throttle_ms from result_json, so a live PATCH is picked up at next step."""
+    from app.modules.elaborazioni.capacitas.apps.involture.client import InVoltureClient
+    from app.models.capacitas import CapacitasParticelleSyncJob
+    from app.modules.elaborazioni.capacitas.models import (
+        CapacitasTerreniBatchItemResult,
+        CapacitasTerreniBatchResponse,
+    )
+    from app.services.elaborazioni_capacitas_particelle_sync import run_particelle_sync_job
+
+    sleeps_used: list[float] = []
+    original_sleep = __import__("asyncio").sleep
+
+    async def recording_sleep(delay: float) -> None:
+        sleeps_used.append(delay)
+        await original_sleep(0)
+
+    monkeypatch.setattr("asyncio.sleep", recording_sleep)
+
+    async def fake_sync_terreni_batch(db, client_arg, request, **kwargs):
+        return CapacitasTerreniBatchResponse(
+            processed_items=1,
+            imported_rows=1,
+            failed_items=0,
+            total_rows=1,
+            linked_units=0,
+            linked_occupancies=0,
+            imported_certificati=0,
+            imported_details=0,
+            items=[
+                CapacitasTerreniBatchItemResult(
+                    ok=True,
+                    label="Uras 1/680",
+                    search_key="Uras/1/680",
+                    total_rows=1,
+                    imported_rows=1,
+                    imported_certificati=0,
+                    imported_details=0,
+                )
+            ],
+        )
+
+    monkeypatch.setattr(
+        "app.services.elaborazioni_capacitas_particelle_sync.sync_terreni_batch",
+        fake_sync_terreni_batch,
+    )
+
+    db = TestingSessionLocal()
+    try:
+        # Pre-write 450ms (double-speed) in result_json to simulate a PATCH applied mid-run
+        OVERRIDDEN_THROTTLE_MS = 450
+        job = CapacitasParticelleSyncJob(
+            requested_by_user_id=1,
+            credential_id=None,
+            status="pending",
+            mode="progressive_catalog",
+            payload_json={"only_due": False, "limit": 2, "fetch_certificati": False, "fetch_details": False},
+            result_json={"throttle_ms": OVERRIDDEN_THROTTLE_MS, "speed_multiplier": 2},
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+
+        involture = InVoltureClient.__new__(InVoltureClient)
+        involture._manager = type("M", (), {})()  # type: ignore[attr-defined]
+
+        await run_particelle_sync_job(db, involture, job)
+
+        assert sleeps_used, "nessun sleep registrato tra i due item"
+        assert abs(sleeps_used[-1] - OVERRIDDEN_THROTTLE_MS / 1000) < 0.01, (
+            f"throttle atteso {OVERRIDDEN_THROTTLE_MS / 1000}s, usato {sleeps_used[-1]}s"
+        )
+    finally:
+        db.close()

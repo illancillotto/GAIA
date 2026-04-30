@@ -1628,6 +1628,24 @@ export async function deleteCapacitasParticelleSyncJob(token: string, jobId: num
   });
 }
 
+export async function patchCapacitasParticelleSyncJobSpeed(
+  token: string,
+  jobId: number,
+  doubleSpeed: boolean,
+): Promise<CapacitasParticelleSyncJob> {
+  return request<CapacitasParticelleSyncJob>(
+    `/elaborazioni/capacitas/involture/particelle/jobs/${jobId}/speed`,
+    {
+      method: "PATCH",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ double_speed: doubleSpeed }),
+    },
+  );
+}
+
 export async function getCatastoComuni(token: string, search?: string): Promise<CatastoComune[]> {
   const query = createQueryString({ search });
   return request<CatastoComune[]>(`/catasto/comuni${query}`, {

@@ -375,6 +375,10 @@ class CapacitasParticelleSyncJobCreateRequest(BaseModel):
     auto_resume: bool = True
 
 
+class CapacitasParticelleSyncJobSpeedPatch(BaseModel):
+    double_speed: bool
+
+
 class CapacitasParticelleSyncJobOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

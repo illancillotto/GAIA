@@ -24,6 +24,7 @@ import {
   listCapacitasParticelleSyncJobs,
   listCapacitasCredentials,
   listCapacitasTerreniJobs,
+  patchCapacitasParticelleSyncJobSpeed,
   rerunCapacitasAnagraficaHistoryJob,
   rerunCapacitasParticelleSyncJob,
   rerunCapacitasTerreniJob,
@@ -467,6 +468,7 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
   const [particelleJobBusyId, setParticelleJobBusyId] = useState<number | null>(null);
   const [particelleDeletingJobId, setParticelleDeletingJobId] = useState<number | null>(null);
   const [particelleMonitorSessionExpired, setParticelleMonitorSessionExpired] = useState(false);
+  const [particelleSpeedBusyId, setParticelleSpeedBusyId] = useState<number | null>(null);
   const particelleInFlightJobIds = useRef<Set<number>>(new Set());
   const [particelleError, setParticelleError] = useState<string | null>(null);
   const [particelleStatusMessage, setParticelleStatusMessage] = useState<string | null>(null);
@@ -849,6 +851,20 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
       setParticelleError(deleteError instanceof Error ? deleteError.message : "Errore eliminazione job particelle");
     } finally {
       setParticelleDeletingJobId(null);
+    }
+  }
+
+  async function handlePatchParticelleSpeed(jobId: number, doubleSpeed: boolean): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) return;
+    setParticelleSpeedBusyId(jobId);
+    try {
+      const updated = await patchCapacitasParticelleSyncJobSpeed(token, jobId, doubleSpeed);
+      setParticelleJobs((prev) => prev.map((j) => (j.id === updated.id ? updated : j)));
+    } catch (err) {
+      setParticelleError(err instanceof Error ? err.message : "Errore cambio velocità job");
+    } finally {
+      setParticelleSpeedBusyId(null);
     }
   }
 
@@ -1276,11 +1292,38 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
                               <div className="mt-3 h-2 overflow-hidden rounded-full bg-sky-100">
                                 <div className="h-full rounded-full bg-sky-500 transition-all duration-500" style={{ width: `${result.progress_percent}%` }} />
                               </div>
-                              <div className="mt-2 flex flex-wrap gap-3 text-xs text-gray-500">
+                              <div className="mt-2 flex flex-wrap items-center gap-3 text-xs text-gray-500">
                                 <span>ok <span className="font-medium text-emerald-700">{result.success_items}</span></span>
                                 <span>skipped <span className="font-medium text-gray-600">{result.skipped_items}</span></span>
                                 <span>failed <span className="font-medium text-rose-600">{result.failed_items}</span></span>
                                 <span className="ml-auto text-gray-400">{result.aggressive_window ? "Fascia serale" : "Fascia diurna"} · {result.throttle_ms}ms{result.speed_multiplier && result.speed_multiplier > 1 ? ` · x${result.speed_multiplier}` : ""} · {result.parallel_workers ?? 1}w</span>
+                              </div>
+                              <div className="mt-3 flex flex-wrap items-center gap-2">
+                                <span className="text-xs text-gray-400 mr-1">Velocità:</span>
+                                <button
+                                  className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
+                                    !result.speed_multiplier || result.speed_multiplier <= 1
+                                      ? "border-[#1D4E35] bg-[#eef7ef] text-[#1D4E35]"
+                                      : "border-gray-200 bg-gray-50 text-gray-600 hover:border-[#1D4E35]/30 hover:bg-[#f5faf5]"
+                                  }`}
+                                  disabled={particelleSpeedBusyId === job.id}
+                                  onClick={() => void handlePatchParticelleSpeed(job.id, false)}
+                                  type="button"
+                                >
+                                  Standard
+                                </button>
+                                <button
+                                  className={`rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
+                                    result.speed_multiplier && result.speed_multiplier > 1
+                                      ? "border-[#1D4E35] bg-[#eef7ef] text-[#1D4E35]"
+                                      : "border-gray-200 bg-gray-50 text-gray-600 hover:border-[#1D4E35]/30 hover:bg-[#f5faf5]"
+                                  }`}
+                                  disabled={particelleSpeedBusyId === job.id}
+                                  onClick={() => void handlePatchParticelleSpeed(job.id, true)}
+                                  type="button"
+                                >
+                                  {particelleSpeedBusyId === job.id ? "..." : "Doppia velocità"}
+                                </button>
                               </div>
                               {result.recent_items.length > 0 ? (
                                 <div className="mt-3 overflow-x-auto">
