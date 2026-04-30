@@ -1140,7 +1140,7 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
                   onChange={(event) => setParticelleSyncForm((current) => ({ ...current, limit: event.target.value }))}
                 />
               </label>
-              <label className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
+              <label className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3" title="Elabora solo le particelle che non sono state sincronizzate di recente (ultime 72h di giorno, 12h la sera). Disattiva per forzare una riverifica completa di tutte le particelle.">
                 <input
                   checked={particelleSyncForm.only_due}
                   className="h-4 w-4 accent-[#1D4E35]"
@@ -1149,7 +1149,7 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
                 />
                 <span className="text-sm text-gray-700">Solo particelle dovute</span>
               </label>
-              <label className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
+              <label className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3" title="Per ogni particella scarica anche il PDF del certificato catastale da Capacitas e lo salva nel database.">
                 <input
                   checked={particelleSyncForm.fetch_certificati}
                   className="h-4 w-4 accent-[#1D4E35]"
@@ -1158,7 +1158,7 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
                 />
                 <span className="text-sm text-gray-700">Scarica certificati</span>
               </label>
-              <label className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
+              <label className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3" title="Recupera i dati di dettaglio della particella (qualità, classe, superficie, redditi) dalla scheda terreno di Capacitas.">
                 <input
                   checked={particelleSyncForm.fetch_details}
                   className="h-4 w-4 accent-[#1D4E35]"
