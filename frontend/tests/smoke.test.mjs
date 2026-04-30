@@ -91,10 +91,12 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   const importPage = read("src/app/catasto/import/page.tsx");
   const importDetailPage = read("src/app/catasto/import/[id]/page.tsx");
   const distrettiPage = read("src/app/catasto/distretti/page.tsx");
+  const distrettoDetailPage = read("src/app/catasto/distretti/[id]/page.tsx");
   const particelleDetailPage = read("src/app/catasto/particelle/[id]/page.tsx");
   const anomaliePage = read("src/app/catasto/anomalie/page.tsx");
   const anagraficaPage = read("src/app/catasto/elaborazioni-massive/page.tsx");
   const anagraficaBulkPanel = read("src/components/catasto/anagrafica/AnagraficaBulkPanel.tsx");
+  const mapContainer = read("src/components/catasto/gis/MapContainer.tsx");
 
   assert.match(dashboardPage, /GAIA Catasto/);
   assert.match(catastoPageWrapper, /ProtectedPage/);
@@ -144,6 +146,15 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   assert.match(importPage, /setReportPage\(1\)/);
   assert.match(distrettiPage, /catastoListDistretti/);
   assert.match(distrettiPage, /catastoGetDistrettoKpi/);
+  assert.match(distrettiPage, /L'anno corrente/);
+  assert.match(distrettiPage, /Tabella distretti/);
+  assert.match(distrettoDetailPage, /catastoGetDistretto/);
+  assert.match(distrettoDetailPage, /catastoListParticelle/);
+  assert.match(distrettoDetailPage, /catastoListAnomalie/);
+  assert.match(distrettoDetailPage, /Esporta CSV/);
+  assert.match(distrettoDetailPage, /Esporta XLS/);
+  assert.match(distrettoDetailPage, /Esporta PDF/);
+  assert.match(distrettoDetailPage, /Vista completa/);
   assert.match(anomaliePage, /catastoUpdateAnomalia/);
   assert.match(anomaliePage, /requiredRoles=\{\["admin", "super_admin"\]\}/);
   assert.match(anagraficaPage, /Elaborazione massiva/);
@@ -151,6 +162,10 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   assert.match(anagraficaBulkPanel, /catastoBulkSearchAnagrafica/);
   assert.match(particelleDetailPage, /catastoGetParticellaUtenze/);
   assert.match(particelleDetailPage, /catastoGetParticellaAnomalie/);
+  assert.match(mapContainer, /\/tiles\/cat_distretti\/\{z\}\/\{x\}\/\{y\}/);
+  assert.match(mapContainer, /"source-layer": "cat_distretti"/);
+  assert.match(mapContainer, /id: "distretti-fill"/);
+  assert.match(mapContainer, /id: "distretti-outline"/);
   assert.match(requestWorkspace, /createElaborazioneBatch/);
   assert.match(requestWorkspace, /startElaborazioneBatch/);
   assert.match(requestWorkspace, /Scarica template CSV/);

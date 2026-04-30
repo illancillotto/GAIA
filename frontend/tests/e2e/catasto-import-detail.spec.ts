@@ -99,7 +99,7 @@ test("admin opens catasto import detail page for a completed batch", async ({ pa
 
   await page.goto("/catasto/import/00000000-0000-0000-0000-000000000333");
 
-  await expect(page.getByText("Dettaglio import")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Dettaglio import", level: 2 })).toBeVisible();
   await expect(page.getByText("capacitas-detail.xlsx")).toBeVisible();
   await expect(page.getByText("Sintesi batch")).toBeVisible();
   await expect(page.getByText("Distretti rilevati")).toBeVisible();
@@ -107,4 +107,59 @@ test("admin opens catasto import detail page for a completed batch", async ({ pa
   await expect(page.getByText("Preview (prime 50)")).toBeVisible();
   await expect(page.getByText("Lista anomalie")).toBeVisible();
   await expect(page.getByRole("cell", { name: "VAL-02-cf_invalido" }).first()).toBeVisible();
+});
+
+test("admin opens catasto import detail page for a distretti batch", async ({ page }) => {
+  await loginAsAdmin(page);
+
+  await page.route("**/api/catasto/import/00000000-0000-0000-0000-000000000553/status", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        id: "00000000-0000-0000-0000-000000000553",
+        filename: "distretti-detail.zip",
+        tipo: "shapefile_distretti",
+        anno_campagna: null,
+        hash_file: null,
+        righe_totali: 44,
+        righe_importate: 42,
+        righe_anomalie: 2,
+        status: "completed",
+        report_json: {
+          righe_staging: 44,
+          distretti_validi: 42,
+          distretti_inseriti: 1,
+          distretti_aggiornati: 4,
+          distretti_invariati: 37,
+          distretti_versionati: 5,
+          distretti_assenti_nello_snapshot: 2,
+          righe_scartate_senza_numero: 1,
+          righe_scartate_senza_geometria: 1,
+          comuni_rilevati: [],
+        },
+        errore: null,
+        created_at: "2026-04-29T09:10:30Z",
+        completed_at: "2026-04-29T09:12:00Z",
+        created_by: 1,
+      }),
+    });
+  });
+
+  await page.route("**/api/catasto/import/00000000-0000-0000-0000-000000000553/report**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ items: [], total: 0, page: 1, page_size: 50 }),
+    });
+  });
+
+  await page.goto("/catasto/import/00000000-0000-0000-0000-000000000553");
+
+  await expect(page.getByRole("heading", { name: "Dettaglio import", level: 2 })).toBeVisible();
+  await expect(page.getByText("distretti-detail.zip")).toBeVisible();
+  await expect(page.getByText("Sintesi batch")).toBeVisible();
+  await expect(page.getByText("Righe totali")).toBeVisible();
+  await expect(page.getByText("Nessun contatore disponibile")).toBeVisible();
+  await expect(page.getByText("Nessuna preview")).toBeVisible();
 });

@@ -585,6 +585,53 @@ def test_distretti_endpoint_returns_seeded_items() -> None:
     assert payload[0]["num_distretto"] == "10"
 
 
+def test_distretto_geojson_endpoint_returns_feature() -> None:
+    raw_conn = engine.raw_connection()
+    try:
+        raw_conn.create_function(
+            "AsGeoJSON",
+            1,
+            lambda value: '{"type":"MultiPolygon","coordinates":[]}' if value else None,
+        )
+    finally:
+        raw_conn.close()
+
+    db = TestingSessionLocal()
+    try:
+        distretto = db.query(CatDistretto).filter(CatDistretto.num_distretto == "10").one()
+        distretto.geometry = "SRID=4326;MULTIPOLYGON(((8.58 39.78,8.581 39.78,8.581 39.781,8.58 39.781,8.58 39.78)))"
+        db.add(distretto)
+        db.commit()
+        distretto_id = str(distretto.id)
+    finally:
+        db.close()
+
+    response = client.get(f"/catasto/distretti/{distretto_id}/geojson", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["type"] == "Feature"
+    assert payload["geometry"]["type"] in {"Polygon", "MultiPolygon"}
+    assert payload["properties"]["num_distretto"] == "10"
+
+
+def test_distretto_geojson_endpoint_returns_404_without_geometry() -> None:
+    db = TestingSessionLocal()
+    try:
+        distretto = db.query(CatDistretto).filter(CatDistretto.num_distretto == "10").one()
+        distretto.geometry = None
+        db.add(distretto)
+        db.commit()
+        distretto_id = str(distretto.id)
+    finally:
+        db.close()
+
+    response = client.get(f"/catasto/distretti/{distretto_id}/geojson", headers=auth_headers())
+
+    assert response.status_code == 404
+    assert "geometria" in response.json()["detail"].lower()
+
+
 def test_anomalie_endpoint_filters_by_tipo() -> None:
     response = client.get("/catasto/anomalie/?tipo=VAL-02-cf_invalido", headers=auth_headers())
     assert response.status_code == 200
