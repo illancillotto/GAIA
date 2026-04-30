@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 import logging
 
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import inspect
@@ -8,9 +9,10 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.api.router import api_router
 from app.core.config import settings
-from app.core.database import SessionLocal, engine
+from app.core.database import SessionLocal, engine, get_db
 from app.core.logging import configure_logging
 from app.models.section_permission import Section
+from app.modules.utenze.anpr.scheduler import register_anpr_scheduler
 from app.scripts.bootstrap_sections import ensure_default_sections
 from app.services.bootstrap_admin import ensure_bootstrap_admin
 
@@ -66,7 +68,11 @@ def _ensure_sections_on_startup() -> None:
 async def lifespan(_: FastAPI):
     _ensure_bootstrap_admin_on_startup()
     _ensure_sections_on_startup()
+    scheduler = AsyncIOScheduler(timezone="UTC")
+    await register_anpr_scheduler(scheduler, get_db)
+    scheduler.start()
     yield
+    scheduler.shutdown(wait=False)
 
 app = FastAPI(
     title=settings.project_name,

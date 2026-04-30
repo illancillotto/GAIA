@@ -114,6 +114,12 @@ class AnagraficaPerson(Base):
     cap: Mapped[str | None] = mapped_column(String(16), nullable=True)
     email: Mapped[str | None] = mapped_column(String(255), nullable=True)
     telefono: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    anpr_id: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
+    stato_anpr: Mapped[str | None] = mapped_column(String(30), nullable=True, index=True)
+    data_decesso: Mapped[date | None] = mapped_column(Date, nullable=True)
+    luogo_decesso_comune: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    last_anpr_check_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_c030_check_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(

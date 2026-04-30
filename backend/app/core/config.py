@@ -1,7 +1,12 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic import AliasChoices, Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+REPO_ROOT = Path(__file__).resolve().parents[3]
+ROOT_ENV_FILE = REPO_ROOT / ".env"
 
 
 class Settings(BaseSettings):
@@ -81,6 +86,21 @@ class Settings(BaseSettings):
     jwt_secret_key: str = Field(alias="JWT_SECRET_KEY")
     jwt_expire_minutes: int = Field(default=60, alias="JWT_EXPIRE_MINUTES")
     jwt_algorithm: str = "HS256"
+    pdnd_client_id: str = Field(default="", alias="PDND_CLIENT_ID")
+    pdnd_kid: str = Field(default="", alias="PDND_KID")
+    pdnd_private_key_path: str = Field(default="", alias="PDND_PRIVATE_KEY_PATH")
+    pdnd_private_key_pem: str = Field(default="", alias="PDND_PRIVATE_KEY_PEM")
+    pdnd_auth_url: str = Field(default="https://auth.interop.pagopa.it/as/token.oauth2", alias="PDND_AUTH_URL")
+    pdnd_audience: str = Field(default="https://interop.pagopa.it/", alias="PDND_AUDIENCE")
+    anpr_base_url: str = Field(
+        default="https://modipa-val.anpr.interno.it/govway/rest/in/MinInternoPortaANPR-PDND",
+        alias="ANPR_BASE_URL",
+    )
+    pdnd_fruitore_user_id: str = Field(default="GAIA-CBO", alias="PDND_FRUITORE_USER_ID")
+    pdnd_fruitore_user_location: str = Field(default="GAIA-SRV", alias="PDND_FRUITORE_USER_LOCATION")
+    pdnd_loa: str = Field(default="LOW", alias="PDND_LOA")
+    purpose_id_c030: str = Field(default="", alias="PURPOSE_ID_C030")
+    purpose_id_c004: str = Field(default="", alias="PURPOSE_ID_C004")
     nas_host: str = Field(default="nas.internal.local", alias="NAS_HOST")
     nas_port: int = Field(default=22, alias="NAS_PORT")
     nas_username: str = Field(default="svc_naap", alias="NAS_USERNAME")
@@ -164,7 +184,7 @@ class Settings(BaseSettings):
     utenze_delete_password: str | None = Field(default=None, alias="UTENZE_DELETE_PASSWORD")
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=ROOT_ENV_FILE,
         env_file_encoding="utf-8",
         case_sensitive=False,
         extra="ignore",

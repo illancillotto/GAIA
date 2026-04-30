@@ -145,6 +145,7 @@ la documentazione di dominio fa riferimento a `domain-docs/utenze/`.
 
 1. Copia il file ambiente:
    `cp .env.example .env`
+   Il file ambiente canonico del repository e `/.env`; i servizi Docker e il backend leggono da questa source of truth.
 2. Avvia lo stack:
    `make up`
 3. Rebuild quando cambi dipendenze o entrypoint:

@@ -19,6 +19,18 @@ def test_settings_use_expected_defaults(monkeypatch) -> None:
         "NAS_ACL_COMMAND_TEMPLATE",
         "JWT_SECRET_KEY",
         "JWT_EXPIRE_MINUTES",
+        "PDND_CLIENT_ID",
+        "PDND_KID",
+        "PDND_PRIVATE_KEY_PATH",
+        "PDND_PRIVATE_KEY_PEM",
+        "PDND_AUTH_URL",
+        "PDND_AUDIENCE",
+        "ANPR_BASE_URL",
+        "PDND_FRUITORE_USER_ID",
+        "PDND_FRUITORE_USER_LOCATION",
+        "PDND_LOA",
+        "PURPOSE_ID_C030",
+        "PURPOSE_ID_C004",
         "SYNC_LIVE_MAX_ATTEMPTS",
         "SYNC_LIVE_RETRY_DELAY_SECONDS",
         "SYNC_LIVE_BACKOFF_MODE",
@@ -46,6 +58,18 @@ def test_settings_use_expected_defaults(monkeypatch) -> None:
     assert settings.jwt_secret_key == "config-defaults-secret"
     assert settings.jwt_expire_minutes == 60
     assert settings.jwt_algorithm == "HS256"
+    assert settings.pdnd_client_id == ""
+    assert settings.pdnd_kid == ""
+    assert settings.pdnd_private_key_path == ""
+    assert settings.pdnd_private_key_pem == ""
+    assert settings.pdnd_auth_url == "https://auth.interop.pagopa.it/as/token.oauth2"
+    assert settings.pdnd_audience == "https://interop.pagopa.it/"
+    assert settings.anpr_base_url == "https://modipa-val.anpr.interno.it/govway/rest/in/MinInternoPortaANPR-PDND"
+    assert settings.pdnd_fruitore_user_id == "GAIA-CBO"
+    assert settings.pdnd_fruitore_user_location == "GAIA-SRV"
+    assert settings.pdnd_loa == "LOW"
+    assert settings.purpose_id_c030 == ""
+    assert settings.purpose_id_c004 == ""
     assert settings.nas_host == "nas.internal.local"
     assert settings.nas_port == 22
     assert settings.nas_username == "svc_naap"
@@ -76,6 +100,18 @@ def test_settings_allow_environment_override(monkeypatch) -> None:
     monkeypatch.setenv("BACKEND_PORT", "9010")
     monkeypatch.setenv("BACKEND_CORS_ORIGINS", "http://localhost:8080,https://gaia.internal")
     monkeypatch.setenv("DATABASE_URL", "sqlite:///./test.db")
+    monkeypatch.setenv("PDND_CLIENT_ID", "client-123")
+    monkeypatch.setenv("PDND_KID", "kid-456")
+    monkeypatch.setenv("PDND_PRIVATE_KEY_PATH", "/tmp/pdnd.pem")
+    monkeypatch.setenv("PDND_PRIVATE_KEY_PEM", "pem-inline")
+    monkeypatch.setenv("PDND_AUTH_URL", "https://auth.example.test/token")
+    monkeypatch.setenv("PDND_AUDIENCE", "https://audience.example.test/")
+    monkeypatch.setenv("ANPR_BASE_URL", "https://anpr.example.test")
+    monkeypatch.setenv("PDND_FRUITORE_USER_ID", "GAIA-TEST")
+    monkeypatch.setenv("PDND_FRUITORE_USER_LOCATION", "GAIA-TEST-SRV")
+    monkeypatch.setenv("PDND_LOA", "HIGH")
+    monkeypatch.setenv("PURPOSE_ID_C030", "purpose-c030")
+    monkeypatch.setenv("PURPOSE_ID_C004", "purpose-c004")
     monkeypatch.setenv("NAS_HOST", "10.10.10.10")
     monkeypatch.setenv("NAS_TIMEOUT", "25")
     monkeypatch.setenv("NAS_SHARES_COMMAND", "ls /shares")
@@ -96,6 +132,18 @@ def test_settings_allow_environment_override(monkeypatch) -> None:
     assert settings.backend_port == 9010
     assert settings.backend_cors_origins == "http://localhost:8080,https://gaia.internal"
     assert settings.database_url == "sqlite:///./test.db"
+    assert settings.pdnd_client_id == "client-123"
+    assert settings.pdnd_kid == "kid-456"
+    assert settings.pdnd_private_key_path == "/tmp/pdnd.pem"
+    assert settings.pdnd_private_key_pem == "pem-inline"
+    assert settings.pdnd_auth_url == "https://auth.example.test/token"
+    assert settings.pdnd_audience == "https://audience.example.test/"
+    assert settings.anpr_base_url == "https://anpr.example.test"
+    assert settings.pdnd_fruitore_user_id == "GAIA-TEST"
+    assert settings.pdnd_fruitore_user_location == "GAIA-TEST-SRV"
+    assert settings.pdnd_loa == "HIGH"
+    assert settings.purpose_id_c030 == "purpose-c030"
+    assert settings.purpose_id_c004 == "purpose-c004"
     assert settings.nas_host == "10.10.10.10"
     assert settings.nas_timeout == 25
     assert settings.nas_shares_command == "ls /shares"

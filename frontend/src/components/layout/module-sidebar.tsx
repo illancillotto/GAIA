@@ -32,6 +32,7 @@ type ModuleSidebarProps = {
   reviewBadge?: number;
   userBadge?: number;
   grantedSectionKeys?: string[];
+  currentUserRole?: string;
 };
 
 export function ModuleSidebar({
@@ -39,8 +40,10 @@ export function ModuleSidebar({
   reviewBadge = 0,
   userBadge = 0,
   grantedSectionKeys = [],
+  currentUserRole,
 }: ModuleSidebarProps) {
   const canAccessUsersSection = grantedSectionKeys.includes("accessi.users");
+  const canAccessUtenzeAnprConfig = currentUserRole === "admin" || currentUserRole === "super_admin";
 
   if (currentModuleKey === "nas_control") {
     return (
@@ -147,6 +150,9 @@ export function ModuleSidebar({
         <NavItem href="/utenze" icon={GridIcon} label="Dashboard" />
         <NavItem href="/utenze/subjects" icon={UserIcon} label="Soggetti" match="prefix" />
         <NavItem href="/utenze/import" icon={RefreshIcon} label="Import archivio" match="prefix" />
+        {canAccessUtenzeAnprConfig ? (
+          <NavItem href="/anagrafica/anpr-config" icon={LockIcon} label="Config. ANPR" match="prefix" />
+        ) : null}
       </div>
     );
   }

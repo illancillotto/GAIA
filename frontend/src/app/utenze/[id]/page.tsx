@@ -4,6 +4,7 @@ import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { AnprStatusCard } from "@/components/anagrafica/AnprStatusCard";
 import { UtenzeModulePage } from "@/components/utenze/utenze-module-page";
 import {
   deleteUtenzeDocument,
@@ -21,9 +22,11 @@ import { cn } from "@/lib/cn";
 import type {
   AnagraficaDocument,
   AnagraficaNasFolderCandidate,
+  AnprSubjectStatus,
   AnagraficaSubjectDetail,
   AnagraficaSubjectNasImportStatus,
   AnagraficaSubjectUpdateInput,
+  CurrentUser,
 } from "@/types/api";
 
 type DocumentPreviewKind = "pdf" | "image" | "docx" | "spreadsheet" | "text" | "download";
@@ -66,7 +69,8 @@ function isPreviewableText(extension: string | null): boolean {
   return extension != null && TEXT_EXTENSIONS.has(extension.toLowerCase());
 }
 
-function DetailContent({ token, subjectId }: { token: string; subjectId: string }) {
+function DetailContent({ token, subjectId, currentUser }: { token: string; subjectId: string; currentUser: CurrentUser }) {
+  void currentUser;
   const router = useRouter();
   const manualFileInputRef = useRef<HTMLInputElement | null>(null);
   const [subject, setSubject] = useState<AnagraficaSubjectDetail | null>(null);
@@ -571,6 +575,18 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
     return <article className="panel-card text-sm text-gray-500">Caricamento scheda soggetto.</article>;
   }
 
+  const initialAnprStatus: AnprSubjectStatus | undefined = subject.person
+    ? {
+        subject_id: subject.id,
+        anpr_id: subject.person.anpr_id,
+        stato_anpr: subject.person.stato_anpr,
+        data_decesso: subject.person.data_decesso,
+        luogo_decesso_comune: subject.person.luogo_decesso_comune,
+        last_anpr_check_at: subject.person.last_anpr_check_at,
+        last_c030_check_at: subject.person.last_c030_check_at,
+      }
+    : undefined;
+
   const readOnlyControlClassName = !isEditMode ? "bg-gray-50 text-gray-500" : "";
 
   return (
@@ -972,6 +988,7 @@ function DetailContent({ token, subjectId }: { token: string; subjectId: string 
           {saveError ? <p className="mb-3 text-sm text-red-600">{saveError}</p> : null}
           {saveMessage ? <p className="mb-3 text-sm text-[#1D4E35]">{saveMessage}</p> : null}
           <div className="grid gap-4 md:grid-cols-2">
+            {subject.person ? <AnprStatusCard subjectId={subjectId} initialStatus={initialAnprStatus} /> : null}
             <label className="block text-sm font-medium text-gray-700 md:col-span-2">
               Source name raw
               <input className={cn("form-control mt-1", readOnlyControlClassName)} value={sourceNameRaw} onChange={(event) => setSourceNameRaw(event.target.value)} readOnly={!isEditMode} />
@@ -1437,7 +1454,7 @@ export default function UtenzeSubjectDetailPage() {
       description="Scheda utenza completa del soggetto, documenti associati e audit log."
       breadcrumb={params.id}
     >
-      {({ token }) => <DetailContent token={token} subjectId={params.id} />}
+      {({ token, currentUser }) => <DetailContent token={token} subjectId={params.id} currentUser={currentUser} />}
     </UtenzeModulePage>
   );
 }

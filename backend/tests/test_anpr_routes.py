@@ -1,0 +1,148 @@
+from __future__ import annotations
+
+import uuid
+from collections.abc import Generator
+from types import SimpleNamespace
+
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from app.core.database import get_db
+from app.core.security import hash_password
+from app.db.base import Base
+from app.models.application_user import ApplicationUser, ApplicationUserRole
+from app.modules.accessi.routes.auth import router as auth_router
+from app.modules.utenze.anpr.routes import router as anpr_router
+
+
+SQLALCHEMY_DATABASE_URL = "sqlite://"
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
+TestingSessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+app = FastAPI()
+app.include_router(auth_router)
+app.include_router(anpr_router)
+client = TestClient(app)
+
+
+def override_get_db() -> Generator[Session, None, None]:
+    db = TestingSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+@pytest.fixture(autouse=True)
+def setup_database() -> Generator[None, None, None]:
+    app.dependency_overrides[get_db] = override_get_db
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+    yield
+    app.dependency_overrides.clear()
+    Base.metadata.drop_all(bind=engine)
+
+
+def _create_user(role: str, *, module_utenze: bool = True) -> ApplicationUser:
+    db = TestingSessionLocal()
+    user = ApplicationUser(
+        username=f"{role}_user",
+        email=f"{role}@example.local",
+        password_hash=hash_password("secret123"),
+        role=role,
+        is_active=True,
+        module_accessi=True,
+        module_utenze=module_utenze,
+    )
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    db.close()
+    return user
+
+
+def _auth_headers(username: str) -> dict[str, str]:
+    response = client.post("/auth/login", json={"username": username, "password": "secret123"})
+    assert response.status_code == 200
+    token = response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+def test_post_sync_subject_allows_reviewer_and_returns_result(monkeypatch: pytest.MonkeyPatch) -> None:
+    reviewer = _create_user(ApplicationUserRole.REVIEWER.value)
+    subject_id = uuid.uuid4()
+
+    async def fake_sync_single_subject(subject_id: str, db, triggered_by: str, auth, client):
+        assert triggered_by == f"user:{reviewer.id}"
+        return {
+            "subject_id": subject_id,
+            "success": True,
+            "esito": "alive",
+            "data_decesso": None,
+            "anpr_id": "123456789",
+            "calls_made": 2,
+            "message": "ok",
+        }
+
+    monkeypatch.setattr("app.modules.utenze.anpr.routes.sync_single_subject", fake_sync_single_subject)
+
+    response = client.post(f"/utenze/anpr/sync/{subject_id}", headers=_auth_headers(reviewer.username))
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["subject_id"] == str(subject_id)
+    assert body["esito"] == "alive"
+    assert body["calls_made"] == 2
+
+
+def test_post_sync_subject_denies_viewer() -> None:
+    viewer = _create_user(ApplicationUserRole.VIEWER.value)
+    subject_id = uuid.uuid4()
+
+    response = client.post(f"/utenze/anpr/sync/{subject_id}", headers=_auth_headers(viewer.username))
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Insufficient role"
+
+
+def test_get_config_returns_admin_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    admin = _create_user(ApplicationUserRole.ADMIN.value)
+
+    async def fake_get_config(db):
+        return SimpleNamespace(
+            max_calls_per_day=100,
+            job_enabled=True,
+            job_cron="0 2 * * *",
+            lookback_years=1,
+            retry_not_found_days=90,
+            updated_at=None,
+        )
+
+    monkeypatch.setattr("app.modules.utenze.anpr.routes.get_config", fake_get_config)
+
+    response = client.get("/utenze/anpr/config", headers=_auth_headers(admin.username))
+
+    assert response.status_code == 200
+    assert response.json()["job_cron"] == "0 2 * * *"
+
+
+def test_post_job_trigger_returns_accepted(monkeypatch: pytest.MonkeyPatch) -> None:
+    admin = _create_user(ApplicationUserRole.ADMIN.value)
+    monkeypatch.setattr("app.modules.utenze.anpr.routes._run_daily_job_task", lambda: None)
+    monkeypatch.setitem(
+        __import__("app.modules.utenze.anpr.routes", fromlist=["_job_runtime_state"])._job_runtime_state,
+        "running",
+        False,
+    )
+
+    response = client.post("/utenze/anpr/job/trigger", headers=_auth_headers(admin.username))
+
+    assert response.status_code == 202
+    assert response.json()["message"] == "job scheduled"

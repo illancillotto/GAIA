@@ -10,7 +10,7 @@ Questa guida descrive il deployment iniziale della piattaforma in ambiente local
 ## 2. Prerequisiti
 
 - Docker Engine e Docker Compose plugin
-- file `.env` derivato da `.env.example`
+- file root `.env` derivato da `.env.example`
 - porte locali disponibili per frontend, backend e nginx
 
 ## 3. Servizi
@@ -23,6 +23,7 @@ Questa guida descrive il deployment iniziale della piattaforma in ambiente local
 ## 4. Avvio Locale
 
 1. `cp .env.example .env`
+   Il file root `/.env` e la source of truth del setup locale; evitare di duplicare la configurazione in file env separati di sottocartella.
 2. `make up`
 3. `make migrate`
 4. `make bootstrap-admin`

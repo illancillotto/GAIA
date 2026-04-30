@@ -86,6 +86,7 @@ export function Sidebar({
           reviewBadge={reviewBadge}
           userBadge={userBadge}
           grantedSectionKeys={grantedSectionKeys}
+          currentUserRole={currentUser.role}
         />
       </div>
 

@@ -424,6 +424,12 @@ export type AnagraficaPerson = {
   cognome: string;
   nome: string;
   codice_fiscale: string;
+  anpr_id: string | null;
+  stato_anpr: "alive" | "deceased" | "not_found_anpr" | "cancelled_anpr" | "error" | "unknown" | null;
+  data_decesso: string | null;
+  luogo_decesso_comune: string | null;
+  last_anpr_check_at: string | null;
+  last_c030_check_at: string | null;
   data_nascita: string | null;
   comune_nascita: string | null;
   indirizzo: string | null;
@@ -508,13 +514,73 @@ export type AnagraficaSubjectDetail = {
 
 export type UtenzeSubjectDetail = AnagraficaSubjectDetail;
 
+export type AnagraficaPersonInput = {
+  cognome: string;
+  nome: string;
+  codice_fiscale: string;
+  data_nascita?: string | null;
+  comune_nascita?: string | null;
+  indirizzo?: string | null;
+  comune_residenza?: string | null;
+  cap?: string | null;
+  email?: string | null;
+  telefono?: string | null;
+  note?: string | null;
+};
+
+export type AnprSubjectStatus = {
+  subject_id: string;
+  anpr_id: string | null;
+  stato_anpr: "alive" | "deceased" | "not_found_anpr" | "cancelled_anpr" | "error" | "unknown" | null;
+  data_decesso: string | null;
+  luogo_decesso_comune: string | null;
+  last_anpr_check_at: string | null;
+  last_c030_check_at: string | null;
+};
+
+export type AnprSyncResult = {
+  subject_id: string;
+  success: boolean;
+  esito: string;
+  data_decesso: string | null;
+  anpr_id: string | null;
+  calls_made: number;
+  message: string;
+};
+
+export type AnprSyncConfig = {
+  max_calls_per_day: number;
+  job_enabled: boolean;
+  job_cron: string;
+  lookback_years: number;
+  retry_not_found_days: number;
+  updated_at: string | null;
+};
+
+export type AnprSyncConfigUpdateInput = {
+  max_calls_per_day?: number;
+  job_enabled?: boolean;
+  job_cron?: string;
+  lookback_years?: number;
+  retry_not_found_days?: number;
+};
+
+export type AnprJobTriggerResult = {
+  started_at: string;
+  subjects_processed: number;
+  deceased_found: number;
+  errors: number;
+  calls_used: number;
+  message: string;
+};
+
 export type AnagraficaSubjectCreateInput = {
   subject_type: "person" | "company" | "unknown";
   source_name_raw: string;
   nas_folder_path?: string | null;
   nas_folder_letter?: string | null;
   requires_review?: boolean;
-  person?: Omit<AnagraficaPerson, "subject_id" | "created_at" | "updated_at"> | null;
+  person?: AnagraficaPersonInput | null;
   company?: Omit<AnagraficaCompany, "subject_id" | "created_at" | "updated_at"> | null;
 };
 
@@ -526,7 +592,7 @@ export type AnagraficaSubjectUpdateInput = {
   nas_folder_path?: string | null;
   nas_folder_letter?: string | null;
   requires_review?: boolean;
-  person?: Omit<AnagraficaPerson, "subject_id" | "created_at" | "updated_at"> | null;
+  person?: AnagraficaPersonInput | null;
   company?: Omit<AnagraficaCompany, "subject_id" | "created_at" | "updated_at"> | null;
 };
 

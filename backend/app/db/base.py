@@ -55,6 +55,7 @@ from app.modules.utenze.models import (
     AnagraficaSubject,
     BonificaUserStaging,
 )
+from app.modules.utenze.anpr.models import AnprCheckLog, AnprSyncConfig
 from app.models.catasto import (
     CatastoBatch,
     CatastoCaptchaLog,
@@ -93,6 +94,8 @@ __all__ = [
     "AnagraficaPerson",
     "AnagraficaPersonSnapshot",
     "AnagraficaSubject",
+    "AnprCheckLog",
+    "AnprSyncConfig",
     "BonificaUserStaging",
     "Base",
     "BonificaOristaneseCredential",
