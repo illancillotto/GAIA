@@ -1,104 +1,162 @@
 """
-Test manuale di verifica per i due bug fix su Cabras foglio 24 / particella 3.
+Sync e verifica di una particella del consorzio Capacitas.
 
 Uso:
-    docker exec -w /app gaia-backend python test_fix_verification.py
+    docker exec -w /app gaia-backend python test_fix_verification.py <comune> <foglio> <particella>
 
-Verifica:
-  Fix 1 - Anno fallback: utenza_id non deve essere None per sub a (CCO 0A1462373)
-  Fix 2 - Refetch cert: dopo refetch, CCO 0A1462373 e 0A1031735 devono avere intestatari
+Esempi:
+    docker exec -w /app gaia-backend python test_fix_verification.py Cabras 24 3
+    docker exec -w /app gaia-backend python test_fix_verification.py Cabras 24 37
+    docker exec -w /app gaia-backend python test_fix_verification.py Cabras 1 4
+    docker exec -w /app gaia-backend python test_fix_verification.py Uras 1 680
 """
 import asyncio
 import sys
 sys.path.insert(0, '/app')
 
 
-async def main():
+def _sep(title: str = "") -> None:
+    print(f"\n{'=' * 60}")
+    if title:
+        print(title)
+        print('=' * 60)
+
+
+async def main(comune_input: str, foglio: str, particella: str) -> None:
     from app.core.database import SessionLocal
     from app.services.elaborazioni_capacitas import _decrypt
     from app.modules.elaborazioni.capacitas.session import CapacitasSessionManager
     from app.modules.elaborazioni.capacitas.apps.involture.client import InVoltureClient
-    from app.services.elaborazioni_capacitas_terreni import (
-        sync_terreni_batch,
-        refetch_certificati_senza_intestatari,
-        _find_utenza_for_terreno_row,
-    )
+    from app.services.elaborazioni_capacitas_terreni import sync_terreni_batch
     from app.modules.elaborazioni.capacitas.models import (
-        CapacitasTerreniBatchRequest, CapacitasTerreniBatchItem, CapacitasTerrenoRow,
+        CapacitasTerreniBatchRequest, CapacitasTerreniBatchItem,
     )
     from app.models.catasto_phase1 import (
-        CatConsorzioUnit, CatConsorzioOccupancy, CatCapacitasTerrenoRow,
-        CatCapacitasCertificato, CatCapacitasIntestatario, CatUtenzaIrrigua,
-        CatUtenzaIntestatario,
+        CatParticella, CatConsorzioUnit, CatConsorzioOccupancy,
+        CatCapacitasTerrenoRow, CatCapacitasCertificato, CatCapacitasIntestatario,
+        CatUtenzaIrrigua, CatUtenzaIntestatario, CatComune,
     )
     from app.models.capacitas import CapacitasCredential
-    from sqlalchemy import select, func
+    from sqlalchemy import func, or_, select
 
     db = SessionLocal()
     credential = db.get(CapacitasCredential, 1)
     password = _decrypt(credential.password_encrypted)
 
-    print("=" * 60)
-    print("STATO ATTUALE DB (prima del test)")
-    print("=" * 60)
-
-    # Stato attuale utenze Cabras 24/3
-    utenze = db.execute(
-        select(CatUtenzaIrrigua)
-        .where(CatUtenzaIrrigua.foglio == '24', CatUtenzaIrrigua.particella == '3')
-    ).scalars().all()
-    print(f"\nUtenze foglio=24 particella=3: {len(utenze)}")
-    for u in utenze:
-        intestatari_count = db.scalar(
-            select(func.count(CatUtenzaIntestatario.id)).where(CatUtenzaIntestatario.utenza_id == u.id)
-        )
-        print(f"  cco={u.cco!r:20} sub={u.subalterno!r:6} anno={u.anno_campagna} intestatari={intestatari_count}")
-
-    # Stato cert senza intestatari (globale)
-    subq = select(CatCapacitasIntestatario.certificato_id).distinct().scalar_subquery()
-    empty_count = db.scalar(
-        select(func.count(CatCapacitasCertificato.id))
-        .where(CatCapacitasCertificato.id.notin_(subq))
+    # Risolve CatComune dal nome (case-insensitive)
+    comune = db.scalar(
+        select(CatComune).where(func.lower(CatComune.nome_comune) == comune_input.lower())
     )
-    total_certs = db.scalar(select(func.count(CatCapacitasCertificato.id)))
-    print(f"\nCertificati totali: {total_certs}")
-    print(f"Certificati senza intestatari: {empty_count}")
-
-    # Cert specifici per Cabras sub a e sub b
-    target_ccos = ['0A1462373', '0A1031735']
-    for cco in target_ccos:
-        certs = db.execute(
-            select(CatCapacitasCertificato)
-            .where(CatCapacitasCertificato.cco == cco)
-            .order_by(CatCapacitasCertificato.collected_at.desc())
-            .limit(3)
+    if comune is None:
+        # Prova ricerca parziale
+        comuni_candidati = db.execute(
+            select(CatComune).where(CatComune.nome_comune.ilike(f"%{comune_input}%"))
         ).scalars().all()
-        print(f"\nCertificati CCO {cco}: {len(certs)} snapshot")
-        for c in certs:
-            n = db.scalar(
-                select(func.count(CatCapacitasIntestatario.id))
-                .where(CatCapacitasIntestatario.certificato_id == c.id)
-            )
-            print(f"  collected_at={c.collected_at.date()} intestatari={n}")
+        if not comuni_candidati:
+            print(f"ERRORE: comune '{comune_input}' non trovato in DB.")
+            db.close()
+            return
+        if len(comuni_candidati) > 1:
+            print(f"Comuni trovati per '{comune_input}':")
+            for c in comuni_candidati:
+                print(f"  {c.nome_comune}")
+            print("Specifica meglio il nome.")
+            db.close()
+            return
+        comune = comuni_candidati[0]
 
-    print("\n" + "=" * 60)
-    print("FIX 1: Verifica anno fallback con una nuova sync Cabras 24/3")
-    print("=" * 60)
+    label = f"{comune.nome_comune} {foglio}/{particella}"
+    print(f"\nComune: {comune.nome_comune} (id={comune.id}, cap_code={comune.cod_comune_capacitas}, belfiore={comune.codice_catastale})")
+
+    # ------------------------------------------------------------------
+    _sep(f"STATO DB PRE-SYNC — {label}")
+    # ------------------------------------------------------------------
+
+    parts = db.execute(
+        select(CatParticella).where(
+            CatParticella.comune_id == comune.id,
+            CatParticella.foglio == foglio,
+            CatParticella.particella == particella,
+        )
+    ).scalars().all()
+    print(f"\nParticelle AE ({len(parts)}):")
+    for p in parts:
+        print(f"  sub={p.subalterno!r:6} is_current={p.is_current} sup={p.superficie_mq} mq")
+
+    utenze = db.execute(
+        select(CatUtenzaIrrigua).where(
+            CatUtenzaIrrigua.comune_id == comune.id,
+            CatUtenzaIrrigua.foglio == foglio,
+            CatUtenzaIrrigua.particella == particella,
+        )
+    ).scalars().all()
+    print(f"\nUtenze irrigue ({len(utenze)}):")
+    for u in utenze:
+        ni = db.scalar(select(func.count(CatUtenzaIntestatario.id)).where(CatUtenzaIntestatario.utenza_id == u.id))
+        print(f"  cco={u.cco!r:20} sub={u.subalterno!r:6} anno={u.anno_campagna} intestatari={ni}")
+
+    # CatConsorzioUnit: filtra per comune_id o source_comune_id (la particella potrebbe
+    # esistere solo nel consorzio e non nell'AE, quindi serve source_comune_id come fallback)
+    units_pre = db.execute(
+        select(CatConsorzioUnit).where(
+            or_(
+                CatConsorzioUnit.comune_id == comune.id,
+                CatConsorzioUnit.source_comune_id == comune.id,
+                CatConsorzioUnit.cod_comune_capacitas == comune.cod_comune_capacitas,
+            ),
+            CatConsorzioUnit.foglio == foglio,
+            CatConsorzioUnit.particella == particella,
+        )
+    ).scalars().all()
+    print(f"\nUnità consorziali ({len(units_pre)}):")
+    for u in units_pre:
+        occs = db.execute(
+            select(CatConsorzioOccupancy)
+            .where(CatConsorzioOccupancy.unit_id == u.id)
+            .order_by(CatConsorzioOccupancy.id.desc())
+            .limit(5)
+        ).scalars().all()
+        for occ in occs:
+            utenza_ok = "OK  " if occ.utenza_id else "NONE"
+            print(f"  sub={u.subalterno!r:6} utenza_id={utenza_ok} is_current={str(occ.is_current):5} cco={occ.cco!r}")
+
+    # CatCapacitasTerrenoRow: filtra per belfiore o cod_comune_capacitas
+    rows_pre = db.execute(
+        select(CatCapacitasTerrenoRow).where(
+            or_(
+                CatCapacitasTerrenoRow.belfiore == comune.codice_catastale,
+                CatCapacitasTerrenoRow.com == str(comune.cod_comune_capacitas),
+            ),
+            CatCapacitasTerrenoRow.foglio == foglio,
+            CatCapacitasTerrenoRow.particella == particella,
+        )
+        .order_by(CatCapacitasTerrenoRow.id.desc())
+        .limit(10)
+    ).scalars().all()
+    print(f"\nRighe Capacitas in DB ({len(rows_pre)}):")
+    for r in rows_pre:
+        print(f"  sub={r.sub!r:8} cco={r.cco!r:20} anno={r.anno} state={r.row_visual_state}")
+
+    # ------------------------------------------------------------------
+    _sep(f"SYNC Capacitas — {label}")
+    # ------------------------------------------------------------------
 
     async with CapacitasSessionManager(credential.username, password) as manager:
         await manager.activate_app('involture')
         client = InVoltureClient(manager)
 
-        frazioni = await client.search_frazioni('Cabras')
-        print(f"Frazioni Cabras: {len(frazioni)}")
+        frazioni = await client.search_frazioni(comune.nome_comune)
+        print(f"Frazioni '{comune.nome_comune}': {len(frazioni)}")
+        for f in frazioni:
+            print(f"  id={f.id!r} label={f.display!r}")
 
         request = CapacitasTerreniBatchRequest(
             items=[CapacitasTerreniBatchItem(
-                label='Cabras 24/3',
-                comune='Cabras',
+                label=label,
+                comune=comune.nome_comune,
                 sezione='',
-                foglio='24',
-                particella='3',
+                foglio=foglio,
+                particella=particella,
                 sub='',
             )],
             continue_on_error=True,
@@ -106,87 +164,96 @@ async def main():
             fetch_certificati=True,
             fetch_details=False,
         )
-
         result = await sync_terreni_batch(db, client, request)
         item = result.items[0] if result.items else None
-        print(f"Sync result: ok={item.ok if item else None} rows={result.total_rows} cert={result.imported_certificati}")
+        print(f"\nRisultato sync:")
+        print(f"  ok={item.ok if item else None}")
+        print(f"  righe Capacitas: {result.total_rows}")
+        print(f"  certificati:     {result.imported_certificati}")
+        print(f"  unità:           {result.linked_units}")
+        print(f"  occupancies:     {result.linked_occupancies}")
         if item and not item.ok:
             print(f"  ERRORE: {item.error}")
 
-    print("\nVerifica occupancies dopo sync:")
-    rows = db.execute(
-        select(CatCapacitasTerrenoRow)
-        .where(CatCapacitasTerrenoRow.foglio == '24', CatCapacitasTerrenoRow.particella == '3')
+    # ------------------------------------------------------------------
+    _sep(f"STATO DB POST-SYNC — {label}")
+    # ------------------------------------------------------------------
+
+    rows_post = db.execute(
+        select(CatCapacitasTerrenoRow).where(
+            or_(
+                CatCapacitasTerrenoRow.belfiore == comune.codice_catastale,
+                CatCapacitasTerrenoRow.com == str(comune.cod_comune_capacitas),
+            ),
+            CatCapacitasTerrenoRow.foglio == foglio,
+            CatCapacitasTerrenoRow.particella == particella,
+        )
         .order_by(CatCapacitasTerrenoRow.id.desc())
-        .limit(10)
+        .limit(20)
     ).scalars().all()
-    for r in rows:
-        utenza = db.scalar(select(CatUtenzaIrrigua).where(CatUtenzaIrrigua.id == r.id)) if r else None
+    print(f"\nRighe Capacitas ({len(rows_post)}):")
+    for r in rows_post:
         print(f"  sub={r.sub!r:8} cco={r.cco!r:20} anno={r.anno} state={r.row_visual_state}")
 
-    # Verifica occupancies e utenza_id
-    units = db.execute(
-        select(CatConsorzioUnit)
-        .where(CatConsorzioUnit.foglio == '24', CatConsorzioUnit.particella == '3')
+    units_post = db.execute(
+        select(CatConsorzioUnit).where(
+            or_(
+                CatConsorzioUnit.comune_id == comune.id,
+                CatConsorzioUnit.source_comune_id == comune.id,
+                CatConsorzioUnit.cod_comune_capacitas == comune.cod_comune_capacitas,
+            ),
+            CatConsorzioUnit.foglio == foglio,
+            CatConsorzioUnit.particella == particella,
+        )
     ).scalars().all()
-    print(f"\nConsorzioUnit foglio=24 particella=3: {len(units)}")
-    for unit in units:
+    print(f"\nUnità consorziali ({len(units_post)}):")
+    for unit in units_post:
         occs = db.execute(
             select(CatConsorzioOccupancy)
             .where(CatConsorzioOccupancy.unit_id == unit.id)
             .order_by(CatConsorzioOccupancy.id.desc())
-            .limit(3)
+            .limit(5)
         ).scalars().all()
         for occ in occs:
-            print(f"  sub={unit.subalterno!r:6} utenza_id={'OK' if occ.utenza_id else 'NONE':4} is_current={occ.is_current} cco={occ.cco!r}")
+            utenza_ok = "OK  " if occ.utenza_id else "NONE"
+            print(f"  sub={unit.subalterno!r:6} utenza_id={utenza_ok} is_current={str(occ.is_current):5} cco={occ.cco!r}")
 
-    print("\n" + "=" * 60)
-    print("FIX 2: Refetch certificati senza intestatari")
-    print("=" * 60)
-
-    async with CapacitasSessionManager(credential.username, password) as manager:
-        await manager.activate_app('involture')
-        client = InVoltureClient(manager)
-
-        # IMPORTANTE: non chiamare search_terreni prima del refetch
-        # per evitare il bug di session state Capacitas
-        print("Avvio refetch (max 100 certificati senza intestatari)...")
-        count = await refetch_certificati_senza_intestatari(db, client, limit=100, throttle_ms=300)
-        print(f"Certificati ri-fetchati: {count}")
-
-    print("\nVerifica post-refetch per Cabras CCO:")
-    for cco in target_ccos:
-        certs = db.execute(
+    all_ccos = list({r.cco for r in rows_post if r.cco})
+    print(f"\nCertificati per CCO ({len(all_ccos)} distinti):")
+    for cco in sorted(all_ccos):
+        cert = db.scalar(
             select(CatCapacitasCertificato)
             .where(CatCapacitasCertificato.cco == cco)
             .order_by(CatCapacitasCertificato.collected_at.desc())
-            .limit(3)
+        )
+        if cert is None:
+            print(f"  CCO={cco:20} — nessun certificato")
+            continue
+        ints = db.execute(
+            select(CatCapacitasIntestatario).where(CatCapacitasIntestatario.certificato_id == cert.id)
         ).scalars().all()
-        for c in certs:
-            n = db.scalar(
-                select(func.count(CatCapacitasIntestatario.id))
-                .where(CatCapacitasIntestatario.certificato_id == c.id)
-            )
-            print(f"  CCO={cco} collected_at={c.collected_at.date()} intestatari={n}")
+        print(f"  CCO={cco:20} intestatari={len(ints)}")
+        for i in ints:
+            print(f"    -> {i.denominazione!r:40} CF={i.codice_fiscale!r}")
 
-    # Verifica utenza intestatari
-    print("\nVerifica CatUtenzaIntestatario per foglio=24 particella=3:")
-    utenze_after = db.execute(
-        select(CatUtenzaIrrigua)
-        .where(CatUtenzaIrrigua.foglio == '24', CatUtenzaIrrigua.particella == '3')
-    ).scalars().all()
-    for u in utenze_after:
+    print(f"\nUtenze irrigue post-sync ({len(utenze)}):")
+    for u in utenze:
+        db.refresh(u)
         intestatari = db.execute(
             select(CatUtenzaIntestatario).where(CatUtenzaIntestatario.utenza_id == u.id)
         ).scalars().all()
         print(f"  cco={u.cco!r:20} sub={u.subalterno!r:6} intestatari={len(intestatari)}")
         for i in intestatari:
-            print(f"    -> {i.denominazione!r} CF={i.codice_fiscale!r}")
+            print(f"    -> {i.denominazione!r:40} CF={i.codice_fiscale!r}")
 
     db.close()
-    print("\n" + "=" * 60)
-    print("TEST COMPLETATO")
-    print("=" * 60)
+    _sep(f"COMPLETATO — {label}")
 
 
-asyncio.run(main())
+if __name__ == "__main__":
+    args = sys.argv[1:]
+    if len(args) != 3:
+        print("Uso: python test_fix_verification.py <comune> <foglio> <particella>")
+        print("Es:  python test_fix_verification.py Cabras 24 3")
+        sys.exit(1)
+    asyncio.run(main(comune_input=args[0], foglio=args[1], particella=args[2]))
