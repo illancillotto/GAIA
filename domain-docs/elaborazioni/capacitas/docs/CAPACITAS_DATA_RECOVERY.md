@@ -445,6 +445,33 @@ Punti di verifica principali:
 - logging route in `capacitas_routes.py`
 - snippet diagnostici payload nei fallimenti parser/lookup
 
+### 15.1 Script di verifica manuale per singola particella
+
+`backend/test_fix_verification.py` — tool operativo da eseguire nel container backend per verificare sync e persistenza su una singola particella Capacitas.
+
+Uso:
+
+```bash
+docker exec -w /app gaia-backend python test_fix_verification.py <comune> <foglio> <particella>
+```
+
+Esempi:
+
+```bash
+docker exec -w /app gaia-backend python test_fix_verification.py Cabras 24 3
+docker exec -w /app gaia-backend python test_fix_verification.py Cabras 24 37
+docker exec -w /app gaia-backend python test_fix_verification.py Cabras 1 4
+docker exec -w /app gaia-backend python test_fix_verification.py Uras 1 680
+```
+
+Output prodotto (nell'ordine):
+
+1. **Stato DB pre-sync**: particelle AE, utenze irrigue, unità consorziali, righe Capacitas presenti
+2. **Esecuzione sync**: chiama `sync_terreni_batch` sulla particella richiesta e stampa il report (righe, certificati, unità, occupancies)
+3. **Stato DB post-sync**: righe Capacitas aggiornate, unità consorziali con `utenza_id` e `is_current`, certificati per CCO con intestatari e flag `deceduto`, utenze irrigue con intestatari collegati
+
+Il comune viene risolto dal nome in modo case-insensitive con fallback a ricerca parziale; il script segnala esplicitamente se il comune non e trovato o se il match e ambiguo.
+
 Quando un flusso cambia, vanno aggiornati insieme:
 
 - parser

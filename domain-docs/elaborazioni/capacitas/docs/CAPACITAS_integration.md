@@ -408,6 +408,19 @@ Persistenza consigliata:
 - il link verso `ana_subjects` deve essere opzionale e derivare da match su `codice_fiscale` o fallback `source_external_id=IDXANA`
 - il primo scrape valido costituisce la baseline iniziale del profilo in GAIA; gli scrape successivi aggiornano `ana_persons` solo dopo aver scritto uno snapshot in `ana_person_snapshots` quando i dati cambiano
 
+## Script di verifica manuale
+
+`backend/test_fix_verification.py` — tool operativo per testare sync e persistenza su una singola particella direttamente nel container backend.
+
+```bash
+docker exec -w /app gaia-backend python test_fix_verification.py <comune> <foglio> <particella>
+# es: docker exec -w /app gaia-backend python test_fix_verification.py Cabras 24 37
+```
+
+Mostra stato DB pre/post sync, report sync (righe, certificati, unità, occupancies), intestatari con flag `deceduto` e collegamento `utenza_id` sulle occupancies.
+
+Documentazione completa in `domain-docs/elaborazioni/capacitas/docs/CAPACITAS_DATA_RECOVERY.md` sezione 15.1.
+
 ## TODO successivi
 
 ## Credenziali — gestione
