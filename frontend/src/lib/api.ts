@@ -48,6 +48,8 @@ import type {
   CapacitasLookupOption,
   CapacitasParticelleSyncJob,
   CapacitasParticelleSyncJobCreateInput,
+  CapacitasRefetchCertificatiInput,
+  CapacitasRefetchCertificatiResult,
   CapacitasSearchInput,
   CapacitasSearchResult,
   CapacitasTerreniJob,
@@ -1699,6 +1701,22 @@ export async function patchCapacitasParticelleSyncJobSpeed(
         "Content-Type": "application/json",
       },
       body: JSON.stringify({ double_speed: doubleSpeed }),
+    },
+  );
+}
+
+export async function refetchCapacitasCertificatiEmpty(
+  token: string,
+  payload: CapacitasRefetchCertificatiInput,
+): Promise<CapacitasRefetchCertificatiResult> {
+  return request<CapacitasRefetchCertificatiResult>(
+    "/elaborazioni/capacitas/involture/certificati/refetch-empty",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify(payload),
     },
   );
 }

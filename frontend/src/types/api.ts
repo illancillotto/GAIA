@@ -1327,6 +1327,17 @@ export type CapacitasTerreniJob = {
   updated_at: string;
 };
 
+export type CapacitasRefetchCertificatiInput = {
+  credential_id?: number | null;
+  limit?: number;
+  throttle_ms?: number;
+};
+
+export type CapacitasRefetchCertificatiResult = {
+  refetched: number;
+  remaining_empty: number;
+};
+
 export type CapacitasParticelleSyncJobCreateInput = {
   credential_id?: number | null;
   only_due?: boolean;

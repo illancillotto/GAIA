@@ -5,7 +5,7 @@ from typing import Annotated
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user, require_admin_user
@@ -22,6 +22,8 @@ from app.modules.elaborazioni.capacitas.models import (
     CapacitasParticelleSyncJobCreateRequest,
     CapacitasParticelleSyncJobOut,
     CapacitasParticelleSyncJobSpeedPatch,
+    CapacitasRefetchCertificatiRequest,
+    CapacitasRefetchCertificatiResponse,
     CapacitasStoricoAnagraficaRow,
     CapacitasTerreniBatchRequest,
     CapacitasTerreniBatchResponse,
@@ -38,7 +40,7 @@ from app.modules.elaborazioni.capacitas.models import (
 )
 from app.modules.elaborazioni.capacitas.session import CapacitasSessionManager
 from app.models.application_user import ApplicationUser
-from app.models.catasto_phase1 import CatCapacitasCertificato, CatCapacitasTerrenoRow, CatConsorzioOccupancy
+from app.models.catasto_phase1 import CatCapacitasCertificato, CatCapacitasIntestatario, CatCapacitasTerrenoRow, CatConsorzioOccupancy
 from app.services.elaborazioni_capacitas_anagrafica_history import (
     CapacitasAnagraficaHistoryImportError,
     create_anagrafica_history_job,
@@ -78,6 +80,7 @@ from app.services.elaborazioni_capacitas_terreni import (
     delete_terreni_sync_job,
     get_terreni_sync_job,
     list_terreni_sync_jobs,
+    refetch_certificati_senza_intestatari,
     serialize_terreni_sync_job,
     sync_terreni_batch,
     sync_terreni_for_request,
@@ -656,6 +659,54 @@ async def run_terreni_job(
 
     _enqueue_capacitas_job(db, job)
     return serialize_terreni_sync_job(job)
+
+
+@router.post("/involture/certificati/refetch-empty", response_model=CapacitasRefetchCertificatiResponse)
+async def refetch_certificati_empty(
+    body: CapacitasRefetchCertificatiRequest,
+    _: Annotated[ApplicationUser, Depends(require_admin_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> CapacitasRefetchCertificatiResponse:
+    """Re-fetcha i certificati salvati con 0 intestatari.
+
+    Deve essere la prima operazione della sessione Capacitas (non chiamare
+    search_terreni prima) altrimenti si riproduce il bug di session-state.
+    """
+    try:
+        credential, password = pick_credential(db, body.credential_id)
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+
+    manager = CapacitasSessionManager(credential.username, password)
+    try:
+        await manager.login()
+        await manager.activate_app("involture")
+        client = InVoltureClient(manager)
+        refetched = await refetch_certificati_senza_intestatari(
+            db,
+            client,
+            limit=body.limit,
+            throttle_ms=body.throttle_ms,
+        )
+        mark_credential_used(db, credential.id)
+    except Exception as exc:
+        logger.exception("Errore refetch certificati Capacitas: cred_id=%d err=%s", credential.id, exc)
+        db.rollback()
+        mark_credential_error(db, credential.id, str(exc))
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail=f"Errore refetch certificati inVOLTURE: {exc}",
+        ) from exc
+    finally:
+        await manager.close()
+
+    certs_with_intestatari = select(CatCapacitasIntestatario.certificato_id).distinct().scalar_subquery()
+    remaining_empty = db.scalar(
+        select(func.count(CatCapacitasCertificato.id))
+        .where(CatCapacitasCertificato.id.notin_(certs_with_intestatari))
+    ) or 0
+
+    return CapacitasRefetchCertificatiResponse(refetched=refetched, remaining_empty=remaining_empty)
 
 
 @router.post("/involture/particelle/jobs", response_model=CapacitasParticelleSyncJobOut, status_code=status.HTTP_202_ACCEPTED)

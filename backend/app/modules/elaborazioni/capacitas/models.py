@@ -396,6 +396,17 @@ class CapacitasParticelleSyncJobOut(BaseModel):
     updated_at: datetime
 
 
+class CapacitasRefetchCertificatiRequest(BaseModel):
+    credential_id: int | None = None
+    limit: int = Field(default=100, ge=1, le=2000)
+    throttle_ms: int = Field(default=300, ge=0, le=5000)
+
+
+class CapacitasRefetchCertificatiResponse(BaseModel):
+    refetched: int
+    remaining_empty: int
+
+
 class CapacitasCredentialCreate(BaseModel):
     label: str = Field(min_length=1, max_length=120)
     username: str = Field(min_length=1, max_length=255)

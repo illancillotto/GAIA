@@ -25,6 +25,7 @@ import {
   listCapacitasCredentials,
   listCapacitasTerreniJobs,
   patchCapacitasParticelleSyncJobSpeed,
+  refetchCapacitasCertificatiEmpty,
   rerunCapacitasAnagraficaHistoryJob,
   rerunCapacitasParticelleSyncJob,
   rerunCapacitasTerreniJob,
@@ -38,6 +39,7 @@ import type {
   CapacitasAnagraficaHistoryImportResult,
   CapacitasCredential,
   CapacitasParticelleSyncJob,
+  CapacitasRefetchCertificatiResult,
   CapacitasTerreniBatchItemInput,
   CapacitasTerreniBatchResult,
   CapacitasTerreniJob,
@@ -46,12 +48,13 @@ import type {
 const JOB_POLL_INTERVAL_MS = 5000;
 const PREVIEW_ROWS_LIMIT = 20;
 
-type CapacitasSection = "particelle" | "storico" | "terreni";
+type CapacitasSection = "particelle" | "storico" | "terreni" | "certificati";
 
 const CAPACITAS_SECTIONS: Array<{ id: CapacitasSection; label: string; description: string }> = [
   { id: "particelle", label: "Sync particelle", description: "Riallinea il catalogo particelle GAIA" },
   { id: "storico", label: "Storico anagrafico", description: "Importa snapshot storici da Capacitas" },
   { id: "terreni", label: "Terreni batch", description: "Carica file e monitora i job Terreni" },
+  { id: "certificati", label: "Certificati", description: "Re-fetch certificati senza intestatari" },
 ];
 
 function formatDateTime(value: string | null | undefined): string {
@@ -528,6 +531,11 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [historyStatusMessage, setHistoryStatusMessage] = useState<string | null>(null);
   const [historyResult, setHistoryResult] = useState<CapacitasAnagraficaHistoryImportResult | null>(null);
+
+  const [refetchForm, setRefetchForm] = useState({ credential_id: "", limit: 100, throttle_ms: 300 });
+  const [refetchBusy, setRefetchBusy] = useState(false);
+  const [refetchResult, setRefetchResult] = useState<CapacitasRefetchCertificatiResult | null>(null);
+  const [refetchError, setRefetchError] = useState<string | null>(null);
 
   const activeCredentialsCount = credentials.filter((credential) => credential.active).length;
   const jobsInFlight =
@@ -1074,7 +1082,7 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
           </div>
         </ElaborazioneHero>
 
-        <nav className="grid gap-3 md:grid-cols-3" aria-label="Sezioni Capacitas">
+        <nav className="grid gap-3 md:grid-cols-4" aria-label="Sezioni Capacitas">
           {CAPACITAS_SECTIONS.map((section) => {
             const active = activeSection === section.id;
             return (
@@ -2199,6 +2207,124 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
               </table>
             </div>
           )}
+        </article>
+          </>
+        ) : null}
+
+        {activeSection === "certificati" ? (
+          <>
+        <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white p-0 shadow-panel">
+          <ElaborazionePanelHeader
+            badge={
+              <>
+                <DocumentIcon className="h-3.5 w-3.5" />
+                Certificati
+              </>
+            }
+            title="Re-fetch certificati senza intestatari"
+            description="Rileva i certificati Capacitas salvati con 0 intestatari (bug sessione) e li ri-fetcha in una sessione fresca prima di qualsiasi ricerca terreni."
+          />
+          <div className="space-y-6 p-6">
+            <div className="grid gap-4 md:grid-cols-3">
+              <label className="space-y-2">
+                <span className="label-caption">Credenziale</span>
+                <select
+                  className="form-control"
+                  value={refetchForm.credential_id}
+                  onChange={(e) => setRefetchForm((f) => ({ ...f, credential_id: e.target.value }))}
+                >
+                  <option value="">Auto-selezione backend</option>
+                  {credentials.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.label} · {c.username}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="space-y-2">
+                <span className="label-caption">Limite certificati</span>
+                <input
+                  className="form-control"
+                  max={2000}
+                  min={1}
+                  type="number"
+                  value={refetchForm.limit}
+                  onChange={(e) => setRefetchForm((f) => ({ ...f, limit: Number(e.target.value) }))}
+                />
+              </label>
+              <label className="space-y-2">
+                <span className="label-caption">Throttle (ms)</span>
+                <input
+                  className="form-control"
+                  max={5000}
+                  min={0}
+                  type="number"
+                  value={refetchForm.throttle_ms}
+                  onChange={(e) => setRefetchForm((f) => ({ ...f, throttle_ms: Number(e.target.value) }))}
+                />
+              </label>
+            </div>
+
+            <div className="rounded-[16px] border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+              <strong>Attenzione:</strong> questa operazione apre una nuova sessione Capacitas e la usa <em>esclusivamente</em> per il re-fetch. Non eseguire sync parallele durante l&apos;operazione.
+            </div>
+
+            {refetchError ? (
+              <ElaborazioneNoticeCard tone="danger" title="Errore" description={refetchError} />
+            ) : null}
+
+            {refetchResult ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <ElaborazioneMiniStat
+                  eyebrow="Ri-fetchati"
+                  value={refetchResult.refetched}
+                  description="Certificati aggiornati con intestatari."
+                  tone="success"
+                />
+                <ElaborazioneMiniStat
+                  eyebrow="Ancora vuoti"
+                  value={refetchResult.remaining_empty}
+                  description="Certificati rimasti senza intestatari."
+                  tone={refetchResult.remaining_empty > 0 ? "warning" : "default"}
+                />
+              </div>
+            ) : null}
+
+            <div className="flex justify-end">
+              <button
+                className="btn-primary"
+                disabled={refetchBusy}
+                type="button"
+                onClick={() => {
+                  void (async () => {
+                    const token = getStoredAccessToken();
+                    if (!token) return;
+                    setRefetchBusy(true);
+                    setRefetchError(null);
+                    setRefetchResult(null);
+                    try {
+                      const result = await refetchCapacitasCertificatiEmpty(token, {
+                        credential_id: refetchForm.credential_id ? Number(refetchForm.credential_id) : null,
+                        limit: refetchForm.limit,
+                        throttle_ms: refetchForm.throttle_ms,
+                      });
+                      setRefetchResult(result);
+                    } catch (err) {
+                      if (isAuthError(err)) {
+                        setRefetchError("Sessione GAIA scaduta. Rientra per riprovare.");
+                      } else {
+                        setRefetchError(err instanceof Error ? err.message : "Errore durante il re-fetch.");
+                      }
+                    } finally {
+                      setRefetchBusy(false);
+                    }
+                  })();
+                }}
+              >
+                {refetchBusy ? "Re-fetch in corso..." : "Avvia re-fetch"}
+              </button>
+            </div>
+          </div>
         </article>
           </>
         ) : null}
