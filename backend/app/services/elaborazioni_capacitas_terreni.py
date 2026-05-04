@@ -274,6 +274,72 @@ async def sync_certificato_snapshot(
     return certificato, certificato_snapshot
 
 
+async def refetch_certificati_senza_intestatari(
+    db: Session,
+    client: InVoltureClient,
+    *,
+    limit: int = 50,
+    throttle_ms: int = 0,
+    storico_cache: dict[str, list[CapacitasStoricoAnagraficaRow]] | None = None,
+    anagrafica_detail_cache: dict[str, CapacitasAnagraficaDetail] | None = None,
+) -> int:
+    """Re-fetcha i certificati salvati con 0 intestatari (bug session-state Capacitas).
+
+    Va chiamato in una sessione Capacitas fresca, prima di qualsiasi search_terreni,
+    altrimenti si riproduce lo stesso bug di stato sessione.
+    Ritorna il numero di certificati ri-fetchati con successo.
+    """
+    certs_with_intestatari = select(CatCapacitasIntestatario.certificato_id).distinct().scalar_subquery()
+    empty_certs = list(
+        db.scalars(
+            select(CatCapacitasCertificato)
+            .where(CatCapacitasCertificato.id.notin_(certs_with_intestatari))
+            .where(CatCapacitasCertificato.com.isnot(None))
+            .where(CatCapacitasCertificato.pvc.isnot(None))
+            .order_by(CatCapacitasCertificato.collected_at.desc())
+            .limit(limit)
+        ).all()
+    )
+    if not empty_certs:
+        return 0
+
+    effective_storico_cache = storico_cache if storico_cache is not None else {}
+    effective_anagrafica_cache = anagrafica_detail_cache if anagrafica_detail_cache is not None else {}
+    collected_at = datetime.now(timezone.utc)
+    refetched = 0
+
+    for index, cert in enumerate(empty_certs):
+        try:
+            target_utenza = db.scalar(
+                select(CatUtenzaIrrigua)
+                .where(CatUtenzaIrrigua.cco == cert.cco)
+                .order_by(CatUtenzaIrrigua.anno_campagna.desc())
+            )
+            target_utenze = [target_utenza] if target_utenza is not None else None
+            await sync_certificato_snapshot(
+                db,
+                client,
+                cco=cert.cco,
+                com=cert.com or "",
+                pvc=cert.pvc or "",
+                fra=cert.fra or "",
+                ccs=cert.ccs or "",
+                collected_at=collected_at,
+                target_utenze=target_utenze,
+                storico_cache=effective_storico_cache,
+                anagrafica_detail_cache=effective_anagrafica_cache,
+            )
+            db.commit()
+            refetched += 1
+        except Exception:
+            db.rollback()
+
+        if index < len(empty_certs) - 1 and throttle_ms > 0:
+            await asyncio.sleep(throttle_ms / 1000)
+
+    return refetched
+
+
 async def sync_terreni_batch(
     db: Session,
     client: InVoltureClient,
@@ -1558,12 +1624,12 @@ def _find_or_create_occupancy(
             CatConsorzioOccupancy.source_type == "capacitas_terreni",
         )
     )
-    if existing is not None:
-        return False
+    utenza = _find_utenza_for_terreno_row(db, row) if anno else None
 
-    utenza = None
-    if anno:
-        utenza = _find_utenza_for_terreno_row(db, row)
+    if existing is not None:
+        if existing.utenza_id is None and utenza is not None:
+            existing.utenza_id = utenza.id
+        return False
 
     db.add(
         CatConsorzioOccupancy(
@@ -1592,37 +1658,49 @@ def _same_optional_text(left: str | None, right: str | None) -> bool:
 
 
 def _find_utenza_for_terreno_row(db: Session, row: CapacitasTerrenoRow) -> CatUtenzaIrrigua | None:
+    if not row.cco:
+        return None
+
     anno = _to_int(row.anno)
-    if not row.cco or anno is None:
-        return None
-
-    candidates = list(
-        db.scalars(
-            select(CatUtenzaIrrigua).where(
-                CatUtenzaIrrigua.cco == row.cco,
-                CatUtenzaIrrigua.anno_campagna == anno,
-            )
-        ).all()
-    )
-    if not candidates:
-        return None
-
     row_com = _to_int(row.com)
     row_fra = _to_int(row.fra)
-    for candidate in candidates:
-        if row_com is not None and candidate.cod_comune_capacitas != row_com:
-            continue
-        if row_fra is not None and candidate.cod_frazione != row_fra:
-            continue
-        if row.foglio and not _same_optional_text(candidate.foglio, row.foglio):
-            continue
-        if row.particella and not _same_optional_text(candidate.particella, row.particella):
-            continue
-        if row.sub is not None and not _same_optional_text(candidate.subalterno, row.sub):
-            continue
-        return candidate
 
-    return None
+    def _matches_geo(candidate: CatUtenzaIrrigua) -> bool:
+        if row_com is not None and candidate.cod_comune_capacitas != row_com:
+            return False
+        if row_fra is not None and candidate.cod_frazione != row_fra:
+            return False
+        if row.foglio and not _same_optional_text(candidate.foglio, row.foglio):
+            return False
+        if row.particella and not _same_optional_text(candidate.particella, row.particella):
+            return False
+        if row.sub is not None and not _same_optional_text(candidate.subalterno, row.sub):
+            return False
+        return True
+
+    if anno is not None:
+        exact = list(
+            db.scalars(
+                select(CatUtenzaIrrigua).where(
+                    CatUtenzaIrrigua.cco == row.cco,
+                    CatUtenzaIrrigua.anno_campagna == anno,
+                )
+            ).all()
+        )
+        match = next((c for c in exact if _matches_geo(c)), None)
+        if match is not None:
+            return match
+
+    # Fallback: anno non corrisponde (es. row.anno=2024, utenza.anno_campagna=2025).
+    # Usa l'utenza piu recente per questo CCO con le stesse coordinate geografiche.
+    all_for_cco = list(
+        db.scalars(
+            select(CatUtenzaIrrigua)
+            .where(CatUtenzaIrrigua.cco == row.cco)
+            .order_by(CatUtenzaIrrigua.anno_campagna.desc())
+        ).all()
+    )
+    return next((c for c in all_for_cco if _matches_geo(c)), None)
 
 
 def _find_source_comune(db: Session, row: CapacitasTerrenoRow) -> CatComune | None:

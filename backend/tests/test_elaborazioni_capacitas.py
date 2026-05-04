@@ -3577,3 +3577,216 @@ async def test_run_particelle_sync_job_picks_up_live_throttle_override(monkeypat
         )
     finally:
         db.close()
+
+
+# ---------------------------------------------------------------------------
+# Tests Bug Fix 1: _find_utenza_for_terreno_row anno fallback
+# ---------------------------------------------------------------------------
+
+class TestFindUtenzaForTerrenoRowAnnoFallback:
+    """Verifica che _find_utenza_for_terreno_row usi il fallback anno quando
+    l'anno della riga Capacitas non corrisponde a nessun anno_campagna in DB."""
+
+    def _make_row(self, **kwargs):
+        from app.modules.elaborazioni.capacitas.models import CapacitasTerrenoRow
+        defaults = dict(cco="0A1462373", com="95", fra="38", foglio="24", particella="3", sub=None, anno="2024")
+        defaults.update(kwargs)
+        return CapacitasTerrenoRow.model_construct(**defaults)
+
+    def _make_utenza(self, db: Session, *, anno: int, sub: str | None = None, cco: str = "0A1462373") -> CatUtenzaIrrigua:
+        batch = db.query(CatImportBatch).first()
+        utenza = CatUtenzaIrrigua(
+            import_batch_id=batch.id if batch else None,
+            anno_campagna=anno,
+            cco=cco,
+            cod_comune_capacitas=95,
+            cod_frazione=38,
+            foglio="24",
+            particella="3",
+            subalterno=sub,
+        )
+        db.add(utenza)
+        db.flush()
+        return utenza
+
+    def test_exact_anno_match_returns_utenza(self) -> None:
+        from app.services.elaborazioni_capacitas_terreni import _find_utenza_for_terreno_row
+        db = TestingSessionLocal()
+        try:
+            utenza = self._make_utenza(db, anno=2024)
+            row = self._make_row(anno="2024")
+            result = _find_utenza_for_terreno_row(db, row)
+            assert result is not None
+            assert result.id == utenza.id
+        finally:
+            db.rollback()
+            db.close()
+
+    def test_anno_mismatch_falls_back_to_most_recent(self) -> None:
+        from app.services.elaborazioni_capacitas_terreni import _find_utenza_for_terreno_row
+        db = TestingSessionLocal()
+        try:
+            self._make_utenza(db, anno=2023)
+            utenza_2025 = self._make_utenza(db, anno=2025)
+            # row.anno=2024 non esiste a DB, deve restituire l'anno più recente (2025)
+            row = self._make_row(anno="2024")
+            result = _find_utenza_for_terreno_row(db, row)
+            assert result is not None
+            assert result.id == utenza_2025.id
+        finally:
+            db.rollback()
+            db.close()
+
+    def test_no_cco_returns_none(self) -> None:
+        from app.services.elaborazioni_capacitas_terreni import _find_utenza_for_terreno_row
+        db = TestingSessionLocal()
+        try:
+            row = self._make_row(cco=None)
+            assert _find_utenza_for_terreno_row(db, row) is None
+        finally:
+            db.rollback()
+            db.close()
+
+    def test_cco_not_in_db_returns_none(self) -> None:
+        from app.services.elaborazioni_capacitas_terreni import _find_utenza_for_terreno_row
+        db = TestingSessionLocal()
+        try:
+            row = self._make_row(cco="XXXXXXXX", anno="2024")
+            assert _find_utenza_for_terreno_row(db, row) is None
+        finally:
+            db.rollback()
+            db.close()
+
+    def test_sub_filter_respected_in_fallback(self) -> None:
+        from app.services.elaborazioni_capacitas_terreni import _find_utenza_for_terreno_row
+        db = TestingSessionLocal()
+        try:
+            self._make_utenza(db, anno=2025, sub="b")   # sub diverso
+            utenza_a = self._make_utenza(db, anno=2025, sub="a")
+            # row chiede sub "a", anno=2024 (mismatch) → fallback su utenza sub a
+            row = self._make_row(anno="2024", sub="a")
+            result = _find_utenza_for_terreno_row(db, row)
+            assert result is not None
+            assert result.id == utenza_a.id
+        finally:
+            db.rollback()
+            db.close()
+
+
+# ---------------------------------------------------------------------------
+# Tests Bug Fix 2: refetch_certificati_senza_intestatari
+# ---------------------------------------------------------------------------
+
+def _make_cert_for_refetch(
+    db: Session, *, cco: str = "0A1462373", has_intestatario: bool = False
+) -> CatCapacitasCertificato:
+    cert = CatCapacitasCertificato(
+        cco=cco,
+        fra="38",
+        ccs="03",
+        pvc="001",
+        com="95",
+        collected_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
+    )
+    db.add(cert)
+    db.flush()
+    if has_intestatario:
+        db.add(CatCapacitasIntestatario(
+            certificato_id=cert.id,
+            denominazione="Mario Rossi",
+            collected_at=datetime(2024, 1, 1, tzinfo=timezone.utc),
+        ))
+        db.flush()
+    return cert
+
+
+@pytest.mark.anyio
+async def test_refetch_certificati_richiama_sync_per_cert_senza_intestatari(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.services.elaborazioni_capacitas_terreni import refetch_certificati_senza_intestatari
+    from app.modules.elaborazioni.capacitas.models import CapacitasTerrenoCertificato
+
+    db = TestingSessionLocal()
+    called_ccos: list[str] = []
+
+    async def fake_sync_snapshot(db, client, *, cco, com, pvc, fra, ccs, **kwargs):
+        called_ccos.append(cco)
+        snap = CatCapacitasCertificato(
+            cco=cco, fra=fra, ccs=ccs, pvc=pvc, com=com,
+            collected_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+        )
+        db.add(snap)
+        db.flush()
+        return CapacitasTerrenoCertificato(cco=cco, fra=fra, ccs=ccs, pvc=pvc, com=com), snap
+
+    monkeypatch.setattr(
+        "app.services.elaborazioni_capacitas_terreni.sync_certificato_snapshot",
+        fake_sync_snapshot,
+    )
+
+    try:
+        _make_cert_for_refetch(db, cco="0A1462373", has_intestatario=False)
+        _make_cert_for_refetch(db, cco="0A1031735", has_intestatario=True)  # deve essere saltato
+        db.commit()
+
+        count = await refetch_certificati_senza_intestatari(db, None, limit=10)  # type: ignore[arg-type]
+
+        assert count == 1
+        assert called_ccos == ["0A1462373"]
+    finally:
+        db.rollback()
+        db.close()
+
+
+@pytest.mark.anyio
+async def test_refetch_certificati_zero_se_tutti_hanno_intestatari(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.services.elaborazioni_capacitas_terreni import refetch_certificati_senza_intestatari
+
+    db = TestingSessionLocal()
+    sync_called = False
+
+    async def fake_sync_snapshot(db, client, **kwargs):
+        nonlocal sync_called
+        sync_called = True
+
+    monkeypatch.setattr(
+        "app.services.elaborazioni_capacitas_terreni.sync_certificato_snapshot",
+        fake_sync_snapshot,
+    )
+
+    try:
+        _make_cert_for_refetch(db, cco="0A9999999", has_intestatario=True)
+        db.commit()
+
+        count = await refetch_certificati_senza_intestatari(db, None)  # type: ignore[arg-type]
+
+        assert count == 0
+        assert not sync_called
+    finally:
+        db.rollback()
+        db.close()
+
+
+@pytest.mark.anyio
+async def test_refetch_certificati_gestisce_eccezioni_senza_propagare(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.services.elaborazioni_capacitas_terreni import refetch_certificati_senza_intestatari
+
+    db = TestingSessionLocal()
+
+    async def fake_sync_snapshot(db, client, **kwargs):
+        raise RuntimeError("Capacitas error")
+
+    monkeypatch.setattr(
+        "app.services.elaborazioni_capacitas_terreni.sync_certificato_snapshot",
+        fake_sync_snapshot,
+    )
+
+    try:
+        _make_cert_for_refetch(db, cco="0A1111111", has_intestatario=False)
+        db.commit()
+
+        count = await refetch_certificati_senza_intestatari(db, None)  # type: ignore[arg-type]
+
+        assert count == 0  # errore gestito, non propagato
+    finally:
+        db.rollback()
+        db.close()
