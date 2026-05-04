@@ -18,6 +18,7 @@ from app.models.catasto import CatastoElaborazioniMassiveJob
 from app.models.catasto_phase1 import (
     CatAnomalia,
     CatCapacitasCertificato,
+    CatCapacitasIntestatario,
     CatCapacitasTerrenoRow,
     CatComune,
     CatConsorzioOccupancy,
@@ -671,6 +672,125 @@ def _utenza_summary_from_occupancy(occupancy: CatConsorzioOccupancy | None) -> C
     )
 
 
+def _intestatario_response_from_capacitas_row(row: CatCapacitasIntestatario) -> CatIntestatarioResponse:
+    cognome, nome = _split_denominazione(row.denominazione)
+    codice_fiscale = _normalize_cf(row.codice_fiscale) or ""
+    return CatIntestatarioResponse(
+        id=row.subject_id or row.id,
+        codice_fiscale=codice_fiscale,
+        denominazione=row.denominazione,
+        tipo="PF" if len(codice_fiscale) == 16 else "PG" if codice_fiscale else None,
+        cognome=cognome if codice_fiscale else None,
+        nome=nome if codice_fiscale else None,
+        data_nascita=row.data_nascita,
+        luogo_nascita=row.luogo_nascita,
+        indirizzo=row.residenza,
+        comune_residenza=row.comune_residenza,
+        cap=row.cap,
+        email=None,
+        telefono=None,
+        ragione_sociale=row.denominazione if codice_fiscale and len(codice_fiscale) != 16 else None,
+        source="capacitas",
+        last_verified_at=row.collected_at,
+        deceduto=row.deceduto,
+    )
+
+
+def _load_intestatari_from_cco(db: Session, cco: str) -> list[CatIntestatarioResponse]:
+    cert = db.execute(
+        select(CatCapacitasCertificato)
+        .where(CatCapacitasCertificato.cco == cco)
+        .order_by(desc(CatCapacitasCertificato.collected_at))
+        .limit(1)
+    ).scalars().first()
+    if cert is None:
+        return []
+    rows = db.execute(
+        select(CatCapacitasIntestatario)
+        .where(CatCapacitasIntestatario.certificato_id == cert.id)
+        .order_by(CatCapacitasIntestatario.denominazione)
+    ).scalars().all()
+    seen: set[str] = set()
+    items: list[CatIntestatarioResponse] = []
+    for row in rows:
+        key = _normalize_cf(row.codice_fiscale) or row.idxana or str(row.id)
+        if key in seen:
+            continue
+        seen.add(key)
+        items.append(_intestatario_response_from_capacitas_row(row))
+    return items
+
+
+def _build_consorzio_sub_matches(db: Session, p: CatParticella) -> list[CatAnagraficaMatch]:
+    """Returns one CatAnagraficaMatch per sub-level CatConsorzioUnit for the given particella.
+
+    Sub-level units are those with subalterno IS NOT NULL linked to the same
+    foglio/particella/comune as the particella but stored separately (particella_id=None).
+    Returns an empty list when no sub-level units with a current CCO exist.
+    """
+    if p.cod_comune_capacitas is None:
+        return []
+
+    sub_units = db.execute(
+        select(CatConsorzioUnit)
+        .where(
+            CatConsorzioUnit.foglio == p.foglio,
+            CatConsorzioUnit.particella == p.particella,
+            CatConsorzioUnit.cod_comune_capacitas == p.cod_comune_capacitas,
+            CatConsorzioUnit.subalterno.is_not(None),
+            CatConsorzioUnit.is_active.is_(True),
+        )
+        .order_by(CatConsorzioUnit.subalterno)
+    ).scalars().all()
+
+    if not sub_units:
+        return []
+
+    comune_record = db.get(CatComune, p.comune_id) if p.comune_id else None
+    matches: list[CatAnagraficaMatch] = []
+
+    for unit in sub_units:
+        occupancy = db.execute(
+            select(CatConsorzioOccupancy)
+            .where(
+                CatConsorzioOccupancy.unit_id == unit.id,
+                CatConsorzioOccupancy.cco.is_not(None),
+                CatConsorzioOccupancy.is_current.is_(True),
+            )
+            .order_by(desc(CatConsorzioOccupancy.valid_from), desc(CatConsorzioOccupancy.updated_at))
+            .limit(1)
+        ).scalars().first()
+
+        cco = occupancy.cco if occupancy else None
+        intestatari = _load_intestatari_from_cco(db, cco) if cco else []
+
+        utenza_summary = _utenza_summary_from_occupancy(occupancy) if occupancy else None
+
+        matches.append(
+            CatAnagraficaMatch(
+                particella_id=p.id,
+                comune=p.nome_comune or (comune_record.nome_comune if comune_record else None),
+                comune_id=p.comune_id,
+                cod_comune_capacitas=p.cod_comune_capacitas,
+                codice_catastale=p.codice_catastale or (comune_record.codice_catastale if comune_record else None),
+                foglio=p.foglio,
+                particella=p.particella,
+                subalterno=unit.subalterno,
+                num_distretto=p.num_distretto,
+                nome_distretto=p.nome_distretto,
+                superficie_mq=p.superficie_mq,
+                superficie_grafica_mq=p.superficie_grafica_mq,
+                presente_in_catasto_consorzio=True,
+                utenza_latest=utenza_summary,
+                intestatari=intestatari,
+                anomalie_count=0,
+                anomalie_top=[],
+            )
+        )
+
+    return matches
+
+
 def _load_consorzio_presence_by_particella_ids(db: Session, particella_ids: set[UUID]) -> set[UUID]:
     if not particella_ids:
         return set()
@@ -1107,6 +1227,11 @@ async def bulk_search_anagrafica(
                 )
                 if live_resolver is not None:
                     match = await live_resolver.enrich_match(items[0], match)
+
+                sub_matches: list[CatAnagraficaMatch] | None = None
+                if not sub_norm:
+                    sub_matches = _build_consorzio_sub_matches(db, items[0]) or None
+
                 results.append(
                     CatAnagraficaBulkSearchRowResult(
                         row_index=row.row_index,
@@ -1119,7 +1244,8 @@ async def bulk_search_anagrafica(
                         message="OK",
                         particella_id=match.particella_id,
                         match=match,
-                        matches_count=1,
+                        matches=sub_matches,
+                        matches_count=(len(sub_matches) if sub_matches else 1),
                     )
                 )
                 if live_resolver is not None and live_resolver.dirty:

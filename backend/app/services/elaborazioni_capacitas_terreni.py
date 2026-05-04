@@ -26,7 +26,7 @@ from app.models.catasto_phase1 import (
 from app.modules.utenze.models import AnagraficaPerson, AnagraficaSubject, AnagraficaSubjectStatus, AnagraficaSubjectType
 from app.modules.utenze.services.person_history_service import persist_person_source_snapshot, snapshot_person_if_changed
 from app.models.capacitas import CapacitasTerreniSyncJob
-from app.modules.elaborazioni.capacitas.apps.involture.client import InVoltureClient
+from app.modules.elaborazioni.capacitas.apps.involture.client import CapacitasSessionExpiredError, InVoltureClient
 from app.modules.elaborazioni.capacitas.models import (
     CapacitasAnagraficaDetail,
     CapacitasStoricoAnagraficaRow,
@@ -438,7 +438,7 @@ async def sync_terreni_batch(
             totals["failed_items"] += 1
             if progress_callback is not None:
                 await progress_callback(item_result)
-            if not request.continue_on_error:
+            if isinstance(exc, CapacitasSessionExpiredError) or not request.continue_on_error:
                 break
 
         if totals["processed_items"] < len(request.items) and policy is not None and policy.throttle_ms > 0:
