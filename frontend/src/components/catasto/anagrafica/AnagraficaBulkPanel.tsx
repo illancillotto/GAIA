@@ -596,7 +596,7 @@ export function AnagraficaBulkPanel() {
             cap: intestatario.cap ?? "",
             telefono: intestatario.telefono ?? "",
             email: intestatario.email ?? "",
-            deceduto: String(intestatario.deceduto ?? ""),
+            deceduto: intestatario.deceduto ? "si" : "",
           });
         });
       }
