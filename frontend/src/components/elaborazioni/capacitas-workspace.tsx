@@ -23,9 +23,11 @@ import {
   listCapacitasAnagraficaHistoryJobs,
   listCapacitasParticelleSyncJobs,
   listCapacitasCredentials,
+  listCapacitasParticelleAnomalie,
   listCapacitasTerreniJobs,
   patchCapacitasParticelleSyncJobSpeed,
   refetchCapacitasCertificatiEmpty,
+  resolveCapacitasParticellaFrazione,
   rerunCapacitasAnagraficaHistoryJob,
   rerunCapacitasParticelleSyncJob,
   rerunCapacitasTerreniJob,
@@ -38,6 +40,8 @@ import type {
   CapacitasAnagraficaHistoryImportJob,
   CapacitasAnagraficaHistoryImportResult,
   CapacitasCredential,
+  CapacitasFrazioneCandidate,
+  CapacitasParticellaAnomalia,
   CapacitasParticelleSyncJob,
   CapacitasRefetchCertificatiResult,
   CapacitasTerreniBatchItemInput,
@@ -48,13 +52,14 @@ import type {
 const JOB_POLL_INTERVAL_MS = 5000;
 const PREVIEW_ROWS_LIMIT = 20;
 
-type CapacitasSection = "particelle" | "storico" | "terreni" | "certificati";
+type CapacitasSection = "particelle" | "storico" | "terreni" | "certificati" | "anomalie";
 
 const CAPACITAS_SECTIONS: Array<{ id: CapacitasSection; label: string; description: string }> = [
   { id: "particelle", label: "Sync particelle", description: "Riallinea il catalogo particelle GAIA" },
   { id: "storico", label: "Storico anagrafico", description: "Importa snapshot storici da Capacitas" },
   { id: "terreni", label: "Terreni batch", description: "Carica file e monitora i job Terreni" },
   { id: "certificati", label: "Certificati", description: "Re-fetch certificati senza intestatari" },
+  { id: "anomalie", label: "Anomalie", description: "Particelle con frazione ambigua da risolvere" },
 ];
 
 function formatDateTime(value: string | null | undefined): string {
@@ -536,6 +541,17 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
   const [refetchBusy, setRefetchBusy] = useState(false);
   const [refetchResult, setRefetchResult] = useState<CapacitasRefetchCertificatiResult | null>(null);
   const [refetchError, setRefetchError] = useState<string | null>(null);
+
+  const [anomalie, setAnomalie] = useState<CapacitasParticellaAnomalia[]>([]);
+  const [anomalieBusy, setAnomalieBusy] = useState(false);
+  const [anomalieError, setAnomalieError] = useState<string | null>(null);
+  const [resolveModal, setResolveModal] = useState<{
+    particella: CapacitasParticellaAnomalia;
+    selectedFrazioneId: string;
+    busy: boolean;
+    error: string | null;
+    success: boolean;
+  } | null>(null);
 
   const activeCredentialsCount = credentials.filter((credential) => credential.active).length;
   const jobsInFlight =
@@ -1082,7 +1098,7 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
           </div>
         </ElaborazioneHero>
 
-        <nav className="grid gap-3 md:grid-cols-4" aria-label="Sezioni Capacitas">
+        <nav className="grid gap-3 md:grid-cols-5" aria-label="Sezioni Capacitas">
           {CAPACITAS_SECTIONS.map((section) => {
             const active = activeSection === section.id;
             return (
@@ -2328,7 +2344,205 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
         </article>
           </>
         ) : null}
+
+        {activeSection === "anomalie" ? (
+          <>
+            <ElaborazionePanelHeader
+              title="Anomalie — frazioni ambigue"
+              description="Particelle per cui Capacitas ha restituito risultati in più frazioni distinte dello stesso comune. È necessaria la scelta manuale della frazione corretta."
+            />
+            <article className="space-y-6 rounded-xl border border-gray-200 bg-white p-6 shadow-sm">
+              <div className="flex items-center justify-between gap-4">
+                <p className="text-sm text-gray-500">
+                  {anomalie.length > 0
+                    ? `${anomalie.length} particella${anomalie.length > 1 ? "e" : ""} con anomalia`
+                    : "Nessuna anomalia in coda"}
+                </p>
+                <button
+                  className="btn-secondary"
+                  type="button"
+                  disabled={anomalieBusy}
+                  onClick={() => {
+                    void (async () => {
+                      const token = getStoredAccessToken();
+                      if (!token) return;
+                      setAnomalieBusy(true);
+                      setAnomalieError(null);
+                      try {
+                        const rows = await listCapacitasParticelleAnomalie(token);
+                        setAnomalie(rows);
+                      } catch (err) {
+                        setAnomalieError(err instanceof Error ? err.message : "Errore caricamento anomalie");
+                      } finally {
+                        setAnomalieBusy(false);
+                      }
+                    })();
+                  }}
+                >
+                  {anomalieBusy ? "Caricamento..." : "Aggiorna lista"}
+                </button>
+              </div>
+
+              {anomalieError ? (
+                <ElaborazioneNoticeCard tone="danger" title="Errore" description={anomalieError} />
+              ) : null}
+
+              {anomalie.length === 0 ? (
+                <EmptyState
+                  icon={ServerIcon}
+                  title="Nessuna anomalia"
+                  description="Clicca Aggiorna lista per controllare."
+                />
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-gray-100 text-left text-xs text-gray-500">
+                        <th className="pb-2 pr-4 font-medium">Comune</th>
+                        <th className="pb-2 pr-4 font-medium">Foglio/Particella</th>
+                        <th className="pb-2 pr-4 font-medium">Frazioni trovate</th>
+                        <th className="pb-2 pr-4 font-medium">Ultima sync</th>
+                        <th className="pb-2 font-medium"></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                      {anomalie.map((row) => (
+                        <tr key={row.id} className="hover:bg-gray-50">
+                          <td className="py-2 pr-4 font-medium">{row.nome_comune ?? "—"}</td>
+                          <td className="py-2 pr-4 font-mono text-xs">
+                            {row.foglio}/{row.particella}
+                            {row.subalterno ? `/${row.subalterno}` : ""}
+                          </td>
+                          <td className="py-2 pr-4">
+                            <div className="flex flex-wrap gap-1">
+                              {row.candidates.map((c) => (
+                                <span
+                                  key={c.frazione_id}
+                                  className="inline-flex items-center gap-1 rounded bg-amber-50 px-2 py-0.5 text-xs font-mono text-amber-800"
+                                >
+                                  {c.frazione_id} ({c.n_rows} righe)
+                                </span>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="py-2 pr-4 text-xs text-gray-500">
+                            {formatDateTime(row.capacitas_last_sync_at)}
+                          </td>
+                          <td className="py-2">
+                            <button
+                              className="btn-secondary text-xs"
+                              type="button"
+                              onClick={() =>
+                                setResolveModal({
+                                  particella: row,
+                                  selectedFrazioneId: row.candidates[0]?.frazione_id ?? "",
+                                  busy: false,
+                                  error: null,
+                                  success: false,
+                                })
+                              }
+                            >
+                              Risolvi
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </article>
+          </>
+        ) : null}
+
       </div>
+
+      {resolveModal ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-xl">
+            <h2 className="mb-1 text-base font-semibold text-gray-900">Risolvi frazione ambigua</h2>
+            <p className="mb-4 text-sm text-gray-500">
+              {resolveModal.particella.nome_comune} — foglio {resolveModal.particella.foglio}/
+              {resolveModal.particella.particella}
+            </p>
+
+            <p className="mb-2 text-sm font-medium text-gray-700">Seleziona la frazione corretta:</p>
+            <div className="mb-4 space-y-2">
+              {resolveModal.particella.candidates.map((c: CapacitasFrazioneCandidate) => (
+                <label key={c.frazione_id} className="flex cursor-pointer items-start gap-3 rounded-lg border border-gray-200 p-3 hover:bg-gray-50">
+                  <input
+                    type="radio"
+                    name="frazione_id"
+                    value={c.frazione_id}
+                    checked={resolveModal.selectedFrazioneId === c.frazione_id}
+                    onChange={() =>
+                      setResolveModal((prev) => prev ? { ...prev, selectedFrazioneId: c.frazione_id } : null)
+                    }
+                    className="mt-0.5"
+                  />
+                  <div>
+                    <p className="font-mono text-sm font-medium">{c.frazione_id}</p>
+                    <p className="text-xs text-gray-500">
+                      {c.n_rows} righe · CCO: {c.ccos.join(", ") || "—"} · stati: {c.stati.join(", ") || "—"}
+                    </p>
+                  </div>
+                </label>
+              ))}
+            </div>
+
+            {resolveModal.error ? (
+              <ElaborazioneNoticeCard tone="danger" title="Errore" description={resolveModal.error} />
+            ) : null}
+
+            {resolveModal.success ? (
+              <ElaborazioneNoticeCard tone="success" title="Sincronizzato" description="La particella è stata sincronizzata con la frazione selezionata." />
+            ) : null}
+
+            <div className="mt-4 flex justify-end gap-3">
+              <button
+                className="btn-secondary"
+                type="button"
+                disabled={resolveModal.busy}
+                onClick={() => setResolveModal(null)}
+              >
+                Chiudi
+              </button>
+              {!resolveModal.success ? (
+                <button
+                  className="btn-primary"
+                  type="button"
+                  disabled={resolveModal.busy || !resolveModal.selectedFrazioneId}
+                  onClick={() => {
+                    void (async () => {
+                      const token = getStoredAccessToken();
+                      if (!token) return;
+                      setResolveModal((prev) => prev ? { ...prev, busy: true, error: null } : null);
+                      try {
+                        const result = await resolveCapacitasParticellaFrazione(
+                          token,
+                          resolveModal.particella.id,
+                          { frazione_id: resolveModal.selectedFrazioneId, fetch_certificati: true },
+                        );
+                        if (result.ok) {
+                          setResolveModal((prev) => prev ? { ...prev, busy: false, success: true } : null);
+                          setAnomalie((prev) => prev.filter((a) => a.id !== resolveModal.particella.id));
+                        } else {
+                          setResolveModal((prev) => prev ? { ...prev, busy: false, error: result.error ?? "Errore sync" } : null);
+                        }
+                      } catch (err) {
+                        setResolveModal((prev) => prev ? { ...prev, busy: false, error: err instanceof Error ? err.message : "Errore" } : null);
+                      }
+                    })();
+                  }}
+                >
+                  {resolveModal.busy ? "Sincronizzazione..." : "Sincronizza"}
+                </button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <ElaborazioneWorkspaceModal
         description="Configurazione credenziali aperta in modale per mantenere il contesto della ricerca Capacitas."
         href="/elaborazioni/settings"

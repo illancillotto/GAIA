@@ -150,6 +150,30 @@ async def main(comune_input: str, foglio: str, particella: str) -> None:
         for f in frazioni:
             print(f"  id={f.id!r} label={f.display!r}")
 
+        # Scansione diagnostica: mostra quante righe restituisce ogni frazione
+        if len(frazioni) > 1:
+            from app.modules.elaborazioni.capacitas.models import CapacitasTerreniSearchRequest
+            print(f"\nScansione frazioni per {foglio}/{particella}:")
+            for fraz in frazioni:
+                try:
+                    search_req = CapacitasTerreniSearchRequest(
+                        frazione_id=fraz.id,
+                        sezione='',
+                        foglio=foglio,
+                        particella=particella,
+                        sub='',
+                    )
+                    result = await client.search_terreni(search_req)
+                    rows = result.rows if result else []
+                    if rows:
+                        stati = [r.row_visual_state for r in rows]
+                        ccos = list({r.cco for r in rows if r.cco})
+                        print(f"  {fraz.id!r:5} {fraz.display!r:40} -> {len(rows)} righe | stati={stati} | CCO={ccos}")
+                    else:
+                        print(f"  {fraz.id!r:5} {fraz.display!r:40} -> 0 righe")
+                except Exception as exc:
+                    print(f"  {fraz.id!r:5} {fraz.display!r:40} -> ERRORE: {exc}")
+
         request = CapacitasTerreniBatchRequest(
             items=[CapacitasTerreniBatchItem(
                 label=label,

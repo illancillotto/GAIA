@@ -407,6 +407,42 @@ class CapacitasRefetchCertificatiResponse(BaseModel):
     remaining_empty: int
 
 
+class CapacitasFrazioneCandidate(BaseModel):
+    frazione_id: str
+    n_rows: int
+    ccos: list[str]
+    stati: list[str]
+
+
+class CapacitasParticellaAnomaliaOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    comune_id: str | None
+    nome_comune: str | None
+    foglio: str
+    particella: str
+    subalterno: str | None
+    anomaly_type: str
+    candidates: list[CapacitasFrazioneCandidate]
+    capacitas_last_sync_at: datetime | None
+    capacitas_last_sync_error: str | None
+
+
+class CapacitasResolveFragioneRequest(BaseModel):
+    frazione_id: str = Field(min_length=1)
+    credential_id: int | None = None
+    fetch_certificati: bool = True
+    fetch_details: bool = False
+
+
+class CapacitasResolveFragioneResponse(BaseModel):
+    ok: bool
+    total_rows: int = 0
+    imported_certificati: int = 0
+    error: str | None = None
+
+
 class CapacitasCredentialCreate(BaseModel):
     label: str = Field(min_length=1, max_length=120)
     username: str = Field(min_length=1, max_length=255)

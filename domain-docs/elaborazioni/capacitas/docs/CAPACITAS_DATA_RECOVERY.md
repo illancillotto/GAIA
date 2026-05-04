@@ -430,10 +430,43 @@ Regola implementata:
 - il comune canonico resta quello reale GAIA
 - il comune sorgente Capacitas viene conservato nei campi `source_*`
 
-### 14.3 Multipli candidati frazione
+### 14.3 Multipli candidati frazione — risoluzione automatica
 
-- nei batch il backend puo provare piu frazioni candidate per lo stesso comune
+- nei batch il backend prova piu frazioni candidate per lo stesso comune
 - il candidato utile e quello che restituisce davvero la particella cercata
+- se esattamente una frazione ha risultati, il sync procede con quella senza intervento manuale
+
+### 14.4 Frazioni ambigue — anomalia e risoluzione manuale
+
+Si verifica quando due o piu frazioni dello stesso comune restituiscono entrambe risultati per lo stesso foglio/particella (es. Oristano foglio 8 particella 48 presente sia in `04 DONIGALA FENUGHEDU` che in `11 ORISTANO`).
+
+Comportamento:
+
+- `_probe_frazioni_for_item` esegue un search leggero (senza scritture DB) su tutte le frazioni candidate
+- se il probe trova piu di una frazione con righe → alza `CapacitasFrazioneAmbiguaError` con l'elenco candidati (frazione_id, n_rows, CCO, stati)
+- `_sync_particella_item` catcha l'errore e salva sulla particella:
+  - `capacitas_last_sync_status = "anomalia"`
+  - `capacitas_anomaly_type = "frazione_ambigua"`
+  - `capacitas_anomaly_data.candidates` = lista frazioni con i loro metadati
+- nessun dato Capacitas viene scritto in DB per la particella anomala
+
+Risoluzione manuale:
+
+1. L'operatore apre il workspace Capacitas → sezione **Anomalie**
+2. Vede le particelle in anomalia con le frazioni candidate e i rispettivi CCO
+3. Preme **Risolvi** → modal con radio button per scegliere la frazione corretta
+4. Preme **Sincronizza** → `POST /elaborazioni/capacitas/involture/particelle/{id}/resolve-frazione`
+5. Il backend esegue il sync con la frazione esplicita; se ok azzera `capacitas_anomaly_type/data`
+
+Endpoints anomalie:
+
+- `GET /elaborazioni/capacitas/involture/particelle/anomalie` — lista particelle con anomalia non risolta
+- `POST /elaborazioni/capacitas/involture/particelle/{id}/resolve-frazione` — body: `{frazione_id, credential_id?, fetch_certificati, fetch_details}`
+
+Persistenza:
+
+- colonne aggiunte a `cat_particelle`: `capacitas_anomaly_type VARCHAR(32)`, `capacitas_anomaly_data JSON`
+- migration: `20260504_0072_add_capacitas_anomaly_to_particelle.py`
 
 ## 15. Diagnostica e test
 

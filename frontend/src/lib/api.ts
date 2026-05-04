@@ -46,10 +46,13 @@ import type {
   CapacitasAnagraficaHistoryImportJob,
   CapacitasAnagraficaHistoryImportResult,
   CapacitasLookupOption,
+  CapacitasParticellaAnomalia,
   CapacitasParticelleSyncJob,
   CapacitasParticelleSyncJobCreateInput,
   CapacitasRefetchCertificatiInput,
   CapacitasRefetchCertificatiResult,
+  CapacitasResolveFragioneInput,
+  CapacitasResolveFragioneResult,
   CapacitasSearchInput,
   CapacitasSearchResult,
   CapacitasTerreniJob,
@@ -1716,6 +1719,35 @@ export async function refetchCapacitasCertificatiEmpty(
       headers: {
         Authorization: `Bearer ${token}`,
       },
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export async function listCapacitasParticelleAnomalie(
+  token: string,
+  params?: { limit?: number; offset?: number },
+): Promise<CapacitasParticellaAnomalia[]> {
+  const query = createQueryString({
+    limit: params?.limit?.toString(),
+    offset: params?.offset?.toString(),
+  });
+  return request<CapacitasParticellaAnomalia[]>(
+    `/elaborazioni/capacitas/involture/particelle/anomalie${query}`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+}
+
+export async function resolveCapacitasParticellaFrazione(
+  token: string,
+  particellaId: string,
+  payload: CapacitasResolveFragioneInput,
+): Promise<CapacitasResolveFragioneResult> {
+  return request<CapacitasResolveFragioneResult>(
+    `/elaborazioni/capacitas/involture/particelle/${particellaId}/resolve-frazione`,
+    {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
       body: JSON.stringify(payload),
     },
   );

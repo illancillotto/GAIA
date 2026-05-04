@@ -46,6 +46,15 @@ from app.modules.elaborazioni.capacitas.models import (
 
 TerreniItemProgressCallback = Callable[[CapacitasTerreniBatchItemResult], Awaitable[None]]
 
+
+class CapacitasFrazioneAmbiguaError(RuntimeError):
+    """Raised when multiple frazioni return results for the same foglio/particella."""
+
+    def __init__(self, message: str, candidates: list[dict]) -> None:
+        super().__init__(message)
+        self.candidates = candidates
+
+
 _COMUNE_SWAP_CODES: dict[int, int] = {
     165: 280,  # Arborea -> Terralba
     280: 165,  # Terralba -> Arborea
@@ -1040,6 +1049,36 @@ def _apply_section_frazione_hints(
     return preferred_present + remainder
 
 
+async def _probe_frazioni_for_item(
+    client: InVoltureClient,
+    item: CapacitasTerreniBatchItem,
+    frazione_candidates: list[str],
+) -> list[dict]:
+    """Lightweight probe: search (no DB write) each fraction and return those with results."""
+    hits: list[dict] = []
+    for frazione_id in frazione_candidates:
+        search_req = CapacitasTerreniSearchRequest(
+            frazione_id=frazione_id,
+            sezione=item.sezione,
+            foglio=item.foglio,
+            particella=item.particella,
+            sub=item.sub,
+        )
+        try:
+            result = await client.search_terreni(search_req)
+            rows = result.rows if result else []
+            if rows:
+                hits.append({
+                    "frazione_id": frazione_id,
+                    "n_rows": len(rows),
+                    "ccos": sorted({r.cco for r in rows if r.cco}),
+                    "stati": sorted({r.row_visual_state for r in rows if r.row_visual_state}),
+                })
+        except Exception:
+            pass
+    return hits
+
+
 async def _sync_batch_item_with_candidates(
     db: Session,
     client: InVoltureClient,
@@ -1049,6 +1088,20 @@ async def _sync_batch_item_with_candidates(
     *,
     throttle_ms: int = 0,
 ) -> CapacitasTerreniSyncResponse:
+    # When frazione is explicit (single candidate) skip ambiguity check entirely.
+    if len(frazione_candidates) > 1:
+        hits = await _probe_frazioni_for_item(client, item, frazione_candidates)
+        if len(hits) > 1:
+            comune_value = (item.comune or "").strip() or "n/d"
+            raise CapacitasFrazioneAmbiguaError(
+                f"Particella {item.foglio}/{item.particella} trovata in {len(hits)} frazioni distinte "
+                f"per comune '{comune_value}': richiede risoluzione manuale.",
+                candidates=hits,
+            )
+        if len(hits) == 1:
+            # Exactly one fraction has results — restrict to that one.
+            frazione_candidates = [hits[0]["frazione_id"]]
+
     attempted_errors: list[str] = []
 
     for frazione_id in frazione_candidates:

@@ -1338,6 +1338,40 @@ export type CapacitasRefetchCertificatiResult = {
   remaining_empty: number;
 };
 
+export type CapacitasFrazioneCandidate = {
+  frazione_id: string;
+  n_rows: number;
+  ccos: string[];
+  stati: string[];
+};
+
+export type CapacitasParticellaAnomalia = {
+  id: string;
+  comune_id: string | null;
+  nome_comune: string | null;
+  foglio: string;
+  particella: string;
+  subalterno: string | null;
+  anomaly_type: string;
+  candidates: CapacitasFrazioneCandidate[];
+  capacitas_last_sync_at: string | null;
+  capacitas_last_sync_error: string | null;
+};
+
+export type CapacitasResolveFragioneInput = {
+  frazione_id: string;
+  credential_id?: number | null;
+  fetch_certificati?: boolean;
+  fetch_details?: boolean;
+};
+
+export type CapacitasResolveFragioneResult = {
+  ok: boolean;
+  total_rows: number;
+  imported_certificati: number;
+  error: string | null;
+};
+
 export type CapacitasParticelleSyncJobCreateInput = {
   credential_id?: number | null;
   only_due?: boolean;

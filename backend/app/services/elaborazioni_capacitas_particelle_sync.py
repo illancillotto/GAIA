@@ -22,7 +22,7 @@ from app.modules.elaborazioni.capacitas.models import (
     CapacitasTerreniBatchItem,
     CapacitasTerreniBatchRequest,
 )
-from app.services.elaborazioni_capacitas_terreni import sync_terreni_batch
+from app.services.elaborazioni_capacitas_terreni import CapacitasFrazioneAmbiguaError, sync_terreni_batch
 
 ROME_TZ = ZoneInfo("Europe/Rome")
 DAY_THROTTLE_MS = 900
@@ -448,6 +448,23 @@ async def _sync_particella_item(
             "label": item.label,
             "status": item_status,
             "message": item_message,
+        }
+    except CapacitasFrazioneAmbiguaError as exc:
+        db.rollback()
+        particella = db.get(CatParticella, item.particella_id)
+        if particella is not None:
+            particella.capacitas_last_sync_at = current_time
+            particella.capacitas_last_sync_status = "anomalia"
+            particella.capacitas_last_sync_error = str(exc)
+            particella.capacitas_last_sync_job_id = job_id
+            particella.capacitas_anomaly_type = "frazione_ambigua"
+            particella.capacitas_anomaly_data = {"candidates": exc.candidates}
+            db.commit()
+        return {
+            "particella_id": str(item.particella_id),
+            "label": item.label,
+            "status": "anomalia",
+            "message": str(exc),
         }
     except Exception as exc:
         db.rollback()

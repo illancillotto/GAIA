@@ -172,6 +172,8 @@ class CatParticella(Base):
     capacitas_last_sync_status: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     capacitas_last_sync_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     capacitas_last_sync_job_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
+    capacitas_anomaly_type: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    capacitas_anomaly_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     valid_from: Mapped[date] = mapped_column(Date, nullable=False, default=date.today)
     valid_to: Mapped[date | None] = mapped_column(Date, nullable=True)
     is_current: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)

@@ -22,8 +22,11 @@ from app.modules.elaborazioni.capacitas.models import (
     CapacitasParticelleSyncJobCreateRequest,
     CapacitasParticelleSyncJobOut,
     CapacitasParticelleSyncJobSpeedPatch,
+    CapacitasParticellaAnomaliaOut,
     CapacitasRefetchCertificatiRequest,
     CapacitasRefetchCertificatiResponse,
+    CapacitasResolveFragioneRequest,
+    CapacitasResolveFragioneResponse,
     CapacitasStoricoAnagraficaRow,
     CapacitasTerreniBatchRequest,
     CapacitasTerreniBatchResponse,
@@ -40,7 +43,7 @@ from app.modules.elaborazioni.capacitas.models import (
 )
 from app.modules.elaborazioni.capacitas.session import CapacitasSessionManager
 from app.models.application_user import ApplicationUser
-from app.models.catasto_phase1 import CatCapacitasCertificato, CatCapacitasIntestatario, CatCapacitasTerrenoRow, CatConsorzioOccupancy
+from app.models.catasto_phase1 import CatCapacitasCertificato, CatCapacitasIntestatario, CatCapacitasTerrenoRow, CatComune, CatConsorzioOccupancy, CatParticella
 from app.services.elaborazioni_capacitas_anagrafica_history import (
     CapacitasAnagraficaHistoryImportError,
     create_anagrafica_history_job,
@@ -74,6 +77,7 @@ from app.services.elaborazioni_capacitas import (
     update_credential,
 )
 from app.services.elaborazioni_capacitas_terreni import (
+    CapacitasFrazioneAmbiguaError,
     compute_terreni_sync_policy,
     create_terreni_sync_job,
     expire_stale_terreni_sync_jobs,
@@ -823,6 +827,137 @@ async def run_particelle_job(
 
     _enqueue_capacitas_job(db, job)
     return serialize_particelle_sync_job(job)
+
+
+@router.get("/involture/particelle/anomalie", response_model=list[CapacitasParticellaAnomaliaOut])
+def list_particelle_anomalie(
+    _: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+    limit: int = Query(default=200, ge=1, le=1000),
+    offset: int = Query(default=0, ge=0),
+) -> list[CapacitasParticellaAnomaliaOut]:
+    rows = db.execute(
+        select(CatParticella)
+        .where(
+            CatParticella.capacitas_anomaly_type.isnot(None),
+            CatParticella.is_current.is_(True),
+        )
+        .order_by(CatParticella.capacitas_last_sync_at.desc().nullslast())
+        .limit(limit)
+        .offset(offset)
+    ).scalars().all()
+
+    result: list[CapacitasParticellaAnomaliaOut] = []
+    for p in rows:
+        comune = db.get(CatComune, p.comune_id) if p.comune_id else None
+        data = p.capacitas_anomaly_data or {}
+        candidates_raw = data.get("candidates", [])
+        result.append(CapacitasParticellaAnomaliaOut(
+            id=str(p.id),
+            comune_id=str(p.comune_id) if p.comune_id else None,
+            nome_comune=comune.nome_comune if comune else None,
+            foglio=p.foglio,
+            particella=p.particella,
+            subalterno=p.subalterno,
+            anomaly_type=p.capacitas_anomaly_type or "",
+            candidates=[
+                {
+                    "frazione_id": c.get("frazione_id", ""),
+                    "n_rows": c.get("n_rows", 0),
+                    "ccos": c.get("ccos", []),
+                    "stati": c.get("stati", []),
+                }
+                for c in candidates_raw
+            ],
+            capacitas_last_sync_at=p.capacitas_last_sync_at,
+            capacitas_last_sync_error=p.capacitas_last_sync_error,
+        ))
+    return result
+
+
+@router.post(
+    "/involture/particelle/{particella_id}/resolve-frazione",
+    response_model=CapacitasResolveFragioneResponse,
+)
+async def resolve_particella_frazione(
+    particella_id: str,
+    body: CapacitasResolveFragioneRequest,
+    current_user: Annotated[ApplicationUser, Depends(require_admin_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> CapacitasResolveFragioneResponse:
+    from uuid import UUID as _UUID
+    try:
+        pid = _UUID(particella_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="particella_id non valido")
+
+    particella = db.get(CatParticella, pid)
+    if particella is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Particella non trovata")
+
+    comune = db.get(CatComune, particella.comune_id) if particella.comune_id else None
+    if comune is None:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Comune non disponibile sulla particella")
+
+    credential = pick_credential(db)
+    if credential is None:
+        if body.credential_id is not None:
+            credential = get_credential(db, body.credential_id)
+        if credential is None:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Nessuna credenziale Capacitas disponibile")
+
+    from app.services.elaborazioni_capacitas import _decrypt
+    password = _decrypt(credential.password_encrypted)
+
+    from app.modules.elaborazioni.capacitas.models import CapacitasTerreniBatchItem as _BatchItem
+    batch_request = CapacitasTerreniBatchRequest(
+        items=[
+            _BatchItem(
+                label=f"{comune.nome_comune} {particella.foglio}/{particella.particella}",
+                comune=comune.nome_comune,
+                frazione_id=body.frazione_id,
+                sezione="",
+                foglio=particella.foglio,
+                particella=particella.particella,
+                sub=particella.subalterno or "",
+            )
+        ],
+        continue_on_error=False,
+        credential_id=credential.id,
+        fetch_certificati=body.fetch_certificati,
+        fetch_details=body.fetch_details,
+    )
+
+    try:
+        async with CapacitasSessionManager(credential.username, password) as manager:
+            await manager.activate_app("involture")
+            client = InVoltureClient(manager)
+            sync_result = await sync_terreni_batch(db, client, batch_request)
+
+        item_result = sync_result.items[0] if sync_result.items else None
+        if item_result is None or not item_result.ok:
+            return CapacitasResolveFragioneResponse(
+                ok=False,
+                error=item_result.error if item_result else "Nessun risultato dal sync",
+            )
+
+        # Clear anomaly
+        particella.capacitas_anomaly_type = None
+        particella.capacitas_anomaly_data = None
+        particella.capacitas_last_sync_status = "synced"
+        particella.capacitas_last_sync_error = None
+        db.commit()
+
+        return CapacitasResolveFragioneResponse(
+            ok=True,
+            total_rows=item_result.total_rows,
+            imported_certificati=item_result.imported_certificati,
+        )
+    except CapacitasFrazioneAmbiguaError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc))
+    except Exception as exc:
+        logger.exception("Errore resolve-frazione particella %s: %s", particella_id, exc)
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc))
 
 
 _RPT_CERTIFICATO_BASE = "https://involture1.servizicapacitas.com/pages/rptCertificato.aspx"

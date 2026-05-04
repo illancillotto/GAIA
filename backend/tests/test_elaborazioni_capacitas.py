@@ -2124,6 +2124,10 @@ def test_capacitas_terreni_sync_batch_tries_multiple_exact_comune_matches_until_
 def test_capacitas_terreni_sync_batch_tries_duplicate_comune_matches_in_sequence(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """Quando frazione '14' non trova la particella (eccezione nella probe), il codice procede
+    con la frazione '35' che ha risultati. Il probe chiama search_terreni su entrambe le
+    frazioni, poi la sync chiama search_terreni di nuovo sulla frazione selezionata ('35'):
+    la sequenza attesa è ['14', '35', '35']."""
     create_response = client.post(
         "/elaborazioni/capacitas/credentials",
         headers=auth_headers(),
@@ -2198,7 +2202,8 @@ def test_capacitas_terreni_sync_batch_tries_duplicate_comune_matches_in_sequence
     assert payload["processed_items"] == 1
     assert payload["failed_items"] == 0
     assert payload["items"][0]["ok"] is True
-    assert attempted_frazioni == ["14", "35"]
+    # Probe: ["14" (eccezione), "35"] → un solo hit → sync usa solo "35" → search_terreni("35") di nuovo
+    assert attempted_frazioni == ["14", "35", "35"]
 
 
 def test_capacitas_terreni_sync_batch_matches_comune_without_asterisk(
@@ -3790,3 +3795,282 @@ async def test_refetch_certificati_gestisce_eccezioni_senza_propagare(monkeypatc
     finally:
         db.rollback()
         db.close()
+
+
+# ---------------------------------------------------------------------------
+# Tests: CapacitasFrazioneAmbiguaError e rilevamento anomalia frazione
+# ---------------------------------------------------------------------------
+
+
+def _make_search_result(rows):
+    """Costruisce un CapacitasTerreniSearchResult con le righe fornite."""
+    return CapacitasTerreniSearchResult(total=len(rows), rows=rows)
+
+
+def _make_terreno_row(**kwargs):
+    from app.modules.elaborazioni.capacitas.models import CapacitasTerrenoRow
+    defaults = dict(
+        id="1", pvc="001", com="200", cco="004000308", fra="11",
+        ccs="0", foglio="8", particella="48", sub="", anno="2022",
+        voltura="", opcode="", data_reg="", bac_descr="",
+        row_visual_state="current_black", superficie=None, ta_ext=None,
+    )
+    defaults.update(kwargs)
+    return CapacitasTerrenoRow.model_construct(**defaults)
+
+
+@pytest.mark.anyio
+async def test_probe_frazioni_returns_only_frazioni_with_results(monkeypatch: pytest.MonkeyPatch) -> None:
+    """_probe_frazioni_for_item restituisce solo le frazioni che hanno righe."""
+    from app.modules.elaborazioni.capacitas.models import CapacitasTerreniBatchItem
+    from app.services.elaborazioni_capacitas_terreni import _probe_frazioni_for_item
+
+    search_calls: list[str] = []
+
+    async def fake_search_terreni(self, req):
+        search_calls.append(req.frazione_id)
+        if req.frazione_id == "11":
+            return _make_search_result([_make_terreno_row()])
+        return _make_search_result([])
+
+    from app.modules.elaborazioni.capacitas.apps.involture.client import InVoltureClient
+    monkeypatch.setattr(InVoltureClient, "search_terreni", fake_search_terreni)
+
+    client = InVoltureClient.__new__(InVoltureClient)
+    item = CapacitasTerreniBatchItem(foglio="8", particella="48", comune="Oristano")
+
+    hits = await _probe_frazioni_for_item(client, item, ["04", "05", "11", "18"])
+
+    assert len(hits) == 1
+    assert hits[0]["frazione_id"] == "11"
+    assert hits[0]["n_rows"] == 1
+    assert set(search_calls) == {"04", "05", "11", "18"}
+
+
+@pytest.mark.anyio
+async def test_probe_frazioni_ignora_eccezioni_singola_frazione(monkeypatch: pytest.MonkeyPatch) -> None:
+    """_probe_frazioni_for_item non propaga eccezioni su singole frazioni."""
+    from app.modules.elaborazioni.capacitas.models import CapacitasTerreniBatchItem
+    from app.services.elaborazioni_capacitas_terreni import _probe_frazioni_for_item
+
+    async def fake_search_terreni(self, req):
+        if req.frazione_id == "04":
+            raise RuntimeError("timeout")
+        return _make_search_result([_make_terreno_row()])
+
+    from app.modules.elaborazioni.capacitas.apps.involture.client import InVoltureClient
+    monkeypatch.setattr(InVoltureClient, "search_terreni", fake_search_terreni)
+
+    client = InVoltureClient.__new__(InVoltureClient)
+    item = CapacitasTerreniBatchItem(foglio="8", particella="48", comune="Oristano")
+
+    hits = await _probe_frazioni_for_item(client, item, ["04", "11"])
+
+    assert len(hits) == 1
+    assert hits[0]["frazione_id"] == "11"
+
+
+@pytest.mark.anyio
+async def test_sync_batch_item_raises_frazione_ambigua_when_multiple_frazioni_match(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """_sync_batch_item_with_candidates alza CapacitasFrazioneAmbiguaError se
+    più di una frazione restituisce risultati."""
+    from app.modules.elaborazioni.capacitas.apps.involture.client import InVoltureClient
+    from app.modules.elaborazioni.capacitas.models import (
+        CapacitasTerreniBatchItem,
+        CapacitasTerreniBatchRequest,
+    )
+    from app.services.elaborazioni_capacitas_terreni import (
+        CapacitasFrazioneAmbiguaError,
+        _sync_batch_item_with_candidates,
+    )
+
+    async def fake_search_terreni(self, req):
+        return _make_search_result([_make_terreno_row(fra=req.frazione_id)])
+
+    monkeypatch.setattr(InVoltureClient, "search_terreni", fake_search_terreni)
+    client = InVoltureClient.__new__(InVoltureClient)
+
+    db = TestingSessionLocal()
+    try:
+        item = CapacitasTerreniBatchItem(foglio="8", particella="48", comune="Oristano")
+        batch_req = CapacitasTerreniBatchRequest(
+            items=[item], credential_id=None, fetch_certificati=False, fetch_details=False
+        )
+
+        with pytest.raises(CapacitasFrazioneAmbiguaError) as exc_info:
+            await _sync_batch_item_with_candidates(db, client, batch_req, item, ["04", "11"])
+
+        err = exc_info.value
+        assert len(err.candidates) == 2
+        assert {c["frazione_id"] for c in err.candidates} == {"04", "11"}
+    finally:
+        db.close()
+
+
+@pytest.mark.anyio
+async def test_sync_batch_item_proceeds_when_single_frazione_matches(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """_sync_batch_item_with_candidates procede normalmente se una sola frazione ha risultati."""
+    from app.modules.elaborazioni.capacitas.apps.involture.client import InVoltureClient
+    from app.modules.elaborazioni.capacitas.models import (
+        CapacitasTerreniBatchItem,
+        CapacitasTerreniBatchRequest,
+        CapacitasTerreniSyncResponse,
+    )
+    from app.services.elaborazioni_capacitas_terreni import _sync_batch_item_with_candidates
+
+    async def fake_search_terreni(self, req):
+        if req.frazione_id == "11":
+            return _make_search_result([_make_terreno_row()])
+        return _make_search_result([])
+
+    sync_called_with: list[str] = []
+
+    async def fake_sync_for_request(db, client, req, **kwargs):
+        sync_called_with.append(req.frazione_id)
+        return CapacitasTerreniSyncResponse(
+            search_key="test", total_rows=1, imported_rows=1,
+            imported_certificati=0, imported_details=0, linked_units=0, linked_occupancies=0,
+        )
+
+    monkeypatch.setattr(InVoltureClient, "search_terreni", fake_search_terreni)
+    monkeypatch.setattr(
+        "app.services.elaborazioni_capacitas_terreni.sync_terreni_for_request",
+        fake_sync_for_request,
+    )
+    client = InVoltureClient.__new__(InVoltureClient)
+
+    db = TestingSessionLocal()
+    try:
+        item = CapacitasTerreniBatchItem(foglio="8", particella="48", comune="Oristano")
+        batch_req = CapacitasTerreniBatchRequest(
+            items=[item], credential_id=None, fetch_certificati=False, fetch_details=False
+        )
+
+        result = await _sync_batch_item_with_candidates(db, client, batch_req, item, ["04", "11"])
+
+        assert result.total_rows == 1
+        assert sync_called_with == ["11"], "deve usare solo la frazione con risultati"
+    finally:
+        db.close()
+
+
+@pytest.mark.anyio
+async def test_sync_particella_item_marks_anomalia_on_frazione_ambigua(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """_sync_particella_item salva capacitas_anomaly_type='frazione_ambigua' quando
+    sync_terreni_batch alza CapacitasFrazioneAmbiguaError."""
+    from sqlalchemy import select as sa_select
+
+    from app.modules.elaborazioni.capacitas.apps.involture.client import InVoltureClient
+    from app.modules.elaborazioni.capacitas.models import CapacitasParticelleSyncJobCreateRequest
+    from app.services.elaborazioni_capacitas_particelle_sync import (
+        ParticellaSyncItem,
+        _sync_particella_item,
+    )
+    from app.services.elaborazioni_capacitas_terreni import CapacitasFrazioneAmbiguaError
+
+    candidates = [
+        {"frazione_id": "04", "n_rows": 5, "ccos": ["004000308"], "stati": ["historic_marker"]},
+        {"frazione_id": "11", "n_rows": 3, "ccos": ["0A0436904"], "stati": ["current_black"]},
+    ]
+
+    async def fake_sync_terreni_batch(db, client, request):
+        raise CapacitasFrazioneAmbiguaError(
+            "Particella 8/48 trovata in 2 frazioni", candidates=candidates
+        )
+
+    monkeypatch.setattr(
+        "app.services.elaborazioni_capacitas_particelle_sync.sync_terreni_batch",
+        fake_sync_terreni_batch,
+    )
+
+    db = TestingSessionLocal()
+    try:
+        particella = db.scalar(
+            sa_select(CatParticella).where(CatParticella.foglio == "1", CatParticella.particella == "680")
+        )
+        assert particella is not None
+
+        job = CapacitasParticelleSyncJob(
+            requested_by_user_id=1,
+            credential_id=None,
+            status="processing",
+            mode="progressive_catalog",
+            payload_json={"only_due": True},
+            result_json={"processed_items": 0},
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+
+        client_stub = InVoltureClient.__new__(InVoltureClient)
+        item = ParticellaSyncItem(
+            index=0,
+            particella_id=particella.id,
+            label="Oristano 8/48",
+            comune_label="Oristano",
+            sezione="",
+            foglio="8",
+            particella="48",
+            sub="",
+        )
+        payload = CapacitasParticelleSyncJobCreateRequest(
+            only_due=False, fetch_certificati=False, fetch_details=False
+        )
+
+        result = await _sync_particella_item(
+            db, client_stub, job_id=job.id, credential_id=None, payload=payload, item=item
+        )
+
+        assert result["status"] == "anomalia"
+        db.refresh(particella)
+        assert particella.capacitas_last_sync_status == "anomalia"
+        assert particella.capacitas_anomaly_type == "frazione_ambigua"
+        assert particella.capacitas_anomaly_data is not None
+        assert len(particella.capacitas_anomaly_data["candidates"]) == 2
+    finally:
+        db.rollback()
+        db.close()
+
+
+def test_list_particelle_anomalie_returns_only_anomalous(monkeypatch: pytest.MonkeyPatch) -> None:
+    """GET /involture/particelle/anomalie restituisce solo le particelle con anomalia."""
+    import json
+    from sqlalchemy import select as sa_select
+
+    db = TestingSessionLocal()
+    try:
+        particella = db.scalar(
+            sa_select(CatParticella).where(CatParticella.foglio == "1", CatParticella.particella == "680")
+        )
+        assert particella is not None
+        particella.capacitas_anomaly_type = "frazione_ambigua"
+        particella.capacitas_anomaly_data = {
+            "candidates": [
+                {"frazione_id": "04", "n_rows": 5, "ccos": ["004000308"], "stati": ["historic_marker"]},
+                {"frazione_id": "11", "n_rows": 3, "ccos": ["0A0436904"], "stati": ["current_black"]},
+            ]
+        }
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get(
+        "/elaborazioni/capacitas/involture/particelle/anomalie",
+        headers={"Authorization": "Bearer " + _get_admin_token()},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data) == 1
+    assert data[0]["anomaly_type"] == "frazione_ambigua"
+    assert len(data[0]["candidates"]) == 2
+
+
+def _get_admin_token() -> str:
+    resp = client.post("/auth/login", json={"username": "elaborazioni-admin", "password": "secret123"})
+    return resp.json()["access_token"]

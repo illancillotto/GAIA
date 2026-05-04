@@ -76,6 +76,9 @@ Implementato:
   - `GET /elaborazioni/capacitas/involture/anagrafica/storico/jobs/{id}`
   - `POST /elaborazioni/capacitas/involture/anagrafica/storico/jobs/{id}/run`
   - `DELETE /elaborazioni/capacitas/involture/anagrafica/storico/jobs/{id}`
+  - `POST /elaborazioni/capacitas/involture/certificati/refetch-empty`
+  - `GET /elaborazioni/capacitas/involture/particelle/anomalie`
+  - `POST /elaborazioni/capacitas/involture/particelle/{id}/resolve-frazione`
 - persistenza nel layer catasto consortile:
   - `cat_consorzio_units`
   - `cat_consorzio_unit_segments`
@@ -99,7 +102,10 @@ Implementato:
   - tab `Massiva da file` con import `.xlsx/.csv` locale e creazione job batch
   - template scaricabile `Excel` / `CSV` con colonne umane `comune, sezione, foglio, particella, sub`
   - risoluzione backend `comune -> frazione_id Capacitas` durante il batch
-  - se un comune ha piu frazioni candidate con match sul nome (`Arborea`, `Santa Giusta`, ecc.), il batch prova i candidati in sequenza e usa quello che restituisce davvero la particella
+  - se un comune ha piu frazioni candidate con match sul nome (`Arborea`, `Santa Giusta`, ecc.), il batch prova prima tutte le frazioni con una ricerca leggera (probe) e:
+    - se una sola frazione ha risultati → sync automatico su quella
+    - se piu frazioni hanno risultati → anomalia `frazione_ambigua` salvata sulla particella, nessun dato scritto
+  - le particelle in anomalia compaiono nel tab **Anomalie** del workspace Capacitas; l'operatore sceglie la frazione corretta tramite modal e avvia il sync manuale
   - flag globali di avvio job per `fetch_certificati` e `fetch_details`, non piu richiesti per ogni riga file
   - monitor job con refresh, avanzamento incrementale in `result_json`, rerun manuale, eliminazione dei job terminati e segnalazione esplicita di sessione frontend scaduta
 
