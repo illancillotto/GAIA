@@ -22,6 +22,7 @@
 - `domain-docs/utenze/docs/specs/C004-servizioVerificaDichDecesso.yaml`
 - `domain-docs/utenze/docs/specs/SpecificaAPI_C030.yaml`
 - completata la suite test dedicata backend per auth, client, service, routes e scheduler
+- aggiunta validazione esplicita della configurazione PDND (`PDND_CLIENT_ID`, `PDND_KID`, `PDND_PRIVATE_KEY_PATH`/`PDND_PRIVATE_KEY_PEM`) con risposta API `503` invece di `500` grezzo quando il backend non ha credenziali ANPR utilizzabili
 
 ## Verifiche Eseguite
 

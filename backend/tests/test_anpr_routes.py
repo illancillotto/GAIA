@@ -16,6 +16,7 @@ from app.core.security import hash_password
 from app.db.base import Base
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.modules.accessi.routes.auth import router as auth_router
+from app.modules.utenze.anpr.auth import PdndConfigurationError
 from app.modules.utenze.anpr.routes import router as anpr_router
 
 
@@ -110,6 +111,21 @@ def test_post_sync_subject_denies_viewer() -> None:
 
     assert response.status_code == 403
     assert response.json()["detail"] == "Insufficient role"
+
+
+def test_post_sync_subject_returns_503_for_pdnd_misconfiguration(monkeypatch: pytest.MonkeyPatch) -> None:
+    reviewer = _create_user(ApplicationUserRole.REVIEWER.value)
+    subject_id = uuid.uuid4()
+
+    async def fake_sync_single_subject(subject_id: str, db, triggered_by: str, auth, client):
+        raise PdndConfigurationError("PDND private key not configured: set PDND_PRIVATE_KEY_PATH or PDND_PRIVATE_KEY_PEM")
+
+    monkeypatch.setattr("app.modules.utenze.anpr.routes.sync_single_subject", fake_sync_single_subject)
+
+    response = client.post(f"/utenze/anpr/sync/{subject_id}", headers=_auth_headers(reviewer.username))
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "PDND private key not configured: set PDND_PRIVATE_KEY_PATH or PDND_PRIVATE_KEY_PEM"
 
 
 def test_get_config_returns_admin_config(monkeypatch: pytest.MonkeyPatch) -> None:

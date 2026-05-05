@@ -25,24 +25,45 @@ def _base64url_encode(value: bytes) -> str:
     return base64.urlsafe_b64encode(value).rstrip(b"=").decode("ascii")
 
 
+class PdndConfigurationError(ValueError):
+    """Raised when PDND credentials are missing or invalid."""
+
+
 class PdndAuthManager:
     _voucher_cache: dict[str, str | float] = {}
+
+    def _validate_settings(self) -> None:
+        if not (settings.pdnd_client_id or "").strip():
+            raise PdndConfigurationError("PDND client id not configured: set PDND_CLIENT_ID")
+        if not (settings.pdnd_kid or "").strip():
+            raise PdndConfigurationError("PDND key id not configured: set PDND_KID")
 
     def _load_private_key(self) -> rsa.RSAPrivateKey:
         private_key_pem = (settings.pdnd_private_key_pem or "").strip()
         private_key_path = (settings.pdnd_private_key_path or "").strip()
 
         if private_key_path:
-            private_key_pem = Path(private_key_path).read_text(encoding="utf-8")
+            try:
+                private_key_pem = Path(private_key_path).read_text(encoding="utf-8")
+            except FileNotFoundError as exc:
+                raise PdndConfigurationError(
+                    f"PDND private key file not found: {private_key_path}"
+                ) from exc
         elif not private_key_pem:
-            raise ValueError("PDND private key not configured: set PDND_PRIVATE_KEY_PATH or PDND_PRIVATE_KEY_PEM")
+            raise PdndConfigurationError(
+                "PDND private key not configured: set PDND_PRIVATE_KEY_PATH or PDND_PRIVATE_KEY_PEM"
+            )
 
-        key = serialization.load_pem_private_key(private_key_pem.encode("utf-8"), password=None)
+        try:
+            key = serialization.load_pem_private_key(private_key_pem.encode("utf-8"), password=None)
+        except (TypeError, ValueError) as exc:
+            raise PdndConfigurationError("PDND private key is not a valid PEM RSA private key") from exc
         if not isinstance(key, rsa.RSAPrivateKey):
-            raise TypeError("PDND private key must be an RSA private key")
+            raise PdndConfigurationError("PDND private key must be an RSA private key")
         return key
 
     def _build_client_assertion(self) -> str:
+        self._validate_settings()
         now = datetime.now(UTC)
         payload = {
             "iss": settings.pdnd_client_id,
@@ -83,6 +104,7 @@ class PdndAuthManager:
         return access_token
 
     def build_agid_jwt_signature(self, payload_bytes: bytes) -> str:
+        self._validate_settings()
         now = datetime.now(UTC)
         digest = _base64url_encode(hashlib.sha256(payload_bytes).digest())
         claims = {
@@ -106,6 +128,7 @@ class PdndAuthManager:
         return jwt.encode(claims, self._load_private_key(), algorithm="RS256", headers=headers)
 
     def build_agid_jwt_tracking_evidence(self, motivo_richiesta: str) -> str:
+        self._validate_settings()
         now = datetime.now(UTC)
         claims = {
             "iat": now,

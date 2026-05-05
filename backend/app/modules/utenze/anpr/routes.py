@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_active_user, require_module, require_role
 from app.core.database import SessionLocal, get_db
 from app.models.application_user import ApplicationUser
+from app.modules.utenze.anpr.auth import PdndConfigurationError
 from app.modules.utenze.anpr.client import AnprClient
 from app.modules.utenze.anpr.models import AnprCheckLog
 from app.modules.utenze.anpr.schemas import (
@@ -94,13 +95,19 @@ async def post_sync_subject(
     __: Annotated[ApplicationUser, RequireAnprSyncRole],
     db: Annotated[Session, Depends(get_db)],
 ) -> AnprSyncResult:
-    result = await sync_single_subject(
-        str(subject_id),
-        db,
-        triggered_by=f"user:{current_user.id}",
-        auth=None,
-        client=AnprClient(),
-    )
+    try:
+        result = await sync_single_subject(
+            str(subject_id),
+            db,
+            triggered_by=f"user:{current_user.id}",
+            auth=None,
+            client=AnprClient(),
+        )
+    except PdndConfigurationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
     result = AnprSyncResult.model_validate(result)
     if result.esito == "error" and result.calls_made == 0:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=result.message)

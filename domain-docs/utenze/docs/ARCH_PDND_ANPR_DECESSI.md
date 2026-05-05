@@ -110,6 +110,16 @@ PDND_FRUITORE_USER_LOCATION=GAIA-SRV-CBO  # postazione
 PDND_LOA=LOW  # livello di autenticazione
 ```
 
+Validazioni runtime minime:
+- `PDND_CLIENT_ID` obbligatorio
+- `PDND_KID` obbligatorio
+- almeno uno tra `PDND_PRIVATE_KEY_PATH` e `PDND_PRIVATE_KEY_PEM` obbligatorio
+- se `PDND_PRIVATE_KEY_PATH` è valorizzato, il file deve esistere ed essere un PEM RSA valido
+
+Comportamento applicativo:
+- la sync manuale `POST /utenze/anpr/sync/{subject_id}` restituisce `503 Service Unavailable` con dettaglio esplicito se la configurazione PDND è assente o non valida
+- in assenza di queste variabili il backend non può ottenere il voucher PDND né firmare gli header `Agid-JWT-*`
+
 ### 3.2 Flusso autenticazione
 
 ```

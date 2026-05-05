@@ -10,7 +10,7 @@ import pytest
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 
-from app.modules.utenze.anpr.auth import PdndAuthManager
+from app.modules.utenze.anpr.auth import PdndAuthManager, PdndConfigurationError
 
 
 UTC = timezone.utc
@@ -61,6 +61,7 @@ def test_build_agid_jwt_signature_contains_digest_claim(monkeypatch: pytest.Monk
     payload = b'{"hello":"world"}'
     expected_digest = _base64url_encode(hashlib.sha256(payload).digest())
 
+    monkeypatch.setattr("app.modules.utenze.anpr.auth.settings.pdnd_client_id", "client-abc")
     monkeypatch.setattr("app.modules.utenze.anpr.auth.settings.pdnd_kid", "kid-signature")
     monkeypatch.setattr(manager, "_load_private_key", lambda: private_key)
 
@@ -78,6 +79,7 @@ def test_build_agid_jwt_tracking_evidence_contains_expected_claims(monkeypatch: 
     private_key, public_key_pem = _generate_test_rsa_keypair()
     manager = PdndAuthManager()
 
+    monkeypatch.setattr("app.modules.utenze.anpr.auth.settings.pdnd_client_id", "client-abc")
     monkeypatch.setattr("app.modules.utenze.anpr.auth.settings.pdnd_kid", "kid-track")
     monkeypatch.setattr("app.modules.utenze.anpr.auth.settings.pdnd_fruitore_user_id", "GAIA-CBO")
     monkeypatch.setattr("app.modules.utenze.anpr.auth.settings.pdnd_fruitore_user_location", "GAIA-SRV")
@@ -136,3 +138,23 @@ def test_get_voucher_uses_cache_until_near_expiry(monkeypatch: pytest.MonkeyPatc
     assert calls[0]["url"] == "https://auth.example.test/token"
     assert calls[0]["data"]["grant_type"] == "client_credentials"
     assert calls[0]["data"]["client_assertion"] == "assertion-token"
+
+
+def test_build_client_assertion_requires_client_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    manager = PdndAuthManager()
+
+    monkeypatch.setattr("app.modules.utenze.anpr.auth.settings.pdnd_client_id", "")
+    monkeypatch.setattr("app.modules.utenze.anpr.auth.settings.pdnd_kid", "kid-xyz")
+
+    with pytest.raises(PdndConfigurationError, match="PDND client id not configured"):
+        manager._build_client_assertion()
+
+
+def test_load_private_key_requires_existing_file(monkeypatch: pytest.MonkeyPatch) -> None:
+    manager = PdndAuthManager()
+
+    monkeypatch.setattr("app.modules.utenze.anpr.auth.settings.pdnd_private_key_path", "/tmp/missing-pdnd-key.pem")
+    monkeypatch.setattr("app.modules.utenze.anpr.auth.settings.pdnd_private_key_pem", "")
+
+    with pytest.raises(PdndConfigurationError, match="PDND private key file not found"):
+        manager._load_private_key()
