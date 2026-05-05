@@ -144,6 +144,10 @@ class AnagraficaResetResponse(BaseModel):
     deleted_storage_files: int
 
 
+class RegistryImportJobDeletedResponse(BaseModel):
+    deleted: bool
+
+
 class AnagraficaNasFolderCandidateResponse(BaseModel):
     folder_name: str
     letter: str | None = None

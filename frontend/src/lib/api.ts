@@ -904,6 +904,35 @@ export async function getAnagraficaImportJob(token: string, jobId: string): Prom
 
 export const getUtenzeImportJob = getAnagraficaImportJob;
 
+export async function abortUtenzeRegistryImportJob(token: string, jobId: string): Promise<AnagraficaImportJob> {
+  return request<AnagraficaImportJob>(`/utenze/import/jobs/${jobId}/abort-registry`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function resumeUtenzeRegistryImportJob(token: string, jobId: string): Promise<AnagraficaImportRunResult> {
+  return request<AnagraficaImportRunResult>(`/utenze/import/jobs/${jobId}/resume-registry`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export type RegistryImportJobDeletedResponse = { deleted: boolean };
+
+export async function deleteUtenzeRegistryImportJob(token: string, jobId: string): Promise<RegistryImportJobDeletedResponse> {
+  return request<RegistryImportJobDeletedResponse>(`/utenze/import/jobs/${jobId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
 export async function resumeAnagraficaImportJob(token: string, jobId: string): Promise<AnagraficaImportRunResult> {
   return request<AnagraficaImportRunResult>(`/utenze/import/jobs/${jobId}/resume`, {
     method: "POST",

@@ -259,14 +259,26 @@ test("utenze dashboard opens subject and document summaries in modal overlays", 
 test("utenze import page exposes bulk import progress feedback", () => {
   const importPage = read("src/app/utenze/import/page.tsx");
 
-  assert.match(importPage, /Aggiornamento utenze in corso/);
+  assert.match(importPage, /Aggiornamento utenze da NAS/);
   assert.match(importPage, /activeBulkJob/);
   assert.match(importPage, /bulkJobProgress/);
+  assert.match(importPage, /bulkTrackingJobId/);
   assert.match(importPage, /setInterval/);
   assert.match(importPage, /completed_items/);
   assert.match(importPage, /running_items/);
   assert.match(importPage, /failed_items/);
-  assert.match(importPage, /non duplica i soggetti/);
+  assert.match(importPage, /Storico aggiornamenti massivi/);
+});
+
+test("catasto anagrafica bulk export normalizes foglio+sezione and exposes ruolo/cnc before note", () => {
+  const panel = read("src/components/catasto/anagrafica/AnagraficaBulkPanel.tsx");
+
+  assert.match(panel, /const FOGLIO_WITH_SEZIONE_RE =/);
+  assert.match(panel, /function normalizeFoglioSezioneInput/);
+  assert.match(panel, /stato_ruolo: m\?\.stato_ruolo \?\? ""/);
+  assert.match(panel, /stato_cnc: m\?\.stato_cnc \?\? ""/);
+  assert.match(panel, /deceduto: intestatario\.deceduto \? "si" : "",\s+note: m\?\.note \?\? ""/s);
+  assert.match(panel, /rows\.push\(\{ \.\.\.base, \.\.\.emptyInt, note: m\?\.note \?\? "" \}\)/);
 });
 
 test("utenze detail page keeps preview modal and delete password flow", () => {
