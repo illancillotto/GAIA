@@ -36,7 +36,8 @@
 - frontend Anagrafica collegato alle API reali del backend tramite `frontend/src/lib/api.ts`
 - introdotte dashboard modulo, lista soggetti, dettaglio soggetto e wizard import
 - aggiornata la navigazione modulo con voci dedicate `Dashboard`, `Soggetti`, `Import archivio`
-- pagina `/utenze/import`: layout a sezioni (hero KPI, tab come workspace Capacitas, pannelli `rounded-[28px]` con header modulo elaborazioni); sezione NAS con tooltip nativi su descrizione, box avviso e azioni; flusso massivo da anagrafica etichettato «Aggiorna utenze» (UI)
+- pagina `/utenze/import`: layout a due sezioni (Excel · Archivio NAS); dentro Archivio NAS sono inclusi preview/snapshot/aggiornamento massivo/reset, storico REGISTRY con azioni e pannello «Job e storico NAS» (dettaglio job + lista snapshot); hero KPI e pannelli `rounded-[28px]` come workspace elaborazioni
+- `POST /utenze/import/run-from-subjects`: creazione job REGISTRY in stato `pending` e presa in carico dal worker esterno `modules/elaborazioni/worker/worker.py`; il job non dipende piu dalla sessione web di GAIA e, in caso di restart del worker, le righe `processing` vengono riportate a `pending` per il recupero automatico. `POST /utenze/import/jobs/{id}/resume-registry` rimette in coda i soggetti mancanti sul worker; progresso osservabile via `GET /utenze/import/jobs/{id}`. Il frontend mantiene banner/polling anche in stato `pending`; `_refresh_import_job_status` persiste `created_documents` / `updated_documents` aggregati in `log_json`; restano disponibili `POST /utenze/import/jobs/{id}/abort-registry` e `DELETE /utenze/import/jobs/{id}` (solo REGISTRY, owner o super_admin)
 - aggiornati i tipi frontend per stats, soggetti, documenti, preview import e job
 - verifica TypeScript frontend completata con `tsc --noEmit`
 - introdotto export backend/frontend in formato CSV e XLSX con riuso dei filtri correnti

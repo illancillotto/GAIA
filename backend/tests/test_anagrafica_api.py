@@ -16,8 +16,19 @@ from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.models.catasto import CatastoDocument
 from app.modules.utenze.router import get_anagrafica_import_service
-from app.modules.utenze.models import AnagraficaDocument
-from app.modules.utenze.services.import_service import AnagraficaImportPreviewService
+from app.modules.utenze.models import (
+    AnagraficaDocument,
+    AnagraficaImportJob,
+    AnagraficaImportJobItem,
+    AnagraficaImportJobItemStatus,
+    AnagraficaImportJobStatus,
+    AnagraficaSubject,
+)
+from app.modules.utenze.services.import_service import (
+    AnagraficaImportPreviewService,
+    prepare_registry_import_jobs_for_recovery,
+    process_registry_bulk_import_job,
+)
 
 
 engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
@@ -1073,8 +1084,31 @@ def test_bulk_import_from_existing_registry_and_reset(tmp_path) -> None:
         assert bulk_response.status_code == 202
         bulk_payload = bulk_response.json()
         assert bulk_payload["letter"] == "REGISTRY"
-        assert bulk_payload["imported_ok"] == 1
-        assert bulk_payload["created_documents"] == 1
+        assert bulk_payload["status"] == "pending"
+        job_id = bulk_payload["job_id"]
+
+        job_detail = client.get(f"/utenze/import/jobs/{job_id}", headers=headers)
+        assert job_detail.status_code == 200
+        queued_job_payload = job_detail.json()
+        assert queued_job_payload["status"] == "pending"
+        assert queued_job_payload["items"] == []
+
+        db = TestingSessionLocal()
+        try:
+            process_registry_bulk_import_job(
+                db,
+                uuid.UUID(job_id),
+                service=AnagraficaImportPreviewService(FakeNasConnector(), archive_root="/archive"),
+            )
+        finally:
+            db.close()
+
+        job_detail = client.get(f"/utenze/import/jobs/{job_id}", headers=headers)
+        assert job_detail.status_code == 200
+        job_payload = job_detail.json()
+        assert job_payload["status"] == "completed"
+        assert job_payload["imported_ok"] == 1
+        assert job_payload["items"][0]["documents_created"] == 1
 
         jobs_response = client.get("/utenze/import/jobs", headers=headers)
         assert jobs_response.status_code == 200
@@ -1101,5 +1135,126 @@ def test_bulk_import_from_existing_registry_and_reset(tmp_path) -> None:
         assert detail_payload["nas_folder_path"] is None
         assert detail_payload["nas_folder_letter"] is None
         assert detail_payload["imported_at"] is None
+    finally:
+        settings.utenze_document_storage_path = original_storage_path
+
+
+def test_prepare_registry_import_jobs_for_recovery_requeues_processing_items() -> None:
+    create_user("registry_recovery", module_utenze=True)
+    db = TestingSessionLocal()
+    try:
+        user = db.query(ApplicationUser).filter(ApplicationUser.username == "registry_recovery").one()
+        subject = AnagraficaSubject(
+            subject_type="person",
+            source_name_raw="Obinu_Santina_BNOSTN34L64I743F",
+        )
+        db.add(subject)
+        db.flush()
+        subject_id = subject.id
+
+        job_id = uuid.uuid4()
+        db.execute(
+            AnagraficaImportJob.__table__.insert().values(
+                id=job_id,
+                requested_by_user_id=user.id,
+                letter="REGISTRY",
+                status=AnagraficaImportJobStatus.RUNNING.value,
+                total_folders=1,
+                imported_ok=0,
+                imported_errors=0,
+                warning_count=0,
+                log_json={"mode": "registry_import"},
+            )
+        )
+        db.add(
+            AnagraficaImportJobItem(
+                job_id=job_id,
+                subject_id=subject_id,
+                folder_name="Obinu_Santina_BNOSTN34L64I743F",
+                nas_folder_path="subject:test",
+                status=AnagraficaImportJobItemStatus.PROCESSING.value,
+            )
+        )
+        db.commit()
+
+        recovered_ids = prepare_registry_import_jobs_for_recovery(db)
+        assert recovered_ids == [job_id]
+
+        db.expire_all()
+        recovered_job = db.get(AnagraficaImportJob, job_id)
+        assert recovered_job is not None
+        assert recovered_job.status == AnagraficaImportJobStatus.PENDING.value
+        assert recovered_job.started_at is None
+        assert recovered_job.log_json["mode"] == "registry_import_resume"
+        recovered_item = db.query(AnagraficaImportJobItem).filter(AnagraficaImportJobItem.job_id == job_id).one()
+        assert recovered_item.status == AnagraficaImportJobItemStatus.PENDING.value
+        assert recovered_item.last_error is None
+        assert recovered_item.completed_at is None
+    finally:
+        db.close()
+
+
+def test_recovered_registry_job_runs_in_resume_mode_without_duplicate_items(tmp_path) -> None:
+    create_user("registry_resume", module_utenze=True)
+    token = login("registry_resume")
+    headers = {"Authorization": f"Bearer {token}"}
+    original_storage_path = settings.utenze_document_storage_path
+    settings.utenze_document_storage_path = str(tmp_path / "utenze-docs")
+
+    try:
+        create_response = client.post(
+            "/utenze/subjects",
+            headers=headers,
+            json={
+                "subject_type": "person",
+                "source_name_raw": "Obinu_Santina_BNOSTN34L64I743F",
+                "person": {
+                    "cognome": "Obinu",
+                    "nome": "Santina",
+                    "codice_fiscale": "BNOSTN34L64I743F",
+                },
+            },
+        )
+        assert create_response.status_code == 201
+        subject_id = uuid.UUID(create_response.json()["id"])
+
+        bulk_response = client.post("/utenze/import/run-from-subjects", headers=headers)
+        assert bulk_response.status_code == 202
+        job_id = uuid.UUID(bulk_response.json()["job_id"])
+
+        db = TestingSessionLocal()
+        try:
+            job = db.get(AnagraficaImportJob, job_id)
+            assert job is not None
+            job.status = AnagraficaImportJobStatus.RUNNING.value
+            job.started_at = None
+            db.add(job)
+            db.add(
+                AnagraficaImportJobItem(
+                    job_id=job_id,
+                    subject_id=subject_id,
+                    letter="O",
+                    folder_name="Obinu Santina",
+                    nas_folder_path=f"subject:{subject_id}",
+                    status=AnagraficaImportJobItemStatus.PROCESSING.value,
+                )
+            )
+            db.commit()
+
+            recovered_ids = prepare_registry_import_jobs_for_recovery(db)
+            assert recovered_ids == [job_id]
+
+            process_registry_bulk_import_job(
+                db,
+                job_id,
+                service=AnagraficaImportPreviewService(FakeNasConnector(), archive_root="/archive"),
+            )
+
+            db.expire_all()
+            items = db.query(AnagraficaImportJobItem).filter(AnagraficaImportJobItem.job_id == job_id).all()
+            assert len(items) == 1
+            assert items[0].status == AnagraficaImportJobItemStatus.COMPLETED.value
+        finally:
+            db.close()
     finally:
         settings.utenze_document_storage_path = original_storage_path

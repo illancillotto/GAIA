@@ -10,7 +10,7 @@ import shlex
 from typing import Protocol
 import uuid
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import settings
@@ -710,39 +710,243 @@ def import_subject_from_existing_registry(
         _close_connector(resolved_service.connector)
 
 
-def import_existing_registry_subjects(
+def start_registry_bulk_import_job(db: Session, current_user: ApplicationUser) -> uuid.UUID:
+    """Persist a PENDING REGISTRY job row so the external worker can pick it up."""
+    total_subjects = int(db.scalar(select(func.count()).select_from(AnagraficaSubject)) or 0)
+    job = AnagraficaImportJob(
+        requested_by_user_id=current_user.id,
+        letter="REGISTRY",
+        status=AnagraficaImportJobStatus.PENDING.value,
+        total_folders=total_subjects,
+        imported_ok=0,
+        imported_errors=0,
+        warning_count=0,
+        log_json={"mode": "registry_import", "warnings": [], "errors": [], "items": []},
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return job.id
+
+
+def queue_resume_registry_bulk_import_job(db: Session, job_id: uuid.UUID) -> AnagraficaImportJob | None:
+    """Requeue a REGISTRY job for resume on the external worker."""
+    job = db.get(AnagraficaImportJob, job_id)
+    if job is None or job.letter != "REGISTRY":
+        return None
+
+    now = datetime.now(UTC)
+    items = db.scalars(select(AnagraficaImportJobItem).where(AnagraficaImportJobItem.job_id == job_id)).all()
+    for item in items:
+        if item.status == AnagraficaImportJobItemStatus.PROCESSING.value:
+            item.status = AnagraficaImportJobItemStatus.PENDING.value
+            item.completed_at = None
+            item.last_error = None
+            db.add(item)
+
+    prior_log = job.log_json if isinstance(job.log_json, dict) else {}
+    job.status = AnagraficaImportJobStatus.PENDING.value
+    job.started_at = None
+    job.completed_at = None
+    job.log_json = {
+        **prior_log,
+        "mode": "registry_import_resume",
+        "queued_at": now.isoformat(),
+    }
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+    return job
+
+
+def prepare_registry_import_jobs_for_recovery(db: Session) -> list[uuid.UUID]:
+    """Reset RUNNING REGISTRY jobs to PENDING after a worker/web restart."""
+    jobs = db.scalars(
+        select(AnagraficaImportJob).where(
+            AnagraficaImportJob.letter == "REGISTRY",
+            AnagraficaImportJob.status == AnagraficaImportJobStatus.RUNNING.value,
+        )
+    ).all()
+    recovered_ids: list[uuid.UUID] = []
+    now = datetime.now(UTC)
+
+    for job in jobs:
+        items = db.scalars(select(AnagraficaImportJobItem).where(AnagraficaImportJobItem.job_id == job.id)).all()
+        for item in items:
+            if item.status == AnagraficaImportJobItemStatus.PROCESSING.value:
+                item.status = AnagraficaImportJobItemStatus.PENDING.value
+                item.completed_at = None
+                item.last_error = None
+                db.add(item)
+
+        prior_log = job.log_json if isinstance(job.log_json, dict) else {}
+        job.status = AnagraficaImportJobStatus.PENDING.value
+        job.started_at = None
+        job.completed_at = None
+        job.log_json = {
+            **prior_log,
+            "mode": "registry_import_resume",
+            "recovered_at": now.isoformat(),
+        }
+        db.add(job)
+        recovered_ids.append(job.id)
+
+    if recovered_ids:
+        db.flush()
+
+    return recovered_ids
+
+
+def process_registry_bulk_import_job(db: Session, job_id: uuid.UUID, service: AnagraficaImportPreviewService | None = None) -> None:
+    """Run one queued REGISTRY job using the provided DB session."""
+    job = db.get(AnagraficaImportJob, job_id)
+    if job is None or job.letter != "REGISTRY":
+        return
+
+    user = db.get(ApplicationUser, job.requested_by_user_id) if job.requested_by_user_id is not None else None
+    if user is None:
+        job.status = AnagraficaImportJobStatus.FAILED.value
+        job.completed_at = datetime.now(UTC)
+        prior_log = job.log_json if isinstance(job.log_json, dict) else {}
+        job.log_json = {
+            **prior_log,
+            "errors": [
+                *([*prior_log.get("errors", [])] if isinstance(prior_log.get("errors"), list) else []),
+                {"message": "Utente richiedente non disponibile: impossibile eseguire il job REGISTRY."},
+            ],
+        }
+        db.add(job)
+        db.commit()
+        return
+
+    mode = job.log_json.get("mode") if isinstance(job.log_json, dict) else None
+    resume_mode = mode == "registry_import_resume"
+    skip_subject_ids = registry_job_completed_subject_ids(db, job_id) if resume_mode else None
+
+    job.status = AnagraficaImportJobStatus.RUNNING.value
+    job.started_at = datetime.now(UTC)
+    job.completed_at = None
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    _execute_registry_bulk_import(
+        db,
+        user,
+        job,
+        service=service,
+        resume_mode=resume_mode,
+        skip_subject_ids=skip_subject_ids,
+    )
+
+
+def run_registry_bulk_import_job_by_id(job_id: uuid.UUID) -> None:
+    """Worker entrypoint: load and execute one queued REGISTRY job by id."""
+    from app.core.database import SessionLocal
+
+    with SessionLocal() as db:
+        process_registry_bulk_import_job(db, job_id)
+
+
+def registry_job_completed_subject_ids(db: Session, job_id: uuid.UUID) -> set[uuid.UUID]:
+    rows = db.scalars(
+        select(AnagraficaImportJobItem.subject_id).where(
+            AnagraficaImportJobItem.job_id == job_id,
+            AnagraficaImportJobItem.status == AnagraficaImportJobItemStatus.COMPLETED.value,
+            AnagraficaImportJobItem.subject_id.is_not(None),
+        )
+    ).all()
+    return {sid for sid in rows if sid is not None}
+
+
+def _delete_non_completed_registry_items_for_subject(db: Session, job_id: uuid.UUID, subject_id: uuid.UUID) -> None:
+    db.execute(
+        delete(AnagraficaImportJobItem).where(
+            AnagraficaImportJobItem.job_id == job_id,
+            AnagraficaImportJobItem.subject_id == subject_id,
+            AnagraficaImportJobItem.status != AnagraficaImportJobItemStatus.COMPLETED.value,
+        )
+    )
+    db.commit()
+
+
+def finalize_stuck_registry_import_job(
+    db: Session,
+    job_id: uuid.UUID,
+    *,
+    refresh: bool = True,
+    message: str = "Interrotto manualmente (job bloccato o worker terminato).",
+) -> AnagraficaImportJob | None:
+    """
+    Mark PROCESSING items as failed so a REGISTRY job can reach a terminal state.
+    Used when the async worker died mid-subject or the user stops a stuck run.
+    """
+    job = db.get(AnagraficaImportJob, job_id)
+    if job is None or job.letter != "REGISTRY":
+        return None
+
+    now = datetime.now(UTC)
+    items = db.scalars(select(AnagraficaImportJobItem).where(AnagraficaImportJobItem.job_id == job_id)).all()
+    changed = False
+    for item in items:
+        if item.status == AnagraficaImportJobItemStatus.PROCESSING.value:
+            item.status = AnagraficaImportJobItemStatus.FAILED.value
+            item.last_error = message
+            item.completed_at = now
+            db.add(item)
+            changed = True
+
+    if changed:
+        db.commit()
+
+    if refresh:
+        _refresh_import_job_status(db, job_id)
+        job = db.get(AnagraficaImportJob, job_id)
+
+    return job
+
+
+def delete_registry_import_job(db: Session, job_id: uuid.UUID) -> bool:
+    """Delete a REGISTRY import job and its items. Returns False if job missing or not REGISTRY."""
+    job = db.get(AnagraficaImportJob, job_id)
+    if job is None or job.letter != "REGISTRY":
+        return False
+    db.execute(delete(AnagraficaImportJobItem).where(AnagraficaImportJobItem.job_id == job_id))
+    db.execute(delete(AnagraficaImportJob).where(AnagraficaImportJob.id == job_id))
+    db.commit()
+    return True
+
+
+def _execute_registry_bulk_import(
     db: Session,
     current_user: ApplicationUser,
+    job: AnagraficaImportJob,
     service: AnagraficaImportPreviewService | None = None,
-) -> ImportRunResult:
+    *,
+    resume_mode: bool = False,
+    skip_subject_ids: set[uuid.UUID] | None = None,
+) -> None:
     resolved_service = service or AnagraficaImportPreviewService(get_nas_client())
-    started_at = datetime.now(UTC)
+    started_at = job.started_at or datetime.now(UTC)
 
     try:
         subjects = db.scalars(
             select(AnagraficaSubject).order_by(AnagraficaSubject.nas_folder_letter.asc(), AnagraficaSubject.created_at.asc())
         ).all()
-        job = AnagraficaImportJob(
-            requested_by_user_id=current_user.id,
-            letter="REGISTRY",
-            status=AnagraficaImportJobStatus.RUNNING.value,
-            total_folders=len(subjects),
-            imported_ok=0,
-            imported_errors=0,
-            warning_count=0,
-            log_json={"mode": "registry_import", "warnings": [], "errors": [], "items": []},
-            started_at=started_at,
-        )
-        db.add(job)
-        db.flush()
+        # total_folders was set from a count at job creation; keep in sync if subjects changed mid-flight.
+        if len(subjects) != job.total_folders:
+            job.total_folders = len(subjects)
+            db.add(job)
+            db.commit()
 
-        created_subjects = 0
-        updated_subjects = 0
-        created_documents = 0
-        updated_documents = 0
-        warning_count = 0
+        skip = skip_subject_ids or set()
 
         for subject in subjects:
+            if subject.id in skip:
+                continue
+            if resume_mode:
+                _delete_non_completed_registry_items_for_subject(db, job.id, subject.id)
+
             folder_name = _subject_display_name(db, subject)
             job_item = AnagraficaImportJobItem(
                 job_id=job.id,
@@ -756,6 +960,7 @@ def import_existing_registry_subjects(
             )
             db.add(job_item)
             db.flush()
+            db.commit()
 
             try:
                 matched_folder = resolved_service.match_existing_subject_folder(db, subject)
@@ -787,11 +992,7 @@ def import_existing_registry_subjects(
                         },
                     )
 
-                updated_subjects += 1
-                created_documents += document_stats["created"]
-                updated_documents += document_stats["updated"]
                 item_warning_count = len(subject_preview.warnings) + sum(len(document.warnings) for document in subject_preview.documents)
-                warning_count += item_warning_count
 
                 job_item.letter = subject_preview.letter
                 job_item.folder_name = matched_folder.folder_name
@@ -816,30 +1017,44 @@ def import_existing_registry_subjects(
                 db.commit()
 
         _refresh_import_job_status(db, job.id)
-        db.refresh(job)
-        job.warning_count = warning_count
-        db.add(job)
-        db.commit()
-        db.refresh(job)
-
-        return ImportRunResult(
-            job_id=job.id,
-            letter="REGISTRY",
-            status=job.status,
-            total_folders=job.total_folders,
-            imported_ok=job.imported_ok,
-            imported_errors=job.imported_errors,
-            warning_count=job.warning_count,
-            created_subjects=created_subjects,
-            updated_subjects=updated_subjects,
-            created_documents=created_documents,
-            updated_documents=updated_documents,
-            generated_at=started_at,
-            completed_at=job.completed_at or datetime.now(UTC),
-            log_json=job.log_json,
-        )
     finally:
         _close_connector(resolved_service.connector)
+
+
+def import_existing_registry_subjects(
+    db: Session,
+    current_user: ApplicationUser,
+    service: AnagraficaImportPreviewService | None = None,
+) -> ImportRunResult:
+    """Synchronous registry import (tests / tooling); prefer async worker + polling in HTTP handlers."""
+    started_at = datetime.now(UTC)
+    job_id = start_registry_bulk_import_job(db, current_user)
+    job = db.get(AnagraficaImportJob, job_id)
+    if job is None:
+        raise ValueError("Registry import job not found after creation")
+    _execute_registry_bulk_import(db, current_user, job, service=service)
+    db.refresh(job)
+
+    items = db.scalars(select(AnagraficaImportJobItem).where(AnagraficaImportJobItem.job_id == job_id)).all()
+    created_documents = sum(item.documents_created for item in items)
+    updated_documents = sum(item.documents_updated for item in items)
+
+    return ImportRunResult(
+        job_id=job.id,
+        letter="REGISTRY",
+        status=job.status,
+        total_folders=job.total_folders,
+        imported_ok=job.imported_ok,
+        imported_errors=job.imported_errors,
+        warning_count=job.warning_count,
+        created_subjects=0,
+        updated_subjects=sum(1 for item in items if item.status == AnagraficaImportJobItemStatus.COMPLETED.value),
+        created_documents=created_documents,
+        updated_documents=updated_documents,
+        generated_at=started_at,
+        completed_at=job.completed_at or datetime.now(UTC),
+        log_json=job.log_json,
+    )
 
 
 def reset_anagrafica_data(db: Session) -> ResetAnagraficaResult:
@@ -1144,7 +1359,13 @@ def _refresh_import_job_status(db: Session, job_id: uuid.UUID) -> None:
         else AnagraficaImportJobStatus.FAILED.value if failed
         else AnagraficaImportJobStatus.COMPLETED.value
     )
+    created_documents_total = sum(item.documents_created for item in items)
+    updated_documents_total = sum(item.documents_updated for item in items)
+    prior_mode = None
+    if isinstance(job.log_json, dict):
+        prior_mode = job.log_json.get("mode")
     job.log_json = {
+        **({"mode": prior_mode} if prior_mode else {}),
         "warnings": [],
         "errors": [
             {"folder_name": item.folder_name, "path": item.nas_folder_path, "message": item.last_error}
@@ -1163,6 +1384,8 @@ def _refresh_import_job_status(db: Session, job_id: uuid.UUID) -> None:
             }
             for item in items
         ],
+        "created_documents": created_documents_total,
+        "updated_documents": updated_documents_total,
     }
     db.add(job)
     db.commit()

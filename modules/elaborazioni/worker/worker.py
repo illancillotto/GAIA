@@ -28,6 +28,10 @@ from app.models.catasto import (
     CatastoVisuraRequest,
     CatastoVisuraRequestStatus,
 )
+from app.modules.utenze.services.import_service import (
+    prepare_registry_import_jobs_for_recovery,
+    run_registry_bulk_import_job_by_id,
+)
 from app.services.elaborazioni_capacitas_anagrafica_history import (
     expire_stale_anagrafica_history_jobs,
     prepare_anagrafica_history_jobs_for_recovery,
@@ -126,6 +130,12 @@ class CatastoWorker:
                 await self._process_capacitas_job(job_kind, job_id)
                 continue
 
+            registry_job_id = self._next_registry_import_job_id()
+            if registry_job_id is not None:
+                logger.info("Job REGISTRY utenze %s prelevato dalla coda", registry_job_id)
+                await self._process_registry_import_job(registry_job_id)
+                continue
+
             batch_id = self._next_batch_id()
             if batch_id is None:
                 await asyncio.sleep(POLL_INTERVAL_SEC)
@@ -164,12 +174,15 @@ class CatastoWorker:
             history_ids = prepare_anagrafica_history_jobs_for_recovery(db)
             terreni_ids = prepare_terreni_sync_jobs_for_recovery(db)
             particelle_ids = prepare_particelle_sync_jobs_for_recovery(db)
+            registry_ids = prepare_registry_import_jobs_for_recovery(db)
             if history_ids:
                 logger.info("Recuperati %d job Capacitas storico anagrafica", len(history_ids))
             if terreni_ids:
                 logger.info("Recuperati %d job Capacitas terreni", len(terreni_ids))
             if particelle_ids:
                 logger.info("Recuperati %d job Capacitas particelle", len(particelle_ids))
+            if registry_ids:
+                logger.info("Recuperati %d job REGISTRY utenze", len(registry_ids))
             db.commit()
 
     def _next_connection_test_id(self):
@@ -221,6 +234,29 @@ class CatastoWorker:
             await run_particelle_job_by_id(job_id)
             return
         logger.error("Tipo job Capacitas non riconosciuto: %s", job_kind)
+
+    def _next_registry_import_job_id(self):
+        from app.modules.utenze.models import AnagraficaImportJob, AnagraficaImportJobStatus
+
+        with SessionLocal() as db:
+            job = db.scalar(
+                select(AnagraficaImportJob)
+                .where(
+                    AnagraficaImportJob.letter == "REGISTRY",
+                    AnagraficaImportJob.status == AnagraficaImportJobStatus.PENDING.value,
+                )
+                .order_by(AnagraficaImportJob.created_at.asc())
+                .with_for_update(skip_locked=True)
+            )
+            if job is None:
+                return None
+            job.status = AnagraficaImportJobStatus.RUNNING.value
+            job.started_at = datetime.now(timezone.utc)
+            db.commit()
+            return job.id
+
+    async def _process_registry_import_job(self, job_id) -> None:
+        await asyncio.to_thread(run_registry_bulk_import_job_by_id, job_id)
 
     async def _process_connection_test(self, connection_test_id) -> None:
         browser = BrowserSession(

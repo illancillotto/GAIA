@@ -72,6 +72,7 @@ from app.modules.utenze.schemas import (
     BonificaUserStagingBulkApproveResponse,
     BonificaUserStagingListResponse,
     BonificaUserStagingResponse,
+    RegistryImportJobDeletedResponse,
     XlsxImportBatchResponse,
     XlsxImportStartResponse,
 )
@@ -79,10 +80,14 @@ from app.modules.utenze.services.import_service import (
     AnagraficaImportPreviewService,
     create_import_snapshot,
     create_manual_document,
-    import_existing_registry_subjects,
+    delete_registry_import_job,
+    finalize_stuck_registry_import_job,
     import_subject_from_existing_registry,
     preview_import,
+    queue_resume_registry_bulk_import_job,
+    registry_job_completed_subject_ids,
     reset_anagrafica_data,
+    start_registry_bulk_import_job,
 )
 from app.modules.utenze.services.csv_import_service import import_subjects_from_csv
 from app.modules.utenze.services.person_history_service import snapshot_person_if_changed
@@ -164,6 +169,24 @@ def _serialize_import_job(db: Session, job: AnagraficaImportJob) -> AnagraficaIm
     return AnagraficaImportJobResponse.model_validate(payload)
 
 
+def _require_registry_import_job_for_mutation(
+    db: Session,
+    job_id: uuid.UUID,
+    current_user: ApplicationUser,
+) -> AnagraficaImportJob:
+    job = db.get(AnagraficaImportJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Import job non trovato")
+    if job.letter != "REGISTRY":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Questa azione è disponibile solo per job REGISTRY (aggiornamento massivo da anagrafica).",
+        )
+    if job.requested_by_user_id != current_user.id and not current_user.is_super_admin:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Non hai permesso di modificare questo job")
+    return job
+
+
 @router.get("", response_model=AnagraficaModuleStatusResponse)
 def get_anagrafica_module_status(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
@@ -232,42 +255,46 @@ def post_import_run(
 
 
 @router.post("/import/run-from-subjects", response_model=AnagraficaImportRunResponse, status_code=status.HTTP_202_ACCEPTED)
-def post_import_run_from_subjects(
+async def post_import_run_from_subjects(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     _: Annotated[ApplicationUser, RequireUtenzeModule],
     db: Annotated[Session, Depends(get_db)],
-    service: Annotated[AnagraficaImportPreviewService, Depends(get_anagrafica_import_service)],
 ) -> AnagraficaImportRunResponse:
     try:
-        result = import_existing_registry_subjects(db, current_user=current_user, service=service)
-        return AnagraficaImportRunResponse.model_validate(
-            {
-                "job_id": str(result.job_id),
-                "letter": result.letter,
-                "status": result.status,
-                "total_folders": result.total_folders,
-                "imported_ok": result.imported_ok,
-                "imported_errors": result.imported_errors,
-                "warning_count": result.warning_count,
-                "pending_items": 0,
-                "running_items": 0,
-                "completed_items": result.imported_ok,
-                "failed_items": result.imported_errors,
-                "created_subjects": result.created_subjects,
-                "updated_subjects": result.updated_subjects,
-                "created_documents": result.created_documents,
-                "updated_documents": result.updated_documents,
-                "generated_at": result.generated_at,
-                "completed_at": result.completed_at,
-                "log_json": result.log_json,
-            }
-        )
+        job_id = start_registry_bulk_import_job(db, current_user)
     except ValueError as exc:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
-    except NasConnectorError as exc:
-        db.rollback()
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+
+    job = db.get(AnagraficaImportJob, job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Impossibile creare il job di aggiornamento utenze")
+
+    progress = _job_progress(db, job_id)
+    generated_at = job.created_at
+
+    return AnagraficaImportRunResponse.model_validate(
+        {
+            "job_id": str(job_id),
+            "letter": "REGISTRY",
+            "status": job.status,
+            "total_folders": job.total_folders,
+            "imported_ok": job.imported_ok,
+            "imported_errors": job.imported_errors,
+            "warning_count": job.warning_count,
+            "pending_items": progress["pending_items"],
+            "running_items": progress["running_items"],
+            "completed_items": progress["completed_items"],
+            "failed_items": progress["failed_items"],
+            "created_subjects": 0,
+            "updated_subjects": 0,
+            "created_documents": 0,
+            "updated_documents": 0,
+            "generated_at": generated_at,
+            "completed_at": job.completed_at,
+            "log_json": job.log_json,
+        }
+    )
 
 
 @router.get("/import/jobs", response_model=list[AnagraficaImportJobResponse])
@@ -291,6 +318,90 @@ def get_import_job(
     if job is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Import job not found")
     return _serialize_import_job(db, job)
+
+
+@router.post("/import/jobs/{job_id}/abort-registry", response_model=AnagraficaImportJobResponse)
+def post_abort_registry_import_job(
+    job_id: uuid.UUID,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    _: Annotated[ApplicationUser, RequireUtenzeModule],
+    db: Annotated[Session, Depends(get_db)],
+) -> AnagraficaImportJobResponse:
+    """Chiude job REGISTRY bloccati: marca gli item `processing` come falliti e ricalcola lo stato del job."""
+    _require_registry_import_job_for_mutation(db, job_id, current_user)
+    updated = finalize_stuck_registry_import_job(db, job_id, refresh=True)
+    if updated is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Import job non trovato")
+    return _serialize_import_job(db, updated)
+
+
+@router.post("/import/jobs/{job_id}/resume-registry", response_model=AnagraficaImportRunResponse, status_code=status.HTTP_202_ACCEPTED)
+async def post_resume_registry_import_job(
+    job_id: uuid.UUID,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    _: Annotated[ApplicationUser, RequireUtenzeModule],
+    db: Annotated[Session, Depends(get_db)],
+) -> AnagraficaImportRunResponse:
+    """Riprende un job REGISTRY: interrompe eventuali item bloccati in processing, poi elabora solo i soggetti non ancora completati."""
+    _require_registry_import_job_for_mutation(db, job_id, current_user)
+
+    total_subjects = int(db.scalar(select(func.count()).select_from(AnagraficaSubject)) or 0)
+    completed_ids = registry_job_completed_subject_ids(db, job_id)
+    if total_subjects == 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Nessun soggetto in anagrafica: impossibile riprendere il job.",
+        )
+    if len(completed_ids) >= total_subjects:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Tutti i soggetti risultano già elaborati con esito positivo per questo job.",
+        )
+
+    job = queue_resume_registry_bulk_import_job(db, job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Import job non trovato")
+
+    progress = _job_progress(db, job_id)
+    generated_at = job.created_at
+
+    return AnagraficaImportRunResponse.model_validate(
+        {
+            "job_id": str(job_id),
+            "letter": "REGISTRY",
+            "status": job.status,
+            "total_folders": job.total_folders,
+            "imported_ok": job.imported_ok,
+            "imported_errors": job.imported_errors,
+            "warning_count": job.warning_count,
+            "pending_items": progress["pending_items"],
+            "running_items": progress["running_items"],
+            "completed_items": progress["completed_items"],
+            "failed_items": progress["failed_items"],
+            "created_subjects": 0,
+            "updated_subjects": 0,
+            "created_documents": 0,
+            "updated_documents": 0,
+            "generated_at": generated_at,
+            "completed_at": job.completed_at,
+            "log_json": job.log_json,
+        }
+    )
+
+
+@router.delete("/import/jobs/{job_id}", response_model=RegistryImportJobDeletedResponse)
+def delete_registry_import_job_route(
+    job_id: uuid.UUID,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    _: Annotated[ApplicationUser, RequireUtenzeModule],
+    db: Annotated[Session, Depends(get_db)],
+) -> RegistryImportJobDeletedResponse:
+    """Elimina dal database un job REGISTRY e tutti i relativi item (storico / job bloccati)."""
+    _require_registry_import_job_for_mutation(db, job_id, current_user)
+    deleted = delete_registry_import_job(db, job_id)
+    if not deleted:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Import job non trovato")
+    return RegistryImportJobDeletedResponse(deleted=True)
 
 
 @router.post("/import/jobs/{job_id}/resume", response_model=AnagraficaImportRunResponse, status_code=status.HTTP_202_ACCEPTED)
