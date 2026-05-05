@@ -33,6 +33,7 @@ export default function SelectionPanel({ particelle, truncated, nTotale }: Selec
       intestatari: [],
       anomalie_count: 0,
       anomalie_top: [],
+      note: null,
     };
   }, [selected]);
 

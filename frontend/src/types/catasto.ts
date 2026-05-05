@@ -356,6 +356,7 @@ export type CatAnagraficaMatch = {
   intestatari: CatIntestatario[];
   anomalie_count: number;
   anomalie_top: { tipo: string; count: number }[];
+  note: string | null;
 };
 
 export type CatAnagraficaSearchResponse = {

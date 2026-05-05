@@ -532,6 +532,7 @@ export function AnagraficaBulkPanel() {
               cco: m?.utenza_latest?.cco ?? "",
               link_involture: m?.utenza_latest?.cco ? urlByCco.get(m.utenza_latest.cco) ?? "" : "",
               apri_involture: "",
+              note: m?.note ?? "",
             }
           : {
               comune: m?.comune ?? r.comune_input ?? "",
@@ -544,6 +545,7 @@ export function AnagraficaBulkPanel() {
               cco: m?.utenza_latest?.cco ?? "",
               link_involture: m?.utenza_latest?.cco ? urlByCco.get(m.utenza_latest.cco) ?? "" : "",
               apri_involture: "",
+              note: m?.note ?? "",
             };
 
       const emptyInt = {

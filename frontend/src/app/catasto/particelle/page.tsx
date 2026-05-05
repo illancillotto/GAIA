@@ -32,6 +32,7 @@ function particellaToMatch(p: CatParticella): CatAnagraficaMatch {
     intestatari: [],
     anomalie_count: 0,
     anomalie_top: [],
+    note: null,
   };
 }
 

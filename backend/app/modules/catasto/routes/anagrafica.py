@@ -696,7 +696,15 @@ def _intestatario_response_from_capacitas_row(row: CatCapacitasIntestatario) -> 
     )
 
 
+def _is_sentinel_cco(cco: str) -> bool:
+    """Returns True for Capacitas placeholder CCOs (e.g. 014099999) that are shared
+    across many unrelated sub-units and do not carry reliable intestatario data."""
+    return cco.endswith("99999")
+
+
 def _load_intestatari_from_cco(db: Session, cco: str) -> list[CatIntestatarioResponse]:
+    if _is_sentinel_cco(cco):
+        return []
     cert = db.execute(
         select(CatCapacitasCertificato)
         .where(CatCapacitasCertificato.cco == cco)
@@ -721,12 +729,25 @@ def _load_intestatari_from_cco(db: Session, cco: str) -> list[CatIntestatarioRes
     return items
 
 
+def _best_occupancy_for_unit(db: Session, unit_id: UUID) -> CatConsorzioOccupancy | None:
+    """Returns the best occupancy for a unit: current first, then most recent."""
+    return db.execute(
+        select(CatConsorzioOccupancy)
+        .where(CatConsorzioOccupancy.unit_id == unit_id, CatConsorzioOccupancy.cco.is_not(None))
+        .order_by(
+            desc(CatConsorzioOccupancy.is_current),
+            desc(CatConsorzioOccupancy.valid_from),
+            desc(CatConsorzioOccupancy.updated_at),
+        )
+        .limit(1)
+    ).scalars().first()
+
+
 def _build_consorzio_sub_matches(db: Session, p: CatParticella) -> list[CatAnagraficaMatch]:
     """Returns one CatAnagraficaMatch per sub-level CatConsorzioUnit for the given particella.
 
     Sub-level units are those with subalterno IS NOT NULL linked to the same
     foglio/particella/comune as the particella but stored separately (particella_id=None).
-    Returns an empty list when no sub-level units with a current CCO exist.
     """
     if p.cod_comune_capacitas is None:
         return []
@@ -750,21 +771,18 @@ def _build_consorzio_sub_matches(db: Session, p: CatParticella) -> list[CatAnagr
     matches: list[CatAnagraficaMatch] = []
 
     for unit in sub_units:
-        occupancy = db.execute(
-            select(CatConsorzioOccupancy)
-            .where(
-                CatConsorzioOccupancy.unit_id == unit.id,
-                CatConsorzioOccupancy.cco.is_not(None),
-                CatConsorzioOccupancy.is_current.is_(True),
-            )
-            .order_by(desc(CatConsorzioOccupancy.valid_from), desc(CatConsorzioOccupancy.updated_at))
-            .limit(1)
-        ).scalars().first()
+        occupancy = _best_occupancy_for_unit(db, unit.id)
 
         cco = occupancy.cco if occupancy else None
-        intestatari = _load_intestatari_from_cco(db, cco) if cco else []
-
+        is_stale = bool(occupancy and not occupancy.is_current)
+        intestatari = _load_intestatari_from_cco(db, cco) if (cco and not is_stale) else []
         utenza_summary = _utenza_summary_from_occupancy(occupancy) if occupancy else None
+        if cco and _is_sentinel_cco(cco):
+            note = "CCO provvisorio Capacitas: dati intestatario non disponibili"
+        elif is_stale:
+            note = "Dati non aggiornati: l'intestazione fa riferimento a un'occupazione storica"
+        else:
+            note = None
 
         matches.append(
             CatAnagraficaMatch(
@@ -785,10 +803,100 @@ def _build_consorzio_sub_matches(db: Session, p: CatParticella) -> list[CatAnagr
                 intestatari=intestatari,
                 anomalie_count=0,
                 anomalie_top=[],
+                note=note,
             )
         )
 
     return matches
+
+
+def _find_consorzio_sub_match(
+    db: Session,
+    foglio: str,
+    particella: str,
+    sub: str,
+    comune_norm: str,
+) -> CatAnagraficaMatch | None:
+    """Fallback: looks up a sub-level CatConsorzioUnit directly when CatParticella has no entry for that sub.
+
+    Used when the user explicitly specifies a sub (e.g. A, B) that only exists in CatConsorzioUnit
+    (particella_id=None) and not in CatParticella.
+    """
+    sub_upper = sub.strip().upper()
+    unit_query = (
+        select(CatConsorzioUnit)
+        .where(
+            CatConsorzioUnit.foglio == foglio,
+            CatConsorzioUnit.particella == particella,
+            CatConsorzioUnit.subalterno == sub_upper,
+            CatConsorzioUnit.is_active.is_(True),
+        )
+    )
+    if _looks_like_int(comune_norm):
+        unit_query = unit_query.where(CatConsorzioUnit.cod_comune_capacitas == int(comune_norm))
+    else:
+        unit_query = unit_query.where(
+            func.lower(func.coalesce(CatConsorzioUnit.source_comune_label, "")) == comune_norm.lower()
+        )
+
+    unit = db.execute(unit_query.limit(1)).scalars().first()
+    if unit is None:
+        return None
+
+    occupancy = _best_occupancy_for_unit(db, unit.id)
+
+    cco = occupancy.cco if occupancy else None
+    is_stale = bool(occupancy and not occupancy.is_current)
+    intestatari = _load_intestatari_from_cco(db, cco) if (cco and not is_stale) else []
+    utenza_summary = _utenza_summary_from_occupancy(occupancy) if occupancy else None
+
+    # Resolve comune info from the unit's comune reference
+    comune_record = db.get(CatComune, unit.comune_id) if unit.comune_id else None
+    source_comune = db.get(CatComune, unit.source_comune_id) if unit.source_comune_id else None
+    resolved_comune = comune_record or source_comune
+
+    # Try to find the base CatParticella (sub=None) to reuse its particella_id and geometry data
+    base_particella: CatParticella | None = None
+    if unit.particella_id is None:
+        p_query = select(CatParticella).where(
+            CatParticella.foglio == foglio,
+            CatParticella.particella == particella,
+            CatParticella.is_current.is_(True),
+            func.coalesce(CatParticella.subalterno, "") == "",
+        )
+        if resolved_comune is not None:
+            p_query = p_query.where(CatParticella.comune_id == resolved_comune.id)
+        base_particella = db.execute(p_query.limit(1)).scalars().first()
+    else:
+        base_particella = db.get(CatParticella, unit.particella_id)
+
+    particella_id = base_particella.id if base_particella else unit.id  # type: ignore[arg-type]
+    if cco and _is_sentinel_cco(cco):
+        note = "CCO provvisorio Capacitas: dati intestatario non disponibili"
+    elif is_stale:
+        note = "Dati non aggiornati: l'intestazione fa riferimento a un'occupazione storica"
+    else:
+        note = None
+    return CatAnagraficaMatch(
+        particella_id=particella_id,
+        comune=resolved_comune.nome_comune if resolved_comune else unit.source_comune_label,
+        comune_id=resolved_comune.id if resolved_comune else None,
+        cod_comune_capacitas=unit.cod_comune_capacitas,
+        codice_catastale=resolved_comune.codice_catastale if resolved_comune else None,
+        foglio=unit.foglio or foglio,
+        particella=unit.particella or particella,
+        subalterno=unit.subalterno,
+        num_distretto=base_particella.num_distretto if base_particella else None,
+        nome_distretto=base_particella.nome_distretto if base_particella else None,
+        superficie_mq=base_particella.superficie_mq if base_particella else None,
+        superficie_grafica_mq=base_particella.superficie_grafica_mq if base_particella else None,
+        presente_in_catasto_consorzio=True,
+        utenza_latest=utenza_summary,
+        intestatari=intestatari,
+        anomalie_count=0,
+        anomalie_top=[],
+        note=note,
+    )
 
 
 def _load_consorzio_presence_by_particella_ids(db: Session, particella_ids: set[UUID]) -> set[UUID]:
@@ -1170,18 +1278,39 @@ async def bulk_search_anagrafica(
 
                 items = db.execute(query.limit(50)).scalars().all()
                 if len(items) == 0:
-                    results.append(
-                        CatAnagraficaBulkSearchRowResult(
-                            row_index=row.row_index,
-                            comune_input=row.comune,
-                            sezione_input=row.sezione,
-                            foglio_input=row.foglio,
-                            particella_input=row.particella,
-                            sub_input=row.sub,
-                            esito="NOT_FOUND",
-                            message="Nessuna particella trovata.",
+                    # Fallback: sub explicitly given but not in CatParticella — try CatConsorzioUnit directly
+                    sub_match: CatAnagraficaMatch | None = None
+                    if sub_norm and foglio_norm and particella_norm and comune_norm:
+                        sub_match = _find_consorzio_sub_match(db, foglio_norm, particella_norm, sub_norm, comune_norm)
+                    if sub_match is not None:
+                        results.append(
+                            CatAnagraficaBulkSearchRowResult(
+                                row_index=row.row_index,
+                                comune_input=row.comune,
+                                sezione_input=row.sezione,
+                                foglio_input=row.foglio,
+                                particella_input=row.particella,
+                                sub_input=row.sub,
+                                esito="FOUND",
+                                message="OK",
+                                particella_id=sub_match.particella_id,
+                                match=sub_match,
+                                matches_count=1,
+                            )
                         )
-                    )
+                    else:
+                        results.append(
+                            CatAnagraficaBulkSearchRowResult(
+                                row_index=row.row_index,
+                                comune_input=row.comune,
+                                sezione_input=row.sezione,
+                                foglio_input=row.foglio,
+                                particella_input=row.particella,
+                                sub_input=row.sub,
+                                esito="NOT_FOUND",
+                                message="Nessuna particella trovata.",
+                            )
+                        )
                     continue
 
                 if len(items) > 1:

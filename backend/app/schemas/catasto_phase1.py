@@ -367,6 +367,7 @@ class CatAnagraficaMatch(BaseModel):
     intestatari: list[CatIntestatarioResponse] = []
     anomalie_count: int = 0
     anomalie_top: list[dict] = []
+    note: str | None = None
 
 
 class CatAnagraficaSearchResponse(BaseModel):
