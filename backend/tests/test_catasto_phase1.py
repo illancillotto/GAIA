@@ -2382,6 +2382,189 @@ def test_bulk_search_anagrafica_live_fallback_uses_alternate_comune_without_sezi
     assert "comune alternativo" in (payload["match"]["note"] or "")
 
 
+def test_bulk_search_anagrafica_live_fallback_uses_same_comune_without_sezione(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_login(self) -> None:
+        return None
+
+    async def fake_activate_app(self, app_name: str) -> None:
+        assert app_name == "involture"
+
+    async def fake_close(self) -> None:
+        return None
+
+    async def fake_search_frazioni(self, query: str) -> list[CapacitasLookupOption]:
+        assert query == "Arborea"
+        return [CapacitasLookupOption(id="31", display="31 ARBOREA")]
+
+    async def fake_search_terreni(self, request) -> CapacitasTerreniSearchResult:
+        assert request.sezione == ""
+        if request.frazione_id == "31":
+            return CapacitasTerreniSearchResult(
+                total=1,
+                rows=[
+                    {
+                        "ID": "live-only-arborea-row-23-423",
+                        "PVC": "097",
+                        "COM": "165",
+                        "CCO": "0A0172980",
+                        "FRA": "31",
+                        "CCS": "00000",
+                        "Foglio": "23",
+                        "Partic": "423",
+                        "Sub": "",
+                        "Sez": "",
+                        "Anno": "2024",
+                        "Belfiore": "A357",
+                        "Ta_ext": " 9",
+                    }
+                ],
+            )
+        return CapacitasTerreniSearchResult(total=0, rows=[])
+
+    async def fake_fetch_certificato(self, **kwargs) -> CapacitasTerrenoCertificato:
+        return CapacitasTerrenoCertificato(
+            cco="0A0172980",
+            com="165",
+            pvc="097",
+            fra="31",
+            ccs="00000",
+            ruolo_status="Iscrivibile a ruolo",
+            utenza_status="non iscritta a ruolo",
+            intestatari=[],
+        )
+
+    monkeypatch.setattr("app.modules.catasto.routes.anagrafica.pick_credential", lambda db, credential_id: (SimpleNamespace(id=1, username="live-user"), "secret"))
+    monkeypatch.setattr("app.modules.catasto.routes.anagrafica.mark_credential_used", lambda db, credential_id: None)
+    monkeypatch.setattr("app.modules.catasto.routes.anagrafica.mark_credential_error", lambda db, credential_id, error: None)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.login", fake_login)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.activate_app", fake_activate_app)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.close", fake_close)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.search_frazioni", fake_search_frazioni)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.search_terreni", fake_search_terreni)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.apps.involture.client.InVoltureClient.fetch_certificato", fake_fetch_certificato)
+
+    response = client.post(
+        "/catasto/elaborazioni-massive/particelle",
+        headers=auth_headers(),
+        json={
+            "include_capacitas_live": True,
+            "rows": [{"row_index": 1, "comune": "Arborea", "foglio": "23 sez.C", "particella": "423"}],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["results"][0]
+    assert payload["esito"] == "FOUND"
+    assert payload["match"]["foglio"] == "23"
+    assert payload["match"]["particella"] == "423"
+    assert payload["match"]["utenza_latest"]["cco"] == "0A0172980"
+    assert payload["match"]["note"] == "Dati recuperati da Capacitas live: particella non risolta nel catasto locale"
+
+
+def test_bulk_search_anagrafica_live_fallback_returns_multiple_matches_for_ambiguous_live_hits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_login(self) -> None:
+        return None
+
+    async def fake_activate_app(self, app_name: str) -> None:
+        assert app_name == "involture"
+
+    async def fake_close(self) -> None:
+        return None
+
+    async def fake_search_frazioni(self, query: str) -> list[CapacitasLookupOption]:
+        if query == "Arborea":
+            return [CapacitasLookupOption(id="31", display="31 ARBOREA")]
+        if query == "Terralba":
+            return [CapacitasLookupOption(id="37", display="37 TERRALBA")]
+        return []
+
+    async def fake_search_terreni(self, request) -> CapacitasTerreniSearchResult:
+        assert request.sezione == ""
+        if request.frazione_id == "31":
+            return CapacitasTerreniSearchResult(
+                total=1,
+                rows=[
+                        {
+                            "ID": "live-arborea-16-30",
+                            "PVC": "097",
+                            "COM": "165",
+                            "CCO": "000000511",
+                            "FRA": "31",
+                            "CCS": "00000",
+                            "Foglio": "16",
+                            "Partic": "3000",
+                            "Sub": "",
+                            "Sez": "",
+                            "Anno": "2024",
+                            "Belfiore": "A357",
+                            "Ta_ext": " 7",
+                        }
+                    ],
+                )
+        if request.frazione_id == "37":
+            return CapacitasTerreniSearchResult(
+                total=1,
+                rows=[
+                    {
+                        "ID": "live-terralba-16-30",
+                        "PVC": "097",
+                        "COM": "280",
+                        "CCO": "0A1022843",
+                        "FRA": "37",
+                        "CCS": "00000",
+                        "Foglio": "16",
+                        "Partic": "3000",
+                        "Sub": "",
+                        "Sez": "",
+                        "Anno": "2024",
+                        "Belfiore": "L122",
+                        "Ta_ext": " 9",
+                    }
+                ],
+            )
+        return CapacitasTerreniSearchResult(total=0, rows=[])
+
+    async def fake_fetch_certificato(self, **kwargs) -> CapacitasTerrenoCertificato:
+        return CapacitasTerrenoCertificato(
+            cco=kwargs["cco"],
+            com=kwargs["com"],
+            pvc=kwargs["pvc"],
+            fra=kwargs["fra"],
+            ccs=kwargs["ccs"],
+            intestatari=[],
+        )
+
+    monkeypatch.setattr("app.modules.catasto.routes.anagrafica.pick_credential", lambda db, credential_id: (SimpleNamespace(id=1, username="live-user"), "secret"))
+    monkeypatch.setattr("app.modules.catasto.routes.anagrafica.mark_credential_used", lambda db, credential_id: None)
+    monkeypatch.setattr("app.modules.catasto.routes.anagrafica.mark_credential_error", lambda db, credential_id, error: None)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.login", fake_login)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.activate_app", fake_activate_app)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.close", fake_close)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.search_frazioni", fake_search_frazioni)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.search_terreni", fake_search_terreni)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.apps.involture.client.InVoltureClient.fetch_certificato", fake_fetch_certificato)
+
+    response = client.post(
+        "/catasto/elaborazioni-massive/particelle",
+        headers=auth_headers(),
+        json={
+            "include_capacitas_live": True,
+            "rows": [{"row_index": 1, "comune": "Arborea", "foglio": "16 sez.C", "particella": "3000"}],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["results"][0]
+    assert payload["esito"] == "MULTIPLE_MATCHES"
+    assert payload["matches_count"] == 2
+    ccos = sorted(match["utenza_latest"]["cco"] for match in payload["matches"])
+    assert ccos == ["000000511", "0A1022843"]
+
+
 def test_import_history_and_report_endpoints_return_batch_data() -> None:
     db = TestingSessionLocal()
     try:
