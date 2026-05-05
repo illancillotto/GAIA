@@ -2268,7 +2268,7 @@ def test_bulk_search_anagrafica_swapped_terralba_b_looks_up_arborea(
         headers=auth_headers(),
         json={
             "include_capacitas_live": True,
-            "rows": [{"row_index": 1, "comune": "Terralba", "sezione": "B", "foglio": "27", "particella": "2"}],
+            "rows": [{"row_index": 1, "comune": "Terralba", "foglio": "27 sez.B", "particella": "2"}],
         },
     )
 
@@ -2294,6 +2294,92 @@ def test_bulk_search_anagrafica_swapped_terralba_b_looks_up_arborea(
         assert unit.source_comune_label == "Arborea"
     finally:
         db.close()
+
+
+def test_bulk_search_anagrafica_live_fallback_uses_alternate_comune_without_sezione(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_login(self) -> None:
+        return None
+
+    async def fake_activate_app(self, app_name: str) -> None:
+        assert app_name == "involture"
+
+    async def fake_close(self) -> None:
+        return None
+
+    async def fake_search_frazioni(self, query: str) -> list[CapacitasLookupOption]:
+        if query == "Terralba":
+            return [CapacitasLookupOption(id="37", display="37 TERRALBA")]
+        if query == "Arborea":
+            return [CapacitasLookupOption(id="31", display="31 ARBOREA")]
+        return []
+
+    async def fake_search_terreni(self, request) -> CapacitasTerreniSearchResult:
+        assert request.sezione == ""
+        if request.frazione_id == "37":
+            return CapacitasTerreniSearchResult(total=0, rows=[])
+        if request.frazione_id == "31":
+            return CapacitasTerreniSearchResult(
+                total=1,
+                rows=[
+                    {
+                        "ID": "live-only-swap-row-27-2",
+                        "PVC": "097",
+                        "COM": "165",
+                        "CCO": "0A1022843",
+                        "FRA": "31",
+                        "CCS": "00000",
+                        "Foglio": "27",
+                        "Partic": "2",
+                        "Sub": "",
+                        "Sez": "",
+                        "Anno": "2024",
+                        "Belfiore": "A357",
+                        "Ta_ext": " 9",
+                    }
+                ],
+            )
+        return CapacitasTerreniSearchResult(total=0, rows=[])
+
+    async def fake_fetch_certificato(self, **kwargs) -> CapacitasTerrenoCertificato:
+        return CapacitasTerrenoCertificato(
+            cco="0A1022843",
+            com="165",
+            pvc="097",
+            fra="31",
+            ccs="00000",
+            ruolo_status="Iscrivibile a ruolo",
+            utenza_status="non iscritta a ruolo",
+            intestatari=[],
+        )
+
+    monkeypatch.setattr("app.modules.catasto.routes.anagrafica.pick_credential", lambda db, credential_id: (SimpleNamespace(id=1, username="live-user"), "secret"))
+    monkeypatch.setattr("app.modules.catasto.routes.anagrafica.mark_credential_used", lambda db, credential_id: None)
+    monkeypatch.setattr("app.modules.catasto.routes.anagrafica.mark_credential_error", lambda db, credential_id, error: None)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.login", fake_login)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.activate_app", fake_activate_app)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.close", fake_close)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.search_frazioni", fake_search_frazioni)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.client.InVoltureClient.search_terreni", fake_search_terreni)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.apps.involture.client.InVoltureClient.fetch_certificato", fake_fetch_certificato)
+
+    response = client.post(
+        "/catasto/elaborazioni-massive/particelle",
+        headers=auth_headers(),
+        json={
+            "include_capacitas_live": True,
+            "rows": [{"row_index": 1, "comune": "Terralba", "foglio": "27 sez.B", "particella": "2"}],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["results"][0]
+    assert payload["esito"] == "FOUND"
+    assert payload["match"]["foglio"] == "27"
+    assert payload["match"]["particella"] == "2"
+    assert payload["match"]["utenza_latest"]["cco"] == "0A1022843"
+    assert "comune alternativo" in (payload["match"]["note"] or "")
 
 
 def test_import_history_and_report_endpoints_return_batch_data() -> None:

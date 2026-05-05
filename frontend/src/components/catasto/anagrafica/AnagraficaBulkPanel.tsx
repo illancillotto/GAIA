@@ -128,6 +128,31 @@ type BulkSummary = {
   error: number;
 };
 
+const FOGLIO_WITH_SEZIONE_RE = /^\s*([^\s]+)\s+sez\.?\s*([A-Za-z0-9]+)(?:\s+.*)?$/i;
+
+function normalizeSezioneValue(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  const lowered = trimmed.toLowerCase();
+  if (lowered.startsWith("sez")) {
+    return trimmed.slice(3).replace(/^[\s.:-]+/, "").trim();
+  }
+  return trimmed;
+}
+
+function normalizeFoglioSezioneInput(foglio: string, sezione: string): { foglio: string; sezione: string } {
+  const foglioTrimmed = foglio.trim();
+  const sezioneTrimmed = normalizeSezioneValue(sezione);
+  const match = foglioTrimmed.match(FOGLIO_WITH_SEZIONE_RE);
+  if (!match) {
+    return { foglio: foglioTrimmed, sezione: sezioneTrimmed };
+  }
+  return {
+    foglio: match[1]?.trim() ?? foglioTrimmed,
+    sezione: sezioneTrimmed || normalizeSezioneValue(match[2] ?? ""),
+  };
+}
+
 type BulkOperationHistoryItem = CatAnagraficaBulkJobItem;
 
 type BulkProgressState = {
@@ -255,8 +280,9 @@ async function readFileToRows(
       const foglio = foglioRaw != null ? String(foglioRaw).trim() : "";
       const particella = particellaRaw != null ? String(particellaRaw).trim() : "";
       const sub = subRaw != null ? String(subRaw).trim() : "";
+      const normalized = normalizeFoglioSezioneInput(foglio, sezione);
 
-      if (!comune && !foglio && !particella && !sub && !sezione) {
+      if (!comune && !normalized.foglio && !particella && !sub && !normalized.sezione) {
         skipped += 1;
         continue;
       }
@@ -264,8 +290,8 @@ async function readFileToRows(
       rows.push({
         row_index: i + 2,
         comune: comune || null,
-        sezione: sezione || null,
-        foglio: foglio || null,
+        sezione: normalized.sezione || null,
+        foglio: normalized.foglio || null,
         particella: particella || null,
         sub: sub || null,
       });

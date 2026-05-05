@@ -4,7 +4,7 @@ import logging
 from collections import defaultdict
 from datetime import datetime, timezone
 from typing import Literal
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Body, Depends
 from fastapi import HTTPException, Query, status
@@ -56,6 +56,14 @@ from app.services.elaborazioni_capacitas_terreni import (
 router = APIRouter(prefix="/catasto/elaborazioni-massive/particelle", tags=["catasto-elaborazioni-massive"])
 logger = logging.getLogger(__name__)
 
+_FOGLIO_WITH_SEZIONE_RE = r"^\s*(?P<foglio>[^\s]+)\s+sez\.?\s*(?P<sezione>[A-Za-z0-9]+)(?:\s+.*)?$"
+_COMUNE_LIVE_SWAP_LOOKUP: dict[str, str] = {
+    "arborea": "Terralba",
+    "terralba": "Arborea",
+    "165": "Terralba",
+    "280": "Arborea",
+}
+
 
 def _norm_str(value: str | None) -> str | None:
     if value is None:
@@ -71,6 +79,20 @@ def _looks_like_int(value: str | None) -> bool:
     return v.isdigit()
 
 
+def _safe_int(value: str | int | None) -> int | None:
+    if value is None:
+        return None
+    if isinstance(value, int):
+        return value
+    text = value.strip()
+    if not text:
+        return None
+    try:
+        return int(text)
+    except ValueError:
+        return None
+
+
 def _build_denominazione(cognome: str | None, nome: str | None) -> str | None:
     value = " ".join(part for part in [cognome, nome] if part and part.strip()).strip()
     return value or None
@@ -83,6 +105,82 @@ def _normalize_cf(value: str | None) -> str | None:
 
 def _normalize_ccs(value: str | None) -> str:
     return _norm_str(value) or "00000"
+
+
+def _normalize_sezione_value(value: str | None) -> str | None:
+    normalized = _norm_str(value)
+    if not normalized:
+        return None
+    lowered = normalized.casefold()
+    if lowered.startswith("sez"):
+        tail = normalized[3:].lstrip(" .:-")
+        return _norm_str(tail) or normalized
+    return normalized
+
+
+def _normalize_bulk_particella_inputs(
+    comune: str | None,
+    sezione: str | None,
+    foglio: str | None,
+) -> tuple[str | None, str | None, str | None]:
+    comune_norm = _norm_str(comune)
+    sezione_norm = _normalize_sezione_value(sezione)
+    foglio_norm = _norm_str(foglio)
+
+    if foglio_norm is None:
+        return comune_norm, sezione_norm, foglio_norm
+
+    import re
+
+    match = re.match(_FOGLIO_WITH_SEZIONE_RE, foglio_norm, flags=re.IGNORECASE)
+    if match:
+        foglio_norm = _norm_str(match.group("foglio"))
+        if sezione_norm is None:
+            sezione_norm = _normalize_sezione_value(match.group("sezione"))
+
+    return comune_norm, sezione_norm, foglio_norm
+
+
+def _alternate_live_lookup_comune(comune: str | None) -> str | None:
+    comune_norm = _norm_str(comune)
+    if comune_norm is None:
+        return None
+    return _COMUNE_LIVE_SWAP_LOOKUP.get(comune_norm.casefold())
+
+
+def _query_particelle_candidates(
+    db: Session,
+    *,
+    comune_norm: str,
+    sezione_norm: str | None,
+    foglio_norm: str,
+    particella_norm: str,
+    sub_norm: str | None,
+) -> list[CatParticella]:
+    query = (
+        select(CatParticella)
+        .outerjoin(CatComune, CatComune.id == CatParticella.comune_id)
+        .where(
+            CatParticella.is_current.is_(True),
+            CatParticella.foglio == foglio_norm,
+            CatParticella.particella == particella_norm,
+        )
+        .order_by(CatParticella.cod_comune_capacitas, CatParticella.foglio, CatParticella.particella)
+    )
+
+    if sezione_norm:
+        query = query.where(CatParticella.sezione_catastale == sezione_norm)
+    if sub_norm:
+        query = query.where(CatParticella.subalterno == sub_norm)
+
+    if _looks_like_int(comune_norm):
+        query = query.where(CatParticella.cod_comune_capacitas == int(comune_norm))
+    else:
+        query = query.where(
+            func.lower(func.coalesce(CatParticella.nome_comune, CatComune.nome_comune, "")) == comune_norm.lower()
+        )
+
+    return db.execute(query.limit(50)).scalars().all()
 
 
 def _occupancy_rank(occupancy: CatConsorzioOccupancy | None) -> tuple[int, str, str]:
@@ -251,6 +349,230 @@ class _CapacitasLiveResolver:
             match.intestatari = resolved
             match.presente_in_catasto_consorzio = True
         return match
+
+    async def find_live_only_matches(
+        self,
+        *,
+        comune: str,
+        foglio: str,
+        particella: str,
+        sub: str | None = None,
+    ) -> list[CatAnagraficaMatch]:
+        client = await self._ensure_client()
+        if client is None:
+            return []
+
+        comuni_to_try = [comune]
+        alternate = _alternate_live_lookup_comune(comune)
+        if alternate and alternate.casefold() not in {item.casefold() for item in comuni_to_try}:
+            comuni_to_try.append(alternate)
+
+        matches: list[CatAnagraficaMatch] = []
+        seen_keys: set[tuple[str | None, str | None, str | None, str, str, str | None]] = set()
+
+        for lookup_comune in comuni_to_try:
+            try:
+                frazione_candidates = await _resolve_batch_frazione_candidates(
+                    client,
+                    lookup_comune,
+                    None,
+                    self._frazione_cache,
+                )
+            except Exception:
+                continue
+
+            for frazione_id in frazione_candidates:
+                request = CapacitasTerreniSearchRequest(
+                    frazione_id=frazione_id,
+                    sezione="",
+                    foglio=foglio,
+                    particella=particella,
+                    sub=sub or "",
+                )
+                try:
+                    result = await sync_terreni_for_request(
+                        self._db,
+                        client,
+                        request,
+                        fetch_certificati=True,
+                        fetch_details=False,
+                    )
+                    self.dirty = True
+                except RuntimeError as exc:
+                    self._db.rollback()
+                    normalized = str(exc).casefold()
+                    if "non trov" in normalized or "nessun" in normalized or "no result" in normalized:
+                        continue
+                    return matches
+                except Exception:
+                    self._db.rollback()
+                    return matches
+
+                live_matches = self._build_live_matches_from_search_key(
+                    search_key=result.search_key,
+                    input_comune=comune,
+                    lookup_comune=lookup_comune,
+                    foglio=foglio,
+                    particella=particella,
+                    sub=sub,
+                )
+                for match in live_matches:
+                    key = (
+                        match.cert_com,
+                        match.cert_pvc,
+                        match.cert_fra,
+                        match.foglio,
+                        match.particella,
+                        match.subalterno,
+                    )
+                    if key in seen_keys:
+                        continue
+                    seen_keys.add(key)
+                    matches.append(match)
+        return matches
+
+    def _build_live_matches_from_search_key(
+        self,
+        *,
+        search_key: str,
+        input_comune: str,
+        lookup_comune: str,
+        foglio: str,
+        particella: str,
+        sub: str | None,
+    ) -> list[CatAnagraficaMatch]:
+        rows = self._db.execute(
+            select(CatCapacitasTerrenoRow)
+            .where(
+                CatCapacitasTerrenoRow.search_key == search_key,
+                CatCapacitasTerrenoRow.foglio == foglio,
+                CatCapacitasTerrenoRow.particella == particella,
+                func.coalesce(CatCapacitasTerrenoRow.sub, "") == (sub or ""),
+            )
+            .order_by(desc(CatCapacitasTerrenoRow.collected_at))
+        ).scalars().all()
+        if not rows:
+            return []
+
+        def rank(row: CatCapacitasTerrenoRow) -> tuple[int, int, str]:
+            state = (row.row_visual_state or "").strip().casefold()
+            return (
+                2 if "current" in state else 1 if "black" in state else 0,
+                _safe_int(row.anno),
+                row.collected_at.isoformat() if row.collected_at else "",
+            )
+
+        best_by_sub: dict[str, CatCapacitasTerrenoRow] = {}
+        for row in rows:
+            key = _norm_str(row.sub) or ""
+            current = best_by_sub.get(key)
+            if current is None or rank(row) > rank(current):
+                best_by_sub[key] = row
+
+        matches: list[CatAnagraficaMatch] = []
+        for row in best_by_sub.values():
+            matches.append(self._build_live_only_match_from_row(row, input_comune=input_comune, lookup_comune=lookup_comune))
+        return matches
+
+    def _build_live_only_match_from_row(
+        self,
+        row: CatCapacitasTerrenoRow,
+        *,
+        input_comune: str,
+        lookup_comune: str,
+    ) -> CatAnagraficaMatch:
+        unit = self._db.get(CatConsorzioUnit, row.unit_id) if row.unit_id else None
+        particella_record = self._db.get(CatParticella, unit.particella_id) if unit and unit.particella_id else None
+        comune_record: CatComune | None = None
+        if particella_record is not None and particella_record.comune_id is not None:
+            comune_record = self._db.get(CatComune, particella_record.comune_id)
+        elif unit is not None and unit.comune_id is not None:
+            comune_record = self._db.get(CatComune, unit.comune_id)
+        elif row.com and row.com.isdigit():
+            comune_record = self._db.execute(
+                select(CatComune).where(CatComune.cod_comune_capacitas == int(row.com)).limit(1)
+            ).scalars().first()
+        elif row.belfiore:
+            comune_record = self._db.execute(
+                select(CatComune).where(CatComune.codice_catastale == row.belfiore).limit(1)
+            ).scalars().first()
+
+        cert_com = _norm_str(row.com)
+        cert_pvc = _norm_str(row.pvc)
+        cert_fra = _norm_str(row.fra)
+        cert_ccs = _normalize_ccs(row.ccs)
+        intestatari = _load_intestatari_from_cert_context(
+            self._db,
+            cco=row.cco or "",
+            com=cert_com,
+            pvc=cert_pvc,
+            fra=cert_fra,
+            ccs=cert_ccs,
+        ) if row.cco else []
+        stato_ruolo, stato_cnc = _load_cert_status_from_context(
+            self._db,
+            cco=row.cco,
+            com=cert_com,
+            pvc=cert_pvc,
+            fra=cert_fra,
+            ccs=cert_ccs,
+        )
+        note = None
+        if input_comune.strip().casefold() != lookup_comune.strip().casefold():
+            note = f"Dati recuperati da Capacitas cercando il comune alternativo '{lookup_comune}'"
+        elif comune_record is None or particella_record is None:
+            note = "Dati recuperati da Capacitas live: particella non risolta nel catasto locale"
+
+        return CatAnagraficaMatch(
+            particella_id=(particella_record.id if particella_record is not None else unit.id if unit is not None else uuid4()),
+            unit_id=unit.id if unit is not None else None,
+            comune_id=(particella_record.comune_id if particella_record is not None else comune_record.id if comune_record is not None else None),
+            comune=(
+                particella_record.nome_comune
+                if particella_record is not None
+                else comune_record.nome_comune if comune_record is not None else lookup_comune
+            ),
+            cod_comune_capacitas=(
+                particella_record.cod_comune_capacitas
+                if particella_record is not None
+                else unit.cod_comune_capacitas if unit is not None else _safe_int(row.com) if row.com else None
+            ),
+            codice_catastale=(
+                particella_record.codice_catastale
+                if particella_record is not None
+                else comune_record.codice_catastale if comune_record is not None else row.belfiore
+            ),
+            foglio=row.foglio or "",
+            particella=row.particella or "",
+            subalterno=_norm_str(row.sub),
+            num_distretto=particella_record.num_distretto if particella_record is not None else None,
+            nome_distretto=particella_record.nome_distretto if particella_record is not None else None,
+            superficie_mq=row.superficie_mq,
+            superficie_grafica_mq=particella_record.superficie_grafica_mq if particella_record is not None else None,
+            presente_in_catasto_consorzio=bool(unit is not None or particella_record is not None),
+            utenza_latest=CatAnagraficaUtenzaSummary(
+                id=(unit.id if unit is not None else uuid4()),
+                cco=row.cco,
+                anno_campagna=_safe_int(row.anno),
+                stato="capacitas_live",
+                num_distretto=None,
+                nome_distretto=None,
+                sup_irrigabile_mq=row.superficie_mq,
+                denominazione=None,
+                codice_fiscale=None,
+                ha_anomalie=None,
+            ),
+            cert_com=cert_com,
+            cert_pvc=cert_pvc,
+            cert_fra=cert_fra,
+            cert_ccs=cert_ccs,
+            stato_ruolo=stato_ruolo,
+            stato_cnc=stato_cnc,
+            intestatari=intestatari,
+            anomalie_count=0,
+            anomalie_top=[],
+            note=note,
+        )
 
     async def _sync_particella_from_live_terreni(self, p: CatParticella) -> bool:
         if p.id in self._sync_attempted_particelle:
@@ -1573,9 +1895,11 @@ async def bulk_search_anagrafica(
                         live_resolver.dirty = False
                     continue
 
-                comune_norm = _norm_str(row.comune)
-                sezione_norm = _norm_str(row.sezione)
-                foglio_norm = _norm_str(row.foglio)
+                comune_norm, sezione_norm, foglio_norm = _normalize_bulk_particella_inputs(
+                    row.comune,
+                    row.sezione,
+                    row.foglio,
+                )
                 particella_norm = _norm_str(row.particella)
                 sub_norm = _norm_str(row.sub)
 
@@ -1594,30 +1918,14 @@ async def bulk_search_anagrafica(
                     )
                     continue
 
-                query = (
-                    select(CatParticella)
-                    .outerjoin(CatComune, CatComune.id == CatParticella.comune_id)
-                    .where(
-                        CatParticella.is_current.is_(True),
-                        CatParticella.foglio == foglio_norm,
-                        CatParticella.particella == particella_norm,
-                    )
-                    .order_by(CatParticella.cod_comune_capacitas, CatParticella.foglio, CatParticella.particella)
+                items = _query_particelle_candidates(
+                    db,
+                    comune_norm=comune_norm,
+                    sezione_norm=sezione_norm,
+                    foglio_norm=foglio_norm,
+                    particella_norm=particella_norm,
+                    sub_norm=sub_norm,
                 )
-
-                if sezione_norm:
-                    query = query.where(CatParticella.sezione_catastale == sezione_norm)
-                if sub_norm:
-                    query = query.where(CatParticella.subalterno == sub_norm)
-
-                if _looks_like_int(comune_norm):
-                    query = query.where(CatParticella.cod_comune_capacitas == int(comune_norm))
-                else:
-                    query = query.where(
-                        func.lower(func.coalesce(CatParticella.nome_comune, CatComune.nome_comune, "")) == comune_norm.lower()
-                    )
-
-                items = db.execute(query.limit(50)).scalars().all()
                 if len(items) == 0:
                     # Fallback: sub explicitly given but not in CatParticella — try CatConsorzioUnit directly
                     sub_match: CatAnagraficaMatch | None = None
@@ -1643,6 +1951,61 @@ async def bulk_search_anagrafica(
                                 matches_count=1,
                             )
                         )
+                    elif live_resolver is not None:
+                        live_matches = await live_resolver.find_live_only_matches(
+                            comune=comune_norm,
+                            foglio=foglio_norm,
+                            particella=particella_norm,
+                            sub=sub_norm,
+                        )
+                        if len(live_matches) == 1:
+                            live_match = live_matches[0]
+                            results.append(
+                                CatAnagraficaBulkSearchRowResult(
+                                    row_index=row.row_index,
+                                    comune_input=row.comune,
+                                    sezione_input=row.sezione,
+                                    foglio_input=row.foglio,
+                                    particella_input=row.particella,
+                                    sub_input=row.sub,
+                                    esito="FOUND",
+                                    message="OK",
+                                    particella_id=live_match.particella_id,
+                                    match=live_match,
+                                    matches_count=1,
+                                )
+                            )
+                        elif len(live_matches) > 1:
+                            results.append(
+                                CatAnagraficaBulkSearchRowResult(
+                                    row_index=row.row_index,
+                                    comune_input=row.comune,
+                                    sezione_input=row.sezione,
+                                    foglio_input=row.foglio,
+                                    particella_input=row.particella,
+                                    sub_input=row.sub,
+                                    esito="MULTIPLE_MATCHES",
+                                    message=f"Trovati {len(live_matches)} esiti live Capacitas. Verifica il comune/frazione corretti.",
+                                    matches_count=len(live_matches),
+                                    matches=live_matches,
+                                )
+                            )
+                        else:
+                            results.append(
+                                CatAnagraficaBulkSearchRowResult(
+                                    row_index=row.row_index,
+                                    comune_input=row.comune,
+                                    sezione_input=row.sezione,
+                                    foglio_input=row.foglio,
+                                    particella_input=row.particella,
+                                    sub_input=row.sub,
+                                    esito="NOT_FOUND",
+                                    message="Nessuna particella trovata.",
+                                )
+                            )
+                        if live_resolver.dirty:
+                            db.commit()
+                            live_resolver.dirty = False
                     else:
                         results.append(
                             CatAnagraficaBulkSearchRowResult(
