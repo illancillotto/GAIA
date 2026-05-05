@@ -340,6 +340,7 @@ export type CatAnagraficaUtenzaSummary = {
 
 export type CatAnagraficaMatch = {
   particella_id: UUID;
+  unit_id: UUID | null;
   comune_id: UUID | null;
   comune: string | null;
   cod_comune_capacitas: number | null;
@@ -353,6 +354,12 @@ export type CatAnagraficaMatch = {
   superficie_grafica_mq: string | null;
   presente_in_catasto_consorzio?: boolean;
   utenza_latest: CatAnagraficaUtenzaSummary | null;
+  cert_com: string | null;
+  cert_pvc: string | null;
+  cert_fra: string | null;
+  cert_ccs: string | null;
+  stato_ruolo: string | null;
+  stato_cnc: string | null;
   intestatari: CatIntestatario[];
   anomalie_count: number;
   anomalie_top: { tipo: string; count: number }[];

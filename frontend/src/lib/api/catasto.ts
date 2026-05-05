@@ -390,8 +390,16 @@ export async function catastoListSchemi(token: string): Promise<CatSchemaContrib
   });
 }
 
-export async function capacitasGetRptCertificatoLink(token: string, cco: string): Promise<{ url: string }> {
+export async function capacitasGetRptCertificatoLink(
+  token: string,
+  cco: string,
+  params?: { com?: string | null; pvc?: string | null; fra?: string | null; ccs?: string | null },
+): Promise<{ url: string }> {
   const query = new URLSearchParams({ cco });
+  if (params?.com) query.set("com", params.com);
+  if (params?.pvc) query.set("pvc", params.pvc);
+  if (params?.fra) query.set("fra", params.fra);
+  if (params?.ccs) query.set("ccs", params.ccs);
   return request<{ url: string }>(`/elaborazioni/capacitas/involture/link/rpt-certificato?${query.toString()}`, {
     headers: authHeaders(token),
   });

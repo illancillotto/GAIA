@@ -18,6 +18,7 @@ export default function SelectionPanel({ particelle, truncated, nTotale }: Selec
     if (!selected) return null;
     return {
       particella_id: selected.id,
+      unit_id: null,
       comune_id: null,
       comune: selected.nome_comune ?? null,
       cod_comune_capacitas: selected.cod_comune_capacitas ?? null,
@@ -29,7 +30,14 @@ export default function SelectionPanel({ particelle, truncated, nTotale }: Selec
       nome_distretto: selected.nome_distretto ?? null,
       superficie_mq: selected.superficie_mq != null ? String(selected.superficie_mq) : null,
       superficie_grafica_mq: selected.superficie_grafica_mq != null ? String(selected.superficie_grafica_mq) : null,
+      presente_in_catasto_consorzio: false,
       utenza_latest: null,
+      cert_com: null,
+      cert_pvc: null,
+      cert_fra: null,
+      cert_ccs: null,
+      stato_ruolo: null,
+      stato_cnc: null,
       intestatari: [],
       anomalie_count: 0,
       anomalie_top: [],

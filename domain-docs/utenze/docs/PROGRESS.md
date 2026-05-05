@@ -36,6 +36,7 @@
 - frontend Anagrafica collegato alle API reali del backend tramite `frontend/src/lib/api.ts`
 - introdotte dashboard modulo, lista soggetti, dettaglio soggetto e wizard import
 - aggiornata la navigazione modulo con voci dedicate `Dashboard`, `Soggetti`, `Import archivio`
+- pagina `/utenze/import`: layout a sezioni (hero KPI, tab come workspace Capacitas, pannelli `rounded-[28px]` con header modulo elaborazioni); sezione NAS con tooltip nativi su descrizione, box avviso e azioni; flusso massivo da anagrafica etichettato «Aggiorna utenze» (UI)
 - aggiornati i tipi frontend per stats, soggetti, documenti, preview import e job
 - verifica TypeScript frontend completata con `tsc --noEmit`
 - introdotto export backend/frontend in formato CSV e XLSX con riuso dei filtri correnti

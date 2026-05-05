@@ -349,6 +349,7 @@ class CatAnagraficaUtenzaSummary(BaseModel):
 
 class CatAnagraficaMatch(BaseModel):
     particella_id: UUID
+    unit_id: UUID | None = None
     comune_id: UUID | None = None
     comune: str | None = None
     cod_comune_capacitas: int | None = None
@@ -364,6 +365,12 @@ class CatAnagraficaMatch(BaseModel):
     presente_in_catasto_consorzio: bool = False
 
     utenza_latest: CatAnagraficaUtenzaSummary | None = None
+    cert_com: str | None = None
+    cert_pvc: str | None = None
+    cert_fra: str | None = None
+    cert_ccs: str | None = None
+    stato_ruolo: str | None = None
+    stato_cnc: str | None = None
     intestatari: list[CatIntestatarioResponse] = []
     anomalie_count: int = 0
     anomalie_top: list[dict] = []

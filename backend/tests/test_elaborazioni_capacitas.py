@@ -1294,6 +1294,47 @@ def test_capacitas_rpt_certificato_link_falls_back_to_occupancy_when_terreno_mis
     assert "CCS=00007" in url
 
 
+def test_capacitas_rpt_certificato_link_uses_explicit_context_params() -> None:
+    db = TestingSessionLocal()
+    try:
+        db.add(
+            CatCapacitasCertificato(
+                cco="0A2200004",
+                com="165",
+                pvc="097",
+                fra="31",
+                ccs="00000",
+                collected_at=datetime.now(timezone.utc),
+            )
+        )
+        db.add(
+            CatCapacitasCertificato(
+                cco="0A2200004",
+                com="289",
+                pvc="097",
+                fra="38",
+                ccs="00000",
+                collected_at=datetime.now(timezone.utc) - timedelta(days=1),
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get(
+        "/elaborazioni/capacitas/involture/link/rpt-certificato?cco=0A2200004&com=289&pvc=097&fra=38&ccs=00000",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 200
+    url = response.json()["url"]
+    assert "CCO=0A2200004" in url
+    assert "COM=289" in url
+    assert "PVC=097" in url
+    assert "FRA=38" in url
+    assert "CCS=00000" in url
+
+
 def test_capacitas_rpt_certificato_link_reports_incomplete_source_details() -> None:
     db = TestingSessionLocal()
     try:

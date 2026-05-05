@@ -259,7 +259,7 @@ test("utenze dashboard opens subject and document summaries in modal overlays", 
 test("utenze import page exposes bulk import progress feedback", () => {
   const importPage = read("src/app/utenze/import/page.tsx");
 
-  assert.match(importPage, /Import massivo in corso/);
+  assert.match(importPage, /Aggiornamento utenze in corso/);
   assert.match(importPage, /activeBulkJob/);
   assert.match(importPage, /bulkJobProgress/);
   assert.match(importPage, /setInterval/);

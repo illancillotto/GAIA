@@ -220,7 +220,6 @@ def test_import_job_detail_includes_items_and_resume_endpoint() -> None:
     assert resume_response.status_code == 409
 
 
-def test_csv_import_creates_and_updates_person_subjects() -> None:
     create_user("csv_user", module_utenze=True)
     token = login("csv_user")
     headers = {"Authorization": f"Bearer {token}"}

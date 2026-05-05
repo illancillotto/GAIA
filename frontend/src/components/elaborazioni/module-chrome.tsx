@@ -12,11 +12,14 @@ export function ElaborazionePanelHeader({
   badge,
   title,
   description,
+  descriptionTooltip,
   actions,
 }: {
   badge?: ReactNode;
   title: string;
   description: string;
+  /** Testo mostrato al passaggio del mouse sulla descrizione (tooltip nativo). */
+  descriptionTooltip?: string;
   actions?: ReactNode;
 }) {
   return (
@@ -29,7 +32,12 @@ export function ElaborazionePanelHeader({
             </div>
           ) : null}
           <p className="mt-3 text-lg font-semibold text-gray-900">{title}</p>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600">{description}</p>
+          <p
+            className={descriptionTooltip ? "mt-2 max-w-2xl cursor-help text-sm leading-6 text-gray-600" : "mt-2 max-w-2xl text-sm leading-6 text-gray-600"}
+            title={descriptionTooltip}
+          >
+            {description}
+          </p>
         </div>
         {actions ? <div>{actions}</div> : null}
       </div>

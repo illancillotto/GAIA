@@ -180,7 +180,12 @@ export function ParticellaDetailDialog({
     setCapacitasLinkBusy(true);
     setCapacitasLinkError(null);
     try {
-      const { url } = await capacitasGetRptCertificatoLink(token, cco);
+      const { url } = await capacitasGetRptCertificatoLink(token, cco, {
+        com: match.cert_com,
+        pvc: match.cert_pvc,
+        fra: match.cert_fra,
+        ccs: match.cert_ccs,
+      });
       window.open(url, "_blank", "noopener,noreferrer");
     } catch (e) {
       setCapacitasLinkError(e instanceof Error ? e.message : "Errore generazione link Capacitas");

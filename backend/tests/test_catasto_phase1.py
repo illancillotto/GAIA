@@ -1162,6 +1162,494 @@ def test_bulk_search_anagrafica_multiple_matches_does_not_pick_first_particella(
     assert sorted(match["subalterno"] for match in row["matches"]) == ["1", "2"]
 
 
+def test_bulk_search_anagrafica_uses_exact_cert_context_for_reused_cco() -> None:
+    db = TestingSessionLocal()
+    try:
+        comune_uras = CatComune(
+            nome_comune="Uras",
+            codice_catastale="L496",
+            cod_comune_capacitas=289,
+            codice_comune_formato_numerico=115081,
+            codice_comune_numerico_2017_2025=95078,
+            nome_comune_legacy="Uras",
+            cod_provincia=115,
+            sigla_provincia="OR",
+            regione="Sardegna",
+        )
+        db.add(comune_uras)
+        db.flush()
+        particella = CatParticella(
+            comune_id=comune_uras.id,
+            cod_comune_capacitas=289,
+            codice_catastale="L496",
+            nome_comune="Uras",
+            foglio="17",
+            particella="244",
+            subalterno=None,
+            is_current=True,
+        )
+        db.add(particella)
+        db.flush()
+        unit = CatConsorzioUnit(
+            particella_id=particella.id,
+            comune_id=comune_uras.id,
+            cod_comune_capacitas=289,
+            source_comune_label="Uras",
+            foglio="17",
+            particella="244",
+            subalterno=None,
+            is_active=True,
+        )
+        db.add(unit)
+        db.flush()
+        db.add(
+            CatUtenzaIrrigua(
+                anno_campagna=2025,
+                cco="000000074",
+                comune_id=comune_uras.id,
+                cod_comune_capacitas=289,
+                nome_comune="Uras",
+                foglio="17",
+                particella="244",
+                particella_id=particella.id,
+                denominazione="Comune Di Uras",
+                codice_fiscale="80000590952",
+            )
+        )
+        db.add(
+            CatConsorzioOccupancy(
+                unit_id=unit.id,
+                cco="000000074",
+                com="289",
+                pvc="097",
+                fra="38",
+                ccs="00000",
+                source_type="capacitas_terreni",
+                relationship_type="utilizzatore_reale",
+                is_current=True,
+            )
+        )
+        wrong_cert = CatCapacitasCertificato(
+            cco="000000074",
+            com="165",
+            pvc="097",
+            fra="31",
+            ccs="00000",
+            collected_at=datetime(2026, 5, 5, 6, 0, tzinfo=timezone.utc),
+        )
+        right_cert = CatCapacitasCertificato(
+            cco="000000074",
+            com="289",
+            pvc="097",
+            fra="38",
+            ccs="00000",
+            collected_at=datetime(2026, 4, 30, 13, 37, tzinfo=timezone.utc),
+        )
+        db.add_all([wrong_cert, right_cert])
+        db.flush()
+        db.add(
+            CatCapacitasIntestatario(
+                certificato_id=wrong_cert.id,
+                denominazione="Fiandri Giuseppe",
+                codice_fiscale="FNDGPP80A01H501U",
+                collected_at=wrong_cert.collected_at,
+            )
+        )
+        db.add(
+            CatCapacitasIntestatario(
+                certificato_id=right_cert.id,
+                denominazione="Comune Di Uras",
+                codice_fiscale="80000590952",
+                collected_at=right_cert.collected_at,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.post(
+        "/catasto/elaborazioni-massive/particelle",
+        headers=auth_headers(),
+        json={"rows": [{"row_index": 1, "comune": "Uras", "foglio": "17", "particella": "244"}]},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["results"][0]["match"]
+    assert payload["cert_com"] == "289"
+    assert payload["cert_fra"] == "38"
+    assert payload["intestatari"][0]["denominazione"] == "Comune Di Uras"
+
+
+def test_bulk_search_anagrafica_sub_matches_preserve_case_variants() -> None:
+    db = TestingSessionLocal()
+    try:
+        comune = CatComune(
+            nome_comune="Santa Giusta",
+            codice_catastale="I205",
+            cod_comune_capacitas=239,
+            codice_comune_formato_numerico=115048,
+            codice_comune_numerico_2017_2025=95048,
+            nome_comune_legacy="Santa Giusta",
+            cod_provincia=115,
+            sigla_provincia="OR",
+            regione="Sardegna",
+        )
+        db.add(comune)
+        db.flush()
+        particella = CatParticella(
+            comune_id=comune.id,
+            cod_comune_capacitas=239,
+            codice_catastale="I205",
+            nome_comune="Santa Giusta",
+            foglio="20",
+            particella="265",
+            subalterno=None,
+            is_current=True,
+        )
+        db.add(particella)
+        db.flush()
+        unit_upper = CatConsorzioUnit(
+            particella_id=None,
+            comune_id=comune.id,
+            cod_comune_capacitas=239,
+            source_comune_label="Santa Giusta",
+            foglio="20",
+            particella="265",
+            subalterno="A",
+            is_active=True,
+        )
+        unit_lower = CatConsorzioUnit(
+            particella_id=None,
+            comune_id=comune.id,
+            cod_comune_capacitas=239,
+            source_comune_label="Santa Giusta",
+            foglio="20",
+            particella="265",
+            subalterno="a",
+            is_active=True,
+        )
+        db.add_all([unit_upper, unit_lower])
+        db.flush()
+        db.add(
+            CatConsorzioOccupancy(
+                unit_id=unit_upper.id,
+                cco="014000929",
+                com="239",
+                pvc="097",
+                fra="14",
+                ccs="00000",
+                source_type="capacitas_terreni",
+                relationship_type="utilizzatore_reale",
+                is_current=False,
+                valid_from=date(2007, 1, 1),
+            )
+        )
+        db.add(
+            CatConsorzioOccupancy(
+                unit_id=unit_lower.id,
+                cco="0A0621305",
+                com="239",
+                pvc="097",
+                fra="14",
+                ccs="00000",
+                source_type="capacitas_terreni",
+                relationship_type="utilizzatore_reale",
+                is_current=True,
+                valid_from=date(2011, 1, 1),
+            )
+        )
+        cert = CatCapacitasCertificato(
+            cco="0A0621305",
+            com="239",
+            pvc="097",
+            fra="14",
+            ccs="00000",
+            collected_at=datetime.now(timezone.utc),
+        )
+        db.add(cert)
+        db.flush()
+        db.add(
+            CatCapacitasIntestatario(
+                certificato_id=cert.id,
+                denominazione="Figus Maddalena",
+                codice_fiscale="FGSMDL70A41H501U",
+                collected_at=cert.collected_at,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.post(
+        "/catasto/elaborazioni-massive/particelle",
+        headers=auth_headers(),
+        json={"rows": [{"row_index": 1, "comune": "Santa Giusta", "foglio": "20", "particella": "265"}]},
+    )
+
+    assert response.status_code == 200
+    matches = response.json()["results"][0]["matches"]
+    assert len(matches) == 2
+    assert sorted((match["subalterno"], match["utenza_latest"]["cco"]) for match in matches) == [
+        ("A", "014000929"),
+        ("a", "0A0621305"),
+    ]
+
+
+def test_bulk_search_anagrafica_sub_historical_falls_back_to_current_base_owner() -> None:
+    db = TestingSessionLocal()
+    try:
+        comune = CatComune(
+            nome_comune="Santa Giusta",
+            codice_catastale="I205",
+            cod_comune_capacitas=239,
+            codice_comune_formato_numerico=115048,
+            codice_comune_numerico_2017_2025=95048,
+            nome_comune_legacy="Santa Giusta",
+            cod_provincia=115,
+            sigla_provincia="OR",
+            regione="Sardegna",
+        )
+        db.add(comune)
+        db.flush()
+        particella = CatParticella(
+            comune_id=comune.id,
+            cod_comune_capacitas=239,
+            codice_catastale="I205",
+            nome_comune="Santa Giusta",
+            foglio="20",
+            particella="184",
+            subalterno=None,
+            is_current=True,
+        )
+        db.add(particella)
+        db.flush()
+        db.add(
+            CatUtenzaIrrigua(
+                anno_campagna=2025,
+                cco="0A1260895",
+                comune_id=comune.id,
+                cod_comune_capacitas=239,
+                nome_comune="Santa Giusta",
+                foglio="20",
+                particella="184",
+                particella_id=particella.id,
+                denominazione="D'ettorre Carmine",
+                codice_fiscale="DTTCMN54M12H398A",
+            )
+        )
+        base_cert = CatCapacitasCertificato(
+            cco="0A1260895",
+            com="239",
+            pvc="097",
+            fra="14",
+            ccs="00000",
+            collected_at=datetime.now(timezone.utc),
+        )
+        db.add(base_cert)
+        db.flush()
+        db.add(
+            CatCapacitasIntestatario(
+                certificato_id=base_cert.id,
+                denominazione="D'ettorre Carmine",
+                codice_fiscale="DTTCMN54M12H398A",
+                collected_at=base_cert.collected_at,
+            )
+        )
+        unit_a = CatConsorzioUnit(
+            comune_id=comune.id,
+            cod_comune_capacitas=239,
+            source_comune_label="Santa Giusta",
+            foglio="20",
+            particella="184",
+            subalterno="A",
+            is_active=True,
+        )
+        db.add(unit_a)
+        db.flush()
+        db.add(
+            CatConsorzioOccupancy(
+                unit_id=unit_a.id,
+                cco="014000896",
+                com="239",
+                pvc="097",
+                fra="14",
+                ccs="00000",
+                source_type="capacitas_terreni",
+                relationship_type="utilizzatore_reale",
+                is_current=False,
+                valid_from=date(2021, 1, 1),
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.post(
+        "/catasto/elaborazioni-massive/particelle",
+        headers=auth_headers(),
+        json={"rows": [{"row_index": 1, "comune": "Santa Giusta", "foglio": "20", "particella": "184"}]},
+    )
+
+    assert response.status_code == 200
+    matches = response.json()["results"][0]["matches"]
+    assert len(matches) == 1
+    assert matches[0]["subalterno"] == "A"
+    assert matches[0]["utenza_latest"]["cco"] == "0A1260895"
+    assert matches[0]["intestatari"][0]["denominazione"] == "D'ettorre Carmine"
+    assert matches[0]["note"] == "Presenti dati non aggiornati/storici del sub: intestatario corrente derivato dalla particella base"
+
+
+def test_bulk_search_anagrafica_live_enriches_sub_matches(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db = TestingSessionLocal()
+    try:
+        comune = CatComune(
+            nome_comune="Santa Giusta",
+            codice_catastale="I205",
+            cod_comune_capacitas=239,
+            codice_comune_formato_numerico=115048,
+            codice_comune_numerico_2017_2025=95048,
+            nome_comune_legacy="Santa Giusta",
+            cod_provincia=115,
+            sigla_provincia="OR",
+            regione="Sardegna",
+        )
+        db.add(comune)
+        db.flush()
+        particella = CatParticella(
+            comune_id=comune.id,
+            cod_comune_capacitas=239,
+            codice_catastale="I205",
+            nome_comune="Santa Giusta",
+            foglio="20",
+            particella="265",
+            subalterno=None,
+            is_current=True,
+        )
+        db.add(particella)
+        db.flush()
+        unit = CatConsorzioUnit(
+            comune_id=comune.id,
+            cod_comune_capacitas=239,
+            source_comune_label="Santa Giusta",
+            foglio="20",
+            particella="265",
+            subalterno="c",
+            is_active=True,
+        )
+        db.add(unit)
+        db.flush()
+        db.add(
+            CatConsorzioOccupancy(
+                unit_id=unit.id,
+                cco="014000215",
+                com="239",
+                pvc="097",
+                fra="14",
+                ccs="00000",
+                source_type="capacitas_terreni",
+                relationship_type="utilizzatore_reale",
+                is_current=True,
+                valid_from=date(2007, 1, 1),
+            )
+        )
+        stale_cert = CatCapacitasCertificato(
+            cco="014000215",
+            com="239",
+            pvc="097",
+            fra="14",
+            ccs="00000",
+            collected_at=datetime.now(timezone.utc),
+        )
+        db.add(stale_cert)
+        db.flush()
+        db.add(
+            CatCapacitasIntestatario(
+                certificato_id=stale_cert.id,
+                denominazione="Consorzio Industriale Provinciale Oristanese",
+                codice_fiscale="80003430958",
+                collected_at=stale_cert.collected_at,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    async def fake_login(self) -> None:
+        return None
+
+    async def fake_activate_app(self, app_name: str) -> None:
+        assert app_name == "involture"
+
+    async def fake_close(self) -> None:
+        return None
+
+    async def fake_fetch_certificato(self, **kwargs) -> CapacitasTerrenoCertificato:
+        assert kwargs == {"cco": "014000215", "com": "239", "pvc": "097", "fra": "14", "ccs": "00000"}
+        return CapacitasTerrenoCertificato(
+            cco="014000215",
+            com="239",
+            pvc="097",
+            fra="14",
+            ccs="00000",
+            intestatari=[
+                CapacitasIntestatario(
+                    idxana="IDX-FIGUS",
+                    idxesa="IDX-ESA-FIGUS",
+                    codice_fiscale="FGSMDL70A41H501U",
+                    denominazione="Figus Maddalena",
+                    luogo_nascita="Oristano",
+                )
+            ],
+        )
+
+    async def fake_fetch_current_anagrafica_detail(self, *, idxana: str, idxesa: str) -> CapacitasAnagraficaDetail:
+        assert idxana == "IDX-FIGUS"
+        assert idxesa == "IDX-ESA-FIGUS"
+        return CapacitasAnagraficaDetail(
+            idxana=idxana,
+            idxesa=idxesa,
+            cognome="Figus",
+            nome="Maddalena",
+            denominazione="Figus Maddalena",
+            codice_fiscale="FGSMDL70A41H501U",
+            luogo_nascita="Oristano",
+            data_nascita=date(1970, 1, 1),
+            residenza_localita="Santa Giusta",
+            residenza_indirizzo="Via Roma",
+            residenza_civico="1",
+            residenza_cap="09096",
+        )
+
+    monkeypatch.setattr("app.modules.catasto.routes.anagrafica.pick_credential", lambda db, credential_id: (SimpleNamespace(id=1, username="live-user"), "secret"))
+    monkeypatch.setattr("app.modules.catasto.routes.anagrafica.mark_credential_used", lambda db, credential_id: None)
+    monkeypatch.setattr("app.modules.catasto.routes.anagrafica.mark_credential_error", lambda db, credential_id, error: None)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.login", fake_login)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.activate_app", fake_activate_app)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.close", fake_close)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.apps.involture.client.InVoltureClient.fetch_certificato", fake_fetch_certificato)
+    monkeypatch.setattr(
+        "app.modules.elaborazioni.capacitas.apps.involture.client.InVoltureClient.fetch_current_anagrafica_detail",
+        fake_fetch_current_anagrafica_detail,
+    )
+
+    response = client.post(
+        "/catasto/elaborazioni-massive/particelle",
+        headers=auth_headers(),
+        json={
+            "include_capacitas_live": True,
+            "rows": [{"row_index": 1, "comune": "Santa Giusta", "foglio": "20", "particella": "265"}],
+        },
+    )
+
+    assert response.status_code == 200
+    matches = response.json()["results"][0]["matches"]
+    assert len(matches) == 1
+    assert matches[0]["subalterno"] == "c"
+    assert matches[0]["intestatari"][0]["denominazione"] == "Figus Maddalena"
+
+
 def test_bulk_search_anagrafica_falls_back_to_live_capacitas_for_missing_intestatario(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

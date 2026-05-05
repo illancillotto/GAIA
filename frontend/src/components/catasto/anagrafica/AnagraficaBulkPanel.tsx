@@ -10,7 +10,7 @@ import { AlertBanner } from "@/components/ui/alert-banner";
 import { DocumentIcon, RefreshIcon } from "@/components/ui/icons";
 import { capacitasGetRptCertificatoLink, catastoBulkSearchAnagrafica, catastoDeleteElaborazioniMassiveJobs, catastoGetElaborazioneMassivaJob, catastoListElaborazioniMassiveJobs, catastoSaveElaborazioneMassivaJob } from "@/lib/api/catasto";
 import { getStoredAccessToken } from "@/lib/auth";
-import type { CatAnagraficaBulkJobItem, CatAnagraficaBulkRowInput, CatAnagraficaBulkRowResult, CatIntestatario } from "@/types/catasto";
+import type { CatAnagraficaBulkJobItem, CatAnagraficaBulkRowInput, CatAnagraficaBulkRowResult, CatAnagraficaMatch, CatIntestatario } from "@/types/catasto";
 
 function triggerDownload(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
@@ -64,10 +64,20 @@ function formatConsorzioEsitoForExport(presenteInConsorzio: boolean): string {
 
 async function resolveCapacitasRptCertificatoUrls(
   token: string,
-  ccos: string[],
+  matches: CatAnagraficaMatch[],
 ): Promise<Map<string, string>> {
   const out = new Map<string, string>();
-  const unique = Array.from(new Set(ccos.map((c) => c.trim()).filter(Boolean)));
+  const unique = Array.from(
+    new Map(
+      matches
+        .filter((match) => Boolean(match.utenza_latest?.cco))
+        .map((match) => {
+          const cco = match.utenza_latest?.cco?.trim() ?? "";
+          const key = [cco, match.cert_com ?? "", match.cert_pvc ?? "", match.cert_fra ?? "", match.cert_ccs ?? ""].join("|");
+          return [key, match] as const;
+        }),
+    ).values(),
+  );
   // Capacitas/InVolture può rate-limitare o essere instabile: preferiamo meno concorrenza e un retry leggero.
   const concurrency = 3;
   let idx = 0;
@@ -80,7 +90,13 @@ async function resolveCapacitasRptCertificatoUrls(
       let resolved = "";
       for (let attempt = 0; attempt < 2; attempt += 1) {
         try {
-          const { url } = await capacitasGetRptCertificatoLink(token, current);
+          const cco = current.utenza_latest?.cco?.trim() ?? "";
+          const { url } = await capacitasGetRptCertificatoLink(token, cco, {
+            com: current.cert_com,
+            pvc: current.cert_pvc,
+            fra: current.cert_fra,
+            ccs: current.cert_ccs,
+          });
           resolved = url || "";
           break;
         } catch {
@@ -88,7 +104,14 @@ async function resolveCapacitasRptCertificatoUrls(
           await new Promise((r) => window.setTimeout(r, 250 + attempt * 300));
         }
       }
-      out.set(current, resolved);
+      const key = [
+        current.utenza_latest?.cco?.trim() ?? "",
+        current.cert_com ?? "",
+        current.cert_pvc ?? "",
+        current.cert_fra ?? "",
+        current.cert_ccs ?? "",
+      ].join("|");
+      out.set(key, resolved);
     }
   }
 
@@ -510,14 +533,19 @@ export function AnagraficaBulkPanel() {
     exportResults: CatAnagraficaBulkRowResult[],
     format: "csv" | "xlsx",
   ): Promise<void> {
-    const ccos = exportResults
-      .flatMap((r) => r.matches ?? (r.match ? [r.match] : []))
-      .map((m) => m.utenza_latest?.cco ?? "")
-      .filter(Boolean);
-    const urlByCco = ccos.length ? await resolveCapacitasRptCertificatoUrls(token, ccos) : new Map<string, string>();
+    const matchesForLinks = exportResults.flatMap((r) => r.matches ?? (r.match ? [r.match] : []));
+    const urlByMatchKey = matchesForLinks.length ? await resolveCapacitasRptCertificatoUrls(token, matchesForLinks) : new Map<string, string>();
     const rows: Record<string, unknown>[] = [];
     for (const r of exportResults) {
       const matches = r.matches ?? (r.match ? [r.match] : []);
+      const buildMatchLinkKey = (match?: (typeof matches)[0]): string =>
+        [
+          match?.utenza_latest?.cco?.trim() ?? "",
+          match?.cert_com ?? "",
+          match?.cert_pvc ?? "",
+          match?.cert_fra ?? "",
+          match?.cert_ccs ?? "",
+        ].join("|");
       const buildBase = (m?: (typeof matches)[0]) =>
         kind === "CF_PIVA_PARTICELLE"
           ? {
@@ -530,9 +558,10 @@ export function AnagraficaBulkPanel() {
               esito: formatEsitoForExport(r.esito),
               "trovato in esito consorzio": formatConsorzioEsitoForExport(Boolean(m?.presente_in_catasto_consorzio)),
               cco: m?.utenza_latest?.cco ?? "",
-              link_involture: m?.utenza_latest?.cco ? urlByCco.get(m.utenza_latest.cco) ?? "" : "",
+              link_involture: m?.utenza_latest?.cco ? urlByMatchKey.get(buildMatchLinkKey(m)) ?? "" : "",
               apri_involture: "",
-              note: m?.note ?? "",
+              stato_ruolo: m?.stato_ruolo ?? "",
+              stato_cnc: m?.stato_cnc ?? "",
             }
           : {
               comune: m?.comune ?? r.comune_input ?? "",
@@ -543,9 +572,10 @@ export function AnagraficaBulkPanel() {
               esito: formatEsitoForExport(r.esito),
               "trovato in esito consorzio": formatConsorzioEsitoForExport(Boolean(m?.presente_in_catasto_consorzio)),
               cco: m?.utenza_latest?.cco ?? "",
-              link_involture: m?.utenza_latest?.cco ? urlByCco.get(m.utenza_latest.cco) ?? "" : "",
+              link_involture: m?.utenza_latest?.cco ? urlByMatchKey.get(buildMatchLinkKey(m)) ?? "" : "",
               apri_involture: "",
-              note: m?.note ?? "",
+              stato_ruolo: m?.stato_ruolo ?? "",
+              stato_cnc: m?.stato_cnc ?? "",
             };
 
       const emptyInt = {
@@ -565,6 +595,7 @@ export function AnagraficaBulkPanel() {
         telefono: "",
         email: "",
         deceduto: "",
+        note: "",
       };
 
       if (matches.length === 0) {
@@ -577,7 +608,7 @@ export function AnagraficaBulkPanel() {
         const n = intestatari.length;
         const base = buildBase(m);
         if (n === 0) {
-          rows.push({ ...base, ...emptyInt });
+          rows.push({ ...base, ...emptyInt, note: m?.note ?? "" });
           continue;
         }
         intestatari.forEach((intestatario, index) => {
@@ -599,6 +630,7 @@ export function AnagraficaBulkPanel() {
             telefono: intestatario.telefono ?? "",
             email: intestatario.email ?? "",
             deceduto: intestatario.deceduto ? "si" : "",
+            note: m?.note ?? "",
           });
         });
       }

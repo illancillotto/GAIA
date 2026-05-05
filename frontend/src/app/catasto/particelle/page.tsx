@@ -17,6 +17,7 @@ import type { CatAnagraficaMatch, CatParticella } from "@/types/catasto";
 function particellaToMatch(p: CatParticella): CatAnagraficaMatch {
   return {
     particella_id: p.id,
+    unit_id: null,
     comune_id: p.comune_id,
     comune: p.nome_comune,
     cod_comune_capacitas: p.cod_comune_capacitas,
@@ -28,7 +29,14 @@ function particellaToMatch(p: CatParticella): CatAnagraficaMatch {
     nome_distretto: p.nome_distretto,
     superficie_mq: p.superficie_mq,
     superficie_grafica_mq: p.superficie_grafica_mq,
+    presente_in_catasto_consorzio: false,
     utenza_latest: null,
+    cert_com: null,
+    cert_pvc: null,
+    cert_fra: null,
+    cert_ccs: null,
+    stato_ruolo: null,
+    stato_cnc: null,
     intestatari: [],
     anomalie_count: 0,
     anomalie_top: [],

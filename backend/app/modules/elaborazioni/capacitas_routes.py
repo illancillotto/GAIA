@@ -983,15 +983,43 @@ async def get_rpt_certificato_link(
     _: Annotated[ApplicationUser, Depends(require_active_user)],
     db: Annotated[Session, Depends(get_db)],
     cco: str = Query(..., min_length=1),
+    com: str | None = Query(default=None),
+    pvc: str | None = Query(default=None),
+    fra: str | None = Query(default=None),
+    ccs: str | None = Query(default=None),
     credential_id: int | None = None,
 ) -> dict[str, str]:
     """Return the browser-session URL to rptCertificato.aspx for a given CCO."""
     _ = credential_id  # Backward-compatible query parameter; the link uses the browser's Capacitas session.
     cco = cco.strip()
 
+    com = _normalize_link_param(com) or None
+    pvc = _normalize_link_param(pvc) or None
+    fra = _normalize_link_param(fra) or None
+    ccs = _normalize_link_param(ccs, default="00000")
+
+    certificato_query = select(CatCapacitasCertificato).where(CatCapacitasCertificato.cco == cco)
+    occ_query = select(CatConsorzioOccupancy).where(CatConsorzioOccupancy.cco == cco)
+    row_query = select(CatCapacitasTerrenoRow).where(CatCapacitasTerrenoRow.cco == cco)
+    if com is not None:
+        certificato_query = certificato_query.where(CatCapacitasCertificato.com == com)
+        occ_query = occ_query.where(CatConsorzioOccupancy.com == com)
+        row_query = row_query.where(CatCapacitasTerrenoRow.com == com)
+    if pvc is not None:
+        certificato_query = certificato_query.where(CatCapacitasCertificato.pvc == pvc)
+        occ_query = occ_query.where(CatConsorzioOccupancy.pvc == pvc)
+        row_query = row_query.where(CatCapacitasTerrenoRow.pvc == pvc)
+    if fra is not None:
+        certificato_query = certificato_query.where(CatCapacitasCertificato.fra == fra)
+        occ_query = occ_query.where(CatConsorzioOccupancy.fra == fra)
+        row_query = row_query.where(CatCapacitasTerrenoRow.fra == fra)
+    if any(value is not None for value in (com, pvc, fra, ccs)):
+        certificato_query = certificato_query.where(func.coalesce(CatCapacitasCertificato.ccs, "00000") == ccs)
+        occ_query = occ_query.where(func.coalesce(CatConsorzioOccupancy.ccs, "00000") == ccs)
+        row_query = row_query.where(func.coalesce(CatCapacitasTerrenoRow.ccs, "00000") == ccs)
+
     certificato = db.execute(
-        select(CatCapacitasCertificato)
-        .where(CatCapacitasCertificato.cco == cco)
+        certificato_query
         .order_by(desc(CatCapacitasCertificato.collected_at))
         .limit(1)
     ).scalar_one_or_none()
@@ -1011,8 +1039,7 @@ async def get_rpt_certificato_link(
             return {"url": f"{_RPT_CERTIFICATO_BASE}?{params}"}
 
     occ = db.execute(
-        select(CatConsorzioOccupancy)
-        .where(CatConsorzioOccupancy.cco == cco)
+        occ_query
         .order_by(desc(CatConsorzioOccupancy.updated_at))
         .limit(1)
     ).scalar_one_or_none()
@@ -1032,8 +1059,7 @@ async def get_rpt_certificato_link(
             return {"url": f"{_RPT_CERTIFICATO_BASE}?{params}"}
 
     row = db.execute(
-        select(CatCapacitasTerrenoRow)
-        .where(CatCapacitasTerrenoRow.cco == cco)
+        row_query
         .order_by(desc(CatCapacitasTerrenoRow.collected_at))
         .limit(1)
     ).scalar_one_or_none()
