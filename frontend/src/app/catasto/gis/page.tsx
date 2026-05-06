@@ -106,6 +106,7 @@ export default function CatastoGisPage() {
   const [showDistretti, setShowDistretti] = useState(true);
   const [showDistrettiFill, setShowDistrettiFill] = useState(false);
   const [showParticelle, setShowParticelle] = useState(true);
+  const [showParticelleFill, setShowParticelleFill] = useState(true);
   const [highlightSelected, setHighlightSelected] = useState(true);
   const [distrettiOpacity, setDistrettiOpacity] = useState(0.3);
   const [particelleOpacity, setParticelleOpacity] = useState(0.42);
@@ -579,6 +580,7 @@ export default function CatastoGisPage() {
                     showDistretti,
                     showDistrettiFill,
                     showParticelle,
+                    showParticelleFill,
                     distrettiOpacity,
                     particelleOpacity,
                     distretto: distrettoLayer.trim() ? distrettoLayer.trim() : null,
@@ -663,7 +665,19 @@ export default function CatastoGisPage() {
                         Particelle
                       </button>
                       <div className="pointer-events-none absolute left-0 top-full z-10 mt-2 w-52 translate-y-1 rounded-2xl border border-indigo-100 bg-white/95 p-3 opacity-0 shadow-xl ring-1 ring-black/5 backdrop-blur transition-all duration-150 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100">
-                        <div className="mb-2 flex items-center justify-between text-[11px]">
+                        <button
+                          type="button"
+                          onClick={() => setShowParticelleFill((v) => !v)}
+                          className={`mb-3 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium transition-all ${
+                            showParticelleFill
+                              ? "border-violet-200 bg-violet-50 text-violet-700"
+                              : "border-gray-200 bg-white text-gray-500 hover:border-violet-100 hover:text-violet-700"
+                          }`}
+                        >
+                          <span className={`h-1.5 w-1.5 rounded-full transition-colors ${showParticelleFill ? "bg-violet-400" : "bg-gray-300"}`} />
+                          Riempimento
+                        </button>
+                        <div className="flex items-center justify-between text-[11px]">
                           <span className="font-medium text-indigo-900/75">Opacità bordo + fill</span>
                           <span className="rounded-full bg-indigo-50 px-2 py-0.5 font-semibold text-indigo-700">
                             {Math.round(particelleOpacity * 100)}%

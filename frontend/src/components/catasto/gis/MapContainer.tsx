@@ -17,6 +17,7 @@ interface MapContainerProps {
     showDistretti: boolean;
     showDistrettiFill?: boolean;
     showParticelle: boolean;
+    showParticelleFill?: boolean;
     distrettiOpacity?: number;
     particelleOpacity?: number;
     distretto?: string | null;
@@ -550,6 +551,7 @@ export default function MapContainer({
     const showDistretti = mapLayers?.showDistretti ?? true;
     const showDistrettiFill = mapLayers?.showDistrettiFill ?? false;
     const showParticelle = mapLayers?.showParticelle ?? true;
+    const showParticelleFill = mapLayers?.showParticelleFill ?? true;
     const distrettiOpacity = mapLayers?.distrettiOpacity ?? 0.3;
     const particelleOpacity = mapLayers?.particelleOpacity ?? 0.42;
 
@@ -561,15 +563,12 @@ export default function MapContainer({
       map.setLayoutProperty("distretti-outline", "visibility", showDistretti ? "visible" : "none");
       map.setPaintProperty("distretti-outline", "line-opacity", Math.min(1, distrettiOpacity + 0.15));
     }
-    for (const layerId of ["particelle-fill", "particelle-outline"]) {
-      if (map.getLayer(layerId)) {
-        map.setLayoutProperty(layerId, "visibility", showParticelle ? "visible" : "none");
-      }
-    }
     if (map.getLayer("particelle-fill")) {
+      map.setLayoutProperty("particelle-fill", "visibility", showParticelle && showParticelleFill ? "visible" : "none");
       map.setPaintProperty("particelle-fill", "fill-opacity", particelleOpacity);
     }
     if (map.getLayer("particelle-outline")) {
+      map.setLayoutProperty("particelle-outline", "visibility", showParticelle ? "visible" : "none");
       map.setPaintProperty("particelle-outline", "line-opacity", Math.min(1, particelleOpacity + 0.2));
     }
 
