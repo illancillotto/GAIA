@@ -140,6 +140,7 @@ export interface GisMapOverlayLayer {
   saved_selection_id?: string | null;
   name: string;
   color: string;
+  opacity?: number;
   visible: boolean;
   source_filename?: string | null;
   geojson?: GeoJSON.FeatureCollection | null;

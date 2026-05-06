@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ComponentType, SVGProps } from "react";
+import { useEffect, useState } from "react";
 
 import { cn } from "@/lib/cn";
 
@@ -14,6 +15,8 @@ type NavItemProps = {
   badgeVariant?: "danger" | "warning";
   match?: "exact" | "prefix";
   disabled?: boolean;
+  /** Se presente, questo link non risulta attivo quando l'hash è uguale (pathname deve già coincidere). */
+  inactiveWhenHash?: string;
 };
 
 export function NavItem({
@@ -24,12 +27,33 @@ export function NavItem({
   badgeVariant = "warning",
   match = "exact",
   disabled = false,
+  inactiveWhenHash,
 }: NavItemProps) {
   const pathname = usePathname();
-  const isActive =
+  const [locHash, setLocHash] = useState("");
+
+  useEffect(() => {
+    const sync = () => setLocHash(typeof window !== "undefined" ? window.location.hash : "");
+    sync();
+    window.addEventListener("hashchange", sync);
+    return () => window.removeEventListener("hashchange", sync);
+  }, []);
+
+  const hashIndex = href.indexOf("#");
+  const baseHref = hashIndex >= 0 ? href.slice(0, hashIndex) : href;
+  const requiredHash = hashIndex >= 0 ? href.slice(hashIndex) : null;
+
+  const pathMatches =
     match === "prefix"
-      ? pathname === href || pathname.startsWith(`${href}/`)
-      : pathname === href;
+      ? pathname === baseHref || pathname.startsWith(`${baseHref}/`)
+      : pathname === baseHref;
+
+  let isActive = pathMatches;
+  if (requiredHash) {
+    isActive = pathMatches && locHash === requiredHash;
+  } else if (inactiveWhenHash) {
+    isActive = pathMatches && locHash !== inactiveWhenHash;
+  }
 
   const className = cn(
     "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors",

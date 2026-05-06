@@ -103,6 +103,67 @@ def test_post_sync_subject_allows_reviewer_and_returns_result(monkeypatch: pytes
     assert body["calls_made"] == 2
 
 
+def test_post_preview_lookup_returns_body_for_reviewer(monkeypatch: pytest.MonkeyPatch) -> None:
+    reviewer = _create_user(ApplicationUserRole.REVIEWER.value)
+
+    async def fake_lookup(codice_fiscale: str, *, client=None, auth_manager=None):
+        assert codice_fiscale == "RSSMRA80A01H501U"
+        from app.modules.utenze.anpr.schemas import AnprPreviewLookupResponse
+
+        return AnprPreviewLookupResponse(
+            success=True,
+            anpr_id="ID-999",
+            stato_anpr="alive",
+            calls_made=2,
+            message="ok preview",
+        )
+
+    monkeypatch.setattr("app.modules.utenze.anpr.routes.lookup_anpr_by_codice_fiscale", fake_lookup)
+
+    response = client.post(
+        "/utenze/anpr/preview-lookup",
+        headers=_auth_headers(reviewer.username),
+        json={"codice_fiscale": "RSSMRA80A01H501U"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["anpr_id"] == "ID-999"
+    assert body["calls_made"] == 2
+    assert body["message"] == "ok preview"
+
+
+def test_post_preview_lookup_denies_viewer() -> None:
+    viewer = _create_user(ApplicationUserRole.VIEWER.value)
+
+    response = client.post(
+        "/utenze/anpr/preview-lookup",
+        headers=_auth_headers(viewer.username),
+        json={"codice_fiscale": "RSSMRA80A01H501U"},
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Insufficient role"
+
+
+def test_post_preview_lookup_returns_503_for_pdnd_misconfiguration(monkeypatch: pytest.MonkeyPatch) -> None:
+    reviewer = _create_user(ApplicationUserRole.REVIEWER.value)
+
+    async def fake_lookup(codice_fiscale: str, *, client=None, auth_manager=None):
+        raise PdndConfigurationError("PDND private key missing")
+
+    monkeypatch.setattr("app.modules.utenze.anpr.routes.lookup_anpr_by_codice_fiscale", fake_lookup)
+
+    response = client.post(
+        "/utenze/anpr/preview-lookup",
+        headers=_auth_headers(reviewer.username),
+        json={"codice_fiscale": "RSSMRA80A01H501U"},
+    )
+
+    assert response.status_code == 503
+    assert response.json()["detail"] == "PDND private key missing"
+
+
 def test_post_sync_subject_denies_viewer() -> None:
     viewer = _create_user(ApplicationUserRole.VIEWER.value)
     subject_id = uuid.uuid4()

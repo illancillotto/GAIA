@@ -286,6 +286,7 @@ export default function CatastoGisPage() {
         saved_selection_id: null,
         name: file.name.replace(/\.(xlsx|xls)$/i, ""),
         color: LAYER_COLORS[nextLayerIndex % LAYER_COLORS.length] ?? "#10B981",
+        opacity: 0.55,
         visible: true,
         source_filename: file.name,
         geojson: resolved.geojson ?? { type: "FeatureCollection", features: [] },
@@ -392,6 +393,7 @@ export default function CatastoGisPage() {
         saved_selection_id: detail.id,
         name: detail.name,
         color: detail.color,
+        opacity: 0.55,
         visible: true,
         source_filename: detail.source_filename ?? null,
         geojson: detail.geojson ?? { type: "FeatureCollection", features: [] },
@@ -746,6 +748,26 @@ export default function CatastoGisPage() {
                               onChange={(e) => updateOverlayLayer(layer.layer_key, (item) => ({ ...item, color: e.target.value.toUpperCase() }))}
                               className="h-10 w-12 cursor-pointer rounded border border-gray-200 bg-white p-1"
                               title="Colore layer"
+                            />
+                          </div>
+                          <div className="mt-2">
+                            <div className="mb-1 flex items-center justify-between text-[11px] text-gray-500">
+                              <span>Trasparenza layer</span>
+                              <span>{Math.round((1 - (layer.opacity ?? 0.55)) * 100)}%</span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0.1"
+                              max="1"
+                              step="0.05"
+                              value={layer.opacity ?? 0.55}
+                              onChange={(e) =>
+                                updateOverlayLayer(layer.layer_key, (item) => ({
+                                  ...item,
+                                  opacity: Number(e.target.value),
+                                }))
+                              }
+                              className="w-full accent-emerald-600"
                             />
                           </div>
                           <div className="mt-2 grid grid-cols-2 gap-2">

@@ -70,6 +70,27 @@ class AnprSubjectStatus(BaseModel):
     last_c030_check_at: datetime | None
 
 
+class AnprPreviewLookupRequest(BaseModel):
+    codice_fiscale: str = Field(..., min_length=11, max_length=32)
+
+    @field_validator("codice_fiscale")
+    @classmethod
+    def normalize_cf(cls, value: str) -> str:
+        return value.replace(" ", "").upper().strip()
+
+
+class AnprPreviewLookupResponse(BaseModel):
+    """Risposta preview ANPR (solo interrogazione PDND; nessuna persistenza in anagrafica)."""
+
+    success: bool
+    anpr_id: str | None = None
+    stato_anpr: str | None = None
+    data_decesso: date | None = None
+    luogo_decesso_comune: str | None = None
+    calls_made: int = 0
+    message: str
+
+
 class AnprJobTriggerResult(BaseModel):
     started_at: datetime
     subjects_processed: int

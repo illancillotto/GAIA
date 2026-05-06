@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useDeferredValue, useEffect, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useState } from "react";
 
 import { UtenzeModulePage } from "@/components/utenze/utenze-module-page";
+import { UtenzeCreateSubjectTrigger } from "@/components/utenze/utenze-create-subject-trigger";
 import {
   ModuleWorkspaceHero,
   ModuleWorkspaceKpiRow,
@@ -65,27 +66,36 @@ function DashboardContent({ token }: { token: string }) {
   const normalizedSearchTerm = deferredSearchTerm.trim();
   const canSearch = normalizedSearchTerm.length >= 3;
 
+  const loadDashboardData = useCallback(async () => {
+    try {
+      const [statsResponse, subjectsResponse, jobsResponse] = await Promise.all([
+        getUtenzeStats(token),
+        getUtenzeSubjects(token, { pageSize: 6 }),
+        getUtenzeImportJobs(token),
+      ]);
+      setStats(statsResponse);
+      setSubjects(subjectsResponse.items);
+      setJobs(jobsResponse.slice(0, 5));
+      setLoadError(null);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Errore nel caricamento modulo");
+    }
+  }, [token]);
+
   useEffect(() => {
-    async function loadData() {
-      try {
-        const [statsResponse, subjectsResponse, jobsResponse] = await Promise.all([
-          getUtenzeStats(token),
-          getUtenzeSubjects(token, { pageSize: 6 }),
-          getUtenzeImportJobs(token),
-        ]);
-        setStats(statsResponse);
-        setSubjects(subjectsResponse.items);
-        setJobs(jobsResponse.slice(0, 5));
-        setLoadError(null);
-      } catch (error) {
-        setLoadError(error instanceof Error ? error.message : "Errore nel caricamento modulo");
-      } finally {
+    let cancelled = false;
+    async function run() {
+      setIsLoading(true);
+      await loadDashboardData();
+      if (!cancelled) {
         setIsLoading(false);
       }
     }
-
-    void loadData();
-  }, [token]);
+    void run();
+    return () => {
+      cancelled = true;
+    };
+  }, [loadDashboardData]);
 
   useEffect(() => {
     async function loadSearchResults() {
@@ -173,7 +183,7 @@ function DashboardContent({ token }: { token: string }) {
                 <p className="mt-1 text-sm text-gray-500">Dettaglio classificazione e ultimi documenti non classificati.</p>
               </div>
               <div className="flex items-center gap-3">
-                <Link className="btn-secondary" href="/utenze/subjects" target="_blank">
+                <Link className="btn-secondary" href="/utenze/import#utenze-soggetti" target="_blank">
                   Apri pagina
                 </Link>
                 <button className="btn-secondary" type="button" onClick={() => setIsDocumentSummaryOpen(false)}>
@@ -283,7 +293,20 @@ function DashboardContent({ token }: { token: string }) {
               />
             )}
             <div className="flex flex-wrap gap-2">
-              <Link className="btn-secondary" href="/utenze/subjects">
+              <UtenzeCreateSubjectTrigger
+                token={token}
+                buttonClassName="inline-flex items-center gap-2"
+                buttonContent={
+                  <>
+                    <UserIcon className="h-4 w-4" />
+                    Crea nuovo utente
+                  </>
+                }
+                onCreated={async () => {
+                  await loadDashboardData();
+                }}
+              />
+              <Link className="btn-secondary" href="/utenze/import#utenze-soggetti">
                 <SearchIcon className="h-4 w-4" />
                 Apri soggetti
               </Link>
@@ -330,7 +353,7 @@ function DashboardContent({ token }: { token: string }) {
             <p className="section-title">Ricerca soggetti</p>
             <p className="section-copy">Inserisci almeno 3 lettere del nome, cognome o ragione sociale per trovare subito i record.</p>
           </div>
-          <Link href="/utenze/subjects" className="text-sm font-medium text-[#1D4E35]">
+          <Link href="/utenze/import#utenze-soggetti" className="text-sm font-medium text-[#1D4E35]">
             Ricerca avanzata
           </Link>
         </div>
@@ -406,7 +429,7 @@ function DashboardContent({ token }: { token: string }) {
               <p className="section-title">Soggetti recenti</p>
               <p className="section-copy">Ultimi record creati o aggiornati nel dominio Utenze.</p>
             </div>
-            <Link href="/utenze/subjects" className="text-sm font-medium text-[#1D4E35]">
+            <Link href="/utenze/import#utenze-soggetti" className="text-sm font-medium text-[#1D4E35]">
               Lista completa
             </Link>
           </div>

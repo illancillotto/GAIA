@@ -1,10 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 
 import { ElaborazionePanelHeader } from "@/components/elaborazioni/module-chrome";
 import { ModuleWorkspaceHero, ModuleWorkspaceMiniStat } from "@/components/layout/module-workspace-hero";
 import { UtenzeModulePage } from "@/components/utenze/utenze-module-page";
+import { UtenzeSubjectsSection } from "@/components/utenze/utenze-subjects-section";
 import { EmptyState } from "@/components/ui/empty-state";
 import { DocumentIcon, FolderIcon, RefreshIcon, ServerIcon } from "@/components/ui/icons";
 import {
@@ -67,7 +69,9 @@ function isRegistryJobActive(job: Pick<UtenzeImportJob, "status"> | null | undef
   return job?.status === "pending" || job?.status === "running";
 }
 
-type UtenzeImportSection = "excel" | "nas";
+const UTENZE_SOGGETTI_HASH = "#utenze-soggetti";
+
+type UtenzeImportSection = "excel" | "nas" | "soggetti";
 
 const UTENZE_IMPORT_SECTIONS: Array<{ id: UtenzeImportSection; label: string; description: string }> = [
   { id: "excel", label: "Anagrafica Excel", description: "Upload .xlsx, avanzamento e storico batch" },
@@ -75,6 +79,11 @@ const UTENZE_IMPORT_SECTIONS: Array<{ id: UtenzeImportSection; label: string; de
     id: "nas",
     label: "Archivio NAS",
     description: "Preview, snapshot, aggiornamento utenze, reset e cronologia job NAS",
+  },
+  {
+    id: "soggetti",
+    label: "Soggetti",
+    description: "Registro utenti, CSV, export e creazione schede",
   },
 ];
 
@@ -91,6 +100,7 @@ const NAS_RESET_BUTTON_TOOLTIP =
   "Rimuove documenti, job di import, traccia audit import e copie locali; azzera nas_folder e link sui soggetti. Le anagrafiche restano.";
 
 function ImportContent({ token }: { token: string }) {
+  const pathname = usePathname();
   const [activeSection, setActiveSection] = useState<UtenzeImportSection>("excel");
   const [preview, setPreview] = useState<UtenzeImportPreview | null>(null);
   const [jobs, setJobs] = useState<UtenzeImportJob[]>([]);
@@ -181,6 +191,30 @@ function ImportContent({ token }: { token: string }) {
   useEffect(() => {
     void loadJobs();
   }, [loadJobs]);
+
+  useEffect(() => {
+    function applyHash() {
+      if (typeof window === "undefined") return;
+      if (window.location.hash === UTENZE_SOGGETTI_HASH) {
+        setActiveSection("soggetti");
+      }
+    }
+    applyHash();
+    window.addEventListener("hashchange", applyHash);
+    return () => window.removeEventListener("hashchange", applyHash);
+  }, []);
+
+  const selectImportSection = useCallback(
+    (section: UtenzeImportSection) => {
+      setActiveSection(section);
+      if (typeof window === "undefined") return;
+      const next =
+        section === "soggetti" ? `${pathname}${UTENZE_SOGGETTI_HASH}` : pathname;
+      window.history.replaceState(null, "", next);
+      window.dispatchEvent(new Event("hashchange"));
+    },
+    [pathname],
+  );
 
   useEffect(() => {
     if (!bulkTrackingJobId) {
@@ -383,7 +417,7 @@ function ImportContent({ token }: { token: string }) {
             </>
           }
           title="Centro import archivio"
-          description="Carica anagrafiche da Excel, sincronizza i documenti dal NAS con le utenze esistenti e consulta preview, snapshot e cronologia job — con stessa struttura di navigazione del workspace Capacitas."
+          description="Carica anagrafiche da Excel, sincronizza i documenti dal NAS, gestisci il registro soggetti e consulta preview, snapshot e cronologia job — con stessa struttura di navigazione del workspace Capacitas."
         >
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <ModuleWorkspaceMiniStat
@@ -411,7 +445,7 @@ function ImportContent({ token }: { token: string }) {
           </div>
         </ModuleWorkspaceHero>
 
-        <nav className="grid gap-3 md:grid-cols-2" aria-label="Sezioni import utenze">
+        <nav className="grid gap-3 md:grid-cols-2 xl:grid-cols-3" aria-label="Sezioni import utenze">
           {UTENZE_IMPORT_SECTIONS.map((section) => {
             const active = activeSection === section.id;
             return (
@@ -422,7 +456,7 @@ function ImportContent({ token }: { token: string }) {
                     : "rounded-2xl border border-[#d9dfd6] bg-white px-5 py-4 text-left shadow-sm transition hover:border-[#1D4E35]/40 hover:bg-[#f8fbf8]"
                 }
                 key={section.id}
-                onClick={() => setActiveSection(section.id)}
+                onClick={() => selectImportSection(section.id)}
                 type="button"
               >
                 <span className={active ? "text-sm font-semibold text-[#1D4E35]" : "text-sm font-semibold text-gray-900"}>{section.label}</span>
@@ -479,11 +513,13 @@ function ImportContent({ token }: { token: string }) {
                 </div>
               </div>
               <p className="text-sm text-gray-600">
-                Puoi cambiare sezione (Excel o Archivio NAS): l&apos;avanzamento resta qui sopra finché il job è attivo. Al termine trovi il riepilogo nella sezione NAS (storico aggiornamenti massivi).
+                Puoi cambiare sezione (Excel, NAS o Soggetti): l&apos;avanzamento resta qui sopra finché il job è attivo. Al termine trovi il riepilogo nella sezione NAS (storico aggiornamenti massivi).
               </p>
             </div>
           </article>
         ) : null}
+
+        {activeSection === "soggetti" ? <UtenzeSubjectsSection token={token} /> : null}
 
         {activeSection === "excel" ? (
           <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
@@ -1086,7 +1122,7 @@ export default function UtenzeImportPage() {
   return (
     <UtenzeModulePage
       title="Import archivio"
-      description="Aggiornamento o caricamento documenti NAS sulle utenze esistenti, con preview, snapshot e reset operativo."
+      description="Excel, sincronizzazione NAS e registro soggetti."
       breadcrumb="Import"
     >
       {({ token }) => <ImportContent token={token} />}

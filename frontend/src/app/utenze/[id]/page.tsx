@@ -649,7 +649,7 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
               Nessun dato rilevato nel NAS, importa manualmente
             </button>
           ) : null}
-          <button className="btn-secondary" type="button" onClick={() => router.push("/utenze/subjects")}>
+          <button className="btn-secondary" type="button" onClick={() => router.push("/utenze/import#utenze-soggetti")}>
             Torna alla lista
           </button>
         </div>

@@ -84,8 +84,8 @@ const menuSearchRoutes: SearchRoute[] = [
 
   // Utenze / Anagrafica
   { label: "Utenze · Dashboard", href: "/utenze", moduleKey: "utenze" },
-  { label: "Utenze · Soggetti", href: "/utenze/subjects", moduleKey: "utenze", keywords: ["anagrafica", "subjects"] },
-  { label: "Utenze · Import archivio", href: "/utenze/import", moduleKey: "utenze", keywords: ["import"] },
+  { label: "Utenze · Soggetti", href: "/utenze/import#utenze-soggetti", moduleKey: "utenze", keywords: ["anagrafica", "subjects"] },
+  { label: "Utenze · Import dati", href: "/utenze/import", moduleKey: "utenze", keywords: ["import"] },
 
   // Operazioni
   { label: "Operazioni · Dashboard", href: "/operazioni", moduleKey: "operazioni" },

@@ -19,6 +19,7 @@ from app.modules.utenze.anpr.service import (
     _build_result_message,
     _map_person_status,
     build_check_queue,
+    lookup_anpr_by_codice_fiscale,
     run_daily_job,
     sync_single_subject,
     update_config,
@@ -360,3 +361,60 @@ async def test_run_daily_job_returns_disabled_summary_without_processing() -> No
     assert summary.subjects_processed == 0
     assert summary.calls_used == 0
     assert summary.message == "job disabled"
+
+
+@pytest.mark.anyio
+async def test_lookup_anpr_by_codice_fiscale_runs_c030_then_c004() -> None:
+    class FakeClient:
+        async def c030_get_anpr_id(self, cf: str, key: str) -> C030Result:
+            assert cf == "RSSMRA80A01H501U"
+            assert key == "preview"
+            return C030Result(
+                success=True,
+                anpr_id="ANPR-X",
+                id_operazione_anpr="op1",
+                esito="anpr_id_found",
+                error_detail=None,
+                id_operazione_client="cli1",
+            )
+
+        async def c004_check_death(self, anpr_id: str, key: str) -> C004Result:
+            assert anpr_id == "ANPR-X"
+            return C004Result(
+                success=True,
+                esito="alive",
+                data_decesso=None,
+                id_operazione_anpr="op2",
+                error_detail=None,
+                id_operazione_client="cli2",
+                raw_response=None,
+            )
+
+    result = await lookup_anpr_by_codice_fiscale("rss mra80a01 h501 u", client=FakeClient())
+    assert result.success is True
+    assert result.anpr_id == "ANPR-X"
+    assert result.stato_anpr == "alive"
+    assert result.calls_made == 2
+
+
+@pytest.mark.anyio
+async def test_lookup_anpr_by_codice_fiscale_returns_after_c030_not_found_single_call() -> None:
+    class FakeClient:
+        async def c030_get_anpr_id(self, cf: str, key: str) -> C030Result:
+            del cf, key
+            return C030Result(
+                success=False,
+                anpr_id=None,
+                id_operazione_anpr=None,
+                esito="not_found",
+                error_detail=None,
+                id_operazione_client="cli",
+            )
+
+        async def c004_check_death(self, anpr_id: str, key: str) -> C004Result:  # pragma: no cover - must not run
+            raise AssertionError()
+
+    result = await lookup_anpr_by_codice_fiscale("FOO", client=FakeClient())
+    assert result.success is True
+    assert result.stato_anpr == "not_found_anpr"
+    assert result.calls_made == 1

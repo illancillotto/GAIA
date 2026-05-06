@@ -101,7 +101,7 @@ Legend: 🔴 Non iniziato · 🟡 In corso · 🟢 Completato · ⚫ Bloccato
 | 2.7 | Pagina GIS `/catasto/gis` | 🟢 | `frontend/src/app/catasto/gis/page.tsx` | Layout GIS + pannello analisi; import Excel con riepilogo, colore layer, salvataggio/caricamento selezioni e mappa più alta |
 | 2.8 | Layer distretti e particelle MVT | 🟢 | `frontend/src/components/catasto/gis/MapContainer.tsx` | Distretti zoom 7+, particelle correnti zoom 13+ |
 | 2.9 | Popup particella con link scheda | 🟢 | `frontend/src/components/catasto/gis/MapContainer.tsx` | Fetch dati leggeri da `/catasto/gis/particella/{id}/popup` |
-| 2.10 | Overlay import Excel persistente | 🟢 | `frontend/src/components/catasto/gis/MapContainer.tsx` + `frontend/src/lib/api/catasto.ts` | Layer GeoJSON importato applicato quando la source MapLibre è pronta, `fitBounds` automatico e colore configurabile |
+| 2.10 | Overlay import Excel persistente | 🟢 | `frontend/src/components/catasto/gis/MapContainer.tsx` + `frontend/src/lib/api/catasto.ts` | GeoJSON caricato sulla mappa quando la source è pronta; colore configurabile da pannello; **opacità layer** (`opacity` su overlay, slider in `frontend/src/app/catasto/gis/page.tsx`) moltiplica l’opacità interpolata sullo zoom nei paint fill/circle (`__overlayOpacity` nelle proprietà feature) |
 
 ---
 

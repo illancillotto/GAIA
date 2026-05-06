@@ -183,7 +183,7 @@ export default function AvvisoDetailPage() {
           </Link>
           {avviso.subject_id ? (
             <Link
-              href={`/utenze/subjects/${avviso.subject_id}`}
+              href={`/utenze/${avviso.subject_id}`}
               className="rounded-xl border border-[#d6e5db] bg-white px-4 py-2 text-sm font-medium text-[#1D4E35] transition hover:bg-[#f3f8f5]"
             >
               Apri soggetto GAIA
@@ -268,7 +268,7 @@ export default function AvvisoDetailPage() {
                   label="Soggetto GAIA"
                   value={
                     <Link
-                      href={`/utenze/subjects/${avviso.subject_id}`}
+                      href={`/utenze/${avviso.subject_id}`}
                       className="text-[#1D4E35] hover:underline"
                     >
                       {avviso.display_name ?? avviso.subject_id}

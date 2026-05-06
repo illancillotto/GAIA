@@ -526,6 +526,10 @@ export type AnagraficaPersonInput = {
   email?: string | null;
   telefono?: string | null;
   note?: string | null;
+  anpr_id?: string | null;
+  stato_anpr?: string | null;
+  data_decesso?: string | null;
+  luogo_decesso_comune?: string | null;
 };
 
 export type AnprSubjectStatus = {
@@ -544,6 +548,16 @@ export type AnprSyncResult = {
   esito: string;
   data_decesso: string | null;
   anpr_id: string | null;
+  calls_made: number;
+  message: string;
+};
+
+export type AnprPreviewLookupResponse = {
+  success: boolean;
+  anpr_id: string | null;
+  stato_anpr: string | null;
+  data_decesso: string | null;
+  luogo_decesso_comune: string | null;
   calls_made: number;
   message: string;
 };
@@ -577,6 +591,8 @@ export type AnprJobTriggerResult = {
 export type AnagraficaSubjectCreateInput = {
   subject_type: "person" | "company" | "unknown";
   source_name_raw: string;
+  source_external_id?: string | null;
+  /** In creazione ignorato dall'API: il path NAS è calcolato lato server. */
   nas_folder_path?: string | null;
   nas_folder_letter?: string | null;
   requires_review?: boolean;

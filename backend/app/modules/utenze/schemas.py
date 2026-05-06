@@ -229,6 +229,10 @@ class AnagraficaPersonPayload(BaseModel):
     email: str | None = None
     telefono: str | None = None
     note: str | None = None
+    anpr_id: str | None = None
+    stato_anpr: str | None = None
+    data_decesso: date | None = None
+    luogo_decesso_comune: str | None = None
 
 
 class AnagraficaCompanyPayload(BaseModel):
@@ -300,7 +304,11 @@ class AnagraficaCatastoDocumentResponse(BaseModel):
 class AnagraficaSubjectCreateRequest(BaseModel):
     subject_type: Literal["person", "company", "unknown"]
     source_name_raw: str
-    nas_folder_path: str | None = None
+    source_external_id: str | None = None
+    nas_folder_path: str | None = Field(
+        default=None,
+        description="Ignorato alla creazione: il backend calcola il percorso canonico da archive root + lettera + source_name_raw.",
+    )
     nas_folder_letter: str | None = None
     requires_review: bool = False
     person: AnagraficaPersonPayload | None = None

@@ -18,12 +18,21 @@ from app.modules.utenze.anpr.models import AnprCheckLog
 from app.modules.utenze.anpr.schemas import (
     AnprCheckLogItem,
     AnprJobTriggerResult,
+    AnprPreviewLookupRequest,
+    AnprPreviewLookupResponse,
     AnprSubjectStatus,
     AnprSyncConfigRead,
     AnprSyncConfigUpdate,
     AnprSyncResult,
 )
-from app.modules.utenze.anpr.service import AnprJobSummary, get_config, run_daily_job, sync_single_subject, update_config
+from app.modules.utenze.anpr.service import (
+    AnprJobSummary,
+    get_config,
+    lookup_anpr_by_codice_fiscale,
+    run_daily_job,
+    sync_single_subject,
+    update_config,
+)
 from app.modules.utenze.models import AnagraficaPerson, AnagraficaSubject
 
 router = APIRouter(prefix="/utenze/anpr", tags=["anpr"])
@@ -85,6 +94,23 @@ def _serialize_job_summary(summary: AnprJobSummary | None, *, message: str) -> A
         calls_used=summary.calls_used,
         message=message,
     )
+
+
+@router.post("/preview-lookup", response_model=AnprPreviewLookupResponse)
+async def post_preview_lookup_anpr(
+    payload: AnprPreviewLookupRequest,
+    _: Annotated[ApplicationUser, Depends(require_active_user)],
+    __: Annotated[ApplicationUser, RequireUtenzeModule],
+    ___: Annotated[ApplicationUser, RequireAnprSyncRole],
+) -> AnprPreviewLookupResponse:
+    try:
+        result = await lookup_anpr_by_codice_fiscale(payload.codice_fiscale, client=AnprClient())
+    except PdndConfigurationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
+    return result
 
 
 @router.post("/sync/{subject_id}", response_model=AnprSyncResult)

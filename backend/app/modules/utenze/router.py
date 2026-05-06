@@ -90,6 +90,7 @@ from app.modules.utenze.services.import_service import (
     start_registry_bulk_import_job,
 )
 from app.modules.utenze.services.csv_import_service import import_subjects_from_csv
+from app.modules.utenze.services.nas_path_service import canonical_subject_nas_folder_path
 from app.modules.utenze.services.person_history_service import snapshot_person_if_changed
 from app.modules.utenze.services.xlsx_import_service import run_xlsx_import
 from app.services.nas_connector import NasConnectorError, get_nas_client
@@ -607,12 +608,19 @@ def create_subject(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Esiste gia un utente registrato con codice fiscale {duplicate_identifier}.",
         )
+    letter_norm = (payload.nas_folder_letter or "").strip().upper() or None
+    computed_nas_path = canonical_subject_nas_folder_path(
+        source_name_raw=payload.source_name_raw,
+        nas_folder_letter=letter_norm,
+    )
+    external_ref = (payload.source_external_id or "").strip()
     subject = AnagraficaSubject(
         subject_type=payload.subject_type,
         status=AnagraficaSubjectStatus.ACTIVE.value,
         source_name_raw=payload.source_name_raw,
-        nas_folder_path=payload.nas_folder_path,
-        nas_folder_letter=(payload.nas_folder_letter or "").strip().upper() or None,
+        source_external_id=external_ref or None,
+        nas_folder_path=computed_nas_path,
+        nas_folder_letter=letter_norm,
         requires_review=payload.requires_review,
     )
     db.add(subject)
@@ -1766,23 +1774,27 @@ def _build_subject_detail(db: Session, subject_id: uuid.UUID) -> AnagraficaSubje
     company_response = None
     if person is not None:
         person_response = AnagraficaPersonResponse.model_validate(
-            {
-                "subject_id": str(person.subject_id),
-                "cognome": person.cognome,
-                "nome": person.nome,
-                "codice_fiscale": person.codice_fiscale,
-                "data_nascita": person.data_nascita,
-                "comune_nascita": person.comune_nascita,
-                "indirizzo": person.indirizzo,
-                "comune_residenza": person.comune_residenza,
-                "cap": person.cap,
-                "email": person.email,
-                "telefono": person.telefono,
-                "note": person.note,
-                "created_at": person.created_at,
-                "updated_at": person.updated_at,
-            }
-        )
+                {
+                    "subject_id": str(person.subject_id),
+                    "cognome": person.cognome,
+                    "nome": person.nome,
+                    "codice_fiscale": person.codice_fiscale,
+                    "data_nascita": person.data_nascita,
+                    "comune_nascita": person.comune_nascita,
+                    "indirizzo": person.indirizzo,
+                    "comune_residenza": person.comune_residenza,
+                    "cap": person.cap,
+                    "email": person.email,
+                    "telefono": person.telefono,
+                    "note": person.note,
+                    "anpr_id": person.anpr_id,
+                    "stato_anpr": person.stato_anpr,
+                    "data_decesso": person.data_decesso,
+                    "luogo_decesso_comune": person.luogo_decesso_comune,
+                    "created_at": person.created_at,
+                    "updated_at": person.updated_at,
+                }
+            )
     if company is not None:
         company_response = AnagraficaCompanyResponse.model_validate(
             {

@@ -14,7 +14,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.catasto_phase1 import CatUtenzaIrrigua
 from app.modules.utenze.anpr.client import AnprClient
 from app.modules.utenze.anpr.models import AnprCheckLog, AnprSyncConfig
-from app.modules.utenze.anpr.schemas import AnprSyncConfigUpdate, AnprSyncResult
+from app.modules.utenze.anpr.schemas import (
+    AnprPreviewLookupResponse,
+    AnprSyncConfigUpdate,
+    AnprSyncResult,
+)
 from app.modules.utenze.models import AnagraficaPerson, AnagraficaSubject, AnagraficaSubjectType
 
 logger = logging.getLogger(__name__)
@@ -199,6 +203,72 @@ async def sync_single_subject(
         anpr_id=person.anpr_id,
         calls_made=calls_made,
         message=_build_result_message(c004_result.esito, c004_result.error_detail),
+    )
+
+
+async def lookup_anpr_by_codice_fiscale(
+    codice_fiscale: str,
+    *,
+    client: AnprClient | None = None,
+    auth_manager: Any | None = None,
+) -> AnprPreviewLookupResponse:
+    """Interroga ANPR (C030 + eventuale C004) usando solo codice fiscale, senza soggetto in DB."""
+
+    cf = codice_fiscale.replace(" ", "").upper().strip()
+    if not cf:
+        return AnprPreviewLookupResponse(success=False, calls_made=0, message="Codice fiscale mancante")
+
+    anpr_client = client or AnprClient(auth_manager)
+    preview_key = "preview"
+    calls_made = 0
+
+    c030 = await anpr_client.c030_get_anpr_id(cf, preview_key)
+    calls_made += 1
+
+    if c030.esito == "error":
+        return AnprPreviewLookupResponse(
+            success=False,
+            calls_made=calls_made,
+            message=_build_result_message(c030.esito, c030.error_detail),
+        )
+
+    if c030.esito != "anpr_id_found":
+        stato = _map_person_status(c030.esito)
+        return AnprPreviewLookupResponse(
+            success=True,
+            stato_anpr=stato,
+            calls_made=calls_made,
+            message=_build_result_message(c030.esito, c030.error_detail),
+        )
+
+    anpr_uid = (c030.anpr_id or "").strip() or None
+    if not anpr_uid:
+        return AnprPreviewLookupResponse(
+            success=False,
+            calls_made=calls_made,
+            message=_build_result_message("error", "Identificativo ANPR vuoto dopo C030"),
+        )
+
+    c004 = await anpr_client.c004_check_death(anpr_uid, preview_key)
+    calls_made += 1
+
+    if c004.esito == "error":
+        return AnprPreviewLookupResponse(
+            success=False,
+            anpr_id=anpr_uid,
+            calls_made=calls_made,
+            message=_build_result_message(c004.esito, c004.error_detail),
+        )
+
+    stato = _map_person_status(c004.esito)
+    data_dec = c004.data_decesso if c004.esito == "deceased" else None
+    return AnprPreviewLookupResponse(
+        success=True,
+        anpr_id=anpr_uid,
+        stato_anpr=stato,
+        data_decesso=data_dec,
+        calls_made=calls_made,
+        message=_build_result_message(c004.esito, c004.error_detail),
     )
 
 

@@ -19,9 +19,10 @@ import type {
   AnagraficaSubjectListResponse,
   AnagraficaSubjectUpdateInput,
   AnprJobTriggerResult,
+  AnprPreviewLookupResponse,
+  AnprSubjectStatus,
   AnprSyncConfig,
   AnprSyncConfigUpdateInput,
-  AnprSubjectStatus,
   AnprSyncResult,
   ApplicationUser,
   ApplicationUserCreateInput,
@@ -704,6 +705,14 @@ export async function syncUtenzeAnprSubject(token: string, subjectId: string): P
   return request<AnprSyncResult>(`/utenze/anpr/sync/${subjectId}`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function previewLookupUtenzeAnprByCf(token: string, codiceFiscale: string): Promise<AnprPreviewLookupResponse> {
+  return request<AnprPreviewLookupResponse>("/utenze/anpr/preview-lookup", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ codice_fiscale: codiceFiscale.trim() }),
   });
 }
 
