@@ -258,9 +258,12 @@ export async function catastoListParticelle(
     particella?: string;
     distretto?: string;
     anno?: number;
+    search?: string;
     cf?: string;
     intestatario?: string;
     haAnomalie?: boolean;
+    soloConAnagrafica?: boolean;
+    soloARuolo?: boolean;
     limit?: number;
   },
 ): Promise<CatParticella[]> {
@@ -272,9 +275,12 @@ export async function catastoListParticelle(
   if (filters?.particella) query.set("particella", filters.particella);
   if (filters?.distretto) query.set("distretto", filters.distretto);
   if (filters?.anno != null) query.set("anno", String(filters.anno));
+  if (filters?.search) query.set("search", filters.search);
   if (filters?.cf) query.set("cf", filters.cf);
   if (filters?.intestatario) query.set("intestatario", filters.intestatario);
   if (filters?.haAnomalie != null) query.set("ha_anomalie", filters.haAnomalie ? "true" : "false");
+  if (filters?.soloConAnagrafica != null) query.set("solo_con_anagrafica", filters.soloConAnagrafica ? "true" : "false");
+  if (filters?.soloARuolo != null) query.set("solo_a_ruolo", filters.soloARuolo ? "true" : "false");
   if (filters?.limit != null) query.set("limit", String(filters.limit));
   const suffix = query.toString() ? `?${query.toString()}` : "";
 

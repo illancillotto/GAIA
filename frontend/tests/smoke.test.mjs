@@ -281,6 +281,34 @@ test("catasto anagrafica bulk export normalizes foglio+sezione and exposes ruolo
   assert.match(panel, /rows\.push\(\{ \.\.\.base, \.\.\.emptyInt, note: m\?\.note \?\? "" \}\)/);
 });
 
+test("catasto particelle page exposes solo a ruolo toggle", () => {
+  const particellePage = read("src/app/catasto/particelle/page.tsx");
+  const catastoApi = read("src/lib/api/catasto.ts");
+
+  assert.match(particellePage, /Visualizza solo particelle con anagrafica/);
+  assert.match(particellePage, /Solo particelle con anagrafica/);
+  assert.match(particellePage, /la vedi comunque anche se manca l&apos;anagrafica/);
+  assert.match(particellePage, /Senza anagrafica/);
+  assert.match(particellePage, /Particella trovata, ma senza anagrafica collegata/);
+  assert.match(particellePage, /soloConAnagrafica: true/);
+  assert.match(particellePage, /soloConAnagrafica: nextFilters\.soloConAnagrafica/);
+  assert.match(particellePage, /Visualizza solo particelle a ruolo/);
+  assert.match(particellePage, /Solo particelle a ruolo/);
+  assert.match(particellePage, /anno piu recente, usa automaticamente l&apos;anno precedente/);
+  assert.match(particellePage, /verifica che l'archivio Ruolo sia stato importato e collegato al Catasto/);
+  assert.match(particellePage, /tracking-\[0\.16em\] text-\[#52715d\]/);
+  assert.match(particellePage, /soloARuolo: false/);
+  assert.match(particellePage, /soloARuolo: nextFilters\.soloARuolo/);
+  assert.match(particellePage, /void applyFilters\(nextFilters\)/);
+  assert.match(particellePage, /\/\^\[A-Z0-9\]\{16\}\$\/i\.test\(trimmed\)/);
+  assert.match(particellePage, /\/\^\\d\{11\}\$\/\.test\(trimmed\)/);
+  assert.match(particellePage, /CF\/P\.IVA \(es\. RSSMRA80A01H501T o 00588230953\) o nome/);
+  assert.match(catastoApi, /soloConAnagrafica\?: boolean/);
+  assert.match(catastoApi, /query\.set\("solo_con_anagrafica", filters\.soloConAnagrafica \? "true" : "false"\)/);
+  assert.match(catastoApi, /soloARuolo\?: boolean/);
+  assert.match(catastoApi, /query\.set\("solo_a_ruolo", filters\.soloARuolo \? "true" : "false"\)/);
+});
+
 test("utenze detail page keeps preview modal and delete password flow", () => {
   const detailPage = read("src/app/utenze/[id]/page.tsx");
   const apiClient = read("src/lib/api.ts");

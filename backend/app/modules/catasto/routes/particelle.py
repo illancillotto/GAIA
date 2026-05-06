@@ -4,7 +4,7 @@ import json
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import desc, exists, func, select
+from sqlalchemy import desc, exists, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user
@@ -39,8 +39,26 @@ from app.schemas.catasto_phase1 import (
     CatUtenzaIrriguaResponse,
 )
 from app.modules.utenze.schemas import AnagraficaPersonResponse, AnagraficaPersonSnapshotResponse
+from app.modules.ruolo.models import RuoloParticella
 
 router = APIRouter(prefix="/catasto/particelle", tags=["catasto-particelle"])
+
+
+def _with_ruolo_year_filter(query, anno_tributario: int):
+    return query.where(
+        exists(
+            select(RuoloParticella.id).where(
+                RuoloParticella.catasto_parcel_id == CatParticella.id,
+                RuoloParticella.anno_tributario == anno_tributario,
+            )
+        )
+    )
+
+
+def _with_anagrafica_filter(query):
+    return query.where(
+        exists(select(CatUtenzaIrrigua.id).where(CatUtenzaIrrigua.particella_id == CatParticella.id))
+    )
 
 
 @router.get("/", response_model=list[CatParticellaResponse])
@@ -54,9 +72,18 @@ def list_particelle(
     particella: str | None = Query(None),
     distretto: str | None = Query(None),
     anno: int | None = Query(None),
+    search: str | None = Query(
+        None,
+        description="Ricerca parziale unificata su CF/P.IVA/intestatario (case-insensitive).",
+    ),
     cf: str | None = Query(None),
     intestatario: str | None = Query(None, description="Ricerca parziale sulla denominazione utenza (case-insensitive)."),
     ha_anomalie: bool | None = Query(None),
+    solo_con_anagrafica: bool = Query(
+        False,
+        description="Se true, mostra solo particelle con almeno una anagrafica collegata; per ricerche puntuali foglio/particella la riga resta visibile anche se senza anagrafica.",
+    ),
+    solo_a_ruolo: bool = Query(False, description="Se true, mostra solo particelle collegate ad almeno una riga ruolo."),
     limit: int = Query(100, ge=1, le=500),
 ) -> list[CatParticellaResponse]:
     query = select(CatParticella).where(CatParticella.is_current.is_(True)).order_by(
@@ -74,15 +101,57 @@ def list_particelle(
         query = query.where(CatParticella.particella == particella)
     if distretto:
         query = query.where(CatParticella.num_distretto == distretto)
-
-    if anno is not None or cf or intestatario or ha_anomalie is not None:
+    if anno is not None or search or cf or intestatario or ha_anomalie is not None:
         utenze_filters: list = [CatUtenzaIrrigua.particella_id == CatParticella.id]
         if anno is not None:
             utenze_filters.append(CatUtenzaIrrigua.anno_campagna == anno)
+        if search:
+            search_term = f"%{search.strip()}%"
+            utenze_filters.append(
+                or_(
+                    CatUtenzaIrrigua.codice_fiscale.ilike(search_term),
+                    CatUtenzaIrrigua.denominazione.ilike(search_term),
+                    exists(
+                        select(CatUtenzaIntestatario.id).where(
+                            CatUtenzaIntestatario.utenza_id == CatUtenzaIrrigua.id,
+                            or_(
+                                CatUtenzaIntestatario.codice_fiscale.ilike(search_term),
+                                CatUtenzaIntestatario.partita_iva.ilike(search_term),
+                                CatUtenzaIntestatario.denominazione.ilike(search_term),
+                            ),
+                        )
+                    ),
+                )
+            )
         if cf:
-            utenze_filters.append(CatUtenzaIrrigua.codice_fiscale == cf.strip().upper())
+            cf_norm = cf.strip().upper()
+            utenze_filters.append(
+                or_(
+                    CatUtenzaIrrigua.codice_fiscale == cf_norm,
+                    exists(
+                        select(CatUtenzaIntestatario.id).where(
+                            CatUtenzaIntestatario.utenza_id == CatUtenzaIrrigua.id,
+                            or_(
+                                CatUtenzaIntestatario.codice_fiscale == cf_norm,
+                                CatUtenzaIntestatario.partita_iva == cf_norm,
+                            ),
+                        )
+                    ),
+                )
+            )
         if intestatario:
-            utenze_filters.append(CatUtenzaIrrigua.denominazione.ilike(f"%{intestatario.strip()}%"))
+            intestatario_term = f"%{intestatario.strip()}%"
+            utenze_filters.append(
+                or_(
+                    CatUtenzaIrrigua.denominazione.ilike(intestatario_term),
+                    exists(
+                        select(CatUtenzaIntestatario.id).where(
+                            CatUtenzaIntestatario.utenza_id == CatUtenzaIrrigua.id,
+                            CatUtenzaIntestatario.denominazione.ilike(intestatario_term),
+                        )
+                    ),
+                )
+            )
         if ha_anomalie is True:
             utenze_filters.append(
                 exists(select(CatAnomalia.id).where(CatAnomalia.utenza_id == CatUtenzaIrrigua.id))
@@ -93,11 +162,35 @@ def list_particelle(
             )
         query = query.where(exists(select(CatUtenzaIrrigua.id).where(*utenze_filters)))
 
-    items = list(db.execute(query.limit(limit)).scalars().all())
+    def _load_items(source_query):
+        if not solo_a_ruolo:
+            return list(db.execute(source_query.limit(limit)).scalars().all())
+
+        latest_ruolo_year = db.scalar(select(func.max(RuoloParticella.anno_tributario)))
+        if latest_ruolo_year is None:
+            return []
+
+        items = list(
+            db.execute(_with_ruolo_year_filter(source_query, int(latest_ruolo_year)).limit(limit)).scalars().all()
+        )
+        if not items:
+            fallback_year = int(latest_ruolo_year) - 1
+            items = list(db.execute(_with_ruolo_year_filter(source_query, fallback_year).limit(limit)).scalars().all())
+        return items
+
+    direct_particella_lookup = bool((foglio or "").strip() and (particella or "").strip())
+    effective_query = _with_anagrafica_filter(query) if solo_con_anagrafica else query
+    items = _load_items(effective_query)
+    if not items and solo_con_anagrafica and direct_particella_lookup:
+        items = _load_items(query)
+
     if not items:
         return []
 
     particella_ids = [p.id for p in items]
+    anagrafica_ids = set(
+        db.execute(select(CatUtenzaIrrigua.particella_id).where(CatUtenzaIrrigua.particella_id.in_(particella_ids))).scalars().all()
+    )
     rn_col = func.row_number().over(
         partition_by=CatUtenzaIrrigua.particella_id,
         order_by=desc(CatUtenzaIrrigua.anno_campagna),
@@ -118,6 +211,7 @@ def list_particelle(
     responses: list[CatParticellaResponse] = []
     for p in items:
         r = CatParticellaResponse.model_validate(p)
+        r.ha_anagrafica = p.id in anagrafica_ids
         u = utenza_map.get(p.id)
         if u:
             r.utenza_cf = u.codice_fiscale

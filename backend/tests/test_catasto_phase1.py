@@ -36,6 +36,7 @@ from app.models.catasto_phase1 import (
 )
 from app.modules.utenze.models import AnagraficaSubject
 from app.modules.utenze.models import AnagraficaPerson, AnagraficaPersonSnapshot
+from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob, RuoloParticella, RuoloPartita
 from app.modules.catasto.routes import import_routes as import_routes_module
 from app.modules.catasto.services.import_capacitas import CapacitasImportDuplicateError, import_capacitas_excel
 from app.modules.catasto.services.comuni_reference import load_comuni_reference
@@ -967,6 +968,271 @@ def test_particelle_endpoint_returns_empty_when_combined_filters_conflict() -> N
 
     assert response.status_code == 200
     assert response.json() == []
+
+
+def test_particelle_endpoint_supports_numeric_cf_search() -> None:
+    db = TestingSessionLocal()
+    try:
+        seed_anomalie_workflow_data(db)
+    finally:
+        db.close()
+
+    response = client.get(
+        "/catasto/particelle/?cf=00588230953",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 1
+    assert payload[0]["cod_comune_capacitas"] == 212
+    assert payload[0]["foglio"] == "9"
+    assert payload[0]["particella"] == "401"
+
+
+def test_particelle_endpoint_supports_partial_cf_search() -> None:
+    db = TestingSessionLocal()
+    try:
+        seed_anomalie_workflow_data(db)
+    finally:
+        db.close()
+
+    response = client.get(
+        "/catasto/particelle/?search=RSS",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 1
+    assert payload[0]["cod_comune_capacitas"] == 165
+    assert payload[0]["foglio"] == "5"
+    assert payload[0]["particella"] == "120"
+
+
+def test_particelle_endpoint_supports_intestatario_search_on_annual_owners() -> None:
+    db = TestingSessionLocal()
+    try:
+        seed_anomalie_workflow_data(db)
+        utenza = db.query(CatUtenzaIrrigua).filter(CatUtenzaIrrigua.cco == "UT-ANOM-10-2025").one()
+        now = datetime.now(timezone.utc)
+        db.add(
+            CatUtenzaIntestatario(
+                utenza_id=utenza.id,
+                idxana="IDX-ANA-PART-SEARCH",
+                idxesa="IDX-ESA-PART-SEARCH",
+                history_id="HIST-PART-SEARCH",
+                anno_riferimento=2025,
+                data_agg=now,
+                codice_fiscale="VRDLGI80A01H501V",
+                denominazione="Verdi Luigi",
+                titoli="Proprieta` 1/1",
+                deceduto=False,
+                collected_at=now,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get(
+        "/catasto/particelle/?intestatario=Verdi%20Luigi",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 1
+    assert payload[0]["cod_comune_capacitas"] == 165
+    assert payload[0]["foglio"] == "5"
+    assert payload[0]["particella"] == "120"
+
+
+def test_particelle_endpoint_supports_solo_a_ruolo_filter() -> None:
+    db = TestingSessionLocal()
+    try:
+        particella = db.query(CatParticella).filter(CatParticella.cod_comune_capacitas == 165).one()
+        ruolo_job = RuoloImportJob(anno_tributario=2025, status="completed")
+        db.add(ruolo_job)
+        db.flush()
+        avviso = RuoloAvviso(
+            import_job_id=ruolo_job.id,
+            codice_cnc="CNC-SEED-001",
+            anno_tributario=2025,
+        )
+        db.add(avviso)
+        db.flush()
+        partita = RuoloPartita(
+            avviso_id=avviso.id,
+            codice_partita="P-SEED-001",
+            comune_nome="Arborea",
+        )
+        db.add(partita)
+        db.flush()
+        db.add(
+            RuoloParticella(
+                partita_id=partita.id,
+                anno_tributario=2025,
+                foglio=particella.foglio,
+                particella=particella.particella,
+                subalterno=particella.subalterno,
+                catasto_parcel_id=particella.id,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    filtered_response = client.get(
+        "/catasto/particelle/?solo_a_ruolo=true",
+        headers=auth_headers(),
+    )
+    assert filtered_response.status_code == 200
+    filtered_payload = filtered_response.json()
+    assert len(filtered_payload) == 1
+    assert filtered_payload[0]["cod_comune_capacitas"] == 165
+    assert filtered_payload[0]["foglio"] == "5"
+    assert filtered_payload[0]["particella"] == "120"
+
+    non_matching_response = client.get(
+        "/catasto/particelle/?solo_a_ruolo=true&comune=212",
+        headers=auth_headers(),
+    )
+    assert non_matching_response.status_code == 200
+    assert non_matching_response.json() == []
+
+
+def test_particelle_endpoint_supports_solo_con_anagrafica_filter() -> None:
+    db = TestingSessionLocal()
+    try:
+        particella_con_anagrafica = db.query(CatParticella).filter(CatParticella.cod_comune_capacitas == 165).one()
+        db.add(
+            CatParticella(
+                comune_id=particella_con_anagrafica.comune_id,
+                cod_comune_capacitas=165,
+                codice_catastale="A357",
+                nome_comune="Arborea",
+                foglio="6",
+                particella="601",
+                is_current=True,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get(
+        "/catasto/particelle/?solo_con_anagrafica=true",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 1
+    assert payload[0]["foglio"] == "5"
+    assert payload[0]["particella"] == "120"
+    assert payload[0]["ha_anagrafica"] is True
+
+
+def test_particelle_endpoint_direct_lookup_keeps_particella_without_anagrafica_visible() -> None:
+    db = TestingSessionLocal()
+    try:
+        particella_con_anagrafica = db.query(CatParticella).filter(CatParticella.cod_comune_capacitas == 165).one()
+        db.add(
+            CatParticella(
+                comune_id=particella_con_anagrafica.comune_id,
+                cod_comune_capacitas=165,
+                codice_catastale="A357",
+                nome_comune="Arborea",
+                foglio="6",
+                particella="602",
+                is_current=True,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get(
+        "/catasto/particelle/?solo_con_anagrafica=true&comune=165&foglio=6&particella=602",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 1
+    assert payload[0]["foglio"] == "6"
+    assert payload[0]["particella"] == "602"
+    assert payload[0]["ha_anagrafica"] is False
+    assert payload[0]["utenza_cf"] is None
+    assert payload[0]["utenza_denominazione"] is None
+
+
+def test_particelle_endpoint_solo_a_ruolo_falls_back_to_previous_year_when_filtered_current_year_is_missing() -> None:
+    db = TestingSessionLocal()
+    try:
+        particella = db.query(CatParticella).filter(CatParticella.cod_comune_capacitas == 165).one()
+        altra_particella = CatParticella(
+            comune_id=particella.comune_id,
+            cod_comune_capacitas=212,
+            codice_catastale="B314",
+            nome_comune="Cabras",
+            foglio="9",
+            particella="900",
+            is_current=True,
+        )
+        db.add(altra_particella)
+        db.flush()
+
+        ruolo_job_2024 = RuoloImportJob(anno_tributario=2024, status="completed")
+        ruolo_job_2025 = RuoloImportJob(anno_tributario=2025, status="completed")
+        db.add_all([ruolo_job_2024, ruolo_job_2025])
+        db.flush()
+
+        avviso_2024 = RuoloAvviso(import_job_id=ruolo_job_2024.id, codice_cnc="CNC-SEED-2024", anno_tributario=2024)
+        avviso_2025 = RuoloAvviso(import_job_id=ruolo_job_2025.id, codice_cnc="CNC-SEED-2025", anno_tributario=2025)
+        db.add_all([avviso_2024, avviso_2025])
+        db.flush()
+
+        partita_2024 = RuoloPartita(avviso_id=avviso_2024.id, codice_partita="P-SEED-2024", comune_nome="Arborea")
+        partita_2025 = RuoloPartita(avviso_id=avviso_2025.id, codice_partita="P-SEED-2025", comune_nome="Cabras")
+        db.add_all([partita_2024, partita_2025])
+        db.flush()
+
+        db.add_all(
+            [
+                RuoloParticella(
+                    partita_id=partita_2024.id,
+                    anno_tributario=2024,
+                    foglio=particella.foglio,
+                    particella=particella.particella,
+                    subalterno=particella.subalterno,
+                    catasto_parcel_id=particella.id,
+                ),
+                RuoloParticella(
+                    partita_id=partita_2025.id,
+                    anno_tributario=2025,
+                    foglio=altra_particella.foglio,
+                    particella=altra_particella.particella,
+                    catasto_parcel_id=altra_particella.id,
+                ),
+            ]
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get(
+        "/catasto/particelle/?solo_a_ruolo=true&comune=165",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 1
+    assert payload[0]["cod_comune_capacitas"] == 165
+    assert payload[0]["foglio"] == "5"
+    assert payload[0]["particella"] == "120"
 
 
 def test_bulk_search_anagrafica_returns_mixed_row_outcomes() -> None:

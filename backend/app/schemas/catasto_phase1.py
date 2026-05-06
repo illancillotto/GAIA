@@ -105,6 +105,7 @@ class CatParticellaResponse(BaseModel):
     suppressed: bool
     created_at: datetime
     updated_at: datetime
+    ha_anagrafica: bool = False
     utenza_cf: str | None = None
     utenza_denominazione: str | None = None
 

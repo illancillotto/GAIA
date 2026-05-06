@@ -50,13 +50,6 @@ function formatHaFromMq(value: string | number): string {
   return new Intl.NumberFormat("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(ha);
 }
 
-function parseCfIntestarioFilter(value: string): { cf?: string; intestatario?: string } {
-  const trimmed = value.trim();
-  if (!trimmed) return {};
-  if (/^[A-Z0-9]{16}$/i.test(trimmed)) return { cf: trimmed.toUpperCase() };
-  return { intestatario: trimmed };
-}
-
 function parseComuneFilter(value: string): { comune?: number; codiceCatastale?: string; nomeComune?: string } {
   const trimmed = value.trim();
   if (!trimmed) return {};
@@ -65,14 +58,32 @@ function parseComuneFilter(value: string): { comune?: number; codiceCatastale?: 
   return { nomeComune: trimmed };
 }
 
+function parseCfIntestatarioFilter(value: string): { cf?: string; search?: string } {
+  const trimmed = value.trim();
+  if (!trimmed) return {};
+  if (/^[A-Z0-9]{16}$/i.test(trimmed)) return { cf: trimmed.toUpperCase() };
+  if (/^\d{11}$/.test(trimmed)) return { cf: trimmed };
+  return { search: trimmed };
+}
+
 export default function CatastoParticellePage() {
   const [selectedParticella, setSelectedParticella] = useState<CatParticella | null>(null);
-  const [filters, setFilters] = useState<{ comune: string; foglio: string; particella: string; distretto: string; cfIntestario: string }>({
+  const [filters, setFilters] = useState<{
+    comune: string;
+    foglio: string;
+    particella: string;
+    distretto: string;
+    cfIntestario: string;
+    soloConAnagrafica: boolean;
+    soloARuolo: boolean;
+  }>({
     comune: "",
     foglio: "",
     particella: "",
     distretto: "",
     cfIntestario: "",
+    soloConAnagrafica: true,
+    soloARuolo: false,
   });
   const [items, setItems] = useState<CatParticella[]>([]);
   const [busy, setBusy] = useState(false);
@@ -83,21 +94,25 @@ export default function CatastoParticellePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function applyFilters(): Promise<void> {
+  async function applyFilters(nextFilters = filters): Promise<void> {
     const token = getStoredAccessToken();
     if (!token) return;
 
-    const { comune, codiceCatastale, nomeComune } = parseComuneFilter(filters.comune);
+    const { comune, codiceCatastale, nomeComune } = parseComuneFilter(nextFilters.comune);
+    const { cf, search } = parseCfIntestatarioFilter(nextFilters.cfIntestario);
     setBusy(true);
     try {
       const data = await catastoListParticelle(token, {
         comune,
         codiceCatastale,
         nomeComune,
-        foglio: filters.foglio || undefined,
-        particella: filters.particella || undefined,
-        distretto: filters.distretto || undefined,
-        ...parseCfIntestarioFilter(filters.cfIntestario),
+        foglio: nextFilters.foglio || undefined,
+        particella: nextFilters.particella || undefined,
+        distretto: nextFilters.distretto || undefined,
+        cf,
+        search,
+        soloConAnagrafica: nextFilters.soloConAnagrafica,
+        soloARuolo: nextFilters.soloARuolo,
         limit: 200,
       });
       setItems(data);
@@ -158,19 +173,36 @@ export default function CatastoParticellePage() {
         header: "CF / P.IVA",
         id: "utenzaCf",
         cell: ({ row }) => (
-          <span className="text-sm text-gray-700">{row.original.utenza_cf ?? "—"}</span>
+          <span className={`text-sm ${row.original.ha_anagrafica ? "text-gray-700" : "font-medium text-[#9f1239]"}`}>
+            {row.original.utenza_cf ?? (row.original.ha_anagrafica ? "—" : "Senza anagrafica")}
+          </span>
         ),
       },
       {
         header: "Denominazione",
         id: "utenzaDenominazione",
         cell: ({ row }) => (
-          <span className="text-sm text-gray-700">{row.original.utenza_denominazione ?? "—"}</span>
+          row.original.ha_anagrafica ? (
+            <span className="text-sm text-gray-700">{row.original.utenza_denominazione ?? "—"}</span>
+          ) : (
+            <div className="space-y-1">
+              <span className="inline-flex rounded-full bg-[#fff1f2] px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-[#9f1239] ring-1 ring-[#fecdd3]">
+                Senza anagrafica
+              </span>
+              <p className="text-xs text-[#7f1d1d]">Particella trovata, ma senza anagrafica collegata.</p>
+            </div>
+          )
         ),
       },
     ],
     [],
   );
+
+  const emptyDescription = filters.soloARuolo
+    ? "Non ci sono particelle collegate al ruolo per i filtri correnti. Se il risultato resta vuoto anche senza altri filtri, verifica che l'archivio Ruolo sia stato importato e collegato al Catasto."
+    : filters.soloConAnagrafica
+      ? "Non ci sono particelle con anagrafica per i filtri correnti. Disattiva il filtro se vuoi vedere anche le particelle senza anagrafica collegata."
+      : "Non ci sono particelle che corrispondono ai filtri correnti.";
 
   return (
     <CatastoPage
@@ -202,50 +234,112 @@ export default function CatastoParticellePage() {
             }}
           >
             <TableFilters>
-              <label className="text-sm font-medium text-gray-700">
-                Comune
+              <label className="rounded-[22px] border border-[#d7e4da] bg-[radial-gradient(circle_at_top_left,_rgba(29,78,53,0.06),_transparent_40%),linear-gradient(135deg,#f8fbf9,#ffffff)] px-4 py-3 text-sm font-medium text-gray-700 shadow-sm transition hover:border-[#b7cbbd] hover:shadow">
+                <span className="block text-[11px] font-semibold uppercase tracking-[0.16em] text-[#52715d]">Comune</span>
                 <input
-                  className="form-control mt-1"
+                  className="form-control mt-2 border-white/0 bg-white/80"
                   placeholder="Nome (es. Palmas Arborea), cod. Capacitas (es. 165) o Belfiore (es. G286)"
                   value={filters.comune}
                   onChange={(e) => setFilters((c) => ({ ...c, comune: e.target.value }))}
                 />
               </label>
-              <label className="text-sm font-medium text-gray-700">
-                Foglio
+              <label className="rounded-[22px] border border-[#d7e4da] bg-[radial-gradient(circle_at_top_left,_rgba(29,78,53,0.06),_transparent_40%),linear-gradient(135deg,#f8fbf9,#ffffff)] px-4 py-3 text-sm font-medium text-gray-700 shadow-sm transition hover:border-[#b7cbbd] hover:shadow">
+                <span className="block text-[11px] font-semibold uppercase tracking-[0.16em] text-[#52715d]">Foglio</span>
                 <input
-                  className="form-control mt-1"
+                  className="form-control mt-2 border-white/0 bg-white/80"
                   placeholder="Es. 5"
                   value={filters.foglio}
                   onChange={(e) => setFilters((c) => ({ ...c, foglio: e.target.value }))}
                 />
               </label>
-              <label className="text-sm font-medium text-gray-700">
-                Particella
+              <label className="rounded-[22px] border border-[#d7e4da] bg-[radial-gradient(circle_at_top_left,_rgba(29,78,53,0.06),_transparent_40%),linear-gradient(135deg,#f8fbf9,#ffffff)] px-4 py-3 text-sm font-medium text-gray-700 shadow-sm transition hover:border-[#b7cbbd] hover:shadow">
+                <span className="block text-[11px] font-semibold uppercase tracking-[0.16em] text-[#52715d]">Particella</span>
                 <input
-                  className="form-control mt-1"
+                  className="form-control mt-2 border-white/0 bg-white/80"
                   placeholder="Es. 120"
                   value={filters.particella}
                   onChange={(e) => setFilters((c) => ({ ...c, particella: e.target.value }))}
                 />
               </label>
-              <label className="text-sm font-medium text-gray-700">
-                Distretto
+              <label className="rounded-[22px] border border-[#d7e4da] bg-[radial-gradient(circle_at_top_left,_rgba(29,78,53,0.06),_transparent_40%),linear-gradient(135deg,#f8fbf9,#ffffff)] px-4 py-3 text-sm font-medium text-gray-700 shadow-sm transition hover:border-[#b7cbbd] hover:shadow">
+                <span className="block text-[11px] font-semibold uppercase tracking-[0.16em] text-[#52715d]">Distretto</span>
                 <input
-                  className="form-control mt-1"
+                  className="form-control mt-2 border-white/0 bg-white/80"
                   placeholder="Es. 10"
                   value={filters.distretto}
                   onChange={(e) => setFilters((c) => ({ ...c, distretto: e.target.value }))}
                 />
               </label>
-              <label className="text-sm font-medium text-gray-700">
-                Codice fiscale / Intestatario
+              <label className="rounded-[22px] border border-[#d7e4da] bg-[radial-gradient(circle_at_top_left,_rgba(29,78,53,0.06),_transparent_40%),linear-gradient(135deg,#f8fbf9,#ffffff)] px-4 py-3 text-sm font-medium text-gray-700 shadow-sm transition hover:border-[#b7cbbd] hover:shadow">
+                <span className="block text-[11px] font-semibold uppercase tracking-[0.16em] text-[#52715d]">Codice fiscale / Intestatario</span>
                 <input
-                  className="form-control mt-1"
-                  placeholder="CF (es. RSSMRA80A01H501T) o nome (es. Rossi)"
+                  className="form-control mt-2 border-white/0 bg-white/80"
+                  placeholder="CF/P.IVA (es. RSSMRA80A01H501T o 00588230953) o nome (es. Rossi)"
                   value={filters.cfIntestario}
                   onChange={(e) => setFilters((c) => ({ ...c, cfIntestario: e.target.value }))}
                 />
+              </label>
+              <label className="group flex items-center justify-between gap-4 rounded-[22px] border border-[#d7e4da] bg-[radial-gradient(circle_at_top_left,_rgba(29,78,53,0.08),_transparent_46%),linear-gradient(135deg,#f7fbf8,#ffffff)] px-4 py-3 text-sm text-gray-700 shadow-sm transition hover:border-[#b7cbbd] hover:shadow">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-gray-900">Solo particelle con anagrafica</p>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${filters.soloConAnagrafica ? "bg-[#1D4E35] text-white" : "bg-white text-gray-500 ring-1 ring-gray-200"}`}>
+                      {filters.soloConAnagrafica ? "Attivo" : "Off"}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-xs text-gray-500">All&apos;apertura mostra solo le particelle che hanno anagrafica. Se cerchi una particella specifica, la vedi comunque anche se manca l&apos;anagrafica.</p>
+                </div>
+                <input
+                  aria-label="Visualizza solo particelle con anagrafica"
+                  checked={filters.soloConAnagrafica}
+                  className="peer sr-only"
+                  type="checkbox"
+                  onChange={(e) => {
+                    const nextFilters = { ...filters, soloConAnagrafica: e.target.checked };
+                    setFilters(nextFilters);
+                    void applyFilters(nextFilters);
+                  }}
+                />
+                <span className="relative inline-flex h-8 w-14 shrink-0 items-center rounded-full bg-gray-300 transition peer-checked:bg-[#1D4E35] peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#1D4E35]/25 group-hover:bg-gray-400/80 peer-checked:group-hover:bg-[#255c41]">
+                  <span
+                    className={`absolute left-1 flex h-6 w-6 items-center justify-center rounded-full bg-white shadow-sm transition-transform ${
+                      filters.soloConAnagrafica ? "translate-x-6" : "translate-x-0"
+                    }`}
+                  >
+                    <span className={`h-2 w-2 rounded-full ${filters.soloConAnagrafica ? "bg-[#1D4E35]" : "bg-gray-300"}`} />
+                  </span>
+                </span>
+              </label>
+              <label className="group flex items-center justify-between gap-4 rounded-[22px] border border-[#d7e4da] bg-[radial-gradient(circle_at_top_left,_rgba(29,78,53,0.08),_transparent_46%),linear-gradient(135deg,#f7fbf8,#ffffff)] px-4 py-3 text-sm text-gray-700 shadow-sm transition hover:border-[#b7cbbd] hover:shadow">
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium text-gray-900">Solo particelle a ruolo</p>
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] ${filters.soloARuolo ? "bg-[#1D4E35] text-white" : "bg-white text-gray-500 ring-1 ring-gray-200"}`}>
+                      {filters.soloARuolo ? "Attivo" : "Off"}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-xs text-gray-500">Mostra solo le particelle collegate al ruolo consortile. Se per i filtri attivi non esistono righe nell&apos;anno piu recente, usa automaticamente l&apos;anno precedente.</p>
+                </div>
+                <input
+                  aria-label="Visualizza solo particelle a ruolo"
+                  checked={filters.soloARuolo}
+                  className="peer sr-only"
+                  type="checkbox"
+                  onChange={(e) => {
+                    const nextFilters = { ...filters, soloARuolo: e.target.checked };
+                    setFilters(nextFilters);
+                    void applyFilters(nextFilters);
+                  }}
+                />
+                <span className="relative inline-flex h-8 w-14 shrink-0 items-center rounded-full bg-gray-300 transition peer-checked:bg-[#1D4E35] peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-[#1D4E35]/25 group-hover:bg-gray-400/80 peer-checked:group-hover:bg-[#255c41]">
+                  <span
+                    className={`absolute left-1 flex h-6 w-6 items-center justify-center rounded-full bg-white shadow-sm transition-transform ${
+                      filters.soloARuolo ? "translate-x-6" : "translate-x-0"
+                    }`}
+                  >
+                    <span className={`h-2 w-2 rounded-full ${filters.soloARuolo ? "bg-[#1D4E35]" : "bg-gray-300"}`} />
+                  </span>
+                </span>
               </label>
             </TableFilters>
 
@@ -258,8 +352,17 @@ export default function CatastoParticellePage() {
               type="button"
               disabled={busy}
               onClick={() => {
-                setFilters({ comune: "", foglio: "", particella: "", distretto: "", cfIntestario: "" });
-                void applyFilters();
+                const resetFilters = {
+                  comune: "",
+                  foglio: "",
+                  particella: "",
+                  distretto: "",
+                  cfIntestario: "",
+                  soloConAnagrafica: true,
+                  soloARuolo: false,
+                };
+                setFilters(resetFilters);
+                void applyFilters(resetFilters);
               }}
             >
               Reset
@@ -273,7 +376,7 @@ export default function CatastoParticellePage() {
           {busy && items.length === 0 ? (
             <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 text-sm text-gray-500">Caricamento…</div>
           ) : items.length === 0 ? (
-            <EmptyState icon={SearchIcon} title="Nessuna particella" description="Non ci sono particelle che corrispondono ai filtri correnti." />
+            <EmptyState icon={SearchIcon} title="Nessuna particella" description={emptyDescription} />
           ) : (
             <DataTable data={items} columns={columns} initialPageSize={12} onRowClick={(row) => setSelectedParticella(row)} />
           )}
