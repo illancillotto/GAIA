@@ -12,7 +12,7 @@ import {
   ModuleWorkspaceNoticeCard,
 } from "@/components/layout/module-workspace-hero";
 import { EmptyState } from "@/components/ui/empty-state";
-import { FolderIcon, RefreshIcon, SearchIcon, UserIcon } from "@/components/ui/icons";
+import { DocumentIcon, FolderIcon, RefreshIcon, SearchIcon, UserIcon } from "@/components/ui/icons";
 import { getUtenzeDocumentSummary, getUtenzeImportJobs, getUtenzeStats, getUtenzeSubjects, searchUtenzeSubjects } from "@/lib/api";
 import { formatDateTime } from "@/lib/presentation";
 import type { UtenzeDocumentSummary, UtenzeImportJob, UtenzeStats, UtenzeSubjectListItem } from "@/types/api";
@@ -288,7 +288,7 @@ function DashboardContent({ token }: { token: string }) {
               <ModuleWorkspaceNoticeCard title="Caricamento non riuscito" description={loadError} tone="danger" />
             ) : (
               <ModuleWorkspaceNoticeCard
-                title="Riepilogo documenti"
+                title="Panoramica documenti"
                 description="Apri il pannello dedicato per classificati, non classificati e ultimi file senza tipo."
               />
             )}
@@ -306,15 +306,12 @@ function DashboardContent({ token }: { token: string }) {
                   await loadDashboardData();
                 }}
               />
-              <Link className="btn-secondary" href="/utenze/import#utenze-soggetti">
-                <SearchIcon className="h-4 w-4" />
-                Apri soggetti
-              </Link>
               <Link className="btn-primary" href="/utenze/import">
                 <RefreshIcon className="h-4 w-4" />
                 Crea snapshot
               </Link>
-              <button className="btn-secondary" type="button" onClick={() => void handleOpenDocumentSummary()}>
+              <button className="btn-primary" type="button" onClick={() => void handleOpenDocumentSummary()}>
+                <DocumentIcon className="h-4 w-4" />
                 Riepilogo documenti
               </button>
             </div>
