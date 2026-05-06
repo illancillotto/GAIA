@@ -67,6 +67,11 @@ def _looks_like_int(value: str) -> bool:
         return False
 
 
+def _looks_like_codice_catastale(value: str) -> bool:
+    normalized = value.strip().upper()
+    return len(normalized) == 4 and normalized[0].isalpha() and normalized[1:].isdigit()
+
+
 def _parse_uuid(value: str, field_name: str = "id") -> uuid.UUID:
     try:
         return uuid.UUID(str(value))
@@ -606,6 +611,12 @@ def resolve_particelle_refs(db: Session, body: GisResolveRefsRequest) -> GisReso
 
         if _looks_like_int(comune_norm):
             query = query.filter(CatParticella.cod_comune_capacitas == int(comune_norm))
+        elif _looks_like_codice_catastale(comune_norm):
+            codice_catastale_norm = comune_norm.strip().upper()
+            query = query.filter(
+                func.upper(func.coalesce(CatParticella.codice_catastale, CatComune.codice_catastale, ""))
+                == codice_catastale_norm
+            )
         else:
             query = query.filter(
                 func.lower(func.coalesce(CatParticella.nome_comune, CatComune.nome_comune, "")) == comune_norm.lower()

@@ -76,7 +76,8 @@ def get_particella_popup(
     summary="Risolvi particelle da riferimenti catastali",
     description=(
         "Riceve una lista di riferimenti (comune/sezione/foglio/particella/sub) e prova a risolvere "
-        "le particelle correnti. Opzionalmente restituisce un GeoJSON FeatureCollection per visualizzazione su mappa."
+        "le particelle correnti. Il campo comune accetta nome comune, cod_comune_capacitas o codice catastale/Belfiore. "
+        "Opzionalmente restituisce un GeoJSON FeatureCollection per visualizzazione su mappa."
     ),
 )
 def resolve_particelle_refs(

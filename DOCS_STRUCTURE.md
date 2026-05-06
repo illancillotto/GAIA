@@ -196,6 +196,9 @@ GAIA/
 │       └── worker/
 ├── nginx/
 ├── progress/
+├── secrets/
+│   └── pdnd/
+│       └── .gitkeep
 ├── scripts/
 ├── AGENTS.md
 ├── ARCHITECTURE.md
@@ -216,3 +219,4 @@ GAIA/
 - Il dominio anagrafico usa `domain-docs/utenze/` come posizione canonica della documentazione.
 - Nel runtime possono coesistere superfici `anagrafica` e `utenze` per compatibilita applicativa.
 - La directory `progress/` contiene file di avanzamento tecnico puntuali per tranche di lavoro e non sostituisce PRD, README o documentazione di dominio.
+- La directory `secrets/pdnd/` e destinata solo a chiavi locali non versionate usate dal backend in sviluppo, ad esempio `private_key.pem`.

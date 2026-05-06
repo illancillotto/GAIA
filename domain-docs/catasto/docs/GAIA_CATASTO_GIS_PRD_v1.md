@@ -168,9 +168,26 @@ Click su particella nella mappa → popup con:
 - Superficie (mq)
 - Distretto
 - N. anomalie aperte
+
+### RF-07 — Import Excel riferimenti catastali
+
+L'upload Excel nella vista GIS accetta un file con colonne `comune`, `sezione`, `foglio`, `particella`, `sub`.
+
+Regole di risoluzione del campo `comune`:
+- nome comune testuale, confrontato case-insensitive
+- `cod_comune_capacitas` numerico
+- `codice catastale`/Belfiore del comune (es. `G286`)
+
+Le righe vengono risolte sulle particelle correnti (`is_current = TRUE`); i match univoci possono essere restituiti anche come GeoJSON per la visualizzazione immediata in mappa.
+
+Comportamento layer:
+- ogni import Excel genera un layer logico distinto nel workspace GIS
+- il client puo mantenere piu layer contemporaneamente in mappa, con colore e visibilita indipendenti
+- ogni layer importato puo essere salvato in modo persistente come selezione GIS personale
+- i layer salvati possono essere ricaricati successivamente anche in combinazione con altri layer salvati o appena importati
 - Link → `/catasto/particelle/{id}` (scheda completa esistente)
 
-### RF-07 — Export selezione
+### RF-08 — Export selezione
 
 Dalla sidebar risultati, pulsanti export:
 - **GeoJSON**: geometrie + attributi delle particelle selezionate
@@ -178,7 +195,7 @@ Dalla sidebar risultati, pulsanti export:
 
 Endpoint: `GET /catasto/gis/export?ids=...&format=geojson|csv`
 
-### RF-08 — Integrazione con modulo Catasto esistente
+### RF-09 — Integrazione con modulo Catasto esistente
 
 - Click su distretto nella mappa → apre pannello KPI distretto (riusa componente esistente)
 - Popup particella → link alla scheda `/catasto/particelle/{id}` (già implementata in Fase 1)

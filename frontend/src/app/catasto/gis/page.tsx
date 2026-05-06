@@ -1,7 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 
 import AnalysisPanel from "@/components/catasto/gis/AnalysisPanel";
@@ -19,7 +19,14 @@ import {
 } from "@/lib/api/catasto";
 import { getStoredAccessToken } from "@/lib/auth";
 import { useGisSelection } from "@/hooks/useGisSelection";
-import type { GisFilters, GisParticellaRef, GisSavedSelectionItemInput, GisSavedSelectionSummary } from "@/types/gis";
+import type {
+  GisFilters,
+  GisMapOverlayLayer,
+  GisParticellaRef,
+  GisSavedSelectionDetail,
+  GisSavedSelectionItemInput,
+  GisSavedSelectionSummary,
+} from "@/types/gis";
 
 const MapContainer = dynamic(() => import("@/components/catasto/gis/MapContainer"), {
   ssr: false,
@@ -39,6 +46,20 @@ interface ImportStats {
   withGeometry: number;
 }
 
+interface OverlayLayerState extends GisMapOverlayLayer {
+  importStats: ImportStats | null;
+  importedItems: GisSavedSelectionItemInput[];
+  isPersisted: boolean;
+}
+
+const LAYER_COLORS = ["#10B981", "#F59E0B", "#3B82F6", "#EF4444", "#8B5CF6", "#14B8A6", "#F97316"];
+
+function toNullableCellString(value: unknown): string | null {
+  if (value == null) return null;
+  const normalized = String(value).trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
 function triggerDownload(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const anchor = window.document.createElement("a");
@@ -46,6 +67,29 @@ function triggerDownload(blob: Blob, filename: string): void {
   anchor.download = filename;
   anchor.click();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function buildImportStatsFromDetail(detail: GisSavedSelectionDetail): ImportStats {
+  const summary = detail.import_summary as Partial<ImportStats> | null | undefined;
+  if (!summary) {
+    return {
+      processed: detail.n_particelle,
+      found: detail.n_particelle,
+      notFound: 0,
+      multiple: 0,
+      invalid: 0,
+      withGeometry: detail.n_with_geometry,
+    };
+  }
+
+  return {
+    processed: Number(summary.processed ?? detail.n_particelle),
+    found: Number(summary.found ?? detail.n_particelle),
+    notFound: Number(summary.notFound ?? 0),
+    multiple: Number(summary.multiple ?? 0),
+    invalid: Number(summary.invalid ?? 0),
+    withGeometry: detail.n_with_geometry,
+  };
 }
 
 export default function CatastoGisPage() {
@@ -64,16 +108,19 @@ export default function CatastoGisPage() {
   const [distrettoLayer, setDistrettoLayer] = useState<string>("");
   const [xlsxFile, setXlsxFile] = useState<File | null>(null);
   const [xlsxBusy, setXlsxBusy] = useState(false);
-  const [uploadedGeojson, setUploadedGeojson] = useState<GeoJSON.FeatureCollection | null>(null);
-  const [uploadedColor, setUploadedColor] = useState("#10B981");
-  const [importStats, setImportStats] = useState<ImportStats | null>(null);
-  const [importedItems, setImportedItems] = useState<GisSavedSelectionItemInput[]>([]);
+  const [overlayLayers, setOverlayLayers] = useState<OverlayLayerState[]>([]);
   const [savedSelections, setSavedSelections] = useState<GisSavedSelectionSummary[]>([]);
   const [savedBusy, setSavedBusy] = useState(false);
-  const [saveName, setSaveName] = useState("");
-  const [activeSavedSelectionId, setActiveSavedSelectionId] = useState<string | null>(null);
+  const [focusGeojson, setFocusGeojson] = useState<GeoJSON.FeatureCollection | null>(null);
+  const [focusSignal, setFocusSignal] = useState(0);
+  const layerCounterRef = useRef(0);
   const activeFilters = useMemo<GisFilters>(() => ({}), []);
   const { result, isLoading, error, runSelection, clearSelection } = useGisSelection(token);
+  const loadedSavedSelectionIds = useMemo(
+    () => new Set(overlayLayers.filter((layer) => layer.saved_selection_id).map((layer) => layer.saved_selection_id as string)),
+    [overlayLayers],
+  );
+  const visibleOverlayLayers = useMemo(() => overlayLayers.filter((layer) => layer.visible), [overlayLayers]);
 
   useEffect(() => {
     setToken(getStoredAccessToken());
@@ -147,14 +194,21 @@ export default function CatastoGisPage() {
     clearSelection();
   }, [clearSelection]);
 
-  const handleClearImport = useCallback(() => {
-    setUploadedGeojson(null);
-    setXlsxFile(null);
-    setImportStats(null);
-    setImportedItems([]);
-    setActiveSavedSelectionId(null);
-    setGisInfo(null);
+  const focusLayerGeojson = useCallback((geojson: GeoJSON.FeatureCollection | null | undefined) => {
+    if (!geojson || geojson.features.length === 0) return;
+    setFocusGeojson(geojson);
+    setFocusSignal((value) => value + 1);
+    setResizeSignal((value) => value + 1);
+  }, []);
+
+  const updateOverlayLayer = useCallback((layerKey: string, updater: (layer: OverlayLayerState) => OverlayLayerState) => {
+    setOverlayLayers((layers) => layers.map((layer) => (layer.layer_key === layerKey ? updater(layer) : layer)));
+  }, []);
+
+  const removeOverlayLayer = useCallback((layerKey: string) => {
+    setOverlayLayers((layers) => layers.filter((layer) => layer.layer_key !== layerKey));
     setGisError(null);
+    setGisInfo(null);
   }, []);
 
   const openExpanded = useCallback(() => {
@@ -204,17 +258,14 @@ export default function CatastoGisPage() {
 
       const items: GisParticellaRef[] = rows.slice(0, 5000).map((r, i) => ({
         row_index: i + 2, // assume header row
-        comune: (r["comune"] ?? r["Comune"] ?? r["COMUNE"] ?? null) as string | null,
-        sezione: (r["sezione"] ?? r["Sezione"] ?? r["SEZIONE"] ?? null) as string | null,
-        foglio: (r["foglio"] ?? r["Foglio"] ?? r["FOGLIO"] ?? null) as string | null,
-        particella: (r["particella"] ?? r["Particella"] ?? r["PARTICELLA"] ?? null) as string | null,
-        sub: (r["sub"] ?? r["Sub"] ?? r["SUB"] ?? r["subalterno"] ?? r["Subalterno"] ?? null) as string | null,
+        comune: toNullableCellString(r["comune"] ?? r["Comune"] ?? r["COMUNE"] ?? null),
+        sezione: toNullableCellString(r["sezione"] ?? r["Sezione"] ?? r["SEZIONE"] ?? null),
+        foglio: toNullableCellString(r["foglio"] ?? r["Foglio"] ?? r["FOGLIO"] ?? null),
+        particella: toNullableCellString(r["particella"] ?? r["Particella"] ?? r["PARTICELLA"] ?? null),
+        sub: toNullableCellString(r["sub"] ?? r["Sub"] ?? r["SUB"] ?? r["subalterno"] ?? r["Subalterno"] ?? null),
       }));
 
       const resolved = await catastoGisResolveRefs(token, items, { includeGeometry: true });
-      setUploadedGeojson(resolved.geojson ?? null);
-      setActiveSavedSelectionId(null);
-
       const withGeometry = resolved.geojson?.features.filter((f) => f.geometry != null).length ?? 0;
       const foundItems: GisSavedSelectionItemInput[] = resolved.results
         .filter((row) => row.esito === "FOUND" && row.particella_id)
@@ -229,16 +280,28 @@ export default function CatastoGisPage() {
             sub: row.sub_input,
           },
         }));
-      setImportedItems(foundItems);
-      setImportStats({
-        processed: resolved.processed,
-        found: resolved.found,
-        notFound: resolved.not_found,
-        multiple: resolved.multiple,
-        invalid: resolved.invalid,
-        withGeometry,
-      });
-      setSaveName(file.name.replace(/\.(xlsx|xls)$/i, ""));
+      const nextLayerIndex = layerCounterRef.current++;
+      const nextLayer: OverlayLayerState = {
+        layer_key: `draft-${nextLayerIndex}`,
+        saved_selection_id: null,
+        name: file.name.replace(/\.(xlsx|xls)$/i, ""),
+        color: LAYER_COLORS[nextLayerIndex % LAYER_COLORS.length] ?? "#10B981",
+        visible: true,
+        source_filename: file.name,
+        geojson: resolved.geojson ?? { type: "FeatureCollection", features: [] },
+        importStats: {
+          processed: resolved.processed,
+          found: resolved.found,
+          notFound: resolved.not_found,
+          multiple: resolved.multiple,
+          invalid: resolved.invalid,
+          withGeometry,
+        },
+        importedItems: foundItems,
+        isPersisted: false,
+      };
+      setOverlayLayers((layers) => [...layers, nextLayer]);
+      focusLayerGeojson(nextLayer.geojson);
 
       if (resolved.found === 0) {
         setGisError(`Nessuna particella trovata su ${resolved.processed} righe.`);
@@ -260,13 +323,15 @@ export default function CatastoGisPage() {
     } finally {
       setXlsxBusy(false);
     }
-  }, [token]);
+  }, [focusLayerGeojson, token]);
 
-  const handleSaveImportedSelection = useCallback(async () => {
-    if (!token || importedItems.length === 0 || !importStats) return;
-    const trimmedName = saveName.trim();
+  const handleSaveImportedLayer = useCallback(async (layerKey: string) => {
+    if (!token) return;
+    const layer = overlayLayers.find((item) => item.layer_key === layerKey);
+    if (!layer || layer.isPersisted || layer.importedItems.length === 0 || !layer.importStats) return;
+    const trimmedName = layer.name.trim();
     if (!trimmedName) {
-      setGisError("Inserisci un nome per salvare la selezione.");
+      setGisError("Inserisci un nome per salvare il layer.");
       return;
     }
 
@@ -276,78 +341,106 @@ export default function CatastoGisPage() {
     try {
       const saved = await catastoGisCreateSavedSelection(token, {
         name: trimmedName,
-        color: uploadedColor,
-        source_filename: xlsxFile?.name ?? null,
-        import_summary: importStats as unknown as Record<string, unknown>,
-        items: importedItems,
+        color: layer.color,
+        source_filename: layer.source_filename ?? null,
+        import_summary: layer.importStats as unknown as Record<string, unknown>,
+        items: layer.importedItems,
       });
-      setActiveSavedSelectionId(saved.id);
-      setUploadedGeojson(saved.geojson ?? uploadedGeojson);
+      setOverlayLayers((layers) =>
+        layers.map((item) =>
+          item.layer_key === layerKey
+            ? {
+                ...item,
+                layer_key: saved.id,
+                saved_selection_id: saved.id,
+                name: saved.name,
+                color: saved.color,
+                geojson: saved.geojson ?? item.geojson,
+                isPersisted: true,
+              }
+            : item,
+        ),
+      );
       await refreshSavedSelections();
-      setGisInfo(`Selezione salvata: ${saved.name} (${saved.n_particelle.toLocaleString("it-IT")} particelle).`);
+      setGisInfo(`Layer salvato: ${saved.name} (${saved.n_particelle.toLocaleString("it-IT")} particelle).`);
     } catch (e) {
-      setGisError(e instanceof Error ? e.message : "Salvataggio selezione fallito");
+      setGisError(e instanceof Error ? e.message : "Salvataggio layer fallito");
     } finally {
       setSavedBusy(false);
     }
-  }, [importStats, importedItems, refreshSavedSelections, saveName, token, uploadedColor, uploadedGeojson, xlsxFile]);
+  }, [overlayLayers, refreshSavedSelections, token]);
 
   const handleLoadSavedSelection = useCallback(async (selectionId: string) => {
     if (!token) return;
+
+    const existing = overlayLayers.find((layer) => layer.saved_selection_id === selectionId);
+    if (existing) {
+      updateOverlayLayer(existing.layer_key, (layer) => ({ ...layer, visible: true }));
+      focusLayerGeojson(existing.geojson);
+      setGisInfo(`Layer già disponibile in mappa: ${existing.name}.`);
+      setGisError(null);
+      return;
+    }
+
     setSavedBusy(true);
     setGisError(null);
     setGisInfo(null);
     try {
       const detail = await catastoGisGetSavedSelection(token, selectionId);
-      setUploadedGeojson(detail.geojson ?? null);
-      setUploadedColor(detail.color);
-      setSaveName(detail.name);
-      setXlsxFile(null);
-      setImportedItems([]);
-      setActiveSavedSelectionId(detail.id);
-      const summary = detail.import_summary as Partial<ImportStats> | null | undefined;
-      setImportStats(
-        summary
-          ? {
-              processed: Number(summary.processed ?? detail.n_particelle),
-              found: Number(summary.found ?? detail.n_particelle),
-              notFound: Number(summary.notFound ?? 0),
-              multiple: Number(summary.multiple ?? 0),
-              invalid: Number(summary.invalid ?? 0),
-              withGeometry: detail.n_with_geometry,
-            }
-          : {
-              processed: detail.n_particelle,
-              found: detail.n_particelle,
-              notFound: 0,
-              multiple: 0,
-              invalid: 0,
-              withGeometry: detail.n_with_geometry,
-            },
-      );
-      setGisInfo(`Selezione caricata: ${detail.name}.`);
+      const loadedLayer: OverlayLayerState = {
+        layer_key: detail.id,
+        saved_selection_id: detail.id,
+        name: detail.name,
+        color: detail.color,
+        visible: true,
+        source_filename: detail.source_filename ?? null,
+        geojson: detail.geojson ?? { type: "FeatureCollection", features: [] },
+        importStats: buildImportStatsFromDetail(detail),
+        importedItems: [],
+        isPersisted: true,
+      };
+      setOverlayLayers((layers) => [...layers, loadedLayer]);
+      focusLayerGeojson(loadedLayer.geojson);
+      setGisInfo(`Layer caricato: ${detail.name}.`);
     } catch (e) {
-      setGisError(e instanceof Error ? e.message : "Caricamento selezione fallito");
+      setGisError(e instanceof Error ? e.message : "Caricamento layer fallito");
     } finally {
       setSavedBusy(false);
     }
-  }, [token]);
+  }, [focusLayerGeojson, overlayLayers, token, updateOverlayLayer]);
 
-  const handleUpdateSavedColor = useCallback(async () => {
-    if (!token || !activeSavedSelectionId) return;
+  const handleUpdatePersistedLayer = useCallback(async (layerKey: string) => {
+    if (!token) return;
+    const layer = overlayLayers.find((item) => item.layer_key === layerKey);
+    if (!layer?.saved_selection_id) return;
+
     setSavedBusy(true);
     setGisError(null);
     setGisInfo(null);
     try {
-      await catastoGisUpdateSavedSelection(token, activeSavedSelectionId, { name: saveName.trim() || undefined, color: uploadedColor });
+      const updated = await catastoGisUpdateSavedSelection(token, layer.saved_selection_id, {
+        name: layer.name.trim() || undefined,
+        color: layer.color,
+      });
+      setOverlayLayers((layers) =>
+        layers.map((item) =>
+          item.layer_key === layerKey
+            ? {
+                ...item,
+                name: updated.name,
+                color: updated.color,
+              }
+            : item,
+        ),
+      );
       await refreshSavedSelections();
-      setGisInfo("Selezione salvata aggiornata.");
+      setGisInfo(`Layer aggiornato: ${updated.name}.`);
     } catch (e) {
-      setGisError(e instanceof Error ? e.message : "Aggiornamento selezione fallito");
+      setGisError(e instanceof Error ? e.message : "Aggiornamento layer fallito");
     } finally {
       setSavedBusy(false);
     }
-  }, [activeSavedSelectionId, refreshSavedSelections, saveName, token, uploadedColor]);
+  }, [overlayLayers, refreshSavedSelections, token]);
 
   const handleDeleteSavedSelection = useCallback(async (selectionId: string) => {
     if (!token) return;
@@ -356,15 +449,15 @@ export default function CatastoGisPage() {
     setGisInfo(null);
     try {
       await catastoGisDeleteSavedSelection(token, selectionId);
-      if (activeSavedSelectionId === selectionId) handleClearImport();
+      setOverlayLayers((layers) => layers.filter((layer) => layer.saved_selection_id !== selectionId));
       await refreshSavedSelections();
-      setGisInfo("Selezione salvata eliminata.");
+      setGisInfo("Layer salvato eliminato.");
     } catch (e) {
-      setGisError(e instanceof Error ? e.message : "Eliminazione selezione fallita");
+      setGisError(e instanceof Error ? e.message : "Eliminazione layer fallita");
     } finally {
       setSavedBusy(false);
     }
-  }, [activeSavedSelectionId, handleClearImport, refreshSavedSelections, token]);
+  }, [refreshSavedSelections, token]);
 
   return (
     <CatastoPage
@@ -464,8 +557,9 @@ export default function CatastoGisPage() {
                     distretto: distrettoLayer.trim() ? distrettoLayer.trim() : null,
                     highlightSelected,
                   }}
-                  uploadedGeojson={uploadedGeojson}
-                  uploadedColor={uploadedColor}
+                  overlayLayers={visibleOverlayLayers}
+                  focusGeojson={focusGeojson}
+                  focusSignal={focusSignal}
                   drawSignal={drawSignal}
                   clearSignal={clearSignal}
                   resizeSignal={resizeSignal}
@@ -534,16 +628,7 @@ export default function CatastoGisPage() {
                 <div className="rounded-2xl border border-emerald-100 bg-emerald-50/30 p-3">
                   <div className="mb-2 flex items-center justify-between gap-2">
                     <p className="text-[10px] font-semibold uppercase tracking-widest text-emerald-700">Import da Excel</p>
-                    <label className="inline-flex items-center gap-2 text-[11px] font-medium text-gray-500">
-                      Colore
-                      <input
-                        type="color"
-                        value={uploadedColor}
-                        onChange={(e) => setUploadedColor(e.target.value.toUpperCase())}
-                        className="h-6 w-8 cursor-pointer rounded border border-gray-200 bg-white p-0.5"
-                        title="Colore selezione importata"
-                      />
-                    </label>
+                    <span className="text-[11px] text-gray-500">{overlayLayers.length.toLocaleString("it-IT")} layer in workspace</span>
                   </div>
                   <label
                     className={`group flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed px-4 py-5 text-center transition-all ${
@@ -591,68 +676,111 @@ export default function CatastoGisPage() {
                       </>
                     )}
                   </label>
-                  {importStats ? (
-                    <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[11px]">
-                      <div className="rounded-lg bg-white px-2 py-2 shadow-sm">
-                        <div className="font-semibold text-emerald-700">{importStats.found.toLocaleString("it-IT")}</div>
-                        <div className="text-gray-400">trovate</div>
-                      </div>
-                      <div className="rounded-lg bg-white px-2 py-2 shadow-sm">
-                        <div className="font-semibold text-indigo-700">{importStats.withGeometry.toLocaleString("it-IT")}</div>
-                        <div className="text-gray-400">in mappa</div>
-                      </div>
-                      <div className="rounded-lg bg-white px-2 py-2 shadow-sm">
-                        <div className="font-semibold text-amber-700">
-                          {(importStats.notFound + importStats.multiple + importStats.invalid).toLocaleString("it-IT")}
-                        </div>
-                        <div className="text-gray-400">scarti</div>
-                      </div>
-                    </div>
-                  ) : null}
-                  {uploadedGeojson ? (
-                    <div className="mt-3 space-y-2">
-                      <input
-                        value={saveName}
-                        onChange={(e) => setSaveName(e.target.value)}
-                        placeholder="Nome selezione"
-                        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
-                      />
-                      <div className="grid grid-cols-2 gap-2">
-                        <button
-                          type="button"
-                          onClick={activeSavedSelectionId ? handleUpdateSavedColor : handleSaveImportedSelection}
-                          disabled={savedBusy || (!activeSavedSelectionId && importedItems.length === 0)}
-                          className="rounded-lg bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-300"
-                        >
-                          {activeSavedSelectionId ? "Aggiorna" : "Salva selezione"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={handleClearImport}
-                          className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-500 transition hover:bg-gray-50 hover:text-gray-700"
-                        >
-                          Rimuovi
-                        </button>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (uploadedGeojson) {
-                            setResizeSignal((value) => value + 1);
-                            setUploadedGeojson({ ...uploadedGeojson });
-                          }
-                        }}
-                        className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-emerald-100 bg-white py-2 text-xs font-medium text-emerald-700 transition hover:bg-emerald-50"
-                      >
-                        Centra di nuovo in mappa
-                      </button>
-                    </div>
-                  ) : null}
+                  <p className="mt-2 text-[11px] text-gray-500">
+                    Colonne attese: <span className="font-medium">comune</span>, <span className="font-medium">sezione</span>, <span className="font-medium">foglio</span>, <span className="font-medium">particella</span>, <span className="font-medium">sub</span>. Nel campo{" "}
+                    <span className="font-medium">comune</span> puoi usare nome comune, codice Capacitas numerico oppure codice catastale/Belfiore.
+                  </p>
                 </div>
 
                 <div>
                   <div className="mb-2 flex items-center justify-between">
-                    <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Selezioni salvate</p>
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Layer in mappa</p>
+                    <span className="text-[11px] text-gray-400">{visibleOverlayLayers.length.toLocaleString("it-IT")} visibili</span>
+                  </div>
+                  <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
+                    {overlayLayers.length === 0 ? (
+                      <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-3 py-4 text-center text-xs text-gray-400">
+                        Nessun layer caricato. Importa uno o piu file Excel oppure aggiungi un layer salvato.
+                      </div>
+                    ) : (
+                      overlayLayers.map((layer) => (
+                        <div key={layer.layer_key} className="rounded-xl border border-gray-100 bg-white p-3 shadow-sm">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: layer.color }} />
+                                <p className="truncate text-sm font-semibold text-gray-800">{layer.name || "Layer senza nome"}</p>
+                                <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${layer.isPersisted ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
+                                  {layer.isPersisted ? "Salvato" : "Bozza"}
+                                </span>
+                              </div>
+                              <p className="mt-0.5 truncate text-[11px] text-gray-400">{layer.source_filename ?? "Import manuale"}</p>
+                            </div>
+                            <label className="inline-flex items-center gap-1 text-[11px] font-medium text-gray-500">
+                              <input
+                                type="checkbox"
+                                checked={layer.visible}
+                                onChange={() => updateOverlayLayer(layer.layer_key, (item) => ({ ...item, visible: !item.visible }))}
+                              />
+                              Visibile
+                            </label>
+                          </div>
+                          {layer.importStats ? (
+                            <div className="mt-2 grid grid-cols-3 gap-2 text-center text-[11px]">
+                              <div className="rounded-lg bg-gray-50 px-2 py-2">
+                                <div className="font-semibold text-emerald-700">{layer.importStats.found.toLocaleString("it-IT")}</div>
+                                <div className="text-gray-400">trovate</div>
+                              </div>
+                              <div className="rounded-lg bg-gray-50 px-2 py-2">
+                                <div className="font-semibold text-indigo-700">{layer.importStats.withGeometry.toLocaleString("it-IT")}</div>
+                                <div className="text-gray-400">in mappa</div>
+                              </div>
+                              <div className="rounded-lg bg-gray-50 px-2 py-2">
+                                <div className="font-semibold text-amber-700">
+                                  {(layer.importStats.notFound + layer.importStats.multiple + layer.importStats.invalid).toLocaleString("it-IT")}
+                                </div>
+                                <div className="text-gray-400">scarti</div>
+                              </div>
+                            </div>
+                          ) : null}
+                          <div className="mt-2 grid grid-cols-[1fr_auto] gap-2">
+                            <input
+                              value={layer.name}
+                              onChange={(e) => updateOverlayLayer(layer.layer_key, (item) => ({ ...item, name: e.target.value }))}
+                              placeholder="Nome layer"
+                              className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:border-emerald-300 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                            />
+                            <input
+                              type="color"
+                              value={layer.color}
+                              onChange={(e) => updateOverlayLayer(layer.layer_key, (item) => ({ ...item, color: e.target.value.toUpperCase() }))}
+                              className="h-10 w-12 cursor-pointer rounded border border-gray-200 bg-white p-1"
+                              title="Colore layer"
+                            />
+                          </div>
+                          <div className="mt-2 grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => focusLayerGeojson(layer.geojson)}
+                              className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-xs font-medium text-gray-700 transition hover:bg-indigo-50 hover:text-indigo-700"
+                            >
+                              Centra
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => removeOverlayLayer(layer.layer_key)}
+                              className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-xs font-medium text-gray-500 transition hover:bg-gray-50 hover:text-gray-700"
+                            >
+                              Rimuovi dalla mappa
+                            </button>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => void (layer.isPersisted ? handleUpdatePersistedLayer(layer.layer_key) : handleSaveImportedLayer(layer.layer_key))}
+                            disabled={savedBusy || (!layer.isPersisted && layer.importedItems.length === 0)}
+                            className="mt-2 w-full rounded-lg bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:bg-gray-300"
+                          >
+                            {layer.isPersisted ? "Aggiorna metadati salvati" : "Salva permanentemente"}
+                          </button>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="mb-2 flex items-center justify-between">
+                    <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Archivio layer salvati</p>
                     <button
                       type="button"
                       onClick={() => void refreshSavedSelections()}
@@ -672,7 +800,7 @@ export default function CatastoGisPage() {
                         <div
                           key={selection.id}
                           className={`rounded-xl border bg-white p-2 shadow-sm ${
-                            activeSavedSelectionId === selection.id ? "border-emerald-200 ring-1 ring-emerald-100" : "border-gray-100"
+                            loadedSavedSelectionIds.has(selection.id) ? "border-emerald-200 ring-1 ring-emerald-100" : "border-gray-100"
                           }`}
                         >
                           <div className="flex items-start justify-between gap-2">
@@ -694,14 +822,27 @@ export default function CatastoGisPage() {
                               Elimina
                             </button>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => void handleLoadSavedSelection(selection.id)}
-                            disabled={savedBusy}
-                            className="mt-2 w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-indigo-50 hover:text-indigo-700 disabled:text-gray-300"
-                          >
-                            Carica in mappa
-                          </button>
+                          <div className="mt-2 grid grid-cols-2 gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void handleLoadSavedSelection(selection.id)}
+                              disabled={savedBusy}
+                              className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-indigo-50 hover:text-indigo-700 disabled:text-gray-300"
+                            >
+                              {loadedSavedSelectionIds.has(selection.id) ? "Porta in primo piano" : "Aggiungi in mappa"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const loadedLayer = overlayLayers.find((layer) => layer.saved_selection_id === selection.id);
+                                if (loadedLayer) removeOverlayLayer(loadedLayer.layer_key);
+                              }}
+                              disabled={!loadedSavedSelectionIds.has(selection.id)}
+                              className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-500 transition hover:bg-gray-50 hover:text-gray-700 disabled:text-gray-300"
+                            >
+                              Rimuovi
+                            </button>
+                          </div>
                         </div>
                       ))
                     )}

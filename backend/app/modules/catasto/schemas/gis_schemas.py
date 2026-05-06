@@ -95,7 +95,10 @@ class ParticellaPopupData(BaseModel):
 
 
 class GisParticellaRef(BaseModel):
-    comune: str | None = Field(default=None, description="Nome comune oppure cod_comune_capacitas (numero in stringa)")
+    comune: str | None = Field(
+        default=None,
+        description="Nome comune oppure cod_comune_capacitas o codice catastale/Belfiore (es. G286)",
+    )
     sezione: str | None = Field(default=None, description="Sezione catastale (opzionale)")
     foglio: str | None = Field(default=None, description="Foglio (obbligatorio)")
     particella: str | None = Field(default=None, description="Particella (obbligatorio)")

@@ -134,3 +134,13 @@ export interface GisSavedSelectionSummary {
 export interface GisSavedSelectionDetail extends GisSavedSelectionSummary {
   geojson?: GeoJSON.FeatureCollection | null;
 }
+
+export interface GisMapOverlayLayer {
+  layer_key: string;
+  saved_selection_id?: string | null;
+  name: string;
+  color: string;
+  visible: boolean;
+  source_filename?: string | null;
+  geojson?: GeoJSON.FeatureCollection | null;
+}

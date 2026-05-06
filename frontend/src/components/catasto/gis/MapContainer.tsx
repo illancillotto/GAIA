@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import MapboxDraw from "maplibre-gl-draw";
 
 import { catastoGisGetPopup } from "@/lib/api/catasto";
-import type { GisFilters, ParticellaPopupData } from "@/types/gis";
+import type { GisFilters, GisMapOverlayLayer, ParticellaPopupData } from "@/types/gis";
 
 interface MapContainerProps {
   token: string | null;
@@ -19,8 +19,9 @@ interface MapContainerProps {
     distretto?: string | null;
     highlightSelected?: boolean;
   };
-  uploadedGeojson?: GeoJSON.FeatureCollection | null;
-  uploadedColor?: string;
+  overlayLayers?: GisMapOverlayLayer[];
+  focusGeojson?: GeoJSON.FeatureCollection | null;
+  focusSignal?: number;
   drawSignal: number;
   clearSignal: number;
   resizeSignal?: number;
@@ -111,6 +112,52 @@ function buildCentroidFeatureCollection(collection: GeoJSON.FeatureCollection | 
   return { type: "FeatureCollection", features };
 }
 
+function buildOverlayFeatureCollection(overlayLayers: GisMapOverlayLayer[] | undefined): GeoJSON.FeatureCollection {
+  if (!overlayLayers || overlayLayers.length === 0) {
+    return { type: "FeatureCollection", features: [] };
+  }
+
+  const features: GeoJSON.Feature[] = [];
+  for (const layer of overlayLayers) {
+    if (!layer.visible || !layer.geojson) continue;
+    for (const feature of layer.geojson.features) {
+      features.push({
+        ...feature,
+        properties: {
+          ...(feature.properties ?? {}),
+          __overlayLayerKey: layer.layer_key,
+          __overlayName: layer.name,
+          __overlayColor: layer.color,
+          __overlaySavedSelectionId: layer.saved_selection_id ?? null,
+        },
+      });
+    }
+  }
+
+  return { type: "FeatureCollection", features };
+}
+
+function fitCollectionBounds(map: maplibregl.Map, collection: GeoJSON.FeatureCollection | null | undefined): void {
+  if (!collection || collection.features.length === 0) return;
+
+  try {
+    const bounds = new maplibregl.LngLatBounds();
+    for (const feature of collection.features) {
+      const geom = feature.geometry;
+      if (!geom) continue;
+      const rings = getGeometryRings(geom);
+      for (const ring of rings) {
+        for (const point of ring) bounds.extend([point[0], point[1]]);
+      }
+    }
+    if (!bounds.isEmpty()) {
+      map.fitBounds(bounds, { padding: 40, duration: 600, maxZoom: 16 });
+    }
+  } catch {
+    // Fit bounds is best-effort.
+  }
+}
+
 export default function MapContainer({
   token,
   onGeometryDrawn,
@@ -118,8 +165,9 @@ export default function MapContainer({
   selectedIds,
   filters,
   mapLayers,
-  uploadedGeojson,
-  uploadedColor = "#10B981",
+  overlayLayers,
+  focusGeojson,
+  focusSignal,
   drawSignal,
   clearSignal,
   resizeSignal,
@@ -130,10 +178,14 @@ export default function MapContainer({
   const drawRef = useRef<DrawControl | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
   const handlersRef = useRef({ onGeometryDrawn, onSelectionCleared, token });
-  const initialUploadedColorRef = useRef(uploadedColor);
   const [mapError, setMapError] = useState<string | null>(null);
   const [mapReadyVersion, setMapReadyVersion] = useState(0);
   const resizeRafRef = useRef<number | null>(null);
+  const combinedOverlayGeojson = useMemo(() => buildOverlayFeatureCollection(overlayLayers), [overlayLayers]);
+  const overlayCentroids = useMemo(
+    () => buildCentroidFeatureCollection(combinedOverlayGeojson),
+    [combinedOverlayGeojson],
+  );
 
   useEffect(() => {
     handlersRef.current = { onGeometryDrawn, onSelectionCleared, token };
@@ -288,7 +340,7 @@ export default function MapContainer({
         type: "fill",
         source: "uploaded-particelle-source",
         paint: {
-          "fill-color": initialUploadedColorRef.current,
+          "fill-color": ["coalesce", ["get", "__overlayColor"], "#10B981"],
           "fill-opacity": [
             "interpolate",
             ["linear"],
@@ -307,7 +359,7 @@ export default function MapContainer({
         type: "line",
         source: "uploaded-particelle-source",
         paint: {
-          "line-color": initialUploadedColorRef.current,
+          "line-color": ["coalesce", ["get", "__overlayColor"], "#10B981"],
           "line-width": [
             "interpolate",
             ["linear"],
@@ -326,7 +378,7 @@ export default function MapContainer({
         type: "circle",
         source: "uploaded-particelle-centroids-source",
         paint: {
-          "circle-color": initialUploadedColorRef.current,
+          "circle-color": ["coalesce", ["get", "__overlayColor"], "#10B981"],
           "circle-radius": [
             "interpolate",
             ["linear"],
@@ -508,47 +560,20 @@ export default function MapContainer({
     const map = mapRef.current;
     if (!map || mapReadyVersion === 0) return;
 
-    if (map.getLayer("uploaded-particelle-fill")) {
-      map.setPaintProperty("uploaded-particelle-fill", "fill-color", uploadedColor);
-    }
-    if (map.getLayer("uploaded-particelle-outline")) {
-      map.setPaintProperty("uploaded-particelle-outline", "line-color", uploadedColor);
-    }
-    if (map.getLayer("uploaded-particelle-centroids")) {
-      map.setPaintProperty("uploaded-particelle-centroids", "circle-color", uploadedColor);
-    }
-  }, [mapReadyVersion, uploadedColor]);
-
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || mapReadyVersion === 0) return;
-
     const source = map.getSource("uploaded-particelle-source") as maplibregl.GeoJSONSource | undefined;
     const centroidSource = map.getSource("uploaded-particelle-centroids-source") as maplibregl.GeoJSONSource | undefined;
     if (!source || !centroidSource) return;
 
-    source.setData(uploadedGeojson ?? { type: "FeatureCollection", features: [] });
-    centroidSource.setData(buildCentroidFeatureCollection(uploadedGeojson));
+    source.setData(combinedOverlayGeojson);
+    centroidSource.setData(overlayCentroids);
+    fitCollectionBounds(map, combinedOverlayGeojson);
+  }, [combinedOverlayGeojson, mapReadyVersion, overlayCentroids]);
 
-    if (uploadedGeojson && uploadedGeojson.features.length > 0) {
-      try {
-        const bounds = new maplibregl.LngLatBounds();
-        for (const feature of uploadedGeojson.features) {
-          const geom = feature.geometry;
-          if (!geom) continue;
-          const rings = getGeometryRings(geom);
-          for (const ring of rings) {
-            for (const point of ring) bounds.extend([point[0], point[1]]);
-          }
-        }
-        if (!bounds.isEmpty()) {
-          map.fitBounds(bounds, { padding: 40, duration: 600, maxZoom: 16 });
-        }
-      } catch {
-        // Fit bounds is best-effort.
-      }
-    }
-  }, [mapReadyVersion, uploadedGeojson]);
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || mapReadyVersion === 0 || !focusSignal) return;
+    fitCollectionBounds(map, focusGeojson);
+  }, [focusGeojson, focusSignal, mapReadyVersion]);
 
   if (mapError) {
     return (
