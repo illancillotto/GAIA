@@ -15,7 +15,10 @@ interface MapContainerProps {
   filters: GisFilters;
   mapLayers?: {
     showDistretti: boolean;
+    showDistrettiFill?: boolean;
     showParticelle: boolean;
+    distrettiOpacity?: number;
+    particelleOpacity?: number;
     distretto?: string | null;
     highlightSelected?: boolean;
   };
@@ -365,6 +368,11 @@ export default function MapContainer({
         source: "uploaded-particelle-source",
         paint: {
           "line-color": ["coalesce", ["get", "__overlayColor"], "#10B981"],
+          "line-opacity": [
+            "*",
+            ["coalesce", ["get", "__overlayOpacity"], 0.55],
+            0.9,
+          ],
           "line-width": [
             "interpolate",
             ["linear"],
@@ -413,6 +421,11 @@ export default function MapContainer({
             ],
           ],
           "circle-stroke-color": "#FFFFFF",
+          "circle-stroke-opacity": [
+            "*",
+            ["coalesce", ["get", "__overlayOpacity"], 0.55],
+            0.95,
+          ],
           "circle-stroke-width": [
             "interpolate",
             ["linear"],
@@ -535,13 +548,29 @@ export default function MapContainer({
     if (!map || mapReadyVersion === 0) return;
 
     const showDistretti = mapLayers?.showDistretti ?? true;
+    const showDistrettiFill = mapLayers?.showDistrettiFill ?? false;
     const showParticelle = mapLayers?.showParticelle ?? true;
+    const distrettiOpacity = mapLayers?.distrettiOpacity ?? 0.3;
+    const particelleOpacity = mapLayers?.particelleOpacity ?? 0.42;
 
-    for (const layerId of ["distretti-fill", "distretti-outline"]) {
-      if (map.getLayer(layerId)) map.setLayoutProperty(layerId, "visibility", showDistretti ? "visible" : "none");
+    if (map.getLayer("distretti-fill")) {
+      map.setLayoutProperty("distretti-fill", "visibility", showDistretti && showDistrettiFill ? "visible" : "none");
+      map.setPaintProperty("distretti-fill", "fill-opacity", distrettiOpacity);
+    }
+    if (map.getLayer("distretti-outline")) {
+      map.setLayoutProperty("distretti-outline", "visibility", showDistretti ? "visible" : "none");
+      map.setPaintProperty("distretti-outline", "line-opacity", Math.min(1, distrettiOpacity + 0.15));
     }
     for (const layerId of ["particelle-fill", "particelle-outline"]) {
-      if (map.getLayer(layerId)) map.setLayoutProperty(layerId, "visibility", showParticelle ? "visible" : "none");
+      if (map.getLayer(layerId)) {
+        map.setLayoutProperty(layerId, "visibility", showParticelle ? "visible" : "none");
+      }
+    }
+    if (map.getLayer("particelle-fill")) {
+      map.setPaintProperty("particelle-fill", "fill-opacity", particelleOpacity);
+    }
+    if (map.getLayer("particelle-outline")) {
+      map.setPaintProperty("particelle-outline", "line-opacity", Math.min(1, particelleOpacity + 0.2));
     }
 
     const distretto = (mapLayers?.distretto ?? filters.num_distretto ?? null) || null;
@@ -575,7 +604,6 @@ export default function MapContainer({
 
     source.setData(combinedOverlayGeojson);
     centroidSource.setData(overlayCentroids);
-    fitCollectionBounds(map, combinedOverlayGeojson);
   }, [combinedOverlayGeojson, mapReadyVersion, overlayCentroids]);
 
   useEffect(() => {
