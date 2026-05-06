@@ -176,15 +176,16 @@ export function ParticellaDetailDialog({
 
   async function openCapacitasCertificato(cco: string): Promise<void> {
     const token = getStoredAccessToken();
-    if (!token) return;
+    if (!token || !match) return;
+    const currentMatch = match;
     setCapacitasLinkBusy(true);
     setCapacitasLinkError(null);
     try {
       const { url } = await capacitasGetRptCertificatoLink(token, cco, {
-        com: match.cert_com,
-        pvc: match.cert_pvc,
-        fra: match.cert_fra,
-        ccs: match.cert_ccs,
+        com: currentMatch.cert_com,
+        pvc: currentMatch.cert_pvc,
+        fra: currentMatch.cert_fra,
+        ccs: currentMatch.cert_ccs,
       });
       window.open(url, "_blank", "noopener,noreferrer");
     } catch (e) {

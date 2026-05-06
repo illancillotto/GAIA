@@ -186,12 +186,13 @@ function ImportContent({ token }: { token: string }) {
     if (!bulkTrackingJobId) {
       return;
     }
+    const trackedJobId = bulkTrackingJobId;
 
     let cancelled = false;
 
     async function pollOnce() {
       try {
-        const job = await getUtenzeImportJob(token, bulkTrackingJobId);
+        const job = await getUtenzeImportJob(token, trackedJobId);
         if (cancelled) return;
         setActiveBulkJob(job);
         setSelectedJob((current) => (current?.job_id === job.job_id ? job : current));
@@ -659,7 +660,7 @@ function ImportContent({ token }: { token: string }) {
                   title={NAS_PANEL_DESCRIPTION_TOOLTIP}
                 >
                   Il flusso operativo ora parte dalle anagrafiche già presenti: il sistema cerca sul NAS la cartella corretta per lettera, importa i file e li
-                  collega al soggetto. Lo snapshot resta disponibile come staging diagnostico dell'archivio completo.
+                  collega al soggetto. Lo snapshot resta disponibile come staging diagnostico dell&apos;archivio completo.
                 </div>
                 <div className="flex flex-wrap items-end gap-3">
                   <button
@@ -890,7 +891,7 @@ function ImportContent({ token }: { token: string }) {
                   </div>
                   {preview.total_folders === 0 ? (
                     <p className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                      Nessuna cartella trovata nell'archivio NAS configurato. Verifica il path archivio o il contenuto disponibile sul NAS.
+                      Nessuna cartella trovata nell&apos;archivio NAS configurato. Verifica il path archivio o il contenuto disponibile sul NAS.
                     </p>
                   ) : null}
                   <div className="grid gap-3 md:grid-cols-4">
