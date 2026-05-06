@@ -244,7 +244,7 @@ async function readFileToRows(
     }
   } else {
     if (!comuneKey || !foglioKey || !particellaKey) {
-      throw new Error("Colonne minime mancanti. Richieste: comune, foglio, particella (opzionali: sezione, sub).");
+      throw new Error("Colonne minime mancanti. Richieste: comune, foglio, particella (opzionali: sezione, sub). Nel campo comune puoi usare nome comune, codice Capacitas numerico o codice catastale/Belfiore.");
     }
   }
 
@@ -872,7 +872,7 @@ export function AnagraficaBulkPanel() {
                 className="btn-secondary"
                 disabled={busy}
                 onClick={() => {
-                  const sheet = XLSX.utils.json_to_sheet([{ comune: "165", sezione: "", foglio: "5", particella: "120", sub: "" }]);
+                  const sheet = XLSX.utils.json_to_sheet([{ comune: "A357", sezione: "", foglio: "5", particella: "120", sub: "" }]);
                   const csv = XLSX.utils.sheet_to_csv(sheet);
                   triggerDownload(new Blob([csv], { type: "text/csv;charset=utf-8" }), "template-particelle-intestatari.csv");
                 }}
@@ -885,7 +885,7 @@ export function AnagraficaBulkPanel() {
                 disabled={busy}
                 onClick={() => {
                   const wb = XLSX.utils.book_new();
-                  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([{ comune: "165", sezione: "", foglio: "5", particella: "120", sub: "" }]), "template");
+                  XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet([{ comune: "A357", sezione: "", foglio: "5", particella: "120", sub: "" }]), "template");
                   const out = XLSX.write(wb, { type: "array", bookType: "xlsx" });
                   triggerDownload(
                     new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),

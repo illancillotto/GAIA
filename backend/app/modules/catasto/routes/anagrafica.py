@@ -148,6 +148,11 @@ def _alternate_live_lookup_comune(comune: str | None) -> str | None:
     return _COMUNE_LIVE_SWAP_LOOKUP.get(comune_norm.casefold())
 
 
+def _looks_like_codice_catastale(value: str) -> bool:
+    normalized = value.strip().upper()
+    return len(normalized) == 4 and normalized[0].isalpha() and normalized[1:].isdigit()
+
+
 def _query_particelle_candidates(
     db: Session,
     *,
@@ -175,6 +180,11 @@ def _query_particelle_candidates(
 
     if _looks_like_int(comune_norm):
         query = query.where(CatParticella.cod_comune_capacitas == int(comune_norm))
+    elif _looks_like_codice_catastale(comune_norm):
+        codice_catastale_norm = comune_norm.strip().upper()
+        query = query.where(
+            func.upper(func.coalesce(CatParticella.codice_catastale, CatComune.codice_catastale, "")) == codice_catastale_norm
+        )
     else:
         query = query.where(
             func.lower(func.coalesce(CatParticella.nome_comune, CatComune.nome_comune, "")) == comune_norm.lower()

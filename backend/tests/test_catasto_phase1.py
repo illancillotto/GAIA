@@ -1260,6 +1260,27 @@ def test_bulk_search_anagrafica_returns_mixed_row_outcomes() -> None:
     assert payload[2]["esito"] == "INVALID_ROW"
 
 
+def test_bulk_search_anagrafica_supports_codice_catastale_in_comune_column() -> None:
+    response = client.post(
+        "/catasto/elaborazioni-massive/particelle",
+        headers=auth_headers(),
+        json={
+            "rows": [
+                {"row_index": 2, "comune": "A357", "foglio": "5", "particella": "120"},
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["results"]
+    assert len(payload) == 1
+    assert payload[0]["esito"] == "FOUND"
+    assert payload[0]["match"]["codice_catastale"] == "A357"
+    assert payload[0]["match"]["cod_comune_capacitas"] == 165
+    assert payload[0]["match"]["foglio"] == "5"
+    assert payload[0]["match"]["particella"] == "120"
+
+
 def test_bulk_search_presente_consorzio_true_when_utenza_without_consorzio_unit() -> None:
     """Senza CatConsorzioUnit ma con utenza di campagna il flag export non deve dire 'non presente'."""
     db = TestingSessionLocal()
