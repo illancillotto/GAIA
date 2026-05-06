@@ -793,7 +793,7 @@ export default function CatastoGisPage() {
                 </div>
               </div>
 
-              <div className="min-h-0 flex-1 overflow-hidden px-4 py-4">
+              <div className="min-h-0 flex-1 overflow-hidden px-4 pt-4">
                 <div className="flex h-full min-h-0 flex-col gap-4">
                   <div className="min-h-0 flex-1 overflow-hidden">
                     <div className="mb-2 flex items-center justify-between">
