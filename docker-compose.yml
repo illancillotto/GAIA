@@ -63,6 +63,9 @@ services:
       context: ./backend
     container_name: gaia-backend
     restart: unless-stopped
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     env_file:
       - .env
     environment:
@@ -90,8 +93,12 @@ services:
   frontend:
     build:
       context: ./frontend
+      network: host
     container_name: gaia-frontend
     restart: unless-stopped
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     env_file:
       - .env
     depends_on:
@@ -113,6 +120,9 @@ services:
     image: nginx:1.29-alpine
     container_name: gaia-nginx
     restart: unless-stopped
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     depends_on:
       martin:
         condition: service_started
@@ -136,6 +146,9 @@ services:
       dockerfile: ./modules/elaborazioni/worker/Dockerfile
     container_name: gaia-elaborazioni-worker
     restart: unless-stopped
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     env_file:
       - .env
     environment:
@@ -159,6 +172,9 @@ services:
       context: ./backend
     container_name: gaia-network-scanner
     restart: unless-stopped
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     env_file:
       - .env
     environment:
@@ -186,6 +202,9 @@ services:
       context: ./backend
     container_name: gaia-arp-helper
     restart: unless-stopped
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     network_mode: host
     entrypoint: ["python", "-m", "app.scripts.arp_helper"]
 

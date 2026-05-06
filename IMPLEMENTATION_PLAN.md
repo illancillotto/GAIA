@@ -258,6 +258,8 @@ Output attesi:
 
 ### DevOps
 - immagini Docker chiare e minimali
+- hardening DNS Docker host per build deterministici dei container
+- rimozione del workaround Compose `build.network: host` dal servizio `frontend` dopo stabilizzazione DNS del daemon
 
 ---
 

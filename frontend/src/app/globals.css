@@ -8,6 +8,8 @@
 @layer base {
   :root {
     color-scheme: light;
+    --font-newsreader: Georgia, "Times New Roman", Times, serif;
+    --font-manrope: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   }
 
   * {

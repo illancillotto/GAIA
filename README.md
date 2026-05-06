@@ -180,6 +180,10 @@ Quando il frontend mostra comportamenti incoerenti o il build Next fallisce su c
 
 Il comando Docker ferma temporaneamente il servizio `frontend`, esegue un build pulito in un container effimero e poi rialza il servizio.
 
+Nota operativa Docker:
+- lo stack Compose forza temporaneamente `build.network: host` per il solo servizio `frontend`, per aggirare timeout DNS intermittenti del builder Docker verso `registry.npmjs.org`
+- il workaround e intenzionale ma non definitivo; l'obiettivo a regime e spostare la correzione sul daemon Docker host con DNS espliciti e rimuovere la dipendenza da `build.network: host`
+
 ### Test frontend
 
 - smoke statici:

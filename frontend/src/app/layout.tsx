@@ -1,21 +1,7 @@
 import type { Metadata } from "next";
-import { Manrope, Newsreader } from "next/font/google";
 
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./globals.css";
-
-const newsreader = Newsreader({
-  subsets: ["latin"],
-  variable: "--font-newsreader",
-  display: "swap",
-  axes: ["opsz"],
-});
-
-const manrope = Manrope({
-  subsets: ["latin"],
-  variable: "--font-manrope",
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   title: "GAIA | Gestione Apparati Informativi",
@@ -28,7 +14,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="it" className={`${newsreader.variable} ${manrope.variable}`}>
+    <html lang="it">
       <head>
         {/* Material Symbols icon font */}
         {/* TODO(next15): replace this stylesheet link with a supported icon-loading strategy. */}

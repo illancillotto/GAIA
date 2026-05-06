@@ -169,6 +169,11 @@ L’applicazione gira tramite Docker Compose con questi servizi:
 
 ### frontend
 Serve la web app e consuma le API del backend.
+Nel `docker-compose.yml` il build del frontend usa temporaneamente `network: host`
+per il solo stage di build, per mitigare errori DNS del builder Docker osservati
+su fetch NPM verso `registry.npmjs.org`; a regime il fix va spostato sulla
+configurazione DNS del daemon Docker host, cosi da ripristinare un build Compose
+portabile senza dipendenze dal networking host.
 
 ### backend
 Espone API, applica auth condivisa, coordina i moduli e usa router separati per dominio.
