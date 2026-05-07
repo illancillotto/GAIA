@@ -2,6 +2,37 @@
 
 export type RuoloImportJobStatus = "pending" | "running" | "completed" | "failed";
 
+export type RuoloImportJobReportItem = {
+  codice_cnc: string | null;
+  codice_fiscale_raw: string | null;
+  nominativo_raw: string | null;
+  reason_code: string;
+  reason_label: string;
+};
+
+export type RuoloImportJobReportSummary = {
+  filename: string;
+  anno_tributario: number;
+  total_partite: number;
+  records_imported: number;
+  records_skipped: number;
+  records_errors: number;
+};
+
+export type RuoloImportJobReportPreview = {
+  skipped_items: RuoloImportJobReportItem[];
+  error_items: RuoloImportJobReportItem[];
+  skipped_preview_count: number;
+  error_preview_count: number;
+  skipped_total_count: number;
+  error_total_count: number;
+};
+
+export type RuoloImportJobParams = {
+  report_summary?: RuoloImportJobReportSummary;
+  report_preview?: RuoloImportJobReportPreview;
+} & Record<string, unknown>;
+
 export type RuoloImportJobResponse = {
   id: string;
   anno_tributario: number;
@@ -15,7 +46,7 @@ export type RuoloImportJobResponse = {
   records_errors: number | null;
   error_detail: string | null;
   triggered_by: number | null;
-  params_json: Record<string, unknown> | null;
+  params_json: RuoloImportJobParams | null;
   created_at: string;
 };
 

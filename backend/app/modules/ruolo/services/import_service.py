@@ -6,6 +6,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 import uuid
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -26,12 +27,110 @@ from app.modules.ruolo.services.parser import (
 from app.modules.utenze.models import AnagraficaCompany, AnagraficaPerson, AnagraficaSubject
 
 logger = logging.getLogger(__name__)
+_RE_CATASTO_CODE = re.compile(r"\b([A-Z]\d{3})\b")
+_JOB_REPORT_PREVIEW_LIMIT = 50
 
 _background_tasks: set[asyncio.Task] = set()
 
 
 class SubjectNotFound(Exception):
     """Soggetto non trovato in ana_subjects tramite CF/PIVA."""
+
+
+def _normalize_comune_codice(raw_value: str | None) -> str | None:
+    """
+    Normalizza il codice comune proveniente da catasto_comuni/codice_sister.
+
+    Nei dataset reali il valore può essere già un codice catastale (`F272`) oppure
+    una forma composita tipo `F272#MOGORO#0#0`. In catasto_parcels serve il codice
+    corto compatibile con `VARCHAR(10)`.
+    """
+    if raw_value is None:
+        return None
+
+    cleaned = raw_value.strip().upper()
+    if not cleaned:
+        return None
+    if len(cleaned) <= 10 and "#" not in cleaned:
+        return cleaned
+
+    first_segment = cleaned.split("#", maxsplit=1)[0].strip()
+    if first_segment and len(first_segment) <= 10:
+        cleaned = first_segment
+
+    match = _RE_CATASTO_CODE.search(cleaned)
+    if match:
+        return match.group(1)
+
+    return cleaned[:10] if cleaned else None
+
+
+def _merge_particella_rows(particelle: list[ParsedParticella]) -> list[ParsedParticella]:
+    """
+    Deduplica righe duplicate della stessa particella all'interno della stessa partita.
+
+    Nel formato reale una stessa particella può comparire due volte:
+    - riga base con importi 0648/0985
+    - riga dettaglio con domanda, sup. irrigata, coltura o importo 0668
+    """
+    merged: dict[tuple[str, str, str | None], ParsedParticella] = {}
+    ordered_keys: list[tuple[str, str, str | None]] = []
+
+    for item in particelle:
+        key = (item.foglio, item.particella, item.subalterno)
+        existing = merged.get(key)
+        if existing is None:
+            merged[key] = item
+            ordered_keys.append(key)
+            continue
+
+        merged[key] = ParsedParticella(
+            domanda_irrigua=item.domanda_irrigua or existing.domanda_irrigua,
+            distretto=item.distretto or existing.distretto,
+            foglio=existing.foglio,
+            particella=existing.particella,
+            subalterno=item.subalterno or existing.subalterno,
+            sup_catastale_are=item.sup_catastale_are or existing.sup_catastale_are,
+            sup_catastale_ha=item.sup_catastale_ha or existing.sup_catastale_ha,
+            sup_irrigata_ha=item.sup_irrigata_ha or existing.sup_irrigata_ha,
+            coltura=item.coltura or existing.coltura,
+            importo_manut=item.importo_manut or existing.importo_manut,
+            importo_irrig=item.importo_irrig or existing.importo_irrig,
+            importo_ist=item.importo_ist or existing.importo_ist,
+        )
+
+    return [merged[key] for key in ordered_keys]
+
+
+def _build_job_report_payload(
+    *,
+    filename: str,
+    anno: int,
+    total_partite: int,
+    imported: int,
+    skipped: int,
+    errors: int,
+    skipped_items: list[dict[str, str | int | None]],
+    error_items: list[dict[str, str | int | None]],
+) -> dict[str, object]:
+    return {
+        "report_summary": {
+            "filename": filename,
+            "anno_tributario": anno,
+            "total_partite": total_partite,
+            "records_imported": imported,
+            "records_skipped": skipped,
+            "records_errors": errors,
+        },
+        "report_preview": {
+            "skipped_items": skipped_items[:_JOB_REPORT_PREVIEW_LIMIT],
+            "error_items": error_items[:_JOB_REPORT_PREVIEW_LIMIT],
+            "skipped_preview_count": min(len(skipped_items), _JOB_REPORT_PREVIEW_LIMIT),
+            "error_preview_count": min(len(error_items), _JOB_REPORT_PREVIEW_LIMIT),
+            "skipped_total_count": len(skipped_items),
+            "error_total_count": len(error_items),
+        },
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -108,9 +207,13 @@ def _upsert_catasto_parcel(
             )
         )
     if comune_row is not None:
-        comune_codice = comune_row.codice_sister
+        comune_codice = _normalize_comune_codice(comune_row.codice_sister)
     else:
         logger.warning("Comune non trovato in catasto_comuni: %s", comune_nome)
+        return None
+
+    if not comune_codice:
+        logger.warning("Codice comune non normalizzabile per %s: %s", comune_nome, comune_row.codice_sister)
         return None
 
     # Cerca record esistente con valid_to IS NULL
@@ -125,6 +228,14 @@ def _upsert_catasto_parcel(
     )
 
     if existing is not None:
+        if existing.valid_from == anno:
+            if existing.sup_catastale_are is None and sup_catastale_are is not None:
+                existing.sup_catastale_are = float(sup_catastale_are)
+                existing.sup_catastale_ha = float(sup_catastale_are / Decimal("100"))
+                existing.updated_at = datetime.now(timezone.utc)
+                db.flush()
+            return existing.id
+
         # Verifica se la superficie è cambiata
         existing_are = existing.sup_catastale_are
         new_are = float(sup_catastale_are) if sup_catastale_are else None
@@ -255,6 +366,7 @@ def _upsert_partite(
     db.flush()
 
     for partita_data in partite:
+        particelle_data = _merge_particella_rows(partita_data.particelle)
         partita = RuoloPartita(
             id=uuid.uuid4(),
             avviso_id=avviso_id,
@@ -270,7 +382,7 @@ def _upsert_partite(
         db.add(partita)
         db.flush()
 
-        for part_data in partita_data.particelle:
+        for part_data in particelle_data:
             # Upsert catasto_parcel
             catasto_parcel_id = None
             try:
@@ -338,12 +450,16 @@ async def run_import_job(job_id: uuid.UUID, raw_content: bytes, anno: int, filen
         skipped = 0
         errors = 0
         error_lines: list[str] = []
+        skipped_items: list[dict[str, str | int | None]] = []
+        error_items: list[dict[str, str | int | None]] = []
+        total_partite = 0
 
         try:
             text = extract_text_from_content(raw_content, filename=filename)
             partite = parse_ruolo_file(text)
 
-            job.total_partite = len(partite)
+            total_partite = len(partite)
+            job.total_partite = total_partite
             db.commit()
 
             for partita_cnc in partite:
@@ -352,8 +468,16 @@ async def run_import_job(job_id: uuid.UUID, raw_content: bytes, anno: int, filen
                     _upsert_partite(db, avviso_id, partita_cnc.partite, anno)
                     db.commit()
 
-                    if _resolve_subject_id(db, partita_cnc.codice_fiscale_raw) is None:
+                    subject_id = _resolve_subject_id(db, partita_cnc.codice_fiscale_raw)
+                    if subject_id is None:
                         skipped += 1
+                        skipped_items.append({
+                            "codice_cnc": partita_cnc.codice_cnc,
+                            "codice_fiscale_raw": partita_cnc.codice_fiscale_raw or None,
+                            "nominativo_raw": partita_cnc.nominativo_raw or None,
+                            "reason_code": "subject_not_found",
+                            "reason_label": "Soggetto non trovato in Anagrafica",
+                        })
                     else:
                         imported += 1
 
@@ -362,6 +486,13 @@ async def run_import_job(job_id: uuid.UUID, raw_content: bytes, anno: int, filen
                     errors += 1
                     error_msg = f"CNC {partita_cnc.codice_cnc}: {exc}"
                     error_lines.append(error_msg)
+                    error_items.append({
+                        "codice_cnc": partita_cnc.codice_cnc,
+                        "codice_fiscale_raw": partita_cnc.codice_fiscale_raw or None,
+                        "nominativo_raw": partita_cnc.nominativo_raw or None,
+                        "reason_code": "import_error",
+                        "reason_label": str(exc),
+                    })
                     logger.warning("Errore import partita %s: %s", partita_cnc.codice_cnc, exc)
 
             job.status = "completed"
@@ -370,6 +501,13 @@ async def run_import_job(job_id: uuid.UUID, raw_content: bytes, anno: int, filen
             logger.exception("Import job failed: %s", exc)
             job.status = "failed"
             error_lines.append(str(exc))
+            error_items.append({
+                "codice_cnc": None,
+                "codice_fiscale_raw": None,
+                "nominativo_raw": None,
+                "reason_code": "job_failed",
+                "reason_label": str(exc),
+            })
 
         finally:
             job.finished_at = datetime.now(timezone.utc)
@@ -377,6 +515,16 @@ async def run_import_job(job_id: uuid.UUID, raw_content: bytes, anno: int, filen
             job.records_skipped = skipped
             job.records_errors = errors
             job.error_detail = "\n".join(error_lines[:20]) if error_lines else None
+            job.params_json = _build_job_report_payload(
+                filename=filename,
+                anno=anno,
+                total_partite=total_partite,
+                imported=imported,
+                skipped=skipped,
+                errors=errors,
+                skipped_items=skipped_items,
+                error_items=error_items,
+            )
             db.commit()
 
     except Exception as exc:

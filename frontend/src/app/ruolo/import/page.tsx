@@ -14,7 +14,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { AlertTriangleIcon, CalendarIcon, DocumentIcon, FolderIcon, LockIcon, RefreshIcon } from "@/components/ui/icons";
 import { getStoredAccessToken } from "@/lib/auth";
 import { detectRuoloImportYear, getImportJob, listImportJobs, uploadRuoloFile } from "@/lib/ruolo-api";
-import type { RuoloImportJobResponse } from "@/types/ruolo";
+import type { RuoloImportJobParams, RuoloImportJobResponse } from "@/types/ruolo";
 
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, string> = {
@@ -42,6 +42,7 @@ export default function RuoloImportPage() {
   const [warningMsg, setWarningMsg] = useState<string | null>(null);
   const [jobs, setJobs] = useState<RuoloImportJobResponse[]>([]);
   const [pollingJobId, setPollingJobId] = useState<string | null>(null);
+  const [reportJob, setReportJob] = useState<RuoloImportJobResponse | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
@@ -398,10 +399,19 @@ export default function RuoloImportPage() {
                       </div>
                     </div>
                     {job.error_detail ? (
-                      <div className="mt-4 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
+                      <div className="mt-4 rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700 line-clamp-4">
                         {job.error_detail}
                       </div>
                     ) : null}
+                    <div className="mt-4 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setReportJob(job)}
+                        className="rounded-xl border border-[#d4ddd3] bg-white px-3 py-2 text-sm font-medium text-[#1D4E35] transition hover:border-[#1D4E35] hover:bg-[#f4faf5]"
+                      >
+                        Apri report
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -426,6 +436,173 @@ export default function RuoloImportPage() {
           </div>
         ) : null}
       </div>
+      <RuoloImportReportModal job={reportJob} onClose={() => setReportJob(null)} />
     </RuoloModulePage>
+  );
+}
+
+function getJobReportParams(job: RuoloImportJobResponse): RuoloImportJobParams | null {
+  return job.params_json ?? null;
+}
+
+function RuoloImportReportModal({
+  job,
+  onClose,
+}: {
+  job: RuoloImportJobResponse | null;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    if (!job) return;
+
+    function handleKeyDown(event: KeyboardEvent): void {
+      if (event.key === "Escape") {
+        onClose();
+      }
+    }
+
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [job, onClose]);
+
+  if (!job) return null;
+
+  const params = getJobReportParams(job);
+  const summary = params?.report_summary;
+  const preview = params?.report_preview;
+  const skippedItems = preview?.skipped_items ?? [];
+  const errorItems = preview?.error_items ?? [];
+  const skippedReason =
+    (job.records_skipped ?? 0) > 0
+      ? "Nel flusso attuale `saltati` indica avvisi importati ma non collegati a un soggetto in Anagrafica."
+      : "Nessun record non collegato rilevato nel job.";
+
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 px-4 py-6 backdrop-blur-sm">
+      <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-[28px] border border-gray-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.24)]">
+        <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-6 py-5">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1D4E35]">Report import</p>
+            <h2 className="mt-2 text-2xl font-semibold text-gray-900">{job.filename ?? "Job Ruolo"}</h2>
+            <p className="mt-1 text-sm text-gray-500">
+              Anno {job.anno_tributario} · stato {job.status} · avviato il {new Date(job.started_at).toLocaleString("it-IT")}
+            </p>
+          </div>
+          <button className="btn-secondary" type="button" onClick={onClose}>
+            Chiudi
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto bg-[#f7faf7] px-6 py-6">
+          <div className="grid gap-4 md:grid-cols-4">
+            <MetricCard label="Totale partite" value={summary?.total_partite ?? job.total_partite ?? "—"} />
+            <MetricCard label="Importati" value={summary?.records_imported ?? job.records_imported ?? "—"} />
+            <MetricCard label="Saltati" value={summary?.records_skipped ?? job.records_skipped ?? "—"} />
+            <MetricCard label="Errori" value={summary?.records_errors ?? job.records_errors ?? "—"} />
+          </div>
+
+          <div className="mt-6 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-4 text-sm text-amber-900">
+            <p className="font-semibold">Significato dei record saltati</p>
+            <p className="mt-1 leading-6">{skippedReason}</p>
+          </div>
+
+          <section className="mt-6 rounded-2xl border border-[#dfe7dc] bg-white p-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-gray-900">Avvisi non collegati ad Anagrafica</p>
+                <p className="mt-1 text-sm text-gray-500">
+                  {preview
+                    ? `Anteprima ${preview.skipped_preview_count} di ${preview.skipped_total_count} casi.`
+                    : "Il job non contiene ancora un report strutturato; per i job futuri vedrai qui il dettaglio."}
+                </p>
+              </div>
+            </div>
+
+            {skippedItems.length === 0 ? (
+              <p className="mt-4 text-sm text-gray-500">Nessun record saltato nel job selezionato.</p>
+            ) : (
+              <div className="mt-4 overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200 text-sm">
+                  <thead>
+                    <tr className="text-left text-xs uppercase tracking-[0.18em] text-gray-500">
+                      <th className="py-2 pr-4">CNC</th>
+                      <th className="py-2 pr-4">CF/P.IVA</th>
+                      <th className="py-2 pr-4">Nominativo</th>
+                      <th className="py-2">Motivo</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 text-gray-700">
+                    {skippedItems.map((item, index) => (
+                      <tr key={`${item.codice_cnc ?? "skip"}-${index}`}>
+                        <td className="py-3 pr-4 font-medium">{item.codice_cnc ?? "—"}</td>
+                        <td className="py-3 pr-4">{item.codice_fiscale_raw ?? "—"}</td>
+                        <td className="py-3 pr-4">{item.nominativo_raw ?? "—"}</td>
+                        <td className="py-3">{item.reason_label}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          <section className="mt-6 rounded-2xl border border-[#dfe7dc] bg-white p-5">
+            <div>
+              <p className="text-sm font-semibold text-gray-900">Errori di import</p>
+              <p className="mt-1 text-sm text-gray-500">
+                {preview
+                  ? `Anteprima ${preview.error_preview_count} di ${preview.error_total_count} casi.`
+                  : "Per i job storici senza report strutturato viene mostrato solo il testo grezzo dell'errore."}
+              </p>
+            </div>
+
+            {errorItems.length > 0 ? (
+              <div className="mt-4 overflow-x-auto">
+                <table className="min-w-full divide-y divide-gray-200 text-sm">
+                  <thead>
+                    <tr className="text-left text-xs uppercase tracking-[0.18em] text-gray-500">
+                      <th className="py-2 pr-4">CNC</th>
+                      <th className="py-2 pr-4">CF/P.IVA</th>
+                      <th className="py-2 pr-4">Nominativo</th>
+                      <th className="py-2">Motivo</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 text-gray-700">
+                    {errorItems.map((item, index) => (
+                      <tr key={`${item.codice_cnc ?? "error"}-${index}`}>
+                        <td className="py-3 pr-4 font-medium">{item.codice_cnc ?? "—"}</td>
+                        <td className="py-3 pr-4">{item.codice_fiscale_raw ?? "—"}</td>
+                        <td className="py-3 pr-4">{item.nominativo_raw ?? "—"}</td>
+                        <td className="py-3">{item.reason_label}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : job.error_detail ? (
+              <div className="mt-4 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700 whitespace-pre-wrap">
+                {job.error_detail}
+              </div>
+            ) : (
+              <p className="mt-4 text-sm text-gray-500">Nessun errore registrato nel job selezionato.</p>
+            )}
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MetricCard({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className="rounded-2xl border border-[#dfe7dc] bg-white px-4 py-4">
+      <p className="text-xs uppercase tracking-[0.18em] text-gray-500">{label}</p>
+      <p className="mt-2 text-2xl font-semibold text-gray-900">{value}</p>
+    </div>
   );
 }

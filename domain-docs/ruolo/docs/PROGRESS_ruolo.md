@@ -18,7 +18,7 @@
 | M2 API e query layer | ✅ done | Repository, schemas, route import + query, router.py |
 | M3 Bootstrap e integrazione | ✅ done | Section keys, flag module_ruolo, router registrato in api/router.py |
 | M4 Frontend | ✅ done | Dashboard, avvisi, dettaglio, stats, import, widget soggetto |
-| M5 Hardening | 🔄 parziale | Permessi require_module attivi; test API e integration test pendenti |
+| M5 Hardening | ✅ completo | Permessi require_module attivi; test API, parser/import realistici e catasto parcels coperti |
 
 ---
 
@@ -118,9 +118,20 @@
 - [x] Permessi `require_module("ruolo")` applicati su tutti gli endpoint
 - [x] Fix permessi admin esistenti: migration di backfill `module_ruolo` per account `admin` / `super_admin` creati prima del modulo
 - [x] Export CSV `GET /ruolo/avvisi/export` implementato
-- [ ] `backend/tests/ruolo/test_import.py` — import, idempotenza, orfani (pendente)
-- [ ] `backend/tests/ruolo/test_api.py` — endpoint principali (pendente)
-- [ ] `backend/tests/ruolo/test_catasto_parcels.py` — logica temporale (pendente)
+- [x] Compatibilità Pydantic v2/UUID sugli endpoint `GET /ruolo/import/jobs`, `GET /ruolo/import/jobs/{job_id}` e sui response model `ruolo/schemas.py`
+  - Fixato il mismatch tra UUID ORM nativi e campi `str` nei model di risposta, mantenendo serializzazione JSON string verso il frontend
+  - Aggiunto test API dedicato `backend/tests/ruolo/test_api.py`
+- [x] Allineamento parser/import ai file DMP reali 2025 di Capacitàs
+  - Lo split delle `Partita CNC` ora supporta sia il primo header con prefisso `<qm500>--` sia i blocchi successivi con header `---------Partita CNC ...`
+  - Normalizzato `catasto_comuni.codice_sister` composito (es. `F272#MOGORO#0#0`) al codice catastale corto usabile in `catasto_parcels.comune_codice`
+  - Aggiunti test `backend/tests/ruolo/test_parser.py` e `backend/tests/ruolo/test_import_helpers.py`
+- [x] Report job Ruolo persistito e consultabile da UI
+  - `params_json` del job contiene `report_summary` e `report_preview` con motivazioni dei casi `skipped` / `error`
+  - In `/ruolo/import` ogni card job espone una modale “Apri report” con riepilogo e dettaglio operativo
+  - Semantica esplicitata: `records_skipped` = avvisi importati ma non collegati a un soggetto in Anagrafica
+- [x] `backend/tests/ruolo/test_import.py` — import service, report job, skipped/error preview
+- [x] `backend/tests/ruolo/test_catasto_parcels.py` — logica temporale `catasto_parcels`
+- [x] `backend/tests/ruolo/test_import_integration.py` — smoke `integration-light` su blocchi DMP 2025 realistici con parser reale, merge duplicati, skipped report e filtro sezioni `CONSUMI`
 - [ ] Import completo file Ruolo 2024 (~9.810 partite) su dati reali (pendente)
 
 ---

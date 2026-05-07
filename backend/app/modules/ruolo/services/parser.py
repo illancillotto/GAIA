@@ -195,6 +195,10 @@ def _parse_particella_positional(
 
     if not foglio and not particella_val:
         return None
+    if not foglio.isdigit() or not particella_val.isdigit():
+        return None
+    if any("=" in (vals.get(key) or "") for key in ("dom", "dis", "fog", "part", "sub", "colt")):
+        return None
 
     sup_cata = safe_decimal(vals.get("sup_cata", ""))
     sup_ha = (sup_cata / Decimal("100")) if sup_cata else None
@@ -232,6 +236,8 @@ def _parse_particella_line(values: list[str]) -> ParsedParticella | None:
     con DOM=None, SUB=None, IRRIG=None, IST=None.
     """
     if not values or len(values) < 4:
+        return None
+    if any("=" in value for value in values):
         return None
 
     def safe_decimal(s: str) -> Decimal | None:
@@ -316,6 +322,9 @@ def _parse_particella_line(values: list[str]) -> ParsedParticella | None:
     else:
         return None
 
+    if not fog.isdigit() or not part.isdigit():
+        return None
+
     sup_cata = safe_decimal(sup_cata_s)
     sup_ha = (sup_cata / Decimal("100")) if sup_cata else None
 
@@ -340,7 +349,10 @@ def _parse_particella_line(values: list[str]) -> ParsedParticella | None:
 # ---------------------------------------------------------------------------
 
 _RE_CNC_HEADER = re.compile(r'Partita CNC\s+([\d.]+)')
-_RE_INIZIO = re.compile(r'<inizio>')
+_RE_CNC_BLOCK_HEADER = re.compile(
+    r'^(?:<qm500>--|---------)?Partita CNC\s+([\d.]+).*?<inizio>\s*$',
+    re.MULTILINE,
+)
 _RE_FINE = re.compile(r'<-fine->')
 
 
@@ -349,19 +361,16 @@ def _split_blocks_v2(raw_text: str) -> list[tuple[str, str]]:
     Ritorna una lista di (codice_cnc, blocco_testo) per ogni partita CNC trovata.
     """
     results: list[tuple[str, str]] = []
-    inizio_positions = [m.start() for m in _RE_INIZIO.finditer(raw_text)]
+    matches = list(_RE_CNC_BLOCK_HEADER.finditer(raw_text))
 
-    for pos in inizio_positions:
-        preceding = raw_text[max(0, pos - 300):pos]
-        cnc_match = None
-        for m in _RE_CNC_HEADER.finditer(preceding):
-            cnc_match = m
-        codice_cnc = cnc_match.group(1) if cnc_match else "UNKNOWN"
-
-        after = raw_text[pos + len("<inizio>"):]
-        fine_match = _RE_FINE.search(after)
-        block = after[:fine_match.start()] if fine_match else after
-
+    for idx, match in enumerate(matches):
+        codice_cnc = match.group(1)
+        block_start = match.end()
+        block_end = matches[idx + 1].start() if idx + 1 < len(matches) else len(raw_text)
+        block = raw_text[block_start:block_end]
+        fine_match = _RE_FINE.search(block)
+        if fine_match:
+            block = block[:fine_match.start()]
         results.append((codice_cnc, block))
     return results
 
@@ -428,6 +437,10 @@ _RE_NP_HEADER_PART = re.compile(
     re.IGNORECASE,
 )
 _RE_NP_LINE = re.compile(r'^NP\s+(\d+)\s+(.*)')
+_RE_NP_STOP_PARTICELLE = re.compile(
+    r'NP\s+\d+\s+(?:CONSUMI DA CONTATORE:|ANNO DOMANDA DISTRETTO|LEGENDA:|DOM\.=DOMANDA IRRIGUA|SUP\.CATA\.=SUPERFICIE CATASTALE|MANUT\.\s*=MANUTENZIONE|IST\.=ISTITUZIONALE)',
+    re.IGNORECASE,
+)
 
 
 def _parse_partite_block(block: str) -> list[ParsedPartita]:
@@ -499,10 +512,17 @@ def _parse_partite_block(block: str) -> list[ParsedPartita]:
             in_particelle = True
             continue
 
+        if _RE_NP_STOP_PARTICELLE.match(line):
+            in_particelle = False
+            continue
+
         # Riga NP generica → riga particella
         m_np = _RE_NP_LINE.match(line)
         if m_np and in_particelle:
             data_content, _ = _strip_np_prefix(line)
+            stripped = data_content.strip()
+            if not stripped or set(stripped) == {"="}:
+                continue
             if col_positions:
                 particella = _parse_particella_positional(data_content, col_positions)
             else:

@@ -78,6 +78,24 @@ N4
 
 FULL_SAMPLE = SAMPLE_PARTITA_1 + "\n" + SAMPLE_PARTITA_2
 
+REALISTIC_MULTI_HEADER_SAMPLE = """\
+<qm500>--Partita CNC 01.02025000000101------------------------------------------<017.743><01.A><02025000000101><inizio>
+N2 MCCPLA69E23F272E 00000000 00 N
+MACCIONI PAOLO 23.05.1969 F272 MOGORO(OR)
+Dom: VIA POD.113 CASA 49 MORIMENTA 00000 09095 F272 MOGORO(OR)
+Res: 00000 00000 ( )
+NP  4  PARTITA 0A1102766/00000 BENI IN COMUNE DI PABILLONIS
+----------------<017.743><01.A><02025000000101><-fine->
+
+---------Partita CNC 01.02025000000303------------------------------------------<017.743><01.A><02025000000303><inizio>
+N2 MDDLSE06L64H856X 00000000 00 N
+MEDDA ELISA 24.07.2006 H856 SAN GAVINO MONREALE(VS)
+Dom: VIA NAPOLI N 2 A INT 00006 09030 G207 PABILLONIS(VS)
+Res: 00000 00000 ( )
+NP  4  PARTITA 0A1404173/00000 BENI IN COMUNE DI PABILLONIS
+----------------<017.743><01.A><02025000000303><-fine->
+"""
+
 
 # ---------------------------------------------------------------------------
 # Test 1: parse delle due partite di esempio
@@ -172,6 +190,40 @@ def test_parse_riga_malformata_non_interrompe():
     result = parse_ruolo_file(malformed + SAMPLE_PARTITA_2)
     # La seconda partita deve essere parsata correttamente
     assert len(result) >= 1
+
+
+def test_parse_realistic_headers_without_qm500_on_following_blocks():
+    result = parse_ruolo_file(REALISTIC_MULTI_HEADER_SAMPLE)
+    assert len(result) == 2
+    assert result[0].codice_cnc == "01.02025000000101"
+    assert result[1].codice_cnc == "01.02025000000303"
+
+
+def test_parse_particelle_stops_before_consumi_section():
+    sample = """\
+<qm500>--Partita CNC 01.02025000634843------------------------------------------<017.743><01.A><02025000634843><inizio>
+N2 SRRDNC42A05M153H 00000000 00 N
+SERRA DOMENICO FELICE 05.01.1942 M153 ZEDDIANI(OR)
+Dom: VIA ROMA 00112 09070 M153 ZEDDIANI(OR)
+Res: 00000 00000 ( )
+NP   4 PARTITA 000000548/00000 BENI IN COMUNE DI ZEDDIANI
+NP   5 CONTRIBUENTE: SERRA DOMENICO FELICE                        C.F. SRRDNC42A05M153H
+NP  10 DOM. DIS. FOG. PART.  SUB SUP.CATA.  SUP.IRR. COLT.     MANUT.   IRRIG.     IST.
+NP  11         7    8   752          1.870                       6,83              4,87
+NP  12         7    9    27    A     5.565                      20,31             14,51
+NP  16 CONSUMI DA CONTATORE:      908,000 MC    IMPOSTA:      10,90 EURO (TRIBUTO 0668)
+NP  17 ANNO DOMANDA DISTRETTO SUP.DOMANDA CONTATORE  SERIALE    TESSERA   CONSUMO (MC)
+NP  18 2025    1539         7             1846000490                           908,000
+NP  19 ================================================================================
+N4
+    2025 0668        90.800           70,00  (L.       135.539 )
+    OPERE DI BONIFICA (UTENZA 025006348)
+----------------<017.743><01.A><02025000634843><-fine->
+"""
+    result = parse_ruolo_file(sample)
+    assert len(result) == 1
+    assert len(result[0].partite) == 1
+    assert len(result[0].partite[0].particelle) == 2
 
 
 # ---------------------------------------------------------------------------

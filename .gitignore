@@ -28,6 +28,7 @@ frontend/.env
 .venv/
 secrets/pdnd/*
 !secrets/pdnd/.gitkeep
+.venv-test-catasto/
 
 # Logs
 logs/
@@ -54,6 +55,7 @@ anagrafica_data.tar.gz
 catasto_data.tar.gz
 gaia-images.tar.gz
 postgres_data.tar.gz
+.pytest-gaia.db
 
 # ── GSD baseline (auto-generated) ──
 .gsd

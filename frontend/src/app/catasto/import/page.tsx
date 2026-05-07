@@ -439,85 +439,6 @@ export default function CatastoImportPage() {
           )}
         </article>
 
-        <article className="panel-card">
-          <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-sm font-medium text-gray-900">Storico import recenti</p>
-                <p className="mt-1 text-sm text-gray-500">Ultimi batch {batchTipoLabel(currentBatchTipo).toLowerCase()} eseguiti dal modulo Catasto.</p>
-              </div>
-            <p className="text-sm text-gray-500">{history.length} batch</p>
-          </div>
-
-          <div className="mt-4 grid gap-3 md:grid-cols-2">
-            <label className="text-sm font-medium text-gray-700">
-              Stato
-              <select className="form-control mt-1" value={historyStatus} onChange={(e) => setHistoryStatus(e.target.value)}>
-                <option value="">Tutti</option>
-                <option value="processing">Processing</option>
-                <option value="completed">Completed</option>
-                <option value="failed">Failed</option>
-                <option value="replaced">Replaced</option>
-              </select>
-            </label>
-            <label className="text-sm font-medium text-gray-700">
-              Limite
-              <select className="form-control mt-1" value={String(historyLimit)} onChange={(e) => setHistoryLimit(Number(e.target.value))}>
-                <option value="5">5</option>
-                <option value="10">10</option>
-                <option value="20">20</option>
-              </select>
-            </label>
-          </div>
-
-          {history.length === 0 ? (
-            <div className="mt-4">
-              <EmptyState icon={SearchIcon} title="Nessuno storico disponibile" description="Non risultano import recenti per il modulo Catasto." />
-            </div>
-          ) : (
-            <div className="mt-4 overflow-x-auto">
-              <table className="data-table">
-                <thead>
-                  <tr>
-                    <th>Creato</th>
-                    <th>File</th>
-                    <th>Stato</th>
-                    <th>Importate</th>
-                    <th>Anomalie</th>
-                    <th>Azioni</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {history.map((item) => (
-                    <tr key={item.id}>
-                      <td className="text-sm text-gray-600">{formatDateTime(item.created_at)}</td>
-                      <td className="text-sm font-medium text-gray-900">{item.filename}</td>
-                      <td>
-                        <ImportStatusBadge status={item.status} />
-                      </td>
-                      <td className="text-sm text-gray-600">{item.righe_importate}</td>
-                      <td className="text-sm text-gray-600">{item.righe_anomalie}</td>
-                      <td>
-                        <div className="flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            className="btn-secondary"
-                            onClick={() => void reopenBatch(item)}
-                          >
-                            Apri report
-                          </button>
-                          <Link className="btn-secondary" href={`/catasto/import/${item.id}`}>
-                            Dettaglio
-                          </Link>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </article>
-
         {step === "upload" ? (
           <article className="panel-card">
             <div className="flex items-start justify-between gap-4">
@@ -847,7 +768,7 @@ export default function CatastoImportPage() {
                 </p>
               </div>
             </div>
-            <div className="mt-4 grid gap-3 md:grid-cols-4">
+            <div className="mt-4 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
               <div className="rounded-xl border border-gray-100 bg-white p-4">
                 <p className="text-xs uppercase tracking-wide text-gray-400">Senza match</p>
                 <p className="mt-1 text-lg font-semibold text-gray-900">
@@ -858,6 +779,18 @@ export default function CatastoImportPage() {
                 <p className="text-xs uppercase tracking-wide text-gray-400">Comuni non risolti</p>
                 <p className="mt-1 text-lg font-semibold text-gray-900">
                   {safeNumber((batch.report_json as Record<string, unknown> | null)?.["righe_scartate_comune_non_risolto"])}
+                </p>
+              </div>
+              <div className="rounded-xl border border-gray-100 bg-white p-4">
+                <p className="text-xs uppercase tracking-wide text-gray-400">Duplicati collassati</p>
+                <p className="mt-1 text-lg font-semibold text-gray-900">
+                  {safeNumber((batch.report_json as Record<string, unknown> | null)?.["righe_duplicate_collassate"])}
+                </p>
+              </div>
+              <div className="rounded-xl border border-gray-100 bg-white p-4">
+                <p className="text-xs uppercase tracking-wide text-gray-400">Duplicati in conflitto</p>
+                <p className="mt-1 text-lg font-semibold text-gray-900">
+                  {safeNumber((batch.report_json as Record<string, unknown> | null)?.["righe_duplicate_conflitto"])}
                 </p>
               </div>
               <div className="rounded-xl border border-gray-100 bg-white p-4">
@@ -872,6 +805,17 @@ export default function CatastoImportPage() {
                   {safeNumber((batch.report_json as Record<string, unknown> | null)?.["history_written"])}
                 </p>
               </div>
+            </div>
+            <div className="mt-4 rounded-xl border border-[#1D4E35]/10 bg-[#f7fbf8] px-4 py-3 text-sm text-gray-600">
+              <p>
+                <strong className="font-semibold text-gray-800">Senza match</strong>: il comune/sezione/foglio/particella del file e stato letto correttamente, ma non esiste una particella corrente corrispondente in archivio.
+              </p>
+              <p className="mt-2">
+                <strong className="font-semibold text-gray-800">Duplicati collassati</strong>: nel file ci sono piu righe per la stessa particella logica e il sistema le ha accorpate in una sola chiave.
+              </p>
+              <p className="mt-2">
+                <strong className="font-semibold text-gray-800">Duplicati in conflitto</strong>: il file contiene piu righe per la stessa particella logica ma con distretti diversi, quindi il dato sorgente e incoerente.
+              </p>
             </div>
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               <div className="rounded-xl border border-gray-100 bg-white p-4">
@@ -898,6 +842,85 @@ export default function CatastoImportPage() {
             </div>
           </article>
         ) : null}
+
+        <article className="panel-card">
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-sm font-medium text-gray-900">Storico import recenti</p>
+              <p className="mt-1 text-sm text-gray-500">Ultimi batch {batchTipoLabel(currentBatchTipo).toLowerCase()} eseguiti dal modulo Catasto.</p>
+            </div>
+            <p className="text-sm text-gray-500">{history.length} batch</p>
+          </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
+            <label className="text-sm font-medium text-gray-700">
+              Stato
+              <select className="form-control mt-1" value={historyStatus} onChange={(e) => setHistoryStatus(e.target.value)}>
+                <option value="">Tutti</option>
+                <option value="processing">Processing</option>
+                <option value="completed">Completed</option>
+                <option value="failed">Failed</option>
+                <option value="replaced">Replaced</option>
+              </select>
+            </label>
+            <label className="text-sm font-medium text-gray-700">
+              Limite
+              <select className="form-control mt-1" value={String(historyLimit)} onChange={(e) => setHistoryLimit(Number(e.target.value))}>
+                <option value="5">5</option>
+                <option value="10">10</option>
+                <option value="20">20</option>
+              </select>
+            </label>
+          </div>
+
+          {history.length === 0 ? (
+            <div className="mt-4">
+              <EmptyState icon={SearchIcon} title="Nessuno storico disponibile" description="Non risultano import recenti per il modulo Catasto." />
+            </div>
+          ) : (
+            <div className="mt-4 overflow-x-auto">
+              <table className="data-table">
+                <thead>
+                  <tr>
+                    <th>Creato</th>
+                    <th>File</th>
+                    <th>Stato</th>
+                    <th>Importate</th>
+                    <th>Anomalie</th>
+                    <th>Azioni</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {history.map((item) => (
+                    <tr key={item.id}>
+                      <td className="text-sm text-gray-600">{formatDateTime(item.created_at)}</td>
+                      <td className="text-sm font-medium text-gray-900">{item.filename}</td>
+                      <td>
+                        <ImportStatusBadge status={item.status} />
+                      </td>
+                      <td className="text-sm text-gray-600">{item.righe_importate}</td>
+                      <td className="text-sm text-gray-600">{item.righe_anomalie}</td>
+                      <td>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            className="btn-secondary"
+                            onClick={() => void reopenBatch(item)}
+                          >
+                            Apri report
+                          </button>
+                          <Link className="btn-secondary" href={`/catasto/import/${item.id}`}>
+                            Dettaglio
+                          </Link>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </article>
 
         {step === "report" && batch?.tipo !== "shapefile" && batch?.tipo !== "shapefile_distretti" && batch?.tipo !== "distretti_excel" ? (
           <div className="grid gap-6 xl:grid-cols-2">

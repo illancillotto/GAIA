@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 from typing import Any
 
@@ -13,7 +14,7 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field
 class RuoloImportJobResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: str
+    id: uuid.UUID
     anno_tributario: int
     filename: str | None
     status: str
@@ -44,7 +45,7 @@ class RuoloImportJobListResponse(BaseModel):
 
 
 class RuoloImportUploadResponse(BaseModel):
-    job_id: str
+    job_id: uuid.UUID
     status: str
     anno_tributario: int
     warning_existing: bool = False
@@ -62,8 +63,8 @@ class RuoloImportYearDetectionResponse(BaseModel):
 class RuoloParticellaResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: str
-    partita_id: str
+    id: uuid.UUID
+    partita_id: uuid.UUID
     anno_tributario: int
     domanda_irrigua: str | None = None
     distretto: str | None = None
@@ -77,7 +78,7 @@ class RuoloParticellaResponse(BaseModel):
     importo_manut: float | None = None
     importo_irrig: float | None = None
     importo_ist: float | None = None
-    catasto_parcel_id: str | None = None
+    catasto_parcel_id: uuid.UUID | None = None
     created_at: datetime
 
 
@@ -88,8 +89,8 @@ class RuoloParticellaResponse(BaseModel):
 class RuoloPartitaResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: str
-    avviso_id: str
+    id: uuid.UUID
+    avviso_id: uuid.UUID
     codice_partita: str
     comune_nome: str
     comune_codice: str | None = None
@@ -109,10 +110,10 @@ class RuoloPartitaResponse(BaseModel):
 class RuoloAvvisoListItemResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: str
+    id: uuid.UUID
     codice_cnc: str
     anno_tributario: int
-    subject_id: str | None = None
+    subject_id: uuid.UUID | None = None
     codice_fiscale_raw: str | None = None
     nominativo_raw: str | None = None
     codice_utenza: str | None = None
@@ -136,11 +137,11 @@ class RuoloAvvisoListResponse(BaseModel):
 class RuoloAvvisoDetailResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: str
-    import_job_id: str
+    id: uuid.UUID
+    import_job_id: uuid.UUID
     codice_cnc: str
     anno_tributario: int
-    subject_id: str | None = None
+    subject_id: uuid.UUID | None = None
     codice_fiscale_raw: str | None = None
     nominativo_raw: str | None = None
     domicilio_raw: str | None = None
@@ -200,7 +201,7 @@ class RuoloStatsComuneResponse(BaseModel):
 class CatastoParcelResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    id: str
+    id: uuid.UUID
     comune_codice: str
     comune_nome: str
     foglio: str
