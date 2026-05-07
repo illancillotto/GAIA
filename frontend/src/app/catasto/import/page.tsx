@@ -16,13 +16,14 @@ import {
   catastoGetImportSummary,
   catastoUploadCapacitas,
   catastoUploadDistrettiExcel,
+  catastoUploadShapefile,
 } from "@/lib/api/catasto";
 import { ApiError, isAuthError } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import type { CatAnomaliaListResponse, CatImportBatch, CatImportSummary, UUID } from "@/types/catasto";
 
 type StepKey = "upload" | "progress" | "report";
-type ImportType = "capacitas" | "distretti_excel";
+type ImportType = "capacitas" | "shapefile_particelle" | "distretti_excel";
 
 type PreviewAnomalia = {
   riga?: number;
@@ -53,11 +54,13 @@ function formatDateTime(value: string | null): string {
 
 function importTypeToBatchTipo(importType: ImportType): string {
   if (importType === "capacitas") return "capacitas_ruolo";
+  if (importType === "shapefile_particelle") return "shapefile";
   return "distretti_excel";
 }
 
 function importTypeLabel(importType: ImportType): string {
   if (importType === "capacitas") return "Capacitas (Excel)";
+  if (importType === "shapefile_particelle") return "Particelle (Shapefile ZIP)";
   return "Aggiorna distretti (Excel)";
 }
 
@@ -115,6 +118,7 @@ export default function CatastoImportPage() {
   const [importType, setImportType] = useState<ImportType>("capacitas");
   const [file, setFile] = useState<File | null>(null);
   const [force, setForce] = useState(false);
+  const [sourceSrid, setSourceSrid] = useState(4326);
   const [uploadProgress, setUploadProgress] = useState(0);
 
   const [batchId, setBatchId] = useState<UUID | null>(null);
@@ -186,7 +190,12 @@ export default function CatastoImportPage() {
     setUploadProgress(0);
     try {
       const result =
-        importType === "capacitas"
+        importType === "shapefile_particelle"
+          ? await catastoUploadShapefile(token, file, {
+              sourceSrid,
+              onProgress: (p) => setUploadProgress(p),
+            })
+          : importType === "capacitas"
           ? await catastoUploadCapacitas(token, file, {
               force,
               onProgress: (p) => setUploadProgress(p),
@@ -528,6 +537,13 @@ export default function CatastoImportPage() {
               </button>
               <button
                 type="button"
+                className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition ${importType === "shapefile_particelle" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                onClick={() => { setImportType("shapefile_particelle"); setFile(null); }}
+              >
+                Particelle (ZIP)
+              </button>
+              <button
+                type="button"
                 className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition ${importType === "distretti_excel" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
                 onClick={() => { setImportType("distretti_excel"); setFile(null); }}
               >
@@ -536,7 +552,7 @@ export default function CatastoImportPage() {
             </div>
 
             <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              Gli import ZIP di particelle e distretti restano disponibili lato backend/API, ma sono disabilitati in questa pagina frontend.
+              L&apos;import ZIP dei distretti resta disponibile lato backend/API, ma non e presentato in questa pagina frontend.
             </div>
 
             {importType === "capacitas" ? (
@@ -552,6 +568,26 @@ export default function CatastoImportPage() {
                 <label className="flex items-center gap-2 rounded-xl border border-gray-100 bg-white px-4 py-3 text-sm text-gray-700">
                   <input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} />
                   Force re-import (sostituisce batch precedente con stesso hash)
+                </label>
+              </div>
+            ) : importType === "shapefile_particelle" ? (
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <FilePicker
+                  id="catasto-import-particelle-file"
+                  label="Archivio ZIP particelle"
+                  accept=".zip"
+                  file={file}
+                  onChange={setFile}
+                  hint="ZIP del layer particelle contenente .shp, .dbf e .shx."
+                />
+                <label className="text-sm font-medium text-gray-700">
+                  SRID sorgente
+                  <select className="form-control mt-1" value={String(sourceSrid)} onChange={(e) => setSourceSrid(Number(e.target.value))}>
+                    <option value="4326">4326 — WGS 84 (default)</option>
+                    <option value="3003">3003 — Monte Mario / Italy zone 1</option>
+                    <option value="32632">32632 — WGS 84 / UTM zone 32N</option>
+                    <option value="6707">6707 — RDN2008 / Italy zone 12</option>
+                  </select>
                 </label>
               </div>
             ) : (
