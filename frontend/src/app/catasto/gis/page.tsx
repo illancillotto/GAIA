@@ -95,6 +95,7 @@ function buildImportStatsFromDetail(detail: GisSavedSelectionDetail): ImportStat
 
 export default function CatastoGisPage() {
   const [token, setToken] = useState<string | null>(null);
+  const [autoSelectionId, setAutoSelectionId] = useState<string | null>(null);
   const [hasDrawing, setHasDrawing] = useState(false);
   const [drawSignal, setDrawSignal] = useState(0);
   const [clearSignal, setClearSignal] = useState(0);
@@ -116,6 +117,7 @@ export default function CatastoGisPage() {
   const [overlayLayers, setOverlayLayers] = useState<OverlayLayerState[]>([]);
   const [savedSelections, setSavedSelections] = useState<GisSavedSelectionSummary[]>([]);
   const [savedSelectionOpacities, setSavedSelectionOpacities] = useState<Record<string, number>>({});
+  const [savedSelectionFills, setSavedSelectionFills] = useState<Record<string, boolean>>({});
   const [savedBusy, setSavedBusy] = useState(false);
   const [focusGeojson, setFocusGeojson] = useState<GeoJSON.FeatureCollection | null>(null);
   const [focusSignal, setFocusSignal] = useState(0);
@@ -126,10 +128,22 @@ export default function CatastoGisPage() {
     () => new Set(overlayLayers.filter((layer) => layer.saved_selection_id).map((layer) => layer.saved_selection_id as string)),
     [overlayLayers],
   );
+  const loadedSavedSelectionLayerMap = useMemo(
+    () =>
+      new Map(
+        overlayLayers
+          .filter((layer) => layer.saved_selection_id)
+          .map((layer) => [layer.saved_selection_id as string, layer] as const),
+      ),
+    [overlayLayers],
+  );
   const visibleOverlayLayers = useMemo(() => overlayLayers.filter((layer) => layer.visible), [overlayLayers]);
+  const autoLoadedSelectionRef = useRef<string | null>(null);
 
   useEffect(() => {
     setToken(getStoredAccessToken());
+    const params = new URLSearchParams(window.location.search);
+    setAutoSelectionId(params.get("selection"));
   }, []);
 
   const refreshSavedSelections = useCallback(async () => {
@@ -377,12 +391,20 @@ export default function CatastoGisPage() {
     }
   }, [overlayLayers, refreshSavedSelections, token]);
 
-  const handleLoadSavedSelection = useCallback(async (selectionId: string) => {
+  const handleLoadSavedSelection = useCallback(async (
+    selectionId: string,
+    overrides?: { opacity?: number; showFill?: boolean },
+  ) => {
     if (!token) return;
 
     const existing = overlayLayers.find((layer) => layer.saved_selection_id === selectionId);
     if (existing) {
-      updateOverlayLayer(existing.layer_key, (layer) => ({ ...layer, visible: true }));
+      updateOverlayLayer(existing.layer_key, (layer) => ({
+        ...layer,
+        visible: true,
+        opacity: overrides?.opacity ?? layer.opacity,
+        showFill: overrides?.showFill ?? layer.showFill,
+      }));
       focusLayerGeojson(existing.geojson);
       setGisInfo(`Layer già disponibile in mappa: ${existing.name}.`);
       setGisError(null);
@@ -399,7 +421,8 @@ export default function CatastoGisPage() {
         saved_selection_id: detail.id,
         name: detail.name,
         color: detail.color,
-        opacity: savedSelectionOpacities[selectionId] ?? 0.55,
+        opacity: overrides?.opacity ?? savedSelectionOpacities[selectionId] ?? 0.55,
+        showFill: overrides?.showFill ?? savedSelectionFills[selectionId] ?? true,
         visible: true,
         source_filename: detail.source_filename ?? null,
         geojson: detail.geojson ?? { type: "FeatureCollection", features: [] },
@@ -415,7 +438,7 @@ export default function CatastoGisPage() {
     } finally {
       setSavedBusy(false);
     }
-  }, [focusLayerGeojson, overlayLayers, savedSelectionOpacities, token, updateOverlayLayer]);
+  }, [focusLayerGeojson, overlayLayers, savedSelectionFills, savedSelectionOpacities, token, updateOverlayLayer]);
 
   const handleUpdatePersistedLayer = useCallback(async (layerKey: string) => {
     if (!token) return;
@@ -477,12 +500,34 @@ export default function CatastoGisPage() {
     }
   }, [token]);
 
-  const handleArchiveOpacityChange = useCallback((selectionId: string, opacity: number) => {
+  const handleArchiveOpacityChange = useCallback(async (selectionId: string, opacity: number) => {
     setSavedSelectionOpacities((prev) => ({ ...prev, [selectionId]: opacity }));
     setOverlayLayers((layers) =>
       layers.map((l) => l.saved_selection_id === selectionId ? { ...l, opacity } : l),
     );
-  }, []);
+    if (!overlayLayers.some((layer) => layer.saved_selection_id === selectionId)) {
+      await handleLoadSavedSelection(selectionId, { opacity });
+    }
+  }, [handleLoadSavedSelection, overlayLayers]);
+
+  const handleArchiveFillChange = useCallback(async (selectionId: string, showFill: boolean) => {
+    setSavedSelectionFills((prev) => ({ ...prev, [selectionId]: showFill }));
+    setOverlayLayers((layers) =>
+      layers.map((l) => l.saved_selection_id === selectionId ? { ...l, showFill } : l),
+    );
+    if (!overlayLayers.some((layer) => layer.saved_selection_id === selectionId)) {
+      await handleLoadSavedSelection(selectionId, { showFill });
+    }
+  }, [handleLoadSavedSelection, overlayLayers]);
+
+  useEffect(() => {
+    if (!token || !autoSelectionId) return;
+    if (autoLoadedSelectionRef.current === autoSelectionId) return;
+    autoLoadedSelectionRef.current = autoSelectionId;
+    void handleLoadSavedSelection(autoSelectionId).catch((e) => {
+      setGisError(e instanceof Error ? e.message : "Caricamento layer da URL fallito");
+    });
+  }, [autoSelectionId, handleLoadSavedSelection, token]);
 
   return (
     <CatastoPage
@@ -538,35 +583,26 @@ export default function CatastoGisPage() {
             ) : null}
 
             {isExpanded ? (
-              <div className="relative flex items-center justify-between gap-3 border-b border-white/10 bg-gray-950/90 px-4 py-3 text-white backdrop-blur">
+              <div className="relative flex items-center justify-between gap-3 border-b border-white/10 bg-gray-950/90 px-4 py-2 text-white backdrop-blur">
                 <div>
                   <div className="text-sm font-semibold">Vista estesa GIS</div>
-                  <div className="text-xs text-white/70">Premi Esc per uscire</div>
+                  <div className="text-[11px] text-white/65">Premi Esc per uscire</div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <DrawingTools
-                    onDrawPolygon={() => setDrawSignal((value) => value + 1)}
-                    onClearDrawing={handleClearSelection}
-                    isLoading={isLoading}
-                    hasSelection={hasDrawing}
-                    nParticelle={result?.n_particelle}
-                  />
-                  <button
-                    type="button"
-                    onClick={closeExpanded}
-                    className="inline-flex items-center justify-center rounded-full border border-white/15 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-white/60"
-                  >
-                    Chiudi
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={closeExpanded}
+                  className="inline-flex items-center justify-center rounded-full border border-white/15 bg-white/10 px-3.5 py-1.5 text-sm font-semibold text-white transition hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-white/60"
+                >
+                  Chiudi
+                </button>
               </div>
             ) : null}
 
-            <div className={isExpanded ? "relative pointer-events-none flex min-h-0 flex-1 p-3" : "h-full"}>
+            <div className={isExpanded ? "relative pointer-events-none flex min-h-0 flex-1 gap-3 p-3" : "h-full"}>
               <div
                 className={
                   isExpanded
-                    ? "pointer-events-auto min-h-0 w-full overflow-hidden rounded-2xl bg-gray-100 shadow-2xl ring-1 ring-white/10"
+                    ? "pointer-events-auto min-h-0 flex-1 overflow-hidden rounded-2xl bg-gray-100 shadow-2xl ring-1 ring-white/10"
                     : "h-full"
                 }
               >
@@ -595,6 +631,128 @@ export default function CatastoGisPage() {
                   className={isExpanded ? "min-h-0 h-full rounded-2xl" : ""}
                 />
               </div>
+              {isExpanded ? (
+                <aside className="pointer-events-auto hidden w-[320px] shrink-0 overflow-y-auto rounded-2xl border border-white/10 bg-gray-950/88 p-4 text-white shadow-2xl ring-1 ring-white/10 lg:block">
+                  <div className="flex flex-col gap-4">
+                    <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
+                      <p className="mb-2 text-[9px] font-semibold uppercase tracking-widest text-white/50">Disegna area</p>
+                      <DrawingTools
+                        onDrawPolygon={() => setDrawSignal((value) => value + 1)}
+                        onClearDrawing={handleClearSelection}
+                        isLoading={isLoading}
+                        hasSelection={hasDrawing}
+                        nParticelle={result?.n_particelle}
+                      />
+                    </div>
+                    <div>
+                      <p className="mb-2 text-[9px] font-semibold uppercase tracking-widest text-white/50">Layer visibili</p>
+                      <div className="flex flex-wrap gap-1.5">
+                        <div className="group relative">
+                          <button
+                            type="button"
+                            onClick={() => setShowDistretti((v) => !v)}
+                            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all ${
+                              showDistretti
+                                ? "border-sky-300/40 bg-sky-400/20 text-sky-100"
+                                : "border-white/15 bg-white/5 text-white/55 hover:border-white/25 hover:text-white/80"
+                            }`}
+                          >
+                            <span className={`h-1.5 w-1.5 rounded-full transition-colors ${showDistretti ? "bg-blue-300" : "bg-white/35"}`} />
+                            Distretti
+                          </button>
+                          <div className="pointer-events-none absolute left-0 top-full z-10 mt-2 w-52 translate-y-1 rounded-2xl border border-blue-100 bg-white/95 p-3 opacity-0 shadow-xl ring-1 ring-black/5 backdrop-blur transition-all duration-150 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100">
+                            <button
+                              type="button"
+                              onClick={() => setShowDistrettiFill((v) => !v)}
+                              className={`mb-3 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium transition-all ${
+                                showDistrettiFill
+                                  ? "border-sky-200 bg-sky-50 text-sky-700"
+                                  : "border-gray-200 bg-white text-gray-500 hover:border-sky-100 hover:text-sky-700"
+                              }`}
+                            >
+                              <span className={`h-1.5 w-1.5 rounded-full transition-colors ${showDistrettiFill ? "bg-sky-400" : "bg-gray-300"}`} />
+                              Riempimento
+                            </button>
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="font-medium text-blue-900/75">Opacità bordo + fill</span>
+                              <span className="rounded-full bg-blue-50 px-2 py-0.5 font-semibold text-blue-700">
+                                {Math.round(distrettiOpacity * 100)}%
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="1"
+                              step="0.05"
+                              value={distrettiOpacity}
+                              onChange={(e) => setDistrettiOpacity(Number(e.target.value))}
+                              className="mt-2 w-full accent-blue-600"
+                            />
+                          </div>
+                        </div>
+                        <div className="group relative">
+                          <button
+                            type="button"
+                            onClick={() => setShowParticelle((v) => !v)}
+                            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all ${
+                              showParticelle
+                                ? "border-indigo-300/40 bg-indigo-400/20 text-indigo-100"
+                                : "border-white/15 bg-white/5 text-white/55 hover:border-white/25 hover:text-white/80"
+                            }`}
+                          >
+                            <span className={`h-1.5 w-1.5 rounded-full transition-colors ${showParticelle ? "bg-indigo-300" : "bg-white/35"}`} />
+                            Particelle
+                          </button>
+                          <div className="pointer-events-none absolute left-0 top-full z-10 mt-2 w-52 translate-y-1 rounded-2xl border border-indigo-100 bg-white/95 p-3 opacity-0 shadow-xl ring-1 ring-black/5 backdrop-blur transition-all duration-150 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100">
+                            <button
+                              type="button"
+                              onClick={() => setShowParticelleFill((v) => !v)}
+                              className={`mb-3 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium transition-all ${
+                                showParticelleFill
+                                  ? "border-violet-200 bg-violet-50 text-violet-700"
+                                  : "border-gray-200 bg-white text-gray-500 hover:border-violet-100 hover:text-violet-700"
+                              }`}
+                            >
+                              <span className={`h-1.5 w-1.5 rounded-full transition-colors ${showParticelleFill ? "bg-violet-400" : "bg-gray-300"}`} />
+                              Riempimento
+                            </button>
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="font-medium text-indigo-900/75">Opacità bordo + fill</span>
+                              <span className="rounded-full bg-indigo-50 px-2 py-0.5 font-semibold text-indigo-700">
+                                {Math.round(particelleOpacity * 100)}%
+                              </span>
+                            </div>
+                            <input
+                              type="range"
+                              min="0"
+                              max="1"
+                              step="0.05"
+                              value={particelleOpacity}
+                              onChange={(e) => setParticelleOpacity(Number(e.target.value))}
+                              className="w-full accent-indigo-600"
+                            />
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setHighlightSelected((v) => !v)}
+                          className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all ${
+                            highlightSelected
+                              ? "border-amber-300/40 bg-amber-400/20 text-amber-100"
+                              : "border-white/15 bg-white/5 text-white/55 hover:border-white/25 hover:text-white/80"
+                          }`}
+                        >
+                          <span className={`h-1.5 w-1.5 rounded-full transition-colors ${highlightSelected ? "bg-amber-300" : "bg-white/35"}`} />
+                          Evidenzia sel.
+                        </button>
+                      </div>
+                    </div>
+                    <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-xs text-white/70">
+                      Il layout esteso usa una sidebar destra per lasciare più altezza utile al comprensorio in mappa e raccogliere i controlli operativi fuori dall'header.
+                    </div>
+                  </div>
+                </aside>
+              ) : null}
             </div>
           </div>
 
@@ -735,13 +893,13 @@ export default function CatastoGisPage() {
                 </div>
 
                 {/* Excel import */}
-                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/30 p-3">
-                  <div className="mb-2 flex items-center justify-between gap-2">
+                <div className="rounded-2xl border border-emerald-100 bg-emerald-50/30 p-2.5">
+                  <div className="mb-1.5 flex items-center justify-between gap-2">
                     <p className="text-[10px] font-semibold uppercase tracking-widest text-emerald-700">Import da Excel</p>
                     <span className="text-[11px] text-gray-500">{overlayLayers.length.toLocaleString("it-IT")} layer in workspace</span>
                   </div>
                   <label
-                    className={`group flex cursor-pointer flex-col items-center gap-2 rounded-xl border-2 border-dashed px-4 py-5 text-center transition-all ${
+                    className={`group flex cursor-pointer flex-col items-center gap-1.5 rounded-xl border-2 border-dashed px-4 py-3.5 text-center transition-all ${
                       xlsxBusy
                         ? "cursor-wait border-gray-200 bg-gray-50 opacity-60"
                         : xlsxFile
@@ -762,7 +920,7 @@ export default function CatastoGisPage() {
                     />
                     {xlsxBusy ? (
                       <>
-                        <svg className="h-7 w-7 animate-spin text-emerald-500" fill="none" viewBox="0 0 24 24">
+                        <svg className="h-6 w-6 animate-spin text-emerald-500" fill="none" viewBox="0 0 24 24">
                           <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
                           <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
                         </svg>
@@ -770,7 +928,7 @@ export default function CatastoGisPage() {
                       </>
                     ) : xlsxFile ? (
                       <>
-                        <svg className="h-7 w-7 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <svg className="h-6 w-6 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
                         </svg>
                         <span className="max-w-full truncate text-sm font-semibold text-emerald-700">{xlsxFile.name}</span>
@@ -778,7 +936,7 @@ export default function CatastoGisPage() {
                       </>
                     ) : (
                       <>
-                        <svg className="h-7 w-7 text-gray-400 transition group-hover:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                        <svg className="h-6 w-6 text-gray-400 transition group-hover:text-indigo-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
                         </svg>
                         <span className="text-sm font-medium text-gray-600 transition group-hover:text-indigo-600">Clicca per selezionare</span>
@@ -786,7 +944,7 @@ export default function CatastoGisPage() {
                       </>
                     )}
                   </label>
-                  <p className="mt-2 text-[11px] text-gray-500">
+                  <p className="mt-1.5 text-[10px] leading-4 text-gray-500">
                     Colonne attese: <span className="font-medium">comune</span>, <span className="font-medium">sezione</span>, <span className="font-medium">foglio</span>, <span className="font-medium">particella</span>, <span className="font-medium">sub</span>. Nel campo{" "}
                     <span className="font-medium">comune</span> puoi usare nome comune, codice Capacitas numerico oppure codice catastale/Belfiore.
                   </p>
@@ -870,7 +1028,19 @@ export default function CatastoGisPage() {
                             />
                           </div>
                           <div className="mt-3 rounded-xl border border-gray-100 bg-gray-50/70 px-3 py-2">
-                            <div className="mb-1.5 flex items-center justify-between text-[11px] text-gray-500">
+                            <button
+                              type="button"
+                              onClick={() => updateOverlayLayer(layer.layer_key, (item) => ({ ...item, showFill: !(item.showFill ?? true) }))}
+                              className={`mb-2.5 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium transition-all ${
+                                (layer.showFill ?? true)
+                                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                  : "border-gray-200 bg-white text-gray-500 hover:border-emerald-100 hover:text-emerald-700"
+                              }`}
+                            >
+                              <span className={`h-1.5 w-1.5 rounded-full transition-colors ${(layer.showFill ?? true) ? "bg-emerald-400" : "bg-gray-300"}`} />
+                              Riempimento
+                            </button>
+                            <div className="flex items-center justify-between text-[11px] text-gray-500">
                               <span className="font-medium text-gray-600">Opacità</span>
                               <span className="rounded-full bg-white px-2 py-0.5 font-semibold text-gray-700 shadow-sm">
                                 {Math.round((layer.opacity ?? 0.55) * 100)}%
@@ -939,13 +1109,18 @@ export default function CatastoGisPage() {
                           Nessuna selezione salvata.
                         </div>
                       ) : (
-                        savedSelections.map((selection) => (
-                          <div
-                            key={selection.id}
-                            className={`rounded-xl border bg-white p-2 shadow-sm ${
-                              loadedSavedSelectionIds.has(selection.id) ? "border-emerald-200 ring-1 ring-emerald-100" : "border-gray-100"
-                            }`}
-                          >
+                        savedSelections.map((selection) => {
+                          const loadedLayer = loadedSavedSelectionLayerMap.get(selection.id);
+                          const effectiveShowFill = loadedLayer?.showFill ?? savedSelectionFills[selection.id] ?? true;
+                          const effectiveOpacity = loadedLayer?.opacity ?? savedSelectionOpacities[selection.id] ?? 0.55;
+
+                          return (
+                            <div
+                              key={selection.id}
+                              className={`rounded-xl border bg-white p-2 shadow-sm ${
+                                loadedSavedSelectionIds.has(selection.id) ? "border-emerald-200 ring-1 ring-emerald-100" : "border-gray-100"
+                              }`}
+                            >
                             <div className="flex items-start justify-between gap-2">
                               <div className="min-w-0">
                                 <div className="flex items-center gap-2">
@@ -973,10 +1148,22 @@ export default function CatastoGisPage() {
                               </button>
                             </div>
                             <div className="mt-2 rounded-lg border border-gray-100 bg-gray-50/70 px-2.5 py-2">
+                              <button
+                                type="button"
+                                onClick={() => handleArchiveFillChange(selection.id, !effectiveShowFill)}
+                                className={`mb-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium transition-all ${
+                                  effectiveShowFill
+                                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                    : "border-gray-200 bg-white text-gray-500 hover:border-emerald-100 hover:text-emerald-700"
+                                }`}
+                              >
+                                <span className={`h-1.5 w-1.5 rounded-full transition-colors ${effectiveShowFill ? "bg-emerald-400" : "bg-gray-300"}`} />
+                                Riempimento
+                              </button>
                               <div className="mb-1 flex items-center justify-between text-[11px]">
                                 <span className="font-medium text-gray-600">Opacità</span>
                                 <span className="font-semibold text-gray-700">
-                                  {Math.round((savedSelectionOpacities[selection.id] ?? 0.55) * 100)}%
+                                  {Math.round(effectiveOpacity * 100)}%
                                 </span>
                               </div>
                               <input
@@ -984,7 +1171,7 @@ export default function CatastoGisPage() {
                                 min="5"
                                 max="100"
                                 step="5"
-                                value={Math.round((savedSelectionOpacities[selection.id] ?? 0.55) * 100)}
+                                value={Math.round(effectiveOpacity * 100)}
                                 onChange={(e) => handleArchiveOpacityChange(selection.id, Number(e.target.value) / 100)}
                                 className="w-full accent-emerald-600"
                               />
@@ -1011,7 +1198,8 @@ export default function CatastoGisPage() {
                               </button>
                             </div>
                           </div>
-                        ))
+                          );
+                        })
                       )}
                     </div>
                   </div>

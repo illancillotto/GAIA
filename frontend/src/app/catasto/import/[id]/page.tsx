@@ -135,6 +135,7 @@ export default function CatastoImportDetailPage() {
   const [report, setReport] = useState<CatAnomaliaListResponse | null>(null);
   const [distrettiAnalysisItems, setDistrettiAnalysisItems] = useState<CatDistrettiExcelAnalysisItem[]>([]);
   const [distrettiAnalysisTotal, setDistrettiAnalysisTotal] = useState(0);
+  const [analysisLoading, setAnalysisLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [actionBusy, setActionBusy] = useState<"export" | "gis" | null>(null);
 
@@ -181,6 +182,7 @@ export default function CatastoImportDetailPage() {
     setReport(null);
     setDistrettiAnalysisItems([]);
     setDistrettiAnalysisTotal(0);
+    setAnalysisLoading(false);
     setError(null);
   }, [batchId]);
 
@@ -209,6 +211,9 @@ export default function CatastoImportDetailPage() {
       async function loadDistrettiAnalysis(): Promise<void> {
         const token = getStoredAccessToken();
         if (!token) return;
+        setAnalysisLoading(true);
+        setDistrettiAnalysisItems([]);
+        setDistrettiAnalysisTotal(0);
         try {
           const analysisTipo =
             batch?.tipo === "distretti_excel"
@@ -224,6 +229,8 @@ export default function CatastoImportDetailPage() {
           setReport(null);
         } catch (e) {
           setError(e instanceof Error ? e.message : "Errore caricamento analisi distretti Excel");
+        } finally {
+          setAnalysisLoading(false);
         }
       }
 
@@ -234,6 +241,8 @@ export default function CatastoImportDetailPage() {
     async function loadReport(): Promise<void> {
       const token = getStoredAccessToken();
       if (!token) return;
+      setAnalysisLoading(true);
+      setReport(null);
       try {
         const payload = await catastoGetImportReport(token, batchId, {
           tipo: reportTipo || undefined,
@@ -245,6 +254,8 @@ export default function CatastoImportDetailPage() {
         setDistrettiAnalysisTotal(0);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Errore caricamento report batch");
+      } finally {
+        setAnalysisLoading(false);
       }
     }
 
@@ -452,18 +463,22 @@ export default function CatastoImportDetailPage() {
                 <button
                   className="btn-secondary"
                   type="button"
-                  disabled={reportPage * 50 >= distrettiAnalysisTotal}
+                  disabled={analysisLoading || reportPage * 50 >= distrettiAnalysisTotal}
                   onClick={() => setReportPage((p) => p + 1)}
                 >
                   Next
                 </button>
-                <span className="text-sm text-gray-500">{distrettiAnalysisTotal.toLocaleString("it-IT")} record</span>
+                <span className="text-sm text-gray-500">
+                  {analysisLoading ? "Aggiornamento…" : `${distrettiAnalysisTotal.toLocaleString("it-IT")} record`}
+                </span>
               </div>
             ) : null}
           </div>
 
           {batch?.tipo === "distretti_excel" ? (
-            distrettiAnalysisItems.length === 0 ? (
+            analysisLoading ? (
+              <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 p-4 text-sm text-gray-500">Aggiornamento anomalie…</div>
+            ) : distrettiAnalysisItems.length === 0 ? (
               <div className="mt-4">
                 <EmptyState icon={SearchIcon} title="Nessuna anomalia" description="Non ci sono record per i filtri correnti." />
               </div>
@@ -497,7 +512,7 @@ export default function CatastoImportDetailPage() {
                 </table>
               </div>
             )
-          ) : !report ? (
+          ) : analysisLoading || !report ? (
             <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 p-4 text-sm text-gray-500">Caricamento lista anomalie…</div>
           ) : report.items.length === 0 ? (
             <div className="mt-4">

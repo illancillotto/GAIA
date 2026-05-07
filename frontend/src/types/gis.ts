@@ -141,6 +141,7 @@ export interface GisMapOverlayLayer {
   name: string;
   color: string;
   opacity?: number;
+  showFill?: boolean;
   visible: boolean;
   source_filename?: string | null;
   geojson?: GeoJSON.FeatureCollection | null;

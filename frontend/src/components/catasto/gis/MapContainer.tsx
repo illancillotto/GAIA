@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import maplibregl from "maplibre-gl";
 import MapboxDraw from "maplibre-gl-draw";
 
@@ -116,30 +116,37 @@ function buildCentroidFeatureCollection(collection: GeoJSON.FeatureCollection | 
   return { type: "FeatureCollection", features };
 }
 
-function buildOverlayFeatureCollection(overlayLayers: GisMapOverlayLayer[] | undefined): GeoJSON.FeatureCollection {
-  if (!overlayLayers || overlayLayers.length === 0) {
-    return { type: "FeatureCollection", features: [] };
-  }
+function buildLayerGeojson(layer: GisMapOverlayLayer): GeoJSON.FeatureCollection {
+  if (!layer.geojson) return { type: "FeatureCollection", features: [] };
+  return {
+    type: "FeatureCollection",
+    features: layer.geojson.features.map((feature) => ({
+      ...feature,
+      properties: {
+        ...(feature.properties ?? {}),
+        __overlayLayerKey: layer.layer_key,
+        __overlayName: layer.name,
+        __overlayColor: layer.color,
+        __overlaySavedSelectionId: layer.saved_selection_id ?? null,
+      },
+    })),
+  };
+}
 
-  const features: GeoJSON.Feature[] = [];
-  for (const layer of overlayLayers) {
-    if (!layer.visible || !layer.geojson) continue;
-    for (const feature of layer.geojson.features) {
-      features.push({
-        ...feature,
-        properties: {
-          ...(feature.properties ?? {}),
-          __overlayLayerKey: layer.layer_key,
-          __overlayName: layer.name,
-          __overlayColor: layer.color,
-          __overlayOpacity: layer.opacity ?? 0.55,
-          __overlaySavedSelectionId: layer.saved_selection_id ?? null,
-        },
-      });
-    }
-  }
+function buildLayerCentroidGeojson(layer: GisMapOverlayLayer): GeoJSON.FeatureCollection {
+  return buildCentroidFeatureCollection(buildLayerGeojson(layer));
+}
 
-  return { type: "FeatureCollection", features };
+const OVERLAY_LAYER_PREFIX = "overlay-";
+function overlayLayerIds(layerKey: string) {
+  const safe = layerKey.replace(/[^a-zA-Z0-9_-]/g, "_");
+  return {
+    sourceId: `${OVERLAY_LAYER_PREFIX}${safe}-source`,
+    centroidSourceId: `${OVERLAY_LAYER_PREFIX}${safe}-centroid-source`,
+    fillId: `${OVERLAY_LAYER_PREFIX}${safe}-fill`,
+    outlineId: `${OVERLAY_LAYER_PREFIX}${safe}-outline`,
+    centroidId: `${OVERLAY_LAYER_PREFIX}${safe}-centroid`,
+  };
 }
 
 function fitCollectionBounds(map: maplibregl.Map, collection: GeoJSON.FeatureCollection | null | undefined): void {
@@ -186,11 +193,7 @@ export default function MapContainer({
   const [mapError, setMapError] = useState<string | null>(null);
   const [mapReadyVersion, setMapReadyVersion] = useState(0);
   const resizeRafRef = useRef<number | null>(null);
-  const combinedOverlayGeojson = useMemo(() => buildOverlayFeatureCollection(overlayLayers), [overlayLayers]);
-  const overlayCentroids = useMemo(
-    () => buildCentroidFeatureCollection(combinedOverlayGeojson),
-    [combinedOverlayGeojson],
-  );
+  const overlayMapKeysRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
     handlersRef.current = { onGeometryDrawn, onSelectionCleared, token };
@@ -332,121 +335,14 @@ export default function MapContainer({
         filter: ["in", ["get", "id"], ["literal", []]],
       });
 
-      map.addSource("uploaded-particelle-source", {
-        type: "geojson",
-        data: { type: "FeatureCollection", features: [] },
-      });
-      map.addSource("uploaded-particelle-centroids-source", {
-        type: "geojson",
-        data: { type: "FeatureCollection", features: [] },
-      });
-      map.addLayer({
-        id: "uploaded-particelle-fill",
-        type: "fill",
-        source: "uploaded-particelle-source",
-        paint: {
-          "fill-color": ["coalesce", ["get", "__overlayColor"], "#10B981"],
-          "fill-opacity": [
-            "*",
-            ["coalesce", ["get", "__overlayOpacity"], 0.55],
-            [
-              "interpolate",
-              ["linear"],
-              ["zoom"],
-              8,
-              1,
-              11,
-              0.75,
-              14,
-              0.5,
-            ],
-          ],
-        },
-      });
-      map.addLayer({
-        id: "uploaded-particelle-outline",
-        type: "line",
-        source: "uploaded-particelle-source",
-        paint: {
-          "line-color": ["coalesce", ["get", "__overlayColor"], "#10B981"],
-          "line-opacity": [
-            "*",
-            ["coalesce", ["get", "__overlayOpacity"], 0.55],
-            0.9,
-          ],
-          "line-width": [
-            "interpolate",
-            ["linear"],
-            ["zoom"],
-            8,
-            2.5,
-            12,
-            2,
-            16,
-            1.25,
-          ],
-        },
-      });
-      map.addLayer({
-        id: "uploaded-particelle-centroids",
-        type: "circle",
-        source: "uploaded-particelle-centroids-source",
-        paint: {
-          "circle-color": ["coalesce", ["get", "__overlayColor"], "#10B981"],
-          "circle-radius": [
-            "interpolate",
-            ["linear"],
-            ["zoom"],
-            7,
-            4.5,
-            10,
-            4,
-            13,
-            3,
-            16,
-            0,
-          ],
-          "circle-opacity": [
-            "*",
-            ["coalesce", ["get", "__overlayOpacity"], 0.55],
-            [
-              "interpolate",
-              ["linear"],
-              ["zoom"],
-              7,
-              1,
-              12,
-              0.85,
-              16,
-              0,
-            ],
-          ],
-          "circle-stroke-color": "#FFFFFF",
-          "circle-stroke-opacity": [
-            "*",
-            ["coalesce", ["get", "__overlayOpacity"], 0.55],
-            0.95,
-          ],
-          "circle-stroke-width": [
-            "interpolate",
-            ["linear"],
-            ["zoom"],
-            7,
-            1.2,
-            12,
-            0.8,
-            16,
-            0,
-          ],
-        },
-      });
-
       map.on("click", async (event) => {
         const currentToken = handlersRef.current.token;
         if (!currentToken) return;
 
-        // Query in priority order: uploaded (green) > MVT particelle
-        const clickableLayers = ["uploaded-particelle-fill", "particelle-fill"].filter(
+        const overlayFillIds = Array.from(overlayMapKeysRef.current).map(
+          (key) => overlayLayerIds(key).fillId,
+        );
+        const clickableLayers = [...overlayFillIds, "particelle-fill"].filter(
           (l) => map.getLayer(l) != null,
         );
         const features = map.queryRenderedFeatures(event.point, { layers: clickableLayers });
@@ -465,7 +361,7 @@ export default function MapContainer({
         }
       });
 
-      for (const layerId of ["particelle-fill", "uploaded-particelle-fill", "distretti-fill"]) {
+      for (const layerId of ["particelle-fill", "distretti-fill"]) {
         map.on("mouseenter", layerId, () => {
           map.getCanvas().style.cursor = "pointer";
         });
@@ -597,13 +493,147 @@ export default function MapContainer({
     const map = mapRef.current;
     if (!map || mapReadyVersion === 0) return;
 
-    const source = map.getSource("uploaded-particelle-source") as maplibregl.GeoJSONSource | undefined;
-    const centroidSource = map.getSource("uploaded-particelle-centroids-source") as maplibregl.GeoJSONSource | undefined;
-    if (!source || !centroidSource) return;
+    const overlays = overlayLayers ?? [];
+    const expectedKeys = new Set(overlays.map((l) => l.layer_key));
+    // eslint-disable-next-line no-console
+    console.log("[gis overlay sync]", overlays.map((l) => ({
+      key: l.layer_key,
+      showFill: l.showFill,
+      visible: l.visible,
+      opacity: l.opacity,
+    })));
 
-    source.setData(combinedOverlayGeojson);
-    centroidSource.setData(overlayCentroids);
-  }, [combinedOverlayGeojson, mapReadyVersion, overlayCentroids]);
+    for (const key of Array.from(overlayMapKeysRef.current)) {
+      if (!expectedKeys.has(key)) {
+        const ids = overlayLayerIds(key);
+        if (map.getLayer(ids.fillId)) map.removeLayer(ids.fillId);
+        if (map.getLayer(ids.outlineId)) map.removeLayer(ids.outlineId);
+        if (map.getLayer(ids.centroidId)) map.removeLayer(ids.centroidId);
+        if (map.getSource(ids.sourceId)) map.removeSource(ids.sourceId);
+        if (map.getSource(ids.centroidSourceId)) map.removeSource(ids.centroidSourceId);
+        overlayMapKeysRef.current.delete(key);
+      }
+    }
+
+    for (const layer of overlays) {
+      const ids = overlayLayerIds(layer.layer_key);
+      const layerData = buildLayerGeojson(layer);
+      const centroidData = buildLayerCentroidGeojson(layer);
+      const opacity = layer.opacity ?? 0.55;
+      const color = layer.color ?? "#10B981";
+      const showFill = layer.showFill ?? true;
+      const isVisible = layer.visible !== false;
+
+      const fillOpacityExpr: maplibregl.ExpressionSpecification = [
+        "*",
+        opacity,
+        ["interpolate", ["linear"], ["zoom"], 8, 1, 11, 0.75, 14, 0.5],
+      ];
+      const lineOpacity = Math.min(1, opacity * 0.9);
+      const circleOpacityExpr: maplibregl.ExpressionSpecification = [
+        "*",
+        opacity,
+        ["interpolate", ["linear"], ["zoom"], 7, 1, 12, 0.85, 16, 0],
+      ];
+      const circleStrokeOpacity = Math.min(1, opacity * 0.95);
+
+      if (!overlayMapKeysRef.current.has(layer.layer_key)) {
+        map.addSource(ids.sourceId, { type: "geojson", data: layerData });
+        map.addSource(ids.centroidSourceId, { type: "geojson", data: centroidData });
+
+        map.addLayer({
+          id: ids.fillId,
+          type: "fill",
+          source: ids.sourceId,
+          paint: {
+            "fill-color": color,
+            "fill-opacity": fillOpacityExpr,
+          },
+        });
+        map.addLayer({
+          id: ids.outlineId,
+          type: "line",
+          source: ids.sourceId,
+          paint: {
+            "line-color": color,
+            "line-opacity": lineOpacity,
+            "line-width": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              8,
+              2.5,
+              12,
+              2,
+              16,
+              1.25,
+            ],
+          },
+        });
+        map.addLayer({
+          id: ids.centroidId,
+          type: "circle",
+          source: ids.centroidSourceId,
+          paint: {
+            "circle-color": color,
+            "circle-radius": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              7,
+              4.5,
+              10,
+              4,
+              13,
+              3,
+              16,
+              0,
+            ],
+            "circle-opacity": circleOpacityExpr,
+            "circle-stroke-color": "#FFFFFF",
+            "circle-stroke-opacity": circleStrokeOpacity,
+            "circle-stroke-width": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              7,
+              1.2,
+              12,
+              0.8,
+              16,
+              0,
+            ],
+          },
+        });
+
+        map.on("mouseenter", ids.fillId, () => {
+          map.getCanvas().style.cursor = "pointer";
+        });
+        map.on("mouseleave", ids.fillId, () => {
+          map.getCanvas().style.cursor = "";
+        });
+
+        overlayMapKeysRef.current.add(layer.layer_key);
+      } else {
+        const source = map.getSource(ids.sourceId) as maplibregl.GeoJSONSource | undefined;
+        const centroidSource = map.getSource(ids.centroidSourceId) as maplibregl.GeoJSONSource | undefined;
+        source?.setData(layerData);
+        centroidSource?.setData(centroidData);
+
+        map.setPaintProperty(ids.fillId, "fill-color", color);
+        map.setPaintProperty(ids.fillId, "fill-opacity", fillOpacityExpr);
+        map.setPaintProperty(ids.outlineId, "line-color", color);
+        map.setPaintProperty(ids.outlineId, "line-opacity", lineOpacity);
+        map.setPaintProperty(ids.centroidId, "circle-color", color);
+        map.setPaintProperty(ids.centroidId, "circle-opacity", circleOpacityExpr);
+        map.setPaintProperty(ids.centroidId, "circle-stroke-opacity", circleStrokeOpacity);
+      }
+
+      map.setLayoutProperty(ids.fillId, "visibility", isVisible && showFill ? "visible" : "none");
+      map.setLayoutProperty(ids.outlineId, "visibility", isVisible ? "visible" : "none");
+      map.setLayoutProperty(ids.centroidId, "visibility", isVisible ? "visible" : "none");
+    }
+  }, [overlayLayers, mapReadyVersion]);
 
   useEffect(() => {
     const map = mapRef.current;
