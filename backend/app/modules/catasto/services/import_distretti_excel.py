@@ -16,6 +16,21 @@ from app.models.catasto_phase1 import CatComune, CatDistretto, CatImportBatch, C
 
 REQUIRED_COLUMNS = {"ANNO", "N_DISTRETTO", "DISTRETTO", "COMUNE", "FOGLIO", "PARTIC"}
 
+COMUNE_ALIAS_WITH_SECTION: dict[str, tuple[str, str | None]] = {
+    "ORISTANO*ORISTANO": ("ORISTANO", "A"),
+    "DONIGALA FENUGHEDU*ORISTANO": ("ORISTANO", "B"),
+    "MASSAMA*ORISTANO": ("ORISTANO", "C"),
+    "NURAXINIEDDU*ORISTANO": ("ORISTANO", "D"),
+    "SILI'*ORISTANO": ("ORISTANO", "E"),
+    "SILI’*ORISTANO": ("ORISTANO", "E"),
+    "CABRAS": ("CABRAS", "A"),
+    "SOLANAS*CABRAS": ("CABRAS", "B"),
+    "OLLASTRA SIMAXIS": ("SIMAXIS", "A"),
+    "SAN VERO CONGIUS*SIMAXIS": ("SIMAXIS", "B"),
+    "SIMAXIS*SIMAXIS": ("SIMAXIS", "A"),
+    "SAN NICOLO ARCIDANO": ("SAN NICOLO D'ARCIDANO", None),
+}
+
 
 def _clean_optional_string(value: Any) -> str | None:
     if value is None or pd.isna(value):
@@ -58,25 +73,45 @@ class DistrettoExcelRow:
     comune_nome: str | None
 
 
+@dataclass
+class ResolvedComuneRef:
+    comune: CatComune
+    derived_sezione: str | None = None
+
+
+def _normalize_comune_key(value: str) -> str:
+    return value.strip().upper()
+
+
 def _resolve_comune(
     raw_value: str,
     comuni_by_capacitas: dict[int, CatComune],
     comuni_by_catastale: dict[str, CatComune],
     comuni_by_name: dict[str, CatComune],
-) -> CatComune | None:
+) -> ResolvedComuneRef | None:
     compact = raw_value.replace(" ", "")
     if compact.isdigit():
         comune = comuni_by_capacitas.get(int(compact))
         if comune is not None:
-            return comune
+            return ResolvedComuneRef(comune=comune)
 
     uppercase = raw_value.upper()
     if len(uppercase) == 4:
         comune = comuni_by_catastale.get(uppercase)
         if comune is not None:
-            return comune
+            return ResolvedComuneRef(comune=comune)
 
-    return comuni_by_name.get(uppercase)
+    alias = COMUNE_ALIAS_WITH_SECTION.get(_normalize_comune_key(raw_value))
+    if alias is not None:
+        canonical_name, derived_sezione = alias
+        comune = comuni_by_name.get(canonical_name)
+        if comune is not None:
+            return ResolvedComuneRef(comune=comune, derived_sezione=derived_sezione)
+
+    comune = comuni_by_name.get(uppercase)
+    if comune is None:
+        return None
+    return ResolvedComuneRef(comune=comune)
 
 
 def import_distretti_excel(
@@ -158,12 +193,15 @@ def import_distretti_excel(
                 )
             continue
 
-        comune = _resolve_comune(comune_raw, comuni_by_capacitas, comuni_by_catastale, comuni_by_name)
-        if comune is None:
+        resolved_comune = _resolve_comune(comune_raw, comuni_by_capacitas, comuni_by_catastale, comuni_by_name)
+        if resolved_comune is None:
             skipped_invalid_comune += 1
             if len(preview_anomalies) < 50:
                 preview_anomalies.append({"riga": row_number, "tipo": "DIST-COMUNE-NOT-FOUND", "comune": comune_raw})
             continue
+        comune = resolved_comune.comune
+        if sezione is None and resolved_comune.derived_sezione is not None:
+            sezione = resolved_comune.derived_sezione
 
         key = (comune.id, sezione, foglio, particella)
         candidate = DistrettoExcelRow(

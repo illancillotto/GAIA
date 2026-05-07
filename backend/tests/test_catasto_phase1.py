@@ -557,6 +557,137 @@ def test_upload_distretti_excel_endpoint_starts_and_completes_batch(monkeypatch:
     assert payload_status["report_json"]["distretti_creati"] == 1
 
 
+def test_import_distretti_excel_resolves_local_comune_aliases_and_sections() -> None:
+    db = TestingSessionLocal()
+    comune_oristano = CatComune(
+        nome_comune="Oristano",
+        codice_catastale="G113",
+        cod_comune_capacitas=500,
+    )
+    comune_simaxis = CatComune(
+        nome_comune="Simaxis",
+        codice_catastale="I743",
+        cod_comune_capacitas=501,
+    )
+    comune_arcidano = CatComune(
+        nome_comune="San Nicolo d'Arcidano",
+        codice_catastale="A368",
+        cod_comune_capacitas=286,
+    )
+    db.add_all([comune_oristano, comune_simaxis, comune_arcidano])
+    db.flush()
+    db.add_all(
+        [
+            CatParticella(
+                comune_id=comune_oristano.id,
+                cod_comune_capacitas=500,
+                codice_catastale="G113",
+                nome_comune="Oristano",
+                sezione_catastale="B",
+                foglio="11",
+                particella="20",
+                subalterno=None,
+                num_distretto="10",
+                nome_distretto="Distretto 10",
+                is_current=True,
+            ),
+            CatParticella(
+                comune_id=comune_simaxis.id,
+                cod_comune_capacitas=501,
+                codice_catastale="I743",
+                nome_comune="Simaxis",
+                sezione_catastale="B",
+                foglio="7",
+                particella="33",
+                subalterno=None,
+                num_distretto="10",
+                nome_distretto="Distretto 10",
+                is_current=True,
+            ),
+            CatParticella(
+                comune_id=comune_arcidano.id,
+                cod_comune_capacitas=286,
+                codice_catastale="A368",
+                nome_comune="San Nicolo d'Arcidano",
+                sezione_catastale=None,
+                foglio="3",
+                particella="101",
+                subalterno=None,
+                num_distretto="10",
+                nome_distretto="Distretto 10",
+                is_current=True,
+            ),
+        ]
+    )
+    db.commit()
+
+    payload = build_distretti_excel_bytes(
+        [
+            {
+                "ANNO": "2025",
+                "N_DISTRETTO": "40",
+                "DISTRETTO": "Oristano B",
+                "COMUNE": "DONIGALA FENUGHEDU*ORISTANO",
+                "SEZIONE": None,
+                "FOGLIO": "11",
+                "PARTIC": "20",
+                "SUB": None,
+            },
+            {
+                "ANNO": "2025",
+                "N_DISTRETTO": "41",
+                "DISTRETTO": "Simaxis B",
+                "COMUNE": "SAN VERO CONGIUS*SIMAXIS",
+                "SEZIONE": None,
+                "FOGLIO": "7",
+                "PARTIC": "33",
+                "SUB": None,
+            },
+            {
+                "ANNO": "2025",
+                "N_DISTRETTO": "42",
+                "DISTRETTO": "Arcidano",
+                "COMUNE": "SAN NICOLO ARCIDANO",
+                "SEZIONE": None,
+                "FOGLIO": "3",
+                "PARTIC": "101",
+                "SUB": None,
+            },
+        ]
+    )
+
+    batch = import_distretti_excel(
+        db=db,
+        file_bytes=payload,
+        filename="distretti-alias.xlsx",
+        created_by=1,
+    )
+
+    updated_oristano = (
+        db.query(CatParticella)
+        .filter(CatParticella.comune_id == comune_oristano.id, CatParticella.foglio == "11", CatParticella.particella == "20")
+        .one()
+    )
+    updated_simaxis = (
+        db.query(CatParticella)
+        .filter(CatParticella.comune_id == comune_simaxis.id, CatParticella.foglio == "7", CatParticella.particella == "33")
+        .one()
+    )
+    updated_arcidano = (
+        db.query(CatParticella)
+        .filter(CatParticella.comune_id == comune_arcidano.id, CatParticella.foglio == "3", CatParticella.particella == "101")
+        .one()
+    )
+
+    assert batch.report_json["righe_scartate_comune_non_risolto"] == 0
+    assert batch.report_json["righe_senza_match_particella"] == 0
+    assert batch.report_json["particelle_aggiornate"] == 3
+    assert updated_oristano.num_distretto == "40"
+    assert updated_simaxis.num_distretto == "41"
+    assert updated_arcidano.num_distretto == "42"
+    db.close()
+
+
 def seed_anomalie_workflow_data(db: Session) -> None:
     batch_id = db.query(CatImportBatch).filter(CatImportBatch.hash_file == "seed-hash").one().id
     particella_10 = db.query(CatParticella).filter(CatParticella.foglio == "5").one()

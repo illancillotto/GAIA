@@ -302,6 +302,7 @@ Comportamento attuale:
 - il wizard import gestisce sia il completamento positivo sia il fallimento del batch con esposizione dell'errore applicativo
 - il report import espone anche una sintesi batch da `report_json` con anno campagna, righe, distretti e comuni rilevati
 - il flusso `Aggiorna distretti` accetta un Excel con colonne `ANNO`, `N_DISTRETTO`, `DISTRETTO`, `COMUNE`, `SEZIONE`, `FOGLIO`, `PARTIC`, `SUB` e aggiorna `cat_particelle` sul match `comune + sezione + foglio + particella`, ignorando `SUB`; righe Excel che differiscono solo per `SUB` non devono duplicare la particella canonica
+- per `Aggiorna distretti`, il backend normalizza anche alias locali del campo `COMUNE` che incorporano la sezione catastale, in particolare sui gruppi `Oristano`, `Cabras`, `Simaxis` e sul nome storico `San Nicolo Arcidano`
 - la pagina import espone anche uno storico dei batch recenti con filtro per stato, limite risultati, contatori e riapertura del report
 - la pagina import espone inoltre un audit summary dei batch Capacitas con conteggi per stato e timestamp dell'ultimo completato
 - `/catasto/import/[id]` espone il dettaglio dedicato di un batch con metadati, preview, contatori e lista anomalie
