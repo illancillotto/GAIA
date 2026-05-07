@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
-from typing import Literal
+from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
@@ -68,6 +68,33 @@ class CatAnomaliaListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class CatDistrettiExcelAnalysisItemResponse(BaseModel):
+    row_number: int
+    comune_input: str | None
+    sezione_input: str | None
+    foglio_input: str | None
+    particella_input: str | None
+    sub_input: str | None
+    comune_resolved: str | None
+    sezione_resolved: str | None
+    num_distretto: str | None
+    nome_distretto: str | None
+    esito: str
+    message: str
+    particella_ids: list[str]
+    current_num_distretti: list[str | None]
+    current_nome_distretti: list[str | None]
+
+
+class CatDistrettiExcelAnalysisResponse(BaseModel):
+    items: list[CatDistrettiExcelAnalysisItemResponse]
+    total: int
+    page: int
+    page_size: int
+    counters: dict[str, int]
+    summary: dict[str, Any]
 
 
 class CatAnomaliaUpdateInput(BaseModel):

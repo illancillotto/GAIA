@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import hashlib
+import io
+import json
+import os
 import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from io import BytesIO
+from pathlib import Path
 from typing import Any, Callable
 
 import pandas as pd
@@ -15,6 +19,7 @@ from app.models.catasto_phase1 import CatComune, CatDistretto, CatImportBatch, C
 
 
 REQUIRED_COLUMNS = {"ANNO", "N_DISTRETTO", "DISTRETTO", "COMUNE", "FOGLIO", "PARTIC"}
+IMPORT_STORAGE_DIR = Path(os.getenv("CATASTO_IMPORT_STORAGE_PATH", "/data/catasto/imports"))
 
 COMUNE_ALIAS_WITH_SECTION: dict[str, tuple[str, str | None]] = {
     "ORISTANO*ORISTANO": ("ORISTANO", "A"),
@@ -79,8 +84,59 @@ class ResolvedComuneRef:
     derived_sezione: str | None = None
 
 
+@dataclass
+class DistrettoExcelAnalysisItem:
+    row_number: int
+    comune_input: str | None
+    sezione_input: str | None
+    foglio_input: str | None
+    particella_input: str | None
+    sub_input: str | None
+    comune_resolved: str | None
+    sezione_resolved: str | None
+    num_distretto: str | None
+    nome_distretto: str | None
+    esito: str
+    message: str
+    particella_ids: list[str]
+    current_num_distretti: list[str | None]
+    current_nome_distretti: list[str | None]
+
+
 def _normalize_comune_key(value: str) -> str:
     return value.strip().upper()
+
+
+def store_distretti_excel_source(batch_id: uuid.UUID, filename: str, file_bytes: bytes) -> str:
+    IMPORT_STORAGE_DIR.mkdir(parents=True, exist_ok=True)
+    suffix = Path(filename or "distretti.xlsx").suffix or ".xlsx"
+    target = IMPORT_STORAGE_DIR / f"{batch_id}{suffix}"
+    target.write_bytes(file_bytes)
+    return str(target)
+
+
+def _load_dataframe(file_bytes: bytes) -> pd.DataFrame:
+    dataframe = pd.read_excel(BytesIO(file_bytes), sheet_name=0, dtype=str)
+    missing_columns = sorted(REQUIRED_COLUMNS - set(dataframe.columns))
+    if missing_columns:
+        raise ValueError(f"Colonne obbligatorie mancanti: {', '.join(missing_columns)}")
+    return dataframe
+
+
+def _get_batch_source_file_path(batch: CatImportBatch) -> str | None:
+    report_json = batch.report_json if isinstance(batch.report_json, dict) else {}
+    path = report_json.get("source_file_path")
+    return str(path) if path else None
+
+
+def load_batch_source_file_bytes(batch: CatImportBatch) -> bytes:
+    source_path = _get_batch_source_file_path(batch)
+    if not source_path:
+        raise ValueError("File sorgente del batch non disponibile.")
+    path = Path(source_path)
+    if not path.exists():
+        raise ValueError("File sorgente del batch non trovato su disco.")
+    return path.read_bytes()
 
 
 def _resolve_comune(
@@ -114,6 +170,255 @@ def _resolve_comune(
     return ResolvedComuneRef(comune=comune)
 
 
+def analyze_distretti_excel_file(db: Session, file_bytes: bytes) -> tuple[dict[str, Any], list[DistrettoExcelAnalysisItem]]:
+    dataframe = _load_dataframe(file_bytes)
+    comuni = db.execute(select(CatComune)).scalars().all()
+    comuni_by_capacitas = {item.cod_comune_capacitas: item for item in comuni}
+    comuni_by_catastale = {item.codice_catastale.upper(): item for item in comuni if item.codice_catastale}
+    comuni_by_name = {item.nome_comune.upper(): item for item in comuni if item.nome_comune}
+
+    row_candidates: dict[tuple[uuid.UUID, str | None, str, str], DistrettoExcelRow] = {}
+    duplicate_collapsed = 0
+    duplicate_conflicts = 0
+    invalid_rows = 0
+    unresolved_rows = 0
+    analysis_items: list[DistrettoExcelAnalysisItem] = []
+    involved_comuni_ids: set[uuid.UUID] = set()
+
+    for row_index, row in dataframe.iterrows():
+        row_number = row_index + 2
+        comune_raw = _clean_optional_string(row.get("COMUNE"))
+        foglio = _normalize_lookup_token(row.get("FOGLIO"))
+        particella = _normalize_lookup_token(row.get("PARTIC"))
+        num_distretto = _normalize_lookup_token(row.get("N_DISTRETTO"))
+        sezione = _normalize_name(row.get("SEZIONE"))
+        nome_distretto = _clean_optional_string(row.get("DISTRETTO"))
+        sub = _clean_optional_string(row.get("SUB"))
+        anno_row = pd.to_numeric(pd.Series([row.get("ANNO")]), errors="coerce").iloc[0]
+
+        if not comune_raw or not foglio or not particella or not num_distretto:
+            invalid_rows += 1
+            analysis_items.append(
+                DistrettoExcelAnalysisItem(
+                    row_number=row_number,
+                    comune_input=comune_raw,
+                    sezione_input=sezione,
+                    foglio_input=foglio,
+                    particella_input=particella,
+                    sub_input=sub,
+                    comune_resolved=None,
+                    sezione_resolved=sezione,
+                    num_distretto=num_distretto,
+                    nome_distretto=nome_distretto,
+                    esito="INVALID_ROW",
+                    message="Campi obbligatori mancanti.",
+                    particella_ids=[],
+                    current_num_distretti=[],
+                    current_nome_distretti=[],
+                )
+            )
+            continue
+
+        resolved_comune = _resolve_comune(comune_raw, comuni_by_capacitas, comuni_by_catastale, comuni_by_name)
+        if resolved_comune is None:
+            unresolved_rows += 1
+            analysis_items.append(
+                DistrettoExcelAnalysisItem(
+                    row_number=row_number,
+                    comune_input=comune_raw,
+                    sezione_input=sezione,
+                    foglio_input=foglio,
+                    particella_input=particella,
+                    sub_input=sub,
+                    comune_resolved=None,
+                    sezione_resolved=sezione,
+                    num_distretto=num_distretto,
+                    nome_distretto=nome_distretto,
+                    esito="COMUNE_NOT_FOUND",
+                    message="Comune non risolto.",
+                    particella_ids=[],
+                    current_num_distretti=[],
+                    current_nome_distretti=[],
+                )
+            )
+            continue
+
+        comune = resolved_comune.comune
+        if sezione is None and resolved_comune.derived_sezione is not None:
+            sezione = resolved_comune.derived_sezione
+
+        key = (comune.id, sezione, foglio, particella)
+        candidate = DistrettoExcelRow(
+            row_number=row_number,
+            anno_campagna=int(anno_row) if not pd.isna(anno_row) else None,
+            comune_raw=comune_raw,
+            sezione=sezione,
+            foglio=foglio,
+            particella=particella,
+            num_distretto=num_distretto,
+            nome_distretto=nome_distretto,
+            comune_id=comune.id,
+            comune_nome=comune.nome_comune,
+        )
+        previous = row_candidates.get(key)
+        if previous is not None:
+            duplicate_collapsed += 1
+            if previous.num_distretto != candidate.num_distretto or previous.nome_distretto != candidate.nome_distretto:
+                duplicate_conflicts += 1
+                analysis_items.append(
+                    DistrettoExcelAnalysisItem(
+                        row_number=row_number,
+                        comune_input=comune_raw,
+                        sezione_input=sezione,
+                        foglio_input=foglio,
+                        particella_input=particella,
+                        sub_input=sub,
+                        comune_resolved=comune.nome_comune,
+                        sezione_resolved=sezione,
+                        num_distretto=num_distretto,
+                        nome_distretto=nome_distretto,
+                        esito="DUPLICATE_CONFLICT",
+                        message="Stessa particella logica presente piu volte nel file con distretti diversi.",
+                        particella_ids=[],
+                        current_num_distretti=[previous.num_distretto],
+                        current_nome_distretti=[previous.nome_distretto],
+                    )
+                )
+        row_candidates[key] = candidate
+        involved_comuni_ids.add(comune.id)
+
+    current_particelle = (
+        db.execute(
+            select(CatParticella).where(
+                CatParticella.is_current.is_(True),
+                CatParticella.comune_id.in_(involved_comuni_ids),
+            )
+        ).scalars().all()
+        if involved_comuni_ids
+        else []
+    )
+    particelle_by_key: dict[tuple[uuid.UUID, str | None, str, str], list[CatParticella]] = {}
+    for particella_record in current_particelle:
+        if particella_record.comune_id is None:
+            continue
+        key = (
+            particella_record.comune_id,
+            _normalize_name(particella_record.sezione_catastale),
+            _normalize_lookup_token(particella_record.foglio),
+            _normalize_lookup_token(particella_record.particella),
+        )
+        if key[2] is None or key[3] is None:
+            continue
+        particelle_by_key.setdefault(key, []).append(particella_record)
+
+    matched = 0
+    aligned = 0
+    to_update = 0
+    without_match = 0
+    for key, candidate in row_candidates.items():
+        matches = particelle_by_key.get(key, [])
+        if not matches:
+            without_match += 1
+            analysis_items.append(
+                DistrettoExcelAnalysisItem(
+                    row_number=candidate.row_number,
+                    comune_input=candidate.comune_raw,
+                    sezione_input=candidate.sezione,
+                    foglio_input=candidate.foglio,
+                    particella_input=candidate.particella,
+                    sub_input=None,
+                    comune_resolved=candidate.comune_nome,
+                    sezione_resolved=candidate.sezione,
+                    num_distretto=candidate.num_distretto,
+                    nome_distretto=candidate.nome_distretto,
+                    esito="NOT_FOUND",
+                    message="Nessuna particella corrente trovata.",
+                    particella_ids=[],
+                    current_num_distretti=[],
+                    current_nome_distretti=[],
+                )
+            )
+            continue
+
+        matched += 1
+        current_nums = [item.num_distretto for item in matches]
+        current_names = [item.nome_distretto for item in matches]
+        all_aligned = all(
+            item.num_distretto == candidate.num_distretto and item.nome_distretto == candidate.nome_distretto
+            for item in matches
+        )
+        if all_aligned:
+            aligned += len(matches)
+            status = "ALREADY_ALIGNED"
+            message = "Particella già allineata al distretto."
+        else:
+            to_update += len(matches)
+            status = "MATCHED"
+            message = "Particella trovata; distretto diverso da aggiornare."
+
+        analysis_items.append(
+            DistrettoExcelAnalysisItem(
+                row_number=candidate.row_number,
+                comune_input=candidate.comune_raw,
+                sezione_input=candidate.sezione,
+                foglio_input=candidate.foglio,
+                particella_input=candidate.particella,
+                sub_input=None,
+                comune_resolved=candidate.comune_nome,
+                sezione_resolved=candidate.sezione,
+                num_distretto=candidate.num_distretto,
+                nome_distretto=candidate.nome_distretto,
+                esito=status,
+                message=message,
+                particella_ids=[str(item.id) for item in matches],
+                current_num_distretti=current_nums,
+                current_nome_distretti=current_names,
+            )
+        )
+
+    summary = {
+        "righe_totali": len(dataframe),
+        "righe_univoche": len(row_candidates),
+        "righe_duplicate_collassate": duplicate_collapsed,
+        "righe_duplicate_conflitto": duplicate_conflicts,
+        "righe_scartate_campi_mancanti": invalid_rows,
+        "righe_scartate_comune_non_risolto": unresolved_rows,
+        "righe_senza_match_particella": without_match,
+        "righe_match_univoco": matched,
+        "particelle_aggiornabili": to_update,
+        "particelle_allineate": aligned,
+    }
+    analysis_items.sort(key=lambda item: item.row_number)
+    return summary, analysis_items
+
+
+def export_distretti_excel_analysis_xlsx(items: list[DistrettoExcelAnalysisItem]) -> bytes:
+    rows = [
+        {
+            "riga_excel": item.row_number,
+            "comune_input": item.comune_input,
+            "comune_risolto": item.comune_resolved,
+            "sezione": item.sezione_resolved,
+            "foglio": item.foglio_input,
+            "particella": item.particella_input,
+            "sub_input": item.sub_input,
+            "num_distretto_file": item.num_distretto,
+            "nome_distretto_file": item.nome_distretto,
+            "esito": item.esito,
+            "messaggio": item.message,
+            "particella_ids": ", ".join(item.particella_ids),
+            "num_distretto_corrente": ", ".join([value or "" for value in item.current_num_distretti]),
+            "nome_distretto_corrente": ", ".join([value or "" for value in item.current_nome_distretti]),
+        }
+        for item in items
+    ]
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        pd.DataFrame(rows).to_excel(writer, index=False, sheet_name="particelle")
+    output.seek(0)
+    return output.getvalue()
+
+
 def import_distretti_excel(
     db: Session,
     file_bytes: bytes,
@@ -124,10 +429,7 @@ def import_distretti_excel(
 ) -> CatImportBatch:
     now = datetime.now(timezone.utc)
     today = date.today()
-    dataframe = pd.read_excel(BytesIO(file_bytes), sheet_name=0, dtype=str)
-    missing_columns = sorted(REQUIRED_COLUMNS - set(dataframe.columns))
-    if missing_columns:
-        raise ValueError(f"Colonne obbligatorie mancanti: {', '.join(missing_columns)}")
+    dataframe = _load_dataframe(file_bytes)
 
     file_hash = hashlib.sha256(file_bytes).hexdigest()
     anno_values = pd.to_numeric(dataframe.get("ANNO"), errors="coerce").dropna()
@@ -158,7 +460,8 @@ def import_distretti_excel(
         batch.righe_anomalie = 0
         batch.status = "processing"
         batch.errore = None
-        batch.report_json = None
+        preserved_path = _get_batch_source_file_path(batch)
+        batch.report_json = {"source_file_path": preserved_path} if preserved_path else None
 
     comuni = db.execute(select(CatComune)).scalars().all()
     comuni_by_capacitas = {item.cod_comune_capacitas: item for item in comuni}
@@ -350,6 +653,7 @@ def import_distretti_excel(
     batch.righe_anomalie = skipped_missing_fields + skipped_invalid_comune + rows_without_match + duplicate_conflicts
     batch.status = "completed"
     batch.completed_at = now
+    persisted_source_path = _get_batch_source_file_path(batch)
     batch.report_json = {
         "anno_campagna": anno_campagna,
         "righe_totali": len(dataframe),
@@ -370,6 +674,8 @@ def import_distretti_excel(
         "comuni_rilevati": sorted(comuni_rilevati),
         "preview_anomalie": preview_anomalies,
     }
+    if persisted_source_path:
+        batch.report_json["source_file_path"] = persisted_source_path
     db.commit()
     db.refresh(batch)
     return batch

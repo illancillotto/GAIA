@@ -61,6 +61,33 @@ export type CatAnomaliaListResponse = {
   page_size: number;
 };
 
+export type CatDistrettiExcelAnalysisItem = {
+  row_number: number;
+  comune_input: string | null;
+  sezione_input: string | null;
+  foglio_input: string | null;
+  particella_input: string | null;
+  sub_input: string | null;
+  comune_resolved: string | null;
+  sezione_resolved: string | null;
+  num_distretto: string | null;
+  nome_distretto: string | null;
+  esito: string;
+  message: string;
+  particella_ids: string[];
+  current_num_distretti: Array<string | null>;
+  current_nome_distretti: Array<string | null>;
+};
+
+export type CatDistrettiExcelAnalysisResponse = {
+  items: CatDistrettiExcelAnalysisItem[];
+  total: number;
+  page: number;
+  page_size: number;
+  counters: Record<string, number>;
+  summary: Record<string, unknown>;
+};
+
 export type CatParticella = {
   comune_id: UUID | null;
   id: UUID;

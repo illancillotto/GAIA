@@ -2,6 +2,7 @@ from collections.abc import Generator
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from io import BytesIO
+from pathlib import Path
 from types import SimpleNamespace
 from uuid import UUID
 
@@ -42,6 +43,7 @@ from app.modules.catasto.routes import import_routes as import_routes_module
 from app.modules.catasto.services.import_capacitas import CapacitasImportDuplicateError, import_capacitas_excel
 from app.modules.catasto.services.comuni_reference import load_comuni_reference
 from app.modules.catasto.services.import_distretti_excel import import_distretti_excel
+from app.modules.catasto.services import import_distretti_excel as import_distretti_excel_module
 from app.modules.elaborazioni.capacitas.models import CapacitasAnagraficaDetail, CapacitasIntestatario, CapacitasTerrenoCertificato
 from app.modules.elaborazioni.capacitas.models import CapacitasLookupOption, CapacitasTerreniSearchResult
 from app.modules.catasto.services.validation import (
@@ -499,8 +501,9 @@ def test_import_distretti_excel_collapses_rows_that_differ_only_by_sub() -> None
     db.close()
 
 
-def test_upload_distretti_excel_endpoint_starts_and_completes_batch(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_upload_distretti_excel_endpoint_starts_and_completes_batch(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(import_routes_module, "SessionLocal", TestingSessionLocal)
+    monkeypatch.setattr(import_distretti_excel_module, "IMPORT_STORAGE_DIR", tmp_path / "imports")
     db = TestingSessionLocal()
     db.add(
         CatParticella(
@@ -686,6 +689,137 @@ def test_import_distretti_excel_resolves_local_comune_aliases_and_sections() -> 
     assert updated_simaxis.num_distretto == "41"
     assert updated_arcidano.num_distretto == "42"
     db.close()
+
+
+def test_distretti_excel_analysis_endpoint_returns_not_found_rows(tmp_path: Path) -> None:
+    payload = build_distretti_excel_bytes(
+        [
+            {
+                "ANNO": "2025",
+                "N_DISTRETTO": "26",
+                "DISTRETTO": "Sassu",
+                "COMUNE": "ARBOREA",
+                "SEZIONE": None,
+                "FOGLIO": "999",
+                "PARTIC": "888",
+                "SUB": None,
+            }
+        ]
+    )
+    source_path = tmp_path / "distretti-analysis.xlsx"
+    source_path.write_bytes(payload)
+
+    db = TestingSessionLocal()
+    batch = CatImportBatch(
+        filename="distretti-analysis.xlsx",
+        tipo="distretti_excel",
+        status="completed",
+        righe_totali=1,
+        righe_importate=0,
+        righe_anomalie=1,
+        created_by=1,
+        report_json={"source_file_path": str(source_path)},
+    )
+    db.add(batch)
+    db.commit()
+    batch_id = batch.id
+    db.close()
+
+    response = client.get(
+        f"/catasto/import/{batch_id}/distretti-excel/analysis?tipo=NOT_FOUND&page=1&page_size=50",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 200
+    payload_json = response.json()
+    assert payload_json["total"] == 1
+    assert payload_json["items"][0]["esito"] == "NOT_FOUND"
+    assert payload_json["items"][0]["foglio_input"] == "999"
+    assert payload_json["items"][0]["particella_input"] == "888"
+    assert payload_json["counters"]["NOT_FOUND"] == 1
+
+
+def test_distretti_excel_analysis_endpoint_returns_duplicate_conflicts(tmp_path: Path) -> None:
+    payload = build_distretti_excel_bytes(
+        [
+            {
+                "ANNO": "2025",
+                "N_DISTRETTO": "26",
+                "DISTRETTO": "Sassu",
+                "COMUNE": "ARBOREA",
+                "SEZIONE": None,
+                "FOGLIO": "5",
+                "PARTIC": "120",
+                "SUB": "1",
+            },
+            {
+                "ANNO": "2025",
+                "N_DISTRETTO": "30",
+                "DISTRETTO": "Nuovo Distretto",
+                "COMUNE": "ARBOREA",
+                "SEZIONE": None,
+                "FOGLIO": "5",
+                "PARTIC": "120",
+                "SUB": "9",
+            },
+        ]
+    )
+    source_path = tmp_path / "distretti-conflict.xlsx"
+    source_path.write_bytes(payload)
+
+    db = TestingSessionLocal()
+    batch = CatImportBatch(
+        filename="distretti-conflict.xlsx",
+        tipo="distretti_excel",
+        status="completed",
+        righe_totali=2,
+        righe_importate=1,
+        righe_anomalie=1,
+        created_by=1,
+        report_json={"source_file_path": str(source_path)},
+    )
+    db.add(batch)
+    db.commit()
+    batch_id = batch.id
+    db.close()
+
+    response = client.get(
+        f"/catasto/import/{batch_id}/distretti-excel/analysis?tipo=DUPLICATE_CONFLICT&page=1&page_size=50",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 200
+    payload_json = response.json()
+    assert payload_json["total"] == 1
+    assert payload_json["items"][0]["esito"] == "DUPLICATE_CONFLICT"
+    assert payload_json["items"][0]["current_num_distretti"] == ["26"]
+    assert payload_json["counters"]["DUPLICATE_CONFLICT"] == 1
+
+
+def test_distretti_excel_analysis_endpoint_returns_409_when_source_file_is_missing() -> None:
+    db = TestingSessionLocal()
+    batch = CatImportBatch(
+        filename="missing-source.xlsx",
+        tipo="distretti_excel",
+        status="completed",
+        righe_totali=1,
+        righe_importate=0,
+        righe_anomalie=1,
+        created_by=1,
+        report_json={"source_file_path": "/tmp/does-not-exist-anymore.xlsx"},
+    )
+    db.add(batch)
+    db.commit()
+    batch_id = batch.id
+    db.close()
+
+    response = client.get(
+        f"/catasto/import/{batch_id}/distretti-excel/analysis?page=1&page_size=50",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 409
+    assert "Reimporta il file" in response.json()["detail"]
 
 
 def seed_anomalie_workflow_data(db: Session) -> None:

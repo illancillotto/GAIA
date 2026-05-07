@@ -6,6 +6,7 @@ import type {
   CatAnagraficaBulkSearchResponse,
   CatAnagraficaBulkJobDetail,
   CatAnagraficaBulkJobListResponse,
+  CatDistrettiExcelAnalysisResponse,
   CatDistretto,
   CatDistrettoKpi,
   CatImportBatch,
@@ -188,6 +189,41 @@ export async function catastoUploadDistrettiExcel(
     token,
     params?.onProgress,
   );
+}
+
+export async function catastoExportDistrettiExcelBatch(
+  token: string,
+  batchId: UUID,
+  scope: "all" | "matched" | "without_match" | "unresolved" = "all",
+): Promise<Blob> {
+  return requestBlob(`/catasto/import/${batchId}/distretti-excel/export?scope=${scope}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function catastoCreateDistrettiExcelGisLayer(
+  token: string,
+  batchId: UUID,
+): Promise<GisSavedSelectionDetail> {
+  return request<GisSavedSelectionDetail>(`/catasto/import/${batchId}/distretti-excel/gis-layer`, {
+    method: "POST",
+    headers: authHeaders(token),
+  });
+}
+
+export async function catastoGetDistrettiExcelAnalysis(
+  token: string,
+  batchId: UUID,
+  params?: { tipo?: string; page?: number; pageSize?: number },
+): Promise<CatDistrettiExcelAnalysisResponse> {
+  const query = new URLSearchParams();
+  if (params?.tipo) query.set("tipo", params.tipo);
+  if (params?.page) query.set("page", String(params.page));
+  if (params?.pageSize) query.set("page_size", String(params.pageSize));
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<CatDistrettiExcelAnalysisResponse>(`/catasto/import/${batchId}/distretti-excel/analysis${suffix}`, {
+    headers: authHeaders(token),
+  });
 }
 
 export async function catastoGetImportStatus(token: string, batchId: UUID): Promise<CatImportBatch> {

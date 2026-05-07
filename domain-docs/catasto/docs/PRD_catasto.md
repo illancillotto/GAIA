@@ -225,6 +225,7 @@ Note:
 - `GET /catasto/import/history`
 - `GET /catasto/import/{batch_id}/status`
 - `GET /catasto/import/{batch_id}/report`
+- `GET /catasto/import/{batch_id}/distretti-excel/analysis`
 - `GET /catasto/distretti/`
 - `GET /catasto/distretti/{distretto_id}`
 - `GET /catasto/distretti/{distretto_id}/kpi`
@@ -233,6 +234,12 @@ Note:
 - `GET /catasto/particelle/{particella_id}`
 - `GET /catasto/particelle/{particella_id}/history`
 - `GET /catasto/anomalie/`
+
+Nota UI obbligatoria per `Distretti Excel`:
+
+- l'API di analisi batch usa esiti canonici stabili (`ALREADY_ALIGNED`, `MATCHED`, `NOT_FOUND`, `COMUNE_NOT_FOUND`, `INVALID_ROW`, `DUPLICATE_CONFLICT`)
+- questi valori sono contratti tecnici backend e non sono testo UX finale
+- il frontend deve sempre tradurli in etichette parlanti e descrizioni brevi per gli operatori, mantenendo i codici raw solo a fini diagnostici o test
 
 ### Fase 4 anagrafica
 
@@ -303,6 +310,7 @@ Comportamento attuale:
 - il report import espone anche una sintesi batch da `report_json` con anno campagna, righe, distretti e comuni rilevati
 - il flusso `Aggiorna distretti` accetta un Excel con colonne `ANNO`, `N_DISTRETTO`, `DISTRETTO`, `COMUNE`, `SEZIONE`, `FOGLIO`, `PARTIC`, `SUB` e aggiorna `cat_particelle` sul match `comune + sezione + foglio + particella`, ignorando `SUB`; righe Excel che differiscono solo per `SUB` non devono duplicare la particella canonica
 - per `Aggiorna distretti`, il backend normalizza anche alias locali del campo `COMUNE` che incorporano la sezione catastale, in particolare sui gruppi `Oristano`, `Cabras`, `Simaxis` e sul nome storico `San Nicolo Arcidano`
+- per i batch `distretti_excel`, il dettaglio import espone anche export XLSX ricalcolato dal file sorgente salvato e un'azione `Apri nel GIS` che crea una selezione GIS salvata con le particelle correnti mappabili del batch
 - la pagina import espone anche uno storico dei batch recenti con filtro per stato, limite risultati, contatori e riapertura del report
 - la pagina import espone inoltre un audit summary dei batch Capacitas con conteggi per stato e timestamp dell'ultimo completato
 - `/catasto/import/[id]` espone il dettaglio dedicato di un batch con metadati, preview, contatori e lista anomalie
