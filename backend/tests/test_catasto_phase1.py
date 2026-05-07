@@ -1,6 +1,7 @@
 from collections.abc import Generator
 from datetime import date, datetime, timezone
 from decimal import Decimal
+from io import BytesIO
 from types import SimpleNamespace
 from uuid import UUID
 
@@ -40,6 +41,7 @@ from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob, RuoloParticell
 from app.modules.catasto.routes import import_routes as import_routes_module
 from app.modules.catasto.services.import_capacitas import CapacitasImportDuplicateError, import_capacitas_excel
 from app.modules.catasto.services.comuni_reference import load_comuni_reference
+from app.modules.catasto.services.import_distretti_excel import import_distretti_excel
 from app.modules.elaborazioni.capacitas.models import CapacitasAnagraficaDetail, CapacitasIntestatario, CapacitasTerrenoCertificato
 from app.modules.elaborazioni.capacitas.models import CapacitasLookupOption, CapacitasTerreniSearchResult
 from app.modules.catasto.services.validation import (
@@ -388,32 +390,171 @@ def seed_additional_distretto_kpi_data(db: Session) -> None:
             ),
         ]
     )
-    db.flush()
 
-    utenze_20 = db.query(CatUtenzaIrrigua).filter(CatUtenzaIrrigua.num_distretto == 20).all()
-    db.add_all(
+
+def build_distretti_excel_bytes(rows: list[dict[str, object]]) -> bytes:
+    buffer = BytesIO()
+    dataframe = pd.DataFrame(rows)
+    with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
+        dataframe.to_excel(writer, index=False)
+    return buffer.getvalue()
+
+
+def test_import_distretti_excel_updates_current_particelle_ignoring_sub() -> None:
+    db = TestingSessionLocal()
+    payload = build_distretti_excel_bytes(
         [
-            CatAnomalia(
-                utenza_id=utenze_20[0].id,
-                particella_id=particella_20.id,
-                anno_campagna=2025,
-                tipo="VAL-01-sup_eccede",
-                severita="warning",
-                status="aperta",
-                descrizione="Superficie incoerente",
-            ),
-            CatAnomalia(
-                utenza_id=utenze_20[1].id,
-                particella_id=particella_20.id,
-                anno_campagna=2025,
-                tipo="VAL-02-cf_invalido",
-                severita="error",
-                status="aperta",
-                descrizione="CF incoerente",
-            ),
+            {
+                "ANNO": "2025",
+                "N_DISTRETTO": "26",
+                "DISTRETTO": "Sassu",
+                "COMUNE": "ARBOREA",
+                "SEZIONE": None,
+                "FOGLIO": "5",
+                "PARTIC": "120",
+                "SUB": "77",
+            }
         ]
     )
+
+    batch = import_distretti_excel(
+        db=db,
+        file_bytes=payload,
+        filename="distretti.xlsx",
+        created_by=1,
+    )
+
+    particella = (
+        db.query(CatParticella)
+        .filter(CatParticella.cod_comune_capacitas == 165, CatParticella.foglio == "5", CatParticella.particella == "120")
+        .one()
+    )
+    assert particella.subalterno == "1"
+    assert particella.num_distretto == "26"
+    assert particella.nome_distretto == "Sassu"
+    assert batch.status == "completed"
+    assert batch.report_json["particelle_aggiornate"] == 1
+    assert batch.report_json["righe_senza_match_particella"] == 0
+
+    history_rows = (
+        db.query(CatParticellaHistory)
+        .filter(CatParticellaHistory.change_reason == "import_distretti_excel")
+        .all()
+    )
+    assert len(history_rows) == 1
+    assert history_rows[0].num_distretto == "10"
+    db.close()
+
+
+def test_import_distretti_excel_collapses_rows_that_differ_only_by_sub() -> None:
+    db = TestingSessionLocal()
+    payload = build_distretti_excel_bytes(
+        [
+            {
+                "ANNO": "2025",
+                "N_DISTRETTO": "26",
+                "DISTRETTO": "Sassu",
+                "COMUNE": "ARBOREA",
+                "SEZIONE": None,
+                "FOGLIO": "5",
+                "PARTIC": "120",
+                "SUB": "1",
+            },
+            {
+                "ANNO": "2025",
+                "N_DISTRETTO": "26",
+                "DISTRETTO": "Sassu",
+                "COMUNE": "ARBOREA",
+                "SEZIONE": None,
+                "FOGLIO": "5",
+                "PARTIC": "120",
+                "SUB": "9",
+            },
+        ]
+    )
+
+    batch = import_distretti_excel(
+        db=db,
+        file_bytes=payload,
+        filename="distretti.xlsx",
+        created_by=1,
+    )
+
+    particella = (
+        db.query(CatParticella)
+        .filter(CatParticella.cod_comune_capacitas == 165, CatParticella.foglio == "5", CatParticella.particella == "120")
+        .one()
+    )
+    history_rows = (
+        db.query(CatParticellaHistory)
+        .filter(CatParticellaHistory.change_reason == "import_distretti_excel")
+        .all()
+    )
+    assert particella.num_distretto == "26"
+    assert batch.report_json["righe_totali"] == 2
+    assert batch.report_json["righe_univoche"] == 1
+    assert batch.report_json["righe_duplicate_collassate"] == 1
+    assert batch.report_json["particelle_aggiornate"] == 1
+    assert len(history_rows) == 1
+    db.close()
+
+
+def test_upload_distretti_excel_endpoint_starts_and_completes_batch(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(import_routes_module, "SessionLocal", TestingSessionLocal)
+    db = TestingSessionLocal()
+    db.add(
+        CatParticella(
+            comune=db.query(CatComune).filter(CatComune.cod_comune_capacitas == 165).one(),
+            cod_comune_capacitas=165,
+            codice_catastale="A357",
+            nome_comune="Arborea",
+            foglio="7",
+            particella="321",
+            subalterno=None,
+            num_distretto="10",
+            nome_distretto="Distretto 10",
+            is_current=True,
+        )
+    )
     db.commit()
+    db.close()
+
+    payload = build_distretti_excel_bytes(
+        [
+            {
+                "ANNO": "2025",
+                "N_DISTRETTO": "30",
+                "DISTRETTO": "Nuovo Distretto",
+                "COMUNE": "A357",
+                "SEZIONE": None,
+                "FOGLIO": "7",
+                "PARTIC": "321",
+                "SUB": "5",
+            }
+        ]
+    )
+
+    response = client.post(
+        "/catasto/import/distretti/excel",
+        headers=auth_headers(),
+        files={
+            "file": (
+                "distretti.xlsx",
+                payload,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+    assert response.status_code == 202
+    batch_id = response.json()["batch_id"]
+
+    status_response = client.get(f"/catasto/import/{batch_id}/status", headers=auth_headers())
+    assert status_response.status_code == 200
+    payload_status = status_response.json()
+    assert payload_status["tipo"] == "distretti_excel"
+    assert payload_status["status"] == "completed"
+    assert payload_status["report_json"]["particelle_aggiornate"] == 1
+    assert payload_status["report_json"]["distretti_creati"] == 1
 
 
 def seed_anomalie_workflow_data(db: Session) -> None:

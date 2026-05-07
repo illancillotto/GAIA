@@ -15,15 +15,14 @@ import {
   catastoGetImportStatus,
   catastoGetImportSummary,
   catastoUploadCapacitas,
-  catastoUploadDistrettiShapefile,
-  catastoUploadShapefile,
+  catastoUploadDistrettiExcel,
 } from "@/lib/api/catasto";
 import { ApiError, isAuthError } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import type { CatAnomaliaListResponse, CatImportBatch, CatImportSummary, UUID } from "@/types/catasto";
 
 type StepKey = "upload" | "progress" | "report";
-type ImportType = "capacitas" | "shapefile_particelle" | "shapefile_distretti";
+type ImportType = "capacitas" | "distretti_excel";
 
 type PreviewAnomalia = {
   riga?: number;
@@ -54,21 +53,61 @@ function formatDateTime(value: string | null): string {
 
 function importTypeToBatchTipo(importType: ImportType): string {
   if (importType === "capacitas") return "capacitas_ruolo";
-  if (importType === "shapefile_distretti") return "shapefile_distretti";
-  return "shapefile";
+  return "distretti_excel";
 }
 
 function importTypeLabel(importType: ImportType): string {
   if (importType === "capacitas") return "Capacitas (Excel)";
-  if (importType === "shapefile_distretti") return "Distretti (Shapefile ZIP)";
-  return "Particelle (Shapefile ZIP)";
+  return "Aggiorna distretti (Excel)";
 }
 
 function batchTipoLabel(batchTipo: string | null | undefined): string {
   if (batchTipo === "capacitas_ruolo") return "Capacitas";
+  if (batchTipo === "distretti_excel") return "Distretti Excel";
   if (batchTipo === "shapefile_distretti") return "Distretti";
   if (batchTipo === "shapefile") return "Particelle";
   return "Import";
+}
+
+function FilePicker({
+  id,
+  label,
+  accept,
+  file,
+  onChange,
+  hint,
+}: {
+  id: string;
+  label: string;
+  accept: string;
+  file: File | null;
+  onChange: (file: File | null) => void;
+  hint?: string;
+}) {
+  return (
+    <div className="text-sm font-medium text-gray-700">
+      <p>{label}</p>
+      <label
+        htmlFor={id}
+        className="mt-1 flex cursor-pointer items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 transition hover:border-[#1D4E35]/40 hover:bg-[#f7fbf8]"
+      >
+        <span className="inline-flex shrink-0 rounded-lg border border-[#1D4E35]/20 bg-[#eef6f0] px-3 py-1.5 text-sm font-semibold text-[#1D4E35]">
+          Scegli file
+        </span>
+        <span className={`min-w-0 truncate text-sm ${file ? "text-gray-800" : "text-gray-400"}`}>
+          {file?.name ?? "Nessun file selezionato"}
+        </span>
+      </label>
+      <input
+        id={id}
+        className="sr-only"
+        type="file"
+        accept={accept}
+        onChange={(e) => onChange(e.target.files?.[0] ?? null)}
+      />
+      {hint ? <p className="mt-1 text-xs text-gray-400">{hint}</p> : null}
+    </div>
+  );
 }
 
 export default function CatastoImportPage() {
@@ -76,7 +115,6 @@ export default function CatastoImportPage() {
   const [importType, setImportType] = useState<ImportType>("capacitas");
   const [file, setFile] = useState<File | null>(null);
   const [force, setForce] = useState(false);
-  const [sourceSrid, setSourceSrid] = useState(4326);
   const [uploadProgress, setUploadProgress] = useState(0);
 
   const [batchId, setBatchId] = useState<UUID | null>(null);
@@ -148,18 +186,12 @@ export default function CatastoImportPage() {
     setUploadProgress(0);
     try {
       const result =
-        importType === "shapefile_particelle"
-          ? await catastoUploadShapefile(token, file, {
-              sourceSrid,
+        importType === "capacitas"
+          ? await catastoUploadCapacitas(token, file, {
+              force,
               onProgress: (p) => setUploadProgress(p),
             })
-          : importType === "shapefile_distretti"
-            ? await catastoUploadDistrettiShapefile(token, file, {
-                sourceSrid,
-                onProgress: (p) => setUploadProgress(p),
-              })
-          : await catastoUploadCapacitas(token, file, {
-              force,
+          : await catastoUploadDistrettiExcel(token, file, {
               onProgress: (p) => setUploadProgress(p),
             });
       setBatchId(result.batch_id);
@@ -496,31 +528,27 @@ export default function CatastoImportPage() {
               </button>
               <button
                 type="button"
-                className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition ${importType === "shapefile_particelle" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
-                onClick={() => { setImportType("shapefile_particelle"); setFile(null); }}
+                className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition ${importType === "distretti_excel" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
+                onClick={() => { setImportType("distretti_excel"); setFile(null); }}
               >
-                Particelle (ZIP)
+                Aggiorna distretti (Excel)
               </button>
-              <button
-                type="button"
-                className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium transition ${importType === "shapefile_distretti" ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}
-                onClick={() => { setImportType("shapefile_distretti"); setFile(null); }}
-              >
-                Distretti (ZIP)
-              </button>
+            </div>
+
+            <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              Gli import ZIP di particelle e distretti restano disponibili lato backend/API, ma sono disabilitati in questa pagina frontend.
             </div>
 
             {importType === "capacitas" ? (
               <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <label className="text-sm font-medium text-gray-700">
-                  File Excel
-                  <input
-                    className="form-control mt-1"
-                    type="file"
-                    accept=".xlsx,.xls"
-                    onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                  />
-                </label>
+                <FilePicker
+                  id="catasto-import-capacitas-file"
+                  label="File Excel"
+                  accept=".xlsx,.xls"
+                  file={file}
+                  onChange={setFile}
+                  hint="Workbook Capacitas con foglio Ruoli ANNO."
+                />
                 <label className="flex items-center gap-2 rounded-xl border border-gray-100 bg-white px-4 py-3 text-sm text-gray-700">
                   <input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} />
                   Force re-import (sostituisce batch precedente con stesso hash)
@@ -528,29 +556,17 @@ export default function CatastoImportPage() {
               </div>
             ) : (
               <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <label className="text-sm font-medium text-gray-700">
-                  Archivio ZIP
-                  <input
-                    className="form-control mt-1"
-                    type="file"
-                    accept=".zip"
-                    onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-                  />
-                  <p className="mt-1 text-xs text-gray-400">
-                    {importType === "shapefile_distretti"
-                      ? "ZIP del layer confini distretti contenente .shp, .dbf e .shx"
-                      : "ZIP particelle catastali contenente .shp, .dbf e .shx"}
-                  </p>
-                </label>
-                <label className="text-sm font-medium text-gray-700">
-                  SRID sorgente
-                  <select className="form-control mt-1" value={String(sourceSrid)} onChange={(e) => setSourceSrid(Number(e.target.value))}>
-                    <option value="4326">4326 — WGS 84 (default)</option>
-                    <option value="3003">3003 — Monte Mario / Italy zone 1</option>
-                    <option value="32632">32632 — WGS 84 / UTM zone 32N</option>
-                    <option value="6707">6707 — RDN2008 / Italy zone 12</option>
-                  </select>
-                </label>
+                <FilePicker
+                  id="catasto-import-distretti-file"
+                  label="File Excel distretti"
+                  accept=".xlsx,.xls"
+                  file={file}
+                  onChange={setFile}
+                  hint="Tracciato atteso: ANNO, N_DISTRETTO, DISTRETTO, COMUNE, SEZIONE, FOGLIO, PARTIC, SUB. Il match su cat_particelle ignora SUB."
+                />
+                <div className="rounded-xl border border-gray-100 bg-white px-4 py-3 text-sm text-gray-600">
+                  Il backend usa come chiave canonica `comune + sezione + foglio + particella`: se il file Excel contiene `SUB`, quel valore viene ignorato e non genera duplicazioni della particella.
+                </div>
               </div>
             )}
 
@@ -760,7 +776,94 @@ export default function CatastoImportPage() {
           </article>
         ) : null}
 
-        {step === "report" && batch?.tipo !== "shapefile" && batch?.tipo !== "shapefile_distretti" ? (
+        {step === "report" && batch?.tipo === "distretti_excel" ? (
+          <article className="panel-card">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium text-gray-900">Risultato aggiornamento distretti</p>
+                <p className="mt-1 text-sm text-gray-500">{batch.filename}</p>
+              </div>
+              <ImportStatusBadge status={batch.status} />
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-4">
+              <div className="rounded-xl border border-gray-100 bg-white p-4">
+                <p className="text-xs uppercase tracking-wide text-gray-400">Righe Excel</p>
+                <p className="mt-1 text-lg font-semibold text-gray-900">
+                  {safeNumber((batch.report_json as Record<string, unknown> | null)?.["righe_totali"])}
+                </p>
+              </div>
+              <div className="rounded-xl border border-gray-100 bg-white p-4">
+                <p className="text-xs uppercase tracking-wide text-gray-400">Chiavi univoche</p>
+                <p className="mt-1 text-lg font-semibold text-gray-900">
+                  {safeNumber((batch.report_json as Record<string, unknown> | null)?.["righe_univoche"])}
+                </p>
+              </div>
+              <div className="rounded-xl border border-gray-100 bg-white p-4">
+                <p className="text-xs uppercase tracking-wide text-gray-400">Particelle aggiornate</p>
+                <p className="mt-1 text-lg font-semibold text-gray-900">
+                  {safeNumber((batch.report_json as Record<string, unknown> | null)?.["particelle_aggiornate"])}
+                </p>
+              </div>
+              <div className="rounded-xl border border-gray-100 bg-white p-4">
+                <p className="text-xs uppercase tracking-wide text-gray-400">Invariate</p>
+                <p className="mt-1 text-lg font-semibold text-gray-900">
+                  {safeNumber((batch.report_json as Record<string, unknown> | null)?.["particelle_invariate"])}
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 grid gap-3 md:grid-cols-4">
+              <div className="rounded-xl border border-gray-100 bg-white p-4">
+                <p className="text-xs uppercase tracking-wide text-gray-400">Senza match</p>
+                <p className="mt-1 text-lg font-semibold text-gray-900">
+                  {safeNumber((batch.report_json as Record<string, unknown> | null)?.["righe_senza_match_particella"])}
+                </p>
+              </div>
+              <div className="rounded-xl border border-gray-100 bg-white p-4">
+                <p className="text-xs uppercase tracking-wide text-gray-400">Comuni non risolti</p>
+                <p className="mt-1 text-lg font-semibold text-gray-900">
+                  {safeNumber((batch.report_json as Record<string, unknown> | null)?.["righe_scartate_comune_non_risolto"])}
+                </p>
+              </div>
+              <div className="rounded-xl border border-gray-100 bg-white p-4">
+                <p className="text-xs uppercase tracking-wide text-gray-400">Distretti creati</p>
+                <p className="mt-1 text-lg font-semibold text-gray-900">
+                  {safeNumber((batch.report_json as Record<string, unknown> | null)?.["distretti_creati"])}
+                </p>
+              </div>
+              <div className="rounded-xl border border-gray-100 bg-white p-4">
+                <p className="text-xs uppercase tracking-wide text-gray-400">Storico scritto</p>
+                <p className="mt-1 text-lg font-semibold text-gray-900">
+                  {safeNumber((batch.report_json as Record<string, unknown> | null)?.["history_written"])}
+                </p>
+              </div>
+            </div>
+            <div className="mt-4 grid gap-4 md:grid-cols-2">
+              <div className="rounded-xl border border-gray-100 bg-white p-4">
+                <p className="text-xs uppercase tracking-wide text-gray-400">Distretti rilevati</p>
+                <p className="mt-2 text-sm text-gray-700">
+                  {safeStringArray((batch.report_json as Record<string, unknown> | null)?.["distretti_rilevati"]).join(", ") || "—"}
+                </p>
+              </div>
+              <div className="rounded-xl border border-gray-100 bg-white p-4">
+                <p className="text-xs uppercase tracking-wide text-gray-400">Comuni rilevati</p>
+                <p className="mt-2 text-sm text-gray-700">
+                  {safeStringArray((batch.report_json as Record<string, unknown> | null)?.["comuni_rilevati"]).join(", ") || "—"}
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 flex">
+              <button
+                type="button"
+                className="btn-secondary"
+                onClick={() => { setStep("upload"); setFile(null); }}
+              >
+                Nuovo import
+              </button>
+            </div>
+          </article>
+        ) : null}
+
+        {step === "report" && batch?.tipo !== "shapefile" && batch?.tipo !== "shapefile_distretti" && batch?.tipo !== "distretti_excel" ? (
           <div className="grid gap-6 xl:grid-cols-2">
             <article className="panel-card xl:col-span-2">
               <div className="flex items-start justify-between gap-4">

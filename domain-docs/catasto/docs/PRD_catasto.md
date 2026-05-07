@@ -298,8 +298,10 @@ Comportamento attuale:
 - `/catasto/documents` reindirizza all'archivio documenti
 - `/catasto/documents/[id]` mostra il dettaglio documento
 - `/catasto/import` espone il wizard upload -> polling -> report anomalie
+- nella UI di `/catasto/import` gli operatori vedono solo i flussi Excel: `Capacitas` e `Aggiorna distretti`; gli import ZIP particelle/distretti restano supportati dal backend ma non sono presentati nel frontend operativo
 - il wizard import gestisce sia il completamento positivo sia il fallimento del batch con esposizione dell'errore applicativo
 - il report import espone anche una sintesi batch da `report_json` con anno campagna, righe, distretti e comuni rilevati
+- il flusso `Aggiorna distretti` accetta un Excel con colonne `ANNO`, `N_DISTRETTO`, `DISTRETTO`, `COMUNE`, `SEZIONE`, `FOGLIO`, `PARTIC`, `SUB` e aggiorna `cat_particelle` sul match `comune + sezione + foglio + particella`, ignorando `SUB`; righe Excel che differiscono solo per `SUB` non devono duplicare la particella canonica
 - la pagina import espone anche uno storico dei batch recenti con filtro per stato, limite risultati, contatori e riapertura del report
 - la pagina import espone inoltre un audit summary dei batch Capacitas con conteggi per stato e timestamp dell'ultimo completato
 - `/catasto/import/[id]` espone il dettaglio dedicato di un batch con metadati, preview, contatori e lista anomalie

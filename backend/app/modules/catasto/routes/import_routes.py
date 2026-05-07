@@ -12,6 +12,7 @@ from app.models.application_user import ApplicationUser
 from app.models.catasto_phase1 import CatAnomalia, CatImportBatch, CatUtenzaIrrigua
 from app.modules.catasto.services.import_distretti import finalize_distretti_shapefile_import
 from app.modules.catasto.services.import_capacitas import CapacitasImportDuplicateError, import_capacitas_excel
+from app.modules.catasto.services.import_distretti_excel import import_distretti_excel
 from app.modules.catasto.services.import_shapefile import drop_staging_table, finalize_shapefile_import, load_zip_to_staging
 from app.schemas.catasto_phase1 import (
     CatAnomaliaListResponse,
@@ -34,6 +35,30 @@ def _run_import(batch_id: uuid.UUID, file_bytes: bytes, filename: str, created_b
             created_by=created_by,
             force=force,
             batch_id=batch_id,
+        )
+    except Exception as exc:
+        batch = db.get(CatImportBatch, batch_id)
+        if batch is not None:
+            batch.status = "failed"
+            batch.errore = str(exc)
+            db.commit()
+        else:
+            db.rollback()
+    finally:
+        db.close()
+
+
+def _run_distretti_excel_import(batch_id: uuid.UUID, file_bytes: bytes, filename: str, created_by: int) -> None:
+    db = SessionLocal()
+    try:
+        _append_step(batch_id, "Lettura Excel distretti in corso…")
+        import_distretti_excel(
+            db=db,
+            file_bytes=file_bytes,
+            filename=filename,
+            created_by=created_by,
+            batch_id=batch_id,
+            log_callback=lambda msg: _append_step(batch_id, msg),
         )
     except Exception as exc:
         batch = db.get(CatImportBatch, batch_id)
@@ -70,6 +95,37 @@ def upload_capacitas(
     db.add(placeholder)
     db.commit()
     background_tasks.add_task(_run_import, batch_id, file_bytes, file.filename or "capacitas.xlsx", current_user.id, force)
+    return CatImportStartResponse(batch_id=batch_id, status="processing")
+
+
+@router.post("/distretti/excel", response_model=CatImportStartResponse, status_code=status.HTTP_202_ACCEPTED)
+def upload_distretti_excel(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(require_admin_user),
+) -> CatImportStartResponse:
+    filename = file.filename or "distretti.xlsx"
+    if not filename.lower().endswith((".xlsx", ".xls")):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Il file deve essere un Excel (.xlsx o .xls) con colonne ANNO, N_DISTRETTO, DISTRETTO, COMUNE, SEZIONE, FOGLIO, PARTIC, SUB.",
+        )
+    file_bytes = file.file.read()
+    batch_id = uuid.uuid4()
+    placeholder = CatImportBatch(
+        id=batch_id,
+        filename=filename,
+        tipo="distretti_excel",
+        status="processing",
+        righe_totali=0,
+        righe_importate=0,
+        righe_anomalie=0,
+        created_by=current_user.id,
+    )
+    db.add(placeholder)
+    db.commit()
+    background_tasks.add_task(_run_distretti_excel_import, batch_id, file_bytes, filename, current_user.id)
     return CatImportStartResponse(batch_id=batch_id, status="processing")
 
 

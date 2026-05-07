@@ -175,6 +175,21 @@ export async function catastoUploadCapacitas(
   );
 }
 
+export async function catastoUploadDistrettiExcel(
+  token: string,
+  file: File,
+  params?: { onProgress?: (percent: number) => void },
+): Promise<CatImportStartResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return requestFormDataWithUploadProgress<CatImportStartResponse>(
+    "/catasto/import/distretti/excel",
+    formData,
+    token,
+    params?.onProgress,
+  );
+}
+
 export async function catastoGetImportStatus(token: string, batchId: UUID): Promise<CatImportBatch> {
   return request<CatImportBatch>(`/catasto/import/${batchId}/status`, {
     headers: authHeaders(token),
