@@ -319,11 +319,13 @@ async def refetch_certificati_senza_intestatari(
 
     for index, cert in enumerate(empty_certs):
         try:
-            target_utenza = db.scalar(
-                select(CatUtenzaIrrigua)
-                .where(CatUtenzaIrrigua.cco == cert.cco)
-                .order_by(CatUtenzaIrrigua.anno_campagna.desc())
+            target_utenze_for_context = _find_utenze_for_cert_context(
+                db,
+                cco=cert.cco,
+                com=cert.com,
+                fra=cert.fra,
             )
+            target_utenza = target_utenze_for_context[0] if target_utenze_for_context else None
             target_utenze = [target_utenza] if target_utenza is not None else None
             await sync_certificato_snapshot(
                 db,
@@ -477,8 +479,11 @@ async def _persist_capacitas_intestatari(
 ) -> None:
     utenze = target_utenze or []
     if target_utenze is None and certificato.cco:
-        utenze = list(
-            db.scalars(select(CatUtenzaIrrigua).where(CatUtenzaIrrigua.cco == certificato.cco)).all()
+        utenze = _find_utenze_for_cert_context(
+            db,
+            cco=certificato.cco,
+            com=certificato.com,
+            fra=certificato.fra,
         )
     for intestatario in certificato.intestatari:
         history_rows: list[CapacitasStoricoAnagraficaRow] = []
@@ -1708,6 +1713,38 @@ def _find_or_create_occupancy(
 
 def _same_optional_text(left: str | None, right: str | None) -> bool:
     return (left or "").strip() == (right or "").strip()
+
+
+def _parse_optional_int(value: str | None) -> int | None:
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _find_utenze_for_cert_context(
+    db: Session,
+    *,
+    cco: str,
+    com: str | None,
+    fra: str | None,
+) -> list[CatUtenzaIrrigua]:
+    query = select(CatUtenzaIrrigua).where(CatUtenzaIrrigua.cco == cco)
+
+    comune_code = _parse_optional_int(com)
+    frazione_code = _parse_optional_int(fra)
+    if comune_code is not None:
+        query = query.where(CatUtenzaIrrigua.cod_comune_capacitas == comune_code)
+    if frazione_code is not None:
+        query = query.where(CatUtenzaIrrigua.cod_frazione == frazione_code)
+
+    return list(
+        db.scalars(
+            query.order_by(CatUtenzaIrrigua.anno_campagna.desc(), CatUtenzaIrrigua.id.desc())
+        ).all()
+    )
 
 
 def _find_utenza_for_terreno_row(db: Session, row: CapacitasTerrenoRow) -> CatUtenzaIrrigua | None:

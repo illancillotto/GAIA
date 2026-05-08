@@ -253,6 +253,8 @@ Note:
 - il filtro per nome comune usa l'anagrafica canonica `cat_comuni` come fallback applicativo e non dipende solo dal campo denormalizzato `cat_particelle.nome_comune`
 - la risoluzione intestatari e `locale-first`: legge prima `ana_persons` / `ana_subjects`
 - se l'intestatario manca localmente ma la particella ha riferimenti Capacitas ricostruibili, il backend usa un fallback live su `rptCertificato.aspx` e `dettaglioAnagrafica.aspx`
+- nel perimetro Capacitas il solo `CCO` non e chiave sufficiente: link certificato, snapshot intestatari e refetch devono usare sempre il contesto `COM/PVC/FRA/CCS` quando disponibile; per il collegamento a `cat_utenze_irrigue` il minimo accettabile e `CCO + COM + FRA`
+- se un `CCO` risulta presente localmente su piu contesti diversi e il chiamante non specifica abbastanza parametri per disambiguare, GAIA deve preferire un errore esplicito (`409`) a un match arbitrario verso il certificato sbagliato
 - il fallback live aggiorna o crea l'anagrafica corrente locale dell'intestatario
 - il flusso massivo non recupera lo storico remoto completo Capacitas: quello resta nel modulo `elaborazioni/capacitas`
 

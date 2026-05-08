@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Generator
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+import uuid
 
 from cryptography.fernet import Fernet
 import pytest
@@ -1226,10 +1227,10 @@ def test_capacitas_rpt_certificato_link_prefers_certificato_snapshot() -> None:
         db.add(
             CatCapacitasTerrenoRow(
                 cco="0A2200001",
-                com="289",
-                pvc="097",
-                fra="38",
-                ccs="00000",
+                com="777",
+                pvc="123",
+                fra="55",
+                ccs="00009",
                 collected_at=datetime.now(timezone.utc) - timedelta(days=1),
             )
         )
@@ -1333,6 +1334,43 @@ def test_capacitas_rpt_certificato_link_uses_explicit_context_params() -> None:
     assert "PVC=097" in url
     assert "FRA=38" in url
     assert "CCS=00000" in url
+
+
+def test_capacitas_rpt_certificato_link_rejects_ambiguous_cco_without_context() -> None:
+    db = TestingSessionLocal()
+    try:
+        db.add(
+            CatCapacitasCertificato(
+                cco="0A2200099",
+                com="165",
+                pvc="097",
+                fra="31",
+                ccs="00000",
+                collected_at=datetime.now(timezone.utc),
+            )
+        )
+        db.add(
+            CatCapacitasCertificato(
+                cco="0A2200099",
+                com="289",
+                pvc="097",
+                fra="38",
+                ccs="00000",
+                collected_at=datetime.now(timezone.utc) - timedelta(days=1),
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get(
+        "/elaborazioni/capacitas/involture/link/rpt-certificato?cco=0A2200099",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 409
+    assert "ambiguo" in response.json()["detail"]
+    assert "COM, PVC, FRA e CCS" in response.json()["detail"]
 
 
 def test_capacitas_rpt_certificato_link_reports_incomplete_source_details() -> None:
@@ -3778,6 +3816,75 @@ async def test_refetch_certificati_richiama_sync_per_cert_senza_intestatari(monk
 
         assert count == 1
         assert called_ccos == ["0A1462373"]
+    finally:
+        db.rollback()
+        db.close()
+
+
+@pytest.mark.anyio
+async def test_refetch_certificati_filters_target_utenza_by_comune_and_frazione(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.services.elaborazioni_capacitas_terreni import refetch_certificati_senza_intestatari
+    from app.modules.elaborazioni.capacitas.models import CapacitasTerrenoCertificato
+
+    db = TestingSessionLocal()
+    captured_target_utenze_ids: list[uuid.UUID] = []
+
+    async def fake_sync_snapshot(db, client, *, cco, com, pvc, fra, ccs, target_utenze=None, **kwargs):
+        if target_utenze:
+            captured_target_utenze_ids.extend(item.id for item in target_utenze)
+        snap = CatCapacitasCertificato(
+            cco=cco,
+            fra=fra,
+            ccs=ccs,
+            pvc=pvc,
+            com=com,
+            collected_at=datetime(2025, 1, 1, tzinfo=timezone.utc),
+        )
+        db.add(snap)
+        db.flush()
+        return CapacitasTerrenoCertificato(cco=cco, fra=fra, ccs=ccs, pvc=pvc, com=com), snap
+
+    monkeypatch.setattr(
+        "app.services.elaborazioni_capacitas_terreni.sync_certificato_snapshot",
+        fake_sync_snapshot,
+    )
+
+    try:
+        batch = db.query(CatImportBatch).first()
+        assert batch is not None
+        matching = CatUtenzaIrrigua(
+            import_batch_id=batch.id,
+            anno_campagna=2025,
+            cco="0A1462373",
+            cod_comune_capacitas=95,
+            cod_frazione=38,
+            foglio="24",
+            particella="3",
+        )
+        wrong = CatUtenzaIrrigua(
+            import_batch_id=batch.id,
+            anno_campagna=2025,
+            cco="0A1462373",
+            cod_comune_capacitas=165,
+            cod_frazione=31,
+            foglio="24",
+            particella="3",
+        )
+        db.add_all([matching, wrong])
+        db.flush()
+
+        _make_cert_for_refetch(db, cco="0A1462373", has_intestatario=False)
+        cert = db.query(CatCapacitasCertificato).filter(CatCapacitasCertificato.cco == "0A1462373").one()
+        cert.com = "95"
+        cert.fra = "38"
+        cert.pvc = "097"
+        cert.ccs = "00000"
+        db.commit()
+
+        count = await refetch_certificati_senza_intestatari(db, None, limit=10)  # type: ignore[arg-type]
+
+        assert count == 1
+        assert captured_target_utenze_ids == [matching.id]
     finally:
         db.rollback()
         db.close()

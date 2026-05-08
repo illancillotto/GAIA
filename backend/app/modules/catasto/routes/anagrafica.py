@@ -1119,6 +1119,40 @@ def _context_from_occupancy(occupancy: CatConsorzioOccupancy | None) -> tuple[st
     )
 
 
+def _context_from_values(
+    com: str | None,
+    pvc: str | None,
+    fra: str | None,
+    ccs: str | None,
+) -> tuple[str | None, str | None, str | None, str | None]:
+    return (_norm_str(com), _norm_str(pvc), _norm_str(fra), _normalize_ccs(ccs))
+
+
+def _collect_local_cert_contexts(db: Session, *, cco: str) -> list[tuple[str, str, str, str]]:
+    contexts: set[tuple[str, str, str, str]] = set()
+
+    def _add_context(com: str | None, pvc: str | None, fra: str | None, ccs: str | None) -> None:
+        normalized = _context_from_values(com, pvc, fra, ccs)
+        if all(normalized[:3]):
+            contexts.add(
+                (
+                    normalized[0] or "",
+                    normalized[1] or "",
+                    normalized[2] or "",
+                    normalized[3] or "00000",
+                )
+            )
+
+    for cert in db.execute(select(CatCapacitasCertificato).where(CatCapacitasCertificato.cco == cco)).scalars().all():
+        _add_context(cert.com, cert.pvc, cert.fra, cert.ccs)
+    for occupancy in db.execute(select(CatConsorzioOccupancy).where(CatConsorzioOccupancy.cco == cco)).scalars().all():
+        _add_context(occupancy.com, occupancy.pvc, occupancy.fra, occupancy.ccs)
+    for row in db.execute(select(CatCapacitasTerrenoRow).where(CatCapacitasTerrenoRow.cco == cco)).scalars().all():
+        _add_context(row.com, row.pvc, row.fra, row.ccs)
+
+    return sorted(contexts)
+
+
 def _is_sentinel_cco(cco: str) -> bool:
     """Returns True for Capacitas placeholder CCOs (e.g. 014099999) that are shared
     across many unrelated sub-units and do not carry reliable intestatario data."""
@@ -1197,9 +1231,12 @@ def _resolve_particella_cert_context(
     if occupancy is not None:
         return _context_from_occupancy(occupancy)
 
-    cert = _find_certificato_snapshot(db, cco=cco_norm)
-    if cert is not None:
-        return (_norm_str(cert.com), _norm_str(cert.pvc), _norm_str(cert.fra), _normalize_ccs(cert.ccs))
+    if latest_utenza is not None:
+        utenza_com = str(latest_utenza.cod_comune_capacitas) if latest_utenza.cod_comune_capacitas is not None else None
+        utenza_fra = str(latest_utenza.cod_frazione) if latest_utenza.cod_frazione is not None else None
+        cert = _find_certificato_snapshot(db, cco=cco_norm, com=utenza_com, fra=utenza_fra)
+        if cert is not None:
+            return _context_from_values(cert.com, cert.pvc, cert.fra, cert.ccs)
 
     if latest_utenza is not None:
         row = (
@@ -1218,7 +1255,11 @@ def _resolve_particella_cert_context(
             .first()
         )
         if row is not None:
-            return (_norm_str(row.com), _norm_str(row.pvc), _norm_str(row.fra), _normalize_ccs(row.ccs))
+            return _context_from_values(row.com, row.pvc, row.fra, row.ccs)
+
+    unique_contexts = _collect_local_cert_contexts(db, cco=cco_norm)
+    if len(unique_contexts) == 1:
+        return unique_contexts[0]
 
     return (None, None, None, None)
 

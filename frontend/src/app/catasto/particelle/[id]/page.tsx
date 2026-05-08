@@ -1,13 +1,13 @@
 "use client";
 
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { CatastoPage } from "@/components/catasto/catasto-page";
 import { AlertBanner } from "@/components/ui/alert-banner";
 import { MetricCard } from "@/components/ui/metric-card";
 import { DataTable } from "@/components/table/data-table";
-import type { ColumnDef } from "@tanstack/react-table";
+import type { CellContext, ColumnDef } from "@tanstack/react-table";
 import { AnomaliaStatusBadge } from "@/components/catasto/AnomaliaStatusBadge";
 import { AnomaliaStatusPill } from "@/components/catasto/AnomaliaStatusPill";
 import {
@@ -49,6 +49,46 @@ function formatDateTime(value: string | null | undefined): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString("it-IT");
+}
+
+type ParticellaHistoryCell = CellContext<CatParticellaHistory, unknown>;
+type UtenzaCell = CellContext<CatUtenzaIrrigua, unknown>;
+type AnomaliaCell = CellContext<CatAnomalia, unknown>;
+type OccupancyCell = CellContext<NonNullable<CatParticellaConsorzio["units"][number]["occupancies"]>[number], unknown>;
+type ConsorzioUnit = CatParticellaConsorzio["units"][number];
+type ConsorzioOwner = ConsorzioUnit["intestatari_proprietari"][number];
+
+function resolveUtenzaCertContext(
+  consorzio: CatParticellaConsorzio | null,
+  utenza: CatUtenzaIrrigua,
+): { com?: string; pvc?: string; fra?: string; ccs?: string } {
+  if (!consorzio) return {};
+
+  const candidates = consorzio.units
+    .flatMap((unit) => unit.occupancies)
+    .filter(
+      (occupancy) =>
+        occupancy.utenza_id === utenza.id &&
+        Boolean(occupancy.com) &&
+        Boolean(occupancy.pvc) &&
+        Boolean(occupancy.fra),
+    )
+    .sort((left, right) => {
+      if (left.is_current !== right.is_current) return left.is_current ? -1 : 1;
+      const leftValid = left.valid_from ?? "";
+      const rightValid = right.valid_from ?? "";
+      if (leftValid !== rightValid) return rightValid.localeCompare(leftValid);
+      return (right.updated_at ?? "").localeCompare(left.updated_at ?? "");
+    });
+
+  const best = candidates[0];
+  if (!best) return {};
+  return {
+    com: best.com ?? undefined,
+    pvc: best.pvc ?? undefined,
+    fra: best.fra ?? undefined,
+    ccs: best.ccs ?? undefined,
+  };
 }
 
 export default function CatastoParticellaDetailPage() {
@@ -148,74 +188,76 @@ export default function CatastoParticellaDetailPage() {
     }
   }
 
-  async function openCapacitasCertificato(cco: string): Promise<void> {
+  const openCapacitasCertificato = useCallback(async (utenza: CatUtenzaIrrigua): Promise<void> => {
     const token = getStoredAccessToken();
-    if (!token) return;
+    const cco = utenza.cco?.trim();
+    if (!token || !cco) return;
 
     setCapacitasLinkBusy(true);
     setCapacitasLinkError(null);
     try {
-      const { url } = await capacitasGetRptCertificatoLink(token, cco);
+      const context = resolveUtenzaCertContext(consorzio, utenza);
+      const { url } = await capacitasGetRptCertificatoLink(token, cco, context);
       window.open(url, "_blank", "noopener,noreferrer");
     } catch (e) {
       setCapacitasLinkError(e instanceof Error ? e.message : "Errore generazione link Capacitas");
     } finally {
       setCapacitasLinkBusy(false);
     }
-  }
+  }, [consorzio]);
 
   const columns = useMemo<ColumnDef<CatParticellaHistory>[]>(
     () => [
       {
         header: "Validità",
         id: "valid",
-        cell: ({ row }) => (
+        cell: ({ row }: ParticellaHistoryCell) => (
           <span className="text-sm text-gray-700">
             {row.original.valid_from} → {row.original.valid_to}
           </span>
         ),
       },
-      { header: "Distretto", accessorKey: "num_distretto", cell: ({ row }) => <span className="text-sm text-gray-700">{row.original.num_distretto ?? "—"}</span> },
+      { header: "Distretto", accessorKey: "num_distretto", cell: ({ row }: ParticellaHistoryCell) => <span className="text-sm text-gray-700">{row.original.num_distretto ?? "—"}</span> },
       {
         header: "Sup. catastale (ha)",
         id: "supCatastale",
-        cell: ({ row }) => <span className="text-sm text-gray-700">{row.original.superficie_mq ? `${formatHaFromMq(row.original.superficie_mq)} ha` : "—"}</span>,
+        cell: ({ row }: ParticellaHistoryCell) => <span className="text-sm text-gray-700">{row.original.superficie_mq ? `${formatHaFromMq(row.original.superficie_mq)} ha` : "—"}</span>,
       },
       {
         header: "Sup. grafica (ha)",
         id: "supGrafica",
-        cell: ({ row }) => <span className="text-sm text-gray-700">{row.original.superficie_grafica_mq ? `${formatHaFromMq(row.original.superficie_grafica_mq)} ha` : "—"}</span>,
+        cell: ({ row }: ParticellaHistoryCell) => <span className="text-sm text-gray-700">{row.original.superficie_grafica_mq ? `${formatHaFromMq(row.original.superficie_grafica_mq)} ha` : "—"}</span>,
       },
-      { header: "Reason", accessorKey: "change_reason", cell: ({ row }) => <span className="text-sm text-gray-600">{row.original.change_reason ?? "—"}</span> },
+      { header: "Reason", accessorKey: "change_reason", cell: ({ row }: ParticellaHistoryCell) => <span className="text-sm text-gray-600">{row.original.change_reason ?? "—"}</span> },
     ],
     [],
   );
 
   const utenzeColumns = useMemo<ColumnDef<CatUtenzaIrrigua>[]>(
     () => [
-      { header: "Anno", accessorKey: "anno_campagna", cell: ({ row }) => <span className="text-sm text-gray-700">{row.original.anno_campagna}</span> },
-      { header: "CCO", accessorKey: "cco", cell: ({ row }) => <span className="text-sm text-gray-700">{row.original.cco ?? "—"}</span> },
-      { header: "CF", accessorKey: "codice_fiscale", cell: ({ row }) => <span className="text-sm text-gray-700">{row.original.codice_fiscale ?? "—"}</span> },
+      { header: "Anno", accessorKey: "anno_campagna", cell: ({ row }: UtenzaCell) => <span className="text-sm text-gray-700">{row.original.anno_campagna}</span> },
+      { header: "CCO", accessorKey: "cco", cell: ({ row }: UtenzaCell) => <span className="text-sm text-gray-700">{row.original.cco ?? "—"}</span> },
+      { header: "CF", accessorKey: "codice_fiscale", cell: ({ row }: UtenzaCell) => <span className="text-sm text-gray-700">{row.original.codice_fiscale ?? "—"}</span> },
       {
         header: "0648 (€)",
         id: "i0648",
-        cell: ({ row }) => <span className="text-sm text-gray-700">{row.original.importo_0648 ?? "—"}</span>,
+        cell: ({ row }: UtenzaCell) => <span className="text-sm text-gray-700">{row.original.importo_0648 ?? "—"}</span>,
       },
       {
         header: "0985 (€)",
         id: "i0985",
-        cell: ({ row }) => <span className="text-sm text-gray-700">{row.original.importo_0985 ?? "—"}</span>,
+        cell: ({ row }: UtenzaCell) => <span className="text-sm text-gray-700">{row.original.importo_0985 ?? "—"}</span>,
       },
       {
         header: "Azioni",
         id: "azioniUtenza",
-        cell: ({ row }) => (
+        cell: ({ row }: UtenzaCell) => (
           row.original.cco ? (
             <button
               type="button"
               className="flex items-center gap-1 text-xs font-medium text-[#1D4E35] hover:underline"
               disabled={capacitasLinkBusy}
-              onClick={() => void openCapacitasCertificato(row.original.cco!)}
+              onClick={() => void openCapacitasCertificato(row.original)}
             >
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">
                 <path d="M6.22 8.72a.75.75 0 0 0 1.06 1.06l5.22-5.22v1.69a.75.75 0 0 0 1.5 0v-3.5a.75.75 0 0 0-.75-.75h-3.5a.75.75 0 0 0 0 1.5h1.69L6.22 8.72Z" />
@@ -227,19 +269,19 @@ export default function CatastoParticellaDetailPage() {
         ),
       },
     ],
-    [capacitasLinkBusy],
+    [capacitasLinkBusy, openCapacitasCertificato],
   );
 
   const anomalieColumns = useMemo<ColumnDef<CatAnomalia>[]>(
     () => [
-      { header: "Sev", accessorKey: "severita", cell: ({ row }) => <AnomaliaStatusBadge severita={row.original.severita} /> },
-      { header: "Tipo", accessorKey: "tipo", cell: ({ row }) => <span className="text-sm font-medium text-gray-900">{row.original.tipo}</span> },
-      { header: "Stato", accessorKey: "status", cell: ({ row }) => <AnomaliaStatusPill status={row.original.status} /> },
-      { header: "Descrizione", accessorKey: "descrizione", cell: ({ row }) => <span className="text-sm text-gray-600">{row.original.descrizione ?? "—"}</span> },
+      { header: "Sev", accessorKey: "severita", cell: ({ row }: AnomaliaCell) => <AnomaliaStatusBadge severita={row.original.severita} /> },
+      { header: "Tipo", accessorKey: "tipo", cell: ({ row }: AnomaliaCell) => <span className="text-sm font-medium text-gray-900">{row.original.tipo}</span> },
+      { header: "Stato", accessorKey: "status", cell: ({ row }: AnomaliaCell) => <AnomaliaStatusPill status={row.original.status} /> },
+      { header: "Descrizione", accessorKey: "descrizione", cell: ({ row }: AnomaliaCell) => <span className="text-sm text-gray-600">{row.original.descrizione ?? "—"}</span> },
       {
         header: "Azioni",
         id: "actions",
-        cell: ({ row }) => (
+        cell: ({ row }: AnomaliaCell) => (
           <div className="flex flex-wrap gap-2">
             <button
               type="button"
@@ -289,13 +331,13 @@ export default function CatastoParticellaDetailPage() {
 
   const consorzioOccupancyColumns = useMemo<ColumnDef<NonNullable<CatParticellaConsorzio["units"][number]["occupancies"]>[number]>[]>(
     () => [
-      { header: "Relazione", accessorKey: "relationship_type", cell: ({ row }) => <span className="text-sm text-gray-700">{row.original.relationship_type}</span> },
-      { header: "CCO", accessorKey: "cco", cell: ({ row }) => <span className="text-sm text-gray-700">{row.original.cco ?? "—"}</span> },
-      { header: "Sorgente", accessorKey: "source_type", cell: ({ row }) => <span className="text-sm text-gray-700">{row.original.source_type}</span> },
+      { header: "Relazione", accessorKey: "relationship_type", cell: ({ row }: OccupancyCell) => <span className="text-sm text-gray-700">{row.original.relationship_type}</span> },
+      { header: "CCO", accessorKey: "cco", cell: ({ row }: OccupancyCell) => <span className="text-sm text-gray-700">{row.original.cco ?? "—"}</span> },
+      { header: "Sorgente", accessorKey: "source_type", cell: ({ row }: OccupancyCell) => <span className="text-sm text-gray-700">{row.original.source_type}</span> },
       {
         header: "Periodo",
         id: "periodo",
-        cell: ({ row }) => (
+        cell: ({ row }: OccupancyCell) => (
           <span className="text-sm text-gray-700">
             {row.original.valid_from ?? "—"} → {row.original.valid_to ?? "—"}
           </span>
@@ -304,7 +346,7 @@ export default function CatastoParticellaDetailPage() {
       {
         header: "Stato",
         id: "current",
-        cell: ({ row }) => (
+        cell: ({ row }: OccupancyCell) => (
           <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${row.original.is_current ? "bg-emerald-50 text-emerald-700" : "bg-slate-100 text-slate-600"}`}>
             {row.original.is_current ? "Corrente" : "Storico"}
           </span>
@@ -398,7 +440,7 @@ export default function CatastoParticellaDetailPage() {
             </div>
           ) : (
             <div className="mt-4 space-y-4">
-              {consorzio.units.map((unit) => (
+              {consorzio.units.map((unit: ConsorzioUnit) => (
                 <div key={unit.id} className="rounded-2xl border border-[#e5ebe2] bg-[#fbfcfb] p-4">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
@@ -445,7 +487,7 @@ export default function CatastoParticellaDetailPage() {
                       <p className="mt-3 text-sm text-gray-500">Nessun intestatario strutturato ancora disponibile per questa unità.</p>
                     ) : (
                       <div className="mt-3 space-y-2">
-                        {unit.intestatari_proprietari.map((owner) => (
+                        {unit.intestatari_proprietari.map((owner: ConsorzioOwner) => (
                           <div key={owner.id} className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2">
                             <p className="text-sm font-medium text-gray-900">
                               {owner.denominazione ?? "—"}

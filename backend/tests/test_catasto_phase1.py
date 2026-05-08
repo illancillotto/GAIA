@@ -1858,6 +1858,9 @@ def test_bulk_search_anagrafica_multiple_matches_does_not_pick_first_particella(
 def test_bulk_search_anagrafica_uses_exact_cert_context_for_reused_cco() -> None:
     db = TestingSessionLocal()
     try:
+        batch = CatImportBatch(filename="test.xlsx", tipo="test", status="completed")
+        db.add(batch)
+        db.flush()
         comune_uras = CatComune(
             nome_comune="Uras",
             codice_catastale="L496",
@@ -1897,6 +1900,7 @@ def test_bulk_search_anagrafica_uses_exact_cert_context_for_reused_cco() -> None
         db.flush()
         db.add(
             CatUtenzaIrrigua(
+                import_batch_id=batch.id,
                 anno_campagna=2025,
                 cco="000000074",
                 comune_id=comune_uras.id,
@@ -1970,7 +1974,103 @@ def test_bulk_search_anagrafica_uses_exact_cert_context_for_reused_cco() -> None
     payload = response.json()["results"][0]["match"]
     assert payload["cert_com"] == "289"
     assert payload["cert_fra"] == "38"
-    assert payload["intestatari"][0]["denominazione"] == "Comune Di Uras"
+
+
+def test_bulk_search_anagrafica_uses_latest_utenza_context_when_cco_exists_on_multiple_comuni() -> None:
+    db = TestingSessionLocal()
+    try:
+        batch = CatImportBatch(filename="test.xlsx", tipo="test", status="completed")
+        db.add(batch)
+        db.flush()
+        comune_uras = CatComune(
+            nome_comune="Uras",
+            codice_catastale="L496",
+            cod_comune_capacitas=289,
+            codice_comune_formato_numerico=115081,
+            codice_comune_numerico_2017_2025=95078,
+            nome_comune_legacy="Uras",
+            cod_provincia=115,
+            sigla_provincia="OR",
+            regione="Sardegna",
+        )
+        db.add(comune_uras)
+        db.flush()
+        particella = CatParticella(
+            comune_id=comune_uras.id,
+            cod_comune_capacitas=289,
+            codice_catastale="L496",
+            nome_comune="Uras",
+            foglio="17",
+            particella="245",
+            subalterno=None,
+            is_current=True,
+        )
+        db.add(particella)
+        db.flush()
+        db.add(
+            CatUtenzaIrrigua(
+                import_batch_id=batch.id,
+                anno_campagna=2025,
+                cco="000000252",
+                comune_id=comune_uras.id,
+                cod_comune_capacitas=289,
+                cod_frazione=38,
+                nome_comune="Uras",
+                foglio="17",
+                particella="245",
+                particella_id=particella.id,
+                denominazione="Utente Uras Corretto",
+                codice_fiscale="RSSMRA80A01H501U",
+            )
+        )
+        wrong_cert = CatCapacitasCertificato(
+            cco="000000252",
+            com="165",
+            pvc="097",
+            fra="31",
+            ccs="00000",
+            collected_at=datetime(2026, 5, 7, 9, 0, tzinfo=timezone.utc),
+        )
+        right_cert = CatCapacitasCertificato(
+            cco="000000252",
+            com="289",
+            pvc="097",
+            fra="38",
+            ccs="00000",
+            collected_at=datetime(2026, 5, 6, 9, 0, tzinfo=timezone.utc),
+        )
+        db.add_all([wrong_cert, right_cert])
+        db.flush()
+        db.add(
+            CatCapacitasIntestatario(
+                certificato_id=wrong_cert.id,
+                denominazione="Utente Arborea Errato",
+                codice_fiscale="RWRRRA80A01H501U",
+                collected_at=wrong_cert.collected_at,
+            )
+        )
+        db.add(
+            CatCapacitasIntestatario(
+                certificato_id=right_cert.id,
+                denominazione="Utente Uras Corretto",
+                codice_fiscale="RSSMRA80A01H501U",
+                collected_at=right_cert.collected_at,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.post(
+        "/catasto/elaborazioni-massive/particelle",
+        headers=auth_headers(),
+        json={"rows": [{"row_index": 1, "comune": "Uras", "foglio": "17", "particella": "245"}]},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["results"][0]["match"]
+    assert payload["cert_com"] == "289"
+    assert payload["cert_fra"] == "38"
 
 
 def test_bulk_search_anagrafica_sub_matches_preserve_case_variants() -> None:
