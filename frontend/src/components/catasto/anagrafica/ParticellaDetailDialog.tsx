@@ -199,7 +199,7 @@ export function ParticellaDetailDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/45 px-4"
+      className="fixed inset-0 z-50 overflow-y-auto bg-gray-900/45 px-4 py-6"
       role="dialog"
       aria-modal="true"
       aria-label={`Dettaglio ${reference}`}
@@ -207,27 +207,33 @@ export function ParticellaDetailDialog({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-3xl rounded-2xl border border-gray-200 bg-white p-6 shadow-2xl">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="text-sm font-semibold text-gray-900">{reference}</p>
-            <p className="mt-1 text-sm text-gray-500">
-              Comune: <span className="font-medium text-gray-800">{match.comune ?? "—"}</span>{" "}
-              <span className="text-gray-400">·</span> Codice Capacitas: <span className="font-medium text-gray-800">{match.cod_comune_capacitas ?? "—"}</span>{" "}
-              <span className="text-gray-400">·</span> Distretto: <span className="font-medium text-gray-800">{match.num_distretto ?? "—"}</span>
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button type="button" className="btn-primary" disabled={busy || syncBusy} onClick={() => void handleSyncParticella()}>
-              {syncBusy ? "Sincronizzazione…" : "Sincronizza con Capacitas"}
-            </button>
-            <button type="button" className="btn-secondary" onClick={onClose}>
-              Chiudi
-            </button>
+      <div className="mx-auto flex w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl">
+        <div className="border-b border-gray-100 px-6 py-5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-gray-900">{reference}</p>
+              <p className="mt-1 text-sm text-gray-500">
+                Comune: <span className="font-medium text-gray-800">{match.comune ?? "—"}</span>{" "}
+                <span className="text-gray-400">·</span> Codice Capacitas: <span className="font-medium text-gray-800">{match.cod_comune_capacitas ?? "—"}</span>{" "}
+                <span className="text-gray-400">·</span> Distretto: <span className="font-medium text-gray-800">{match.num_distretto ?? "—"}</span>
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <a className="btn-secondary" href={`/catasto/particelle/${match.particella_id}`} target="_blank" rel="noreferrer">
+                Apri scheda completa
+              </a>
+              <button type="button" className="btn-primary" disabled={busy || syncBusy} onClick={() => void handleSyncParticella()}>
+                {syncBusy ? "Sincronizzazione…" : "Sincronizza con Capacitas"}
+              </button>
+              <button type="button" className="btn-secondary" onClick={onClose}>
+                Chiudi
+              </button>
+            </div>
           </div>
         </div>
 
-        <div className="mt-3 rounded-xl border border-[#d9e7dc] bg-[#f5faf5] px-4 py-3 text-sm text-gray-700">
+        <div className="max-h-[calc(100vh-7rem)] overflow-y-auto px-6 py-5">
+        <div className="rounded-xl border border-[#d9e7dc] bg-[#f5faf5] px-4 py-3 text-sm text-gray-700">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-medium text-gray-900">Ultimo aggiornamento Capacitas:</span>
             <span>{formatDateTime(particella?.capacitas_last_sync_at)}</span>
@@ -477,11 +483,6 @@ export function ParticellaDetailDialog({
             )}
           </div>
         </div>
-
-        <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
-          <a className="btn-secondary" href={`/catasto/particelle/${match.particella_id}`}>
-            Apri scheda completa
-          </a>
         </div>
       </div>
     </div>

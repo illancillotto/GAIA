@@ -11,6 +11,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { AnomaliaStatusBadge } from "@/components/catasto/AnomaliaStatusBadge";
 import { AnomaliaStatusPill } from "@/components/catasto/AnomaliaStatusPill";
 import {
+  capacitasGetRptCertificatoLink,
   catastoGetParticella,
   catastoGetParticellaAnomalie,
   catastoGetParticellaConsorzio,
@@ -65,6 +66,8 @@ export default function CatastoParticellaDetailPage() {
   const [anomalie, setAnomalie] = useState<CatAnomalia[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [syncBusy, setSyncBusy] = useState(false);
+  const [capacitasLinkBusy, setCapacitasLinkBusy] = useState(false);
+  const [capacitasLinkError, setCapacitasLinkError] = useState<string | null>(null);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -145,6 +148,22 @@ export default function CatastoParticellaDetailPage() {
     }
   }
 
+  async function openCapacitasCertificato(cco: string): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) return;
+
+    setCapacitasLinkBusy(true);
+    setCapacitasLinkError(null);
+    try {
+      const { url } = await capacitasGetRptCertificatoLink(token, cco);
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (e) {
+      setCapacitasLinkError(e instanceof Error ? e.message : "Errore generazione link Capacitas");
+    } finally {
+      setCapacitasLinkBusy(false);
+    }
+  }
+
   const columns = useMemo<ColumnDef<CatParticellaHistory>[]>(
     () => [
       {
@@ -187,8 +206,28 @@ export default function CatastoParticellaDetailPage() {
         id: "i0985",
         cell: ({ row }) => <span className="text-sm text-gray-700">{row.original.importo_0985 ?? "—"}</span>,
       },
+      {
+        header: "Azioni",
+        id: "azioniUtenza",
+        cell: ({ row }) => (
+          row.original.cco ? (
+            <button
+              type="button"
+              className="flex items-center gap-1 text-xs font-medium text-[#1D4E35] hover:underline"
+              disabled={capacitasLinkBusy}
+              onClick={() => void openCapacitasCertificato(row.original.cco!)}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">
+                <path d="M6.22 8.72a.75.75 0 0 0 1.06 1.06l5.22-5.22v1.69a.75.75 0 0 0 1.5 0v-3.5a.75.75 0 0 0-.75-.75h-3.5a.75.75 0 0 0 0 1.5h1.69L6.22 8.72Z" />
+                <path d="M3.5 6.75c0-.69.56-1.25 1.25-1.25H7A.75.75 0 0 0 7 4H4.75A2.75 2.75 0 0 0 2 6.75v4.5A2.75 2.75 0 0 0 4.75 14h4.5A2.75 2.75 0 0 0 12 11.25V9a.75.75 0 0 0-1.5 0v2.25c0 .69-.56 1.25-1.25 1.25h-4.5c-.69 0-1.25-.56-1.25-1.25v-4.5Z" />
+              </svg>
+              {capacitasLinkBusy ? "Apertura…" : "Visualizza su Capacitas"}
+            </button>
+          ) : null
+        ),
+      },
     ],
-    [],
+    [capacitasLinkBusy],
   );
 
   const anomalieColumns = useMemo<ColumnDef<CatAnomalia>[]>(
@@ -474,6 +513,11 @@ export default function CatastoParticellaDetailPage() {
               </select>
             </div>
           </div>
+          {capacitasLinkError ? (
+            <div className="mt-3 rounded-xl border border-red-100 bg-red-50 p-3 text-sm text-red-800">
+              {capacitasLinkError}
+            </div>
+          ) : null}
           <div className="mt-4">
             <DataTable data={utenze} columns={utenzeColumns} initialPageSize={8} emptyTitle={isLoading ? "Caricamento…" : "Nessuna utenza"} />
           </div>
