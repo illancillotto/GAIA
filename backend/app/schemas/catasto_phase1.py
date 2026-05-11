@@ -330,6 +330,8 @@ class CatUtenzaIrriguaResponse(BaseModel):
     denominazione: str | None
     codice_fiscale: str | None
     codice_fiscale_raw: str | None
+    subject_id: UUID | None = None
+    subject_display_name: str | None = None
     anomalia_superficie: bool
     anomalia_cf_invalido: bool
     anomalia_cf_mancante: bool

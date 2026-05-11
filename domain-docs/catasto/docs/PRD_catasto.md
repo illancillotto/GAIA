@@ -233,6 +233,7 @@ Note:
 - `GET /catasto/particelle/`
 - `GET /catasto/particelle/{particella_id}`
 - `GET /catasto/particelle/{particella_id}/history`
+- `GET /catasto/particelle/{particella_id}/utenze`
 - `GET /catasto/anomalie/`
 
 Nota UI obbligatoria per `Distretti Excel`:
@@ -321,6 +322,8 @@ Comportamento attuale:
 - dalla dashboard `/catasto` il click su un distretto apre un workspace rapido in modale; da li i dettagli particella restano embedded senza sidebar completa e con navigazione indietro interna
 - la modale di dettaglio particella usata dalla ricerca anagrafica espone anche il blocco di catasto consortile per consultazione rapida
 - `/catasto/particelle` e `/catasto/particelle/[id]` coprono lookup e dettaglio con utenze/anomalie
+- nella scheda `/catasto/particelle/[id]`, la tabella `Utilizzatore / pagatore annualita` deve esporre la `partita` Capacitas `CCO/FRA/CCS` e usare il contesto completo `COM/PVC/FRA/CCS` per il link `Visualizza su Capacitas`
+- la stessa tabella puo rendere cliccabili codice fiscale e nominativo verso la quick view utenze solo quando il backend restituisce un `subject_id` univoco; in caso di match ambiguo il link va omesso
 - `/catasto/anomalie` espone la lista operativa con aggiornamento stato
 - `/catasto/ricerca-anagrafica` espone ricerca singola e bulk da riferimenti catastali con preview dei match
 - nelle liste e nei dettagli particella il frontend distingue esplicitamente `Sup. catastale` e `Sup. grafica` per evitare di sovraccaricare l'unico dato storico `superficie_mq`

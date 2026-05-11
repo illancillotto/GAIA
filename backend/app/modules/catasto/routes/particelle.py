@@ -24,7 +24,7 @@ from app.modules.elaborazioni.capacitas.client import InVoltureClient
 from app.modules.elaborazioni.capacitas.session import CapacitasSessionManager
 from app.services.elaborazioni_capacitas import mark_credential_error, mark_credential_used, pick_credential
 from app.services.elaborazioni_capacitas_particelle_sync import sync_single_particella
-from app.modules.utenze.models import AnagraficaPerson, AnagraficaPersonSnapshot
+from app.modules.utenze.models import AnagraficaCompany, AnagraficaPerson, AnagraficaPersonSnapshot
 from app.schemas.catasto_phase1 import (
     CatAnomaliaResponse,
     CatParticellaCapacitasSyncInput,
@@ -42,6 +42,75 @@ from app.modules.utenze.schemas import AnagraficaPersonResponse, AnagraficaPerso
 from app.modules.ruolo.models import RuoloParticella
 
 router = APIRouter(prefix="/catasto/particelle", tags=["catasto-particelle"])
+
+
+def _normalize_identifier(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.replace(" ", "").strip().upper()
+    return normalized or None
+
+
+def _build_subject_display_name(
+    person: AnagraficaPerson | None = None,
+    company: AnagraficaCompany | None = None,
+) -> str | None:
+    if person is not None:
+        value = " ".join(part for part in [person.cognome, person.nome] if part and part.strip()).strip()
+        return value or person.codice_fiscale
+    if company is not None:
+        return company.ragione_sociale or company.partita_iva or company.codice_fiscale
+    return None
+
+
+def _resolve_subject_preview_by_identifier_map(
+    db: Session,
+    utenze: list[CatUtenzaIrrigua],
+) -> dict[str, tuple[UUID, str] | None]:
+    identifiers = {
+        normalized
+        for utenza in utenze
+        for normalized in [_normalize_identifier(utenza.codice_fiscale)]
+        if normalized is not None
+    }
+    if not identifiers:
+        return {}
+
+    subject_map: dict[str, set[tuple[UUID, str]]] = {identifier: set() for identifier in identifiers}
+
+    person_rows = db.execute(
+        select(AnagraficaPerson)
+        .where(func.upper(func.replace(AnagraficaPerson.codice_fiscale, " ", "")).in_(identifiers))
+    ).scalars().all()
+    for person in person_rows:
+        identifier = _normalize_identifier(person.codice_fiscale)
+        if identifier is None:
+            continue
+        subject_map.setdefault(identifier, set()).add(
+            (person.subject_id, _build_subject_display_name(person=person) or str(person.subject_id))
+        )
+
+    company_rows = db.execute(
+        select(AnagraficaCompany).where(
+            or_(
+                func.upper(func.replace(func.coalesce(AnagraficaCompany.partita_iva, ""), " ", "")).in_(identifiers),
+                func.upper(func.replace(func.coalesce(AnagraficaCompany.codice_fiscale, ""), " ", "")).in_(identifiers),
+            )
+        )
+    ).scalars().all()
+    for company in company_rows:
+        for raw_identifier in [company.partita_iva, company.codice_fiscale]:
+            identifier = _normalize_identifier(raw_identifier)
+            if identifier is None or identifier not in identifiers:
+                continue
+            subject_map.setdefault(identifier, set()).add(
+                (company.subject_id, _build_subject_display_name(company=company) or str(company.subject_id))
+            )
+
+    resolved: dict[str, tuple[UUID, str] | None] = {}
+    for identifier, matches in subject_map.items():
+        resolved[identifier] = next(iter(matches)) if len(matches) == 1 else None
+    return resolved
 
 
 def _with_ruolo_year_filter(query, anno_tributario: int):
@@ -459,9 +528,22 @@ def get_particella_utenze(
     filters = [CatUtenzaIrrigua.particella_id == particella_id]
     if anno is not None:
         filters.append(CatUtenzaIrrigua.anno_campagna == anno)
-    return list(
+    utenze = list(
         db.execute(select(CatUtenzaIrrigua).where(*filters).order_by(desc(CatUtenzaIrrigua.anno_campagna))).scalars().all()
     )
+    subject_preview_map = _resolve_subject_preview_by_identifier_map(db, utenze)
+    response_items: list[CatUtenzaIrriguaResponse] = []
+    for utenza in utenze:
+        preview = subject_preview_map.get(_normalize_identifier(utenza.codice_fiscale))
+        response_items.append(
+            CatUtenzaIrriguaResponse.model_validate(utenza).model_copy(
+                update={
+                    "subject_id": preview[0] if preview is not None else None,
+                    "subject_display_name": preview[1] if preview is not None else None,
+                }
+            )
+        )
+    return response_items
 
 
 @router.get("/{particella_id}/anomalie", response_model=list[CatAnomaliaResponse])

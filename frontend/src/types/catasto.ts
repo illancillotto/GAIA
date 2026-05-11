@@ -317,6 +317,8 @@ export type CatUtenzaIrrigua = {
   denominazione: string | null;
   codice_fiscale: string | null;
   codice_fiscale_raw: string | null;
+  subject_id: UUID | null;
+  subject_display_name: string | null;
   anomalia_superficie: boolean;
   anomalia_cf_invalido: boolean;
   anomalia_cf_mancante: boolean;

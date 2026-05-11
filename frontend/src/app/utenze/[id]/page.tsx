@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useParams, useRouter } from "next/navigation";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AnprStatusCard } from "@/components/anagrafica/AnprStatusCard";
@@ -72,6 +72,8 @@ function isPreviewableText(extension: string | null): boolean {
 function DetailContent({ token, subjectId, currentUser }: { token: string; subjectId: string; currentUser: CurrentUser }) {
   void currentUser;
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isEmbedded = searchParams.get("embedded") === "1";
   const manualFileInputRef = useRef<HTMLInputElement | null>(null);
   const [subject, setSubject] = useState<AnagraficaSubjectDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -588,6 +590,11 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
     : undefined;
 
   const readOnlyControlClassName = !isEditMode ? "bg-gray-50 text-gray-500" : "";
+  const canQuickImportFromNas = Boolean(
+    isEmbedded &&
+    nasImportStatus?.can_import_from_nas &&
+    (nasImportStatus.pending_files_in_nas ?? 0) > 0,
+  );
 
   return (
     <div className="page-stack">
@@ -644,6 +651,11 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
               {isImportingFromNas ? "Import in corso..." : "Importa documenti da NAS"}
             </button>
           ) : null}
+          {!isEditMode && canQuickImportFromNas ? (
+            <button className="btn-primary" type="button" onClick={() => void handleImportFromNas()} disabled={isImportingFromNas || isLoadingNasStatus}>
+              {isImportingFromNas ? "Import in corso..." : `Importa ${nasImportStatus?.pending_files_in_nas ?? 0} file da NAS`}
+            </button>
+          ) : null}
           {isEditMode && !nasImportStatus?.can_import_from_nas ? (
             <button className="btn-primary" type="button" onClick={() => setIsManualUploadModalOpen(true)}>
               Nessun dato rilevato nel NAS, importa manualmente
@@ -662,9 +674,16 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
               <p className="section-title">Stato import NAS</p>
               <p className="section-copy">{nasImportStatus.message}</p>
             </div>
-            {nasImportStatus.matched_folder_name ? (
-              <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">{nasImportStatus.matched_folder_name}</span>
-            ) : null}
+            <div className="flex flex-wrap items-center gap-2">
+              {nasImportStatus.matched_folder_name ? (
+                <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">{nasImportStatus.matched_folder_name}</span>
+              ) : null}
+              {canQuickImportFromNas ? (
+                <button className="btn-primary !px-3 !py-2 text-xs" type="button" onClick={() => void handleImportFromNas()} disabled={isImportingFromNas || isLoadingNasStatus}>
+                  {isImportingFromNas ? "Import in corso..." : `Importa ora (${nasImportStatus.pending_files_in_nas})`}
+                </button>
+              ) : null}
+            </div>
           </div>
           <div className="mt-4 grid gap-3 md:grid-cols-3">
             <div className="rounded-xl border border-gray-100 bg-gray-50 p-4">

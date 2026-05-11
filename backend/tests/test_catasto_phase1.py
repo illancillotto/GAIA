@@ -36,8 +36,7 @@ from app.models.catasto_phase1 import (
     CatUtenzaIntestatario,
     CatUtenzaIrrigua,
 )
-from app.modules.utenze.models import AnagraficaSubject
-from app.modules.utenze.models import AnagraficaPerson, AnagraficaPersonSnapshot
+from app.modules.utenze.models import AnagraficaCompany, AnagraficaPerson, AnagraficaPersonSnapshot, AnagraficaSubject
 from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob, RuoloParticella, RuoloPartita
 from app.modules.catasto.routes import import_routes as import_routes_module
 from app.modules.catasto.services.import_capacitas import CapacitasImportDuplicateError, import_capacitas_excel
@@ -1323,6 +1322,8 @@ def test_particella_detail_history_utenze_and_anomalie_endpoints() -> None:
     assert utenze_response.status_code == 200
     assert len(utenze_response.json()) == 1
     assert utenze_response.json()[0]["codice_fiscale"] == "DNIFSE64C01L122Y"
+    assert utenze_response.json()[0]["subject_id"] is not None
+    assert utenze_response.json()[0]["subject_display_name"] == "Fenu Denise"
     assert anomalie_response.status_code == 200
     assert len(anomalie_response.json()) == 1
     assert anomalie_response.json()[0]["tipo"] == "VAL-06-imponibile"
@@ -1337,6 +1338,75 @@ def test_particella_detail_history_utenze_and_anomalie_endpoints() -> None:
     assert consorzio_payload["units"][0]["intestatari_proprietari"][0]["subject_id"] == str(subject_id)
     assert consorzio_payload["units"][0]["intestatari_proprietari"][0]["person"]["comune_residenza"] == "Oristano"
     assert consorzio_payload["units"][0]["intestatari_proprietari"][0]["person_snapshots"][0]["comune_residenza"] == "Uras"
+
+
+def test_particella_utenze_response_keeps_subject_unresolved_when_identifier_is_ambiguous() -> None:
+    db = TestingSessionLocal()
+    particella_id: UUID
+    try:
+        particella = db.query(CatParticella).filter(CatParticella.foglio == "5", CatParticella.particella == "120").one()
+        particella_id = particella.id
+        comune = db.query(CatComune).filter(CatComune.cod_comune_capacitas == 165).one()
+        batch = db.query(CatImportBatch).filter(CatImportBatch.hash_file == "seed-hash").one()
+        ambiguous_cf = "AMBGCF80A01H501U"
+
+        utenza = CatUtenzaIrrigua(
+            import_batch_id=batch.id,
+            anno_campagna=2025,
+            cco="UT-AMB-001",
+            comune_id=comune.id,
+            cod_comune_capacitas=165,
+            nome_comune="Arborea",
+            foglio="5",
+            particella="120",
+            particella_id=particella.id,
+            codice_fiscale=ambiguous_cf,
+            denominazione="Identificatore ambiguo",
+        )
+        person_subject = AnagraficaSubject(
+            subject_type="person",
+            status="active",
+            source_system="manual",
+            source_external_id="amb-person",
+            source_name_raw="Ambiguo Persona",
+            requires_review=False,
+        )
+        company_subject = AnagraficaSubject(
+            subject_type="company",
+            status="active",
+            source_system="manual",
+            source_external_id="amb-company",
+            source_name_raw="Ambigua SRL",
+            requires_review=False,
+        )
+        db.add_all([utenza, person_subject, company_subject])
+        db.flush()
+        db.add(
+            AnagraficaPerson(
+                subject_id=person_subject.id,
+                cognome="Ambiguo",
+                nome="Persona",
+                codice_fiscale=ambiguous_cf,
+            )
+        )
+        db.add(
+            AnagraficaCompany(
+                subject_id=company_subject.id,
+                ragione_sociale="Ambigua SRL",
+                partita_iva="12345678901",
+                codice_fiscale=ambiguous_cf,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get(f"/catasto/particelle/{particella_id}/utenze?anno=2025", headers=auth_headers())
+
+    assert response.status_code == 200
+    ambiguous_row = next(item for item in response.json() if item["cco"] == "UT-AMB-001")
+    assert ambiguous_row["subject_id"] is None
+    assert ambiguous_row["subject_display_name"] is None
 
 
 def test_particelle_endpoint_supports_combined_lookup_filters() -> None:

@@ -493,15 +493,22 @@ export default function MapContainer({
     const map = mapRef.current;
     if (!map || mapReadyVersion === 0) return;
 
+    for (const stale of [
+      "uploaded-particelle-fill",
+      "uploaded-particelle-outline",
+      "uploaded-particelle-centroids",
+    ]) {
+      if (map.getLayer(stale)) map.removeLayer(stale);
+    }
+    for (const staleSource of [
+      "uploaded-particelle-source",
+      "uploaded-particelle-centroids-source",
+    ]) {
+      if (map.getSource(staleSource)) map.removeSource(staleSource);
+    }
+
     const overlays = overlayLayers ?? [];
     const expectedKeys = new Set(overlays.map((l) => l.layer_key));
-    // eslint-disable-next-line no-console
-    console.log("[gis overlay sync]", overlays.map((l) => ({
-      key: l.layer_key,
-      showFill: l.showFill,
-      visible: l.visible,
-      opacity: l.opacity,
-    })));
 
     for (const key of Array.from(overlayMapKeysRef.current)) {
       if (!expectedKeys.has(key)) {
@@ -537,10 +544,18 @@ export default function MapContainer({
       ];
       const circleStrokeOpacity = Math.min(1, opacity * 0.95);
 
-      if (!overlayMapKeysRef.current.has(layer.layer_key)) {
+      if (!map.getSource(ids.sourceId)) {
         map.addSource(ids.sourceId, { type: "geojson", data: layerData });
+      } else {
+        (map.getSource(ids.sourceId) as maplibregl.GeoJSONSource).setData(layerData);
+      }
+      if (!map.getSource(ids.centroidSourceId)) {
         map.addSource(ids.centroidSourceId, { type: "geojson", data: centroidData });
+      } else {
+        (map.getSource(ids.centroidSourceId) as maplibregl.GeoJSONSource).setData(centroidData);
+      }
 
+      if (!map.getLayer(ids.fillId)) {
         map.addLayer({
           id: ids.fillId,
           type: "fill",
@@ -550,6 +565,18 @@ export default function MapContainer({
             "fill-opacity": fillOpacityExpr,
           },
         });
+        map.on("mouseenter", ids.fillId, () => {
+          map.getCanvas().style.cursor = "pointer";
+        });
+        map.on("mouseleave", ids.fillId, () => {
+          map.getCanvas().style.cursor = "";
+        });
+      } else {
+        map.setPaintProperty(ids.fillId, "fill-color", color);
+        map.setPaintProperty(ids.fillId, "fill-opacity", fillOpacityExpr);
+      }
+
+      if (!map.getLayer(ids.outlineId)) {
         map.addLayer({
           id: ids.outlineId,
           type: "line",
@@ -570,6 +597,12 @@ export default function MapContainer({
             ],
           },
         });
+      } else {
+        map.setPaintProperty(ids.outlineId, "line-color", color);
+        map.setPaintProperty(ids.outlineId, "line-opacity", lineOpacity);
+      }
+
+      if (!map.getLayer(ids.centroidId)) {
         map.addLayer({
           id: ids.centroidId,
           type: "circle",
@@ -605,29 +638,13 @@ export default function MapContainer({
             ],
           },
         });
-
-        map.on("mouseenter", ids.fillId, () => {
-          map.getCanvas().style.cursor = "pointer";
-        });
-        map.on("mouseleave", ids.fillId, () => {
-          map.getCanvas().style.cursor = "";
-        });
-
-        overlayMapKeysRef.current.add(layer.layer_key);
       } else {
-        const source = map.getSource(ids.sourceId) as maplibregl.GeoJSONSource | undefined;
-        const centroidSource = map.getSource(ids.centroidSourceId) as maplibregl.GeoJSONSource | undefined;
-        source?.setData(layerData);
-        centroidSource?.setData(centroidData);
-
-        map.setPaintProperty(ids.fillId, "fill-color", color);
-        map.setPaintProperty(ids.fillId, "fill-opacity", fillOpacityExpr);
-        map.setPaintProperty(ids.outlineId, "line-color", color);
-        map.setPaintProperty(ids.outlineId, "line-opacity", lineOpacity);
         map.setPaintProperty(ids.centroidId, "circle-color", color);
         map.setPaintProperty(ids.centroidId, "circle-opacity", circleOpacityExpr);
         map.setPaintProperty(ids.centroidId, "circle-stroke-opacity", circleStrokeOpacity);
       }
+
+      overlayMapKeysRef.current.add(layer.layer_key);
 
       map.setLayoutProperty(ids.fillId, "visibility", isVisible && showFill ? "visible" : "none");
       map.setLayoutProperty(ids.outlineId, "visibility", isVisible ? "visible" : "none");

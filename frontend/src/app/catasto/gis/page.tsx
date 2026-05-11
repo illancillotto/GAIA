@@ -276,7 +276,7 @@ export default function CatastoGisPage() {
       const ws = workbook.Sheets[sheetName];
       const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(ws, { defval: null });
 
-      const items: GisParticellaRef[] = rows.slice(0, 5000).map((r, i) => ({
+      const items: GisParticellaRef[] = rows.slice(0, 5000).map((r: Record<string, unknown>, i: number) => ({
         row_index: i + 2, // assume header row
         comune: toNullableCellString(r["comune"] ?? r["Comune"] ?? r["COMUNE"] ?? null),
         sezione: toNullableCellString(r["sezione"] ?? r["Sezione"] ?? r["SEZIONE"] ?? null),
@@ -529,6 +529,121 @@ export default function CatastoGisPage() {
     });
   }, [autoSelectionId, handleLoadSavedSelection, token]);
 
+  const renderArchivioList = (isDark: boolean) => (
+    <>
+      <div className="mb-2 flex items-center justify-between">
+        <p className={`text-[10px] font-semibold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>Archivio layer salvati</p>
+        <button
+          type="button"
+          onClick={() => void refreshSavedSelections()}
+          disabled={savedBusy}
+          className={`text-[11px] font-medium ${isDark ? "text-indigo-300 hover:text-indigo-200" : "text-indigo-600 hover:text-indigo-800"} disabled:opacity-50`}
+        >
+          Aggiorna
+        </button>
+      </div>
+      <div className="max-h-44 space-y-2 overflow-y-auto pr-1">
+        {savedSelections.length === 0 ? (
+          <div className={`rounded-xl border border-dashed px-3 py-4 text-center text-xs ${isDark ? "border-white/20 bg-white/5 text-white/50" : "border-gray-200 bg-gray-50 text-gray-400"}`}>
+            Nessuna selezione salvata.
+          </div>
+        ) : (
+          savedSelections.map((selection) => {
+            const loadedLayer = loadedSavedSelectionLayerMap.get(selection.id);
+            const effectiveShowFill = loadedLayer?.showFill ?? savedSelectionFills[selection.id] ?? true;
+            const effectiveOpacity = loadedLayer?.opacity ?? savedSelectionOpacities[selection.id] ?? 0.55;
+
+            return (
+              <div
+                key={selection.id}
+                className={`rounded-xl border bg-white p-2 shadow-sm ${
+                  loadedSavedSelectionIds.has(selection.id) ? "border-emerald-200 ring-1 ring-emerald-100" : "border-gray-100"
+                }`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="color"
+                        value={selection.color}
+                        onChange={(e) => setSavedSelections((ss) => ss.map((s) => s.id === selection.id ? { ...s, color: e.target.value } : s))}
+                        onBlur={(e) => void handleUpdateArchivedSelectionColor(selection.id, e.target.value.toUpperCase())}
+                        className="h-5 w-5 cursor-pointer rounded-full border-0 bg-transparent p-0"
+                        title="Modifica colore"
+                      />
+                      <p className="truncate text-sm font-semibold text-gray-800">{selection.name}</p>
+                    </div>
+                    <p className="mt-0.5 text-[11px] text-gray-400">
+                      {selection.n_particelle.toLocaleString("it-IT")} particelle · {selection.n_with_geometry.toLocaleString("it-IT")} in mappa
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void handleDeleteSavedSelection(selection.id)}
+                    disabled={savedBusy}
+                    className="text-[11px] font-medium text-gray-400 hover:text-red-600 disabled:text-gray-300"
+                  >
+                    Elimina
+                  </button>
+                </div>
+                <div className="mt-2 rounded-lg border border-gray-100 bg-gray-50/70 px-2.5 py-2">
+                  <button
+                    type="button"
+                    onClick={() => handleArchiveFillChange(selection.id, !effectiveShowFill)}
+                    className={`mb-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium transition-all ${
+                      effectiveShowFill
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                        : "border-gray-200 bg-white text-gray-500 hover:border-emerald-100 hover:text-emerald-700"
+                    }`}
+                  >
+                    <span className={`h-1.5 w-1.5 rounded-full transition-colors ${effectiveShowFill ? "bg-emerald-400" : "bg-gray-300"}`} />
+                    Riempimento
+                  </button>
+                  <div className="mb-1 flex items-center justify-between text-[11px]">
+                    <span className="font-medium text-gray-600">Opacità</span>
+                    <span className="font-semibold text-gray-700">
+                      {Math.round(effectiveOpacity * 100)}%
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="5"
+                    max="100"
+                    step="5"
+                    value={Math.round(effectiveOpacity * 100)}
+                    onChange={(e) => handleArchiveOpacityChange(selection.id, Number(e.target.value) / 100)}
+                    className="w-full accent-emerald-600"
+                  />
+                </div>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => void handleLoadSavedSelection(selection.id)}
+                    disabled={savedBusy}
+                    className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-indigo-50 hover:text-indigo-700 disabled:text-gray-300"
+                  >
+                    {loadedSavedSelectionIds.has(selection.id) ? "Porta in primo piano" : "Aggiungi in mappa"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const loadedLayer = overlayLayers.find((layer) => layer.saved_selection_id === selection.id);
+                      if (loadedLayer) removeOverlayLayer(loadedLayer.layer_key);
+                    }}
+                    disabled={!loadedSavedSelectionIds.has(selection.id)}
+                    className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-500 transition hover:bg-gray-50 hover:text-gray-700 disabled:text-gray-300"
+                  >
+                    Rimuovi
+                  </button>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+    </>
+  );
+
   return (
     <CatastoPage
       title="GIS"
@@ -583,15 +698,15 @@ export default function CatastoGisPage() {
             ) : null}
 
             {isExpanded ? (
-              <div className="relative flex items-center justify-between gap-3 border-b border-white/10 bg-gray-950/90 px-4 py-2 text-white backdrop-blur">
+              <div className="relative flex items-center justify-between gap-3 border-b border-gray-200 bg-white/95 px-4 py-2 text-gray-900 backdrop-blur">
                 <div>
                   <div className="text-sm font-semibold">Vista estesa GIS</div>
-                  <div className="text-[11px] text-white/65">Premi Esc per uscire</div>
+                  <div className="text-[11px] text-gray-500">Premi Esc per uscire</div>
                 </div>
                 <button
                   type="button"
                   onClick={closeExpanded}
-                  className="inline-flex items-center justify-center rounded-full border border-white/15 bg-white/10 px-3.5 py-1.5 text-sm font-semibold text-white transition hover:bg-white/15 focus:outline-none focus:ring-2 focus:ring-white/60"
+                  className="inline-flex items-center justify-center rounded-full border border-gray-200 bg-gray-50 px-3.5 py-1.5 text-sm font-semibold text-gray-700 transition hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-200"
                 >
                   Chiudi
                 </button>
@@ -602,7 +717,7 @@ export default function CatastoGisPage() {
               <div
                 className={
                   isExpanded
-                    ? "pointer-events-auto min-h-0 flex-1 overflow-hidden rounded-2xl bg-gray-100 shadow-2xl ring-1 ring-white/10"
+                    ? "pointer-events-auto min-h-0 flex-1 overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-black/5"
                     : "h-full"
                 }
               >
@@ -632,20 +747,57 @@ export default function CatastoGisPage() {
                 />
               </div>
               {isExpanded ? (
-                <aside className="pointer-events-auto hidden w-[320px] shrink-0 overflow-y-auto rounded-2xl border border-white/10 bg-gray-950/88 p-4 text-white shadow-2xl ring-1 ring-white/10 lg:block">
+                <aside className="pointer-events-auto hidden w-[340px] shrink-0 overflow-y-auto rounded-2xl border border-gray-200 bg-white/95 p-4 text-gray-900 shadow-2xl ring-1 ring-black/5 lg:block backdrop-blur">
                   <div className="flex flex-col gap-4">
-                    <div className="rounded-2xl border border-white/10 bg-white/5 p-3">
-                      <p className="mb-2 text-[9px] font-semibold uppercase tracking-widest text-white/50">Disegna area</p>
+                    <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                      <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-gray-400">Disegna area</p>
                       <DrawingTools
                         onDrawPolygon={() => setDrawSignal((value) => value + 1)}
                         onClearDrawing={handleClearSelection}
                         isLoading={isLoading}
                         hasSelection={hasDrawing}
                         nParticelle={result?.n_particelle}
+                        orientation="vertical"
                       />
+                      {hasDrawing && result?.particelle && result.particelle.length > 0 && (
+                        <div className="mt-4 border-t border-gray-200 pt-3">
+                          <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-gray-500">
+                            Particelle Selezionate ({result.particelle.length})
+                          </p>
+                          <div className="max-h-48 space-y-1.5 overflow-y-auto pr-1">
+                            {result.particelle.map((p) => (
+                              <div key={p.id} className="flex items-center justify-between rounded-xl border border-gray-200 bg-white px-3 py-2 shadow-sm transition hover:border-indigo-200">
+                                <div className="min-w-0">
+                                  <p className="truncate text-xs font-bold text-gray-800">
+                                    {p.nome_comune || "Comune ignoto"}
+                                  </p>
+                                  <p className="truncate text-[10px] font-medium text-gray-500">
+                                    Fg. <span className="text-indigo-600">{p.foglio || "-"}</span> · Part. <span className="text-indigo-600">{p.particella || "-"}</span>
+                                    {p.subalterno ? ` · Sub. ${p.subalterno}` : ""}
+                                  </p>
+                                </div>
+                                <div className="shrink-0 text-right">
+                                  {p.superficie_mq ? (
+                                    <p className="text-[11px] font-bold text-emerald-600">{p.superficie_mq.toLocaleString("it-IT")} mq</p>
+                                  ) : p.superficie_grafica_mq ? (
+                                    <p className="text-[11px] font-bold text-emerald-600">{p.superficie_grafica_mq.toLocaleString("it-IT")} mq</p>
+                                  ) : (
+                                    <p className="text-[10px] text-gray-400">Area ND</p>
+                                  )}
+                                  {p.ha_anomalie && (
+                                    <span className="mt-0.5 inline-block rounded-full bg-amber-100 px-1.5 py-0.5 text-[8px] font-bold text-amber-700">
+                                      ANOMALIE
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                     <div>
-                      <p className="mb-2 text-[9px] font-semibold uppercase tracking-widest text-white/50">Layer visibili</p>
+                      <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-gray-400">Layer visibili</p>
                       <div className="flex flex-wrap gap-1.5">
                         <div className="group relative">
                           <button
@@ -653,11 +805,11 @@ export default function CatastoGisPage() {
                             onClick={() => setShowDistretti((v) => !v)}
                             className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all ${
                               showDistretti
-                                ? "border-sky-300/40 bg-sky-400/20 text-sky-100"
-                                : "border-white/15 bg-white/5 text-white/55 hover:border-white/25 hover:text-white/80"
+                                ? "border-blue-200 bg-blue-50 text-blue-700"
+                                : "border-gray-200 bg-white text-gray-400 hover:border-gray-300 hover:text-gray-600"
                             }`}
                           >
-                            <span className={`h-1.5 w-1.5 rounded-full transition-colors ${showDistretti ? "bg-blue-300" : "bg-white/35"}`} />
+                            <span className={`h-1.5 w-1.5 rounded-full transition-colors ${showDistretti ? "bg-blue-400" : "bg-gray-300"}`} />
                             Distretti
                           </button>
                           <div className="pointer-events-none absolute left-0 top-full z-10 mt-2 w-52 translate-y-1 rounded-2xl border border-blue-100 bg-white/95 p-3 opacity-0 shadow-xl ring-1 ring-black/5 backdrop-blur transition-all duration-150 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100">
@@ -696,11 +848,11 @@ export default function CatastoGisPage() {
                             onClick={() => setShowParticelle((v) => !v)}
                             className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all ${
                               showParticelle
-                                ? "border-indigo-300/40 bg-indigo-400/20 text-indigo-100"
-                                : "border-white/15 bg-white/5 text-white/55 hover:border-white/25 hover:text-white/80"
+                                ? "border-indigo-200 bg-indigo-50 text-indigo-700"
+                                : "border-gray-200 bg-white text-gray-400 hover:border-gray-300 hover:text-gray-600"
                             }`}
                           >
-                            <span className={`h-1.5 w-1.5 rounded-full transition-colors ${showParticelle ? "bg-indigo-300" : "bg-white/35"}`} />
+                            <span className={`h-1.5 w-1.5 rounded-full transition-colors ${showParticelle ? "bg-indigo-400" : "bg-gray-300"}`} />
                             Particelle
                           </button>
                           <div className="pointer-events-none absolute left-0 top-full z-10 mt-2 w-52 translate-y-1 rounded-2xl border border-indigo-100 bg-white/95 p-3 opacity-0 shadow-xl ring-1 ring-black/5 backdrop-blur transition-all duration-150 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100">
@@ -738,17 +890,20 @@ export default function CatastoGisPage() {
                           onClick={() => setHighlightSelected((v) => !v)}
                           className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all ${
                             highlightSelected
-                              ? "border-amber-300/40 bg-amber-400/20 text-amber-100"
-                              : "border-white/15 bg-white/5 text-white/55 hover:border-white/25 hover:text-white/80"
+                              ? "border-amber-200 bg-amber-50 text-amber-700"
+                              : "border-gray-200 bg-white text-gray-400 hover:border-gray-300 hover:text-gray-600"
                           }`}
                         >
-                          <span className={`h-1.5 w-1.5 rounded-full transition-colors ${highlightSelected ? "bg-amber-300" : "bg-white/35"}`} />
+                          <span className={`h-1.5 w-1.5 rounded-full transition-colors ${highlightSelected ? "bg-amber-400" : "bg-gray-300"}`} />
                           Evidenzia sel.
                         </button>
                       </div>
                     </div>
-                    <div className="rounded-2xl border border-white/10 bg-white/5 px-3 py-3 text-xs text-white/70">
-                      Il layout esteso usa una sidebar destra per lasciare più altezza utile al comprensorio in mappa e raccogliere i controlli operativi fuori dall'header.
+                    <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
+                      {renderArchivioList(false)}
+                    </div>
+                    <div className="rounded-2xl border border-gray-100 bg-gray-50 px-3 py-3 text-xs text-gray-500">
+                      Il layout esteso usa una sidebar destra per lasciare più altezza utile al comprensorio in mappa e raccogliere i controlli operativi fuori dall&apos;header.
                     </div>
                   </div>
                 </aside>
@@ -1092,116 +1247,7 @@ export default function CatastoGisPage() {
                   </div>
 
                   <div className="shrink-0">
-                    <div className="mb-2 flex items-center justify-between">
-                      <p className="text-[10px] font-semibold uppercase tracking-widest text-gray-400">Archivio layer salvati</p>
-                      <button
-                        type="button"
-                        onClick={() => void refreshSavedSelections()}
-                        disabled={savedBusy}
-                        className="text-[11px] font-medium text-indigo-600 hover:text-indigo-800 disabled:text-gray-300"
-                      >
-                        Aggiorna
-                      </button>
-                    </div>
-                    <div className="max-h-44 space-y-2 overflow-y-auto pr-1">
-                      {savedSelections.length === 0 ? (
-                        <div className="rounded-xl border border-dashed border-gray-200 bg-gray-50 px-3 py-4 text-center text-xs text-gray-400">
-                          Nessuna selezione salvata.
-                        </div>
-                      ) : (
-                        savedSelections.map((selection) => {
-                          const loadedLayer = loadedSavedSelectionLayerMap.get(selection.id);
-                          const effectiveShowFill = loadedLayer?.showFill ?? savedSelectionFills[selection.id] ?? true;
-                          const effectiveOpacity = loadedLayer?.opacity ?? savedSelectionOpacities[selection.id] ?? 0.55;
-
-                          return (
-                            <div
-                              key={selection.id}
-                              className={`rounded-xl border bg-white p-2 shadow-sm ${
-                                loadedSavedSelectionIds.has(selection.id) ? "border-emerald-200 ring-1 ring-emerald-100" : "border-gray-100"
-                              }`}
-                            >
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-2">
-                                  <input
-                                    type="color"
-                                    value={selection.color}
-                                    onChange={(e) => setSavedSelections((ss) => ss.map((s) => s.id === selection.id ? { ...s, color: e.target.value } : s))}
-                                    onBlur={(e) => void handleUpdateArchivedSelectionColor(selection.id, e.target.value.toUpperCase())}
-                                    className="h-5 w-5 cursor-pointer rounded-full border-0 bg-transparent p-0"
-                                    title="Modifica colore"
-                                  />
-                                  <p className="truncate text-sm font-semibold text-gray-800">{selection.name}</p>
-                                </div>
-                                <p className="mt-0.5 text-[11px] text-gray-400">
-                                  {selection.n_particelle.toLocaleString("it-IT")} particelle · {selection.n_with_geometry.toLocaleString("it-IT")} in mappa
-                                </p>
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => void handleDeleteSavedSelection(selection.id)}
-                                disabled={savedBusy}
-                                className="text-[11px] font-medium text-gray-400 hover:text-red-600 disabled:text-gray-300"
-                              >
-                                Elimina
-                              </button>
-                            </div>
-                            <div className="mt-2 rounded-lg border border-gray-100 bg-gray-50/70 px-2.5 py-2">
-                              <button
-                                type="button"
-                                onClick={() => handleArchiveFillChange(selection.id, !effectiveShowFill)}
-                                className={`mb-2 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium transition-all ${
-                                  effectiveShowFill
-                                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                                    : "border-gray-200 bg-white text-gray-500 hover:border-emerald-100 hover:text-emerald-700"
-                                }`}
-                              >
-                                <span className={`h-1.5 w-1.5 rounded-full transition-colors ${effectiveShowFill ? "bg-emerald-400" : "bg-gray-300"}`} />
-                                Riempimento
-                              </button>
-                              <div className="mb-1 flex items-center justify-between text-[11px]">
-                                <span className="font-medium text-gray-600">Opacità</span>
-                                <span className="font-semibold text-gray-700">
-                                  {Math.round(effectiveOpacity * 100)}%
-                                </span>
-                              </div>
-                              <input
-                                type="range"
-                                min="5"
-                                max="100"
-                                step="5"
-                                value={Math.round(effectiveOpacity * 100)}
-                                onChange={(e) => handleArchiveOpacityChange(selection.id, Number(e.target.value) / 100)}
-                                className="w-full accent-emerald-600"
-                              />
-                            </div>
-                            <div className="mt-2 grid grid-cols-2 gap-2">
-                              <button
-                                type="button"
-                                onClick={() => void handleLoadSavedSelection(selection.id)}
-                                disabled={savedBusy}
-                                className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-xs font-medium text-gray-700 transition hover:bg-indigo-50 hover:text-indigo-700 disabled:text-gray-300"
-                              >
-                                {loadedSavedSelectionIds.has(selection.id) ? "Porta in primo piano" : "Aggiungi in mappa"}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const loadedLayer = overlayLayers.find((layer) => layer.saved_selection_id === selection.id);
-                                  if (loadedLayer) removeOverlayLayer(loadedLayer.layer_key);
-                                }}
-                                disabled={!loadedSavedSelectionIds.has(selection.id)}
-                                className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-500 transition hover:bg-gray-50 hover:text-gray-700 disabled:text-gray-300"
-                              >
-                                Rimuovi
-                              </button>
-                            </div>
-                          </div>
-                          );
-                        })
-                      )}
-                    </div>
+                    {renderArchivioList(false)}
                   </div>
                 </div>
               </div>

@@ -4,6 +4,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { CatastoPage } from "@/components/catasto/catasto-page";
+import { UtenzeSubjectQuickViewDialog } from "@/components/utenze/utenze-subject-quick-view-dialog";
 import { AlertBanner } from "@/components/ui/alert-banner";
 import { MetricCard } from "@/components/ui/metric-card";
 import { DataTable } from "@/components/table/data-table";
@@ -20,6 +21,7 @@ import {
   catastoGetParticellaUtenze,
   catastoUpdateAnomalia,
 } from "@/lib/api/catasto";
+import { searchAnagraficaSubjects } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import type { CatAnomalia, CatParticellaConsorzio, CatParticellaDetail, CatParticellaHistory, CatUtenzaIrrigua } from "@/types/catasto";
 
@@ -49,6 +51,19 @@ function formatDateTime(value: string | null | undefined): string {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toLocaleString("it-IT");
+}
+
+function padCapacitasCode(value: string | number | null | undefined, length: number): string | null {
+  if (value == null) return null;
+  const normalized = String(value).trim();
+  if (!normalized) return null;
+  return normalized.padStart(length, "0");
+}
+
+function normalizeIdentifier(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const normalized = value.replace(/\s+/g, "").trim().toUpperCase();
+  return normalized || null;
 }
 
 type ParticellaHistoryCell = CellContext<CatParticellaHistory, unknown>;
@@ -91,6 +106,20 @@ function resolveUtenzaCertContext(
   };
 }
 
+function formatUtenzaPartita(consorzio: CatParticellaConsorzio | null, utenza: CatUtenzaIrrigua): string | null {
+  const cco = padCapacitasCode(utenza.cco, 9);
+  if (!cco) return null;
+  const context = resolveUtenzaCertContext(consorzio, utenza);
+  const fra = padCapacitasCode(context.fra ?? utenza.cod_frazione, 2);
+  const ccs = padCapacitasCode(context.ccs ?? "00000", 5);
+  if (!fra || !ccs) return cco;
+  return `${cco}/${fra}/${ccs}`;
+}
+
+function getUtenzaSubjectLabel(utenza: CatUtenzaIrrigua): string | null {
+  return utenza.subject_display_name?.trim() || utenza.denominazione?.trim() || null;
+}
+
 export default function CatastoParticellaDetailPage() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
@@ -109,6 +138,9 @@ export default function CatastoParticellaDetailPage() {
   const [capacitasLinkBusy, setCapacitasLinkBusy] = useState(false);
   const [capacitasLinkError, setCapacitasLinkError] = useState<string | null>(null);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
+  const [subjectLookupBusyId, setSubjectLookupBusyId] = useState<string | null>(null);
+  const [subjectLookupError, setSubjectLookupError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -206,6 +238,45 @@ export default function CatastoParticellaDetailPage() {
     }
   }, [consorzio]);
 
+  const openSubjectQuickView = useCallback(async (utenza: CatUtenzaIrrigua): Promise<void> => {
+    if (utenza.subject_id) {
+      setSubjectLookupError(null);
+      setSelectedSubjectId(utenza.subject_id);
+      return;
+    }
+
+    const token = getStoredAccessToken();
+    const identifier = normalizeIdentifier(utenza.codice_fiscale);
+    if (!token || !identifier) {
+      setSubjectLookupError("Nessun soggetto GAIA collegato a questa utenza.");
+      return;
+    }
+
+    setSubjectLookupBusyId(utenza.id);
+    setSubjectLookupError(null);
+    try {
+      const result = await searchAnagraficaSubjects(token, identifier, 20);
+      const matches = result.items.filter((item) => {
+        const itemCf = normalizeIdentifier(item.codice_fiscale);
+        const itemPiva = normalizeIdentifier(item.partita_iva);
+        return itemCf === identifier || itemPiva === identifier;
+      });
+      if (matches.length === 1) {
+        setSelectedSubjectId(matches[0].id);
+        return;
+      }
+      if (matches.length > 1) {
+        setSubjectLookupError("Identificatore fiscale associato a piu soggetti GAIA. Apri la scheda utenze per disambiguare.");
+        return;
+      }
+      setSubjectLookupError("Nessun soggetto GAIA trovato per questo identificatore fiscale.");
+    } catch (e) {
+      setSubjectLookupError(e instanceof Error ? e.message : "Errore apertura dettaglio soggetto");
+    } finally {
+      setSubjectLookupBusyId(null);
+    }
+  }, []);
+
   const columns = useMemo<ColumnDef<CatParticellaHistory>[]>(
     () => [
       {
@@ -236,8 +307,49 @@ export default function CatastoParticellaDetailPage() {
   const utenzeColumns = useMemo<ColumnDef<CatUtenzaIrrigua>[]>(
     () => [
       { header: "Anno", accessorKey: "anno_campagna", cell: ({ row }: UtenzaCell) => <span className="text-sm text-gray-700">{row.original.anno_campagna}</span> },
-      { header: "CCO", accessorKey: "cco", cell: ({ row }: UtenzaCell) => <span className="text-sm text-gray-700">{row.original.cco ?? "—"}</span> },
-      { header: "CF", accessorKey: "codice_fiscale", cell: ({ row }: UtenzaCell) => <span className="text-sm text-gray-700">{row.original.codice_fiscale ?? "—"}</span> },
+      {
+        header: "CCO",
+        accessorKey: "cco",
+        cell: ({ row }: UtenzaCell) => {
+          const partita = formatUtenzaPartita(consorzio, row.original);
+          return (
+            <div className="space-y-0.5 text-sm text-gray-700">
+              <div>{row.original.cco ?? "—"}</div>
+              <div className="text-xs text-gray-500">{partita ? `Partita ${partita}` : "Partita n/d"}</div>
+            </div>
+          );
+        },
+      },
+      {
+        header: "CF / soggetto",
+        accessorKey: "codice_fiscale",
+        cell: ({ row }: UtenzaCell) => {
+          const subjectId = row.original.subject_id;
+          const label = getUtenzaSubjectLabel(row.original);
+          const canOpenSubject = Boolean(subjectId || row.original.codice_fiscale);
+          const isBusy = subjectLookupBusyId === row.original.id;
+          const blockClass = "w-full rounded-xl border border-[#D9E8DF] bg-[#F5FAF7] px-3 py-2 text-left transition hover:border-[#B7D2C1] hover:bg-[#EEF6F1] disabled:cursor-wait disabled:opacity-70";
+          return (
+            <div className="min-w-[240px]">
+              {canOpenSubject ? (
+                <button type="button" className={blockClass} disabled={isBusy} onClick={() => void openSubjectQuickView(row.original)}>
+                  <span className="block text-sm font-semibold tracking-[0.01em] text-[#1D4E35]">
+                    {isBusy ? "Apertura…" : row.original.codice_fiscale ?? "—"}
+                  </span>
+                  <span className="mt-1 block text-xs font-medium text-gray-600">
+                    {label ?? "Apri dettaglio soggetto"}
+                  </span>
+                </button>
+              ) : (
+                <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-left">
+                  <div className="text-sm font-semibold tracking-[0.01em] text-gray-800">{row.original.codice_fiscale ?? "—"}</div>
+                  <div className="mt-1 text-xs font-medium text-gray-500">{label ?? "Nessun soggetto collegato"}</div>
+                </div>
+              )}
+            </div>
+          );
+        },
+      },
       {
         header: "0648 (€)",
         id: "i0648",
@@ -269,7 +381,7 @@ export default function CatastoParticellaDetailPage() {
         ),
       },
     ],
-    [capacitasLinkBusy, openCapacitasCertificato],
+    [capacitasLinkBusy, consorzio, openCapacitasCertificato, openSubjectQuickView, subjectLookupBusyId],
   );
 
   const anomalieColumns = useMemo<ColumnDef<CatAnomalia>[]>(
@@ -560,6 +672,11 @@ export default function CatastoParticellaDetailPage() {
               {capacitasLinkError}
             </div>
           ) : null}
+          {subjectLookupError ? (
+            <div className="mt-3 rounded-xl border border-amber-100 bg-amber-50 p-3 text-sm text-amber-800">
+              {subjectLookupError}
+            </div>
+          ) : null}
           <div className="mt-4">
             <DataTable data={utenze} columns={utenzeColumns} initialPageSize={8} emptyTitle={isLoading ? "Caricamento…" : "Nessuna utenza"} />
           </div>
@@ -590,6 +707,14 @@ export default function CatastoParticellaDetailPage() {
             <DataTable data={history} columns={columns} initialPageSize={10} />
           </div>
         </article>
+
+        {selectedSubjectId ? (
+          <UtenzeSubjectQuickViewDialog
+            subjectId={selectedSubjectId}
+            subjectLabel={utenze.find((item) => item.subject_id === selectedSubjectId)?.subject_display_name ?? null}
+            onClose={() => setSelectedSubjectId(null)}
+          />
+        ) : null}
       </div>
     </CatastoPage>
   );
