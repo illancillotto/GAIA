@@ -118,6 +118,9 @@ La documentazione del progetto e distribuita principalmente in due aree:
 GAIA/
 ├── .github/
 │   └── workflows/
+├── .vscode/
+│   └── settings.json
+├── tsconfig.json
 ├── backend/
 │   ├── alembic/
 │   │   └── versions/
@@ -214,6 +217,7 @@ GAIA/
 
 ## Note utili
 
+- Alla root, `tsconfig.json` estende `frontend/tsconfig.json` e include i sorgenti sotto `frontend/`, così TypeScript e gli editor che aprono il repo da `GAIA/` risolvono correttamente moduli e tipi (es. `react`). La cartella `.vscode/` punta il TypeScript SDK a `frontend/node_modules/typescript`.
 - La directory piu importante per la documentazione funzionale e `domain-docs/`.
 - La documentazione architetturale generale e concentrata in root e in `backend/app/MONOLITH_MODULAR.md`.
 - Il dominio anagrafico usa `domain-docs/utenze/` come posizione canonica della documentazione.

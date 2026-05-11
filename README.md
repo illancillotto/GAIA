@@ -188,6 +188,10 @@ Nota operativa Docker:
 
 - smoke statici:
   `cd frontend && npm test`
+- typecheck (Next/TS) dal frontend:
+  `cd frontend && npm run typecheck`
+- typecheck dal root del repo (utile se apri il workspace su `GAIA/` in Cursor/VS Code):
+  `cd frontend && npm run typecheck:from-root`
 - E2E browser sullo stack locale:
   `cd frontend && PLAYWRIGHT_BASE_URL=http://127.0.0.1:8080 npm run test:e2e`
 

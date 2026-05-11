@@ -1,9 +1,20 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { CatAnagraficaMatch, CatParticellaConsorzio, CatParticellaDetail, CatUtenzaIrrigua, GeoJSONFeature } from "@/types/catasto";
+import type {
+  CatAnagraficaMatch,
+  CatCapacitasIntestatario,
+  CatConsorzioOccupancy,
+  CatConsorzioUnit,
+  CatParticellaConsorzio,
+  CatParticellaDetail,
+  CatUtenzaIrrigua,
+  GeoJSONFeature,
+} from "@/types/catasto";
+import { UtenzeSubjectQuickViewDialog } from "@/components/utenze/utenze-subject-quick-view-dialog";
 import { getStoredAccessToken } from "@/lib/auth";
+import { searchAnagraficaSubjects } from "@/lib/api";
 import {
   capacitasGetRptCertificatoLink,
   catastoGetParticella,
@@ -59,6 +70,63 @@ function formatDateTime(value: string | null | undefined): string {
   return date.toLocaleString("it-IT");
 }
 
+function padCapacitasCode(value: string | number | null | undefined, length: number): string | null {
+  if (value == null) return null;
+  const normalized = String(value).trim();
+  if (!normalized) return null;
+  return normalized.padStart(length, "0");
+}
+
+function normalizeIdentifier(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const normalized = value.replace(/\s+/g, "").trim().toUpperCase();
+  return normalized || null;
+}
+
+function resolveUtenzaCertContext(
+  consorzio: CatParticellaConsorzio | null,
+  utenza: CatUtenzaIrrigua,
+): { com?: string; pvc?: string; fra?: string; ccs?: string } {
+  if (!consorzio) return {};
+
+  const candidates = consorzio.units
+    .flatMap((unit) => unit.occupancies)
+    .filter(
+      (occupancy) =>
+        occupancy.utenza_id === utenza.id && Boolean(occupancy.com) && Boolean(occupancy.pvc) && Boolean(occupancy.fra),
+    )
+    .sort((left, right) => {
+      if (left.is_current !== right.is_current) return left.is_current ? -1 : 1;
+      const leftValid = left.valid_from ?? "";
+      const rightValid = right.valid_from ?? "";
+      if (leftValid !== rightValid) return rightValid.localeCompare(leftValid);
+      return (right.updated_at ?? "").localeCompare(left.updated_at ?? "");
+    });
+
+  const best = candidates[0];
+  if (!best) return {};
+  return {
+    com: best.com ?? undefined,
+    pvc: best.pvc ?? undefined,
+    fra: best.fra ?? undefined,
+    ccs: best.ccs ?? undefined,
+  };
+}
+
+function formatUtenzaPartita(consorzio: CatParticellaConsorzio | null, utenza: CatUtenzaIrrigua): string | null {
+  const cco = padCapacitasCode(utenza.cco, 9);
+  if (!cco) return null;
+  const context = resolveUtenzaCertContext(consorzio, utenza);
+  const fra = padCapacitasCode(context.fra ?? utenza.cod_frazione, 2);
+  const ccs = padCapacitasCode(context.ccs ?? "00000", 5);
+  if (!fra || !ccs) return cco;
+  return `${cco}/${fra}/${ccs}`;
+}
+
+function getUtenzaSubjectLabel(utenza: CatUtenzaIrrigua): string | null {
+  return utenza.subject_display_name?.trim() || utenza.denominazione?.trim() || null;
+}
+
 export function ParticellaDetailDialog({
   open,
   match,
@@ -78,6 +146,9 @@ export function ParticellaDetailDialog({
   const [capacitasLinkError, setCapacitasLinkError] = useState<string | null>(null);
   const [syncBusy, setSyncBusy] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
+  const [subjectQuickView, setSubjectQuickView] = useState<{ id: string; label: string | null } | null>(null);
+  const [subjectLookupBusyId, setSubjectLookupBusyId] = useState<string | null>(null);
+  const [subjectLookupError, setSubjectLookupError] = useState<string | null>(null);
 
   const reference = useMemo(() => (match ? formatRef(match) : "Particella"), [match]);
   const centroid = useMemo(() => extractLonLat(geojson), [geojson]);
@@ -93,6 +164,14 @@ export function ParticellaDetailDialog({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose, open]);
+
+  useEffect(() => {
+    if (!open) {
+      setSubjectQuickView(null);
+      setSubjectLookupBusyId(null);
+      setSubjectLookupError(null);
+    }
+  }, [open]);
 
   useEffect(() => {
     if (!open || !match) return;
@@ -128,6 +207,67 @@ export function ParticellaDetailDialog({
 
     void load();
   }, [open, match]);
+
+  const openCapacitasCertificato = useCallback(
+    async (utenza: CatUtenzaIrrigua): Promise<void> => {
+      const token = getStoredAccessToken();
+      const cco = utenza.cco?.trim();
+      if (!token || !cco || !match) return;
+
+      setCapacitasLinkBusy(true);
+      setCapacitasLinkError(null);
+      try {
+        const context = resolveUtenzaCertContext(consorzio, utenza);
+        const { url } = await capacitasGetRptCertificatoLink(token, cco, context);
+        window.open(url, "_blank", "noopener,noreferrer");
+      } catch (e) {
+        setCapacitasLinkError(e instanceof Error ? e.message : "Errore generazione link Capacitas");
+      } finally {
+        setCapacitasLinkBusy(false);
+      }
+    },
+    [consorzio, match],
+  );
+
+  const openSubjectQuickView = useCallback(async (utenza: CatUtenzaIrrigua): Promise<void> => {
+    const label = getUtenzaSubjectLabel(utenza);
+    if (utenza.subject_id) {
+      setSubjectLookupError(null);
+      setSubjectQuickView({ id: utenza.subject_id, label });
+      return;
+    }
+
+    const token = getStoredAccessToken();
+    const identifier = normalizeIdentifier(utenza.codice_fiscale);
+    if (!token || !identifier) {
+      setSubjectLookupError("Nessun soggetto GAIA collegato a questa utenza.");
+      return;
+    }
+
+    setSubjectLookupBusyId(utenza.id);
+    setSubjectLookupError(null);
+    try {
+      const result = await searchAnagraficaSubjects(token, identifier, 20);
+      const matches = result.items.filter((item) => {
+        const itemCf = normalizeIdentifier(item.codice_fiscale);
+        const itemPiva = normalizeIdentifier(item.partita_iva);
+        return itemCf === identifier || itemPiva === identifier;
+      });
+      if (matches.length === 1) {
+        setSubjectQuickView({ id: matches[0].id, label: matches[0].display_name ?? label });
+        return;
+      }
+      if (matches.length > 1) {
+        setSubjectLookupError("Identificatore fiscale associato a più soggetti GAIA. Apri la scheda utenze per disambiguare.");
+        return;
+      }
+      setSubjectLookupError("Nessun soggetto GAIA trovato per questo identificatore fiscale.");
+    } catch (e) {
+      setSubjectLookupError(e instanceof Error ? e.message : "Errore apertura dettaglio soggetto");
+    } finally {
+      setSubjectLookupBusyId(null);
+    }
+  }, []);
 
   async function reloadCurrentParticella(): Promise<void> {
     if (!match) return;
@@ -171,27 +311,6 @@ export function ParticellaDetailDialog({
       setError(e instanceof Error ? e.message : "Errore sync particella Capacitas");
     } finally {
       setSyncBusy(false);
-    }
-  }
-
-  async function openCapacitasCertificato(cco: string): Promise<void> {
-    const token = getStoredAccessToken();
-    if (!token || !match) return;
-    const currentMatch = match;
-    setCapacitasLinkBusy(true);
-    setCapacitasLinkError(null);
-    try {
-      const { url } = await capacitasGetRptCertificatoLink(token, cco, {
-        com: currentMatch.cert_com,
-        pvc: currentMatch.cert_pvc,
-        fra: currentMatch.cert_fra,
-        ccs: currentMatch.cert_ccs,
-      });
-      window.open(url, "_blank", "noopener,noreferrer");
-    } catch (e) {
-      setCapacitasLinkError(e instanceof Error ? e.message : "Errore generazione link Capacitas");
-    } finally {
-      setCapacitasLinkBusy(false);
     }
   }
 
@@ -350,7 +469,7 @@ export function ParticellaDetailDialog({
             ) : !consorzio || consorzio.units.length === 0 ? (
               <p className="text-sm text-gray-500">Nessun dato consortile disponibile per questa particella.</p>
             ) : (
-              consorzio.units.map((unit) => (
+              consorzio.units.map((unit: CatConsorzioUnit) => (
                 <div key={unit.id} className="rounded-lg border border-white bg-white p-3">
                   <div className="flex flex-wrap items-start justify-between gap-2">
                     <div>
@@ -379,7 +498,7 @@ export function ParticellaDetailDialog({
                         <span className="text-gray-500">CCO:</span>{" "}
                         {unit.occupancies
                           .slice(0, 3)
-                          .map((occ) => occ.cco ?? "—")
+                          .map((occ: CatConsorzioOccupancy) => occ.cco ?? "—")
                           .join(", ")}
                       </p>
                     ) : null}
@@ -390,7 +509,7 @@ export function ParticellaDetailDialog({
                       <p className="mt-2 text-sm text-gray-500">Nessun intestatario strutturato ancora disponibile.</p>
                     ) : (
                       <div className="mt-2 space-y-2">
-                        {unit.intestatari_proprietari.slice(0, 5).map((owner) => (
+                        {unit.intestatari_proprietari.slice(0, 5).map((owner: CatCapacitasIntestatario) => (
                           <div key={owner.id} className="rounded-lg border border-white bg-white px-3 py-2 text-sm text-gray-700">
                             <p className="font-medium text-gray-900">
                               {owner.denominazione ?? "—"}
@@ -435,49 +554,81 @@ export function ParticellaDetailDialog({
               {capacitasLinkError}
             </div>
           ) : null}
+          {subjectLookupError ? (
+            <div className="mt-3 rounded-xl border border-amber-100 bg-amber-50 p-3 text-sm text-amber-800">
+              {subjectLookupError}
+            </div>
+          ) : null}
           <div className="mt-3 overflow-auto">
             {busy ? (
               <p className="text-sm text-gray-500">Caricamento…</p>
             ) : utenze.length === 0 ? (
               <p className="text-sm text-gray-500">Nessuna utenza trovata per la particella.</p>
             ) : (
-              <table className="w-full border-separate border-spacing-y-1">
+              <table className="w-full min-w-[640px] border-separate border-spacing-y-1">
                 <thead>
                   <tr className="text-left text-[10px] font-medium uppercase tracking-widest text-gray-400">
                     <th className="pr-4">Anno</th>
                     <th className="pr-4">CCO</th>
-                    <th className="pr-4">CF</th>
-                    <th className="pr-4">Denominazione</th>
-                    <th className="pr-4">Sup. irrigabile</th>
+                    <th className="pr-4">CF / soggetto</th>
+                    <th className="pr-4">0648 (€)</th>
+                    <th className="pr-4">0985 (€)</th>
                     <th></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {utenze.slice(0, 10).map((u) => (
-                    <tr key={u.id} className="rounded-lg bg-white">
-                      <td className="py-1 pr-4 text-sm text-gray-700">{u.anno_campagna ?? "—"}</td>
-                      <td className="py-1 pr-4 text-sm text-gray-700">{u.cco ?? "—"}</td>
-                      <td className="py-1 pr-4 text-sm text-gray-700">{u.codice_fiscale ?? "—"}</td>
-                      <td className="py-1 pr-4 text-sm text-gray-700">{u.denominazione ?? "—"}</td>
-                      <td className="py-1 pr-4 text-sm text-gray-700">{formatHaFromMq(u.sup_irrigabile_mq)}</td>
-                      <td className="py-1 text-sm">
-                        {u.cco ? (
-                          <button
-                            type="button"
-                            className="flex items-center gap-1 text-xs font-medium text-[#1D4E35] hover:underline"
-                            disabled={capacitasLinkBusy}
-                            onClick={() => void openCapacitasCertificato(u.cco!)}
-                          >
-                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">
-                              <path d="M6.22 8.72a.75.75 0 0 0 1.06 1.06l5.22-5.22v1.69a.75.75 0 0 0 1.5 0v-3.5a.75.75 0 0 0-.75-.75h-3.5a.75.75 0 0 0 0 1.5h1.69L6.22 8.72Z" />
-                              <path d="M3.5 6.75c0-.69.56-1.25 1.25-1.25H7A.75.75 0 0 0 7 4H4.75A2.75 2.75 0 0 0 2 6.75v4.5A2.75 2.75 0 0 0 4.75 14h4.5A2.75 2.75 0 0 0 12 11.25V9a.75.75 0 0 0-1.5 0v2.25c0 .69-.56 1.25-1.25 1.25h-4.5c-.69 0-1.25-.56-1.25-1.25v-4.5Z" />
-                            </svg>
-                            {capacitasLinkBusy ? "Apertura…" : "Visualizza su Capacitas"}
-                          </button>
-                        ) : null}
-                      </td>
-                    </tr>
-                  ))}
+                  {utenze.map((u: CatUtenzaIrrigua) => {
+                    const partita = formatUtenzaPartita(consorzio, u);
+                    const label = getUtenzaSubjectLabel(u);
+                    const canOpenSubject = Boolean(u.subject_id || u.codice_fiscale);
+                    const isBusy = subjectLookupBusyId === u.id;
+                    const blockClass =
+                      "w-full max-w-[280px] rounded-xl border border-[#D9E8DF] bg-[#F5FAF7] px-3 py-2 text-left transition hover:border-[#B7D2C1] hover:bg-[#EEF6F1] disabled:cursor-wait disabled:opacity-70";
+                    return (
+                      <tr key={u.id} className="rounded-lg bg-white align-top">
+                        <td className="py-2 pr-4 text-sm text-gray-700">{u.anno_campagna ?? "—"}</td>
+                        <td className="py-2 pr-4 text-sm text-gray-700">
+                          <div className="space-y-0.5">
+                            <div>{u.cco ?? "—"}</div>
+                            <div className="text-xs text-gray-500">{partita ? `Partita ${partita}` : "Partita n/d"}</div>
+                          </div>
+                        </td>
+                        <td className="py-2 pr-4">
+                          {canOpenSubject ? (
+                            <button type="button" className={blockClass} disabled={isBusy} onClick={() => void openSubjectQuickView(u)}>
+                              <span className="block text-sm font-semibold tracking-[0.01em] text-[#1D4E35]">
+                                {isBusy ? "Apertura…" : u.codice_fiscale ?? "—"}
+                              </span>
+                              <span className="mt-1 block text-xs font-medium text-gray-600">{label ?? "Apri dettaglio soggetto"}</span>
+                            </button>
+                          ) : (
+                            <div className="max-w-[280px] rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-left">
+                              <div className="text-sm font-semibold tracking-[0.01em] text-gray-800">{u.codice_fiscale ?? "—"}</div>
+                              <div className="mt-1 text-xs font-medium text-gray-500">{label ?? "Nessun soggetto collegato"}</div>
+                            </div>
+                          )}
+                        </td>
+                        <td className="py-2 pr-4 text-sm text-gray-700">{u.importo_0648 ?? "—"}</td>
+                        <td className="py-2 pr-4 text-sm text-gray-700">{u.importo_0985 ?? "—"}</td>
+                        <td className="py-2 text-sm">
+                          {u.cco ? (
+                            <button
+                              type="button"
+                              className="flex items-center gap-1 text-xs font-medium text-[#1D4E35] hover:underline"
+                              disabled={capacitasLinkBusy}
+                              onClick={() => void openCapacitasCertificato(u)}
+                            >
+                              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" className="h-3.5 w-3.5">
+                                <path d="M6.22 8.72a.75.75 0 0 0 1.06 1.06l5.22-5.22v1.69a.75.75 0 0 0 1.5 0v-3.5a.75.75 0 0 0-.75-.75h-3.5a.75.75 0 0 0 0 1.5h1.69L6.22 8.72Z" />
+                                <path d="M3.5 6.75c0-.69.56-1.25 1.25-1.25H7A.75.75 0 0 0 7 4H4.75A2.75 2.75 0 0 0 2 6.75v4.5A2.75 2.75 0 0 0 4.75 14h4.5A2.75 2.75 0 0 0 12 11.25V9a.75.75 0 0 0-1.5 0v2.25c0 .69-.56 1.25-1.25 1.25h-4.5c-.69 0-1.25-.56-1.25-1.25v-4.5Z" />
+                              </svg>
+                              {capacitasLinkBusy ? "Apertura…" : "Visualizza su Capacitas"}
+                            </button>
+                          ) : null}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             )}
@@ -485,6 +636,14 @@ export function ParticellaDetailDialog({
         </div>
         </div>
       </div>
+
+      {subjectQuickView ? (
+        <UtenzeSubjectQuickViewDialog
+          subjectId={subjectQuickView.id}
+          subjectLabel={subjectQuickView.label}
+          onClose={() => setSubjectQuickView(null)}
+        />
+      ) : null}
     </div>
   );
 }

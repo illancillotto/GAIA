@@ -4,10 +4,14 @@ on:
   push:
     paths:
       - "frontend/**"
+      - "tsconfig.json"
+      - ".vscode/settings.json"
       - ".github/workflows/frontend.yml"
   pull_request:
     paths:
       - "frontend/**"
+      - "tsconfig.json"
+      - ".vscode/settings.json"
       - ".github/workflows/frontend.yml"
 
 jobs:
@@ -28,6 +32,10 @@ jobs:
       - name: Placeholder lint
         working-directory: frontend
         run: npm run lint
+
+      - name: Typecheck from repo root
+        working-directory: frontend
+        run: npm run typecheck:from-root
 
       - name: Smoke tests
         working-directory: .
