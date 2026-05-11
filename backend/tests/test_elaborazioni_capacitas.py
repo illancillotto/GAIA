@@ -1535,6 +1535,141 @@ def test_capacitas_terreni_sync_persists_consorzio_snapshot(monkeypatch: pytest.
         db.close()
 
 
+@pytest.mark.anyio
+async def test_sync_certificato_snapshot_skips_annual_links_when_cert_context_is_ambiguous() -> None:
+    from app.services.elaborazioni_capacitas_terreni import sync_certificato_snapshot
+
+    class FakeClient:
+        async def fetch_certificato(self, **kwargs) -> CapacitasTerrenoCertificato:
+            return CapacitasTerrenoCertificato(
+                cco="0A2200001",
+                fra="38",
+                ccs="00000",
+                pvc="097",
+                com="289",
+                partita_code="0A2200001/38/00000",
+                intestatari=[
+                    {
+                        "codice_fiscale": "RSSMRA80A01H501Z",
+                        "denominazione": "Rossi Mario",
+                        "titoli": "Proprieta` 1/1",
+                    }
+                ],
+            )
+
+    db = TestingSessionLocal()
+    try:
+        batch = db.query(CatImportBatch).first()
+        assert batch is not None
+        db.add_all(
+            [
+                CatUtenzaIrrigua(
+                    import_batch_id=batch.id,
+                    anno_campagna=2026,
+                    cco="0A2200001",
+                    cod_comune_capacitas=289,
+                    cod_frazione=38,
+                    foglio="1",
+                    particella="680",
+                ),
+                CatUtenzaIrrigua(
+                    import_batch_id=batch.id,
+                    anno_campagna=2026,
+                    cco="0A2200001",
+                    cod_comune_capacitas=289,
+                    cod_frazione=38,
+                    foglio="2",
+                    particella="15",
+                ),
+            ]
+        )
+        db.flush()
+
+        await sync_certificato_snapshot(
+            db,
+            FakeClient(),  # type: ignore[arg-type]
+            cco="0A2200001",
+            com="289",
+            pvc="097",
+            fra="38",
+            ccs="00000",
+        )
+        db.flush()
+
+        assert db.query(CatCapacitasCertificato).count() == 1
+        assert db.query(CatCapacitasIntestatario).count() == 1
+        assert db.query(CatUtenzaIntestatario).count() == 0
+    finally:
+        db.close()
+
+
+@pytest.mark.anyio
+async def test_sync_certificato_snapshot_persists_only_explicit_target_utenza() -> None:
+    from app.services.elaborazioni_capacitas_terreni import sync_certificato_snapshot
+
+    class FakeClient:
+        async def fetch_certificato(self, **kwargs) -> CapacitasTerrenoCertificato:
+            return CapacitasTerrenoCertificato(
+                cco="0A2200002",
+                fra="38",
+                ccs="00000",
+                pvc="097",
+                com="289",
+                partita_code="0A2200002/38/00000",
+                intestatari=[
+                    {
+                        "codice_fiscale": "BNCLCU82A01H501Z",
+                        "denominazione": "Bianchi Luca",
+                        "titoli": "Proprieta` 1/1",
+                    }
+                ],
+            )
+
+    db = TestingSessionLocal()
+    try:
+        batch = db.query(CatImportBatch).first()
+        assert batch is not None
+        target = CatUtenzaIrrigua(
+            import_batch_id=batch.id,
+            anno_campagna=2026,
+            cco="0A2200002",
+            cod_comune_capacitas=289,
+            cod_frazione=38,
+            foglio="1",
+            particella="680",
+        )
+        other = CatUtenzaIrrigua(
+            import_batch_id=batch.id,
+            anno_campagna=2026,
+            cco="0A2200002",
+            cod_comune_capacitas=289,
+            cod_frazione=38,
+            foglio="2",
+            particella="15",
+        )
+        db.add_all([target, other])
+        db.flush()
+
+        await sync_certificato_snapshot(
+            db,
+            FakeClient(),  # type: ignore[arg-type]
+            cco="0A2200002",
+            com="289",
+            pvc="097",
+            fra="38",
+            ccs="00000",
+            target_utenze=[target],
+        )
+        db.flush()
+
+        annual_links = db.query(CatUtenzaIntestatario).all()
+        assert len(annual_links) == 1
+        assert annual_links[0].utenza_id == target.id
+        assert annual_links[0].anno_riferimento == 2026
+    finally:
+        db.close()
+
+
 def test_catasto_particella_capacitas_sync_route_updates_last_sync(monkeypatch: pytest.MonkeyPatch) -> None:
     create_response = client.post(
         "/elaborazioni/capacitas/credentials",

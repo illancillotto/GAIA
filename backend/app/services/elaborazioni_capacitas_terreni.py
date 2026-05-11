@@ -479,12 +479,15 @@ async def _persist_capacitas_intestatari(
 ) -> None:
     utenze = target_utenze or []
     if target_utenze is None and certificato.cco:
-        utenze = _find_utenze_for_cert_context(
+        candidate_utenze = _find_utenze_for_cert_context(
             db,
             cco=certificato.cco,
             com=certificato.com,
             fra=certificato.fra,
         )
+        # Without a single resolved target, avoid spraying annual owner links
+        # across every utenza that happens to share the same certificate context.
+        utenze = candidate_utenze if len(candidate_utenze) == 1 else []
     for intestatario in certificato.intestatari:
         history_rows: list[CapacitasStoricoAnagraficaRow] = []
         if intestatario.idxana:
