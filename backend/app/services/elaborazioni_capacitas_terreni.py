@@ -6,8 +6,9 @@ from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
 import re
 from typing import Awaitable, Callable, Sequence
+import uuid
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.models.catasto_phase1 import (
@@ -252,22 +253,54 @@ async def sync_certificato_snapshot(
         fra=fra,
         ccs=ccs,
     )
-    certificato_snapshot = CatCapacitasCertificato(
-        cco=certificato.cco or cco,
-        fra=certificato.fra or fra,
-        ccs=certificato.ccs or ccs,
-        pvc=certificato.pvc or pvc,
-        com=certificato.com or com,
-        partita_code=certificato.partita_code,
-        utenza_code=certificato.utenza_code,
-        utenza_status=certificato.utenza_status,
-        ruolo_status=certificato.ruolo_status or certificato.partita_status,
-        raw_html=certificato.raw_html,
-        parsed_json=certificato.model_dump(exclude_none=True, mode="json"),
-        collected_at=effective_collected_at,
+    parsed_certificato = certificato.model_dump(exclude_none=True, mode="json")
+    semantic_payload = _build_certificato_semantic_payload(certificato)
+    normalized_cco = certificato.cco or cco
+    normalized_fra = certificato.fra or fra
+    normalized_ccs = certificato.ccs or ccs
+    normalized_pvc = certificato.pvc or pvc
+    normalized_com = certificato.com or com
+
+    certificato_snapshot = _find_latest_certificato_snapshot(
+        db,
+        cco=normalized_cco,
+        com=normalized_com,
+        pvc=normalized_pvc,
+        fra=normalized_fra,
+        ccs=normalized_ccs,
     )
-    db.add(certificato_snapshot)
-    db.flush()
+    existing_semantic_payload = (
+        _normalize_certificato_semantic_payload(certificato_snapshot.parsed_json or {})
+        if certificato_snapshot is not None
+        else None
+    )
+    if certificato_snapshot is not None and existing_semantic_payload == semantic_payload:
+        certificato_snapshot.partita_code = certificato.partita_code
+        certificato_snapshot.utenza_code = certificato.utenza_code
+        certificato_snapshot.utenza_status = certificato.utenza_status
+        certificato_snapshot.ruolo_status = certificato.ruolo_status or certificato.partita_status
+        certificato_snapshot.raw_html = certificato.raw_html
+        certificato_snapshot.collected_at = effective_collected_at
+        db.execute(
+            delete(CatCapacitasIntestatario).where(CatCapacitasIntestatario.certificato_id == certificato_snapshot.id)
+        )
+    else:
+        certificato_snapshot = CatCapacitasCertificato(
+            cco=normalized_cco,
+            fra=normalized_fra,
+            ccs=normalized_ccs,
+            pvc=normalized_pvc,
+            com=normalized_com,
+            partita_code=certificato.partita_code,
+            utenza_code=certificato.utenza_code,
+            utenza_status=certificato.utenza_status,
+            ruolo_status=certificato.ruolo_status or certificato.partita_status,
+            raw_html=certificato.raw_html,
+            parsed_json=parsed_certificato,
+            collected_at=effective_collected_at,
+        )
+        db.add(certificato_snapshot)
+        db.flush()
 
     await _persist_capacitas_intestatari(
         db,
@@ -465,6 +498,56 @@ def _normalize_lookup_label(value: str) -> str:
     return re.sub(r"\s+", " ", value.strip()).casefold()
 
 
+def _build_certificato_semantic_payload(certificato: CapacitasTerrenoCertificato) -> dict[str, object]:
+    return _normalize_certificato_semantic_payload(
+        certificato.model_dump(exclude_none=True, mode="json")
+    )
+
+
+def _normalize_certificato_semantic_payload(payload: dict[str, object]) -> dict[str, object]:
+    return {
+        "cco": payload.get("cco"),
+        "fra": payload.get("fra"),
+        "ccs": payload.get("ccs"),
+        "pvc": payload.get("pvc"),
+        "com": payload.get("com"),
+        "partita_code": payload.get("partita_code"),
+        "comune_label": payload.get("comune_label"),
+        "partita_status": payload.get("partita_status"),
+        "utenza_code": payload.get("utenza_code"),
+        "utenza_status": payload.get("utenza_status"),
+        "ruolo_status": payload.get("ruolo_status"),
+        "intestatari": sorted(
+            [
+                item
+                for item in (payload.get("intestatari") or [])
+                if isinstance(item, dict)
+            ],
+            key=lambda item: (
+                str(item.get("idxana") or ""),
+                str(item.get("idxesa") or ""),
+                str(item.get("codice_fiscale") or ""),
+                str(item.get("denominazione") or ""),
+                str(item.get("titoli") or ""),
+            ),
+        ),
+        "terreni": sorted(
+            [
+                item
+                for item in (payload.get("terreni") or [])
+                if isinstance(item, dict)
+            ],
+            key=lambda item: (
+                str(item.get("external_row_id") or ""),
+                str(item.get("foglio") or ""),
+                str(item.get("particella") or ""),
+                str(item.get("sub") or ""),
+                str(item.get("riordino_code") or ""),
+            ),
+        ),
+    }
+
+
 async def _persist_capacitas_intestatari(
     db: Session,
     client: InVoltureClient,
@@ -478,6 +561,7 @@ async def _persist_capacitas_intestatari(
     anagrafica_detail_cache: dict[str, CapacitasAnagraficaDetail],
 ) -> None:
     utenze = target_utenze or []
+    replaced_annual_keys: set[tuple[uuid.UUID, int]] = set()
     if target_utenze is None and certificato.cco:
         candidate_utenze = _find_utenze_for_cert_context(
             db,
@@ -514,6 +598,7 @@ async def _persist_capacitas_intestatari(
             anagrafica_detail_cache=anagrafica_detail_cache,
             fallback_subject=subject,
             prefetched_history_rows=history_rows,
+            replaced_annual_keys=replaced_annual_keys,
         )
         subject = resolved_subject or subject
         if persist_snapshot_intestatari:
@@ -549,6 +634,7 @@ async def _persist_utenza_intestatari_from_history(
     anagrafica_detail_cache: dict[str, CapacitasAnagraficaDetail],
     fallback_subject: AnagraficaSubject | None,
     prefetched_history_rows: list[CapacitasStoricoAnagraficaRow] | None = None,
+    replaced_annual_keys: set[tuple[uuid.UUID, int]] | None = None,
 ) -> AnagraficaSubject | None:
     if not utenze:
         return fallback_subject
@@ -565,6 +651,15 @@ async def _persist_utenza_intestatari_from_history(
 
     resolved_subject = fallback_subject
     for utenza in utenze:
+        annual_key = (utenza.id, utenza.anno_campagna)
+        if replaced_annual_keys is not None and annual_key not in replaced_annual_keys:
+            db.execute(
+                delete(CatUtenzaIntestatario).where(
+                    CatUtenzaIntestatario.utenza_id == utenza.id,
+                    CatUtenzaIntestatario.anno_riferimento == utenza.anno_campagna,
+                )
+            )
+            replaced_annual_keys.add(annual_key)
         matched_rows = [row for row in history_rows if _to_int(row.anno) == utenza.anno_campagna]
         if matched_rows:
             for history_row in matched_rows:
@@ -1734,12 +1829,15 @@ def _find_utenze_for_cert_context(
     com: str | None,
     fra: str | None,
 ) -> list[CatUtenzaIrrigua]:
-    query = select(CatUtenzaIrrigua).where(CatUtenzaIrrigua.cco == cco)
-
     comune_code = _parse_optional_int(com)
+    if comune_code is None:
+        return []
+
+    query = select(CatUtenzaIrrigua).where(
+        CatUtenzaIrrigua.cco == cco,
+        CatUtenzaIrrigua.cod_comune_capacitas == comune_code,
+    )
     frazione_code = _parse_optional_int(fra)
-    if comune_code is not None:
-        query = query.where(CatUtenzaIrrigua.cod_comune_capacitas == comune_code)
     if frazione_code is not None:
         query = query.where(CatUtenzaIrrigua.cod_frazione == frazione_code)
 
@@ -1750,12 +1848,37 @@ def _find_utenze_for_cert_context(
     )
 
 
+def _find_latest_certificato_snapshot(
+    db: Session,
+    *,
+    cco: str,
+    com: str | None,
+    pvc: str | None,
+    fra: str | None,
+    ccs: str | None,
+) -> CatCapacitasCertificato | None:
+    return db.scalar(
+        select(CatCapacitasCertificato)
+        .where(
+            CatCapacitasCertificato.cco == cco,
+            CatCapacitasCertificato.com == com,
+            CatCapacitasCertificato.pvc == pvc,
+            CatCapacitasCertificato.fra == fra,
+            CatCapacitasCertificato.ccs == ccs,
+        )
+        .order_by(CatCapacitasCertificato.collected_at.desc(), CatCapacitasCertificato.created_at.desc())
+        .limit(1)
+    )
+
+
 def _find_utenza_for_terreno_row(db: Session, row: CapacitasTerrenoRow) -> CatUtenzaIrrigua | None:
     if not row.cco:
         return None
 
     anno = _to_int(row.anno)
     row_com = _to_int(row.com)
+    if row_com is None:
+        return None
     row_fra = _to_int(row.fra)
 
     def _matches_geo(candidate: CatUtenzaIrrigua) -> bool:

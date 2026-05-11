@@ -1409,6 +1409,98 @@ def test_particella_utenze_response_keeps_subject_unresolved_when_identifier_is_
     assert ambiguous_row["subject_display_name"] is None
 
 
+def test_particella_consorzio_filters_out_zero_share_owner_titles() -> None:
+    db = TestingSessionLocal()
+    particella_id: UUID
+    try:
+        particella = db.query(CatParticella).filter(CatParticella.foglio == "5", CatParticella.particella == "120").one()
+        particella_id = particella.id
+        comune = db.query(CatComune).filter(CatComune.cod_comune_capacitas == 165).one()
+        batch = db.query(CatImportBatch).filter(CatImportBatch.hash_file == "seed-hash").one()
+        utenza = CatUtenzaIrrigua(
+            import_batch_id=batch.id,
+            anno_campagna=2025,
+            cco="UT-FILTER-001",
+            comune_id=comune.id,
+            cod_comune_capacitas=165,
+            nome_comune="Arborea",
+            foglio="5",
+            particella="120",
+            subalterno="1",
+            particella_id=particella.id,
+            codice_fiscale="FILTER01A01H501Z",
+            denominazione="Utenza filtro titoli",
+        )
+        db.add(utenza)
+        db.flush()
+
+        unit = CatConsorzioUnit(
+            particella_id=particella.id,
+            comune_id=comune.id,
+            cod_comune_capacitas=165,
+            foglio="5",
+            particella="120",
+            subalterno="1",
+            descrizione="Filtro titoli",
+        )
+        db.add(unit)
+        db.flush()
+
+        db.add(
+            CatConsorzioOccupancy(
+                unit_id=unit.id,
+                utenza_id=utenza.id,
+                cco="UT-FILTER-001",
+                fra="38",
+                ccs="00000",
+                pvc="097",
+                com="165",
+                source_type="capacitas_terreni",
+                relationship_type="utilizzatore_reale",
+                is_current=True,
+            )
+        )
+
+        now = datetime(2026, 5, 11, 10, 0, tzinfo=timezone.utc)
+        db.add_all(
+            [
+                CatUtenzaIntestatario(
+                    utenza_id=utenza.id,
+                    idxana="IDX-ZERO",
+                    anno_riferimento=2025,
+                    codice_fiscale="ZERO01A01H501Z",
+                    denominazione="Residuo Zero",
+                    titoli="Proprieta` 0/0",
+                    collected_at=now,
+                ),
+                CatUtenzaIntestatario(
+                    utenza_id=utenza.id,
+                    idxana="IDX-VALID",
+                    anno_riferimento=2025,
+                    codice_fiscale="VALID01A01H501Z",
+                    denominazione="Proprietario Valido",
+                    titoli="Proprieta` 1/1",
+                    collected_at=now,
+                ),
+            ]
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get(f"/catasto/particelle/{particella_id}/consorzio", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    filtered_unit = next(
+        unit for unit in payload["units"] if any(occ["cco"] == "UT-FILTER-001" for occ in unit["occupancies"])
+    )
+    owner_rows = filtered_unit["intestatari_proprietari"]
+    assert len(owner_rows) == 1
+    assert owner_rows[0]["denominazione"] == "Proprietario Valido"
+    assert owner_rows[0]["titoli"] == "Proprieta` 1/1"
+
+
 def test_particelle_endpoint_supports_combined_lookup_filters() -> None:
     db = TestingSessionLocal()
     try:

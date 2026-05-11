@@ -1670,6 +1670,152 @@ async def test_sync_certificato_snapshot_persists_only_explicit_target_utenza() 
         db.close()
 
 
+@pytest.mark.anyio
+async def test_sync_certificato_snapshot_reuses_latest_identical_snapshot() -> None:
+    from app.services.elaborazioni_capacitas_terreni import sync_certificato_snapshot
+
+    class FakeClient:
+        def __init__(self) -> None:
+            self.calls = 0
+
+        async def fetch_certificato(self, **kwargs) -> CapacitasTerrenoCertificato:
+            self.calls += 1
+            return CapacitasTerrenoCertificato(
+                cco="0A2200003",
+                fra="38",
+                ccs="00000",
+                pvc="097",
+                com="289",
+                partita_code="0A2200003/38/00000",
+                intestatari=[
+                    {
+                        "idxana": "IDX-2200003",
+                        "codice_fiscale": "VRDLGI80A01H501Z",
+                        "denominazione": "Verdi Luigi",
+                        "titoli": "Proprieta` 1/1",
+                    }
+                ],
+                raw_html=f"<html>certificato-{self.calls}</html>",
+            )
+
+    client = FakeClient()
+    db = TestingSessionLocal()
+    try:
+        _, first_snapshot = await sync_certificato_snapshot(
+            db,
+            client,  # type: ignore[arg-type]
+            cco="0A2200003",
+            com="289",
+            pvc="097",
+            fra="38",
+            ccs="00000",
+            collected_at=datetime(2026, 5, 11, 8, 0, tzinfo=timezone.utc),
+        )
+        db.flush()
+
+        _, second_snapshot = await sync_certificato_snapshot(
+            db,
+            client,  # type: ignore[arg-type]
+            cco="0A2200003",
+            com="289",
+            pvc="097",
+            fra="38",
+            ccs="00000",
+            collected_at=datetime(2026, 5, 11, 9, 0, tzinfo=timezone.utc),
+        )
+        db.flush()
+
+        assert first_snapshot.id == second_snapshot.id
+        assert db.query(CatCapacitasCertificato).count() == 1
+        assert db.query(CatCapacitasIntestatario).count() == 1
+        snapshot = db.query(CatCapacitasCertificato).one()
+        assert snapshot.collected_at == datetime(2026, 5, 11, 9, 0, tzinfo=timezone.utc)
+    finally:
+        db.close()
+
+
+@pytest.mark.anyio
+async def test_sync_certificato_snapshot_replaces_annual_links_for_same_utenza_year() -> None:
+    from app.services.elaborazioni_capacitas_terreni import sync_certificato_snapshot
+
+    class FakeClient:
+        async def fetch_certificato(self, **kwargs) -> CapacitasTerrenoCertificato:
+            return CapacitasTerrenoCertificato(
+                cco="0A2200004",
+                fra="38",
+                ccs="00000",
+                pvc="097",
+                com="289",
+                partita_code="0A2200004/38/00000",
+                intestatari=[
+                    {
+                        "idxana": "IDX-OWNER-1",
+                        "codice_fiscale": "RSSMRA80A01H501Z",
+                        "denominazione": "Rossi Mario",
+                        "titoli": "Proprieta` 1/2",
+                    },
+                    {
+                        "idxana": "IDX-OWNER-2",
+                        "codice_fiscale": "BNCLCU82A01H501Z",
+                        "denominazione": "Bianchi Luca",
+                        "titoli": "Proprieta` 1/2",
+                    },
+                ],
+            )
+
+    db = TestingSessionLocal()
+    try:
+        batch = db.query(CatImportBatch).first()
+        assert batch is not None
+        utenza = CatUtenzaIrrigua(
+            import_batch_id=batch.id,
+            anno_campagna=2026,
+            cco="0A2200004",
+            cod_comune_capacitas=289,
+            cod_frazione=38,
+            foglio="1",
+            particella="680",
+        )
+        db.add(utenza)
+        db.flush()
+        db.add(
+            CatUtenzaIntestatario(
+                utenza_id=utenza.id,
+                idxana="IDX-OLD",
+                anno_riferimento=2026,
+                denominazione="Residuo Storico",
+                titoli="Proprieta` 1/1",
+                collected_at=datetime(2026, 5, 1, 8, 0, tzinfo=timezone.utc),
+            )
+        )
+        db.flush()
+
+        await sync_certificato_snapshot(
+            db,
+            FakeClient(),  # type: ignore[arg-type]
+            cco="0A2200004",
+            com="289",
+            pvc="097",
+            fra="38",
+            ccs="00000",
+            target_utenze=[utenza],
+            collected_at=datetime(2026, 5, 11, 10, 0, tzinfo=timezone.utc),
+        )
+        db.flush()
+
+        annual_links = (
+            db.query(CatUtenzaIntestatario)
+            .filter(CatUtenzaIntestatario.utenza_id == utenza.id, CatUtenzaIntestatario.anno_riferimento == 2026)
+            .order_by(CatUtenzaIntestatario.denominazione.asc())
+            .all()
+        )
+        assert len(annual_links) == 2
+        assert [item.denominazione for item in annual_links] == ["Bianchi Luca", "Rossi Mario"]
+        assert all(item.idxana != "IDX-OLD" for item in annual_links)
+    finally:
+        db.close()
+
+
 def test_catasto_particella_capacitas_sync_route_updates_last_sync(monkeypatch: pytest.MonkeyPatch) -> None:
     create_response = client.post(
         "/elaborazioni/capacitas/credentials",
@@ -3876,6 +4022,17 @@ class TestFindUtenzaForTerrenoRowAnnoFallback:
             db.rollback()
             db.close()
 
+    def test_missing_comune_returns_none_even_if_cco_exists(self) -> None:
+        from app.services.elaborazioni_capacitas_terreni import _find_utenza_for_terreno_row
+        db = TestingSessionLocal()
+        try:
+            self._make_utenza(db, anno=2024)
+            row = self._make_row(com=None, anno="2024")
+            assert _find_utenza_for_terreno_row(db, row) is None
+        finally:
+            db.rollback()
+            db.close()
+
     def test_sub_filter_respected_in_fallback(self) -> None:
         from app.services.elaborazioni_capacitas_terreni import _find_utenza_for_terreno_row
         db = TestingSessionLocal()
@@ -3887,6 +4044,41 @@ class TestFindUtenzaForTerrenoRowAnnoFallback:
             result = _find_utenza_for_terreno_row(db, row)
             assert result is not None
             assert result.id == utenza_a.id
+        finally:
+            db.rollback()
+            db.close()
+
+    def test_same_cco_different_comuni_does_not_match_wrong_comune(self) -> None:
+        from app.services.elaborazioni_capacitas_terreni import _find_utenza_for_terreno_row
+        db = TestingSessionLocal()
+        try:
+            batch = db.query(CatImportBatch).first()
+            assert batch is not None
+            wrong = CatUtenzaIrrigua(
+                import_batch_id=batch.id,
+                anno_campagna=2024,
+                cco="0A1462373",
+                cod_comune_capacitas=165,
+                cod_frazione=38,
+                foglio="24",
+                particella="3",
+            )
+            correct = CatUtenzaIrrigua(
+                import_batch_id=batch.id,
+                anno_campagna=2024,
+                cco="0A1462373",
+                cod_comune_capacitas=95,
+                cod_frazione=38,
+                foglio="24",
+                particella="3",
+            )
+            db.add_all([wrong, correct])
+            db.flush()
+
+            row = self._make_row(com="95", anno="2024")
+            result = _find_utenza_for_terreno_row(db, row)
+            assert result is not None
+            assert result.id == correct.id
         finally:
             db.rollback()
             db.close()
@@ -4020,6 +4212,33 @@ async def test_refetch_certificati_filters_target_utenza_by_comune_and_frazione(
 
         assert count == 1
         assert captured_target_utenze_ids == [matching.id]
+    finally:
+        db.rollback()
+        db.close()
+
+
+def test_find_utenze_for_cert_context_requires_comune() -> None:
+    from app.services.elaborazioni_capacitas_terreni import _find_utenze_for_cert_context
+
+    db = TestingSessionLocal()
+    try:
+        batch = db.query(CatImportBatch).first()
+        assert batch is not None
+        db.add(
+            CatUtenzaIrrigua(
+                import_batch_id=batch.id,
+                anno_campagna=2025,
+                cco="0A1462373",
+                cod_comune_capacitas=95,
+                cod_frazione=38,
+                foglio="24",
+                particella="3",
+            )
+        )
+        db.flush()
+
+        assert _find_utenze_for_cert_context(db, cco="0A1462373", com=None, fra="38") == []
+        assert _find_utenze_for_cert_context(db, cco="0A1462373", com="", fra="38") == []
     finally:
         db.rollback()
         db.close()

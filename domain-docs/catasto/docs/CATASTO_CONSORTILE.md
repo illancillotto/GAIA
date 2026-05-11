@@ -286,6 +286,7 @@ Ruolo:
 - conserva la fotografia sorgente degli intestatari letti dal certificato Terreni
 - non e il master anagrafico corrente
 - funge da snapshot tecnico/audit collegato alla singola acquisizione Capacitas
+- se una sync successiva restituisce lo stesso payload certificato per lo stesso contesto (`CCO`, `COM`, `PVC`, `FRA`, `CCS`), GAIA riusa l'ultimo snapshot invece di crearne uno duplicato
 
 ### 5.c Intestatari annuali collegati all'utenza
 
@@ -305,6 +306,10 @@ Principio operativo:
 - `cat_utenze_irrigue` continua a rappresentare l'utilizzatore/pagatore annuale
 - `cat_utenza_intestatari` rappresenta tutti gli intestatari proprietari noti per quella specifica utenza/anno
 - i due concetti non devono essere fusi
+- la persistenza applica una policy `replace` per `utenza_id + anno_riferimento`: ogni sync sostituisce il set annuale esistente con quello appena ricostruito
+- il `CCO` da solo non e considerato sufficiente per il matching: serve sempre almeno `COM` Capacitas coerente, con `FRA` usata come ulteriore vincolo quando disponibile
+- se il certificato non risolve una sola `cat_utenze_irrigue` target nel contesto corrente, GAIA non persiste link annuali per evitare associazioni massive errate
+- l'endpoint `GET /catasto/particelle/{id}/consorzio` esclude dalla sezione `intestatari_proprietari` i record con titolo quota `0/0`, trattati come rumore non proprietario
 
 Campi chiave:
 

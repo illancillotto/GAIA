@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -49,6 +50,18 @@ def _normalize_identifier(value: str | None) -> str | None:
         return None
     normalized = value.replace(" ", "").strip().upper()
     return normalized or None
+
+
+_ZERO_SHARE_TITLE_RE = re.compile(r"\b0\s*/\s*0\b")
+
+
+def _is_visible_owner_title(value: str | None) -> bool:
+    if value is None:
+        return True
+    normalized = value.strip()
+    if not normalized:
+        return True
+    return _ZERO_SHARE_TITLE_RE.search(normalized) is None
 
 
 def _build_subject_display_name(
@@ -383,6 +396,8 @@ def get_particella_consorzio(
                 .all()
             )
             for row in intestatari_rows:
+                if not _is_visible_owner_title(row.titoli):
+                    continue
                 person = db.get(AnagraficaPerson, row.subject_id) if row.subject_id else None
                 person_snapshots = []
                 if row.subject_id:

@@ -238,6 +238,10 @@ Uso in GAIA:
   - `ana_person_snapshots` quando il profilo cambia
   - `cat_utenza_intestatari` per collegare tutti gli intestatari proprietari alla singola `cat_utenze_irrigue` dell'anno
 - se Capacitas non espone storico per quel soggetto, il sync usa il dato sintetico del certificato come fallback e non fallisce
+- gli snapshot `cat_capacitas_intestatari` non crescono piu su sync identiche dello stesso certificato: se il payload dell'ultimo snapshot per lo stesso contesto (`CCO`, `COM`, `PVC`, `FRA`, `CCS`) non cambia, GAIA riusa quello esistente
+- i link annuali `cat_utenza_intestatari` usano policy `replace` per `utenza_id + anno_riferimento`, cosi i residui di sync precedenti vengono rimossi prima di inserire il set ricostruito
+- il matching verso `cat_utenze_irrigue` non usa mai il solo `CCO`: senza `COM` Capacitas valido non viene risolta alcuna utenza target
+- se il certificato non individua una sola utenza target nel contesto corrente, GAIA conserva lo snapshot del certificato ma non persiste link annuali verso `cat_utenze_irrigue`
 
 Workflow batch aggiuntivo disponibile nel modulo `elaborazioni`:
 
