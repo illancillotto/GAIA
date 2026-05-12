@@ -5,10 +5,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 
 import AnalysisPanel from "@/components/catasto/gis/AnalysisPanel";
+import { ParticellaDetailDialog } from "@/components/catasto/anagrafica/ParticellaDetailDialog";
 import DrawingTools from "@/components/catasto/gis/DrawingTools";
 import SelectionPanel from "@/components/catasto/gis/SelectionPanel";
 import { CatastoPage } from "@/components/catasto/catasto-page";
 import {
+  catastoGetDistrettoGeojson,
   catastoGisCreateSavedSelection,
   catastoGisDeleteSavedSelection,
   catastoGisExport,
@@ -16,13 +18,16 @@ import {
   catastoGisListSavedSelections,
   catastoGisResolveRefs,
   catastoGisUpdateSavedSelection,
+  catastoListDistretti,
 } from "@/lib/api/catasto";
 import { getStoredAccessToken } from "@/lib/auth";
 import { useGisSelection } from "@/hooks/useGisSelection";
+import type { CatAnagraficaMatch, CatDistretto } from "@/types/catasto";
 import type {
   GisFilters,
   GisMapOverlayLayer,
   GisParticellaRef,
+  ParticellaPopupData,
   GisSavedSelectionDetail,
   GisSavedSelectionItemInput,
   GisSavedSelectionSummary,
@@ -53,6 +58,20 @@ interface OverlayLayerState extends GisMapOverlayLayer {
 }
 
 const LAYER_COLORS = ["#10B981", "#F59E0B", "#3B82F6", "#EF4444", "#8B5CF6", "#14B8A6", "#F97316"];
+const DISTRETTO_COLORS = [
+  "#1D4E35",
+  "#2563EB",
+  "#D97706",
+  "#7C3AED",
+  "#0F766E",
+  "#BE123C",
+  "#4D7C0F",
+  "#0369A1",
+  "#B45309",
+  "#6D28D9",
+  "#15803D",
+  "#B91C1C",
+];
 
 function toNullableCellString(value: unknown): string | null {
   if (value == null) return null;
@@ -92,6 +111,54 @@ function buildImportStatsFromDetail(detail: GisSavedSelectionDetail): ImportStat
   };
 }
 
+function compareDistrettoNumber(a: CatDistretto, b: CatDistretto): number {
+  const aNumber = Number.parseInt(a.num_distretto, 10);
+  const bNumber = Number.parseInt(b.num_distretto, 10);
+  if (Number.isFinite(aNumber) && Number.isFinite(bNumber) && aNumber !== bNumber) return aNumber - bNumber;
+  return a.num_distretto.localeCompare(b.num_distretto, "it", { numeric: true, sensitivity: "base" });
+}
+
+function popupToMatch(popup: ParticellaPopupData | null): CatAnagraficaMatch | null {
+  if (!popup) return null;
+  return {
+    particella_id: popup.id,
+    unit_id: null,
+    comune_id: null,
+    comune: popup.nome_comune ?? null,
+    cod_comune_capacitas: popup.cod_comune_capacitas ?? null,
+    codice_catastale: popup.codice_catastale ?? null,
+    foglio: popup.foglio ?? "",
+    particella: popup.particella ?? "",
+    subalterno: popup.subalterno ?? null,
+    num_distretto: popup.num_distretto ?? null,
+    nome_distretto: popup.nome_distretto ?? null,
+    superficie_mq: popup.superficie_mq != null ? String(popup.superficie_mq) : null,
+    superficie_grafica_mq: popup.superficie_grafica_mq != null ? String(popup.superficie_grafica_mq) : null,
+    presente_in_catasto_consorzio: false,
+    utenza_latest: null,
+    cert_com: null,
+    cert_pvc: null,
+    cert_fra: null,
+    cert_ccs: null,
+    stato_ruolo: popup.ha_ruolo ? "a_ruolo" : null,
+    stato_cnc: null,
+    intestatari: [],
+    anomalie_count: popup.n_anomalie_aperte ?? 0,
+    anomalie_top: [],
+    note: null,
+  };
+}
+
+function formatHectares(value: number | null | undefined): string {
+  if (value == null) return "-";
+  return `${value.toLocaleString("it-IT", { minimumFractionDigits: 0, maximumFractionDigits: 4 })} ha`;
+}
+
+function formatEuro(value: number | null | undefined): string {
+  if (value == null) return "-";
+  return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(value);
+}
+
 
 export default function CatastoGisPage() {
   const [token, setToken] = useState<string | null>(null);
@@ -106,12 +173,15 @@ export default function CatastoGisPage() {
   const [gisInfo, setGisInfo] = useState<string | null>(null);
   const [showDistretti, setShowDistretti] = useState(true);
   const [showDistrettiFill, setShowDistrettiFill] = useState(false);
-  const [showParticelle, setShowParticelle] = useState(true);
+  const [showParticelle, setShowParticelle] = useState(false);
   const [showParticelleFill, setShowParticelleFill] = useState(true);
   const [highlightSelected, setHighlightSelected] = useState(true);
-  const [distrettiOpacity, setDistrettiOpacity] = useState(0.3);
+  const [distrettiOpacity, setDistrettiOpacity] = useState(0.5);
   const [particelleOpacity, setParticelleOpacity] = useState(0.42);
   const [distrettoLayer, setDistrettoLayer] = useState<string>("");
+  const [distretti, setDistretti] = useState<CatDistretto[]>([]);
+  const [distrettiOpen, setDistrettiOpen] = useState(true);
+  const [distrettiLoading, setDistrettiLoading] = useState(false);
   const [xlsxFile, setXlsxFile] = useState<File | null>(null);
   const [xlsxBusy, setXlsxBusy] = useState(false);
   const [overlayLayers, setOverlayLayers] = useState<OverlayLayerState[]>([]);
@@ -121,6 +191,8 @@ export default function CatastoGisPage() {
   const [savedBusy, setSavedBusy] = useState(false);
   const [focusGeojson, setFocusGeojson] = useState<GeoJSON.FeatureCollection | null>(null);
   const [focusSignal, setFocusSignal] = useState(0);
+  const [popupParticella, setPopupParticella] = useState<ParticellaPopupData | null>(null);
+  const [popupDetailOpen, setPopupDetailOpen] = useState(false);
   const layerCounterRef = useRef(0);
   const activeFilters = useMemo<GisFilters>(() => ({}), []);
   const { result, isLoading, error, runSelection, clearSelection } = useGisSelection(token);
@@ -138,7 +210,24 @@ export default function CatastoGisPage() {
     [overlayLayers],
   );
   const visibleOverlayLayers = useMemo(() => overlayLayers.filter((layer) => layer.visible), [overlayLayers]);
+  const distrettoColorMap = useMemo(
+    () =>
+      Object.fromEntries(
+        [...distretti]
+          .sort(compareDistrettoNumber)
+          .map((distretto, index) => [
+            distretto.num_distretto,
+            DISTRETTO_COLORS[index % DISTRETTO_COLORS.length] ?? "#1D4E35",
+          ]),
+      ),
+    [distretti],
+  );
+  const selectedDistretto = useMemo(
+    () => distretti.find((distretto) => distretto.num_distretto === distrettoLayer.trim()) ?? null,
+    [distretti, distrettoLayer],
+  );
   const autoLoadedSelectionRef = useRef<string | null>(null);
+  const popupMatch = useMemo(() => popupToMatch(popupParticella), [popupParticella]);
 
   useEffect(() => {
     setToken(getStoredAccessToken());
@@ -158,6 +247,17 @@ export default function CatastoGisPage() {
       setGisError(e instanceof Error ? e.message : "Caricamento selezioni salvate fallito");
     });
   }, [refreshSavedSelections, token]);
+
+  useEffect(() => {
+    if (!token) return;
+    setDistrettiLoading(true);
+    void catastoListDistretti(token)
+      .then((items) => setDistretti([...items].sort(compareDistrettoNumber)))
+      .catch((e) => {
+        setGisError(e instanceof Error ? e.message : "Caricamento distretti fallito");
+      })
+      .finally(() => setDistrettiLoading(false));
+  }, [token]);
 
   useEffect(() => {
     if (!isExpanded) return;
@@ -214,6 +314,13 @@ export default function CatastoGisPage() {
     clearSelection();
   }, [clearSelection]);
 
+  const handlePopupParticella = useCallback((particella: ParticellaPopupData | null) => {
+    setPopupParticella(particella);
+    if (!particella) {
+      setPopupDetailOpen(false);
+    }
+  }, []);
+
   const focusLayerGeojson = useCallback((geojson: GeoJSON.FeatureCollection | null | undefined) => {
     if (!geojson || geojson.features.length === 0) return;
     setFocusGeojson(geojson);
@@ -237,6 +344,30 @@ export default function CatastoGisPage() {
 
   const closeExpanded = useCallback(() => {
     setIsExpanded(false);
+  }, []);
+
+  const handleSelectDistretto = useCallback(async (distretto: CatDistretto) => {
+    setShowDistretti(true);
+    setShowParticelle(false);
+    setDistrettoLayer(distretto.num_distretto);
+    if (!token) return;
+    try {
+      const feature = await catastoGetDistrettoGeojson(token, distretto.id);
+      setFocusGeojson({
+        type: "FeatureCollection",
+        features: [feature as GeoJSON.Feature],
+      });
+      setFocusSignal((value) => value + 1);
+      setGisError(null);
+    } catch (e) {
+      setGisError(e instanceof Error ? e.message : "Impossibile centrare il distretto selezionato");
+    }
+  }, [token]);
+
+  const handleClearDistretto = useCallback(() => {
+    setDistrettoLayer("");
+    setShowDistretti(true);
+    setResizeSignal((value) => value + 1);
   }, []);
 
   const handleExport = useCallback(
@@ -529,6 +660,115 @@ export default function CatastoGisPage() {
     });
   }, [autoSelectionId, handleLoadSavedSelection, token]);
 
+  const renderDistrettiPanel = (isDark: boolean) => (
+    <div className={`rounded-2xl border p-3 ${isDark ? "border-white/15 bg-white/10" : "border-emerald-100 bg-emerald-50/30"}`}>
+      <button
+        type="button"
+        onClick={() => setDistrettiOpen((value) => !value)}
+        className="flex w-full items-center justify-between gap-3 text-left"
+      >
+        <div>
+          <p className={`text-[10px] font-semibold uppercase tracking-widest ${isDark ? "text-emerald-200" : "text-emerald-700"}`}>Distretti irrigui</p>
+          <p className={`mt-1 text-xs ${isDark ? "text-white/60" : "text-gray-500"}`}>
+            {selectedDistretto
+              ? `Filtro attivo: distretto ${selectedDistretto.num_distretto}`
+              : "Seleziona un distretto per centrare la mappa e isolare il perimetro."}
+          </p>
+        </div>
+        <span className={`material-symbols-outlined text-[20px] transition ${distrettiOpen ? "rotate-180" : ""} ${isDark ? "text-white/60" : "text-emerald-700"}`}>
+          expand_more
+        </span>
+      </button>
+
+      {selectedDistretto ? (
+        <div className={`mt-3 rounded-xl border px-3 py-2 ${isDark ? "border-white/15 bg-white/10" : "border-white bg-white/80"}`}>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span
+                  className="h-3 w-3 shrink-0 rounded-full ring-2 ring-white"
+                  style={{ backgroundColor: distrettoColorMap[selectedDistretto.num_distretto] ?? "#1D4E35" }}
+                />
+                <p className={`truncate text-sm font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>
+                  Distretto {selectedDistretto.num_distretto}
+                </p>
+              </div>
+              <p className={`mt-0.5 truncate text-[11px] ${isDark ? "text-white/55" : "text-gray-500"}`}>
+                {selectedDistretto.nome_distretto ?? "Senza nome"}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleClearDistretto}
+              className={`rounded-full px-2.5 py-1 text-[11px] font-semibold transition ${isDark ? "bg-white/10 text-white/70 hover:bg-white/15" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
+            >
+              Tutti
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowParticelle((value) => !value)}
+            className={`mt-2 w-full rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
+              showParticelle
+                ? "border-indigo-200 bg-indigo-50 text-indigo-700"
+                : isDark
+                  ? "border-white/15 bg-white/10 text-white/70 hover:bg-white/15"
+                  : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            {showParticelle ? "Nascondi particelle del distretto" : "Mostra particelle del distretto"}
+          </button>
+        </div>
+      ) : null}
+
+      {distrettiOpen ? (
+        <div className="mt-3 max-h-56 space-y-1.5 overflow-y-auto pr-1">
+          {distrettiLoading ? (
+            <div className={`rounded-xl border border-dashed px-3 py-4 text-center text-xs ${isDark ? "border-white/15 text-white/50" : "border-emerald-100 text-gray-500"}`}>
+              Caricamento distretti...
+            </div>
+          ) : distretti.length === 0 ? (
+            <div className={`rounded-xl border border-dashed px-3 py-4 text-center text-xs ${isDark ? "border-white/15 text-white/50" : "border-emerald-100 text-gray-500"}`}>
+              Nessun distretto disponibile.
+            </div>
+          ) : (
+            distretti.map((distretto) => {
+              const isSelected = distretto.num_distretto === distrettoLayer.trim();
+              const color = distrettoColorMap[distretto.num_distretto] ?? "#1D4E35";
+              return (
+                <button
+                  key={distretto.id}
+                  type="button"
+                  onClick={() => void handleSelectDistretto(distretto)}
+                  className={`flex w-full items-center gap-2 rounded-xl border px-3 py-2 text-left transition ${
+                    isSelected
+                      ? "border-emerald-300 bg-white shadow-sm ring-1 ring-emerald-100"
+                      : isDark
+                        ? "border-white/10 bg-white/5 hover:bg-white/10"
+                        : "border-white/70 bg-white/70 hover:border-emerald-200 hover:bg-white"
+                  }`}
+                >
+                  <span className="h-3 w-3 shrink-0 rounded-full ring-2 ring-white" style={{ backgroundColor: color }} />
+                  <span className="min-w-0 flex-1">
+                    <span className={`block truncate text-xs font-semibold ${isDark ? "text-white" : "text-gray-900"}`}>
+                      Distretto {distretto.num_distretto}
+                    </span>
+                    <span className={`block truncate text-[10px] ${isDark ? "text-white/45" : "text-gray-500"}`}>
+                      {distretto.nome_distretto ?? "Senza nome"}
+                    </span>
+                  </span>
+                  {isSelected ? (
+                    <span className="material-symbols-outlined text-[16px] text-emerald-600">check_circle</span>
+                  ) : null}
+                </button>
+              );
+            })
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
+
   const renderArchivioList = (isDark: boolean) => (
     <>
       <div className="mb-2 flex items-center justify-between">
@@ -650,19 +890,33 @@ export default function CatastoGisPage() {
       description="Analisi spaziale delle particelle catastali con layer MVT e selezione GIS."
       breadcrumb="Catasto / GIS"
       requiredModule="catasto"
+      hideContentHeader
     >
-      <div className="flex h-[calc(100vh-135px)] min-h-[720px] flex-col overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
-        <div className="flex flex-col gap-3 border-b border-gray-100 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h2 className="text-lg font-semibold text-gray-900">Catasto GIS</h2>
-            <p className="text-sm text-gray-500">Vista centrata sul comprensorio consortile. Disegna un poligono per calcolare aggregazioni e preview particelle.</p>
+      <div className="relative -mx-7 -mb-6 -mt-6 flex h-[calc(100vh-72px)] min-h-[760px] flex-col overflow-hidden border-y border-slate-200 bg-[#101b17] shadow-[0_24px_80px_rgba(15,23,42,0.18)]">
+        <div className="absolute left-4 top-4 z-20 flex max-w-[calc(100%-2rem)] flex-col gap-3 lg:left-6 lg:right-[452px] lg:max-w-none lg:flex-row lg:items-start lg:justify-between">
+          <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-white/20 bg-white/95 px-3 py-2 shadow-2xl backdrop-blur">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#1D4E35] text-white shadow-sm">
+              <span className="material-symbols-outlined text-[22px]">map</span>
+            </div>
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h2 className="truncate text-sm font-bold uppercase tracking-[0.18em] text-slate-950">GAIA GIS</h2>
+                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                  Catasto
+                </span>
+              </div>
+              <p className="truncate text-xs text-slate-500">
+                Distretti, particelle, selezioni e layer importati nel comprensorio consortile.
+              </p>
+            </div>
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-2 lg:justify-end">
+          <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/20 bg-white/95 p-2 shadow-2xl backdrop-blur">
             <button
               type="button"
               onClick={openExpanded}
-              className="inline-flex items-center justify-center rounded-full border border-gray-200 bg-white px-4 py-2 text-sm font-semibold text-gray-900 shadow-sm transition hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-slate-200 bg-slate-950 px-3 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
             >
+              <span className="material-symbols-outlined text-[16px]">open_in_full</span>
               Vista estesa
             </button>
             <DrawingTools
@@ -676,21 +930,21 @@ export default function CatastoGisPage() {
         </div>
 
         {error || exportError || gisError ? (
-          <div className="mx-4 mt-3 rounded-lg border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
+          <div className="absolute left-4 right-4 top-[118px] z-20 rounded-xl border border-red-200 bg-red-50/95 px-3 py-2 text-sm font-medium text-red-700 shadow-xl backdrop-blur lg:right-[452px]">
             {error || exportError || gisError}
           </div>
         ) : gisInfo ? (
-          <div className="mx-4 mt-3 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+          <div className="absolute left-4 right-4 top-[118px] z-20 rounded-xl border border-amber-200 bg-amber-50/95 px-3 py-2 text-sm font-medium text-amber-700 shadow-xl backdrop-blur lg:right-[452px]">
             {gisInfo}
           </div>
         ) : null}
 
-        <div className={`grid min-h-0 flex-1 overflow-hidden ${isExpanded ? "lg:grid-cols-1" : "lg:grid-cols-[minmax(0,1.55fr)_420px]"}`}>
+        <div className={`grid min-h-0 flex-1 overflow-hidden ${isExpanded ? "lg:grid-cols-1" : "grid-rows-[minmax(0,1fr)_minmax(360px,45vh)] lg:grid-cols-[minmax(0,1fr)_432px] lg:grid-rows-none"}`}>
           <div
             className={
               isExpanded
                 ? "fixed inset-0 z-50 flex flex-col"
-                : "h-full bg-gray-100 p-3"
+                : "h-full bg-[#101b17]"
             }
           >
             {isExpanded ? (
@@ -717,14 +971,15 @@ export default function CatastoGisPage() {
               <div
                 className={
                   isExpanded
-                    ? "pointer-events-auto min-h-0 flex-1 overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-black/5"
-                    : "h-full"
+                    ? "pointer-events-auto relative min-h-0 flex-1 overflow-hidden rounded-2xl bg-white shadow-2xl ring-1 ring-black/5"
+                    : "relative h-full"
                 }
               >
                 <MapContainer
                   token={token}
                   onGeometryDrawn={handleGeometryDrawn}
                   onSelectionCleared={handleClearSelection}
+                  onParticellaClick={handlePopupParticella}
                   selectedIds={result?.particelle.map((particella) => particella.id) ?? []}
                   filters={activeFilters}
                   mapLayers={{
@@ -736,6 +991,7 @@ export default function CatastoGisPage() {
                     particelleOpacity,
                     distretto: distrettoLayer.trim() ? distrettoLayer.trim() : null,
                     highlightSelected,
+                    distrettoColors: distrettoColorMap,
                   }}
                   overlayLayers={visibleOverlayLayers}
                   focusGeojson={focusGeojson}
@@ -743,8 +999,120 @@ export default function CatastoGisPage() {
                   drawSignal={drawSignal}
                   clearSignal={clearSignal}
                   resizeSignal={resizeSignal}
-                  className={isExpanded ? "min-h-0 h-full rounded-2xl" : ""}
+                  className={isExpanded ? "min-h-0 h-full rounded-2xl" : "min-h-0 rounded-none"}
                 />
+                {popupParticella ? (
+                  <div className="pointer-events-none absolute inset-x-3 bottom-3 z-10 sm:inset-x-auto sm:bottom-4 sm:left-4 sm:top-24 sm:w-[380px]">
+                    <div className="pointer-events-auto rounded-2xl border border-slate-200 bg-white/96 p-4 shadow-2xl ring-1 ring-black/5 backdrop-blur">
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="truncate text-sm font-bold text-slate-900">
+                              {popupParticella.cfm || `${popupParticella.foglio ?? "-"} / ${popupParticella.particella ?? "-"}`}
+                            </p>
+                            <span
+                              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                                popupParticella.ha_ruolo ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"
+                              }`}
+                            >
+                              {popupParticella.ha_ruolo ? "A ruolo" : "Fuori ruolo"}
+                            </span>
+                            {popupParticella.n_anomalie_aperte > 0 ? (
+                              <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-700">
+                                {popupParticella.n_anomalie_aperte} anomalie
+                              </span>
+                            ) : null}
+                          </div>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {popupParticella.nome_comune ?? popupParticella.codice_catastale ?? "Comune ND"} · Fg. {popupParticella.foglio ?? "-"} · Part. {popupParticella.particella ?? "-"}
+                            {popupParticella.subalterno ? ` · Sub. ${popupParticella.subalterno}` : ""}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setPopupParticella(null)}
+                          className="rounded-full border border-slate-200 bg-slate-50 p-1.5 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
+                          aria-label="Chiudi dettaglio particella GIS"
+                        >
+                          <span className="material-symbols-outlined text-[16px]">close</span>
+                        </button>
+                      </div>
+
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
+                        <div className="rounded-xl bg-slate-50 px-3 py-2">
+                          <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Superficie</div>
+                          <div className="mt-1 font-semibold text-slate-800">
+                            {(popupParticella.superficie_mq ?? popupParticella.superficie_grafica_mq)?.toLocaleString("it-IT") ?? "-"} mq
+                          </div>
+                        </div>
+                        <div className="rounded-xl bg-slate-50 px-3 py-2">
+                          <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Distretto</div>
+                          <div className="mt-1 font-semibold text-slate-800">
+                            {popupParticella.num_distretto ?? "-"}
+                            {popupParticella.nome_distretto ? ` · ${popupParticella.nome_distretto}` : ""}
+                          </div>
+                        </div>
+                      </div>
+
+                      {popupParticella.ruolo_summary ? (
+                        <div className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50/60 p-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <div>
+                              <div className="text-[10px] font-semibold uppercase tracking-widest text-emerald-700">Ruolo</div>
+                              <div className="mt-1 text-xs font-semibold text-emerald-900">
+                                {popupParticella.ruolo_summary.n_righe} quote · {popupParticella.ruolo_summary.n_subalterni} sub · anno {popupParticella.ruolo_summary.anno_tributario_latest}
+                              </div>
+                            </div>
+                            <div className="text-right text-[11px] text-emerald-900">
+                              <div>{formatHectares(popupParticella.ruolo_summary.sup_irrigata_ha_totale)} irrigati</div>
+                              <div>{formatEuro(popupParticella.ruolo_summary.importo_totale_euro)}</div>
+                            </div>
+                          </div>
+                          <div className="mt-3 max-h-44 space-y-2 overflow-y-auto pr-1">
+                            {popupParticella.ruolo_summary.items.map((item, index) => (
+                              <div key={`${item.anno_tributario}-${item.subalterno ?? "sub"}-${item.codice_partita ?? index}`} className="rounded-xl border border-emerald-100 bg-white/90 px-3 py-2 text-xs">
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="font-semibold text-slate-800">
+                                    {item.subalterno ? `Sub ${item.subalterno}` : "Sub ND"}
+                                    {item.coltura ? ` · ${item.coltura}` : ""}
+                                  </div>
+                                  <div className="text-[11px] font-medium text-slate-500">Anno {item.anno_tributario}</div>
+                                </div>
+                                <div className="mt-1 text-[11px] text-slate-500">
+                                  {item.domanda_irrigua ? `Domanda ${item.domanda_irrigua}` : "Domanda ND"}
+                                  {item.codice_partita ? ` · Partita ${item.codice_partita}` : ""}
+                                </div>
+                                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-700">
+                                  <span>Irrigata: {formatHectares(item.sup_irrigata_ha)}</span>
+                                  <span>Catastale: {formatHectares(item.sup_catastale_ha)}</span>
+                                  <span>Importo: {formatEuro(item.importo_totale_euro)}</span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setPopupDetailOpen(true)}
+                          className="inline-flex items-center justify-center rounded-xl bg-slate-950 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-800"
+                        >
+                          Apri dettaglio particella
+                        </button>
+                        <a
+                          href={`/catasto/particelle/${popupParticella.id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center justify-center rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition hover:bg-slate-50"
+                        >
+                          Apri in pagina
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
               </div>
               {isExpanded ? (
                 <aside className="pointer-events-auto hidden w-[340px] shrink-0 overflow-y-auto rounded-2xl border border-gray-200 bg-white/95 p-4 text-gray-900 shadow-2xl ring-1 ring-black/5 lg:block backdrop-blur">
@@ -805,11 +1173,11 @@ export default function CatastoGisPage() {
                             onClick={() => setShowDistretti((v) => !v)}
                             className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all ${
                               showDistretti
-                                ? "border-blue-200 bg-blue-50 text-blue-700"
+                                ? "border-emerald-200 bg-emerald-50 text-emerald-700"
                                 : "border-gray-200 bg-white text-gray-400 hover:border-gray-300 hover:text-gray-600"
                             }`}
                           >
-                            <span className={`h-1.5 w-1.5 rounded-full transition-colors ${showDistretti ? "bg-blue-400" : "bg-gray-300"}`} />
+                            <span className={`h-1.5 w-1.5 rounded-full transition-colors ${showDistretti ? "bg-emerald-500" : "bg-gray-300"}`} />
                             Distretti
                           </button>
                           <div className="pointer-events-none absolute left-0 top-full z-10 mt-2 w-52 translate-y-1 rounded-2xl border border-blue-100 bg-white/95 p-3 opacity-0 shadow-xl ring-1 ring-black/5 backdrop-blur transition-all duration-150 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100">
@@ -826,8 +1194,8 @@ export default function CatastoGisPage() {
                               Riempimento
                             </button>
                             <div className="flex items-center justify-between text-[11px]">
-                              <span className="font-medium text-blue-900/75">Opacità bordo + fill</span>
-                              <span className="rounded-full bg-blue-50 px-2 py-0.5 font-semibold text-blue-700">
+                              <span className="font-medium text-emerald-900/75">Opacità bordo + fill</span>
+                              <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700">
                                 {Math.round(distrettiOpacity * 100)}%
                               </span>
                             </div>
@@ -838,7 +1206,7 @@ export default function CatastoGisPage() {
                               step="0.05"
                               value={distrettiOpacity}
                               onChange={(e) => setDistrettiOpacity(Number(e.target.value))}
-                              className="mt-2 w-full accent-blue-600"
+                              className="mt-2 w-full accent-emerald-600"
                             />
                           </div>
                         </div>
@@ -899,6 +1267,7 @@ export default function CatastoGisPage() {
                         </button>
                       </div>
                     </div>
+                    {renderDistrettiPanel(false)}
                     <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
                       {renderArchivioList(false)}
                     </div>
@@ -912,10 +1281,21 @@ export default function CatastoGisPage() {
           </div>
 
           {!isExpanded ? (
-            <aside className="flex h-full min-h-0 flex-col overflow-hidden border-t border-gray-100 bg-white lg:border-l lg:border-t-0">
+            <aside className="z-10 flex h-full min-h-0 flex-col overflow-hidden border-t border-slate-200 bg-white/95 shadow-[-18px_0_50px_rgba(15,23,42,0.18)] backdrop-blur lg:border-l lg:border-t-0">
 
               {/* ── Controls ── */}
-              <div className="shrink-0 border-b border-gray-100 px-4 py-4">
+              <div className="shrink-0 border-b border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8faf7_100%)] px-4 py-4">
+                <div className="mb-4 flex items-start justify-between gap-3">
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-emerald-700">Console GIS</p>
+                    <h3 className="mt-1 text-base font-semibold text-slate-950">Layer e strumenti</h3>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">Pannello operativo persistente, ispirato ai GIS web: layer, import, archivio e risultati restano sempre a destra.</p>
+                  </div>
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700">
+                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                    Online
+                  </span>
+                </div>
 
                 {/* Layer toggles */}
                 <div className="flex flex-col gap-4">
@@ -927,11 +1307,11 @@ export default function CatastoGisPage() {
                         onClick={() => setShowDistretti((v) => !v)}
                         className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all ${
                           showDistretti
-                            ? "border-blue-200 bg-blue-50 text-blue-700"
+                            ? "border-emerald-200 bg-emerald-50 text-emerald-700"
                             : "border-gray-200 bg-white text-gray-400 hover:border-gray-300 hover:text-gray-600"
                         }`}
                       >
-                        <span className={`h-1.5 w-1.5 rounded-full transition-colors ${showDistretti ? "bg-blue-400" : "bg-gray-300"}`} />
+                        <span className={`h-1.5 w-1.5 rounded-full transition-colors ${showDistretti ? "bg-emerald-500" : "bg-gray-300"}`} />
                         Distretti
                       </button>
                       <div className="pointer-events-none absolute left-0 top-full z-10 mt-2 w-52 translate-y-1 rounded-2xl border border-blue-100 bg-white/95 p-3 opacity-0 shadow-xl ring-1 ring-black/5 backdrop-blur transition-all duration-150 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100">
@@ -948,8 +1328,8 @@ export default function CatastoGisPage() {
                           Riempimento
                         </button>
                         <div className="flex items-center justify-between text-[11px]">
-                          <span className="font-medium text-blue-900/75">Opacità bordo + fill</span>
-                          <span className="rounded-full bg-blue-50 px-2 py-0.5 font-semibold text-blue-700">
+                          <span className="font-medium text-emerald-900/75">Opacità bordo + fill</span>
+                          <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700">
                             {Math.round(distrettiOpacity * 100)}%
                           </span>
                         </div>
@@ -960,7 +1340,7 @@ export default function CatastoGisPage() {
                           step="0.05"
                           value={distrettiOpacity}
                           onChange={(e) => setDistrettiOpacity(Number(e.target.value))}
-                          className="mt-2 w-full accent-blue-600"
+                          className="mt-2 w-full accent-emerald-600"
                         />
                       </div>
                     </div>
@@ -1022,30 +1402,7 @@ export default function CatastoGisPage() {
                   </div>
                 </div>
 
-                {/* Distretto filter */}
-                <div>
-                  <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-widest text-gray-400">Filtro distretto</p>
-                  <div className="flex items-center gap-2">
-                    <input
-                      value={distrettoLayer}
-                      onChange={(e) => setDistrettoLayer(e.target.value)}
-                      placeholder="es. 03"
-                      className="w-24 rounded-lg border border-gray-200 bg-gray-50 px-3 py-1.5 text-sm text-gray-900 placeholder-gray-400 transition focus:border-indigo-300 focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                    />
-                    {distrettoLayer ? (
-                      <button
-                        type="button"
-                        onClick={() => setDistrettoLayer("")}
-                        className="flex h-7 w-7 items-center justify-center rounded-full text-gray-400 transition hover:bg-gray-100 hover:text-gray-600"
-                        title="Rimuovi filtro"
-                      >
-                        <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                        </svg>
-                      </button>
-                    ) : null}
-                  </div>
-                </div>
+                {renderDistrettiPanel(false)}
 
                 {/* Excel import */}
                 <div className="rounded-2xl border border-emerald-100 bg-emerald-50/30 p-2.5">
@@ -1260,6 +1617,7 @@ export default function CatastoGisPage() {
           ) : null}
         </div>
       </div>
+      <ParticellaDetailDialog open={popupDetailOpen} match={popupMatch} onClose={() => setPopupDetailOpen(false)} />
     </CatastoPage>
   );
 }

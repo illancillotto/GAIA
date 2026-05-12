@@ -98,9 +98,11 @@ Legend: 🔴 Non iniziato · 🟡 In corso · 🟢 Completato · ⚫ Bloccato
 | 2.4 | View particelle correnti per Martin | 🟢 | `backend/alembic/versions/20260427_0066_catasto_gis_view.py` | `cat_particelle_current` con `geometry` e `ha_anomalie` |
 | 2.5 | Endpoint GIS backend | 🟢 | `backend/app/modules/catasto/routes/gis.py` + `services/gis_service.py` | Select spaziale, export CSV/GeoJSON, popup particella, resolve riferimenti Excel e CRUD selezioni salvate |
 | 2.6 | Dipendenze MapLibre/Draw | 🟢 | `frontend/package.json` | `maplibre-gl` già presente; aggiunto `maplibre-gl-draw` |
-| 2.7 | Pagina GIS `/catasto/gis` | 🟢 | `frontend/src/app/catasto/gis/page.tsx` | Layout GIS + pannello analisi; import Excel con riepilogo, colore layer, salvataggio/caricamento selezioni e mappa più alta |
+| 2.7 | Pagina GIS `/catasto/gis` | 🟢 | `frontend/src/app/catasto/gis/page.tsx` | Console GIS a mappa piena con toolbar flottante, sidebar destra persistente, import Excel con riepilogo, colore layer, salvataggio/caricamento selezioni e pannelli analisi/selezione |
 | 2.8 | Layer distretti e particelle MVT | 🟢 | `frontend/src/components/catasto/gis/MapContainer.tsx` | Distretti zoom 7+, particelle correnti zoom 13+ |
-| 2.9 | Popup particella con link scheda | 🟢 | `frontend/src/components/catasto/gis/MapContainer.tsx` | Fetch dati leggeri da `/catasto/gis/particella/{id}/popup` |
+| 2.8.1 | Confini distretti dissolti | 🟢 | `backend/alembic/versions/20260511_0073_catasto_distretti_boundaries_view.py` + `config/martin.toml` | Vista MVT `cat_distretti_boundaries` per disegnare solo il perimetro distretto senza reticolo particellare interno |
+| 2.8.2 | Pannello distretti GIS | 🟢 | `frontend/src/app/catasto/gis/page.tsx` | Accordion sidebar con elenco distretti, palette colore coerente con la mappa, selezione/centratura e toggle particelle del distretto |
+| 2.9 | Scheda particella GIS con ruolo aggregato | 🟢 | `frontend/src/components/catasto/gis/MapContainer.tsx` + `frontend/src/app/catasto/gis/page.tsx` + `backend/app/modules/catasto/services/gis_service.py` | Click mappa -> fetch `/catasto/gis/particella/{id}/popup`, card React con dati base, anomalie, aggregazione `ruolo_particelle` per `catasto_parcel_id` e apertura `ParticellaDetailDialog` |
 | 2.10 | Overlay import Excel persistente | 🟢 | `frontend/src/components/catasto/gis/MapContainer.tsx` + `frontend/src/lib/api/catasto.ts` | GeoJSON caricato sulla mappa quando la source è pronta; colore configurabile da pannello; **opacità layer** (`opacity` su overlay, slider in `frontend/src/app/catasto/gis/page.tsx`) moltiplica l’opacità interpolata sullo zoom nei paint fill/circle (`__overlayOpacity` nelle proprietà feature) |
 
 ---

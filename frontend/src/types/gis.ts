@@ -67,6 +67,30 @@ export interface ParticellaPopupData {
   num_distretto?: string | null;
   nome_distretto?: string | null;
   n_anomalie_aperte: number;
+  ha_ruolo: boolean;
+  ruolo_summary?: ParticellaPopupRuoloSummary | null;
+}
+
+export interface ParticellaPopupRuoloItem {
+  anno_tributario: number;
+  domanda_irrigua?: string | null;
+  subalterno?: string | null;
+  coltura?: string | null;
+  sup_catastale_ha?: number | null;
+  sup_irrigata_ha?: number | null;
+  importo_totale_euro?: number | null;
+  codice_partita?: string | null;
+  codice_cnc?: string | null;
+}
+
+export interface ParticellaPopupRuoloSummary {
+  anno_tributario_latest: number;
+  n_righe: number;
+  n_subalterni: number;
+  sup_catastale_ha_totale?: number | null;
+  sup_irrigata_ha_totale?: number | null;
+  importo_totale_euro?: number | null;
+  items: ParticellaPopupRuoloItem[];
 }
 
 export interface GisParticellaRef {

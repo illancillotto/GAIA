@@ -27,6 +27,25 @@ postgres:
         nome_distretto: text
         attivo: bool
 
+    cat_distretti_boundaries:
+      schema: public
+      table: cat_distretti_boundaries
+      layer_id: cat_distretti_boundaries
+      srid: 4326
+      geometry_column: geometry
+      id_column: ~
+      minzoom: 7
+      maxzoom: 16
+      extent: 4096
+      buffer: 64
+      clip_geom: true
+      geometry_type: MULTILINESTRING
+      properties:
+        id: uuid
+        num_distretto: text
+        nome_distretto: text
+        attivo: bool
+
     cat_particelle_current:
       schema: public
       table: cat_particelle_current
@@ -53,3 +72,4 @@ postgres:
         superficie_mq: numeric
         superficie_grafica_mq: numeric
         ha_anomalie: bool
+        ha_ruolo: bool

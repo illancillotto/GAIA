@@ -1670,6 +1670,84 @@ def test_particelle_endpoint_supports_solo_a_ruolo_filter() -> None:
     assert non_matching_response.json() == []
 
 
+def test_gis_popup_returns_ruolo_summary_with_multiple_quote() -> None:
+    db = TestingSessionLocal()
+    try:
+        particella = db.query(CatParticella).filter(CatParticella.cod_comune_capacitas == 165).one()
+        ruolo_job = RuoloImportJob(anno_tributario=2025, status="completed")
+        db.add(ruolo_job)
+        db.flush()
+        avviso = RuoloAvviso(
+            import_job_id=ruolo_job.id,
+            codice_cnc="CNC-GIS-001",
+            anno_tributario=2025,
+        )
+        db.add(avviso)
+        db.flush()
+        partita = RuoloPartita(
+            avviso_id=avviso.id,
+            codice_partita="P-GIS-001",
+            comune_nome="Arborea",
+        )
+        db.add(partita)
+        db.flush()
+        db.add_all(
+            [
+                RuoloParticella(
+                    partita_id=partita.id,
+                    anno_tributario=2025,
+                    domanda_irrigua="D-01",
+                    foglio=particella.foglio,
+                    particella=particella.particella,
+                    subalterno="1",
+                    sup_catastale_ha=Decimal("0.7500"),
+                    sup_irrigata_ha=Decimal("0.5000"),
+                    coltura="Mais",
+                    importo_manut=Decimal("10.00"),
+                    importo_irrig=Decimal("20.00"),
+                    importo_ist=Decimal("5.00"),
+                    catasto_parcel_id=particella.id,
+                ),
+                RuoloParticella(
+                    partita_id=partita.id,
+                    anno_tributario=2025,
+                    domanda_irrigua="D-01",
+                    foglio=particella.foglio,
+                    particella=particella.particella,
+                    subalterno="2",
+                    sup_catastale_ha=Decimal("0.2500"),
+                    sup_irrigata_ha=Decimal("0.1500"),
+                    coltura="Orzo",
+                    importo_manut=Decimal("4.00"),
+                    importo_irrig=Decimal("6.00"),
+                    importo_ist=Decimal("2.00"),
+                    catasto_parcel_id=particella.id,
+                ),
+            ]
+        )
+        db.commit()
+        particella_id = str(particella.id)
+    finally:
+        db.close()
+
+    response = client.get(
+        f"/catasto/gis/particella/{particella_id}/popup",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["id"] == particella_id
+    assert payload["ha_ruolo"] is True
+    assert payload["ruolo_summary"]["anno_tributario_latest"] == 2025
+    assert payload["ruolo_summary"]["n_righe"] == 2
+    assert payload["ruolo_summary"]["n_subalterni"] == 2
+    assert payload["ruolo_summary"]["sup_catastale_ha_totale"] == 1.0
+    assert payload["ruolo_summary"]["sup_irrigata_ha_totale"] == 0.65
+    assert payload["ruolo_summary"]["importo_totale_euro"] == 47.0
+    assert [item["subalterno"] for item in payload["ruolo_summary"]["items"]] == ["1", "2"]
+
+
 def test_particelle_endpoint_supports_solo_con_anagrafica_filter() -> None:
     db = TestingSessionLocal()
     try:

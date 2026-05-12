@@ -75,6 +75,28 @@ class GisExportFormat(str, Enum):
     csv = "csv"
 
 
+class ParticellaPopupRuoloItem(BaseModel):
+    anno_tributario: int
+    domanda_irrigua: str | None = None
+    subalterno: str | None = None
+    coltura: str | None = None
+    sup_catastale_ha: float | None = None
+    sup_irrigata_ha: float | None = None
+    importo_totale_euro: float | None = None
+    codice_partita: str | None = None
+    codice_cnc: str | None = None
+
+
+class ParticellaPopupRuoloSummary(BaseModel):
+    anno_tributario_latest: int
+    n_righe: int
+    n_subalterni: int
+    sup_catastale_ha_totale: float | None = None
+    sup_irrigata_ha_totale: float | None = None
+    importo_totale_euro: float | None = None
+    items: list[ParticellaPopupRuoloItem] = Field(default_factory=list)
+
+
 class ParticellaPopupData(BaseModel):
     id: str
     cfm: str | None = None
@@ -90,6 +112,8 @@ class ParticellaPopupData(BaseModel):
     num_distretto: str | None = None
     nome_distretto: str | None = None
     n_anomalie_aperte: int = 0
+    ha_ruolo: bool = False
+    ruolo_summary: ParticellaPopupRuoloSummary | None = None
 
     model_config = ConfigDict(from_attributes=True)
 

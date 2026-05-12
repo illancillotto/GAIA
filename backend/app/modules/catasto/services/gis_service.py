@@ -4,12 +4,13 @@ import csv
 import io
 import json
 import uuid
+from decimal import Decimal
 from typing import Any
 
 from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
 from shapely.geometry import shape
-from sqlalchemy import func, text
+from sqlalchemy import desc, func, select, text
 from sqlalchemy.orm import Session
 
 from app.modules.catasto.schemas.gis_schemas import (
@@ -27,8 +28,11 @@ from app.modules.catasto.schemas.gis_schemas import (
     GisSelectResult,
     ParticellaGisSummary,
     ParticellaPopupData,
+    ParticellaPopupRuoloItem,
+    ParticellaPopupRuoloSummary,
 )
-from app.models.catasto_phase1 import CatComune, CatGisSavedSelection, CatGisSavedSelectionItem, CatParticella
+from app.models.catasto_phase1 import CatAnomalia, CatComune, CatGisSavedSelection, CatGisSavedSelectionItem, CatParticella
+from app.modules.ruolo.models import RuoloAvviso, RuoloParticella, RuoloPartita
 
 
 SARDINIA_BBOX = {
@@ -235,36 +239,123 @@ def export_particelle(db: Session, id_list: list[str], fmt: GisExportFormat) -> 
     return _export_csv(db, id_list)
 
 
-def get_popup_data(db: Session, particella_id: str) -> ParticellaPopupData:
-    sql = text(
-        """
-        SELECT
-            p.id::text,
-            p.cfm,
-            p.cod_comune_capacitas,
-            p.cod_comune_capacitas AS cod_comune_istat,
-            p.codice_catastale,
-            p.nome_comune,
-            p.foglio,
-            p.particella,
-            p.subalterno,
-            p.superficie_mq,
-            p.superficie_grafica_mq,
-            p.num_distretto,
-            p.nome_distretto,
-            COUNT(a.id) FILTER (WHERE a.status = 'aperta') AS n_anomalie_aperte
-        FROM cat_particelle p
-        LEFT JOIN cat_anomalie a ON a.particella_id = p.id
-        WHERE p.id::text = :particella_id
-          AND p.is_current = TRUE
-        GROUP BY p.id
-        """
+def _to_float(value: Decimal | float | int | None, digits: int | None = None) -> float | None:
+    if value is None:
+        return None
+    number = float(value)
+    return round(number, digits) if digits is not None else number
+
+
+def _load_particella_ruolo_summary(db: Session, particella_uuid: uuid.UUID) -> ParticellaPopupRuoloSummary | None:
+    rows = db.execute(
+        select(
+            RuoloParticella,
+            RuoloPartita.codice_partita,
+            RuoloAvviso.codice_cnc,
+        )
+        .join(RuoloPartita, RuoloPartita.id == RuoloParticella.partita_id)
+        .join(RuoloAvviso, RuoloAvviso.id == RuoloPartita.avviso_id)
+        .where(RuoloParticella.catasto_parcel_id == particella_uuid)
+        .order_by(
+            desc(RuoloParticella.anno_tributario),
+            RuoloParticella.subalterno,
+            RuoloParticella.coltura,
+            RuoloPartita.codice_partita,
+        )
+    ).all()
+    if not rows:
+        return None
+
+    items: list[ParticellaPopupRuoloItem] = []
+    subalterni: set[str] = set()
+    anno_latest = 0
+    total_sup_catastale = 0.0
+    total_sup_irrigata = 0.0
+    total_importo = 0.0
+    has_sup_catastale = False
+    has_sup_irrigata = False
+    has_importo = False
+
+    for ruolo_particella, codice_partita, codice_cnc in rows:
+        anno_latest = max(anno_latest, int(ruolo_particella.anno_tributario))
+        if ruolo_particella.subalterno:
+            subalterni.add(ruolo_particella.subalterno)
+
+        sup_catastale_ha = _to_float(ruolo_particella.sup_catastale_ha, 4)
+        sup_irrigata_ha = _to_float(ruolo_particella.sup_irrigata_ha, 4)
+        importo_totale = _to_float(
+            (ruolo_particella.importo_manut or 0)
+            + (ruolo_particella.importo_irrig or 0)
+            + (ruolo_particella.importo_ist or 0),
+            2,
+        )
+
+        if sup_catastale_ha is not None:
+            has_sup_catastale = True
+            total_sup_catastale += sup_catastale_ha
+        if sup_irrigata_ha is not None:
+            has_sup_irrigata = True
+            total_sup_irrigata += sup_irrigata_ha
+        if importo_totale is not None:
+            has_importo = True
+            total_importo += importo_totale
+
+        items.append(
+            ParticellaPopupRuoloItem(
+                anno_tributario=int(ruolo_particella.anno_tributario),
+                domanda_irrigua=ruolo_particella.domanda_irrigua,
+                subalterno=ruolo_particella.subalterno,
+                coltura=ruolo_particella.coltura,
+                sup_catastale_ha=sup_catastale_ha,
+                sup_irrigata_ha=sup_irrigata_ha,
+                importo_totale_euro=importo_totale,
+                codice_partita=codice_partita,
+                codice_cnc=codice_cnc,
+            )
+        )
+
+    return ParticellaPopupRuoloSummary(
+        anno_tributario_latest=anno_latest,
+        n_righe=len(items),
+        n_subalterni=len(subalterni),
+        sup_catastale_ha_totale=round(total_sup_catastale, 4) if has_sup_catastale else None,
+        sup_irrigata_ha_totale=round(total_sup_irrigata, 4) if has_sup_irrigata else None,
+        importo_totale_euro=round(total_importo, 2) if has_importo else None,
+        items=items,
     )
-    row = db.execute(sql, {"particella_id": particella_id}).mappings().first()
-    if row is None:
+
+
+def get_popup_data(db: Session, particella_id: str) -> ParticellaPopupData:
+    particella_uuid = _parse_uuid(particella_id, field_name="particella_id")
+    particella = db.get(CatParticella, particella_uuid)
+    if particella is None or not particella.is_current:
         raise HTTPException(status_code=404, detail="Particella non trovata")
 
-    return ParticellaPopupData(**dict(row))
+    n_anomalie_aperte = db.scalar(
+        select(func.count(CatAnomalia.id)).where(
+            CatAnomalia.particella_id == particella_uuid,
+            CatAnomalia.status == "aperta",
+        )
+    )
+    ruolo_summary = _load_particella_ruolo_summary(db, particella_uuid)
+    return ParticellaPopupData(
+        id=str(particella.id),
+        cfm=particella.cfm,
+        cod_comune_capacitas=particella.cod_comune_capacitas,
+        cod_comune_istat=particella.cod_comune_capacitas,
+        codice_catastale=particella.codice_catastale,
+        nome_comune=particella.nome_comune,
+        foglio=particella.foglio,
+        particella=particella.particella,
+        subalterno=particella.subalterno,
+        superficie_mq=float(particella.superficie_mq) if particella.superficie_mq is not None else None,
+        superficie_grafica_mq=float(particella.superficie_grafica_mq) if particella.superficie_grafica_mq is not None else None,
+        num_distretto=particella.num_distretto,
+        nome_distretto=particella.nome_distretto,
+        n_anomalie_aperte=int(n_anomalie_aperte or 0),
+        ha_ruolo=ruolo_summary is not None,
+        ruolo_summary=ruolo_summary,
+    )
 
 
 def list_saved_selections(db: Session, user_id: int) -> list[GisSavedSelectionSummary]:

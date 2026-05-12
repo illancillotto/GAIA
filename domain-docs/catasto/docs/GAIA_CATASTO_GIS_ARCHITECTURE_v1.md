@@ -357,20 +357,24 @@ frontend/src/app/catasto/gis/
 └── page.tsx
 ```
 
-Layout a 3 colonne:
-- **Colonna sinistra (240px)**: FilterBar + LayerControls
-- **Colonna centrale (flex)**: MapContainer
-- **Colonna destra (320px)**: SelectionPanel + AnalysisPanel (collassabile)
+Layout operativo:
+- **Canvas mappa full-height**: `MapContainer` occupa tutta l'altezza utile della pagina, senza card gestionale intermedia.
+- **Toolbar flottante**: brand/contesto GIS, azione `Vista estesa` e strumenti di disegno restano sovrapposti alla mappa.
+- **Sidebar destra persistente**: layer visibili, filtro distretto, import Excel, layer in mappa, archivio, analisi e selezione restano in un pannello laterale stile console GIS.
+- **Pannello distretti**: accordion `Distretti irrigui` alimentato da `/catasto/distretti`; la selezione applica il filtro `num_distretto`, centra la geometria via `/catasto/distretti/{id}/geojson` e usa la stessa palette colore del layer MVT.
+- **Vista estesa**: conserva la mappa come canvas principale e sposta i controlli operativi in una sidebar destra dedicata.
 
 ### 7.2 MapContainer.tsx
 
 Responsabilità:
 - Inizializza MapLibre GL JS con basemap OSM
 - Aggiunge sorgente MVT distretti (`/tiles/cat_distretti/{z}/{x}/{y}`)
+- Aggiunge sorgente MVT confini distretti (`/tiles/cat_distretti_boundaries/{z}/{x}/{y}`), derivata da una view PostGIS `MULTILINESTRING` dissolta
 - Aggiunge sorgente MVT particelle (`/tiles/cat_particelle_current/{z}/{x}/{y}`)
-- Gestisce click su particella → fetch `/catasto/gis/particella/{id}/popup` → mostra popup
+- Gestisce click su particella → fetch `/catasto/gis/particella/{id}/popup` → aggiorna una scheda React contestuale con CTA per `ParticellaDetailDialog`
 - Gestisce click su distretto → emette evento verso SelectionPanel
 - Riceve geometria disegnata da DrawingTools → chiama `POST /catasto/gis/select`
+- Evidenzia le particelle a ruolo direttamente nel fill MVT usando la property booleana `ha_ruolo` esposta dalla view `cat_particelle_current`
 - Stile layer: particelle colorate per `ha_anomalie` (rosso/grigio), distretto per status
 
 ```typescript

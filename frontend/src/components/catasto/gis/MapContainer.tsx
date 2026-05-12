@@ -11,6 +11,7 @@ interface MapContainerProps {
   token: string | null;
   onGeometryDrawn: (geometry: GeoJSON.Geometry) => void;
   onSelectionCleared: () => void;
+  onParticellaClick?: (particella: ParticellaPopupData | null) => void;
   selectedIds: string[];
   filters: GisFilters;
   mapLayers?: {
@@ -22,6 +23,7 @@ interface MapContainerProps {
     particelleOpacity?: number;
     distretto?: string | null;
     highlightSelected?: boolean;
+    distrettoColors?: Record<string, string>;
   };
   overlayLayers?: GisMapOverlayLayer[];
   focusGeojson?: GeoJSON.FeatureCollection | null;
@@ -149,6 +151,17 @@ function overlayLayerIds(layerKey: string) {
   };
 }
 
+function buildDistrettoColorExpression(colors: Record<string, string> | undefined): maplibregl.ExpressionSpecification | string {
+  const entries = Object.entries(colors ?? {});
+  if (entries.length === 0) return "#1D4E35";
+  const expression: unknown[] = ["match", ["get", "num_distretto"]];
+  for (const [num, color] of entries) {
+    expression.push(num, color);
+  }
+  expression.push("#1D4E35");
+  return expression as maplibregl.ExpressionSpecification;
+}
+
 function fitCollectionBounds(map: maplibregl.Map, collection: GeoJSON.FeatureCollection | null | undefined): void {
   if (!collection || collection.features.length === 0) return;
 
@@ -174,6 +187,7 @@ export default function MapContainer({
   token,
   onGeometryDrawn,
   onSelectionCleared,
+  onParticellaClick,
   selectedIds,
   filters,
   mapLayers,
@@ -189,15 +203,15 @@ export default function MapContainer({
   const mapRef = useRef<maplibregl.Map | null>(null);
   const drawRef = useRef<DrawControl | null>(null);
   const popupRef = useRef<maplibregl.Popup | null>(null);
-  const handlersRef = useRef({ onGeometryDrawn, onSelectionCleared, token });
+  const handlersRef = useRef({ onGeometryDrawn, onSelectionCleared, onParticellaClick, token });
   const [mapError, setMapError] = useState<string | null>(null);
   const [mapReadyVersion, setMapReadyVersion] = useState(0);
   const resizeRafRef = useRef<number | null>(null);
   const overlayMapKeysRef = useRef<Set<string>>(new Set());
 
   useEffect(() => {
-    handlersRef.current = { onGeometryDrawn, onSelectionCleared, token };
-  }, [onGeometryDrawn, onSelectionCleared, token]);
+    handlersRef.current = { onGeometryDrawn, onSelectionCleared, onParticellaClick, token };
+  }, [onGeometryDrawn, onParticellaClick, onSelectionCleared, token]);
 
   useEffect(() => {
     if (!mapContainerRef.current || mapRef.current) return;
@@ -267,6 +281,13 @@ export default function MapContainer({
         maxzoom: 16,
       });
 
+      map.addSource("distretti-boundaries-source", {
+        type: "vector",
+        tiles: [`${window.location.origin}/tiles/cat_distretti_boundaries/{z}/{x}/{y}`],
+        minzoom: 7,
+        maxzoom: 16,
+      });
+
       map.addLayer({
         id: "distretti-fill",
         type: "fill",
@@ -274,20 +295,30 @@ export default function MapContainer({
         "source-layer": "cat_distretti",
         minzoom: 7,
         paint: {
-          "fill-color": "#3B82F6",
-          "fill-opacity": 0.14,
+          "fill-color": "#1D4E35",
+          "fill-opacity": 0.12,
         },
       });
 
       map.addLayer({
         id: "distretti-outline",
         type: "line",
-        source: "distretti-source",
-        "source-layer": "cat_distretti",
+        source: "distretti-boundaries-source",
+        "source-layer": "cat_distretti_boundaries",
         minzoom: 7,
         paint: {
-          "line-color": "#1D4ED8",
-          "line-width": 1.5,
+          "line-color": "#1D4E35",
+          "line-width": [
+            "interpolate",
+            ["linear"],
+            ["zoom"],
+            7,
+            1.6,
+            11,
+            2,
+            15,
+            2.6,
+          ],
         },
       });
 
@@ -305,7 +336,14 @@ export default function MapContainer({
         "source-layer": "cat_particelle_current",
         minzoom: 13,
         paint: {
-          "fill-color": ["case", ["==", ["get", "ha_anomalie"], true], "#EF4444", "#6366F1"],
+          "fill-color": [
+            "case",
+            ["==", ["get", "ha_anomalie"], true],
+            "#EF4444",
+            ["==", ["get", "ha_ruolo"], true],
+            "#10B981",
+            "#6366F1",
+          ],
           "fill-opacity": 0.38,
         },
       });
@@ -347,15 +385,21 @@ export default function MapContainer({
         );
         const features = map.queryRenderedFeatures(event.point, { layers: clickableLayers });
         const id = features[0]?.properties?.id;
-        if (!id) return;
-
         popupRef.current?.remove();
+        if (!id) {
+          handlersRef.current.onParticellaClick?.(null);
+          return;
+        }
         try {
           const data = await catastoGisGetPopup(currentToken, String(id));
-          popupRef.current = new maplibregl.Popup({ maxWidth: "320px" })
-            .setLngLat(event.lngLat)
-            .setHTML(buildPopupHtml(data))
-            .addTo(map);
+          if (handlersRef.current.onParticellaClick) {
+            handlersRef.current.onParticellaClick(data);
+          } else {
+            popupRef.current = new maplibregl.Popup({ maxWidth: "320px" })
+              .setLngLat(event.lngLat)
+              .setHTML(buildPopupHtml(data))
+              .addTo(map);
+          }
         } catch {
           // Popup failures are non-blocking for the map interaction.
         }
@@ -450,13 +494,16 @@ export default function MapContainer({
     const showParticelleFill = mapLayers?.showParticelleFill ?? true;
     const distrettiOpacity = mapLayers?.distrettiOpacity ?? 0.3;
     const particelleOpacity = mapLayers?.particelleOpacity ?? 0.42;
+    const distrettoColor = buildDistrettoColorExpression(mapLayers?.distrettoColors);
 
     if (map.getLayer("distretti-fill")) {
       map.setLayoutProperty("distretti-fill", "visibility", showDistretti && showDistrettiFill ? "visible" : "none");
+      map.setPaintProperty("distretti-fill", "fill-color", distrettoColor);
       map.setPaintProperty("distretti-fill", "fill-opacity", distrettiOpacity);
     }
     if (map.getLayer("distretti-outline")) {
       map.setLayoutProperty("distretti-outline", "visibility", showDistretti ? "visible" : "none");
+      map.setPaintProperty("distretti-outline", "line-color", distrettoColor);
       map.setPaintProperty("distretti-outline", "line-opacity", Math.min(1, distrettiOpacity + 0.15));
     }
     if (map.getLayer("particelle-fill")) {
