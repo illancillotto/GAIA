@@ -82,6 +82,9 @@ class ParticellaPopupRuoloItem(BaseModel):
     coltura: str | None = None
     sup_catastale_ha: float | None = None
     sup_irrigata_ha: float | None = None
+    importo_manut_euro: float | None = None
+    importo_irrig_euro: float | None = None
+    importo_ist_euro: float | None = None
     importo_totale_euro: float | None = None
     codice_partita: str | None = None
     codice_cnc: str | None = None
@@ -89,10 +92,14 @@ class ParticellaPopupRuoloItem(BaseModel):
 
 class ParticellaPopupRuoloSummary(BaseModel):
     anno_tributario_latest: int
+    anno_tributario_richiesto: int | None = None
     n_righe: int
     n_subalterni: int
     sup_catastale_ha_totale: float | None = None
     sup_irrigata_ha_totale: float | None = None
+    importo_manut_euro_totale: float | None = None
+    importo_irrig_euro_totale: float | None = None
+    importo_ist_euro_totale: float | None = None
     importo_totale_euro: float | None = None
     items: list[ParticellaPopupRuoloItem] = Field(default_factory=list)
 

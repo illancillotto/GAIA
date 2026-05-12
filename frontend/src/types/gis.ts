@@ -87,6 +87,9 @@ export interface ParticellaPopupRuoloItem {
   coltura?: string | null;
   sup_catastale_ha?: number | null;
   sup_irrigata_ha?: number | null;
+  importo_manut_euro?: number | null;
+  importo_irrig_euro?: number | null;
+  importo_ist_euro?: number | null;
   importo_totale_euro?: number | null;
   codice_partita?: string | null;
   codice_cnc?: string | null;
@@ -94,10 +97,14 @@ export interface ParticellaPopupRuoloItem {
 
 export interface ParticellaPopupRuoloSummary {
   anno_tributario_latest: number;
+  anno_tributario_richiesto?: number | null;
   n_righe: number;
   n_subalterni: number;
   sup_catastale_ha_totale?: number | null;
   sup_irrigata_ha_totale?: number | null;
+  importo_manut_euro_totale?: number | null;
+  importo_irrig_euro_totale?: number | null;
+  importo_ist_euro_totale?: number | null;
   importo_totale_euro?: number | null;
   items: ParticellaPopupRuoloItem[];
 }

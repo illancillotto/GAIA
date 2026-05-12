@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_active_user
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
+from app.models.catasto import CatastoParcel
 from app.models.catasto_phase1 import (
     CatAnomalia,
     CatCapacitasCertificato,
@@ -129,9 +130,17 @@ def _resolve_subject_preview_by_identifier_map(
 def _with_ruolo_year_filter(query, anno_tributario: int):
     return query.where(
         exists(
-            select(RuoloParticella.id).where(
-                RuoloParticella.catasto_parcel_id == CatParticella.id,
+            select(RuoloParticella.id)
+            .join(CatastoParcel, CatastoParcel.id == RuoloParticella.catasto_parcel_id)
+            .where(
                 RuoloParticella.anno_tributario == anno_tributario,
+                CatastoParcel.comune_codice == CatParticella.codice_catastale,
+                CatastoParcel.foglio == CatParticella.foglio,
+                CatastoParcel.particella == CatParticella.particella,
+                or_(
+                    func.coalesce(CatParticella.subalterno, "") == "",
+                    func.coalesce(CatastoParcel.subalterno, "") == CatParticella.subalterno,
+                ),
             )
         )
     )

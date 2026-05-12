@@ -374,7 +374,7 @@ Responsabilità:
 - Gestisce click su particella → fetch `/catasto/gis/particella/{id}/popup` → aggiorna una scheda React contestuale con CTA per `ParticellaDetailDialog`
 - Gestisce click su distretto → emette evento verso SelectionPanel
 - Riceve geometria disegnata da DrawingTools → chiama `POST /catasto/gis/select`
-- Evidenzia le particelle a ruolo direttamente nel fill MVT usando la property booleana `ha_ruolo` esposta dalla view `cat_particelle_current`
+- Evidenzia le particelle a ruolo direttamente nel fill MVT usando la property booleana `ha_ruolo` esposta dalla view `cat_particelle_current`; la property viene calcolata via `catasto_parcels` su codice catastale comune/foglio/particella/subalterno, non tramite UUID diretto tra `ruolo_particelle` e `cat_particelle`
 - Stile layer: particelle colorate per `ha_anomalie` (rosso/grigio), distretto per status
 
 ```typescript

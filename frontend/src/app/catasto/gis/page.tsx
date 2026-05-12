@@ -1101,10 +1101,30 @@ export default function CatastoGisPage() {
                               <div className="mt-1 text-xs font-semibold text-emerald-900">
                                 {popupParticella.ruolo_summary.n_righe} quote · {popupParticella.ruolo_summary.n_subalterni} sub · anno {popupParticella.ruolo_summary.anno_tributario_latest}
                               </div>
+                              {popupParticella.ruolo_summary.anno_tributario_richiesto &&
+                              popupParticella.ruolo_summary.anno_tributario_richiesto !== popupParticella.ruolo_summary.anno_tributario_latest ? (
+                                <div className="mt-0.5 text-[11px] font-medium text-emerald-700">
+                                  Ultimo ruolo disponibile per l&apos;anno richiesto {popupParticella.ruolo_summary.anno_tributario_richiesto}
+                                </div>
+                              ) : null}
                             </div>
                             <div className="text-right text-[11px] text-emerald-900">
                               <div>{formatHectares(popupParticella.ruolo_summary.sup_irrigata_ha_totale)} irrigati</div>
                               <div>{formatEuro(popupParticella.ruolo_summary.importo_totale_euro)}</div>
+                            </div>
+                          </div>
+                          <div className="mt-3 grid grid-cols-3 gap-1.5 text-[11px] text-emerald-950">
+                            <div className="rounded-lg bg-white/75 px-2 py-1.5">
+                              <div className="text-[9px] font-semibold uppercase tracking-widest text-emerald-600">Manut.</div>
+                              <div className="mt-0.5 font-semibold">{formatEuro(popupParticella.ruolo_summary.importo_manut_euro_totale)}</div>
+                            </div>
+                            <div className="rounded-lg bg-white/75 px-2 py-1.5">
+                              <div className="text-[9px] font-semibold uppercase tracking-widest text-emerald-600">Irrig.</div>
+                              <div className="mt-0.5 font-semibold">{formatEuro(popupParticella.ruolo_summary.importo_irrig_euro_totale)}</div>
+                            </div>
+                            <div className="rounded-lg bg-white/75 px-2 py-1.5">
+                              <div className="text-[9px] font-semibold uppercase tracking-widest text-emerald-600">Istr.</div>
+                              <div className="mt-0.5 font-semibold">{formatEuro(popupParticella.ruolo_summary.importo_ist_euro_totale)}</div>
                             </div>
                           </div>
                           <div className="mt-3 max-h-44 space-y-2 overflow-y-auto pr-1">
@@ -1124,7 +1144,10 @@ export default function CatastoGisPage() {
                                 <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-700">
                                   <span>Irrigata: {formatHectares(item.sup_irrigata_ha)}</span>
                                   <span>Catastale: {formatHectares(item.sup_catastale_ha)}</span>
-                                  <span>Importo: {formatEuro(item.importo_totale_euro)}</span>
+                                  <span>Manut.: {formatEuro(item.importo_manut_euro)}</span>
+                                  <span>Irrig.: {formatEuro(item.importo_irrig_euro)}</span>
+                                  <span>Istr.: {formatEuro(item.importo_ist_euro)}</span>
+                                  <span>Totale: {formatEuro(item.importo_totale_euro)}</span>
                                 </div>
                               </div>
                             ))}

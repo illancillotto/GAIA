@@ -5,13 +5,14 @@ import io
 import json
 import re
 import uuid
+from datetime import datetime
 from decimal import Decimal
 from typing import Any
 
 from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
 from shapely.geometry import shape
-from sqlalchemy import desc, func, select, text
+from sqlalchemy import and_, desc, func, select, text
 from sqlalchemy.orm import Session
 
 from app.modules.catasto.schemas.gis_schemas import (
@@ -42,6 +43,7 @@ from app.models.catasto_phase1 import (
     CatUtenzaIntestatario,
     CatUtenzaIrrigua,
 )
+from app.models.catasto import CatastoParcel
 from app.modules.ruolo.models import RuoloAvviso, RuoloParticella, RuoloPartita
 
 
@@ -319,16 +321,39 @@ def _load_popup_titolare(db: Session, particella_uuid: uuid.UUID) -> ParticellaP
     return None
 
 
-def _load_particella_ruolo_summary(db: Session, particella_uuid: uuid.UUID) -> ParticellaPopupRuoloSummary | None:
+def _ruolo_parcel_match_condition(particella: CatParticella):
+    subalterno = _norm_str(particella.subalterno)
+    conditions = [
+        CatastoParcel.comune_codice == particella.codice_catastale,
+        CatastoParcel.foglio == particella.foglio,
+        CatastoParcel.particella == particella.particella,
+    ]
+    if subalterno:
+        conditions.append(func.coalesce(CatastoParcel.subalterno, "") == subalterno)
+    return and_(*conditions)
+
+
+def _load_particella_ruolo_summary(db: Session, particella: CatParticella) -> ParticellaPopupRuoloSummary | None:
+    requested_year = datetime.now().year
+    match_condition = _ruolo_parcel_match_condition(particella)
+    selected_year = db.scalar(
+        select(func.max(RuoloParticella.anno_tributario))
+        .join(CatastoParcel, CatastoParcel.id == RuoloParticella.catasto_parcel_id)
+        .where(match_condition, RuoloParticella.anno_tributario <= requested_year)
+    )
+    if selected_year is None:
+        return None
+
     rows = db.execute(
         select(
             RuoloParticella,
             RuoloPartita.codice_partita,
             RuoloAvviso.codice_cnc,
         )
+        .join(CatastoParcel, CatastoParcel.id == RuoloParticella.catasto_parcel_id)
         .join(RuoloPartita, RuoloPartita.id == RuoloParticella.partita_id)
         .join(RuoloAvviso, RuoloAvviso.id == RuoloPartita.avviso_id)
-        .where(RuoloParticella.catasto_parcel_id == particella_uuid)
+        .where(match_condition, RuoloParticella.anno_tributario == selected_year)
         .order_by(
             desc(RuoloParticella.anno_tributario),
             RuoloParticella.subalterno,
@@ -344,9 +369,15 @@ def _load_particella_ruolo_summary(db: Session, particella_uuid: uuid.UUID) -> P
     anno_latest = 0
     total_sup_catastale = 0.0
     total_sup_irrigata = 0.0
+    total_importo_manut = 0.0
+    total_importo_irrig = 0.0
+    total_importo_ist = 0.0
     total_importo = 0.0
     has_sup_catastale = False
     has_sup_irrigata = False
+    has_importo_manut = False
+    has_importo_irrig = False
+    has_importo_ist = False
     has_importo = False
 
     for ruolo_particella, codice_partita, codice_cnc in rows:
@@ -356,12 +387,13 @@ def _load_particella_ruolo_summary(db: Session, particella_uuid: uuid.UUID) -> P
 
         sup_catastale_ha = _to_float(ruolo_particella.sup_catastale_ha, 4)
         sup_irrigata_ha = _to_float(ruolo_particella.sup_irrigata_ha, 4)
-        importo_totale = _to_float(
-            (ruolo_particella.importo_manut or 0)
-            + (ruolo_particella.importo_irrig or 0)
-            + (ruolo_particella.importo_ist or 0),
-            2,
-        )
+        importo_manut = _to_float(ruolo_particella.importo_manut, 2)
+        importo_irrig = _to_float(ruolo_particella.importo_irrig, 2)
+        importo_ist = _to_float(ruolo_particella.importo_ist, 2)
+        importo_totale_raw = None
+        if importo_manut is not None or importo_irrig is not None or importo_ist is not None:
+            importo_totale_raw = (importo_manut or 0) + (importo_irrig or 0) + (importo_ist or 0)
+        importo_totale = _to_float(importo_totale_raw, 2)
 
         if sup_catastale_ha is not None:
             has_sup_catastale = True
@@ -369,6 +401,15 @@ def _load_particella_ruolo_summary(db: Session, particella_uuid: uuid.UUID) -> P
         if sup_irrigata_ha is not None:
             has_sup_irrigata = True
             total_sup_irrigata += sup_irrigata_ha
+        if importo_manut is not None:
+            has_importo_manut = True
+            total_importo_manut += importo_manut
+        if importo_irrig is not None:
+            has_importo_irrig = True
+            total_importo_irrig += importo_irrig
+        if importo_ist is not None:
+            has_importo_ist = True
+            total_importo_ist += importo_ist
         if importo_totale is not None:
             has_importo = True
             total_importo += importo_totale
@@ -381,6 +422,9 @@ def _load_particella_ruolo_summary(db: Session, particella_uuid: uuid.UUID) -> P
                 coltura=ruolo_particella.coltura,
                 sup_catastale_ha=sup_catastale_ha,
                 sup_irrigata_ha=sup_irrigata_ha,
+                importo_manut_euro=importo_manut,
+                importo_irrig_euro=importo_irrig,
+                importo_ist_euro=importo_ist,
                 importo_totale_euro=importo_totale,
                 codice_partita=codice_partita,
                 codice_cnc=codice_cnc,
@@ -389,10 +433,14 @@ def _load_particella_ruolo_summary(db: Session, particella_uuid: uuid.UUID) -> P
 
     return ParticellaPopupRuoloSummary(
         anno_tributario_latest=anno_latest,
+        anno_tributario_richiesto=requested_year,
         n_righe=len(items),
         n_subalterni=len(subalterni),
         sup_catastale_ha_totale=round(total_sup_catastale, 4) if has_sup_catastale else None,
         sup_irrigata_ha_totale=round(total_sup_irrigata, 4) if has_sup_irrigata else None,
+        importo_manut_euro_totale=round(total_importo_manut, 2) if has_importo_manut else None,
+        importo_irrig_euro_totale=round(total_importo_irrig, 2) if has_importo_irrig else None,
+        importo_ist_euro_totale=round(total_importo_ist, 2) if has_importo_ist else None,
         importo_totale_euro=round(total_importo, 2) if has_importo else None,
         items=items,
     )
@@ -410,7 +458,7 @@ def get_popup_data(db: Session, particella_id: str) -> ParticellaPopupData:
             CatAnomalia.status == "aperta",
         )
     )
-    ruolo_summary = _load_particella_ruolo_summary(db, particella_uuid)
+    ruolo_summary = _load_particella_ruolo_summary(db, particella)
     titolare = _load_popup_titolare(db, particella_uuid)
     return ParticellaPopupData(
         id=str(particella.id),

@@ -36,6 +36,7 @@ from app.models.catasto_phase1 import (
     CatUtenzaIntestatario,
     CatUtenzaIrrigua,
 )
+from app.models.catasto import CatastoParcel
 from app.modules.utenze.models import AnagraficaCompany, AnagraficaPerson, AnagraficaPersonSnapshot, AnagraficaSubject
 from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob, RuoloParticella, RuoloPartita
 from app.modules.catasto.routes import import_routes as import_routes_module
@@ -1620,6 +1621,7 @@ def test_particelle_endpoint_supports_solo_a_ruolo_filter() -> None:
     db = TestingSessionLocal()
     try:
         particella = db.query(CatParticella).filter(CatParticella.cod_comune_capacitas == 165).one()
+        particella.subalterno = None
         ruolo_job = RuoloImportJob(anno_tributario=2025, status="completed")
         db.add(ruolo_job)
         db.flush()
@@ -1637,6 +1639,16 @@ def test_particelle_endpoint_supports_solo_a_ruolo_filter() -> None:
         )
         db.add(partita)
         db.flush()
+        catasto_parcel = CatastoParcel(
+            comune_codice=particella.codice_catastale,
+            comune_nome=particella.nome_comune or "Arborea",
+            foglio=particella.foglio,
+            particella=particella.particella,
+            subalterno=None,
+            valid_from=2025,
+        )
+        db.add(catasto_parcel)
+        db.flush()
         db.add(
             RuoloParticella(
                 partita_id=partita.id,
@@ -1644,7 +1656,7 @@ def test_particelle_endpoint_supports_solo_a_ruolo_filter() -> None:
                 foglio=particella.foglio,
                 particella=particella.particella,
                 subalterno=particella.subalterno,
-                catasto_parcel_id=particella.id,
+                catasto_parcel_id=catasto_parcel.id,
             )
         )
         db.commit()
@@ -1674,6 +1686,7 @@ def test_gis_popup_returns_ruolo_summary_with_multiple_quote() -> None:
     db = TestingSessionLocal()
     try:
         particella = db.query(CatParticella).filter(CatParticella.cod_comune_capacitas == 165).one()
+        particella.subalterno = None
         ruolo_job = RuoloImportJob(anno_tributario=2025, status="completed")
         db.add(ruolo_job)
         db.flush()
@@ -1691,6 +1704,24 @@ def test_gis_popup_returns_ruolo_summary_with_multiple_quote() -> None:
         )
         db.add(partita)
         db.flush()
+        parcel_sub_1 = CatastoParcel(
+            comune_codice=particella.codice_catastale,
+            comune_nome=particella.nome_comune or "Arborea",
+            foglio=particella.foglio,
+            particella=particella.particella,
+            subalterno="1",
+            valid_from=2025,
+        )
+        parcel_sub_2 = CatastoParcel(
+            comune_codice=particella.codice_catastale,
+            comune_nome=particella.nome_comune or "Arborea",
+            foglio=particella.foglio,
+            particella=particella.particella,
+            subalterno="2",
+            valid_from=2025,
+        )
+        db.add_all([parcel_sub_1, parcel_sub_2])
+        db.flush()
         db.add_all(
             [
                 RuoloParticella(
@@ -1706,7 +1737,7 @@ def test_gis_popup_returns_ruolo_summary_with_multiple_quote() -> None:
                     importo_manut=Decimal("10.00"),
                     importo_irrig=Decimal("20.00"),
                     importo_ist=Decimal("5.00"),
-                    catasto_parcel_id=particella.id,
+                    catasto_parcel_id=parcel_sub_1.id,
                 ),
                 RuoloParticella(
                     partita_id=partita.id,
@@ -1721,7 +1752,7 @@ def test_gis_popup_returns_ruolo_summary_with_multiple_quote() -> None:
                     importo_manut=Decimal("4.00"),
                     importo_irrig=Decimal("6.00"),
                     importo_ist=Decimal("2.00"),
-                    catasto_parcel_id=particella.id,
+                    catasto_parcel_id=parcel_sub_2.id,
                 ),
             ]
         )
@@ -1740,12 +1771,17 @@ def test_gis_popup_returns_ruolo_summary_with_multiple_quote() -> None:
     assert payload["id"] == particella_id
     assert payload["ha_ruolo"] is True
     assert payload["ruolo_summary"]["anno_tributario_latest"] == 2025
+    assert payload["ruolo_summary"]["anno_tributario_richiesto"] == datetime.now().year
     assert payload["ruolo_summary"]["n_righe"] == 2
     assert payload["ruolo_summary"]["n_subalterni"] == 2
     assert payload["ruolo_summary"]["sup_catastale_ha_totale"] == 1.0
     assert payload["ruolo_summary"]["sup_irrigata_ha_totale"] == 0.65
+    assert payload["ruolo_summary"]["importo_manut_euro_totale"] == 14.0
+    assert payload["ruolo_summary"]["importo_irrig_euro_totale"] == 26.0
+    assert payload["ruolo_summary"]["importo_ist_euro_totale"] == 7.0
     assert payload["ruolo_summary"]["importo_totale_euro"] == 47.0
     assert [item["subalterno"] for item in payload["ruolo_summary"]["items"]] == ["1", "2"]
+    assert [item["importo_totale_euro"] for item in payload["ruolo_summary"]["items"]] == [35.0, 12.0]
 
 
 def test_gis_popup_returns_latest_visible_titolare() -> None:
@@ -1904,6 +1940,24 @@ def test_particelle_endpoint_solo_a_ruolo_falls_back_to_previous_year_when_filte
         partita_2025 = RuoloPartita(avviso_id=avviso_2025.id, codice_partita="P-SEED-2025", comune_nome="Cabras")
         db.add_all([partita_2024, partita_2025])
         db.flush()
+        catasto_parcel_2024 = CatastoParcel(
+            comune_codice=particella.codice_catastale,
+            comune_nome=particella.nome_comune or "Arborea",
+            foglio=particella.foglio,
+            particella=particella.particella,
+            subalterno=particella.subalterno,
+            valid_from=2024,
+        )
+        catasto_parcel_2025 = CatastoParcel(
+            comune_codice=altra_particella.codice_catastale,
+            comune_nome=altra_particella.nome_comune or "Cabras",
+            foglio=altra_particella.foglio,
+            particella=altra_particella.particella,
+            subalterno=altra_particella.subalterno,
+            valid_from=2025,
+        )
+        db.add_all([catasto_parcel_2024, catasto_parcel_2025])
+        db.flush()
 
         db.add_all(
             [
@@ -1913,14 +1967,14 @@ def test_particelle_endpoint_solo_a_ruolo_falls_back_to_previous_year_when_filte
                     foglio=particella.foglio,
                     particella=particella.particella,
                     subalterno=particella.subalterno,
-                    catasto_parcel_id=particella.id,
+                    catasto_parcel_id=catasto_parcel_2024.id,
                 ),
                 RuoloParticella(
                     partita_id=partita_2025.id,
                     anno_tributario=2025,
                     foglio=altra_particella.foglio,
                     particella=altra_particella.particella,
-                    catasto_parcel_id=altra_particella.id,
+                    catasto_parcel_id=catasto_parcel_2025.id,
                 ),
             ]
         )
