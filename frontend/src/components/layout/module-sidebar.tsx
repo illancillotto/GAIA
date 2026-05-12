@@ -99,7 +99,6 @@ export function ModuleSidebar({
 
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Legacy</p>
         <NavItem href="/catasto/archive" icon={DocumentIcon} label="Archivio documenti" match="prefix" />
-        <NavItem href="/catasto/settings" icon={LockIcon} label="Credenziali" match="prefix" />
       </div>
     );
   }
