@@ -65,7 +65,8 @@ Legend: 🔴 Non iniziato · 🟡 In corso · 🟢 Completato · ⚫ Bloccato
 | 6.2 | Routes particelle (lista, dettaglio, utenze, anomalie, geojson) | 🟢 | `backend/app/modules/catasto/routes/particelle.py` | `utenze` e `anomalie` per particella incluse |
 | 6.3 | Routes import (upload, finalize, status, report, history) | 🟢 | `backend/app/modules/catasto/routes/import_routes.py` | Include finalize shapefile |
 | 6.4 | Routes anomalie (lista, patch) | 🟢 | `backend/app/modules/catasto/routes/anomalie.py` | Include `PATCH /catasto/anomalie/{id}` |
-| 6.5 | Registrazione router in main/catasto module | 🟢 | `backend/app/modules/catasto/routes/__init__.py` + `backend/app/modules/catasto/router.py` | Router incluso in API |
+| 6.5 | Dashboard aggregata | 🟢 | `backend/app/modules/catasto/routes/dashboard.py` | `GET /catasto/dashboard/summary` espone stato import, copertura particelle, utenze, anomalie e KPI distretti in una sola chiamata |
+| 6.6 | Registrazione router in main/catasto module | 🟢 | `backend/app/modules/catasto/routes/__init__.py` + `backend/app/modules/catasto/router.py` | Router incluso in API |
 
 ### Frontend
 
@@ -77,7 +78,7 @@ Legend: 🔴 Non iniziato · 🟡 In corso · 🟢 Completato · ⚫ Bloccato
 | F2.2 | Componente `CfBadge` | 🟢 | `frontend/src/components/catasto/CfBadge.tsx` | |
 | F2.3 | Componente `KpiCard` | 🟢 | `frontend/src/components/catasto/KpiCard.tsx` | |
 | F2.4 | Componente `ImportStatusBadge` | 🟢 | `frontend/src/components/catasto/ImportStatusBadge.tsx` | |
-| F3 | Dashboard `/catasto` | 🟢 | `frontend/src/app/catasto/page.tsx` | |
+| F3 | Dashboard `/catasto` | 🟢 | `frontend/src/app/catasto/page.tsx` | Cruscotto operativo basato su `/catasto/dashboard/summary`: stato import, KPI precisi, copertura dati, qualità/anomalie e priorità distretti senza chiamate N+1 |
 | F4 | Wizard Import `/catasto/import` (3 step) | 🟢 | `frontend/src/app/catasto/import/page.tsx` | |
 | F5 | Lista Distretti `/catasto/distretti` | 🟢 | `frontend/src/app/catasto/distretti/page.tsx` | |
 | F6 | Dettaglio Distretto `/catasto/distretti/[id]` | 🟢 | `frontend/src/app/catasto/distretti/[id]/page.tsx` | Tab anomalie distretto collegata |

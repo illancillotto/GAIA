@@ -280,6 +280,76 @@ export type CatDistrettoKpi = {
   superficie_irrigabile_mq: string;
 };
 
+export type CatDashboardImportSummary = {
+  latest_import: CatImportBatch | null;
+  latest_completed: CatImportBatch | null;
+  processing_batch: number;
+  failed_batch: number;
+  completed_batch: number;
+  latest_imported_anno: number | null;
+};
+
+export type CatDashboardParticelleSummary = {
+  totale_correnti: number;
+  con_geometria: number;
+  senza_geometria: number;
+  in_distretto: number;
+  fuori_distretto: number;
+  senza_distretto: number;
+  soppresse: number;
+};
+
+export type CatDashboardUtenzeSummary = {
+  anno: number | null;
+  totale_utenze: number;
+  particelle_collegate: number;
+  superficie_irrigabile_mq: number;
+  importo_totale_0648: number;
+  importo_totale_0985: number;
+  importo_totale: number;
+  cf_mancante: number;
+  cf_invalido: number;
+  righe_con_anomalie: number;
+  utenze_senza_titolare: number;
+};
+
+export type CatDashboardAnomaliaBucket = {
+  key: string;
+  label: string;
+  count: number;
+};
+
+export type CatDashboardAnomalieSummary = {
+  aperte: number;
+  error: number;
+  warning: number;
+  info: number;
+  by_tipo: CatDashboardAnomaliaBucket[];
+};
+
+export type CatDashboardDistrettoSummary = {
+  distretto_id: UUID;
+  num_distretto: string;
+  nome_distretto: string | null;
+  attivo: boolean;
+  totale_particelle: number;
+  totale_utenze: number;
+  totale_anomalie_aperte: number;
+  anomalie_error: number;
+  superficie_irrigabile_mq: number;
+  importo_totale: number;
+};
+
+export type CatDashboardSummary = {
+  anno: number | null;
+  generated_at: string;
+  imports: CatDashboardImportSummary;
+  particelle: CatDashboardParticelleSummary;
+  utenze: CatDashboardUtenzeSummary;
+  anomalie: CatDashboardAnomalieSummary;
+  distretti: CatDashboardDistrettoSummary[];
+};
+
 export type CatSchemaContributo = {
   id: UUID;
   codice: string;

@@ -365,6 +365,7 @@ backend/app/modules/catasto/
 ├── __init__.py
 ├── routes/
 │   ├── __init__.py
+│   ├── dashboard.py          # Aggregato dashboard Catasto
 │   ├── distretti.py          # CRUD distretti + GeoJSON
 │   ├── particelle.py         # Lista, dettaglio, storico
 │   ├── import_routes.py      # Upload + status import
@@ -399,6 +400,9 @@ backend/app/modules/catasto/
 ## 5. Endpoints API — Fase 1
 
 ```
+# Dashboard
+GET    /catasto/dashboard/summary              KPI aggregati dashboard (import, particelle, utenze, anomalie, distretti)
+
 # Distretti
 GET    /catasto/distretti                      Lista distretti con KPI anno
 GET    /catasto/distretti/{id}                 Dettaglio distretto
@@ -440,7 +444,7 @@ GET    /tiles/cat_particelle/{z}/{x}/{y}       MVT tiles particelle
 
 ```
 frontend/src/app/catasto/
-├── page.tsx                    # Dashboard catasto: KPI globali + accesso rapido
+├── page.tsx                    # Dashboard catasto: cruscotto operativo su /catasto/dashboard/summary
 ├── layout.tsx                  # Layout con sidebar catasto
 ├── import/
 │   └── page.tsx                # Wizard import Capacitas

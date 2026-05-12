@@ -289,6 +289,76 @@ class CatDistrettoKpiResponse(BaseModel):
     superficie_irrigabile_mq: Decimal
 
 
+class CatDashboardImportSummary(BaseModel):
+    latest_import: CatImportBatchResponse | None
+    latest_completed: CatImportBatchResponse | None
+    processing_batch: int
+    failed_batch: int
+    completed_batch: int
+    latest_imported_anno: int | None
+
+
+class CatDashboardParticelleSummary(BaseModel):
+    totale_correnti: int
+    con_geometria: int
+    senza_geometria: int
+    in_distretto: int
+    fuori_distretto: int
+    senza_distretto: int
+    soppresse: int
+
+
+class CatDashboardUtenzeSummary(BaseModel):
+    anno: int | None
+    totale_utenze: int
+    particelle_collegate: int
+    superficie_irrigabile_mq: float
+    importo_totale_0648: float
+    importo_totale_0985: float
+    importo_totale: float
+    cf_mancante: int
+    cf_invalido: int
+    righe_con_anomalie: int
+    utenze_senza_titolare: int
+
+
+class CatDashboardAnomaliaBucket(BaseModel):
+    key: str
+    label: str
+    count: int
+
+
+class CatDashboardAnomalieSummary(BaseModel):
+    aperte: int
+    error: int
+    warning: int
+    info: int
+    by_tipo: list[CatDashboardAnomaliaBucket]
+
+
+class CatDashboardDistrettoSummary(BaseModel):
+    distretto_id: UUID
+    num_distretto: str
+    nome_distretto: str | None
+    attivo: bool
+    totale_particelle: int
+    totale_utenze: int
+    totale_anomalie_aperte: int
+    anomalie_error: int
+    superficie_irrigabile_mq: float
+    importo_totale: float
+
+
+class CatDashboardSummaryResponse(BaseModel):
+    anno: int | None
+    generated_at: datetime
+    imports: CatDashboardImportSummary
+    particelle: CatDashboardParticelleSummary
+    utenze: CatDashboardUtenzeSummary
+    anomalie: CatDashboardAnomalieSummary
+    distretti: list[CatDashboardDistrettoSummary]
+
+
 class CatSchemaContributoResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

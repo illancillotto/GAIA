@@ -392,6 +392,32 @@ def seed_additional_distretto_kpi_data(db: Session) -> None:
             ),
         ]
     )
+    db.flush()
+    utenza_20_a = db.query(CatUtenzaIrrigua).filter(CatUtenzaIrrigua.cco == "UT-SEED-020-2025-A").one()
+    utenza_20_b = db.query(CatUtenzaIrrigua).filter(CatUtenzaIrrigua.cco == "UT-SEED-020-2025-B").one()
+    db.add_all(
+        [
+            CatAnomalia(
+                particella_id=particella_20.id,
+                utenza_id=utenza_20_a.id,
+                anno_campagna=2025,
+                tipo="VAL-07-importi",
+                severita="error",
+                status="aperta",
+                descrizione="Importi incoerenti",
+            ),
+            CatAnomalia(
+                particella_id=particella_20.id,
+                utenza_id=utenza_20_b.id,
+                anno_campagna=2025,
+                tipo="VAL-03-superficie",
+                severita="warning",
+                status="aperta",
+                descrizione="Superficie incoerente",
+            ),
+        ]
+    )
+    db.commit()
 
 
 def build_distretti_excel_bytes(rows: list[dict[str, object]]) -> bytes:
@@ -1130,6 +1156,59 @@ def test_import_capacitas_requires_authentication() -> None:
         files={"file": ("capacitas.xlsx", b"fake-content", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
     )
     assert response.status_code == 401
+
+
+def test_dashboard_summary_endpoint_returns_catasto_control_room() -> None:
+    db = TestingSessionLocal()
+    try:
+        batch = db.query(CatImportBatch).filter(CatImportBatch.hash_file == "seed-hash").one()
+        batch.completed_at = datetime.now(timezone.utc)
+        utenza = db.query(CatUtenzaIrrigua).filter(CatUtenzaIrrigua.cco == "UT-SEED-001").one()
+        db.add(
+            CatAnomalia(
+                particella_id=utenza.particella_id,
+                utenza_id=utenza.id,
+                anno_campagna=2025,
+                tipo="VAL-DASHBOARD",
+                severita="error",
+                status="aperta",
+                descrizione="Anomalia dashboard",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get("/catasto/dashboard/summary?anno=2025", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["anno"] == 2025
+    assert payload["imports"]["latest_imported_anno"] == 2025
+    assert payload["imports"]["completed_batch"] >= 1
+    assert payload["particelle"] == {
+        "totale_correnti": 1,
+        "con_geometria": 0,
+        "senza_geometria": 1,
+        "in_distretto": 1,
+        "fuori_distretto": 0,
+        "senza_distretto": 0,
+        "soppresse": 0,
+    }
+    assert payload["utenze"]["totale_utenze"] == 1
+    assert payload["utenze"]["particelle_collegate"] == 1
+    assert payload["utenze"]["importo_totale_0648"] == 135.0
+    assert payload["utenze"]["importo_totale_0985"] == 270.0
+    assert payload["utenze"]["importo_totale"] == 405.0
+    assert payload["utenze"]["utenze_senza_titolare"] == 1
+    assert payload["anomalie"]["aperte"] == 1
+    assert payload["anomalie"]["error"] == 1
+    assert payload["anomalie"]["by_tipo"][0] == {"key": "VAL-DASHBOARD", "label": "VAL-DASHBOARD", "count": 1}
+    distretto_10 = next(item for item in payload["distretti"] if item["num_distretto"] == "10")
+    assert distretto_10["totale_particelle"] == 1
+    assert distretto_10["totale_utenze"] == 1
+    assert distretto_10["totale_anomalie_aperte"] == 1
+    assert distretto_10["importo_totale"] == 405.0
 
 
 def test_distretto_kpi_endpoint_returns_aggregates_for_year() -> None:
@@ -2430,6 +2509,7 @@ def test_bulk_search_anagrafica_uses_latest_utenza_context_when_cco_exists_on_mu
 def test_bulk_search_anagrafica_sub_matches_preserve_case_variants() -> None:
     db = TestingSessionLocal()
     try:
+        batch = db.query(CatImportBatch).filter(CatImportBatch.hash_file == "seed-hash").one()
         comune = CatComune(
             nome_comune="Santa Giusta",
             codice_catastale="I205",
@@ -2545,6 +2625,7 @@ def test_bulk_search_anagrafica_sub_matches_preserve_case_variants() -> None:
 def test_bulk_search_anagrafica_sub_historical_falls_back_to_current_base_owner() -> None:
     db = TestingSessionLocal()
     try:
+        batch = db.query(CatImportBatch).filter(CatImportBatch.hash_file == "seed-hash").one()
         comune = CatComune(
             nome_comune="Santa Giusta",
             codice_catastale="I205",
@@ -2572,6 +2653,7 @@ def test_bulk_search_anagrafica_sub_historical_falls_back_to_current_base_owner(
         db.flush()
         db.add(
             CatUtenzaIrrigua(
+                import_batch_id=batch.id,
                 anno_campagna=2025,
                 cco="0A1260895",
                 comune_id=comune.id,

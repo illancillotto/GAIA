@@ -97,8 +97,14 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   const anagraficaPage = read("src/app/catasto/elaborazioni-massive/page.tsx");
   const anagraficaBulkPanel = read("src/components/catasto/anagrafica/AnagraficaBulkPanel.tsx");
   const mapContainer = read("src/components/catasto/gis/MapContainer.tsx");
+  const catastoApi = read("src/lib/api/catasto.ts");
+  const catastoTypes = read("src/types/catasto.ts");
 
   assert.match(dashboardPage, /GAIA Catasto/);
+  assert.match(dashboardPage, /catastoGetDashboardSummary/);
+  assert.match(dashboardPage, /Cruscotto dati catastali/);
+  assert.match(catastoApi, /catastoGetDashboardSummary/);
+  assert.match(catastoTypes, /CatDashboardSummary/);
   assert.match(catastoPageWrapper, /ProtectedPage/);
   assert.doesNotMatch(catastoPageWrapper, /CatastoPhase1Nav/);
   assert.doesNotMatch(catastoLayout, /CatastoPhase1Nav/);

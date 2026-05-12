@@ -6,6 +6,7 @@ import type {
   CatAnagraficaBulkSearchResponse,
   CatAnagraficaBulkJobDetail,
   CatAnagraficaBulkJobListResponse,
+  CatDashboardSummary,
   CatDistrettiExcelAnalysisResponse,
   CatDistretto,
   CatDistrettoKpi,
@@ -295,6 +296,13 @@ export async function catastoGetDistrettoKpi(token: string, id: UUID, anno?: num
 
 export async function catastoGetDistrettoGeojson(token: string, id: UUID): Promise<GeoJSONFeature> {
   return request<GeoJSONFeature>(`/catasto/distretti/${id}/geojson`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function catastoGetDashboardSummary(token: string, params?: { anno?: number }): Promise<CatDashboardSummary> {
+  const query = createQueryString({ anno: params?.anno != null ? String(params.anno) : undefined });
+  return request<CatDashboardSummary>(`/catasto/dashboard/summary${query}`, {
     headers: authHeaders(token),
   });
 }

@@ -1306,10 +1306,6 @@ def _current_base_match_data(
 
     utenza_ids: list[UUID] = [latest_utenza.id] if latest_utenza is not None else []
     intestatari = _load_intestatari_by_utenza_ids(db, utenza_ids) if utenza_ids else []
-    if latest_utenza is not None:
-        intestatari = intestatari.get(p.id, [])
-    else:
-        intestatari = []
     if not intestatari and cco and not _is_sentinel_cco(cco):
         cert_com, cert_pvc, cert_fra, cert_ccs = cert_context
         intestatari = _load_intestatari_from_cert_context(
@@ -1370,7 +1366,7 @@ def _build_consorzio_sub_matches(db: Session, p: CatParticella) -> list[CatAnagr
             db, cco=cco, com=cert_com, pvc=cert_pvc, fra=cert_fra, ccs=cert_ccs
         )
         intestatari: list[CatIntestatarioResponse] = []
-        utenza_summary = _utenza_summary_from_occupancy(occupancy) if (occupancy and occupancy.is_current) else None
+        utenza_summary = _utenza_summary_from_occupancy(occupancy) if occupancy else None
         if cco and _is_sentinel_cco(cco):
             note = "CCO provvisorio Capacitas: dati intestatario non disponibili"
         elif cco and not is_stale:
@@ -1463,7 +1459,7 @@ def _find_consorzio_sub_match(
         db, cco=cco, com=cert_com, pvc=cert_pvc, fra=cert_fra, ccs=cert_ccs
     )
     intestatari: list[CatIntestatarioResponse] = []
-    utenza_summary = _utenza_summary_from_occupancy(occupancy) if (occupancy and occupancy.is_current) else None
+    utenza_summary = _utenza_summary_from_occupancy(occupancy) if occupancy else None
 
     # Resolve comune info from the unit's comune reference
     comune_record = db.get(CatComune, unit.comune_id) if unit.comune_id else None
