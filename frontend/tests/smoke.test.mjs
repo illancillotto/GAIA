@@ -256,6 +256,18 @@ test("utenze dashboard opens subject and document summaries in modal overlays", 
   assert.match(apiClient, /export const getUtenzeDocumentSummary/);
 });
 
+test("utenze subject detail exposes quick visura action wired to elaborazioni runtime", () => {
+  const subjectDetailPage = read("src/app/utenze/[id]/page.tsx");
+  const apiClient = read("src/lib/api.ts");
+
+  assert.match(subjectDetailPage, /Visura per soggetto/);
+  assert.match(subjectDetailPage, /handleRequestSubjectVisura/);
+  assert.match(subjectDetailPage, /createElaborazioneRichiesta/);
+  assert.match(subjectDetailPage, /search_mode: "soggetto"/);
+  assert.match(subjectDetailPage, /window\.open\(`\/elaborazioni\/batches\/\$\{subjectVisuraResult\.id\}`/);
+  assert.match(apiClient, /export async function createElaborazioneRichiesta/);
+});
+
 test("utenze import page exposes bulk import progress feedback", () => {
   const importPage = read("src/app/utenze/import/page.tsx");
 

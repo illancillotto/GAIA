@@ -264,7 +264,7 @@ Tutti gli endpoint sono esposti sotto il prefisso `/anagrafica`.
 |----------|--------|-------------|
 | `/anagrafica/subjects` | GET | Lista soggetti con filtri, paginazione, full-text search |
 | `/anagrafica/subjects` | POST | Crea nuovo soggetto manualmente |
-| `/anagrafica/subjects/{id}` | GET | Dettaglio soggetto con documenti, audit log e `person_snapshots` per le persone fisiche |
+| `/anagrafica/subjects/{id}` | GET | Dettaglio soggetto con documenti, audit log, `person_snapshots` per le persone fisiche e azioni operative embedded come verifica ANPR e richiesta visura per soggetto verso il runtime SISTER |
 | `/anagrafica/subjects/{id}` | PUT | Aggiorna dati soggetto |
 | `/anagrafica/subjects/{id}` | DELETE | Disattivazione logica (status = inactive) |
 | `/anagrafica/subjects/{id}/documents` | GET | Lista documenti del soggetto |

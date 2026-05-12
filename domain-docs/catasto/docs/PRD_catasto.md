@@ -321,6 +321,7 @@ Comportamento attuale:
 - `/catasto/distretti` e `/catasto/distretti/[id]` coprono KPI e drill-down per distretto
 - dalla dashboard `/catasto` il click su un distretto apre un workspace rapido in modale; da li i dettagli particella restano embedded senza sidebar completa e con navigazione indietro interna
 - la modale di dettaglio particella usata dalla ricerca anagrafica espone anche il blocco di catasto consortile per consultazione rapida
+- la quick view soggetto riusata dentro il dettaglio particella eredita le azioni operative del modulo utenze, inclusa la richiesta rapida di `visura per soggetto` su runtime `elaborazioni` con ricerca SISTER per `CF/P.IVA`
 - `/catasto/particelle` e `/catasto/particelle/[id]` coprono lookup e dettaglio con utenze/anomalie
 - nella scheda `/catasto/particelle/[id]`, la tabella `Utilizzatore / pagatore annualita` deve esporre la `partita` Capacitas `CCO/FRA/CCS` e usare il contesto completo `COM/PVC/FRA/CCS` per il link `Visualizza su Capacitas`
 - la stessa tabella puo rendere cliccabili codice fiscale e nominativo verso la quick view utenze solo quando il backend restituisce un `subject_id` univoco; in caso di match ambiguo il link va omesso

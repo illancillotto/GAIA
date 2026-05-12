@@ -7,6 +7,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AnprStatusCard } from "@/components/anagrafica/AnprStatusCard";
 import { UtenzeModulePage } from "@/components/utenze/utenze-module-page";
 import {
+  createElaborazioneRichiesta,
   deleteUtenzeDocument,
   downloadUtenzeDocumentBlob,
   getUtenzeSubject,
@@ -27,6 +28,7 @@ import type {
   AnagraficaSubjectNasImportStatus,
   AnagraficaSubjectUpdateInput,
   CurrentUser,
+  ElaborazioneBatchDetail,
 } from "@/types/api";
 
 type DocumentPreviewKind = "pdf" | "image" | "docx" | "spreadsheet" | "text" | "download";
@@ -42,6 +44,13 @@ type ManualUploadItem = {
   docType: string;
   notes: string;
 };
+
+type SubjectVisuraRequestState = {
+  identifier: string;
+  identifierLabel: string;
+  intestazione: string;
+  subjectKind: "PF" | "PNF";
+} | null;
 
 const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg"]);
 const SPREADSHEET_EXTENSIONS = new Set([".xls", ".xlsx"]);
@@ -106,6 +115,9 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
   const [deleteDocumentTarget, setDeleteDocumentTarget] = useState<AnagraficaDocument | null>(null);
   const [deletePassword, setDeletePassword] = useState("");
   const [isDeletingDocument, setIsDeletingDocument] = useState(false);
+  const [isRequestingSubjectVisura, setIsRequestingSubjectVisura] = useState(false);
+  const [subjectVisuraError, setSubjectVisuraError] = useState<string | null>(null);
+  const [subjectVisuraResult, setSubjectVisuraResult] = useState<ElaborazioneBatchDetail | null>(null);
 
   const [sourceNameRaw, setSourceNameRaw] = useState("");
   const [requiresReview, setRequiresReview] = useState(false);
@@ -151,6 +163,8 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
     if (!subject) {
       return;
     }
+    setSubjectVisuraError(null);
+    setSubjectVisuraResult(null);
     setIsEditMode(false);
     setIsEnableEditConfirmOpen(false);
     setSourceNameRaw(subject.source_name_raw);
@@ -196,6 +210,77 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
   async function reloadSubject() {
     const response = await getUtenzeSubject(token, subjectId);
     setSubject(response);
+  }
+
+  function getSubjectVisuraRequestState(): SubjectVisuraRequestState {
+    if (!subject) {
+      return null;
+    }
+
+    if (subject.person) {
+      const identifierValue = subject.person.codice_fiscale?.trim().toUpperCase() ?? "";
+      if (!identifierValue) {
+        return null;
+      }
+
+      return {
+        identifier: identifierValue,
+        identifierLabel: "Codice fiscale",
+        intestazione: `${subject.person.cognome} ${subject.person.nome}`.trim() || subject.source_name_raw,
+        subjectKind: "PF",
+      };
+    }
+
+    if (subject.company) {
+      const partitaIva = subject.company.partita_iva?.trim().toUpperCase() ?? "";
+      const codiceFiscale = subject.company.codice_fiscale?.trim().toUpperCase() ?? "";
+      const identifierValue = partitaIva || codiceFiscale;
+      if (!identifierValue) {
+        return null;
+      }
+
+      return {
+        identifier: identifierValue,
+        identifierLabel: partitaIva ? "Partita IVA" : "Codice fiscale",
+        intestazione: subject.company.ragione_sociale?.trim() || subject.source_name_raw,
+        subjectKind: "PNF",
+      };
+    }
+
+    return null;
+  }
+
+  async function handleRequestSubjectVisura() {
+    const requestState = getSubjectVisuraRequestState();
+    if (!requestState) {
+      setSubjectVisuraError("Identificativo soggetto assente: serve un codice fiscale o una partita IVA per inviare la visura.");
+      setSubjectVisuraResult(null);
+      return;
+    }
+
+    setIsRequestingSubjectVisura(true);
+    setSubjectVisuraError(null);
+    setSubjectVisuraResult(null);
+
+    try {
+      const batch = await createElaborazioneRichiesta(token, {
+        search_mode: "soggetto",
+        tipo_visura: "Sintetica",
+        subject_kind: requestState.subjectKind,
+        subject_id: requestState.identifier,
+        request_type: "ATTUALITA",
+        intestazione: requestState.intestazione,
+      });
+      setSubjectVisuraResult(batch);
+
+      if (!isEmbedded) {
+        router.push(`/elaborazioni/batches/${batch.id}`);
+      }
+    } catch (error) {
+      setSubjectVisuraError(error instanceof Error ? error.message : "Errore avvio visura per soggetto");
+    } finally {
+      setIsRequestingSubjectVisura(false);
+    }
   }
 
   const loadNasImportStatus = useCallback(async () => {
@@ -590,6 +675,7 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
     : undefined;
 
   const readOnlyControlClassName = !isEditMode ? "bg-gray-50 text-gray-500" : "";
+  const subjectVisuraRequestState = getSubjectVisuraRequestState();
   const canQuickImportFromNas = Boolean(
     isEmbedded &&
     nasImportStatus?.can_import_from_nas &&
@@ -1008,6 +1094,59 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
           {saveMessage ? <p className="mb-3 text-sm text-[#1D4E35]">{saveMessage}</p> : null}
           <div className="grid gap-4 md:grid-cols-2">
             {subject.person ? <AnprStatusCard subjectId={subjectId} initialStatus={initialAnprStatus} /> : null}
+            <div className="rounded-2xl border border-[#d8e2d8] bg-[#f8fbf7] p-4 md:col-span-2">
+              <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-[#1D4E35]">Visura per soggetto</p>
+                  <p className="mt-1 text-sm text-gray-600">
+                    Invia una richiesta rapida al runtime SISTER usando i dati anagrafici del soggetto aperto.
+                  </p>
+                </div>
+                <button
+                  className="btn-primary min-w-44"
+                  type="button"
+                  onClick={() => void handleRequestSubjectVisura()}
+                  disabled={isRequestingSubjectVisura || !subjectVisuraRequestState}
+                >
+                  {isRequestingSubjectVisura ? "Richiesta in corso..." : "Richiedi visura"}
+                </button>
+              </div>
+
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
+                <div className="rounded-xl border border-white/70 bg-white px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Tipo soggetto</p>
+                  <p className="mt-1 text-sm text-gray-800">{subjectVisuraRequestState?.subjectKind ?? "Non disponibile"}</p>
+                </div>
+                <div className="rounded-xl border border-white/70 bg-white px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Identificativo</p>
+                  <p className="mt-1 text-sm text-gray-800">
+                    {subjectVisuraRequestState
+                      ? `${subjectVisuraRequestState.identifierLabel}: ${subjectVisuraRequestState.identifier}`
+                      : "Codice fiscale o partita IVA mancanti"}
+                  </p>
+                </div>
+                <div className="rounded-xl border border-white/70 bg-white px-4 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Profilo richiesta</p>
+                  <p className="mt-1 text-sm text-gray-800">Attualita · Sintetica</p>
+                </div>
+              </div>
+
+              {subjectVisuraError ? <p className="mt-4 text-sm text-red-600">{subjectVisuraError}</p> : null}
+              {subjectVisuraResult ? (
+                <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+                  <p>Richiesta visura avviata sul batch {subjectVisuraResult.name}.</p>
+                  {isEmbedded ? (
+                    <button
+                      className="btn-secondary mt-3"
+                      type="button"
+                      onClick={() => window.open(`/elaborazioni/batches/${subjectVisuraResult.id}`, "_blank", "noopener,noreferrer")}
+                    >
+                      Apri batch
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
             <label className="block text-sm font-medium text-gray-700 md:col-span-2">
               Source name raw
               <input className={cn("form-control mt-1", readOnlyControlClassName)} value={sourceNameRaw} onChange={(event) => setSourceNameRaw(event.target.value)} readOnly={!isEditMode} />
