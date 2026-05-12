@@ -97,6 +97,14 @@ class ParticellaPopupRuoloSummary(BaseModel):
     items: list[ParticellaPopupRuoloItem] = Field(default_factory=list)
 
 
+class ParticellaPopupTitolare(BaseModel):
+    codice_fiscale: str | None = None
+    partita_iva: str | None = None
+    denominazione: str | None = None
+    titoli: str | None = None
+    source: str = "utenza"
+
+
 class ParticellaPopupData(BaseModel):
     id: str
     cfm: str | None = None
@@ -112,6 +120,7 @@ class ParticellaPopupData(BaseModel):
     num_distretto: str | None = None
     nome_distretto: str | None = None
     n_anomalie_aperte: int = 0
+    titolare: ParticellaPopupTitolare | None = None
     ha_ruolo: bool = False
     ruolo_summary: ParticellaPopupRuoloSummary | None = None
 

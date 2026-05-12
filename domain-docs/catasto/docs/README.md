@@ -68,6 +68,8 @@ Usare questo indice per capire rapidamente quali file sono:
 - Il layer `cat_particelle_current` pubblicato via Martin deve esporre anche `ha_ruolo`, cosi la mappa puo distinguere visivamente le particelle a ruolo senza introdurre un layer geometrico separato; il dettaglio delle quote/sub continua a essere caricato on-demand da `GET /catasto/gis/particella/{id}/popup`.
 - I distretti in mappa devono essere mostrati principalmente come fill colorato per `num_distretto`; l'outline tecnico `cat_distretti_boundaries` va tenuto nascosto quando il fill e attivo, per evitare che geometrie frammentate producano un reticolo simile alle particelle.
 - La sidebar GIS deve esporre un pannello espandibile `Distretti irrigui`: elenco selezionabile caricato da `/catasto/distretti`, colore stabile per distretto, selezione che filtra/centra la mappa e azione per mostrare o nascondere il particellare solo sul distretto selezionato.
+- Il popup/scheda particella del GIS deve mostrare anche il titolare corrente disponibile: preferire `cat_utenza_intestatari` con titolo visibile, mostrando denominazione e codice fiscale/partita IVA; se assente usare come fallback la riga `cat_utenze_irrigue` piu recente.
+- Le particelle devono restare cliccabili anche quando il layer visuale `Particelle` e spento: usare un layer hitbox trasparente sopra `cat_particelle_current`, mantenendo il filtro distretto corrente.
 - Per modifiche a batch, credenziali, CAPTCHA, richieste singole o avanzamento runtime, verificare sempre anche `domain-docs/elaborazioni/docs/`.
 - Non usare i documenti storici come sorgente primaria per implementazioni nuove.
 - Se un file viene mantenuto solo per compatibilita, segnalarlo esplicitamente nel blocco iniziale del documento.

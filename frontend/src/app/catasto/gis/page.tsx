@@ -1054,6 +1054,45 @@ export default function CatastoGisPage() {
                         </div>
                       </div>
 
+                      <div className="mt-3 rounded-2xl border border-sky-100 bg-sky-50/70 px-3 py-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="text-[10px] font-semibold uppercase tracking-widest text-sky-700">
+                              Titolare
+                            </div>
+                            {popupParticella.titolare ? (
+                              <>
+                                <div className="mt-1 truncate text-sm font-semibold text-slate-900">
+                                  {popupParticella.titolare.denominazione ?? "Nominativo non disponibile"}
+                                </div>
+                                <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-600">
+                                  {popupParticella.titolare.codice_fiscale ? (
+                                    <span>
+                                      CF <span className="font-mono font-semibold text-slate-800">{popupParticella.titolare.codice_fiscale}</span>
+                                    </span>
+                                  ) : null}
+                                  {!popupParticella.titolare.codice_fiscale && popupParticella.titolare.partita_iva ? (
+                                    <span>
+                                      P.IVA <span className="font-mono font-semibold text-slate-800">{popupParticella.titolare.partita_iva}</span>
+                                    </span>
+                                  ) : null}
+                                  {popupParticella.titolare.titoli ? <span>{popupParticella.titolare.titoli}</span> : null}
+                                </div>
+                              </>
+                            ) : (
+                              <div className="mt-1 text-xs font-medium text-slate-500">
+                                Nessun titolare collegato alla particella.
+                              </div>
+                            )}
+                          </div>
+                          {popupParticella.titolare ? (
+                            <span className="shrink-0 rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-sky-700">
+                              {popupParticella.titolare.source === "intestatario" ? "Intestatario" : "Utenza"}
+                            </span>
+                          ) : null}
+                        </div>
+                      </div>
+
                       {popupParticella.ruolo_summary ? (
                         <div className="mt-3 rounded-2xl border border-emerald-100 bg-emerald-50/60 p-3">
                           <div className="flex flex-wrap items-center justify-between gap-2">

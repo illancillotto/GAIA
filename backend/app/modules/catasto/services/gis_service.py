@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import re
 import uuid
 from decimal import Decimal
 from typing import Any
@@ -30,8 +31,17 @@ from app.modules.catasto.schemas.gis_schemas import (
     ParticellaPopupData,
     ParticellaPopupRuoloItem,
     ParticellaPopupRuoloSummary,
+    ParticellaPopupTitolare,
 )
-from app.models.catasto_phase1 import CatAnomalia, CatComune, CatGisSavedSelection, CatGisSavedSelectionItem, CatParticella
+from app.models.catasto_phase1 import (
+    CatAnomalia,
+    CatComune,
+    CatGisSavedSelection,
+    CatGisSavedSelectionItem,
+    CatParticella,
+    CatUtenzaIntestatario,
+    CatUtenzaIrrigua,
+)
 from app.modules.ruolo.models import RuoloAvviso, RuoloParticella, RuoloPartita
 
 
@@ -43,6 +53,7 @@ SARDINIA_BBOX = {
 }
 PREVIEW_LIMIT = 200
 MAX_EXPORT_IDS = 10000
+ZERO_SHARE_TITLE_RE = re.compile(r"\b0\s*/\s*0\b")
 
 
 def _norm_str(value: Any) -> str | None:
@@ -246,6 +257,68 @@ def _to_float(value: Decimal | float | int | None, digits: int | None = None) ->
     return round(number, digits) if digits is not None else number
 
 
+def _is_visible_owner_title(value: str | None) -> bool:
+    if value is None:
+        return True
+    normalized = value.strip()
+    if not normalized:
+        return True
+    return not bool(ZERO_SHARE_TITLE_RE.search(normalized))
+
+
+def _load_popup_titolare(db: Session, particella_uuid: uuid.UUID) -> ParticellaPopupTitolare | None:
+    utenze = (
+        db.execute(
+            select(CatUtenzaIrrigua)
+            .where(CatUtenzaIrrigua.particella_id == particella_uuid)
+            .order_by(desc(CatUtenzaIrrigua.anno_campagna), desc(CatUtenzaIrrigua.created_at))
+            .limit(25)
+        )
+        .scalars()
+        .all()
+    )
+    if not utenze:
+        return None
+
+    utenza_ids = [utenza.id for utenza in utenze]
+    intestatari = (
+        db.execute(
+            select(CatUtenzaIntestatario)
+            .where(CatUtenzaIntestatario.utenza_id.in_(utenza_ids))
+            .order_by(
+                desc(CatUtenzaIntestatario.anno_riferimento),
+                desc(CatUtenzaIntestatario.data_agg),
+                desc(CatUtenzaIntestatario.collected_at),
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for intestatario in intestatari:
+        if not _is_visible_owner_title(intestatario.titoli):
+            continue
+        if not (intestatario.denominazione or intestatario.codice_fiscale or intestatario.partita_iva):
+            continue
+        return ParticellaPopupTitolare(
+            codice_fiscale=intestatario.codice_fiscale,
+            partita_iva=intestatario.partita_iva,
+            denominazione=intestatario.denominazione,
+            titoli=intestatario.titoli,
+            source="intestatario",
+        )
+
+    latest_utenza = utenze[0]
+    if latest_utenza.denominazione or latest_utenza.codice_fiscale:
+        return ParticellaPopupTitolare(
+            codice_fiscale=latest_utenza.codice_fiscale,
+            partita_iva=None,
+            denominazione=latest_utenza.denominazione,
+            titoli=None,
+            source="utenza",
+        )
+    return None
+
+
 def _load_particella_ruolo_summary(db: Session, particella_uuid: uuid.UUID) -> ParticellaPopupRuoloSummary | None:
     rows = db.execute(
         select(
@@ -338,6 +411,7 @@ def get_popup_data(db: Session, particella_id: str) -> ParticellaPopupData:
         )
     )
     ruolo_summary = _load_particella_ruolo_summary(db, particella_uuid)
+    titolare = _load_popup_titolare(db, particella_uuid)
     return ParticellaPopupData(
         id=str(particella.id),
         cfm=particella.cfm,
@@ -353,6 +427,7 @@ def get_popup_data(db: Session, particella_id: str) -> ParticellaPopupData:
         num_distretto=particella.num_distretto,
         nome_distretto=particella.nome_distretto,
         n_anomalie_aperte=int(n_anomalie_aperte or 0),
+        titolare=titolare,
         ha_ruolo=ruolo_summary is not None,
         ruolo_summary=ruolo_summary,
     )

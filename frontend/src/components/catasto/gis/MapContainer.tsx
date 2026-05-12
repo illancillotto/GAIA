@@ -361,6 +361,18 @@ export default function MapContainer({
       });
 
       map.addLayer({
+        id: "particelle-hitbox",
+        type: "fill",
+        source: "particelle-source",
+        "source-layer": "cat_particelle_current",
+        minzoom: 13,
+        paint: {
+          "fill-color": "#000000",
+          "fill-opacity": 0,
+        },
+      });
+
+      map.addLayer({
         id: "particelle-selected-outline",
         type: "line",
         source: "particelle-source",
@@ -380,7 +392,7 @@ export default function MapContainer({
         const overlayFillIds = Array.from(overlayMapKeysRef.current).map(
           (key) => overlayLayerIds(key).fillId,
         );
-        const clickableLayers = [...overlayFillIds, "particelle-fill"].filter(
+        const clickableLayers = [...overlayFillIds, "particelle-hitbox"].filter(
           (l) => map.getLayer(l) != null,
         );
         const features = map.queryRenderedFeatures(event.point, { layers: clickableLayers });
@@ -405,7 +417,7 @@ export default function MapContainer({
         }
       });
 
-      for (const layerId of ["particelle-fill", "distretti-fill"]) {
+      for (const layerId of ["particelle-hitbox", "particelle-fill", "distretti-fill"]) {
         map.on("mouseenter", layerId, () => {
           map.getCanvas().style.cursor = "pointer";
         });
@@ -514,6 +526,9 @@ export default function MapContainer({
       map.setLayoutProperty("particelle-outline", "visibility", showParticelle ? "visible" : "none");
       map.setPaintProperty("particelle-outline", "line-opacity", Math.min(1, particelleOpacity + 0.2));
     }
+    if (map.getLayer("particelle-hitbox")) {
+      map.setLayoutProperty("particelle-hitbox", "visibility", "visible");
+    }
 
     const distretto = (mapLayers?.distretto ?? filters.num_distretto ?? null) || null;
     if (map.getLayer("distretti-fill")) {
@@ -524,6 +539,7 @@ export default function MapContainer({
     if (map.getLayer("particelle-fill")) {
       map.setFilter("particelle-fill", distretto ? ["==", ["get", "num_distretto"], distretto] : null);
       map.setFilter("particelle-outline", distretto ? ["==", ["get", "num_distretto"], distretto] : null);
+      map.setFilter("particelle-hitbox", distretto ? ["==", ["get", "num_distretto"], distretto] : null);
     }
 
     const highlight = mapLayers?.highlightSelected ?? true;

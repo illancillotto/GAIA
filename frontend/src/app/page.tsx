@@ -73,7 +73,6 @@ const menuSearchRoutes: SearchRoute[] = [
   { label: "Catasto · Anomalie", href: "/catasto/anomalie", moduleKey: "catasto", keywords: ["errori"] },
   { label: "Catasto · Import", href: "/catasto/import", moduleKey: "catasto", keywords: ["caricamento"] },
   { label: "Catasto · Archivio documenti", href: "/catasto/archive", moduleKey: "catasto", keywords: ["documenti"] },
-  { label: "Catasto · Credenziali", href: "/catasto/settings", moduleKey: "catasto", keywords: ["credenziali", "settings"] },
 
   // Network (rete)
   { label: "Rete · Dashboard", href: "/network", moduleKey: "rete" },

@@ -67,8 +67,17 @@ export interface ParticellaPopupData {
   num_distretto?: string | null;
   nome_distretto?: string | null;
   n_anomalie_aperte: number;
+  titolare?: ParticellaPopupTitolare | null;
   ha_ruolo: boolean;
   ruolo_summary?: ParticellaPopupRuoloSummary | null;
+}
+
+export interface ParticellaPopupTitolare {
+  codice_fiscale?: string | null;
+  partita_iva?: string | null;
+  denominazione?: string | null;
+  titoli?: string | null;
+  source: "intestatario" | "utenza" | string;
 }
 
 export interface ParticellaPopupRuoloItem {

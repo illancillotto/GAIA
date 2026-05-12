@@ -1748,6 +1748,66 @@ def test_gis_popup_returns_ruolo_summary_with_multiple_quote() -> None:
     assert [item["subalterno"] for item in payload["ruolo_summary"]["items"]] == ["1", "2"]
 
 
+def test_gis_popup_returns_latest_visible_titolare() -> None:
+    db = TestingSessionLocal()
+    try:
+        particella = db.query(CatParticella).filter(CatParticella.cod_comune_capacitas == 165).one()
+        batch = CatImportBatch(filename="utenze-popup.xlsx", tipo="capacitas", status="completed")
+        db.add(batch)
+        db.flush()
+        utenza = CatUtenzaIrrigua(
+            import_batch_id=batch.id,
+            anno_campagna=2026,
+            particella_id=particella.id,
+            cod_comune_capacitas=particella.cod_comune_capacitas,
+            foglio=particella.foglio,
+            particella=particella.particella,
+            denominazione="FALLBACK UTENZA",
+            codice_fiscale="RSSMRA70A01G113A",
+        )
+        db.add(utenza)
+        db.flush()
+        db.add_all(
+            [
+                CatUtenzaIntestatario(
+                    utenza_id=utenza.id,
+                    anno_riferimento=2026,
+                    collected_at=datetime.now(timezone.utc),
+                    codice_fiscale="IGNORARE00A00G113X",
+                    denominazione="INTESTATARIO DA IGNORARE",
+                    titoli="0/0",
+                ),
+                CatUtenzaIntestatario(
+                    utenza_id=utenza.id,
+                    anno_riferimento=2026,
+                    collected_at=datetime.now(timezone.utc),
+                    codice_fiscale="VRDGPP80A01G113B",
+                    denominazione="VERDI GIUSEPPE",
+                    titoli="Proprieta 1/1",
+                ),
+            ]
+        )
+        db.commit()
+        particella_id = str(particella.id)
+    finally:
+        db.close()
+
+    response = client.get(
+        f"/catasto/gis/particella/{particella_id}/popup",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["titolare"] == {
+        "codice_fiscale": "VRDGPP80A01G113B",
+        "partita_iva": None,
+        "denominazione": "VERDI GIUSEPPE",
+        "titoli": "Proprieta 1/1",
+        "source": "intestatario",
+    }
+
+
 def test_particelle_endpoint_supports_solo_con_anagrafica_filter() -> None:
     db = TestingSessionLocal()
     try:
