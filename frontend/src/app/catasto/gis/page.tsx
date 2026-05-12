@@ -24,6 +24,7 @@ import { getStoredAccessToken } from "@/lib/auth";
 import { useGisSelection } from "@/hooks/useGisSelection";
 import type { CatAnagraficaMatch, CatDistretto } from "@/types/catasto";
 import type {
+  GisBasemap,
   GisFilters,
   GisMapOverlayLayer,
   GisParticellaRef,
@@ -71,6 +72,12 @@ const DISTRETTO_COLORS = [
   "#F9A825",
   "#455A64",
   "#AD1457",
+];
+const GOOGLE_MAP_TILES_CONFIGURED = Boolean(process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim());
+const BASEMAP_OPTIONS: Array<{ id: GisBasemap; label: string; swatch: string; requiresGoogleKey?: boolean }> = [
+  { id: "osm", label: "Mappa", swatch: "bg-slate-500" },
+  { id: "satellite", label: "Satellite", swatch: "bg-cyan-600" },
+  { id: "google_satellite", label: "Google Earth", swatch: "bg-lime-600", requiresGoogleKey: true },
 ];
 
 function toNullableCellString(value: unknown): string | null {
@@ -175,6 +182,7 @@ export default function CatastoGisPage() {
   const [showDistrettiFill, setShowDistrettiFill] = useState(true);
   const [showParticelle, setShowParticelle] = useState(false);
   const [showParticelleFill, setShowParticelleFill] = useState(true);
+  const [basemap, setBasemap] = useState<GisBasemap>("osm");
   const [highlightSelected, setHighlightSelected] = useState(true);
   const [distrettiOpacity, setDistrettiOpacity] = useState(0.34);
   const [particelleOpacity, setParticelleOpacity] = useState(0.42);
@@ -660,6 +668,41 @@ export default function CatastoGisPage() {
     });
   }, [autoSelectionId, handleLoadSavedSelection, token]);
 
+  const renderBasemapControl = (isDark: boolean) => (
+    <div className={`rounded-2xl border p-3 ${isDark ? "border-white/15 bg-white/10" : "border-gray-100 bg-gray-50"}`}>
+      <p className={`mb-2 text-[10px] font-semibold uppercase tracking-widest ${isDark ? "text-white/50" : "text-gray-400"}`}>
+        Sfondo mappa
+      </p>
+      <div className="grid grid-cols-3 gap-1.5">
+        {BASEMAP_OPTIONS.map((option) => {
+          const disabled = option.requiresGoogleKey && !GOOGLE_MAP_TILES_CONFIGURED;
+          const selected = basemap === option.id;
+          return (
+            <button
+              key={option.id}
+              type="button"
+              onClick={() => {
+                if (!disabled) setBasemap(option.id);
+              }}
+              disabled={disabled}
+              title={disabled ? "Configura NEXT_PUBLIC_GOOGLE_MAPS_API_KEY per usare Google Map Tiles." : option.label}
+              className={`inline-flex min-w-0 items-center justify-center gap-1.5 rounded-xl border px-2 py-2 text-[11px] font-semibold transition ${
+                selected
+                  ? "border-emerald-300 bg-white text-emerald-800 shadow-sm ring-1 ring-emerald-100"
+                  : isDark
+                    ? "border-white/15 bg-white/5 text-white/65 hover:bg-white/10"
+                    : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"
+              } ${disabled ? "cursor-not-allowed opacity-45" : ""}`}
+            >
+              <span className={`h-2 w-2 shrink-0 rounded-full ${option.swatch}`} />
+              <span className="truncate">{option.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   const renderDistrettiPanel = (isDark: boolean) => (
     <div className={`rounded-2xl border p-3 ${isDark ? "border-white/15 bg-white/10" : "border-emerald-100 bg-emerald-50/30"}`}>
       <button
@@ -999,6 +1042,7 @@ export default function CatastoGisPage() {
                   drawSignal={drawSignal}
                   clearSignal={clearSignal}
                   resizeSignal={resizeSignal}
+                  basemap={basemap}
                   className={isExpanded ? "min-h-0 h-full rounded-2xl" : "min-h-0 rounded-none"}
                 />
                 {popupParticella ? (
@@ -1226,6 +1270,7 @@ export default function CatastoGisPage() {
                         </div>
                       )}
                     </div>
+                    {renderBasemapControl(false)}
                     <div>
                       <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-gray-400">Layer visibili</p>
                       <div className="flex flex-wrap gap-1.5">
@@ -1361,6 +1406,7 @@ export default function CatastoGisPage() {
 
                 {/* Layer toggles */}
                 <div className="flex flex-col gap-4">
+                  {renderBasemapControl(false)}
                   <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-gray-400">Layer visibili</p>
                   <div className="flex flex-wrap gap-1.5">
                     <div className="group relative">

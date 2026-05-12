@@ -5,7 +5,7 @@ import maplibregl from "maplibre-gl";
 import MapboxDraw from "maplibre-gl-draw";
 
 import { catastoGisGetPopup } from "@/lib/api/catasto";
-import type { GisFilters, GisMapOverlayLayer, ParticellaPopupData } from "@/types/gis";
+import type { GisBasemap, GisFilters, GisMapOverlayLayer, ParticellaPopupData } from "@/types/gis";
 
 interface MapContainerProps {
   token: string | null;
@@ -31,6 +31,7 @@ interface MapContainerProps {
   drawSignal: number;
   clearSignal: number;
   resizeSignal?: number;
+  basemap?: GisBasemap;
   className?: string;
 }
 
@@ -56,6 +57,12 @@ const CONSORZIO_MAX_BOUNDS: [[number, number], [number, number]] = [
   [8.2, 39.45],
   [9.1, 40.25],
 ];
+const GOOGLE_MAP_TILES_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ?? "";
+
+type GoogleTilesSession = {
+  session?: string;
+  expiry?: string;
+};
 
 function canCreateWebGLContext(): boolean {
   try {
@@ -183,6 +190,51 @@ function fitCollectionBounds(map: maplibregl.Map, collection: GeoJSON.FeatureCol
   }
 }
 
+async function ensureGoogleSatelliteLayer(map: maplibregl.Map): Promise<boolean> {
+  if (map.getLayer("google-satellite-tiles")) return true;
+  if (!GOOGLE_MAP_TILES_API_KEY) return false;
+
+  const response = await fetch(
+    `https://tile.googleapis.com/v1/createSession?key=${encodeURIComponent(GOOGLE_MAP_TILES_API_KEY)}`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        mapType: "satellite",
+        language: "it-IT",
+        region: "IT",
+      }),
+    },
+  );
+  if (!response.ok) return false;
+
+  const payload = (await response.json()) as GoogleTilesSession;
+  if (!payload.session) return false;
+
+  if (!map.getSource("google-satellite")) {
+    map.addSource("google-satellite", {
+      type: "raster",
+      tiles: [
+        `https://tile.googleapis.com/v1/2dtiles/{z}/{x}/{y}?session=${encodeURIComponent(payload.session)}&key=${encodeURIComponent(GOOGLE_MAP_TILES_API_KEY)}`,
+      ],
+      tileSize: 256,
+      attribution: "Google",
+    });
+  }
+  map.addLayer(
+    {
+      id: "google-satellite-tiles",
+      type: "raster",
+      source: "google-satellite",
+      minzoom: 0,
+      maxzoom: 20,
+      layout: { visibility: "none" },
+    },
+    map.getLayer("distretti-fill") ? "distretti-fill" : undefined,
+  );
+  return true;
+}
+
 export default function MapContainer({
   token,
   onGeometryDrawn,
@@ -197,6 +249,7 @@ export default function MapContainer({
   drawSignal,
   clearSignal,
   resizeSignal,
+  basemap,
   className,
 }: MapContainerProps) {
   const mapContainerRef = useRef<HTMLDivElement>(null);
@@ -234,6 +287,12 @@ export default function MapContainer({
               tileSize: 256,
               attribution: "OpenStreetMap contributors",
             },
+            satellite: {
+              type: "raster",
+              tiles: ["https://services.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}"],
+              tileSize: 256,
+              attribution: "Esri, Maxar, Earthstar Geographics, and the GIS User Community",
+            },
           },
           layers: [
             {
@@ -242,6 +301,14 @@ export default function MapContainer({
               source: "osm",
               minzoom: 0,
               maxzoom: 19,
+            },
+            {
+              id: "satellite-tiles",
+              type: "raster",
+              source: "satellite",
+              minzoom: 0,
+              maxzoom: 19,
+              layout: { visibility: "none" },
             },
           ],
         },
@@ -495,6 +562,42 @@ export default function MapContainer({
     if (!resizeSignal) return;
     mapRef.current?.resize();
   }, [resizeSignal]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || mapReadyVersion === 0) return;
+
+    const selectedBasemap = basemap ?? "osm";
+    const applyVisibility = (activeBasemap: GisBasemap) => {
+      if (map.getLayer("osm-tiles")) {
+        map.setLayoutProperty("osm-tiles", "visibility", activeBasemap === "osm" ? "visible" : "none");
+      }
+      if (map.getLayer("satellite-tiles")) {
+        map.setLayoutProperty("satellite-tiles", "visibility", activeBasemap === "satellite" ? "visible" : "none");
+      }
+      if (map.getLayer("google-satellite-tiles")) {
+        map.setLayoutProperty("google-satellite-tiles", "visibility", activeBasemap === "google_satellite" ? "visible" : "none");
+      }
+    };
+
+    if (selectedBasemap !== "google_satellite") {
+      applyVisibility(selectedBasemap);
+      return;
+    }
+
+    let cancelled = false;
+    void ensureGoogleSatelliteLayer(map)
+      .then((available) => {
+        if (cancelled) return;
+        applyVisibility(available ? "google_satellite" : "osm");
+      })
+      .catch(() => {
+        if (!cancelled) applyVisibility("osm");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [basemap, mapReadyVersion]);
 
   useEffect(() => {
     const map = mapRef.current;

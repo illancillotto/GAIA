@@ -6,6 +6,8 @@ export interface GisFilters {
   solo_anomalie?: boolean;
 }
 
+export type GisBasemap = "osm" | "satellite" | "google_satellite";
+
 export interface GisSelectRequest {
   geometry: GeoJSON.Geometry;
   filters?: GisFilters;
