@@ -59,18 +59,18 @@ interface OverlayLayerState extends GisMapOverlayLayer {
 
 const LAYER_COLORS = ["#10B981", "#F59E0B", "#3B82F6", "#EF4444", "#8B5CF6", "#14B8A6", "#F97316"];
 const DISTRETTO_COLORS = [
-  "#1D4E35",
-  "#2563EB",
-  "#D97706",
-  "#7C3AED",
-  "#0F766E",
-  "#BE123C",
-  "#4D7C0F",
-  "#0369A1",
-  "#B45309",
-  "#6D28D9",
-  "#15803D",
-  "#B91C1C",
+  "#2E7D32",
+  "#1565C0",
+  "#EF6C00",
+  "#6A1B9A",
+  "#00838F",
+  "#C2185B",
+  "#9E9D24",
+  "#5D4037",
+  "#1976D2",
+  "#F9A825",
+  "#455A64",
+  "#AD1457",
 ];
 
 function toNullableCellString(value: unknown): string | null {
@@ -172,11 +172,11 @@ export default function CatastoGisPage() {
   const [gisError, setGisError] = useState<string | null>(null);
   const [gisInfo, setGisInfo] = useState<string | null>(null);
   const [showDistretti, setShowDistretti] = useState(true);
-  const [showDistrettiFill, setShowDistrettiFill] = useState(false);
+  const [showDistrettiFill, setShowDistrettiFill] = useState(true);
   const [showParticelle, setShowParticelle] = useState(false);
   const [showParticelleFill, setShowParticelleFill] = useState(true);
   const [highlightSelected, setHighlightSelected] = useState(true);
-  const [distrettiOpacity, setDistrettiOpacity] = useState(0.5);
+  const [distrettiOpacity, setDistrettiOpacity] = useState(0.34);
   const [particelleOpacity, setParticelleOpacity] = useState(0.42);
   const [distrettoLayer, setDistrettoLayer] = useState<string>("");
   const [distretti, setDistretti] = useState<CatDistretto[]>([]);
@@ -1191,10 +1191,10 @@ export default function CatastoGisPage() {
                               }`}
                             >
                               <span className={`h-1.5 w-1.5 rounded-full transition-colors ${showDistrettiFill ? "bg-sky-400" : "bg-gray-300"}`} />
-                              Riempimento
+                              Aree colorate
                             </button>
                             <div className="flex items-center justify-between text-[11px]">
-                              <span className="font-medium text-emerald-900/75">Opacità bordo + fill</span>
+                              <span className="font-medium text-emerald-900/75">Opacità aree distretto</span>
                               <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700">
                                 {Math.round(distrettiOpacity * 100)}%
                               </span>
@@ -1325,10 +1325,10 @@ export default function CatastoGisPage() {
                           }`}
                         >
                           <span className={`h-1.5 w-1.5 rounded-full transition-colors ${showDistrettiFill ? "bg-sky-400" : "bg-gray-300"}`} />
-                          Riempimento
+                          Aree colorate
                         </button>
                         <div className="flex items-center justify-between text-[11px]">
-                          <span className="font-medium text-emerald-900/75">Opacità bordo + fill</span>
+                          <span className="font-medium text-emerald-900/75">Opacità aree distretto</span>
                           <span className="rounded-full bg-emerald-50 px-2 py-0.5 font-semibold text-emerald-700">
                             {Math.round(distrettiOpacity * 100)}%
                           </span>

@@ -502,7 +502,7 @@ export default function MapContainer({
       map.setPaintProperty("distretti-fill", "fill-opacity", distrettiOpacity);
     }
     if (map.getLayer("distretti-outline")) {
-      map.setLayoutProperty("distretti-outline", "visibility", showDistretti ? "visible" : "none");
+      map.setLayoutProperty("distretti-outline", "visibility", showDistretti && !showDistrettiFill ? "visible" : "none");
       map.setPaintProperty("distretti-outline", "line-color", distrettoColor);
       map.setPaintProperty("distretti-outline", "line-opacity", Math.min(1, distrettiOpacity + 0.15));
     }

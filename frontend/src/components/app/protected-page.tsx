@@ -19,6 +19,7 @@ export type ProtectedPageProps = PropsWithChildren<{
   requiredSection?: string;
   requiredModule?: string;
   requiredRoles?: string[];
+  hideContentHeader?: boolean;
 }>;
 
 const emptySummary: DashboardSummary = {
@@ -38,6 +39,7 @@ export function ProtectedPage({
   requiredSection,
   requiredModule,
   requiredRoles,
+  hideContentHeader = false,
   children,
 }: ProtectedPageProps) {
   const router = useRouter();
@@ -189,10 +191,12 @@ export function ProtectedPage({
     return (
       <main className="min-h-screen bg-[#f7faf7] px-5 py-5">
         <section className="rounded-[24px] border border-gray-200 bg-white p-6 shadow-sm">
-          <div className="mb-6">
-            <h2 className="page-heading">{title}</h2>
-            <p className="mt-1 text-sm text-gray-500">{description}</p>
-          </div>
+          {!hideContentHeader ? (
+            <div className="mb-6">
+              <h2 className="page-heading">{title}</h2>
+              <p className="mt-1 text-sm text-gray-500">{description}</p>
+            </div>
+          ) : null}
           <div className="page-stack">{children}</div>
         </section>
       </main>
@@ -209,10 +213,12 @@ export function ProtectedPage({
     >
       <Topbar pageTitle={title} breadcrumb={breadcrumb} actions={topbarActions} />
       <section className="page-body">
-        <div className="mb-6">
-          <h2 className="page-heading">{title}</h2>
-          <p className="mt-1 text-sm text-gray-500">{description}</p>
-        </div>
+        {!hideContentHeader ? (
+          <div className="mb-6">
+            <h2 className="page-heading">{title}</h2>
+            <p className="mt-1 text-sm text-gray-500">{description}</p>
+          </div>
+        ) : null}
         <div className="page-stack">{children}</div>
       </section>
     </AppShell>
