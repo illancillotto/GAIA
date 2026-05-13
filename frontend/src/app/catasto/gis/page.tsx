@@ -538,20 +538,22 @@ export default function CatastoGisPage() {
     }
   }, [selectedDistretto, token]);
 
-  const handleRunAdeAlignment = useCallback(async () => {
+  const handleRunAdeAlignment = useCallback(async (bboxOverride?: AdeBboxForm, scopeLabel = "AdE") => {
     if (!token) {
       setGisError("Sessione non disponibile. Accedi di nuovo.");
       return;
     }
-    const minLon = Number(adeBbox.minLon);
-    const minLat = Number(adeBbox.minLat);
-    const maxLon = Number(adeBbox.maxLon);
-    const maxLat = Number(adeBbox.maxLat);
+    const sourceBbox = bboxOverride ?? adeBbox;
+    const minLon = Number(sourceBbox.minLon);
+    const minLat = Number(sourceBbox.minLat);
+    const maxLon = Number(sourceBbox.maxLon);
+    const maxLat = Number(sourceBbox.maxLat);
     if (![minLon, minLat, maxLon, maxLat].every(Number.isFinite) || minLon >= maxLon || minLat >= maxLat) {
       setGisError("BBox AdE non valida.");
       return;
     }
 
+    setAdeBbox(sourceBbox);
     setAdeBusy(true);
     setGisError(null);
     setGisInfo(null);
@@ -567,7 +569,7 @@ export default function CatastoGisPage() {
         max_lon: maxLon,
         max_lat: maxLat,
         max_tile_km2: 4,
-        max_tiles: 25,
+        max_tiles: 100,
         count: 1000,
         max_pages_per_tile: 20,
       });
@@ -582,13 +584,44 @@ export default function CatastoGisPage() {
         ]);
         focusLayerGeojson(previewLayer.geojson);
       }
-      setGisInfo(`Run AdE completato: ${sync.features.toLocaleString("it-IT")} particelle scaricate.`);
+      setGisInfo(`Run ${scopeLabel} completato: ${sync.features.toLocaleString("it-IT")} particelle scaricate.`);
     } catch (e) {
       setGisError(e instanceof Error ? e.message : "Allineamento AdE fallito.");
     } finally {
       setAdeBusy(false);
     }
   }, [adeBbox, focusLayerGeojson, token]);
+
+  const handleAlignComprensorioAde = useCallback(async () => {
+    if (!token) {
+      setGisError("Sessione non disponibile. Accedi di nuovo.");
+      return;
+    }
+    const activeDistretti = distretti.filter((distretto) => distretto.attivo && distretto.num_distretto !== "FD");
+    if (activeDistretti.length === 0) {
+      setGisError("Nessun distretto attivo disponibile per calcolare il comprensorio.");
+      return;
+    }
+
+    setAdeBusy(true);
+    setGisError(null);
+    setGisInfo("Calcolo perimetro comprensorio dai distretti...");
+    try {
+      const features = await Promise.all(
+        activeDistretti.map((distretto) => catastoGetDistrettoGeojson(token, distretto.id)),
+      );
+      const bbox = featureCollectionToBbox({
+        type: "FeatureCollection",
+        features: features as GeoJSON.Feature[],
+      });
+      if (!bbox) throw new Error("BBox comprensorio non disponibile.");
+      setAdeBusy(false);
+      await handleRunAdeAlignment(bbox, "comprensorio AdE");
+    } catch (e) {
+      setAdeBusy(false);
+      setGisError(e instanceof Error ? e.message : "Impossibile avviare l'allineamento comprensorio.");
+    }
+  }, [distretti, handleRunAdeAlignment, token]);
 
   const handlePreviewAdeApply = useCallback(async () => {
     if (!token || !adeReport) {
@@ -1229,10 +1262,10 @@ export default function CatastoGisPage() {
       <div className="flex items-start justify-between gap-3">
         <div>
           <p className={`text-[10px] font-semibold uppercase tracking-widest ${isDark ? "text-amber-200" : "text-amber-700"}`}>
-            Allinea particelle AdE
+            Allinea comprensorio AdE
           </p>
           <p className={`mt-1 text-xs leading-5 ${isDark ? "text-white/60" : "text-slate-600"}`}>
-            Scarica il WFS AdE nello scope bbox, crea un run e mostra il report differenze senza aggiornare GAIA.
+            Calcola la bbox dai distretti attivi, scarica il WFS AdE e mostra il report differenze senza aggiornare GAIA.
           </p>
         </div>
         {adeReport ? (
@@ -1242,7 +1275,28 @@ export default function CatastoGisPage() {
         ) : null}
       </div>
 
-      <div className="mt-3 grid grid-cols-2 gap-2">
+      <button
+        type="button"
+        onClick={() => void handleAlignComprensorioAde()}
+        disabled={adeBusy || distretti.length === 0}
+        className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 py-2.5 text-xs font-semibold text-white transition hover:bg-slate-800 disabled:cursor-wait disabled:bg-slate-400"
+      >
+        {adeBusy ? (
+          <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+        ) : (
+          <span className="material-symbols-outlined text-[16px]">travel_explore</span>
+        )}
+        {adeBusy ? "Allineamento comprensorio..." : "Allinea comprensorio"}
+      </button>
+
+      <div className={`mt-3 rounded-xl border px-3 py-2 ${isDark ? "border-white/10 bg-white/5" : "border-amber-100 bg-white/55"}`}>
+        <div className={`text-[10px] font-semibold uppercase tracking-widest ${isDark ? "text-white/45" : "text-slate-400"}`}>
+          Scope avanzato
+        </div>
+        <div className="mt-2 grid grid-cols-2 gap-2">
         {[
           ["minLon", "Min lon"],
           ["minLat", "Min lat"],
@@ -1264,7 +1318,7 @@ export default function CatastoGisPage() {
             />
           </label>
         ))}
-      </div>
+        </div>
 
       <div className="mt-3 grid grid-cols-2 gap-2">
         <button
@@ -1292,7 +1346,9 @@ export default function CatastoGisPage() {
         type="button"
         onClick={() => void handleRunAdeAlignment()}
         disabled={adeBusy}
-        className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 py-2.5 text-xs font-semibold text-white transition hover:bg-slate-800 disabled:cursor-wait disabled:bg-slate-400"
+        className={`mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition disabled:cursor-wait disabled:opacity-60 ${
+          isDark ? "border-white/15 bg-white/5 text-white/75 hover:bg-white/10" : "border-amber-200 bg-white text-amber-800 hover:bg-amber-50"
+        }`}
       >
         {adeBusy ? (
           <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -1302,8 +1358,9 @@ export default function CatastoGisPage() {
         ) : (
           <span className="material-symbols-outlined text-[16px]">sync</span>
         )}
-        {adeBusy ? "Download e confronto..." : "Avvia confronto AdE"}
+        {adeBusy ? "Download e confronto..." : "Avvia confronto su bbox"}
       </button>
+      </div>
 
       {adeSyncResult ? (
         <div className={`mt-3 rounded-xl border px-3 py-2 text-xs ${isDark ? "border-white/15 bg-white/5 text-white/65" : "border-white bg-white/75 text-slate-600"}`}>
