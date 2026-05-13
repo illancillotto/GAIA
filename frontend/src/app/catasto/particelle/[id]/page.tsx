@@ -22,6 +22,7 @@ import {
   catastoUpdateAnomalia,
 } from "@/lib/api/catasto";
 import { searchAnagraficaSubjects } from "@/lib/api";
+import { describeCatastoAnomalia } from "@/lib/catasto-anomalie";
 import { getStoredAccessToken } from "@/lib/auth";
 import type { CatAnomalia, CatParticellaConsorzio, CatParticellaDetail, CatParticellaHistory, CatUtenzaIrrigua } from "@/types/catasto";
 
@@ -277,6 +278,11 @@ export default function CatastoParticellaDetailPage() {
     }
   }, []);
 
+  const anomalieAperte = useMemo(
+    () => anomalie.filter((anomalia) => anomalia.status === "aperta"),
+    [anomalie],
+  );
+
   const columns = useMemo<ColumnDef<CatParticellaHistory>[]>(
     () => [
       {
@@ -390,6 +396,13 @@ export default function CatastoParticellaDetailPage() {
       { header: "Tipo", accessorKey: "tipo", cell: ({ row }: AnomaliaCell) => <span className="text-sm font-medium text-gray-900">{row.original.tipo}</span> },
       { header: "Stato", accessorKey: "status", cell: ({ row }: AnomaliaCell) => <AnomaliaStatusPill status={row.original.status} /> },
       { header: "Descrizione", accessorKey: "descrizione", cell: ({ row }: AnomaliaCell) => <span className="text-sm text-gray-600">{row.original.descrizione ?? "—"}</span> },
+      {
+        header: "Perche",
+        id: "motivo",
+        cell: ({ row }: AnomaliaCell) => (
+          <span className="text-sm text-gray-600">{describeCatastoAnomalia(row.original)}</span>
+        ),
+      },
       {
         header: "Azioni",
         id: "actions",
@@ -523,6 +536,33 @@ export default function CatastoParticellaDetailPage() {
 
               {syncMessage ? <div className="mt-3 rounded-xl border border-emerald-100 bg-emerald-50 p-3 text-sm text-emerald-800">{syncMessage}</div> : null}
               {item.capacitas_last_sync_error ? <div className="mt-3 rounded-xl border border-amber-100 bg-amber-50 p-3 text-sm text-amber-800">{item.capacitas_last_sync_error}</div> : null}
+              {item.swapped_capacitas ? (
+                <div className="mt-3 rounded-2xl border border-orange-200 bg-orange-50 px-4 py-3 text-sm text-orange-950">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <p className="font-semibold">Comune Capacitas/Ruolo diverso dal comune GAIA</p>
+                      <p className="mt-1 text-orange-900">
+                        In GAIA la particella risulta su{" "}
+                        <span className="font-semibold">{item.nome_comune ?? item.codice_catastale ?? "Comune ND"}</span>; nel Ruolo/Capacitas
+                        sorgente risulta su{" "}
+                        <span className="font-semibold">
+                          {item.swapped_capacitas.source_comune_nome ?? item.swapped_capacitas.source_codice_catastale ?? "Comune ND"}
+                        </span>
+                        .
+                      </p>
+                      <p className="mt-1 text-xs text-orange-800">
+                        Rif. sorgente {item.swapped_capacitas.source_foglio ?? "—"}/{item.swapped_capacitas.source_particella ?? "—"}
+                        {item.swapped_capacitas.source_subalterno ? `/${item.swapped_capacitas.source_subalterno}` : ""}
+                        {item.swapped_capacitas.anno_tributario_latest ? ` · anno ${item.swapped_capacitas.anno_tributario_latest}` : ""} ·{" "}
+                        {item.swapped_capacitas.n_righe_ruolo} righe ruolo collegate.
+                      </p>
+                    </div>
+                    <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-orange-700">
+                      Arborea/Terralba
+                    </span>
+                  </div>
+                </div>
+              ) : null}
 
               <div className="mt-4 grid gap-3 md:grid-cols-4">
                 <MetricCard label="Sup. catastale (ha)" value={item.superficie_mq ? `${formatHaFromMq(item.superficie_mq)} ha` : "—"} />
@@ -690,6 +730,35 @@ export default function CatastoParticellaDetailPage() {
             </div>
             <p className="text-sm text-gray-500">{isLoading ? "Caricamento…" : `${anomalie.length} righe`}</p>
           </div>
+          {anomalieAperte.length > 0 ? (
+            <div className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-rose-950">Perche questa particella ha anomalie ruolo</p>
+                  <p className="mt-1 text-sm text-rose-800">
+                    Le anomalie derivano dalle righe ruolo/utenze collegate a questa particella nell&apos;anno selezionato.
+                  </p>
+                </div>
+                <span className="rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-rose-700">
+                  {anomalieAperte.length} aperte
+                </span>
+              </div>
+              <div className="mt-3 grid gap-2 md:grid-cols-2">
+                {anomalieAperte.slice(0, 6).map((anomalia) => (
+                  <div key={anomalia.id} className="rounded-xl border border-rose-100 bg-white/85 px-3 py-2">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sm font-semibold text-gray-900">{anomalia.descrizione ?? anomalia.tipo}</span>
+                      <AnomaliaStatusBadge severita={anomalia.severita} />
+                    </div>
+                    <p className="mt-1 text-sm text-gray-600">{describeCatastoAnomalia(anomalia)}</p>
+                    {anomalia.anno_campagna ? (
+                      <p className="mt-1 text-xs font-medium text-rose-700">Anno ruolo {anomalia.anno_campagna}</p>
+                    ) : null}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
           <div className="mt-4">
             <DataTable data={anomalie} columns={anomalieColumns} initialPageSize={8} emptyTitle={isLoading ? "Caricamento…" : "Nessuna anomalia"} />
           </div>

@@ -24,7 +24,7 @@ interface MapContainerProps {
     distretto?: string | null;
     highlightSelected?: boolean;
     distrettoColors?: Record<string, string>;
-    particelleQuickFilter?: "all" | "ruolo" | "ruolo_anomalie";
+    particelleQuickFilter?: "all" | "ruolo";
   };
   overlayLayers?: GisMapOverlayLayer[];
   focusGeojson?: GeoJSON.FeatureCollection | null;
@@ -49,7 +49,7 @@ type Position = [number, number] | [number, number, number];
 type LinearRing = Position[];
 type PolygonCoords = LinearRing[];
 type MultiPolygonCoords = PolygonCoords[];
-type ParticelleQuickFilter = "all" | "ruolo" | "ruolo_anomalie";
+type ParticelleQuickFilter = "all" | "ruolo";
 
 const CONSORZIO_BOUNDS: [[number, number], [number, number]] = [
   [8.39, 39.62],
@@ -59,6 +59,7 @@ const CONSORZIO_MAX_BOUNDS: [[number, number], [number, number]] = [
   [8.2, 39.45],
   [9.1, 40.25],
 ];
+const PARTICELLE_MIN_ZOOM = 13;
 const GOOGLE_MAP_TILES_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ?? "";
 
 const BOOLEAN_TRUE_EXPRESSION: (property: string) => maplibregl.ExpressionSpecification = (property) => [
@@ -90,11 +91,8 @@ function buildParticelleFilter(
   if (distretto) {
     clauses.push(["==", ["get", "num_distretto"], distretto]);
   }
-  if (quickFilter === "ruolo" || quickFilter === "ruolo_anomalie") {
+  if (quickFilter === "ruolo") {
     clauses.push(BOOLEAN_TRUE_EXPRESSION("ha_ruolo"));
-  }
-  if (quickFilter === "ruolo_anomalie") {
-    clauses.push(BOOLEAN_TRUE_EXPRESSION("ha_anomalie"));
   }
 
   if (clauses.length === 0) return null;
@@ -290,6 +288,7 @@ export default function MapContainer({
   const [mapReadyVersion, setMapReadyVersion] = useState(0);
   const resizeRafRef = useRef<number | null>(null);
   const overlayMapKeysRef = useRef<Set<string>>(new Set());
+  const lastParticelleQuickFilterRef = useRef<ParticelleQuickFilter>("all");
 
   useEffect(() => {
     handlersRef.current = { onGeometryDrawn, onSelectionCleared, onParticellaClick, token };
@@ -464,7 +463,7 @@ export default function MapContainer({
         minzoom: 13,
         paint: {
           "fill-color": "#000000",
-          "fill-opacity": 0,
+          "fill-opacity": 0.001,
         },
       });
 
@@ -660,6 +659,7 @@ export default function MapContainer({
       map.setPaintProperty("particelle-outline", "line-opacity", Math.min(1, particelleOpacity + 0.2));
     }
     if (map.getLayer("particelle-hitbox")) {
+      // Keep the transparent hitbox queryable even when the visual parcel layer is disabled.
       map.setLayoutProperty("particelle-hitbox", "visibility", "visible");
     }
 
@@ -675,6 +675,15 @@ export default function MapContainer({
       map.setFilter("particelle-outline", particelleFilter);
       map.setFilter("particelle-hitbox", particelleFilter);
     }
+
+    if (
+      particelleQuickFilter !== "all" &&
+      lastParticelleQuickFilterRef.current !== particelleQuickFilter &&
+      map.getZoom() < PARTICELLE_MIN_ZOOM
+    ) {
+      map.easeTo({ zoom: PARTICELLE_MIN_ZOOM, duration: 650 });
+    }
+    lastParticelleQuickFilterRef.current = particelleQuickFilter;
 
     const highlight = mapLayers?.highlightSelected ?? true;
     if (map.getLayer("particelle-selected-outline")) {
@@ -885,6 +894,22 @@ function buildPopupHtml(data: ParticellaPopupData): string {
     data.n_anomalie_aperte > 0
       ? `<span style="color:#DC2626;font-weight:600">${data.n_anomalie_aperte} anomalie aperte</span>`
       : `<span style="color:#059669;font-weight:600">Nessuna anomalia aperta</span>`;
+  const swapped = data.swapped_capacitas;
+  const swappedHtml = swapped
+    ? `
+      <div style="margin-top:8px;border:1px solid #FDBA74;background:#FFF7ED;border-radius:10px;padding:8px;color:#9A3412">
+        <div style="font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase">Comune Capacitas diverso</div>
+        <div style="margin-top:3px">
+          In GAIA: <strong>${escapeHtml(data.nome_comune || data.codice_catastale || "-")}</strong> ·
+          Capacitas/Ruolo: <strong>${escapeHtml(swapped.source_comune_nome || swapped.source_codice_catastale || "-")}</strong>
+        </div>
+        <div style="font-size:12px">
+          Rif. sorgente ${escapeHtml(swapped.source_foglio || "-")}/${escapeHtml(swapped.source_particella || "-")}${swapped.source_subalterno ? `/${escapeHtml(swapped.source_subalterno)}` : ""}
+          ${swapped.anno_tributario_latest ? ` · anno ${escapeHtml(String(swapped.anno_tributario_latest))}` : ""}
+        </div>
+      </div>
+    `
+    : "";
 
   return `
     <div style="font-family:system-ui,sans-serif;font-size:13px;line-height:1.5;color:#111827">
@@ -894,6 +919,7 @@ function buildPopupHtml(data: ParticellaPopupData): string {
       <div>Superficie: ${escapeHtml(superficieText)}</div>
       <div>Distretto: ${escapeHtml(data.num_distretto || "-")}${data.nome_distretto ? ` (${escapeHtml(data.nome_distretto)})` : ""}</div>
       <div style="margin-top:4px">${anomalie}</div>
+      ${swappedHtml}
       <div style="margin-top:8px">
         <a href="/catasto/particelle/${encodeURIComponent(data.id)}" style="color:#4F46E5;font-weight:600;text-decoration:none">
           Apri scheda completa

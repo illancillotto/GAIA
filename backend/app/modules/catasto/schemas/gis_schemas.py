@@ -223,6 +223,29 @@ class ParticellaPopupTitolare(BaseModel):
     source: str = "utenza"
 
 
+class ParticellaPopupSwappedCapacitas(BaseModel):
+    source_codice_catastale: str | None = None
+    source_comune_nome: str | None = None
+    source_foglio: str | None = None
+    source_particella: str | None = None
+    source_subalterno: str | None = None
+    anno_tributario_latest: int | None = None
+    match_confidence: str | None = None
+    match_reason: str | None = None
+    n_righe_ruolo: int = 0
+
+
+class ParticellaPopupAnomalia(BaseModel):
+    id: str
+    anno_campagna: int | None = None
+    tipo: str
+    severita: str
+    descrizione: str | None = None
+    dati_json: dict[str, Any] | None = None
+    status: str
+    created_at: datetime
+
+
 class ParticellaPopupData(BaseModel):
     id: str
     cfm: str | None = None
@@ -241,6 +264,8 @@ class ParticellaPopupData(BaseModel):
     titolare: ParticellaPopupTitolare | None = None
     ha_ruolo: bool = False
     ruolo_summary: ParticellaPopupRuoloSummary | None = None
+    swapped_capacitas: ParticellaPopupSwappedCapacitas | None = None
+    anomalie_aperte: list[ParticellaPopupAnomalia] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
 

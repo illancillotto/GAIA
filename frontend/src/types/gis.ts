@@ -180,6 +180,31 @@ export interface ParticellaPopupData {
   titolare?: ParticellaPopupTitolare | null;
   ha_ruolo: boolean;
   ruolo_summary?: ParticellaPopupRuoloSummary | null;
+  swapped_capacitas?: ParticellaPopupSwappedCapacitas | null;
+  anomalie_aperte: ParticellaPopupAnomalia[];
+}
+
+export interface ParticellaPopupAnomalia {
+  id: string;
+  anno_campagna?: number | null;
+  tipo: string;
+  severita: string;
+  descrizione?: string | null;
+  dati_json?: Record<string, unknown> | null;
+  status: string;
+  created_at: string;
+}
+
+export interface ParticellaPopupSwappedCapacitas {
+  source_codice_catastale?: string | null;
+  source_comune_nome?: string | null;
+  source_foglio?: string | null;
+  source_particella?: string | null;
+  source_subalterno?: string | null;
+  anno_tributario_latest?: number | null;
+  match_confidence?: string | null;
+  match_reason?: string | null;
+  n_righe_ruolo: number;
 }
 
 export interface ParticellaPopupTitolare {

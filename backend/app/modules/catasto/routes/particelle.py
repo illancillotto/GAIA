@@ -5,7 +5,7 @@ import re
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import desc, exists, func, or_, select
+from sqlalchemy import and_, desc, exists, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user
@@ -31,6 +31,7 @@ from app.schemas.catasto_phase1 import (
     CatAnomaliaResponse,
     CatParticellaCapacitasSyncInput,
     CatParticellaCapacitasSyncResponse,
+    CatParticellaSwappedCapacitasResponse,
     CatConsorzioOccupancyResponse,
     CatConsorzioUnitSummaryResponse,
     CatParticellaDetailResponse,
@@ -44,6 +45,7 @@ from app.modules.utenze.schemas import AnagraficaPersonResponse, AnagraficaPerso
 from app.modules.ruolo.models import RuoloParticella
 
 router = APIRouter(prefix="/catasto/particelle", tags=["catasto-particelle"])
+SWAPPED_ARBOREA_TERRALBA_REASON = "swapped_arborea_terralba"
 
 
 def _normalize_identifier(value: str | None) -> str | None:
@@ -131,15 +133,20 @@ def _with_ruolo_year_filter(query, anno_tributario: int):
     return query.where(
         exists(
             select(RuoloParticella.id)
-            .join(CatastoParcel, CatastoParcel.id == RuoloParticella.catasto_parcel_id)
+            .outerjoin(CatastoParcel, CatastoParcel.id == RuoloParticella.catasto_parcel_id)
             .where(
                 RuoloParticella.anno_tributario == anno_tributario,
-                CatastoParcel.comune_codice == CatParticella.codice_catastale,
-                CatastoParcel.foglio == CatParticella.foglio,
-                CatastoParcel.particella == CatParticella.particella,
                 or_(
-                    func.coalesce(CatParticella.subalterno, "") == "",
-                    func.coalesce(CatastoParcel.subalterno, "") == CatParticella.subalterno,
+                    RuoloParticella.cat_particella_id == CatParticella.id,
+                    and_(
+                        CatastoParcel.comune_codice == CatParticella.codice_catastale,
+                        CatastoParcel.foglio == CatParticella.foglio,
+                        CatastoParcel.particella == CatParticella.particella,
+                        or_(
+                            func.coalesce(CatParticella.subalterno, "") == "",
+                            func.coalesce(CatastoParcel.subalterno, "") == CatParticella.subalterno,
+                        ),
+                    ),
                 ),
             )
         )
@@ -149,6 +156,53 @@ def _with_ruolo_year_filter(query, anno_tributario: int):
 def _with_anagrafica_filter(query):
     return query.where(
         exists(select(CatUtenzaIrrigua.id).where(CatUtenzaIrrigua.particella_id == CatParticella.id))
+    )
+
+
+def _load_swapped_capacitas_info(
+    db: Session,
+    particella_id: UUID,
+) -> CatParticellaSwappedCapacitasResponse | None:
+    base_filter = (
+        RuoloParticella.cat_particella_id == particella_id,
+        RuoloParticella.cat_particella_match_reason == SWAPPED_ARBOREA_TERRALBA_REASON,
+    )
+    n_righe = int(db.scalar(select(func.count(RuoloParticella.id)).where(*base_filter)) or 0)
+    if n_righe == 0:
+        return None
+
+    row = (
+        db.execute(
+            select(
+                CatastoParcel.comune_codice.label("source_codice_catastale"),
+                CatastoParcel.comune_nome.label("source_comune_nome"),
+                CatastoParcel.foglio.label("source_foglio"),
+                CatastoParcel.particella.label("source_particella"),
+                CatastoParcel.subalterno.label("source_subalterno"),
+                RuoloParticella.anno_tributario.label("anno_tributario_latest"),
+                RuoloParticella.cat_particella_match_confidence.label("match_confidence"),
+                RuoloParticella.cat_particella_match_reason.label("match_reason"),
+            )
+            .join(CatastoParcel, CatastoParcel.id == RuoloParticella.catasto_parcel_id)
+            .where(*base_filter)
+            .order_by(desc(RuoloParticella.anno_tributario), CatastoParcel.subalterno.nullsfirst())
+            .limit(1)
+        )
+        .mappings()
+        .first()
+    )
+    if row is None:
+        return None
+    return CatParticellaSwappedCapacitasResponse(
+        source_codice_catastale=row["source_codice_catastale"],
+        source_comune_nome=row["source_comune_nome"],
+        source_foglio=row["source_foglio"],
+        source_particella=row["source_particella"],
+        source_subalterno=row["source_subalterno"],
+        anno_tributario_latest=row["anno_tributario_latest"],
+        match_confidence=row["match_confidence"],
+        match_reason=row["match_reason"],
+        n_righe_ruolo=n_righe,
     )
 
 
@@ -318,6 +372,7 @@ def get_particella(particella_id: UUID, db: Session = Depends(get_db), _: Applic
         raise HTTPException(status_code=404, detail="Particella not found")
     payload = CatParticellaDetailResponse.model_validate(item)
     payload.fuori_distretto = item.fuori_distretto
+    payload.swapped_capacitas = _load_swapped_capacitas_info(db, item.id)
     return payload
 
 
@@ -354,6 +409,7 @@ async def sync_particella_capacitas(
         mark_credential_used(db, credential.id)
         payload = CatParticellaDetailResponse.model_validate(refreshed)
         payload.fuori_distretto = refreshed.fuori_distretto
+        payload.swapped_capacitas = _load_swapped_capacitas_info(db, refreshed.id)
         return CatParticellaCapacitasSyncResponse(
             particella=payload,
             status=str(item_result.get("status") or refreshed.capacitas_last_sync_status or "failed"),
@@ -579,8 +635,13 @@ def get_particella_anomalie(
 ) -> list[CatAnomalia]:
     query = (
         select(CatAnomalia)
-        .join(CatUtenzaIrrigua, CatUtenzaIrrigua.id == CatAnomalia.utenza_id)
-        .where(CatUtenzaIrrigua.particella_id == particella_id)
+        .outerjoin(CatUtenzaIrrigua, CatUtenzaIrrigua.id == CatAnomalia.utenza_id)
+        .where(
+            or_(
+                CatAnomalia.particella_id == particella_id,
+                CatUtenzaIrrigua.particella_id == particella_id,
+            )
+        )
         .order_by(desc(CatAnomalia.created_at))
     )
     if anno is not None:

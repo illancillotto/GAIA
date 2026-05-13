@@ -392,7 +392,7 @@ Layout operativo:
 - **Canvas mappa full-height**: `MapContainer` occupa tutta l'altezza utile della pagina, senza card gestionale intermedia.
 - **Toolbar flottante**: brand/contesto GIS, azione `Vista estesa` e strumenti di disegno restano sovrapposti alla mappa.
 - **Sidebar destra persistente**: layer visibili, filtro distretto, import Excel, layer in mappa, archivio, analisi e selezione restano in un pannello laterale stile console GIS.
-- **Pannello distretti**: accordion `Distretti irrigui` alimentato da `/catasto/distretti`; la selezione applica il filtro `num_distretto`, centra la geometria via `/catasto/distretti/{id}/geojson` e usa la stessa palette colore del layer MVT.
+- **Pannello distretti**: accordion `Distretti irrigui` alimentato da `/catasto/distretti`; include ricerca per numero/nome, applica il filtro `num_distretto`, centra la geometria via `/catasto/distretti/{id}/geojson` e usa la stessa palette colore del layer MVT.
 - **Vista estesa**: conserva la mappa come canvas principale e sposta i controlli operativi in una sidebar destra dedicata.
 
 ### 7.2 MapContainer.tsx
@@ -403,10 +403,14 @@ Responsabilità:
 - Aggiunge sorgente MVT confini distretti (`/tiles/cat_distretti_boundaries/{z}/{x}/{y}`), derivata da una view PostGIS `MULTILINESTRING` dissolta
 - Aggiunge sorgente MVT particelle (`/tiles/cat_particelle_current/{z}/{x}/{y}`)
 - Gestisce click su particella → fetch `/catasto/gis/particella/{id}/popup` → aggiorna una scheda React contestuale con CTA per `ParticellaDetailDialog`
+- Il popup GIS e il dettaglio particella mostrano il motivo delle anomalie ruolo aperte, leggendo `descrizione` e `dati_json` da `cat_anomalie`.
+- Il popup particella espone anche `swapped_capacitas` quando la particella GAIA e stata collegata a una riga Ruolo/Capacitas storicamente scambiata Arborea/Terralba, cosi l'operatore vede insieme comune reale GAIA e comune sorgente Capacitas/Ruolo.
 - Gestisce click su distretto → emette evento verso SelectionPanel
+- Mantiene un layer hitbox particelle sempre visibile e quasi trasparente, separato da fill/bordi, per consentire il click anche quando il layer particelle e disattivato.
 - Riceve geometria disegnata da DrawingTools → chiama `POST /catasto/gis/select`
 - Evidenzia le particelle a ruolo direttamente nel fill MVT usando la property booleana `ha_ruolo` esposta dalla view `cat_particelle_current`; la property viene calcolata via `catasto_parcels` su codice catastale comune/foglio/particella/subalterno, non tramite UUID diretto tra `ruolo_particelle` e `cat_particelle`
-- Filtra rapidamente i layer particelle su `Tutte`, `A ruolo` e `Ruolo + anomalie` combinando `ha_ruolo`, `ha_anomalie` e l'eventuale filtro distretto anche sull'hitbox di click.
+- Filtra rapidamente i layer particelle su `Tutte` e `A ruolo`, combinando `ha_ruolo` e l'eventuale filtro distretto anche sull'hitbox di click; le particelle a ruolo con anomalie restano evidenziate dal colore rosso.
+- Quando un filtro rapido particelle viene attivato sotto il livello minimo dei tile particelle, la mappa porta automaticamente lo zoom a 13 per rendere visibili i risultati.
 - Permette di cambiare sfondo tra OpenStreetMap, imagery satellite raster e Google Map Tiles API; Google resta disabilitato finche non e disponibile `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`
 - Stile layer: particelle colorate per `ha_anomalie` (rosso/grigio), distretto per status
 

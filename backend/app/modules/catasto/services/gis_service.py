@@ -12,7 +12,7 @@ from typing import Any
 from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
 from shapely.geometry import shape
-from sqlalchemy import and_, desc, func, select, text
+from sqlalchemy import and_, desc, func, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.modules.catasto.schemas.gis_schemas import (
@@ -29,9 +29,11 @@ from app.modules.catasto.schemas.gis_schemas import (
     GisSavedSelectionUpdate,
     GisSelectResult,
     ParticellaGisSummary,
+    ParticellaPopupAnomalia,
     ParticellaPopupData,
     ParticellaPopupRuoloItem,
     ParticellaPopupRuoloSummary,
+    ParticellaPopupSwappedCapacitas,
     ParticellaPopupTitolare,
 )
 from app.models.catasto_phase1 import (
@@ -56,6 +58,7 @@ SARDINIA_BBOX = {
 PREVIEW_LIMIT = 200
 MAX_EXPORT_IDS = 10000
 ZERO_SHARE_TITLE_RE = re.compile(r"\b0\s*/\s*0\b")
+SWAPPED_ARBOREA_TERRALBA_REASON = "swapped_arborea_terralba"
 
 
 def _norm_str(value: Any) -> str | None:
@@ -323,14 +326,14 @@ def _load_popup_titolare(db: Session, particella_uuid: uuid.UUID) -> ParticellaP
 
 def _ruolo_parcel_match_condition(particella: CatParticella):
     subalterno = _norm_str(particella.subalterno)
-    conditions = [
+    legacy_conditions = [
         CatastoParcel.comune_codice == particella.codice_catastale,
         CatastoParcel.foglio == particella.foglio,
         CatastoParcel.particella == particella.particella,
     ]
     if subalterno:
-        conditions.append(func.coalesce(CatastoParcel.subalterno, "") == subalterno)
-    return and_(*conditions)
+        legacy_conditions.append(func.coalesce(CatastoParcel.subalterno, "") == subalterno)
+    return (RuoloParticella.cat_particella_id == particella.id) | and_(*legacy_conditions)
 
 
 def _load_particella_ruolo_summary(db: Session, particella: CatParticella) -> ParticellaPopupRuoloSummary | None:
@@ -446,6 +449,87 @@ def _load_particella_ruolo_summary(db: Session, particella: CatParticella) -> Pa
     )
 
 
+def _load_popup_swapped_capacitas(db: Session, particella_uuid: uuid.UUID) -> ParticellaPopupSwappedCapacitas | None:
+    base_filter = (
+        RuoloParticella.cat_particella_id == particella_uuid,
+        RuoloParticella.cat_particella_match_reason == SWAPPED_ARBOREA_TERRALBA_REASON,
+    )
+    n_righe = int(db.scalar(select(func.count(RuoloParticella.id)).where(*base_filter)) or 0)
+    if n_righe == 0:
+        return None
+
+    row = (
+        db.execute(
+            select(
+                CatastoParcel.comune_codice.label("source_codice_catastale"),
+                CatastoParcel.comune_nome.label("source_comune_nome"),
+                CatastoParcel.foglio.label("source_foglio"),
+                CatastoParcel.particella.label("source_particella"),
+                CatastoParcel.subalterno.label("source_subalterno"),
+                RuoloParticella.anno_tributario.label("anno_tributario_latest"),
+                RuoloParticella.cat_particella_match_confidence.label("match_confidence"),
+                RuoloParticella.cat_particella_match_reason.label("match_reason"),
+            )
+            .join(CatastoParcel, CatastoParcel.id == RuoloParticella.catasto_parcel_id)
+            .where(*base_filter)
+            .order_by(desc(RuoloParticella.anno_tributario), CatastoParcel.subalterno.nullsfirst())
+            .limit(1)
+        )
+        .mappings()
+        .first()
+    )
+    if row is None:
+        return None
+    return ParticellaPopupSwappedCapacitas(
+        source_codice_catastale=row["source_codice_catastale"],
+        source_comune_nome=row["source_comune_nome"],
+        source_foglio=row["source_foglio"],
+        source_particella=row["source_particella"],
+        source_subalterno=row["source_subalterno"],
+        anno_tributario_latest=row["anno_tributario_latest"],
+        match_confidence=row["match_confidence"],
+        match_reason=row["match_reason"],
+        n_righe_ruolo=n_righe,
+    )
+
+
+def _particella_anomalie_condition(particella_uuid: uuid.UUID):
+    return or_(
+        CatAnomalia.particella_id == particella_uuid,
+        CatUtenzaIrrigua.particella_id == particella_uuid,
+    )
+
+
+def _load_popup_anomalie_aperte(db: Session, particella_uuid: uuid.UUID) -> list[ParticellaPopupAnomalia]:
+    rows = (
+        db.execute(
+            select(CatAnomalia)
+            .outerjoin(CatUtenzaIrrigua, CatUtenzaIrrigua.id == CatAnomalia.utenza_id)
+            .where(
+                _particella_anomalie_condition(particella_uuid),
+                CatAnomalia.status == "aperta",
+            )
+            .order_by(desc(CatAnomalia.created_at))
+            .limit(6)
+        )
+        .scalars()
+        .all()
+    )
+    return [
+        ParticellaPopupAnomalia(
+            id=str(row.id),
+            anno_campagna=row.anno_campagna,
+            tipo=row.tipo,
+            severita=row.severita,
+            descrizione=row.descrizione,
+            dati_json=row.dati_json,
+            status=row.status,
+            created_at=row.created_at,
+        )
+        for row in rows
+    ]
+
+
 def get_popup_data(db: Session, particella_id: str) -> ParticellaPopupData:
     particella_uuid = _parse_uuid(particella_id, field_name="particella_id")
     particella = db.get(CatParticella, particella_uuid)
@@ -453,13 +537,17 @@ def get_popup_data(db: Session, particella_id: str) -> ParticellaPopupData:
         raise HTTPException(status_code=404, detail="Particella non trovata")
 
     n_anomalie_aperte = db.scalar(
-        select(func.count(CatAnomalia.id)).where(
-            CatAnomalia.particella_id == particella_uuid,
+        select(func.count(CatAnomalia.id))
+        .outerjoin(CatUtenzaIrrigua, CatUtenzaIrrigua.id == CatAnomalia.utenza_id)
+        .where(
+            _particella_anomalie_condition(particella_uuid),
             CatAnomalia.status == "aperta",
         )
     )
+    anomalie_aperte = _load_popup_anomalie_aperte(db, particella_uuid)
     ruolo_summary = _load_particella_ruolo_summary(db, particella)
     titolare = _load_popup_titolare(db, particella_uuid)
+    swapped_capacitas = _load_popup_swapped_capacitas(db, particella_uuid)
     return ParticellaPopupData(
         id=str(particella.id),
         cfm=particella.cfm,
@@ -478,6 +566,8 @@ def get_popup_data(db: Session, particella_id: str) -> ParticellaPopupData:
         titolare=titolare,
         ha_ruolo=ruolo_summary is not None,
         ruolo_summary=ruolo_summary,
+        swapped_capacitas=swapped_capacitas,
+        anomalie_aperte=anomalie_aperte,
     )
 
 
