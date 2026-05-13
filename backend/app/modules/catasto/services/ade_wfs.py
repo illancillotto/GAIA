@@ -297,6 +297,7 @@ def upsert_ade_parcels(db: Session, features: list[AdeParcelFeature], *, run_id:
             text(
                 """
                 INSERT INTO cat_ade_particelle (
+                    id,
                     source_run_id,
                     inspire_id_local_id,
                     inspire_id_namespace,
@@ -318,7 +319,8 @@ def upsert_ade_parcels(db: Session, features: list[AdeParcelFeature], *, run_id:
                     updated_at
                 )
                 VALUES (
-                    :source_run_id,
+                    gen_random_uuid(),
+                    CAST(:source_run_id AS uuid),
                     :inspire_id_local_id,
                     :inspire_id_namespace,
                     :national_cadastral_reference,
@@ -333,8 +335,8 @@ def upsert_ade_parcels(db: Session, features: list[AdeParcelFeature], *, run_id:
                     :particella_raw,
                     :label,
                     CASE
-                        WHEN :geometry_wkt_6706 IS NULL THEN NULL
-                        ELSE ST_Multi(ST_Transform(ST_SetSRID(ST_GeomFromText(:geometry_wkt_6706), 6706), 4326))
+                        WHEN CAST(:geometry_wkt_6706 AS text) IS NULL THEN NULL
+                        ELSE ST_Multi(ST_Transform(ST_SetSRID(ST_GeomFromText(CAST(:geometry_wkt_6706 AS text)), 6706), 4326))
                     END,
                     :source_crs,
                     CAST(:raw_payload_json AS json),

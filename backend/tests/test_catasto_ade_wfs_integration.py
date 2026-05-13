@@ -12,9 +12,12 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.catasto_phase1 import CatParticella, CatParticellaHistory
 from app.modules.catasto.services.ade_wfs import (
+    AdeParcelFeature,
     apply_ade_alignment,
     get_ade_alignment_report,
+    parse_national_cadastral_reference,
     preview_ade_alignment_apply,
+    upsert_ade_parcels,
 )
 
 
@@ -27,6 +30,18 @@ def _polygon_wkt(x0: float, y0: float, size: float = 0.001) -> str:
         f"{x0} {y0 + size}, "
         f"{x0} {y0}"
         ")))"
+    )
+
+
+def _polygon_wkt_6706(x0: float, y0: float, size: float = 0.001) -> str:
+    return (
+        "POLYGON(("
+        f"{x0} {y0}, "
+        f"{x0 + size} {y0}, "
+        f"{x0 + size} {y0 + size}, "
+        f"{x0} {y0 + size}, "
+        f"{x0} {y0}"
+        "))"
     )
 
 
@@ -391,6 +406,55 @@ def _insert_fk_dependents(db: Session, *, particella_id: str, suffix: str) -> tu
         },
     )
     return utenza_id, unit_id
+
+
+def test_upsert_ade_parcels_persists_wfs_geometry_with_psycopg_typed_binds(db_session: Session) -> None:
+    suffix = uuid4().hex[:8]
+    national_ref = f"A357A8{suffix[:3]}00.9{suffix[3:6]}"
+    run_ids: list[str] = []
+
+    _ensure_comune_arborea(db_session)
+    try:
+        run_id = _create_run(db_session, min_lon=8.50, min_lat=39.50, max_lon=8.53, max_lat=39.53)
+        run_ids.append(run_id)
+        ref = parse_national_cadastral_reference(national_ref)
+        feature = AdeParcelFeature(
+            national_cadastral_reference=national_ref,
+            inspire_id_local_id=f"IT.AGE.PLA.{national_ref}",
+            inspire_id_namespace="IT.AGE.PLA.",
+            administrative_unit="A357",
+            label=ref.particella,
+            cadastral_reference=ref,
+            geometry_wkt_6706=_polygon_wkt_6706(8.51, 39.51),
+            raw_payload={"national_cadastral_reference": national_ref},
+        )
+
+        result = upsert_ade_parcels(db_session, [feature], run_id=run_id)
+        db_session.commit()
+        row = db_session.execute(
+            text(
+                """
+                SELECT source_run_id::text, ST_IsValid(geometry), ST_SRID(geometry)
+                FROM cat_ade_particelle
+                WHERE national_cadastral_reference = :national_ref
+                """
+            ),
+            {"national_ref": national_ref},
+        ).one()
+
+        assert result == {"upserted": 1, "with_geometry": 1}
+        assert row.source_run_id == run_id
+        assert row.st_isvalid is True
+        assert row.st_srid == 4326
+    finally:
+        db_session.rollback()
+        db_session.execute(
+            text("DELETE FROM cat_ade_particelle WHERE national_cadastral_reference = :national_ref"),
+            {"national_ref": national_ref},
+        )
+        if run_ids:
+            db_session.execute(text("DELETE FROM cat_ade_sync_runs WHERE id = ANY(:run_ids)"), {"run_ids": run_ids})
+        db_session.commit()
 
 
 def test_apply_ade_alignment_updates_geometry_in_place_and_preserves_fk(db_session: Session) -> None:
