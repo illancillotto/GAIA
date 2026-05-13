@@ -193,18 +193,27 @@ const ADE_APPLY_CATEGORIES = ["nuove_in_ade", "geometrie_variate"] as const;
 
 function geometryToBbox(geometry: GeoJSON.Geometry): AdeBboxForm | null {
   const coordinates: number[][] = [];
-  const collect = (value: unknown): void => {
-    if (!Array.isArray(value)) return;
+  const stack: unknown[] = [];
+  if (geometry.type === "GeometryCollection") {
+    for (const item of geometry.geometries) {
+      stack.push("coordinates" in item ? item.coordinates : []);
+    }
+  } else {
+    stack.push(geometry.coordinates);
+  }
+
+  while (stack.length > 0) {
+    const value = stack.pop();
+    if (!Array.isArray(value)) {
+      continue;
+    }
     if (value.length >= 2 && typeof value[0] === "number" && typeof value[1] === "number") {
       coordinates.push([value[0], value[1]]);
-      return;
+      continue;
     }
-    value.forEach(collect);
-  };
-  if (geometry.type === "GeometryCollection") {
-    geometry.geometries.forEach((item) => collect("coordinates" in item ? item.coordinates : []));
-  } else {
-    collect(geometry.coordinates);
+    for (let index = 0; index < value.length; index += 1) {
+      stack.push(value[index]);
+    }
   }
   if (coordinates.length === 0) return null;
 
