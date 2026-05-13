@@ -15,8 +15,8 @@ Usare stati coerenti:
 - `BLOCKED`
 - `DONE`
 
-Data ultimo aggiornamento: 2026-04-10
-Responsabile aggiornamento: GSD Autonomous
+Data ultimo aggiornamento: 2026-05-13
+Responsabile aggiornamento: Codex
 
 ---
 
@@ -34,10 +34,10 @@ Responsabile aggiornamento: GSD Autonomous
 | API Segnalazioni/Pratiche | DONE | Report→Case automatico + workflow completo + eventi + import White + dashboard arricchito |
 | Allegati/Storage | DONE | Model + service + dashboard + quote monitoring |
 | Frontend desktop | DONE | Pagine complete: dashboard, operatori (anagrafica + organigramma aree/utenti), carte carburante (anagrafica + import excel + passaggi driver), mezzi, attività, segnalazioni, pratiche, storage + pagine dettaglio; refresh UI liste, dettagli, storage e mini-app con shell condiviso hero/KPI/filter/list + cruscotto segnalazioni con import White |
-| Mini-app operatori | DONE | Pagina home con 3 azioni + stato connessione |
-| Offline minimo | TODO | Bozze locali IndexedDB da implementare |
+| Mini-app operatori | DONE | Superficie mobile-first con home, avvio/chiusura attività, nuova segnalazione, liste personali e bozze locali |
+| Offline minimo | DONE | Bozze locali IndexedDB con stati `draft/pending/error/synced`, retry manuale/bulk e auto-sync alla riconnessione |
 | GPS integration layer | DONE | Model GPS + track summary + adapter pattern pronto |
-| Test | DONE | 21 unit test passano |
+| Test | DONE | Suite Operazioni mirata: 53 test backend passano; suite frontend Vitest: 18 test passano |
 | Documentazione dominio | DONE | Progress aggiornato |
 
 ---
@@ -209,7 +209,7 @@ Responsabile aggiornamento: GSD Autonomous
 
 ## Milestone 5 — Mini-app operatori
 
-**Stato:** DONE (base)
+**Stato:** DONE (base operativa)
 
 ### Checklist
 - [x] Home mini-app
@@ -220,9 +220,11 @@ Responsabile aggiornamento: GSD Autonomous
 - [x] Liste personali
 - [x] Bozze locali
 - [x] Retry invii pendenti
+- [x] Sync manuale singolo e massivo bozze
+- [x] Rientro contestuale dai dettagli con `?context=miniapp`
 
 ### Note
-- Home mini-app con 3 azioni principali implementata
+- Home mini-app con azioni principali implementata
 - Rilevamento stato connessione online/offline
 - Retry automatico delle bozze `pending/error` quando il browser torna online
 - Le bozze sincronizzate vengono rimosse automaticamente dalla coda locale
@@ -231,9 +233,10 @@ Responsabile aggiornamento: GSD Autonomous
 - I link aperti da `liste personali` propagano `?context=miniapp` per mantenere breadcrumb operativo e shortcut coerenti nei dettagli
 - Le schede dettaglio mostrano ora anche team/mezzo/durata/revisione per attività, descrizione/GPS/attività collegata per segnalazioni e milestone temporali/priorità per pratiche
 - Le schede dettaglio supportano ora preview inline e download degli allegati; resta opzionale solo un eventuale viewer GPS ancora più esteso sul payload grezzo
+- Le bozze offline sono gestite in `frontend/src/features/operazioni/utils/offline-drafts.ts` via IndexedDB e vengono consumate dalle pagine `miniapp/attivita/nuova`, `miniapp/attivita/chiusura`, `miniapp/segnalazioni/nuova` e `miniapp/bozze`
 
 ### Blocchi
-- Nessuno
+- Da validare sul campo UX mobile reale e comportamento browser con rete instabile/prolungata offline
 
 ---
 
@@ -308,6 +311,24 @@ Responsabile aggiornamento: GSD Autonomous
 ---
 
 ## 5. Change log operativo
+
+### 2026-05-13
+
+#### Mini-app Operazioni — verifica stato e allineamento documentazione
+
+- Verificato stato reale della mini-app operatori: home, avvio attività, chiusura attività, nuova segnalazione, liste personali e bozze offline risultano implementati.
+- Confermata la gestione offline minima con IndexedDB, stati di sincronizzazione, retry manuale, retry bulk, auto-sync alla riconnessione e rimozione bozze sincronizzate.
+- Confermate le API backend usate dalla mini-app: catalogo attività, team, mezzi, start/stop attività, segnalazioni, pratiche, allegati e dettagli contestuali.
+- Aggiornato lo stato generale da `Offline minimo TODO` a `DONE`, perché la funzionalità è già presente nel codice.
+- Test di riferimento verificati: `backend/.venv/bin/pytest backend/tests/test_operazioni.py backend/tests/test_operazioni_api.py backend/tests/test_operazioni_analytics.py` con 53 passati; `npm test` con 18 passati.
+- Rimangono come prossimi step consigliati test E2E mobile/offline, validazione con operatori reali, hardening rete instabile e scelta provider GPS effettivo.
+
+#### GAIA Mobile — progetto satellite cloud + connector
+
+- Definita la strategia per non esporre GAIA LAN su internet: la mini-app interna resta superficie LAN/VPN e riferimento UX, mentre gli operatori fuori sede useranno un futuro progetto separato `gaia-mobile`.
+- Il progetto `gaia-mobile` dovrà includere PWA cloud, gateway API, sync queue e connector locale outbound-only verso GAIA.
+- Preparati i documenti di avvio: PRD, architettura, execution plan, protocollo sync, prompt Codex e strategia di riuso della mini-app esistente.
+- Il codice della mini-app GAIA non va portato via copia/incolla: si riusano flussi, IndexedDB e stati concettuali, adattandoli al modello asincrono cloud -> connector -> GAIA.
 
 ### 2026-04-22
 

@@ -95,12 +95,20 @@ La documentazione del progetto e distribuita principalmente in due aree:
 ### Operazioni
 
 - `domain-docs/operazioni/README.md` non presente
-- `domain-docs/operazioni/docs/GAIA_OPERAZIONI_PRD.md`
-- `domain-docs/operazioni/docs/GAIA_OPERAZIONI_UI_UX.md`
+- `domain-docs/operazioni/docs/GAIA_OPERAZIONI_PRD_COMPLETO.md`
+- `domain-docs/operazioni/docs/GAIA_OPERAZIONI_EXECUTION_PLAN_COMPLETO.md`
+- `domain-docs/operazioni/docs/GAIA_OPERAZIONI_DB_SCHEMA.md`
 - `domain-docs/operazioni/docs/GAIA_OPERAZIONI_PROGRESS.md`
 - `domain-docs/operazioni/docs/GAIA_OPERAZIONI_API_COMPLETE.md`
-- `domain-docs/operazioni/docs/GAIA_OPERAZIONI_DEVOPS_LOCAL_SETUP.md`
-- `domain-docs/operazioni/docs/GAIA_OPERAZIONI_QUALITY.md`
+- `domain-docs/operazioni/docs/GAIA_OPERAZIONI_PROMPT_BACKEND.md`
+- `domain-docs/operazioni/docs/GAIA_OPERAZIONI_PROMPT_FRONTEND.md`
+- `domain-docs/operazioni/docs/PROMPT_SEGNALAZIONI_VIEWER.md`
+- `domain-docs/operazioni/docs/GAIA_MOBILE_PRD.md`
+- `domain-docs/operazioni/docs/GAIA_MOBILE_ARCHITECTURE.md`
+- `domain-docs/operazioni/docs/GAIA_MOBILE_EXECUTION_PLAN.md`
+- `domain-docs/operazioni/docs/GAIA_MOBILE_SYNC_PROTOCOL.md`
+- `domain-docs/operazioni/docs/GAIA_MOBILE_CODEX_PROMPT.md`
+- `domain-docs/operazioni/docs/GAIA_MOBILE_REUSE_STRATEGY.md`
 
 ### Riordino
 
