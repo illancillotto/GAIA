@@ -11,7 +11,11 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.catasto_phase1 import CatParticella, CatParticellaHistory
-from app.modules.catasto.services.ade_wfs import apply_ade_alignment, preview_ade_alignment_apply
+from app.modules.catasto.services.ade_wfs import (
+    apply_ade_alignment,
+    get_ade_alignment_report,
+    preview_ade_alignment_apply,
+)
 
 
 def _polygon_wkt(x0: float, y0: float, size: float = 0.001) -> str:
@@ -470,6 +474,10 @@ def test_apply_ade_alignment_updates_geometry_in_place_and_preserves_fk(db_sessi
         assert linked_unit == particella_id
         assert len(history_rows) == 1
         assert history_rows[0].change_reason == "ade_wfs_alignment"
+
+        report_after = get_ade_alignment_report(db_session, run_id, geometry_threshold_m=1)
+        assert report_after["counters"]["geometrie_variate"] == 0
+        assert report_after["counters"]["allineate"] == 1
     finally:
         _cleanup(db_session, suffix=suffix, run_ids=run_ids)
 
@@ -648,5 +656,77 @@ def test_apply_ade_alignment_skips_new_parcels_when_comune_is_unmapped(db_sessio
         assert result["counters"]["inserted_new"] == 0
         assert result["counters"]["skipped_missing_comune"] == 1
         assert inserted == []
+    finally:
+        _cleanup(db_session, suffix=suffix, run_ids=run_ids)
+
+
+def test_apply_ade_alignment_standard_does_not_suppress_missing_gaia(db_session: Session) -> None:
+    suffix = uuid4().hex[:8]
+    foglio = f"8{suffix[:2]}"
+    missing_particella = f"7{suffix[2:5]}"
+    new_particella = f"8{suffix[2:5]}"
+    run_ids: list[str] = []
+
+    _ensure_comune_arborea(db_session)
+    _cleanup(db_session, suffix=suffix)
+    try:
+        missing_id = _insert_particella(
+            db_session,
+            foglio=foglio,
+            particella=missing_particella,
+            wkt=_polygon_wkt(8.41, 39.41),
+            suffix=suffix,
+        )
+        run_id = _create_run(db_session, min_lon=8.40, min_lat=39.40, max_lon=8.43, max_lat=39.43)
+        run_ids.append(run_id)
+        _insert_ade_particella(
+            db_session,
+            run_id=run_id,
+            national_ref=f"A357A{foglio.zfill(4)}00.{new_particella}",
+            foglio=foglio,
+            particella=new_particella,
+            wkt=_polygon_wkt(8.42, 39.42),
+        )
+        db_session.commit()
+
+        preview = preview_ade_alignment_apply(
+            db_session,
+            run_id,
+            categories=["nuove_in_ade", "geometrie_variate"],
+            geometry_threshold_m=1,
+        )
+        result = apply_ade_alignment(
+            db_session,
+            run_id,
+            categories=["nuove_in_ade", "geometrie_variate"],
+            geometry_threshold_m=1,
+            confirm=True,
+        )
+        db_session.expire_all()
+        missing = db_session.get(CatParticella, missing_id)
+        inserted = db_session.execute(
+            select(CatParticella).where(
+                CatParticella.codice_catastale == "A357",
+                CatParticella.foglio == foglio,
+                CatParticella.particella == new_particella,
+                CatParticella.is_current.is_(True),
+            )
+        ).scalar_one()
+        missing_history = db_session.execute(
+            select(CatParticellaHistory).where(CatParticellaHistory.particella_id == missing_id)
+        ).scalars().all()
+        report_after = get_ade_alignment_report(db_session, run_id, geometry_threshold_m=1)
+
+        assert preview["counters"]["insert_new"] == 1
+        assert preview["counters"]["suppress_missing"] == 0
+        assert preview["counters"]["skipped_not_selected"] == 1
+        assert result["counters"]["inserted_new"] == 1
+        assert result["counters"]["suppressed_missing"] == 0
+        assert missing is not None
+        assert missing.suppressed is False
+        assert missing.is_current is True
+        assert inserted.source_type == "ade_wfs"
+        assert missing_history == []
+        assert report_after["counters"]["mancanti_in_ade"] == 1
     finally:
         _cleanup(db_session, suffix=suffix, run_ids=run_ids)
