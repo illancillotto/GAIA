@@ -87,6 +87,12 @@ const BASEMAP_OPTIONS: Array<{ id: GisBasemap; label: string; swatch: string; re
   { id: "satellite", label: "Satellite", swatch: "bg-cyan-600" },
   { id: "google_satellite", label: "Google Earth", swatch: "bg-lime-600", requiresGoogleKey: true },
 ];
+type ParticelleQuickFilter = "all" | "ruolo" | "ruolo_anomalie";
+const PARTICELLE_QUICK_FILTERS: Array<{ id: ParticelleQuickFilter; label: string; dot: string }> = [
+  { id: "all", label: "Tutte", dot: "bg-indigo-400" },
+  { id: "ruolo", label: "A ruolo", dot: "bg-emerald-500" },
+  { id: "ruolo_anomalie", label: "Ruolo + anomalie", dot: "bg-rose-500" },
+];
 
 function toNullableCellString(value: unknown): string | null {
   if (value == null) return null;
@@ -296,6 +302,7 @@ export default function CatastoGisPage() {
   const [showDistrettiFill, setShowDistrettiFill] = useState(true);
   const [showParticelle, setShowParticelle] = useState(false);
   const [showParticelleFill, setShowParticelleFill] = useState(true);
+  const [particelleQuickFilter, setParticelleQuickFilter] = useState<ParticelleQuickFilter>("all");
   const [basemap, setBasemap] = useState<GisBasemap>("osm");
   const [highlightSelected, setHighlightSelected] = useState(true);
   const [distrettiOpacity, setDistrettiOpacity] = useState(0.34);
@@ -708,6 +715,12 @@ export default function CatastoGisPage() {
     setResizeSignal((value) => value + 1);
   }, []);
 
+  const handleSetParticelleQuickFilter = useCallback((filter: ParticelleQuickFilter) => {
+    setParticelleQuickFilter(filter);
+    setShowParticelle(true);
+    setShowParticelleFill(true);
+  }, []);
+
   const handleExport = useCallback(
     async (format: "geojson" | "csv") => {
       if (!token || !result || result.particelle.length === 0) return;
@@ -1026,6 +1039,40 @@ export default function CatastoGisPage() {
             >
               <span className={`h-2 w-2 shrink-0 rounded-full ${option.swatch}`} />
               <span className="truncate">{option.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+
+  const renderParticelleQuickFilters = (isDark: boolean) => (
+    <div className={`mt-2 rounded-2xl border px-2.5 py-2 ${isDark ? "border-white/15 bg-white/5" : "border-indigo-100 bg-white/70"}`}>
+      <p className={`mb-2 text-[10px] font-semibold uppercase tracking-widest ${isDark ? "text-white/50" : "text-indigo-500"}`}>
+        Filtro rapido particelle
+      </p>
+      <div className="flex flex-wrap gap-1.5">
+        {PARTICELLE_QUICK_FILTERS.map((option) => {
+          const selected = particelleQuickFilter === option.id;
+          return (
+            <button
+              key={option.id}
+              type="button"
+              onClick={() => handleSetParticelleQuickFilter(option.id)}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
+                selected
+                  ? option.id === "ruolo_anomalie"
+                    ? "border-rose-200 bg-rose-50 text-rose-700 shadow-sm"
+                    : option.id === "ruolo"
+                      ? "border-emerald-200 bg-emerald-50 text-emerald-700 shadow-sm"
+                      : "border-indigo-200 bg-indigo-50 text-indigo-700 shadow-sm"
+                  : isDark
+                    ? "border-white/10 bg-white/5 text-white/60 hover:bg-white/10"
+                    : "border-gray-200 bg-white text-gray-500 hover:border-indigo-100 hover:text-indigo-700"
+              }`}
+            >
+              <span className={`h-1.5 w-1.5 rounded-full ${selected ? option.dot : isDark ? "bg-white/35" : "bg-gray-300"}`} />
+              {option.label}
             </button>
           );
         })}
@@ -1608,6 +1655,7 @@ export default function CatastoGisPage() {
                     distretto: distrettoLayer.trim() ? distrettoLayer.trim() : null,
                     highlightSelected,
                     distrettoColors: distrettoColorMap,
+                    particelleQuickFilter,
                   }}
                   overlayLayers={visibleOverlayLayers}
                   focusGeojson={focusGeojson}
@@ -1946,6 +1994,7 @@ export default function CatastoGisPage() {
                           Evidenzia sel.
                         </button>
                       </div>
+                      {renderParticelleQuickFilters(false)}
                     </div>
                     {renderDistrettiPanel(false)}
                     {renderAdeAlignmentPanel(false)}
@@ -2082,6 +2131,7 @@ export default function CatastoGisPage() {
                       Evidenzia sel.
                     </button>
                   </div>
+                  {renderParticelleQuickFilters(false)}
                 </div>
 
                 {renderDistrettiPanel(false)}

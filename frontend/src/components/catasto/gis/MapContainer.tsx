@@ -24,6 +24,7 @@ interface MapContainerProps {
     distretto?: string | null;
     highlightSelected?: boolean;
     distrettoColors?: Record<string, string>;
+    particelleQuickFilter?: "all" | "ruolo" | "ruolo_anomalie";
   };
   overlayLayers?: GisMapOverlayLayer[];
   focusGeojson?: GeoJSON.FeatureCollection | null;
@@ -48,6 +49,7 @@ type Position = [number, number] | [number, number, number];
 type LinearRing = Position[];
 type PolygonCoords = LinearRing[];
 type MultiPolygonCoords = PolygonCoords[];
+type ParticelleQuickFilter = "all" | "ruolo" | "ruolo_anomalie";
 
 const CONSORZIO_BOUNDS: [[number, number], [number, number]] = [
   [8.39, 39.62],
@@ -58,6 +60,13 @@ const CONSORZIO_MAX_BOUNDS: [[number, number], [number, number]] = [
   [9.1, 40.25],
 ];
 const GOOGLE_MAP_TILES_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY?.trim() ?? "";
+
+const BOOLEAN_TRUE_EXPRESSION: (property: string) => maplibregl.ExpressionSpecification = (property) => [
+  "any",
+  ["==", ["get", property], true],
+  ["==", ["get", property], 1],
+  ["==", ["get", property], "true"],
+];
 
 type GoogleTilesSession = {
   session?: string;
@@ -71,6 +80,26 @@ function canCreateWebGLContext(): boolean {
   } catch {
     return false;
   }
+}
+
+function buildParticelleFilter(
+  distretto: string | null,
+  quickFilter: ParticelleQuickFilter,
+): maplibregl.FilterSpecification | null {
+  const clauses: maplibregl.ExpressionSpecification[] = [];
+  if (distretto) {
+    clauses.push(["==", ["get", "num_distretto"], distretto]);
+  }
+  if (quickFilter === "ruolo" || quickFilter === "ruolo_anomalie") {
+    clauses.push(BOOLEAN_TRUE_EXPRESSION("ha_ruolo"));
+  }
+  if (quickFilter === "ruolo_anomalie") {
+    clauses.push(BOOLEAN_TRUE_EXPRESSION("ha_anomalie"));
+  }
+
+  if (clauses.length === 0) return null;
+  if (clauses.length === 1) return clauses[0] as maplibregl.FilterSpecification;
+  return ["all", ...clauses] as maplibregl.FilterSpecification;
 }
 
 function getGeometryRings(geom: GeoJSON.Geometry): PolygonCoords {
@@ -610,6 +639,7 @@ export default function MapContainer({
     const distrettiOpacity = mapLayers?.distrettiOpacity ?? 0.3;
     const particelleOpacity = mapLayers?.particelleOpacity ?? 0.42;
     const distrettoColor = buildDistrettoColorExpression(mapLayers?.distrettoColors);
+    const particelleQuickFilter = mapLayers?.particelleQuickFilter ?? "all";
 
     if (map.getLayer("distretti-fill")) {
       map.setLayoutProperty("distretti-fill", "visibility", showDistretti && showDistrettiFill ? "visible" : "none");
@@ -640,9 +670,10 @@ export default function MapContainer({
     }
 
     if (map.getLayer("particelle-fill")) {
-      map.setFilter("particelle-fill", distretto ? ["==", ["get", "num_distretto"], distretto] : null);
-      map.setFilter("particelle-outline", distretto ? ["==", ["get", "num_distretto"], distretto] : null);
-      map.setFilter("particelle-hitbox", distretto ? ["==", ["get", "num_distretto"], distretto] : null);
+      const particelleFilter = buildParticelleFilter(distretto, particelleQuickFilter);
+      map.setFilter("particelle-fill", particelleFilter);
+      map.setFilter("particelle-outline", particelleFilter);
+      map.setFilter("particelle-hitbox", particelleFilter);
     }
 
     const highlight = mapLayers?.highlightSelected ?? true;

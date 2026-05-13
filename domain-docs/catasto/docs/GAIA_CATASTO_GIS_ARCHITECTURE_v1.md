@@ -406,6 +406,7 @@ Responsabilità:
 - Gestisce click su distretto → emette evento verso SelectionPanel
 - Riceve geometria disegnata da DrawingTools → chiama `POST /catasto/gis/select`
 - Evidenzia le particelle a ruolo direttamente nel fill MVT usando la property booleana `ha_ruolo` esposta dalla view `cat_particelle_current`; la property viene calcolata via `catasto_parcels` su codice catastale comune/foglio/particella/subalterno, non tramite UUID diretto tra `ruolo_particelle` e `cat_particelle`
+- Filtra rapidamente i layer particelle su `Tutte`, `A ruolo` e `Ruolo + anomalie` combinando `ha_ruolo`, `ha_anomalie` e l'eventuale filtro distretto anche sull'hitbox di click.
 - Permette di cambiare sfondo tra OpenStreetMap, imagery satellite raster e Google Map Tiles API; Google resta disabilitato finche non e disponibile `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`
 - Stile layer: particelle colorate per `ha_anomalie` (rosso/grigio), distretto per status
 
