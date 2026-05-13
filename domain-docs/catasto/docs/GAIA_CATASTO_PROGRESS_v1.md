@@ -112,6 +112,7 @@ Legend: 🔴 Non iniziato · 🟡 In corso · 🟢 Completato · ⚫ Bloccato
 | 2.14 | Wizard GIS allineamento AdE | 🟢 | `frontend/src/app/catasto/gis/page.tsx` + `frontend/src/lib/api/catasto.ts` | Pannello sidebar `Allinea particelle AdE`: bbox manuale, da area disegnata o distretto selezionato; avvia sync WFS, usa `run_id` e mostra il report differenze senza apply automatico |
 | 2.15 | Preview geometrica AdE/GAIA | 🟢 | `backend/app/modules/catasto/services/ade_wfs.py` + `frontend/src/components/catasto/gis/MapContainer.tsx` | Il report include GeoJSON preview delle differenze; il wizard lo carica come overlay colorato in mappa per nuove AdE, geometrie variate, geometrie GAIA correnti e mancanti AdE |
 | 2.16 | Dry-run apply allineamento AdE | 🟢 | `backend/app/modules/catasto/services/ade_wfs.py` + `routes/gis.py` + `frontend/src/app/catasto/gis/page.tsx` | `POST /catasto/gis/ade-wfs/alignment-apply-preview/{run_id}` stima inserimenti, update geometria, soppressioni e impatti sui riferimenti collegati senza modificare `cat_particelle`; il wizard mostra la preview e i match ambigui sono esclusi |
+| 2.17 | Apply backend allineamento AdE | 🟢 | `backend/app/modules/catasto/services/ade_wfs.py` + `routes/gis.py` | `POST /catasto/gis/ade-wfs/alignment-apply/{run_id}` richiede `confirm=true`, inserisce nuove AdE risolvibili su comune, aggiorna geometrie in-place con history e consente soppressione mancanti solo con flag esplicito |
 
 ---
 

@@ -1038,3 +1038,370 @@ def preview_ade_alignment_apply(
         "warnings": warnings,
         "samples": [dict(item) for item in samples],
     }
+
+
+def apply_ade_alignment(
+    db: Session,
+    run_id: str,
+    *,
+    categories: list[str] | None = None,
+    geometry_threshold_m: float = 1.0,
+    confirm: bool = False,
+    allow_suppress_missing: bool = False,
+) -> dict[str, Any]:
+    if not confirm:
+        raise ValueError("Conferma esplicita richiesta per applicare l'allineamento AdE.")
+    if db.bind is None or db.bind.dialect.name != "postgresql":
+        raise ValueError("Applicazione allineamento AdE disponibile solo su PostgreSQL/PostGIS.")
+
+    try:
+        run_uuid = UUID(str(run_id))
+    except ValueError as exc:
+        raise ValueError("Run AdE non valido.") from exc
+
+    run = db.get(CatAdeSyncRun, run_uuid)
+    if run is None:
+        raise ValueError("Run AdE non trovato.")
+    if run.status != "completed":
+        raise ValueError("Applicazione disponibile solo per run AdE completati.")
+
+    selected_categories = _normalize_apply_categories(categories)
+    if "mancanti_in_ade" in selected_categories and not allow_suppress_missing:
+        raise ValueError("Soppressione mancanti in AdE non abilitata: impostare allow_suppress_missing=true.")
+
+    bbox = run.request_bbox_json
+    params = {
+        "run_id": run_id,
+        "threshold_m": geometry_threshold_m,
+        "selected_categories": selected_categories,
+        "min_lon": bbox["min_lon"],
+        "min_lat": bbox["min_lat"],
+        "max_lon": bbox["max_lon"],
+        "max_lat": bbox["max_lat"],
+    }
+    cte = """
+        WITH scope AS (
+            SELECT ST_MakeEnvelope(:min_lon, :min_lat, :max_lon, :max_lat, 4326) AS geom
+        ),
+        ade AS (
+            SELECT *
+            FROM cat_ade_particelle
+            WHERE source_run_id = :run_id
+        ),
+        ade_matches AS (
+            SELECT
+                a.id AS ade_id,
+                COUNT(p.id) AS match_count,
+                MAX(p.id::text)::uuid AS particella_id
+            FROM ade a
+            LEFT JOIN cat_particelle p
+              ON p.is_current IS TRUE
+             AND p.codice_catastale = a.codice_catastale
+             AND COALESCE(p.sezione_catastale, '') = COALESCE(a.sezione_catastale, '')
+             AND p.foglio = a.foglio
+             AND p.particella = a.particella
+            GROUP BY a.id
+        ),
+        classified_ade AS (
+            SELECT
+                a.*,
+                m.particella_id,
+                CASE
+                    WHEN m.match_count = 0 THEN 'nuove_in_ade'
+                    WHEN m.match_count > 1 THEN 'match_ambiguo'
+                    WHEN a.geometry IS NOT NULL
+                     AND p.geometry IS NOT NULL
+                     AND ST_HausdorffDistance(ST_Transform(a.geometry, 32632), ST_Transform(p.geometry, 32632)) > :threshold_m
+                        THEN 'geometrie_variate'
+                    ELSE 'allineate'
+                END AS category
+            FROM ade a
+            JOIN ade_matches m ON m.ade_id = a.id
+            LEFT JOIN cat_particelle p ON p.id = m.particella_id
+        ),
+        missing_gaia AS (
+            SELECT p.*
+            FROM cat_particelle p, scope
+            WHERE p.is_current IS TRUE
+              AND p.geometry IS NOT NULL
+              AND ST_Intersects(p.geometry, scope.geom)
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM ade a
+                  WHERE a.codice_catastale = p.codice_catastale
+                    AND COALESCE(a.sezione_catastale, '') = COALESCE(p.sezione_catastale, '')
+                    AND a.foglio = p.foglio
+                    AND a.particella = p.particella
+              )
+        )
+    """
+
+    skipped = db.execute(
+        text(
+            cte
+            + """
+            SELECT
+                COUNT(*) FILTER (WHERE category = 'match_ambiguo') AS skipped_ambiguous,
+                (
+                    COUNT(*) FILTER (
+                        WHERE category IN ('nuove_in_ade', 'geometrie_variate')
+                          AND category <> ALL(:selected_categories)
+                    )
+                    + (SELECT COUNT(*) FROM missing_gaia WHERE 'mancanti_in_ade' <> ALL(:selected_categories))
+                ) AS skipped_not_selected,
+                COUNT(*) FILTER (
+                    WHERE category = 'nuove_in_ade'
+                      AND category = ANY(:selected_categories)
+                      AND c.id IS NULL
+                ) AS skipped_missing_comune
+            FROM classified_ade a
+            LEFT JOIN cat_comuni c ON c.codice_catastale = a.codice_catastale
+            """
+        ),
+        params,
+    ).one()
+
+    try:
+        updated_history = db.execute(
+            text(
+                cte
+                + """
+                INSERT INTO cat_particelle_history (
+                  history_id,
+                  particella_id,
+                  comune_id,
+                  national_code,
+                  cod_comune_capacitas,
+                  codice_catastale,
+                  foglio,
+                  particella,
+                  subalterno,
+                  superficie_mq,
+                  superficie_grafica_mq,
+                  num_distretto,
+                  geometry,
+                  valid_from,
+                  valid_to,
+                  changed_at,
+                  change_reason
+                )
+                SELECT
+                  gen_random_uuid(),
+                  p.id,
+                  p.comune_id,
+                  p.national_code,
+                  p.cod_comune_capacitas,
+                  p.codice_catastale,
+                  p.foglio,
+                  p.particella,
+                  p.subalterno,
+                  p.superficie_mq,
+                  p.superficie_grafica_mq,
+                  p.num_distretto,
+                  p.geometry,
+                  p.valid_from,
+                  CURRENT_DATE,
+                  now(),
+                  'ade_wfs_alignment'
+                FROM classified_ade a
+                JOIN cat_particelle p ON p.id = a.particella_id
+                WHERE a.category = 'geometrie_variate'
+                  AND a.category = ANY(:selected_categories)
+                  AND a.geometry IS NOT NULL
+                  AND p.geometry IS NOT NULL
+                RETURNING particella_id
+                """
+            ),
+            params,
+        ).rowcount or 0
+
+        updated_geometry = db.execute(
+            text(
+                cte
+                + """
+                UPDATE cat_particelle p
+                SET geometry = a.geometry,
+                    source_type = 'ade_wfs',
+                    updated_at = now()
+                FROM classified_ade a
+                WHERE p.id = a.particella_id
+                  AND a.category = 'geometrie_variate'
+                  AND a.category = ANY(:selected_categories)
+                  AND a.geometry IS NOT NULL
+                  AND p.geometry IS NOT NULL
+                RETURNING p.id
+                """
+            ),
+            params,
+        ).rowcount or 0
+
+        inserted_new = db.execute(
+            text(
+                cte
+                + """
+                INSERT INTO cat_particelle (
+                  id,
+                  comune_id,
+                  national_code,
+                  cod_comune_capacitas,
+                  codice_catastale,
+                  nome_comune,
+                  sezione_catastale,
+                  foglio,
+                  particella,
+                  subalterno,
+                  cfm,
+                  superficie_mq,
+                  superficie_grafica_mq,
+                  num_distretto,
+                  nome_distretto,
+                  geometry,
+                  source_type,
+                  import_batch_id,
+                  valid_from,
+                  valid_to,
+                  is_current,
+                  suppressed,
+                  created_at,
+                  updated_at
+                )
+                SELECT
+                  gen_random_uuid(),
+                  c.id,
+                  a.national_cadastral_reference,
+                  c.cod_comune_capacitas,
+                  a.codice_catastale,
+                  c.nome_comune,
+                  a.sezione_catastale,
+                  a.foglio,
+                  a.particella,
+                  NULL,
+                  NULL,
+                  CASE WHEN a.geometry IS NULL THEN NULL ELSE ST_Area(ST_Transform(a.geometry, 32632)) END,
+                  CASE WHEN a.geometry IS NULL THEN NULL ELSE ST_Area(ST_Transform(a.geometry, 32632)) END,
+                  NULL,
+                  NULL,
+                  a.geometry,
+                  'ade_wfs',
+                  NULL,
+                  CURRENT_DATE,
+                  NULL,
+                  true,
+                  false,
+                  now(),
+                  now()
+                FROM classified_ade a
+                JOIN cat_comuni c ON c.codice_catastale = a.codice_catastale
+                WHERE a.category = 'nuove_in_ade'
+                  AND a.category = ANY(:selected_categories)
+                  AND NOT EXISTS (
+                      SELECT 1
+                      FROM cat_particelle p
+                      WHERE p.is_current IS TRUE
+                        AND p.codice_catastale = a.codice_catastale
+                        AND COALESCE(p.sezione_catastale, '') = COALESCE(a.sezione_catastale, '')
+                        AND p.foglio = a.foglio
+                        AND p.particella = a.particella
+                  )
+                RETURNING id
+                """
+            ),
+            params,
+        ).rowcount or 0
+
+        suppressed_missing = 0
+        if "mancanti_in_ade" in selected_categories:
+            db.execute(
+                text(
+                    cte
+                    + """
+                    INSERT INTO cat_particelle_history (
+                      history_id,
+                      particella_id,
+                      comune_id,
+                      national_code,
+                      cod_comune_capacitas,
+                      codice_catastale,
+                      foglio,
+                      particella,
+                      subalterno,
+                      superficie_mq,
+                      superficie_grafica_mq,
+                      num_distretto,
+                      geometry,
+                      valid_from,
+                      valid_to,
+                      changed_at,
+                      change_reason
+                    )
+                    SELECT
+                      gen_random_uuid(),
+                      p.id,
+                      p.comune_id,
+                      p.national_code,
+                      p.cod_comune_capacitas,
+                      p.codice_catastale,
+                      p.foglio,
+                      p.particella,
+                      p.subalterno,
+                      p.superficie_mq,
+                      p.superficie_grafica_mq,
+                      p.num_distretto,
+                      p.geometry,
+                      p.valid_from,
+                      CURRENT_DATE,
+                      now(),
+                      'ade_wfs_alignment_missing'
+                    FROM missing_gaia p
+                    WHERE p.suppressed IS NOT TRUE
+                    RETURNING particella_id
+                    """
+                ),
+                params,
+            )
+            suppressed_missing = db.execute(
+                text(
+                    cte
+                    + """
+                    UPDATE cat_particelle p
+                    SET suppressed = true,
+                        source_type = 'ade_wfs',
+                        updated_at = now()
+                    FROM missing_gaia missing
+                    WHERE p.id = missing.id
+                      AND p.suppressed IS NOT TRUE
+                    RETURNING p.id
+                    """
+                ),
+                params,
+            ).rowcount or 0
+
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+
+    warnings = [
+        "Geometrie variate aggiornate in-place per preservare i collegamenti FK esistenti.",
+        "I match ambigui non sono stati applicati.",
+    ]
+    if updated_history != updated_geometry:
+        warnings.append("Conteggio history diverso dagli update geometria: verificare il run.")
+    if int(skipped.skipped_missing_comune or 0) > 0:
+        warnings.append("Alcune nuove particelle AdE sono state saltate perché il codice catastale non è mappato in cat_comuni.")
+
+    return {
+        "run_id": str(run.id),
+        "status": "applied",
+        "selected_categories": selected_categories,
+        "geometry_threshold_m": geometry_threshold_m,
+        "counters": {
+            "inserted_new": int(inserted_new or 0),
+            "updated_geometry": int(updated_geometry or 0),
+            "suppressed_missing": int(suppressed_missing or 0),
+            "skipped_ambiguous": int(skipped.skipped_ambiguous or 0),
+            "skipped_not_selected": int(skipped.skipped_not_selected or 0),
+            "skipped_missing_comune": int(skipped.skipped_missing_comune or 0),
+        },
+        "warnings": warnings,
+    }

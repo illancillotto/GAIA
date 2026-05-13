@@ -153,6 +153,34 @@ class AdeAlignmentApplyPreviewResponse(BaseModel):
     samples: list[AdeAlignmentReportSample] = Field(default_factory=list)
 
 
+class AdeAlignmentApplyRequest(BaseModel):
+    categories: list[str] = Field(default_factory=lambda: ["nuove_in_ade", "geometrie_variate"])
+    geometry_threshold_m: float = Field(default=1.0, gt=0, le=25)
+    confirm: bool = Field(default=False, description="Deve essere true per eseguire scritture su cat_particelle.")
+    allow_suppress_missing: bool = Field(
+        default=False,
+        description="Abilita la soppressione delle particelle GAIA mancanti in AdE nello scope bbox.",
+    )
+
+
+class AdeAlignmentApplyCounters(BaseModel):
+    inserted_new: int
+    updated_geometry: int
+    suppressed_missing: int
+    skipped_ambiguous: int
+    skipped_not_selected: int
+    skipped_missing_comune: int
+
+
+class AdeAlignmentApplyResponse(BaseModel):
+    run_id: str
+    status: str = "applied"
+    selected_categories: list[str]
+    geometry_threshold_m: float
+    counters: AdeAlignmentApplyCounters
+    warnings: list[str] = Field(default_factory=list)
+
+
 class GisExportFormat(str, Enum):
     geojson = "geojson"
     csv = "csv"

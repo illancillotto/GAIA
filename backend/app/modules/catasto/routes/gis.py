@@ -8,6 +8,8 @@ from app.api.deps import require_active_user
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
 from app.modules.catasto.schemas.gis_schemas import (
+    AdeAlignmentApplyRequest,
+    AdeAlignmentApplyResponse,
     AdeAlignmentApplyPreviewRequest,
     AdeAlignmentApplyPreviewResponse,
     AdeAlignmentReportResponse,
@@ -26,6 +28,7 @@ from app.modules.catasto.schemas.gis_schemas import (
 )
 from app.modules.catasto.services.ade_wfs import (
     AdeWfsBbox,
+    apply_ade_alignment,
     get_ade_alignment_report,
     preview_ade_alignment_apply,
     sync_ade_parcels_bbox,
@@ -121,6 +124,35 @@ def preview_ade_wfs_alignment_apply(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return AdeAlignmentApplyPreviewResponse(**result)
+
+
+@router.post(
+    "/ade-wfs/alignment-apply/{run_id}",
+    response_model=AdeAlignmentApplyResponse,
+    summary="Applica differenze AdE/GAIA",
+    description=(
+        "Applica in modo controllato le differenze AdE: inserisce nuove particelle, aggiorna geometrie "
+        "in-place preservando i collegamenti FK e può sopprimere mancanti solo con flag esplicito."
+    ),
+)
+def apply_ade_wfs_alignment(
+    run_id: str,
+    body: AdeAlignmentApplyRequest,
+    db: Session = Depends(get_db),
+    _: ApplicationUser = Depends(require_active_user),
+) -> AdeAlignmentApplyResponse:
+    try:
+        result = apply_ade_alignment(
+            db,
+            run_id,
+            categories=body.categories,
+            geometry_threshold_m=body.geometry_threshold_m,
+            confirm=body.confirm,
+            allow_suppress_missing=body.allow_suppress_missing,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return AdeAlignmentApplyResponse(**result)
 
 
 @router.post(

@@ -384,6 +384,101 @@ def test_ade_wfs_alignment_apply_preview_route_returns_dry_run(monkeypatch: pyte
     }
 
 
+def test_ade_wfs_alignment_apply_route_requires_confirmation(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_apply_ade_alignment(
+        db: Session,
+        run_id: str,
+        *,
+        categories: list[str],
+        geometry_threshold_m: float,
+        confirm: bool,
+        allow_suppress_missing: bool,
+    ) -> dict[str, object]:
+        if not confirm:
+            raise ValueError("Conferma esplicita richiesta per applicare l'allineamento AdE.")
+        return {
+            "run_id": run_id,
+            "status": "applied",
+            "selected_categories": categories,
+            "geometry_threshold_m": geometry_threshold_m,
+            "counters": {
+                "inserted_new": 0,
+                "updated_geometry": 0,
+                "suppressed_missing": 0,
+                "skipped_ambiguous": 0,
+                "skipped_not_selected": 0,
+                "skipped_missing_comune": 0,
+            },
+            "warnings": [],
+        }
+
+    monkeypatch.setattr(gis_routes_module, "apply_ade_alignment", fake_apply_ade_alignment)
+
+    response = client.post(
+        "/catasto/gis/ade-wfs/alignment-apply/11111111-1111-1111-1111-111111111111",
+        headers=auth_headers(),
+        json={"categories": ["nuove_in_ade"], "geometry_threshold_m": 1, "confirm": False},
+    )
+
+    assert response.status_code == 400
+    assert "Conferma esplicita" in response.json()["detail"]
+
+
+def test_ade_wfs_alignment_apply_route_returns_apply_result(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_apply_ade_alignment(
+        db: Session,
+        run_id: str,
+        *,
+        categories: list[str],
+        geometry_threshold_m: float,
+        confirm: bool,
+        allow_suppress_missing: bool,
+    ) -> dict[str, object]:
+        captured["run_id"] = run_id
+        captured["categories"] = categories
+        captured["geometry_threshold_m"] = geometry_threshold_m
+        captured["confirm"] = confirm
+        captured["allow_suppress_missing"] = allow_suppress_missing
+        return {
+            "run_id": run_id,
+            "status": "applied",
+            "selected_categories": categories,
+            "geometry_threshold_m": geometry_threshold_m,
+            "counters": {
+                "inserted_new": 2,
+                "updated_geometry": 1,
+                "suppressed_missing": 0,
+                "skipped_ambiguous": 1,
+                "skipped_not_selected": 3,
+                "skipped_missing_comune": 0,
+            },
+            "warnings": ["Geometrie variate aggiornate in-place per preservare i collegamenti FK esistenti."],
+        }
+
+    monkeypatch.setattr(gis_routes_module, "apply_ade_alignment", fake_apply_ade_alignment)
+
+    response = client.post(
+        "/catasto/gis/ade-wfs/alignment-apply/11111111-1111-1111-1111-111111111111",
+        headers=auth_headers(),
+        json={"categories": ["nuove_in_ade", "geometrie_variate"], "geometry_threshold_m": 2, "confirm": True},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "applied"
+    assert payload["counters"]["inserted_new"] == 2
+    assert payload["counters"]["updated_geometry"] == 1
+    assert captured == {
+        "run_id": "11111111-1111-1111-1111-111111111111",
+        "categories": ["nuove_in_ade", "geometrie_variate"],
+        "geometry_threshold_m": 2.0,
+        "confirm": True,
+        "allow_suppress_missing": False,
+    }
+
+
 def seed_phase1_lookup_data(db: Session) -> None:
     comune_arborea = CatComune(
         nome_comune="Arborea",
