@@ -55,7 +55,7 @@ Legend: 🔴 Non iniziato · 🟡 In corso · 🟢 Completato · ⚫ Bloccato
 | 4.5 | `import_capacitas()` — upsert coefficienti e aliquote | 🟡 | `backend/app/modules/catasto/services/import_capacitas.py` | Da completare/allineare a execution plan (upsert automatici) |
 | 5.1 | `finalize_shapefile_import()` — upsert SCD Type 2 | 🟢 | `backend/app/modules/catasto/services/import_shapefile.py` | SCD2 + history; update finale del batch differito a fine transazione per evitare lock tra finalize e progress logger su `cat_import_batches`; fast path DB vuoto ora materializza dedup, inserisce a chunk con step progressivi e alza il parallelismo SQL di sessione in modo aggressivo (`work_mem`, `temp_buffers`, `max_parallel_workers_per_gather`, costi planner, I/O concurrency) |
 | 5.2 | `finalize_shapefile_import()` — deriva distretti via ST_Union | 🟢 | `backend/app/modules/catasto/services/import_shapefile.py` | Upsert `cat_distretti` |
-| 5.3 | Script bash `import_shapefile_catasto.sh` | 🟢 | `scripts/import_shapefile_catasto.sh` | `ogr2ogr` → staging + finalize API; backend upload ZIP ora usa `ogr2ogr` anche lato servizio con `PG_USE_COPY=YES` e droppa `cat_particelle_staging` a fine finalize/errore |
+| 5.3 | Script bash `import_shapefile_catasto.sh` | 🟢 | `scripts/import_shapefile_catasto.sh` | `ogr2ogr` → staging + finalize API; default CRS sorgente `EPSG:7791` per RDN2008 / UTM zone 32N; backend upload ZIP usa `ogr2ogr` con `PG_USE_COPY=YES` e droppa `cat_particelle_staging` a fine finalize/errore |
 
 ### Backend — Routes
 
@@ -148,7 +148,7 @@ Legend: 🔴 Non iniziato · 🟡 In corso · 🟢 Completato · ⚫ Bloccato
 |---|---|---|---|
 | OQ-01 | CCO corrisponde al wc_id White Company? | ✅ Risolto | No. Link tramite `codice_fiscale` / P.IVA |
 | OQ-02 | Codici schema fissi? | ✅ Risolto | Sì: 0648 = contributo irriguo (aliquota fissa); 0985 = Quote Ordinarie (aliquota variabile da contatori, dato autoritativo Capacitas) |
-| OQ-03 | EPSG shapefile? | ✅ Risolto | EPSG:3003 Monte Mario / Italy zone 1. `ogr2ogr`: `-s_srs EPSG:3003 -t_srs EPSG:4326` |
+| OQ-03 | EPSG shapefile? | ✅ Risolto | Default operativo aggiornato a EPSG:7791 RDN2008 / UTM zone 32N. `EPSG:3003` resta selezionabile solo per sorgenti Monte Mario / Gauss-Boaga. |
 | OQ-04 | PARTIC alfanumerico? | ✅ Risolto | Sì (STRADA058 ecc.). Schema già corretto con `VARCHAR(20)` |
 | OQ-05 | Anni precedenti disponibili? | ✅ Risolto | Solo 2025. Import storico non necessario in Fase 1 |
 

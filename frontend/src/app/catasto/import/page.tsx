@@ -118,7 +118,7 @@ export default function CatastoImportPage() {
   const [importType, setImportType] = useState<ImportType>("capacitas");
   const [file, setFile] = useState<File | null>(null);
   const [force, setForce] = useState(false);
-  const [sourceSrid, setSourceSrid] = useState(4326);
+  const [sourceSrid, setSourceSrid] = useState(7791);
   const [uploadProgress, setUploadProgress] = useState(0);
 
   const [batchId, setBatchId] = useState<UUID | null>(null);
@@ -504,11 +504,16 @@ export default function CatastoImportPage() {
                 <label className="text-sm font-medium text-gray-700">
                   SRID sorgente
                   <select className="form-control mt-1" value={String(sourceSrid)} onChange={(e) => setSourceSrid(Number(e.target.value))}>
-                    <option value="4326">4326 — WGS 84 (default)</option>
-                    <option value="3003">3003 — Monte Mario / Italy zone 1</option>
+                    <option value="7791">7791 — RDN2008 / UTM zone 32N (Sardegna, E/N)</option>
+                    <option value="6707">6707 — RDN2008 / UTM zone 32N (assi N/E)</option>
                     <option value="32632">32632 — WGS 84 / UTM zone 32N</option>
-                    <option value="6707">6707 — RDN2008 / Italy zone 12</option>
+                    <option value="25832">25832 — ETRS89 / UTM zone 32N</option>
+                    <option value="3003">3003 — Monte Mario / Italy zone 1</option>
+                    <option value="4326">4326 — WGS 84 longitudine/latitudine</option>
                   </select>
+                  <span className="mt-1 block text-xs font-normal text-gray-400">
+                    Per gli shapefile catastali RDN2008 usa normalmente EPSG:7791; scegliere 3003 solo per dati Monte Mario/Gauss-Boaga.
+                  </span>
                 </label>
               </div>
             ) : (

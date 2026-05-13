@@ -55,7 +55,7 @@ def load_zip_to_staging(
     db: Session,
     *,
     zip_bytes: bytes,
-    source_srid: int = 4326,
+    source_srid: int = 7791,
     staging_table: str = "cat_particelle_staging",
     progress_callback: Callable[[int, int], None] | None = None,
 ) -> str:
@@ -172,7 +172,7 @@ def finalize_shapefile_import(
     db: Session,
     *,
     created_by: int,
-    source_srid: int | None = 4326,
+    source_srid: int | None = 7791,
     staging_table: str = "cat_particelle_staging",
     batch_id: UUID | None = None,
     filename: str | None = None,

@@ -16,7 +16,7 @@ def finalize_distretti_shapefile_import(
     db: Session,
     *,
     created_by: int,
-    source_srid: int | None = 4326,
+    source_srid: int | None = 7791,
     staging_table: str = "cat_distretti_staging",
     batch_id: UUID | None = None,
     filename: str | None = None,

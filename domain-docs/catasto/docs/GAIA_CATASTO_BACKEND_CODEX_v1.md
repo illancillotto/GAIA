@@ -368,13 +368,13 @@ SHAPEFILE="${1:?Specificare path shapefile}"
 PG_CONN="PG:host=${POSTGRES_HOST:-localhost} dbname=${POSTGRES_DB:-gaia} user=${POSTGRES_USER:-gaia} password=${POSTGRES_PASSWORD}"
 
 echo "Import shapefile: $SHAPEFILE"
-echo "Proiezione sorgente: EPSG:3003 (Monte Mario / Italy zone 1) → EPSG:4326"
+echo "Proiezione sorgente: EPSG:7791 (RDN2008 / UTM zone 32N) → EPSG:4326"
 ogr2ogr \
   -f PostgreSQL "$PG_CONN" \
   "$SHAPEFILE" \
   -nln cat_particelle_staging \
   -nlt MULTIPOLYGON \
-  -s_srs EPSG:3003 \
+  -s_srs EPSG:7791 \
   -t_srs EPSG:4326 \
   -overwrite \
   -progress

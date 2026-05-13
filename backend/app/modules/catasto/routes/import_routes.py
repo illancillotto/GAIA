@@ -568,7 +568,10 @@ def _run_distretti_shapefile_import(
 def upload_shapefile(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    source_srid: int = Query(4326),
+    source_srid: int = Query(
+        7791,
+        description="SRID sorgente dello shapefile. Default: EPSG:7791 (RDN2008 / UTM zone 32N, E/N).",
+    ),
     db: Session = Depends(get_db),
     current_user: ApplicationUser = Depends(require_admin_user),
 ) -> CatImportStartResponse:
@@ -626,7 +629,10 @@ def finalize_shapefile(
 def upload_distretti_shapefile(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    source_srid: int = Query(4326),
+    source_srid: int = Query(
+        7791,
+        description="SRID sorgente dello shapefile distretti. Default: EPSG:7791 (RDN2008 / UTM zone 32N, E/N).",
+    ),
     db: Session = Depends(get_db),
     current_user: ApplicationUser = Depends(require_admin_user),
 ) -> CatImportStartResponse:

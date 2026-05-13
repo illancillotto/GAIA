@@ -245,6 +245,6 @@ Flusso multi-step per la revisione delle anomalie rilevate:
 |---|---|---|
 | OQ-01 | ~~Il campo `CCO` corrisponde al `wc_id` White Company?~~ | ✅ **RISOLTO**: CCO ≠ wc_id. Il collegamento tra utenza tributaria e consorziato avviene tramite `codice_fiscale` / P.IVA |
 | OQ-02 | ~~Codici schema fissi?~~ | ✅ **RISOLTO**: 0648 = contributo irriguo (aliquota fissa), 0985 = Quote Ordinarie (aliquota variabile da contatori). Fissi per ora |
-| OQ-03 | ~~EPSG shapefile?~~ | ✅ **RISOLTO**: EPSG:3003 Monte Mario / Italy zone 1. `ogr2ogr` deve convertire a EPSG:4326 con `-s_srs EPSG:3003 -t_srs EPSG:4326` |
+| OQ-03 | ~~EPSG shapefile?~~ | ✅ **RISOLTO**: per gli shapefile catastali RDN2008 usare EPSG:7791 (RDN2008 / UTM zone 32N) e convertire a EPSG:4326 con `-s_srs EPSG:7791 -t_srs EPSG:4326`. EPSG:3003 resta valido solo per sorgenti Monte Mario / Gauss-Boaga. |
 | OQ-04 | ~~PARTIC alfanumerico?~~ | ✅ **RISOLTO**: sì, confermato. Schema già corretto con `VARCHAR(20)` |
 | OQ-05 | ~~Anni precedenti disponibili?~~ | ✅ **RISOLTO**: solo 2025. Import storico non necessario in Fase 1 |

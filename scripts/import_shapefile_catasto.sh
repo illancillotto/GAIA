@@ -8,7 +8,7 @@ POSTGRES_DB="${POSTGRES_DB:-gaia}"
 POSTGRES_USER="${POSTGRES_USER:-gaia}"
 GAIA_API="${GAIA_API:-http://localhost:8000}"
 STAGING_TABLE="${STAGING_TABLE:-cat_particelle_staging}"
-SOURCE_SRID="${SOURCE_SRID:-3003}"
+SOURCE_SRID="${SOURCE_SRID:-7791}"
 
 if [ -z "${POSTGRES_PASSWORD:-}" ]; then
   echo "POSTGRES_PASSWORD non impostata."
@@ -46,4 +46,3 @@ curl -sf -X POST "$GAIA_API/catasto/import/shapefile/finalize" \
   | python3 -m json.tool
 
 echo "=== Import completato ==="
-
