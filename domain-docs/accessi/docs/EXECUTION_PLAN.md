@@ -35,6 +35,7 @@ Stato:
 - login con credenziali errate
 - accesso a `/auth/me` con token valido
 - accesso negato senza token
+- durata token JWT configurata a 90 minuti tramite `JWT_EXPIRE_MINUTES`
 
 ## Milestone 2. Dominio Audit Minimo
 

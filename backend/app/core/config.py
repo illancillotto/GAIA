@@ -84,7 +84,7 @@ class Settings(BaseSettings):
         alias="WC_SYNC_CONSORZIATI_ROLE_ID",
     )
     jwt_secret_key: str = Field(alias="JWT_SECRET_KEY")
-    jwt_expire_minutes: int = Field(default=60, alias="JWT_EXPIRE_MINUTES")
+    jwt_expire_minutes: int = Field(default=90, alias="JWT_EXPIRE_MINUTES")
     jwt_algorithm: str = "HS256"
     pdnd_client_id: str = Field(default="", alias="PDND_CLIENT_ID")
     pdnd_kid: str = Field(default="", alias="PDND_KID")

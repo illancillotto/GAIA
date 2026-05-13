@@ -56,7 +56,7 @@ def test_settings_use_expected_defaults(monkeypatch) -> None:
     assert settings.backend_port == 8000
     assert settings.backend_cors_origins == "http://localhost:3000,http://localhost:8080"
     assert settings.jwt_secret_key == "config-defaults-secret"
-    assert settings.jwt_expire_minutes == 60
+    assert settings.jwt_expire_minutes == 90
     assert settings.jwt_algorithm == "HS256"
     assert settings.pdnd_client_id == ""
     assert settings.pdnd_kid == ""
