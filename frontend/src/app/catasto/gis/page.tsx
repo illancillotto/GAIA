@@ -24,6 +24,7 @@ import {
   catastoGisUpdateSavedSelection,
   catastoListDistretti,
 } from "@/lib/api/catasto";
+import { describeCatastoAnomalia } from "@/lib/catasto-anomalie";
 import { getStoredAccessToken } from "@/lib/auth";
 import { useGisSelection } from "@/hooks/useGisSelection";
 import type { CatAnagraficaMatch, CatDistretto } from "@/types/catasto";
@@ -87,11 +88,10 @@ const BASEMAP_OPTIONS: Array<{ id: GisBasemap; label: string; swatch: string; re
   { id: "satellite", label: "Satellite", swatch: "bg-cyan-600" },
   { id: "google_satellite", label: "Google Earth", swatch: "bg-lime-600", requiresGoogleKey: true },
 ];
-type ParticelleQuickFilter = "all" | "ruolo" | "ruolo_anomalie";
+type ParticelleQuickFilter = "all" | "ruolo";
 const PARTICELLE_QUICK_FILTERS: Array<{ id: ParticelleQuickFilter; label: string; dot: string }> = [
   { id: "all", label: "Tutte", dot: "bg-indigo-400" },
   { id: "ruolo", label: "A ruolo", dot: "bg-emerald-500" },
-  { id: "ruolo_anomalie", label: "Ruolo + anomalie", dot: "bg-rose-500" },
 ];
 
 function toNullableCellString(value: unknown): string | null {
@@ -165,7 +165,7 @@ function popupToMatch(popup: ParticellaPopupData | null): CatAnagraficaMatch | n
     stato_cnc: null,
     intestatari: [],
     anomalie_count: popup.n_anomalie_aperte ?? 0,
-    anomalie_top: [],
+    anomalie_top: popup.anomalie_aperte.map((anomalia) => ({ tipo: anomalia.tipo, count: 1 })),
     note: null,
   };
 }
@@ -310,6 +310,7 @@ export default function CatastoGisPage() {
   const [distrettoLayer, setDistrettoLayer] = useState<string>("");
   const [distretti, setDistretti] = useState<CatDistretto[]>([]);
   const [distrettiOpen, setDistrettiOpen] = useState(true);
+  const [distrettiSearch, setDistrettiSearch] = useState("");
   const [distrettiLoading, setDistrettiLoading] = useState(false);
   const [xlsxFile, setXlsxFile] = useState<File | null>(null);
   const [xlsxBusy, setXlsxBusy] = useState(false);
@@ -324,6 +325,7 @@ export default function CatastoGisPage() {
   const [popupDetailOpen, setPopupDetailOpen] = useState(false);
   const [lastDrawnGeometry, setLastDrawnGeometry] = useState<GeoJSON.Geometry | null>(null);
   const [adeBbox, setAdeBbox] = useState<AdeBboxForm>(DEFAULT_ADE_BBOX);
+  const [adePanelExpanded, setAdePanelExpanded] = useState(false);
   const [adeBusy, setAdeBusy] = useState(false);
   const [adeSyncResult, setAdeSyncResult] = useState<AdeWfsSyncBboxResponse | null>(null);
   const [adeReport, setAdeReport] = useState<AdeAlignmentReportResponse | null>(null);
@@ -363,6 +365,18 @@ export default function CatastoGisPage() {
     () => distretti.find((distretto) => distretto.num_distretto === distrettoLayer.trim()) ?? null,
     [distretti, distrettoLayer],
   );
+  const filteredDistretti = useMemo(() => {
+    const query = distrettiSearch.trim().toLowerCase();
+    if (!query) return distretti;
+    return distretti.filter((distretto) =>
+      [
+        distretto.num_distretto,
+        distretto.nome_distretto,
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(query)),
+    );
+  }, [distretti, distrettiSearch]);
   const adeApplyConfirmationPhrase = adeReport ? `APPLICA ${adeReport.run_id.slice(0, 8)}` : "";
   const canApplyAdeAlignment = Boolean(
     adeReport &&
@@ -1061,11 +1075,9 @@ export default function CatastoGisPage() {
               onClick={() => handleSetParticelleQuickFilter(option.id)}
               className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
                 selected
-                  ? option.id === "ruolo_anomalie"
-                    ? "border-rose-200 bg-rose-50 text-rose-700 shadow-sm"
-                    : option.id === "ruolo"
-                      ? "border-emerald-200 bg-emerald-50 text-emerald-700 shadow-sm"
-                      : "border-indigo-200 bg-indigo-50 text-indigo-700 shadow-sm"
+                  ? option.id === "ruolo"
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700 shadow-sm"
+                    : "border-indigo-200 bg-indigo-50 text-indigo-700 shadow-sm"
                   : isDark
                     ? "border-white/10 bg-white/5 text-white/60 hover:bg-white/10"
                     : "border-gray-200 bg-white text-gray-500 hover:border-indigo-100 hover:text-indigo-700"
@@ -1142,7 +1154,32 @@ export default function CatastoGisPage() {
       ) : null}
 
       {distrettiOpen ? (
-        <div className="mt-3 max-h-56 space-y-1.5 overflow-y-auto pr-1">
+        <div className="mt-3">
+          <label className="sr-only" htmlFor={`distretti-search-${isDark ? "dark" : "light"}`}>
+            Cerca distretto
+          </label>
+          <div className={`flex items-center gap-2 rounded-xl border px-2.5 py-2 ${isDark ? "border-white/15 bg-white/5" : "border-white bg-white/85"}`}>
+            <span className={`material-symbols-outlined text-[16px] ${isDark ? "text-white/45" : "text-emerald-600"}`}>search</span>
+            <input
+              id={`distretti-search-${isDark ? "dark" : "light"}`}
+              type="search"
+              value={distrettiSearch}
+              onChange={(event) => setDistrettiSearch(event.target.value)}
+              placeholder="Cerca per numero o nome"
+              className={`min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-current/45 ${isDark ? "text-white" : "text-gray-800"}`}
+            />
+            {distrettiSearch ? (
+              <button
+                type="button"
+                onClick={() => setDistrettiSearch("")}
+                className={`rounded-full p-0.5 transition ${isDark ? "text-white/45 hover:bg-white/10 hover:text-white/75" : "text-gray-400 hover:bg-gray-100 hover:text-gray-600"}`}
+                aria-label="Pulisci filtro distretti"
+              >
+                <span className="material-symbols-outlined text-[15px]">close</span>
+              </button>
+            ) : null}
+          </div>
+          <div className="mt-2 max-h-56 space-y-1.5 overflow-y-auto pr-1">
           {distrettiLoading ? (
             <div className={`rounded-xl border border-dashed px-3 py-4 text-center text-xs ${isDark ? "border-white/15 text-white/50" : "border-emerald-100 text-gray-500"}`}>
               Caricamento distretti...
@@ -1151,8 +1188,12 @@ export default function CatastoGisPage() {
             <div className={`rounded-xl border border-dashed px-3 py-4 text-center text-xs ${isDark ? "border-white/15 text-white/50" : "border-emerald-100 text-gray-500"}`}>
               Nessun distretto disponibile.
             </div>
+          ) : filteredDistretti.length === 0 ? (
+            <div className={`rounded-xl border border-dashed px-3 py-4 text-center text-xs ${isDark ? "border-white/15 text-white/50" : "border-emerald-100 text-gray-500"}`}>
+              Nessun distretto trovato per “{distrettiSearch.trim()}”.
+            </div>
           ) : (
-            distretti.map((distretto) => {
+            filteredDistretti.map((distretto) => {
               const isSelected = distretto.num_distretto === distrettoLayer.trim();
               const color = distrettoColorMap[distretto.num_distretto] ?? "#1D4E35";
               return (
@@ -1184,6 +1225,7 @@ export default function CatastoGisPage() {
               );
             })
           )}
+          </div>
         </div>
       ) : null}
     </div>
@@ -1306,7 +1348,11 @@ export default function CatastoGisPage() {
 
   const renderAdeAlignmentPanel = (isDark: boolean) => (
     <div className={`rounded-2xl border p-3 ${isDark ? "border-white/15 bg-white/10" : "border-amber-100 bg-amber-50/40"}`}>
-      <div className="flex items-start justify-between gap-3">
+      <button
+        type="button"
+        onClick={() => setAdePanelExpanded((value) => !value)}
+        className="flex w-full items-start justify-between gap-3 text-left"
+      >
         <div>
           <p className={`text-[10px] font-semibold uppercase tracking-widest ${isDark ? "text-amber-200" : "text-amber-700"}`}>
             Allinea comprensorio AdE
@@ -1315,99 +1361,130 @@ export default function CatastoGisPage() {
             Calcola la bbox dai distretti attivi, scarica il WFS AdE e mostra il report differenze senza aggiornare GAIA.
           </p>
         </div>
-        {adeReport ? (
-          <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-            Run pronto
-          </span>
-        ) : null}
-      </div>
-
-      <button
-        type="button"
-        onClick={() => void handleAlignComprensorioAde()}
-        disabled={adeBusy || distretti.length === 0}
-        className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 py-2.5 text-xs font-semibold text-white transition hover:bg-slate-800 disabled:cursor-wait disabled:bg-slate-400"
-      >
-        {adeBusy ? (
-          <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
-        ) : (
-          <span className="material-symbols-outlined text-[16px]">travel_explore</span>
-        )}
-        {adeBusy ? "Allineamento comprensorio..." : "Allinea comprensorio"}
-      </button>
-
-      <div className={`mt-3 rounded-xl border px-3 py-2 ${isDark ? "border-white/10 bg-white/5" : "border-amber-100 bg-white/55"}`}>
-        <div className={`text-[10px] font-semibold uppercase tracking-widest ${isDark ? "text-white/45" : "text-slate-400"}`}>
-          Scope avanzato
-        </div>
-        <div className="mt-2 grid grid-cols-2 gap-2">
-        {[
-          ["minLon", "Min lon"],
-          ["minLat", "Min lat"],
-          ["maxLon", "Max lon"],
-          ["maxLat", "Max lat"],
-        ].map(([key, label]) => (
-          <label key={key} className="block">
-            <span className={`text-[10px] font-semibold uppercase tracking-widest ${isDark ? "text-white/45" : "text-slate-400"}`}>
-              {label}
+        <div className="flex items-center gap-2">
+          {adeReport ? (
+            <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+              Run pronto
             </span>
-            <input
-              value={adeBbox[key as keyof AdeBboxForm]}
-              onChange={(event) => setAdeBbox((value) => ({ ...value, [key]: event.target.value }))}
-              className={`mt-1 w-full rounded-xl border px-2.5 py-2 text-xs font-medium outline-none focus:ring-2 ${
-                isDark
-                  ? "border-white/15 bg-white/10 text-white focus:ring-amber-300/30"
-                  : "border-amber-100 bg-white text-slate-800 focus:ring-amber-100"
-              }`}
-            />
-          </label>
-        ))}
+          ) : null}
+          <span className={`material-symbols-outlined text-[18px] ${isDark ? "text-white/70" : "text-slate-500"}`}>
+            {adePanelExpanded ? "expand_less" : "expand_more"}
+          </span>
         </div>
-
-      <div className="mt-3 grid grid-cols-2 gap-2">
-        <button
-          type="button"
-          onClick={handleUseDrawnBboxForAde}
-          className={`rounded-xl border px-3 py-2 text-xs font-semibold transition ${
-            isDark ? "border-white/15 bg-white/5 text-white/70 hover:bg-white/10" : "border-amber-200 bg-white text-amber-800 hover:bg-amber-50"
-          }`}
-        >
-          Usa area disegnata
-        </button>
-        <button
-          type="button"
-          onClick={() => void handleUseSelectedDistrettoBboxForAde()}
-          disabled={!selectedDistretto}
-          className={`rounded-xl border px-3 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-45 ${
-            isDark ? "border-white/15 bg-white/5 text-white/70 hover:bg-white/10" : "border-amber-200 bg-white text-amber-800 hover:bg-amber-50"
-          }`}
-        >
-          Usa distretto
-        </button>
-      </div>
-
-      <button
-        type="button"
-        onClick={() => void handleRunAdeAlignment()}
-        disabled={adeBusy}
-        className={`mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition disabled:cursor-wait disabled:opacity-60 ${
-          isDark ? "border-white/15 bg-white/5 text-white/75 hover:bg-white/10" : "border-amber-200 bg-white text-amber-800 hover:bg-amber-50"
-        }`}
-      >
-        {adeBusy ? (
-          <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-          </svg>
-        ) : (
-          <span className="material-symbols-outlined text-[16px]">sync</span>
-        )}
-        {adeBusy ? "Download e confronto..." : "Avvia confronto su bbox"}
       </button>
-      </div>
+
+      {!adePanelExpanded ? (
+        <div className={`mt-3 flex items-center justify-between gap-3 rounded-xl border px-3 py-2 text-xs ${isDark ? "border-white/10 bg-white/5 text-white/65" : "border-amber-100 bg-white/55 text-slate-600"}`}>
+          <div>
+            <div className="font-semibold text-slate-900">Pannello compatto</div>
+            <div className="mt-1">
+              {adeReport
+                ? `Run ${adeReport.run_id.slice(0, 8)} · ${adeReport.counters.nuove_in_ade.toLocaleString("it-IT")} nuove · ${adeReport.counters.geometrie_variate.toLocaleString("it-IT")} variate`
+                : "Espandi per avviare l'allineamento o modificare la bbox."}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              void handleAlignComprensorioAde();
+            }}
+            disabled={adeBusy || distretti.length === 0}
+            className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 py-2 text-xs font-semibold text-white transition hover:bg-slate-800 disabled:cursor-wait disabled:bg-slate-400"
+          >
+            {adeBusy ? "..." : "Avvia"}
+          </button>
+        </div>
+      ) : (
+        <>
+          <button
+            type="button"
+            onClick={() => void handleAlignComprensorioAde()}
+            disabled={adeBusy || distretti.length === 0}
+            className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 py-2.5 text-xs font-semibold text-white transition hover:bg-slate-800 disabled:cursor-wait disabled:bg-slate-400"
+          >
+            {adeBusy ? (
+              <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            ) : (
+              <span className="material-symbols-outlined text-[16px]">travel_explore</span>
+            )}
+            {adeBusy ? "Allineamento comprensorio..." : "Allinea comprensorio"}
+          </button>
+
+          <div className={`mt-3 rounded-xl border px-3 py-2 ${isDark ? "border-white/10 bg-white/5" : "border-amber-100 bg-white/55"}`}>
+            <div className={`text-[10px] font-semibold uppercase tracking-widest ${isDark ? "text-white/45" : "text-slate-400"}`}>
+              Scope avanzato
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              {[
+                ["minLon", "Min lon"],
+                ["minLat", "Min lat"],
+                ["maxLon", "Max lon"],
+                ["maxLat", "Max lat"],
+              ].map(([key, label]) => (
+                <label key={key} className="block">
+                  <span className={`text-[10px] font-semibold uppercase tracking-widest ${isDark ? "text-white/45" : "text-slate-400"}`}>
+                    {label}
+                  </span>
+                  <input
+                    value={adeBbox[key as keyof AdeBboxForm]}
+                    onChange={(event) => setAdeBbox((value) => ({ ...value, [key]: event.target.value }))}
+                    className={`mt-1 w-full rounded-xl border px-2.5 py-2 text-xs font-medium outline-none focus:ring-2 ${
+                      isDark
+                        ? "border-white/15 bg-white/10 text-white focus:ring-amber-300/30"
+                        : "border-amber-100 bg-white text-slate-800 focus:ring-amber-100"
+                    }`}
+                  />
+                </label>
+              ))}
+            </div>
+
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={handleUseDrawnBboxForAde}
+                className={`rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+                  isDark ? "border-white/15 bg-white/5 text-white/70 hover:bg-white/10" : "border-amber-200 bg-white text-amber-800 hover:bg-amber-50"
+                }`}
+              >
+                Usa area disegnata
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleUseSelectedDistrettoBboxForAde()}
+                disabled={!selectedDistretto}
+                className={`rounded-xl border px-3 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-45 ${
+                  isDark ? "border-white/15 bg-white/5 text-white/70 hover:bg-white/10" : "border-amber-200 bg-white text-amber-800 hover:bg-amber-50"
+                }`}
+              >
+                Usa distretto
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => void handleRunAdeAlignment()}
+              disabled={adeBusy}
+              className={`mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl border px-3 py-2 text-xs font-semibold transition disabled:cursor-wait disabled:opacity-60 ${
+                isDark ? "border-white/15 bg-white/5 text-white/75 hover:bg-white/10" : "border-amber-200 bg-white text-amber-800 hover:bg-amber-50"
+              }`}
+            >
+              {adeBusy ? (
+                <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              ) : (
+                <span className="material-symbols-outlined text-[16px]">sync</span>
+              )}
+              {adeBusy ? "Download e confronto..." : "Avvia confronto su bbox"}
+            </button>
+          </div>
+        </>
+      )}
 
       {adeSyncResult ? (
         <div className={`mt-3 rounded-xl border px-3 py-2 text-xs ${isDark ? "border-white/15 bg-white/5 text-white/65" : "border-white bg-white/75 text-slate-600"}`}>
@@ -1718,6 +1795,57 @@ export default function CatastoGisPage() {
                           </div>
                         </div>
                       </div>
+
+                      {popupParticella.swapped_capacitas ? (
+                        <div className="mt-3 rounded-2xl border border-orange-200 bg-orange-50 px-3 py-3 text-xs text-orange-950">
+                          <div className="text-[10px] font-semibold uppercase tracking-widest text-orange-700">
+                            Comune Capacitas diverso
+                          </div>
+                          <div className="mt-1 font-semibold">
+                            GAIA: {popupParticella.nome_comune ?? popupParticella.codice_catastale ?? "Comune ND"}
+                          </div>
+                          <div className="mt-0.5 text-orange-900">
+                            Capacitas/Ruolo:{" "}
+                            {popupParticella.swapped_capacitas.source_comune_nome ??
+                              popupParticella.swapped_capacitas.source_codice_catastale ??
+                              "Comune ND"}{" "}
+                            · Rif. {popupParticella.swapped_capacitas.source_foglio ?? "-"}/
+                            {popupParticella.swapped_capacitas.source_particella ?? "-"}
+                            {popupParticella.swapped_capacitas.source_subalterno ? `/${popupParticella.swapped_capacitas.source_subalterno}` : ""}
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {popupParticella.anomalie_aperte.length > 0 ? (
+                        <div className="mt-3 rounded-2xl border border-rose-200 bg-rose-50 px-3 py-3 text-xs text-rose-950">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="text-[10px] font-semibold uppercase tracking-widest text-rose-700">
+                              Perche e in anomalia ruolo
+                            </div>
+                            <span className="rounded-full bg-white/80 px-2 py-0.5 text-[10px] font-semibold text-rose-700">
+                              {popupParticella.n_anomalie_aperte} aperte
+                            </span>
+                          </div>
+                          <div className="mt-2 space-y-2">
+                            {popupParticella.anomalie_aperte.map((anomalia) => (
+                              <div key={anomalia.id} className="rounded-xl border border-rose-100 bg-white/80 px-2.5 py-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <span className="font-semibold text-rose-950">{anomalia.descrizione ?? anomalia.tipo}</span>
+                                  <span className="rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-semibold uppercase text-rose-700">
+                                    {anomalia.severita}
+                                  </span>
+                                </div>
+                                <p className="mt-1 text-[11px] leading-4 text-rose-900">
+                                  {describeCatastoAnomalia(anomalia)}
+                                </p>
+                                {anomalia.anno_campagna ? (
+                                  <p className="mt-1 text-[10px] font-medium text-rose-700">Anno ruolo {anomalia.anno_campagna}</p>
+                                ) : null}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
 
                       <div className="mt-3 rounded-2xl border border-sky-100 bg-sky-50/70 px-3 py-3">
                         <div className="flex items-start justify-between gap-3">
