@@ -24,8 +24,10 @@ import type {
   UUID,
 } from "@/types/catasto";
 import type {
+  AdeAlignmentApplyRequest,
   AdeAlignmentApplyPreviewRequest,
   AdeAlignmentApplyPreviewResponse,
+  AdeAlignmentApplyResponse,
   AdeAlignmentReportResponse,
   AdeWfsSyncBboxRequest,
   AdeWfsSyncBboxResponse,
@@ -92,6 +94,18 @@ export async function catastoGisPreviewAdeAlignmentApply(
   payload: AdeAlignmentApplyPreviewRequest,
 ): Promise<AdeAlignmentApplyPreviewResponse> {
   return request<AdeAlignmentApplyPreviewResponse>(`/catasto/gis/ade-wfs/alignment-apply-preview/${runId}`, {
+    method: "POST",
+    headers: { ...authHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function catastoGisApplyAdeAlignment(
+  token: string,
+  runId: string,
+  payload: AdeAlignmentApplyRequest,
+): Promise<AdeAlignmentApplyResponse> {
+  return request<AdeAlignmentApplyResponse>(`/catasto/gis/ade-wfs/alignment-apply/${runId}`, {
     method: "POST",
     headers: { ...authHeaders(token), "Content-Type": "application/json" },
     body: JSON.stringify(payload),

@@ -11,6 +11,7 @@ import SelectionPanel from "@/components/catasto/gis/SelectionPanel";
 import { CatastoPage } from "@/components/catasto/catasto-page";
 import {
   catastoGetDistrettoGeojson,
+  catastoGisApplyAdeAlignment,
   catastoGisGetAdeAlignmentReport,
   catastoGisPreviewAdeAlignmentApply,
   catastoGisCreateSavedSelection,
@@ -28,6 +29,7 @@ import { useGisSelection } from "@/hooks/useGisSelection";
 import type { CatAnagraficaMatch, CatDistretto } from "@/types/catasto";
 import type {
   AdeAlignmentApplyPreviewResponse,
+  AdeAlignmentApplyResponse,
   AdeAlignmentReportResponse,
   AdeWfsSyncBboxResponse,
   GisBasemap,
@@ -181,6 +183,7 @@ const ADE_PREVIEW_COLORS: Record<string, string> = {
   mancanti_in_ade: "#64748B",
   match_ambiguo: "#8B5CF6",
 };
+const ADE_APPLY_CATEGORIES = ["nuove_in_ade", "geometrie_variate"] as const;
 
 function geometryToBbox(geometry: GeoJSON.Geometry): AdeBboxForm | null {
   const coordinates: number[][] = [];
@@ -318,6 +321,8 @@ export default function CatastoGisPage() {
   const [adeSyncResult, setAdeSyncResult] = useState<AdeWfsSyncBboxResponse | null>(null);
   const [adeReport, setAdeReport] = useState<AdeAlignmentReportResponse | null>(null);
   const [adeApplyPreview, setAdeApplyPreview] = useState<AdeAlignmentApplyPreviewResponse | null>(null);
+  const [adeApplyResult, setAdeApplyResult] = useState<AdeAlignmentApplyResponse | null>(null);
+  const [adeApplyConfirmText, setAdeApplyConfirmText] = useState("");
   const layerCounterRef = useRef(0);
   const activeFilters = useMemo<GisFilters>(() => ({}), []);
   const { result, isLoading, error, runSelection, clearSelection } = useGisSelection(token);
@@ -350,6 +355,14 @@ export default function CatastoGisPage() {
   const selectedDistretto = useMemo(
     () => distretti.find((distretto) => distretto.num_distretto === distrettoLayer.trim()) ?? null,
     [distretti, distrettoLayer],
+  );
+  const adeApplyConfirmationPhrase = adeReport ? `APPLICA ${adeReport.run_id.slice(0, 8)}` : "";
+  const canApplyAdeAlignment = Boolean(
+    adeReport &&
+      adeApplyPreview &&
+      adeApplyConfirmText.trim() === adeApplyConfirmationPhrase &&
+      adeReport.counters.match_ambiguo === 0 &&
+      !adeBusy,
   );
   const autoLoadedSelectionRef = useRef<string | null>(null);
   const popupMatch = useMemo(() => popupToMatch(popupParticella), [popupParticella]);
@@ -545,6 +558,8 @@ export default function CatastoGisPage() {
     setAdeSyncResult(null);
     setAdeReport(null);
     setAdeApplyPreview(null);
+    setAdeApplyResult(null);
+    setAdeApplyConfirmText("");
     try {
       const sync = await catastoGisSyncAdeWfsBbox(token, {
         min_lon: minLon,
@@ -586,10 +601,12 @@ export default function CatastoGisPage() {
     setGisInfo(null);
     try {
       const preview = await catastoGisPreviewAdeAlignmentApply(token, adeReport.run_id, {
-        categories: ["nuove_in_ade", "geometrie_variate"],
+        categories: [...ADE_APPLY_CATEGORIES],
         geometry_threshold_m: adeReport.geometry_threshold_m,
       });
       setAdeApplyPreview(preview);
+      setAdeApplyResult(null);
+      setAdeApplyConfirmText("");
       setGisInfo("Preview applicazione AdE calcolata: nessuna modifica eseguita.");
     } catch (e) {
       setGisError(e instanceof Error ? e.message : "Preview applicazione AdE fallita.");
@@ -597,6 +614,60 @@ export default function CatastoGisPage() {
       setAdeBusy(false);
     }
   }, [adeReport, token]);
+
+  const handleApplyAdeAlignment = useCallback(async () => {
+    if (!token || !adeReport || !adeApplyPreview) {
+      setGisError("Calcola prima la preview applicazione.");
+      return;
+    }
+    if (adeReport.counters.match_ambiguo > 0) {
+      setGisError("Applicazione bloccata: sono presenti match ambigui da revisionare.");
+      return;
+    }
+    if (adeApplyConfirmText.trim() !== adeApplyConfirmationPhrase) {
+      setGisError(`Conferma richiesta: digita ${adeApplyConfirmationPhrase}.`);
+      return;
+    }
+
+    setAdeBusy(true);
+    setGisError(null);
+    setGisInfo(null);
+    try {
+      const applied = await catastoGisApplyAdeAlignment(token, adeReport.run_id, {
+        categories: [...ADE_APPLY_CATEGORIES],
+        geometry_threshold_m: adeReport.geometry_threshold_m,
+        confirm: true,
+        allow_suppress_missing: false,
+      });
+      setAdeApplyResult(applied);
+      const refreshedReport = await catastoGisGetAdeAlignmentReport(token, adeReport.run_id, {
+        geometryThresholdM: adeReport.geometry_threshold_m,
+      });
+      setAdeReport(refreshedReport);
+      setAdeApplyPreview(null);
+      setAdeApplyConfirmText("");
+      const previewLayer = buildAdePreviewLayer(refreshedReport);
+      setOverlayLayers((layers) => [
+        ...layers.filter((layer) => !layer.layer_key.startsWith("ade-preview-")),
+        ...(previewLayer ? [previewLayer] : []),
+      ]);
+      if (previewLayer) focusLayerGeojson(previewLayer.geojson);
+      setGisInfo(
+        `Apply AdE completato: ${applied.counters.inserted_new.toLocaleString("it-IT")} insert, ${applied.counters.updated_geometry.toLocaleString("it-IT")} geometrie aggiornate.`,
+      );
+    } catch (e) {
+      setGisError(e instanceof Error ? e.message : "Applicazione AdE fallita.");
+    } finally {
+      setAdeBusy(false);
+    }
+  }, [
+    adeApplyConfirmationPhrase,
+    adeApplyConfirmText,
+    adeApplyPreview,
+    adeReport,
+    focusLayerGeojson,
+    token,
+  ]);
 
   const handleClearDistretto = useCallback(() => {
     setDistrettoLayer("");
@@ -1305,6 +1376,45 @@ export default function CatastoGisPage() {
                   {adeApplyPreview.warnings.slice(0, 2).join(" ")}
                 </div>
               ) : null}
+              {adeReport.counters.match_ambiguo > 0 ? (
+                <div className="rounded-lg border border-rose-100 bg-rose-50 px-2 py-1.5 text-[11px] font-medium text-rose-700">
+                  Apply bloccato: {adeReport.counters.match_ambiguo.toLocaleString("it-IT")} match ambigui richiedono revisione.
+                </div>
+              ) : (
+                <div className="space-y-2 border-t border-amber-100 pt-2">
+                  <label className="block">
+                    <span className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+                      Conferma scrittura
+                    </span>
+                    <input
+                      value={adeApplyConfirmText}
+                      onChange={(event) => setAdeApplyConfirmText(event.target.value)}
+                      placeholder={adeApplyConfirmationPhrase}
+                      className="mt-1 w-full rounded-lg border border-amber-100 bg-amber-50/50 px-2.5 py-2 text-xs font-semibold text-slate-800 outline-none focus:ring-2 focus:ring-amber-100"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => void handleApplyAdeAlignment()}
+                    disabled={!canApplyAdeAlignment}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-rose-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-rose-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+                  >
+                    <span className="material-symbols-outlined text-[16px]">published_with_changes</span>
+                    Applica nuove e geometrie
+                  </button>
+                  <div className="text-[10px] leading-4 text-slate-500">
+                    Non sopprime le particelle mancanti AdE. Le geometrie aggiornate mantengono lo stesso ID particella e scrivono history.
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : null}
+          {adeApplyResult ? (
+            <div className="rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+              <div className="font-semibold">Apply completato</div>
+              <div className="mt-1 text-[11px] leading-5">
+                {adeApplyResult.counters.inserted_new.toLocaleString("it-IT")} nuove particelle · {adeApplyResult.counters.updated_geometry.toLocaleString("it-IT")} geometrie aggiornate · {adeApplyResult.counters.skipped_missing_comune.toLocaleString("it-IT")} senza comune mappato.
+              </div>
             </div>
           ) : null}
           {adeReport.geojson && adeReport.geojson.features.length > 0 ? (

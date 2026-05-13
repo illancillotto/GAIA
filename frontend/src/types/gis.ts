@@ -137,6 +137,31 @@ export interface AdeAlignmentApplyPreviewResponse {
   samples: AdeAlignmentReportSample[];
 }
 
+export interface AdeAlignmentApplyRequest {
+  categories: string[];
+  geometry_threshold_m?: number;
+  confirm: boolean;
+  allow_suppress_missing?: boolean;
+}
+
+export interface AdeAlignmentApplyCounters {
+  inserted_new: number;
+  updated_geometry: number;
+  suppressed_missing: number;
+  skipped_ambiguous: number;
+  skipped_not_selected: number;
+  skipped_missing_comune: number;
+}
+
+export interface AdeAlignmentApplyResponse {
+  run_id: string;
+  status: string;
+  selected_categories: string[];
+  geometry_threshold_m: number;
+  counters: AdeAlignmentApplyCounters;
+  warnings: string[];
+}
+
 export interface ParticellaPopupData {
   id: string;
   cfm?: string | null;
