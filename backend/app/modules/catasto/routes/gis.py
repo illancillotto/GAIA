@@ -1,12 +1,18 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query, Response, status
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
 from app.modules.catasto.schemas.gis_schemas import (
+    AdeAlignmentApplyPreviewRequest,
+    AdeAlignmentApplyPreviewResponse,
+    AdeAlignmentReportResponse,
+    AdeWfsSyncBboxRequest,
+    AdeWfsSyncBboxResponse,
     GisExportFormat,
     GisResolveRefsRequest,
     GisResolveRefsResponse,
@@ -18,10 +24,103 @@ from app.modules.catasto.schemas.gis_schemas import (
     GisSelectResult,
     ParticellaPopupData,
 )
+from app.modules.catasto.services.ade_wfs import (
+    AdeWfsBbox,
+    get_ade_alignment_report,
+    preview_ade_alignment_apply,
+    sync_ade_parcels_bbox,
+)
 from app.modules.catasto.services import gis_service
 
 
 router = APIRouter(prefix="/catasto/gis", tags=["catasto-gis"])
+
+
+@router.post(
+    "/ade-wfs/sync-bbox",
+    response_model=AdeWfsSyncBboxResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Scarica particelle catastali AdE per bbox",
+    description=(
+        "Interroga il WFS ufficiale Agenzia delle Entrate CP:CadastralParcel per una bbox limitata, "
+        "riproietta le geometrie EPSG:6706 in EPSG:4326 e aggiorna la tabella di staging cat_ade_particelle. "
+        "Non modifica cat_particelle."
+    ),
+)
+def sync_ade_wfs_bbox(
+    body: AdeWfsSyncBboxRequest,
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(require_active_user),
+) -> AdeWfsSyncBboxResponse:
+    try:
+        result = sync_ade_parcels_bbox(
+            db,
+            AdeWfsBbox(
+                min_lon=body.min_lon,
+                min_lat=body.min_lat,
+                max_lon=body.max_lon,
+                max_lat=body.max_lat,
+            ),
+            max_tile_km2=body.max_tile_km2,
+            max_tiles=body.max_tiles,
+            count=body.count,
+            max_pages_per_tile=body.max_pages_per_tile,
+            created_by=current_user.id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=502, detail=f"WFS Agenzia Entrate non raggiungibile: {exc}") from exc
+    return AdeWfsSyncBboxResponse(**result)
+
+
+@router.get(
+    "/ade-wfs/alignment-report/{run_id}",
+    response_model=AdeAlignmentReportResponse,
+    summary="Report differenze particelle AdE/GAIA",
+    description=(
+        "Restituisce il report di confronto per un download WFS AdE completato. "
+        "Le particelle mancanti in AdE sono calcolate solo nello scope bbox del run."
+    ),
+)
+def get_ade_wfs_alignment_report(
+    run_id: str,
+    geometry_threshold_m: float = Query(1.0, gt=0, le=25),
+    db: Session = Depends(get_db),
+    _: ApplicationUser = Depends(require_active_user),
+) -> AdeAlignmentReportResponse:
+    try:
+        result = get_ade_alignment_report(db, run_id, geometry_threshold_m=geometry_threshold_m)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return AdeAlignmentReportResponse(**result)
+
+
+@router.post(
+    "/ade-wfs/alignment-apply-preview/{run_id}",
+    response_model=AdeAlignmentApplyPreviewResponse,
+    summary="Preview applicazione differenze AdE/GAIA",
+    description=(
+        "Calcola il piano di applicazione delle differenze AdE senza modificare cat_particelle. "
+        "I match ambigui sono sempre esclusi dall'applicazione automatica."
+    ),
+)
+def preview_ade_wfs_alignment_apply(
+    run_id: str,
+    body: AdeAlignmentApplyPreviewRequest,
+    db: Session = Depends(get_db),
+    _: ApplicationUser = Depends(require_active_user),
+) -> AdeAlignmentApplyPreviewResponse:
+    try:
+        result = preview_ade_alignment_apply(
+            db,
+            run_id,
+            categories=body.categories,
+            geometry_threshold_m=body.geometry_threshold_m,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return AdeAlignmentApplyPreviewResponse(**result)
 
 
 @router.post(

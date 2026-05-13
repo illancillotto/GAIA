@@ -1,5 +1,7 @@
 from app.models.catasto_phase1 import (
     CatAliquota,
+    CatAdeParticella,
+    CatAdeSyncRun,
     CatAnomalia,
     CatCapacitasCertificato,
     CatCapacitasTerrenoDetail,
@@ -22,6 +24,8 @@ from app.models.catasto_phase1 import (
 
 __all__ = [
     "CatAliquota",
+    "CatAdeParticella",
+    "CatAdeSyncRun",
     "CatAnomalia",
     "CatCapacitasCertificato",
     "CatCapacitasTerrenoDetail",

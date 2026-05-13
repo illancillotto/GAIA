@@ -349,6 +349,17 @@ class CatDashboardDistrettoSummary(BaseModel):
     importo_totale: float
 
 
+class CatDashboardAdeAlignmentSummary(BaseModel):
+    checked: bool
+    has_disallineamenti: bool
+    staged_particelle: int
+    nuove_in_ade: int
+    geometrie_variate: int
+    mancanti_in_ade: int
+    latest_fetched_at: datetime | None
+    message: str
+
+
 class CatDashboardSummaryResponse(BaseModel):
     anno: int | None
     generated_at: datetime
@@ -357,6 +368,7 @@ class CatDashboardSummaryResponse(BaseModel):
     utenze: CatDashboardUtenzeSummary
     anomalie: CatDashboardAnomalieSummary
     distretti: list[CatDashboardDistrettoSummary]
+    ade_alignment: CatDashboardAdeAlignmentSummary
 
 
 class CatSchemaContributoResponse(BaseModel):

@@ -340,6 +340,17 @@ export type CatDashboardDistrettoSummary = {
   importo_totale: number;
 };
 
+export type CatDashboardAdeAlignmentSummary = {
+  checked: boolean;
+  has_disallineamenti: boolean;
+  staged_particelle: number;
+  nuove_in_ade: number;
+  geometrie_variate: number;
+  mancanti_in_ade: number;
+  latest_fetched_at: string | null;
+  message: string;
+};
+
 export type CatDashboardSummary = {
   anno: number | null;
   generated_at: string;
@@ -348,6 +359,7 @@ export type CatDashboardSummary = {
   utenze: CatDashboardUtenzeSummary;
   anomalie: CatDashboardAnomalieSummary;
   distretti: CatDashboardDistrettoSummary[];
+  ade_alignment: CatDashboardAdeAlignmentSummary;
 };
 
 export type CatSchemaContributo = {

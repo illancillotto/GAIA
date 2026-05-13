@@ -10,6 +10,8 @@ from app.models.capacitas import (
 )
 from app.models.wc_sync_job import WCSyncJob
 from app.modules.catasto.models import (
+    CatAdeParticella,
+    CatAdeSyncRun,
     CatCapacitasCertificato,
     CatCapacitasIntestatario,
     CatCapacitasTerrenoDetail,
@@ -103,6 +105,8 @@ __all__ = [
     "CapacitasAnagraficaHistoryImportJob",
     "CapacitasParticelleSyncJob",
     "CapacitasTerreniSyncJob",
+    "CatAdeParticella",
+    "CatAdeSyncRun",
     "CatCapacitasCertificato",
     "CatCapacitasIntestatario",
     "CatCapacitasTerrenoDetail",

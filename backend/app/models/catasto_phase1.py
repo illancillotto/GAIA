@@ -196,6 +196,62 @@ class CatParticella(Base):
         return self.num_distretto == "FD"
 
 
+class CatAdeParticella(Base):
+    __tablename__ = "cat_ade_particelle"
+    __table_args__ = (
+        UniqueConstraint("national_cadastral_reference", name="uq_cat_ade_particelle_national_ref"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    source_run_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cat_ade_sync_runs.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    inspire_id_local_id: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    inspire_id_namespace: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    national_cadastral_reference: Mapped[str] = mapped_column(String(80), nullable=False, index=True)
+    administrative_unit: Mapped[str | None] = mapped_column(String(4), nullable=True, index=True)
+    codice_catastale: Mapped[str | None] = mapped_column(String(4), nullable=True, index=True)
+    sezione_catastale: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    foglio: Mapped[str | None] = mapped_column(String(10), nullable=True, index=True)
+    foglio_raw: Mapped[str | None] = mapped_column(String(10), nullable=True)
+    allegato: Mapped[str | None] = mapped_column(String(5), nullable=True)
+    sviluppo: Mapped[str | None] = mapped_column(String(5), nullable=True)
+    particella: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    particella_raw: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    label: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    geometry: Mapped[object | None] = mapped_column(MULTIPOLYGON_4326, nullable=True)
+    source_crs: Mapped[str] = mapped_column(String(32), default="EPSG:6706", nullable=False)
+    raw_payload_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    fetched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    source_run: Mapped["CatAdeSyncRun | None"] = relationship(back_populates="particelle")
+
+
+class CatAdeSyncRun(Base):
+    __tablename__ = "cat_ade_sync_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    status: Mapped[str] = mapped_column(String(20), default="processing", nullable=False, index=True)
+    request_bbox_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    max_tile_km2: Mapped[Decimal | None] = mapped_column(Numeric(10, 3), nullable=True)
+    max_tiles: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    count_per_page: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    max_pages_per_tile: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    tiles: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    features: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    upserted: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    with_geometry: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_by: Mapped[int | None] = mapped_column(ForeignKey("application_users.id"), nullable=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    particelle: Mapped[list["CatAdeParticella"]] = relationship(back_populates="source_run")
+
+
 class CatGisSavedSelection(Base):
     __tablename__ = "cat_gis_saved_selections"
 

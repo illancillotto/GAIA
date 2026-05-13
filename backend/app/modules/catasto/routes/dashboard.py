@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import case, desc, func, select
+from sqlalchemy import case, desc, func, select, text
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user
@@ -21,6 +21,7 @@ from app.models.catasto_phase1 import (
 from app.schemas.catasto_phase1 import (
     CatDashboardAnomaliaBucket,
     CatDashboardAnomalieSummary,
+    CatDashboardAdeAlignmentSummary,
     CatDashboardDistrettoSummary,
     CatDashboardImportSummary,
     CatDashboardParticelleSummary,
@@ -60,6 +61,140 @@ def _latest_imported_anno(db: Session) -> int | None:
         )
     )
     return int(value) if value is not None else None
+
+
+def _get_ade_alignment_summary(db: Session) -> CatDashboardAdeAlignmentSummary:
+    if db.bind is None or db.bind.dialect.name != "postgresql":
+        return CatDashboardAdeAlignmentSummary(
+            checked=False,
+            has_disallineamenti=False,
+            staged_particelle=0,
+            nuove_in_ade=0,
+            geometrie_variate=0,
+            mancanti_in_ade=0,
+            latest_fetched_at=None,
+            message="Controllo allineamento AdE disponibile su PostgreSQL/PostGIS.",
+        )
+
+    tables_exist = db.execute(
+        text(
+            """
+            SELECT
+                to_regclass('public.cat_ade_particelle') IS NOT NULL AS particelle_exists,
+                to_regclass('public.cat_ade_sync_runs') IS NOT NULL AS runs_exists
+            """
+        )
+    ).one()
+    if not tables_exist.particelle_exists or not tables_exist.runs_exists:
+        return CatDashboardAdeAlignmentSummary(
+            checked=False,
+            has_disallineamenti=False,
+            staged_particelle=0,
+            nuove_in_ade=0,
+            geometrie_variate=0,
+            mancanti_in_ade=0,
+            latest_fetched_at=None,
+            message="Staging AdE non ancora inizializzato.",
+        )
+
+    latest_run = db.execute(
+        text(
+            """
+            SELECT id, completed_at
+            FROM cat_ade_sync_runs
+            WHERE status = 'completed'
+            ORDER BY completed_at DESC NULLS LAST, started_at DESC
+            LIMIT 1
+            """
+        )
+    ).first()
+    if latest_run is None:
+        return CatDashboardAdeAlignmentSummary(
+            checked=False,
+            has_disallineamenti=False,
+            staged_particelle=0,
+            nuove_in_ade=0,
+            geometrie_variate=0,
+            mancanti_in_ade=0,
+            latest_fetched_at=None,
+            message="Nessun download AdE completato.",
+        )
+
+    row = db.execute(
+        text(
+            """
+            WITH staged AS (
+                SELECT
+                    COUNT(*) AS staged_particelle,
+                    MAX(fetched_at) AS latest_fetched_at,
+                    COUNT(*) FILTER (
+                        WHERE NOT EXISTS (
+                            SELECT 1
+                            FROM cat_particelle p
+                            WHERE p.is_current IS TRUE
+                              AND p.codice_catastale = cat_ade_particelle.codice_catastale
+                              AND COALESCE(p.sezione_catastale, '') = COALESCE(cat_ade_particelle.sezione_catastale, '')
+                              AND p.foglio = cat_ade_particelle.foglio
+                              AND p.particella = cat_ade_particelle.particella
+                        )
+                    ) AS nuove_in_ade
+                FROM cat_ade_particelle
+                WHERE source_run_id = :run_id
+            ),
+            one_to_one_matches AS (
+                SELECT
+                    a.id AS ade_id,
+                    MAX(p.id::text)::uuid AS particella_id,
+                    COUNT(p.id) AS match_count
+                FROM cat_ade_particelle a
+                JOIN cat_particelle p
+                  ON p.is_current IS TRUE
+                 AND p.codice_catastale = a.codice_catastale
+                 AND COALESCE(p.sezione_catastale, '') = COALESCE(a.sezione_catastale, '')
+                 AND p.foglio = a.foglio
+                 AND p.particella = a.particella
+                WHERE a.source_run_id = :run_id
+                GROUP BY a.id
+            ),
+            geometry_changed AS (
+                SELECT COUNT(*) AS geometrie_variate
+                FROM one_to_one_matches m
+                JOIN cat_ade_particelle a ON a.id = m.ade_id
+                JOIN cat_particelle p ON p.id = m.particella_id
+                WHERE m.match_count = 1
+                  AND a.geometry IS NOT NULL
+                  AND p.geometry IS NOT NULL
+                  AND ST_HausdorffDistance(ST_Transform(a.geometry, 32632), ST_Transform(p.geometry, 32632)) > 1.0
+            )
+            SELECT
+                staged.staged_particelle,
+                staged.latest_fetched_at,
+                staged.nuove_in_ade,
+                geometry_changed.geometrie_variate
+            FROM staged, geometry_changed
+            """
+        ),
+        {"run_id": latest_run.id},
+    ).one()
+
+    nuove_in_ade = _to_int(row.nuove_in_ade)
+    geometrie_variate = _to_int(row.geometrie_variate)
+    has_disallineamenti = nuove_in_ade > 0 or geometrie_variate > 0
+    message = (
+        "Sono presenti differenze tra staging AdE e particelle GAIA."
+        if has_disallineamenti
+        else "Nessun disallineamento rilevato nell'ultimo download AdE."
+    )
+    return CatDashboardAdeAlignmentSummary(
+        checked=True,
+        has_disallineamenti=has_disallineamenti,
+        staged_particelle=_to_int(row.staged_particelle),
+        nuove_in_ade=nuove_in_ade,
+        geometrie_variate=geometrie_variate,
+        mancanti_in_ade=0,
+        latest_fetched_at=row.latest_fetched_at or latest_run.completed_at,
+        message=message,
+    )
 
 
 @router.get("/summary", response_model=CatDashboardSummaryResponse)
@@ -223,6 +358,7 @@ def get_dashboard_summary(
 
     importo_totale_0648 = _to_float(utenze_row[3])
     importo_totale_0985 = _to_float(utenze_row[4])
+    ade_alignment = _get_ade_alignment_summary(db)
     return CatDashboardSummaryResponse(
         anno=effective_anno,
         generated_at=datetime.now(timezone.utc),
@@ -267,4 +403,5 @@ def get_dashboard_summary(
             ],
         ),
         distretti=distretti,
+        ade_alignment=ade_alignment,
     )

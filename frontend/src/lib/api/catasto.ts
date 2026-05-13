@@ -24,6 +24,11 @@ import type {
   UUID,
 } from "@/types/catasto";
 import type {
+  AdeAlignmentApplyPreviewRequest,
+  AdeAlignmentApplyPreviewResponse,
+  AdeAlignmentReportResponse,
+  AdeWfsSyncBboxRequest,
+  AdeWfsSyncBboxResponse,
   GisFilters,
   GisParticellaRef,
   GisResolveRefsResponse,
@@ -54,6 +59,42 @@ export async function catastoGisSelect(
 export async function catastoGisGetPopup(token: string, id: string): Promise<ParticellaPopupData> {
   return request<ParticellaPopupData>(`/catasto/gis/particella/${id}/popup`, {
     headers: authHeaders(token),
+  });
+}
+
+export async function catastoGisSyncAdeWfsBbox(
+  token: string,
+  payload: AdeWfsSyncBboxRequest,
+): Promise<AdeWfsSyncBboxResponse> {
+  return request<AdeWfsSyncBboxResponse>("/catasto/gis/ade-wfs/sync-bbox", {
+    method: "POST",
+    headers: { ...authHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function catastoGisGetAdeAlignmentReport(
+  token: string,
+  runId: string,
+  params?: { geometryThresholdM?: number },
+): Promise<AdeAlignmentReportResponse> {
+  const query = createQueryString({
+    geometry_threshold_m: params?.geometryThresholdM != null ? String(params.geometryThresholdM) : undefined,
+  });
+  return request<AdeAlignmentReportResponse>(`/catasto/gis/ade-wfs/alignment-report/${runId}${query}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function catastoGisPreviewAdeAlignmentApply(
+  token: string,
+  runId: string,
+  payload: AdeAlignmentApplyPreviewRequest,
+): Promise<AdeAlignmentApplyPreviewResponse> {
+  return request<AdeAlignmentApplyPreviewResponse>(`/catasto/gis/ade-wfs/alignment-apply-preview/${runId}`, {
+    method: "POST",
+    headers: { ...authHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
   });
 }
 

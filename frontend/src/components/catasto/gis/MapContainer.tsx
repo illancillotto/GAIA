@@ -727,7 +727,7 @@ export default function MapContainer({
           type: "fill",
           source: ids.sourceId,
           paint: {
-            "fill-color": color,
+            "fill-color": ["coalesce", ["get", "__overlayColor"], color],
             "fill-opacity": fillOpacityExpr,
           },
         });
@@ -738,7 +738,7 @@ export default function MapContainer({
           map.getCanvas().style.cursor = "";
         });
       } else {
-        map.setPaintProperty(ids.fillId, "fill-color", color);
+        map.setPaintProperty(ids.fillId, "fill-color", ["coalesce", ["get", "__overlayColor"], color]);
         map.setPaintProperty(ids.fillId, "fill-opacity", fillOpacityExpr);
       }
 
@@ -748,7 +748,7 @@ export default function MapContainer({
           type: "line",
           source: ids.sourceId,
           paint: {
-            "line-color": color,
+            "line-color": ["coalesce", ["get", "__overlayColor"], color],
             "line-opacity": lineOpacity,
             "line-width": [
               "interpolate",
@@ -764,7 +764,7 @@ export default function MapContainer({
           },
         });
       } else {
-        map.setPaintProperty(ids.outlineId, "line-color", color);
+        map.setPaintProperty(ids.outlineId, "line-color", ["coalesce", ["get", "__overlayColor"], color]);
         map.setPaintProperty(ids.outlineId, "line-opacity", lineOpacity);
       }
 
@@ -774,7 +774,7 @@ export default function MapContainer({
           type: "circle",
           source: ids.centroidSourceId,
           paint: {
-            "circle-color": color,
+            "circle-color": ["coalesce", ["get", "__overlayColor"], color],
             "circle-radius": [
               "interpolate",
               ["linear"],
@@ -805,7 +805,7 @@ export default function MapContainer({
           },
         });
       } else {
-        map.setPaintProperty(ids.centroidId, "circle-color", color);
+        map.setPaintProperty(ids.centroidId, "circle-color", ["coalesce", ["get", "__overlayColor"], color]);
         map.setPaintProperty(ids.centroidId, "circle-opacity", circleOpacityExpr);
         map.setPaintProperty(ids.centroidId, "circle-stroke-opacity", circleStrokeOpacity);
       }

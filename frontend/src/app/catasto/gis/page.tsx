@@ -11,12 +11,15 @@ import SelectionPanel from "@/components/catasto/gis/SelectionPanel";
 import { CatastoPage } from "@/components/catasto/catasto-page";
 import {
   catastoGetDistrettoGeojson,
+  catastoGisGetAdeAlignmentReport,
+  catastoGisPreviewAdeAlignmentApply,
   catastoGisCreateSavedSelection,
   catastoGisDeleteSavedSelection,
   catastoGisExport,
   catastoGisGetSavedSelection,
   catastoGisListSavedSelections,
   catastoGisResolveRefs,
+  catastoGisSyncAdeWfsBbox,
   catastoGisUpdateSavedSelection,
   catastoListDistretti,
 } from "@/lib/api/catasto";
@@ -24,6 +27,9 @@ import { getStoredAccessToken } from "@/lib/auth";
 import { useGisSelection } from "@/hooks/useGisSelection";
 import type { CatAnagraficaMatch, CatDistretto } from "@/types/catasto";
 import type {
+  AdeAlignmentApplyPreviewResponse,
+  AdeAlignmentReportResponse,
+  AdeWfsSyncBboxResponse,
   GisBasemap,
   GisFilters,
   GisMapOverlayLayer,
@@ -156,6 +162,111 @@ function popupToMatch(popup: ParticellaPopupData | null): CatAnagraficaMatch | n
   };
 }
 
+type AdeBboxForm = {
+  minLon: string;
+  minLat: string;
+  maxLon: string;
+  maxLat: string;
+};
+
+const DEFAULT_ADE_BBOX: AdeBboxForm = {
+  minLon: "8.58",
+  minLat: "39.88",
+  maxLon: "8.59",
+  maxLat: "39.89",
+};
+const ADE_PREVIEW_COLORS: Record<string, string> = {
+  nuove_in_ade: "#F59E0B",
+  geometrie_variate: "#EF4444",
+  mancanti_in_ade: "#64748B",
+  match_ambiguo: "#8B5CF6",
+};
+
+function geometryToBbox(geometry: GeoJSON.Geometry): AdeBboxForm | null {
+  const coordinates: number[][] = [];
+  const collect = (value: unknown): void => {
+    if (!Array.isArray(value)) return;
+    if (value.length >= 2 && typeof value[0] === "number" && typeof value[1] === "number") {
+      coordinates.push([value[0], value[1]]);
+      return;
+    }
+    value.forEach(collect);
+  };
+  if (geometry.type === "GeometryCollection") {
+    geometry.geometries.forEach((item) => collect("coordinates" in item ? item.coordinates : []));
+  } else {
+    collect(geometry.coordinates);
+  }
+  if (coordinates.length === 0) return null;
+
+  const minLon = Math.min(...coordinates.map((coord) => coord[0]));
+  const minLat = Math.min(...coordinates.map((coord) => coord[1]));
+  const maxLon = Math.max(...coordinates.map((coord) => coord[0]));
+  const maxLat = Math.max(...coordinates.map((coord) => coord[1]));
+  if (![minLon, minLat, maxLon, maxLat].every(Number.isFinite)) return null;
+  return {
+    minLon: minLon.toFixed(6),
+    minLat: minLat.toFixed(6),
+    maxLon: maxLon.toFixed(6),
+    maxLat: maxLat.toFixed(6),
+  };
+}
+
+function featureCollectionToBbox(collection: GeoJSON.FeatureCollection): AdeBboxForm | null {
+  const geometries = collection.features.map((feature) => feature.geometry).filter(Boolean) as GeoJSON.Geometry[];
+  if (geometries.length === 0) return null;
+  return geometryToBbox({ type: "GeometryCollection", geometries } as GeoJSON.Geometry);
+}
+
+function formatDateTime(value: string | null | undefined): string {
+  if (!value) return "-";
+  return new Date(value).toLocaleString("it-IT", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function formatMeters(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return "-";
+  return `${value.toLocaleString("it-IT", { maximumFractionDigits: 2 })} m`;
+}
+
+function buildAdePreviewLayer(report: AdeAlignmentReportResponse): OverlayLayerState | null {
+  if (!report.geojson || report.geojson.features.length === 0) return null;
+  const features = report.geojson.features.map((feature, index) => {
+    const category = String(feature.properties?.category ?? "match_ambiguo");
+    const geometrySource = String(feature.properties?.geometry_source ?? "ade");
+    const color = geometrySource === "gaia" && category === "geometrie_variate"
+      ? "#1D4ED8"
+      : ADE_PREVIEW_COLORS[category] ?? "#8B5CF6";
+    return {
+      ...feature,
+      properties: {
+        ...(feature.properties ?? {}),
+        id: feature.properties?.particella_id ?? `${report.run_id}-${index}`,
+        __overlayColor: color,
+      },
+    };
+  });
+  return {
+    layer_key: `ade-preview-${report.run_id}`,
+    saved_selection_id: null,
+    name: `Preview AdE ${report.run_id.slice(0, 8)}`,
+    color: "#EF4444",
+    opacity: 0.62,
+    showFill: true,
+    visible: true,
+    source_filename: "Agenzia Entrate WFS",
+    geojson: { type: "FeatureCollection", features },
+    importStats: null,
+    importedItems: [],
+    isPersisted: false,
+  };
+}
+
 function formatHectares(value: number | null | undefined): string {
   if (value == null) return "-";
   return `${value.toLocaleString("it-IT", { minimumFractionDigits: 0, maximumFractionDigits: 4 })} ha`;
@@ -201,6 +312,12 @@ export default function CatastoGisPage() {
   const [focusSignal, setFocusSignal] = useState(0);
   const [popupParticella, setPopupParticella] = useState<ParticellaPopupData | null>(null);
   const [popupDetailOpen, setPopupDetailOpen] = useState(false);
+  const [lastDrawnGeometry, setLastDrawnGeometry] = useState<GeoJSON.Geometry | null>(null);
+  const [adeBbox, setAdeBbox] = useState<AdeBboxForm>(DEFAULT_ADE_BBOX);
+  const [adeBusy, setAdeBusy] = useState(false);
+  const [adeSyncResult, setAdeSyncResult] = useState<AdeWfsSyncBboxResponse | null>(null);
+  const [adeReport, setAdeReport] = useState<AdeAlignmentReportResponse | null>(null);
+  const [adeApplyPreview, setAdeApplyPreview] = useState<AdeAlignmentApplyPreviewResponse | null>(null);
   const layerCounterRef = useRef(0);
   const activeFilters = useMemo<GisFilters>(() => ({}), []);
   const { result, isLoading, error, runSelection, clearSelection } = useGisSelection(token);
@@ -311,6 +428,7 @@ export default function CatastoGisPage() {
   const handleGeometryDrawn = useCallback(
     async (geometry: GeoJSON.Geometry) => {
       setHasDrawing(true);
+      setLastDrawnGeometry(geometry);
       await runSelection(geometry, activeFilters);
     },
     [activeFilters, runSelection],
@@ -318,6 +436,7 @@ export default function CatastoGisPage() {
 
   const handleClearSelection = useCallback(() => {
     setHasDrawing(false);
+    setLastDrawnGeometry(null);
     setClearSignal((value) => value + 1);
     clearSelection();
   }, [clearSelection]);
@@ -365,12 +484,119 @@ export default function CatastoGisPage() {
         type: "FeatureCollection",
         features: [feature as GeoJSON.Feature],
       });
+      const bbox = featureCollectionToBbox({ type: "FeatureCollection", features: [feature as GeoJSON.Feature] });
+      if (bbox) setAdeBbox(bbox);
       setFocusSignal((value) => value + 1);
       setGisError(null);
     } catch (e) {
       setGisError(e instanceof Error ? e.message : "Impossibile centrare il distretto selezionato");
     }
   }, [token]);
+
+  const handleUseDrawnBboxForAde = useCallback(() => {
+    if (!lastDrawnGeometry) {
+      setGisError("Disegna prima un'area sulla mappa.");
+      return;
+    }
+    const bbox = geometryToBbox(lastDrawnGeometry);
+    if (!bbox) {
+      setGisError("Impossibile calcolare la bbox dell'area disegnata.");
+      return;
+    }
+    setAdeBbox(bbox);
+    setGisError(null);
+    setGisInfo("BBox AdE aggiornata dalla selezione disegnata.");
+  }, [lastDrawnGeometry]);
+
+  const handleUseSelectedDistrettoBboxForAde = useCallback(async () => {
+    if (!token || !selectedDistretto) {
+      setGisError("Seleziona prima un distretto.");
+      return;
+    }
+    try {
+      const feature = await catastoGetDistrettoGeojson(token, selectedDistretto.id);
+      const bbox = featureCollectionToBbox({ type: "FeatureCollection", features: [feature as GeoJSON.Feature] });
+      if (!bbox) throw new Error("BBox distretto non disponibile.");
+      setAdeBbox(bbox);
+      setGisInfo(`BBox AdE aggiornata dal distretto ${selectedDistretto.num_distretto}.`);
+      setGisError(null);
+    } catch (e) {
+      setGisError(e instanceof Error ? e.message : "Impossibile calcolare la bbox del distretto.");
+    }
+  }, [selectedDistretto, token]);
+
+  const handleRunAdeAlignment = useCallback(async () => {
+    if (!token) {
+      setGisError("Sessione non disponibile. Accedi di nuovo.");
+      return;
+    }
+    const minLon = Number(adeBbox.minLon);
+    const minLat = Number(adeBbox.minLat);
+    const maxLon = Number(adeBbox.maxLon);
+    const maxLat = Number(adeBbox.maxLat);
+    if (![minLon, minLat, maxLon, maxLat].every(Number.isFinite) || minLon >= maxLon || minLat >= maxLat) {
+      setGisError("BBox AdE non valida.");
+      return;
+    }
+
+    setAdeBusy(true);
+    setGisError(null);
+    setGisInfo(null);
+    setAdeSyncResult(null);
+    setAdeReport(null);
+    setAdeApplyPreview(null);
+    try {
+      const sync = await catastoGisSyncAdeWfsBbox(token, {
+        min_lon: minLon,
+        min_lat: minLat,
+        max_lon: maxLon,
+        max_lat: maxLat,
+        max_tile_km2: 4,
+        max_tiles: 25,
+        count: 1000,
+        max_pages_per_tile: 20,
+      });
+      setAdeSyncResult(sync);
+      const report = await catastoGisGetAdeAlignmentReport(token, sync.run_id, { geometryThresholdM: 1 });
+      setAdeReport(report);
+      const previewLayer = buildAdePreviewLayer(report);
+      if (previewLayer) {
+        setOverlayLayers((layers) => [
+          ...layers.filter((layer) => !layer.layer_key.startsWith("ade-preview-")),
+          previewLayer,
+        ]);
+        focusLayerGeojson(previewLayer.geojson);
+      }
+      setGisInfo(`Run AdE completato: ${sync.features.toLocaleString("it-IT")} particelle scaricate.`);
+    } catch (e) {
+      setGisError(e instanceof Error ? e.message : "Allineamento AdE fallito.");
+    } finally {
+      setAdeBusy(false);
+    }
+  }, [adeBbox, focusLayerGeojson, token]);
+
+  const handlePreviewAdeApply = useCallback(async () => {
+    if (!token || !adeReport) {
+      setGisError("Esegui prima un confronto AdE.");
+      return;
+    }
+
+    setAdeBusy(true);
+    setGisError(null);
+    setGisInfo(null);
+    try {
+      const preview = await catastoGisPreviewAdeAlignmentApply(token, adeReport.run_id, {
+        categories: ["nuove_in_ade", "geometrie_variate"],
+        geometry_threshold_m: adeReport.geometry_threshold_m,
+      });
+      setAdeApplyPreview(preview);
+      setGisInfo("Preview applicazione AdE calcolata: nessuna modifica eseguita.");
+    } catch (e) {
+      setGisError(e instanceof Error ? e.message : "Preview applicazione AdE fallita.");
+    } finally {
+      setAdeBusy(false);
+    }
+  }, [adeReport, token]);
 
   const handleClearDistretto = useCallback(() => {
     setDistrettoLayer("");
@@ -927,6 +1153,186 @@ export default function CatastoGisPage() {
     </>
   );
 
+  const renderAdeAlignmentPanel = (isDark: boolean) => (
+    <div className={`rounded-2xl border p-3 ${isDark ? "border-white/15 bg-white/10" : "border-amber-100 bg-amber-50/40"}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className={`text-[10px] font-semibold uppercase tracking-widest ${isDark ? "text-amber-200" : "text-amber-700"}`}>
+            Allinea particelle AdE
+          </p>
+          <p className={`mt-1 text-xs leading-5 ${isDark ? "text-white/60" : "text-slate-600"}`}>
+            Scarica il WFS AdE nello scope bbox, crea un run e mostra il report differenze senza aggiornare GAIA.
+          </p>
+        </div>
+        {adeReport ? (
+          <span className="rounded-full bg-white px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+            Run pronto
+          </span>
+        ) : null}
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        {[
+          ["minLon", "Min lon"],
+          ["minLat", "Min lat"],
+          ["maxLon", "Max lon"],
+          ["maxLat", "Max lat"],
+        ].map(([key, label]) => (
+          <label key={key} className="block">
+            <span className={`text-[10px] font-semibold uppercase tracking-widest ${isDark ? "text-white/45" : "text-slate-400"}`}>
+              {label}
+            </span>
+            <input
+              value={adeBbox[key as keyof AdeBboxForm]}
+              onChange={(event) => setAdeBbox((value) => ({ ...value, [key]: event.target.value }))}
+              className={`mt-1 w-full rounded-xl border px-2.5 py-2 text-xs font-medium outline-none focus:ring-2 ${
+                isDark
+                  ? "border-white/15 bg-white/10 text-white focus:ring-amber-300/30"
+                  : "border-amber-100 bg-white text-slate-800 focus:ring-amber-100"
+              }`}
+            />
+          </label>
+        ))}
+      </div>
+
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          onClick={handleUseDrawnBboxForAde}
+          className={`rounded-xl border px-3 py-2 text-xs font-semibold transition ${
+            isDark ? "border-white/15 bg-white/5 text-white/70 hover:bg-white/10" : "border-amber-200 bg-white text-amber-800 hover:bg-amber-50"
+          }`}
+        >
+          Usa area disegnata
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleUseSelectedDistrettoBboxForAde()}
+          disabled={!selectedDistretto}
+          className={`rounded-xl border px-3 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-45 ${
+            isDark ? "border-white/15 bg-white/5 text-white/70 hover:bg-white/10" : "border-amber-200 bg-white text-amber-800 hover:bg-amber-50"
+          }`}
+        >
+          Usa distretto
+        </button>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => void handleRunAdeAlignment()}
+        disabled={adeBusy}
+        className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-3 py-2.5 text-xs font-semibold text-white transition hover:bg-slate-800 disabled:cursor-wait disabled:bg-slate-400"
+      >
+        {adeBusy ? (
+          <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+        ) : (
+          <span className="material-symbols-outlined text-[16px]">sync</span>
+        )}
+        {adeBusy ? "Download e confronto..." : "Avvia confronto AdE"}
+      </button>
+
+      {adeSyncResult ? (
+        <div className={`mt-3 rounded-xl border px-3 py-2 text-xs ${isDark ? "border-white/15 bg-white/5 text-white/65" : "border-white bg-white/75 text-slate-600"}`}>
+          <div className="font-semibold text-slate-900">Run {adeSyncResult.run_id.slice(0, 8)}</div>
+          <div className="mt-1">
+            {adeSyncResult.features.toLocaleString("it-IT")} feature · {adeSyncResult.tiles.toLocaleString("it-IT")} tile · {adeSyncResult.with_geometry.toLocaleString("it-IT")} con geometria
+          </div>
+        </div>
+      ) : null}
+
+      {adeReport ? (
+        <div className="mt-3 space-y-3">
+          <div className="grid grid-cols-2 gap-2 text-center text-[11px]">
+            <div className="rounded-xl bg-emerald-50 px-2 py-2">
+              <div className="font-semibold text-emerald-700">{adeReport.counters.allineate.toLocaleString("it-IT")}</div>
+              <div className="text-emerald-900/50">allineate</div>
+            </div>
+            <div className="rounded-xl bg-amber-50 px-2 py-2">
+              <div className="font-semibold text-amber-700">{adeReport.counters.nuove_in_ade.toLocaleString("it-IT")}</div>
+              <div className="text-amber-900/50">nuove AdE</div>
+            </div>
+            <div className="rounded-xl bg-rose-50 px-2 py-2">
+              <div className="font-semibold text-rose-700">{adeReport.counters.geometrie_variate.toLocaleString("it-IT")}</div>
+              <div className="text-rose-900/50">geometrie variate</div>
+            </div>
+            <div className="rounded-xl bg-slate-100 px-2 py-2">
+              <div className="font-semibold text-slate-700">{adeReport.counters.mancanti_in_ade.toLocaleString("it-IT")}</div>
+              <div className="text-slate-500">mancanti AdE</div>
+            </div>
+          </div>
+          <div className="rounded-xl border border-white bg-white/80 px-3 py-2 text-[11px] text-slate-500">
+            Completato: {formatDateTime(adeReport.completed_at)} · soglia geometria {adeReport.geometry_threshold_m} m
+          </div>
+          <button
+            type="button"
+            onClick={() => void handlePreviewAdeApply()}
+            disabled={adeBusy}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-amber-200 bg-white px-3 py-2 text-xs font-semibold text-amber-800 transition hover:bg-amber-50 disabled:cursor-wait disabled:opacity-60"
+          >
+            <span className="material-symbols-outlined text-[16px]">fact_check</span>
+            Preview applicazione
+          </button>
+          {adeApplyPreview ? (
+            <div className="space-y-2 rounded-xl border border-amber-100 bg-white px-3 py-2 text-xs text-slate-600">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-semibold text-slate-900">Dry-run apply</span>
+                <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                  Nessuna scrittura
+                </span>
+              </div>
+              <div className="grid grid-cols-3 gap-1.5 text-center text-[11px]">
+                <div className="rounded-lg bg-amber-50 px-2 py-1.5">
+                  <div className="font-semibold text-amber-700">{adeApplyPreview.counters.insert_new.toLocaleString("it-IT")}</div>
+                  <div className="text-amber-900/50">insert</div>
+                </div>
+                <div className="rounded-lg bg-rose-50 px-2 py-1.5">
+                  <div className="font-semibold text-rose-700">{adeApplyPreview.counters.update_geometry.toLocaleString("it-IT")}</div>
+                  <div className="text-rose-900/50">update geom.</div>
+                </div>
+                <div className="rounded-lg bg-slate-100 px-2 py-1.5">
+                  <div className="font-semibold text-slate-700">{adeApplyPreview.counters.skipped_ambiguous.toLocaleString("it-IT")}</div>
+                  <div className="text-slate-500">ambigui</div>
+                </div>
+              </div>
+              <div className="text-[11px] leading-5 text-slate-500">
+                Impatto: {adeApplyPreview.impact.utenze_collegate.toLocaleString("it-IT")} utenze, {adeApplyPreview.impact.consorzio_units_collegate.toLocaleString("it-IT")} unità consorzio, {adeApplyPreview.impact.ruolo_particelle_collegate.toLocaleString("it-IT")} righe ruolo collegate.
+              </div>
+              {adeApplyPreview.warnings.length > 0 ? (
+                <div className="text-[11px] leading-5 text-amber-700">
+                  {adeApplyPreview.warnings.slice(0, 2).join(" ")}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          {adeReport.geojson && adeReport.geojson.features.length > 0 ? (
+            <div className="rounded-xl border border-amber-100 bg-white px-3 py-2 text-[11px] text-slate-600">
+              Preview in mappa: giallo nuove AdE, rosso geometrie AdE variate, blu geometrie GAIA correnti, grigio mancanti AdE.
+            </div>
+          ) : null}
+          {adeReport.samples.length > 0 ? (
+            <div className="max-h-40 space-y-1.5 overflow-y-auto pr-1">
+              {adeReport.samples.slice(0, 8).map((item, index) => (
+                <div key={`${item.category}-${item.national_cadastral_reference ?? index}`} className="rounded-xl border border-amber-100 bg-white px-3 py-2 text-xs">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-semibold text-slate-800">{item.national_cadastral_reference ?? `${item.foglio}/${item.particella}`}</span>
+                    <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">{item.category}</span>
+                  </div>
+                  <div className="mt-1 text-[11px] text-slate-500">
+                    {item.codice_catastale ?? "-"} · Fg. {item.foglio ?? "-"} · Part. {item.particella ?? "-"}
+                    {item.distance_m != null ? ` · ${formatMeters(item.distance_m)}` : ""}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
+  );
+
   return (
     <CatastoPage
       title="GIS"
@@ -1375,6 +1781,7 @@ export default function CatastoGisPage() {
                       </div>
                     </div>
                     {renderDistrettiPanel(false)}
+                    {renderAdeAlignmentPanel(false)}
                     <div className="rounded-2xl border border-gray-100 bg-gray-50 p-3">
                       {renderArchivioList(false)}
                     </div>
@@ -1511,6 +1918,7 @@ export default function CatastoGisPage() {
                 </div>
 
                 {renderDistrettiPanel(false)}
+                {renderAdeAlignmentPanel(false)}
 
                 {/* Excel import */}
                 <div className="rounded-2xl border border-emerald-100 bg-emerald-50/30 p-2.5">

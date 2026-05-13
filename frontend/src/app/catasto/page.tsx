@@ -35,6 +35,17 @@ function formatDate(value: string | null | undefined): string {
   return new Date(value).toLocaleDateString("it-IT", { day: "2-digit", month: "2-digit", year: "numeric" });
 }
 
+function formatDateTime(value: string | null | undefined): string {
+  if (!value) return "—";
+  return new Date(value).toLocaleString("it-IT", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
 function percent(part: number, total: number): number {
   if (!Number.isFinite(part) || !Number.isFinite(total) || total <= 0) return 0;
   return Math.round((part / total) * 100);
@@ -104,6 +115,7 @@ export default function CatastoDashboardPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedDistretto, setSelectedDistretto] = useState<CatDashboardDistrettoSummary | null>(null);
+  const [alignmentPopupDismissed, setAlignmentPopupDismissed] = useState(false);
 
   useEffect(() => {
     async function load(): Promise<void> {
@@ -143,6 +155,7 @@ export default function CatastoDashboardPage() {
   const activeYear = summary?.anno ?? anno;
   const tone = statusTone(summary);
   const statusLabel = tone === "success" ? "Operativo" : tone === "warning" ? "Import in corso" : tone === "danger" ? "Da verificare" : "In attesa dati";
+  const showAdeAlignmentPopup = Boolean(summary?.ade_alignment.has_disallineamenti && !alignmentPopupDismissed);
 
   return (
     <CatastoPage
@@ -200,6 +213,13 @@ export default function CatastoDashboardPage() {
         {loadError ? (
           <AlertBanner variant="danger" title="Errore caricamento">
             {loadError}
+          </AlertBanner>
+        ) : null}
+
+        {summary?.ade_alignment.has_disallineamenti ? (
+          <AlertBanner variant="warning" title="Disallineamento particelle AdE">
+            Sono presenti differenze tra staging Agenzia Entrate e particelle GAIA: {formatNumber(summary.ade_alignment.nuove_in_ade)} nuove in AdE e{" "}
+            {formatNumber(summary.ade_alignment.geometrie_variate)} geometrie variate. Ultimo controllo: {formatDateTime(summary.ade_alignment.latest_fetched_at)}.
           </AlertBanner>
         ) : null}
 
@@ -364,6 +384,34 @@ export default function CatastoDashboardPage() {
           description={selectedDistretto?.nome_distretto ?? "Dettaglio distretto aperto dalla dashboard Catasto."}
           onClose={() => setSelectedDistretto(null)}
         />
+
+        {showAdeAlignmentPopup ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/35 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-xl rounded-[2rem] border border-amber-200 bg-white p-6 shadow-2xl">
+              <div className="inline-flex rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-amber-800">
+                Verifica richiesta
+              </div>
+              <h2 className="mt-4 text-2xl font-semibold tracking-tight text-slate-950">Particelle AdE non allineate</h2>
+              <p className="mt-3 text-sm leading-6 text-slate-600">
+                Lo staging WFS Agenzia Entrate contiene differenze rispetto a `cat_particelle`. Prima di aggiornare le geometrie operative, apri il GIS e verifica il confronto.
+              </p>
+              <div className="mt-5 grid gap-3 sm:grid-cols-3">
+                <StatCard label="Nuove AdE" value={formatNumber(summary?.ade_alignment.nuove_in_ade)} sub="Non presenti in GAIA" tone="warning" />
+                <StatCard label="Geometrie" value={formatNumber(summary?.ade_alignment.geometrie_variate)} sub="Distanza > 1 m" tone="danger" />
+                <StatCard label="Staging" value={formatNumber(summary?.ade_alignment.staged_particelle)} sub="Particelle AdE" />
+              </div>
+              <p className="mt-4 text-xs text-slate-500">Ultimo download AdE: {formatDateTime(summary?.ade_alignment.latest_fetched_at)}</p>
+              <div className="mt-6 flex flex-wrap justify-end gap-3">
+                <button type="button" className="btn-secondary" onClick={() => setAlignmentPopupDismissed(true)}>
+                  Ricordamelo dopo
+                </button>
+                <Link className="btn-primary" href="/catasto/gis">
+                  Apri GIS
+                </Link>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </CatastoPage>
   );

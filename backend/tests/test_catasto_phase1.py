@@ -40,10 +40,18 @@ from app.models.catasto import CatastoParcel
 from app.modules.utenze.models import AnagraficaCompany, AnagraficaPerson, AnagraficaPersonSnapshot, AnagraficaSubject
 from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob, RuoloParticella, RuoloPartita
 from app.modules.catasto.routes import import_routes as import_routes_module
+from app.modules.catasto.routes import gis as gis_routes_module
 from app.modules.catasto.services.import_capacitas import CapacitasImportDuplicateError, import_capacitas_excel
 from app.modules.catasto.services.comuni_reference import load_comuni_reference
 from app.modules.catasto.services.import_distretti_excel import import_distretti_excel
 from app.modules.catasto.services import import_distretti_excel as import_distretti_excel_module
+from app.modules.catasto.services.ade_wfs import (
+    AdeWfsBbox,
+    AdeWfsClient,
+    parse_national_cadastral_reference,
+    parse_wfs_feature_collection,
+    split_bbox,
+)
 from app.modules.elaborazioni.capacitas.models import CapacitasAnagraficaDetail, CapacitasIntestatario, CapacitasTerrenoCertificato
 from app.modules.elaborazioni.capacitas.models import CapacitasLookupOption, CapacitasTerreniSearchResult
 from app.modules.catasto.services.validation import (
@@ -133,6 +141,247 @@ def auth_headers_for(username: str) -> dict[str, str]:
     response = client.post("/auth/login", json={"username": username, "password": "secret123"})
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
+
+
+def test_ade_wfs_reference_parser_expands_catasto_key() -> None:
+    parsed = parse_national_cadastral_reference("G113A002700.100")
+
+    assert parsed.codice_catastale == "G113"
+    assert parsed.sezione_catastale == "A"
+    assert parsed.foglio_raw == "0027"
+    assert parsed.foglio == "27"
+    assert parsed.allegato is None
+    assert parsed.sviluppo is None
+    assert parsed.particella_raw == "100"
+    assert parsed.particella == "100"
+
+
+def test_ade_wfs_parser_converts_epsg_6706_axis_order_to_wkt_xy() -> None:
+    xml = b"""<?xml version='1.0' encoding='UTF-8'?>
+    <wfs:FeatureCollection
+      xmlns:CP="http://mapserver.gis.umn.edu/mapserver"
+      xmlns:gml="http://www.opengis.net/gml/3.2"
+      xmlns:wfs="http://www.opengis.net/wfs/2.0">
+      <wfs:member>
+        <CP:CadastralParcel gml:id="CadastralParcel.IT.AGE.PLA.G113A002700.100">
+          <CP:msGeometry>
+            <gml:Polygon srsName="urn:ogc:def:crs:EPSG::6706">
+              <gml:exterior>
+                <gml:LinearRing>
+                  <gml:posList srsDimension="2">39.88329241 8.58820039 39.88324770 8.58804238 39.88267420 8.58827860 39.88329241 8.58820039</gml:posList>
+                </gml:LinearRing>
+              </gml:exterior>
+            </gml:Polygon>
+          </CP:msGeometry>
+          <CP:INSPIREID_LOCALID>IT.AGE.PLA.G113A002700.100</CP:INSPIREID_LOCALID>
+          <CP:INSPIREID_NAMESPACE>IT.AGE.PLA.</CP:INSPIREID_NAMESPACE>
+          <CP:LABEL>100</CP:LABEL>
+          <CP:NATIONALCADASTRALREFERENCE>G113A002700.100</CP:NATIONALCADASTRALREFERENCE>
+          <CP:ADMINISTRATIVEUNIT>G113</CP:ADMINISTRATIVEUNIT>
+        </CP:CadastralParcel>
+      </wfs:member>
+    </wfs:FeatureCollection>
+    """
+
+    features = parse_wfs_feature_collection(xml)
+
+    assert len(features) == 1
+    feature = features[0]
+    assert feature.national_cadastral_reference == "G113A002700.100"
+    assert feature.administrative_unit == "G113"
+    assert feature.cadastral_reference.foglio == "27"
+    assert feature.geometry_wkt_6706 is not None
+    assert feature.geometry_wkt_6706.startswith("POLYGON((8.58820039 39.88329241")
+
+
+def test_ade_wfs_bbox_uses_lat_lon_order_for_remote_service() -> None:
+    bbox = AdeWfsBbox(min_lon=8.58, min_lat=39.88, max_lon=8.59, max_lat=39.89)
+
+    assert bbox.wfs_bbox == "39.88000000,8.58000000,39.89000000,8.59000000,urn:ogc:def:crs:EPSG::6706"
+
+
+def test_ade_wfs_client_uses_start_index_only_for_paged_requests() -> None:
+    client_wfs = AdeWfsClient()
+    bbox = AdeWfsBbox(min_lon=8.58, min_lat=39.88, max_lon=8.59, max_lat=39.89)
+
+    first_page = client_wfs._build_params(bbox, count=1000)
+    second_page = client_wfs._build_params(bbox, count=1000, start_index=1000)
+
+    assert "startIndex" not in first_page
+    assert second_page["startIndex"] == "1000"
+
+
+def test_ade_wfs_split_bbox_limits_tile_area() -> None:
+    tiles = split_bbox(AdeWfsBbox(min_lon=8.50, min_lat=39.80, max_lon=8.70, max_lat=40.00), max_tile_km2=4.0)
+
+    assert len(tiles) > 1
+    assert tiles[0].min_lon == 8.50
+    assert tiles[-1].max_lat == 40.00
+
+
+def test_ade_wfs_sync_bbox_route_stages_without_updating_cat_particelle(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_sync_ade_parcels_bbox(db: Session, bbox: AdeWfsBbox, **kwargs: object) -> dict[str, object]:
+        captured["bbox"] = bbox
+        captured["kwargs"] = kwargs
+        return {
+            "run_id": "11111111-1111-1111-1111-111111111111",
+            "requested_bbox": {
+                "min_lon": bbox.min_lon,
+                "min_lat": bbox.min_lat,
+                "max_lon": bbox.max_lon,
+                "max_lat": bbox.max_lat,
+            },
+            "tiles": 1,
+            "features": 2,
+            "upserted": 2,
+            "with_geometry": 2,
+        }
+
+    monkeypatch.setattr(gis_routes_module, "sync_ade_parcels_bbox", fake_sync_ade_parcels_bbox)
+
+    response = client.post(
+        "/catasto/gis/ade-wfs/sync-bbox",
+        headers=auth_headers(),
+        json={
+            "min_lon": 8.58,
+            "min_lat": 39.88,
+            "max_lon": 8.59,
+            "max_lat": 39.89,
+            "max_tile_km2": 4,
+            "max_tiles": 3,
+            "count": 500,
+            "max_pages_per_tile": 2,
+        },
+    )
+
+    assert response.status_code == 202
+    assert response.json()["run_id"] == "11111111-1111-1111-1111-111111111111"
+    assert response.json()["upserted"] == 2
+    assert isinstance(captured["bbox"], AdeWfsBbox)
+    assert captured["kwargs"] == {
+        "max_tile_km2": 4.0,
+        "max_tiles": 3,
+        "count": 500,
+        "max_pages_per_tile": 2,
+        "created_by": 1,
+    }
+
+
+def test_ade_wfs_alignment_report_route_returns_report(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_get_ade_alignment_report(db: Session, run_id: str, *, geometry_threshold_m: float) -> dict[str, object]:
+        captured["run_id"] = run_id
+        captured["geometry_threshold_m"] = geometry_threshold_m
+        return {
+            "run_id": run_id,
+            "status": "completed",
+            "requested_bbox": {"min_lon": 8.58, "min_lat": 39.88, "max_lon": 8.59, "max_lat": 39.89},
+            "geometry_threshold_m": geometry_threshold_m,
+            "started_at": datetime.now(timezone.utc),
+            "completed_at": datetime.now(timezone.utc),
+            "counters": {
+                "staged_particelle": 3,
+                "allineate": 1,
+                "nuove_in_ade": 1,
+                "geometrie_variate": 1,
+                "match_ambiguo": 0,
+                "mancanti_in_ade": 0,
+            },
+            "samples": [
+                {
+                    "category": "nuove_in_ade",
+                    "national_cadastral_reference": "G113A002700.100",
+                    "codice_catastale": "G113",
+                    "foglio": "27",
+                    "particella": "100",
+                    "particella_id": None,
+                    "distance_m": None,
+                }
+            ],
+            "geojson": {"type": "FeatureCollection", "features": []},
+        }
+
+    monkeypatch.setattr(gis_routes_module, "get_ade_alignment_report", fake_get_ade_alignment_report)
+
+    response = client.get(
+        "/catasto/gis/ade-wfs/alignment-report/11111111-1111-1111-1111-111111111111?geometry_threshold_m=2",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["counters"]["nuove_in_ade"] == 1
+    assert payload["samples"][0]["category"] == "nuove_in_ade"
+    assert captured == {"run_id": "11111111-1111-1111-1111-111111111111", "geometry_threshold_m": 2.0}
+
+
+def test_ade_wfs_alignment_apply_preview_route_returns_dry_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_preview_ade_alignment_apply(
+        db: Session,
+        run_id: str,
+        *,
+        categories: list[str],
+        geometry_threshold_m: float,
+    ) -> dict[str, object]:
+        captured["run_id"] = run_id
+        captured["categories"] = categories
+        captured["geometry_threshold_m"] = geometry_threshold_m
+        return {
+            "run_id": run_id,
+            "status": "preview",
+            "selected_categories": categories,
+            "geometry_threshold_m": geometry_threshold_m,
+            "counters": {
+                "insert_new": 2,
+                "update_geometry": 1,
+                "suppress_missing": 0,
+                "skipped_ambiguous": 1,
+                "skipped_not_selected": 3,
+            },
+            "impact": {
+                "affected_particelle": 1,
+                "utenze_collegate": 2,
+                "consorzio_units_collegate": 1,
+                "saved_selection_items": 0,
+                "ruolo_particelle_collegate": 4,
+            },
+            "warnings": ["Preview non applica modifiche a cat_particelle."],
+            "samples": [
+                {
+                    "category": "geometrie_variate",
+                    "national_cadastral_reference": "G113A000300.411",
+                    "codice_catastale": "G113",
+                    "foglio": "3",
+                    "particella": "411",
+                    "particella_id": "22222222-2222-2222-2222-222222222222",
+                    "distance_m": 2.5,
+                }
+            ],
+        }
+
+    monkeypatch.setattr(gis_routes_module, "preview_ade_alignment_apply", fake_preview_ade_alignment_apply)
+
+    response = client.post(
+        "/catasto/gis/ade-wfs/alignment-apply-preview/11111111-1111-1111-1111-111111111111",
+        headers=auth_headers(),
+        json={"categories": ["nuove_in_ade", "geometrie_variate"], "geometry_threshold_m": 2},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "preview"
+    assert payload["counters"]["update_geometry"] == 1
+    assert payload["impact"]["ruolo_particelle_collegate"] == 4
+    assert captured == {
+        "run_id": "11111111-1111-1111-1111-111111111111",
+        "categories": ["nuove_in_ade", "geometrie_variate"],
+        "geometry_threshold_m": 2.0,
+    }
 
 
 def seed_phase1_lookup_data(db: Session) -> None:
@@ -1204,6 +1453,8 @@ def test_dashboard_summary_endpoint_returns_catasto_control_room() -> None:
     assert payload["anomalie"]["aperte"] == 1
     assert payload["anomalie"]["error"] == 1
     assert payload["anomalie"]["by_tipo"][0] == {"key": "VAL-DASHBOARD", "label": "VAL-DASHBOARD", "count": 1}
+    assert payload["ade_alignment"]["checked"] is False
+    assert payload["ade_alignment"]["has_disallineamenti"] is False
     distretto_10 = next(item for item in payload["distretti"] if item["num_distretto"] == "10")
     assert distretto_10["totale_particelle"] == 1
     assert distretto_10["totale_utenze"] == 1

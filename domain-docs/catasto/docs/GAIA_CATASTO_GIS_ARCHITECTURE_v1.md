@@ -15,7 +15,10 @@ Il GIS è un'**estensione del modulo catasto**, non un modulo separato. Non intr
 Aggiunge:
 - `backend/app/modules/catasto/routes/gis.py` — nuove route analisi spaziale
 - `backend/app/modules/catasto/services/gis_service.py` — logica PostGIS
+- `backend/app/modules/catasto/services/ade_wfs.py` — client WFS Agenzia Entrate per staging particelle ufficiali da bbox
 - `cat_distretti_geometry_versions` — storico geometrico dei confini distrettuali importati autonomamente
+- `cat_ade_sync_runs` — tracciamento perimetro, parametri e stato dei download WFS AdE
+- `cat_ade_particelle` — staging vettoriale AdE, separato da `cat_particelle` e collegato al run sorgente
 - `frontend/src/app/catasto/gis/` — pagina GIS (già pianificata Fase 2, da estendere)
 - `frontend/src/components/catasto/gis/` — componenti GIS (DrawingTools, SelectionPanel, AnalysisPanel)
 
@@ -50,6 +53,7 @@ backend/app/modules/catasto/
 ├── services/
 │   ├── import_shapefile.py          # Esistente
 │   ├── validation.py                # Esistente
+│   ├── ade_wfs.py                   # WFS AdE CP:CadastralParcel -> staging PostGIS
 │   └── gis_service.py               # NUOVO — logica PostGIS
 └── schemas/
     └── gis_schemas.py               # NUOVO — Pydantic request/response GIS
@@ -97,6 +101,31 @@ Per Martin è stata aggiunta una migration dedicata che crea la view `cat_partic
 L'unica verifica da fare è che PostGIS sia abilitato con `ST_Transform` disponibile (richiede PROJ). Questo è garantito dall'immagine Docker `postgis/postgis` già usata in GAIA.
 
 **Nota SRID**: Le query di superficie usano `ST_Transform(geometry, 32632)` (UTM zone 32N) per ottenere aree in metri quadri accurate per la Sardegna. Il DB continua a memorizzare geometrie in EPSG:4326.
+
+### 4.1 Staging WFS Agenzia Entrate
+
+Il servizio WFS ufficiale Agenzia Entrate espone il layer vettoriale `CP:CadastralParcel` su:
+
+```text
+https://wfs.cartografia.agenziaentrate.gov.it/inspire/wfs/owfs01.php
+```
+
+GAIA scarica solo bbox limitate tramite `POST /catasto/gis/ade-wfs/sync-bbox` e persiste un record in `cat_ade_sync_runs` con bbox, parametri, conteggi e stato. Le geometrie sono salvate in `cat_ade_particelle` con `source_run_id`. La tabella e una fonte di confronto/staging: non aggiorna automaticamente `cat_particelle`. Il client usa tile con area massima configurabile e pagina le risposte WFS con `startIndex` per non troncare i risultati quando il server restituisce piu feature del `count` richiesto.
+
+Il CRS remoto e `EPSG:6706` con ordine assi latitudine/longitudine nel GML. Il backend deve quindi:
+- comporre la bbox WFS come `min_lat,min_lon,max_lat,max_lon,urn:ogc:def:crs:EPSG::6706`;
+- convertire le coordinate GML in WKT lon/lat;
+- salvare in PostGIS con `ST_Transform(ST_SetSRID(..., 6706), 4326)`.
+
+Il campo `NATIONALCADASTRALREFERENCE` viene espanso in codice catastale, sezione, foglio, allegato/sviluppo e particella per consentire confronti con `cat_particelle` e `catasto_parcels`.
+
+`GET /catasto/gis/ade-wfs/alignment-report/{run_id}` restituisce il report differenze del run: `nuove_in_ade`, `geometrie_variate`, `match_ambiguo`, `mancanti_in_ade` nello scope bbox del run e `allineate`. La dashboard Catasto include il riepilogo `ade_alignment`: quando l'ultimo run AdE completato contiene particelle non presenti in GAIA o geometrie variate oltre soglia sui match 1:1, il frontend mostra un banner e un popup operativo. Il popup indirizza al GIS/allineamento guidato; non applica modifiche automatiche.
+
+La console `catasto/gis` espone il pannello `Allinea particelle AdE` nella sidebar standard e in vista estesa. L'operatore puo impostare la bbox manualmente, derivarla dall'area disegnata o dal distretto selezionato; il pannello avvia `sync-bbox`, riceve il `run_id`, chiama il report e mostra i contatori principali. L'applicazione delle modifiche a `cat_particelle` resta volutamente fuori da questo step.
+
+Il report include una preview GeoJSON limitata delle differenze. La UI la carica come overlay MapLibre usando colori per feature: giallo per particelle nuove in AdE, rosso per geometrie AdE variate, blu per geometrie GAIA correnti corrispondenti e grigio per particelle GAIA mancanti nello scope AdE. Questa preview serve come passaggio obbligato prima di progettare l'apply selettivo.
+
+`POST /catasto/gis/ade-wfs/alignment-apply-preview/{run_id}` calcola il piano dry-run di applicazione senza scrivere su `cat_particelle`. La preview accetta categorie selezionate (`nuove_in_ade`, `geometrie_variate`, `mancanti_in_ade`), esclude sempre `match_ambiguo` e restituisce conteggi di inserimenti, aggiornamenti geometria, soppressioni e impatti sui riferimenti collegati (`cat_utenze_irrigue`, `cat_consorzio_units`, selezioni GIS salvate e `ruolo_particelle` via `catasto_parcels`). Il wizard GIS espone il pulsante `Preview applicazione`, limitato per ora a nuove AdE e geometrie variate. Lo step serve come guardrail prima di introdurre un apply effettivo con policy replace/SCD.
 
 ---
 
