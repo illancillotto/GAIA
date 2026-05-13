@@ -14,7 +14,7 @@
 | Milestone | Stato | Note |
 |-----------|-------|------|
 | M0 Analisi e design | ✅ done | PRD v1, Execution Plan v1, Prompt Codex prodotti |
-| M1 Fondazione backend | ✅ done | Migration, modelli, enums, parser (14 test), import service |
+| M1 Fondazione backend | ✅ done | Migration, modelli, enums, parser (23 test), import service |
 | M2 API e query layer | ✅ done | Repository, schemas, route import + query, router.py |
 | M3 Bootstrap e integrazione | ✅ done | Section keys, flag module_ruolo, router registrato in api/router.py |
 | M4 Frontend | ✅ done | Dashboard, avvisi, dettaglio, stats, import, widget soggetto |
@@ -56,7 +56,7 @@
   - [x] Parse righe particelle positional (con gestione subalterni letterali)
   - [x] Parse righe N4 (totali + codice utenza)
   - [x] Fault-tolerance: errore per-partita senza interruzione
-- [x] Test unitari parser — **14 test, tutti passanti** (`backend/tests/ruolo/test_parser.py`)
+- [x] Test unitari parser — **23 test, tutti passanti** (`backend/tests/ruolo/test_parser.py`)
 - [x] Import service `ruolo/services/import_service.py`
   - [x] Background task con sessione DB indipendente
   - [x] Estrazione testo da PDF (+ fallback `.dmp` grezzo)
@@ -114,7 +114,7 @@
 - [x] Nessun errore lint (`ReadLints` verde)
 
 ### M5 — Hardening
-- [x] `backend/tests/ruolo/test_parser.py` — **14 test passanti**
+- [x] `backend/tests/ruolo/test_parser.py` — **23 test passanti**
 - [x] Permessi `require_module("ruolo")` applicati su tutti gli endpoint
 - [x] Fix permessi admin esistenti: migration di backfill `module_ruolo` per account `admin` / `super_admin` creati prima del modulo
 - [x] Export CSV `GET /ruolo/avvisi/export` implementato
@@ -124,11 +124,25 @@
 - [x] Allineamento parser/import ai file DMP reali 2025 di Capacitàs
   - Lo split delle `Partita CNC` ora supporta sia il primo header con prefisso `<qm500>--` sia i blocchi successivi con header `---------Partita CNC ...`
   - Normalizzato `catasto_comuni.codice_sister` composito (es. `F272#MOGORO#0#0`) al codice catastale corto usabile in `catasto_parcels.comune_codice`
+  - Normalizzati i comuni di partita catastale da DMP: rimozione quote tra parentesi e alias storici (`SILI'*ORISTANO`, `OLLASTRA SIMAXIS`, `SAN NICOLO ARCIDANO`)
+  - Hardening del parser particelle: le righe legenda/header (`DOM.=DOMANDA IRRIGUA`, `FOG.=FOGLIO CATASTALE`, `CONSUMI DA CONTATORE`, separatori) non possono alimentare `catasto_parcels`
+  - Risoluzione comune solo con match esatto case-insensitive; eliminato il fallback parziale `ILIKE '%nome%'` per evitare casi come `ARBOREA` risolto in `PALMAS ARBOREA`
+  - Fallback risoluzione codice comune da `cat_particelle` quando `catasto_comuni` non contiene il comune ma la particella GAIA esiste in modo univoco
   - Aggiunti test `backend/tests/ruolo/test_parser.py` e `backend/tests/ruolo/test_import_helpers.py`
 - [x] Report job Ruolo persistito e consultabile da UI
   - `params_json` del job contiene `report_summary` e `report_preview` con motivazioni dei casi `skipped` / `error`
   - In `/ruolo/import` ogni card job espone una modale “Apri report” con riepilogo e dettaglio operativo
   - Semantica esplicitata: `records_skipped` = avvisi importati ma non collegati a un soggetto in Anagrafica
+- [x] Collegamento risolto `ruolo_particelle -> cat_particelle`
+  - Aggiunta FK nullable `cat_particella_id` verso `cat_particelle.id`
+  - L'import ruolo valorizza la FK solo per match univoci su codice catastale, foglio, particella e subalterno
+  - Se il ruolo ha un subalterno ma `cat_particelle` ha solo la particella base, il match e consentito solo se la base e univoca e viene marcato `base_without_sub`
+  - Aggiunto script `backend/scripts/backfill_ruolo_cat_particella_id.py` per allineare i dati gia importati
+  - Aggiunto script `backend/scripts/repair_ruolo_catasto_parcels.py` per normalizzare dati gia importati, ricostruire `catasto_parcels` mancanti e rimuovere orfani sporchi con foglio/particella non numerici
+  - Bonifica locale 2026-05-13: `catasto_parcel_not_resolved` ridotti da 4.099 a 3; eliminati 536 `catasto_parcels` orfani sporchi; export aggiornato in `exports/report_backfill_ruolo_cat_particella.md`
+  - Bonifica mismatch comune 2026-05-13: riparate 5.520 righe con codice comune errato; 5.234 sono diventate collegate a `cat_particelle`; non collegate residue ridotte a 2.583
+  - Estesa al Ruolo la regola storica gia usata da sync Terreni Capacitas per lo scambio Arborea/Terralba: se la particella non esiste sul comune sorgente, il resolver prova l'altro comune della coppia e marca il match con `swapped_arborea_terralba`; recuperate 249 righe ulteriori, non collegate residue a 2.334
+  - Allineata la risoluzione Ruolo delle frazioni catastali di Oristano alla logica Capacitas/Agenzia: `SILI -> sezione E`, `NURAXINIEDDU -> D`, `MASSAMA -> C`, `DONIGALA -> B`. Il repair `--repair-oristano-frazione-sections` ricalcola anche righe gia collegate per evitare match permissivi su solo `G113 + foglio + particella`.
 - [x] `backend/tests/ruolo/test_import.py` — import service, report job, skipped/error preview
 - [x] `backend/tests/ruolo/test_catasto_parcels.py` — logica temporale `catasto_parcels`
 - [x] `backend/tests/ruolo/test_import_integration.py` — smoke `integration-light` su blocchi DMP 2025 realistici con parser reale, merge duplicati, skipped report e filtro sezioni `CONSUMI`

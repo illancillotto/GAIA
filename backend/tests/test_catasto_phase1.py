@@ -942,12 +942,22 @@ def test_import_distretti_excel_resolves_local_comune_aliases_and_sections() -> 
         codice_catastale="I743",
         cod_comune_capacitas=501,
     )
+    comune_ollastra = CatComune(
+        nome_comune="Ollastra",
+        codice_catastale="G043",
+        cod_comune_capacitas=226,
+    )
+    comune_san_vero_milis = CatComune(
+        nome_comune="San Vero Milis",
+        codice_catastale="I384",
+        cod_comune_capacitas=179,
+    )
     comune_arcidano = CatComune(
         nome_comune="San Nicolo d'Arcidano",
         codice_catastale="A368",
         cod_comune_capacitas=286,
     )
-    db.add_all([comune_oristano, comune_simaxis, comune_arcidano])
+    db.add_all([comune_oristano, comune_simaxis, comune_ollastra, comune_san_vero_milis, comune_arcidano])
     db.flush()
     db.add_all(
         [
@@ -978,6 +988,19 @@ def test_import_distretti_excel_resolves_local_comune_aliases_and_sections() -> 
                 is_current=True,
             ),
             CatParticella(
+                comune_id=comune_ollastra.id,
+                cod_comune_capacitas=226,
+                codice_catastale="G043",
+                nome_comune="Ollastra",
+                sezione_catastale=None,
+                foglio="8",
+                particella="44",
+                subalterno=None,
+                num_distretto="10",
+                nome_distretto="Distretto 10",
+                is_current=True,
+            ),
+            CatParticella(
                 comune_id=comune_arcidano.id,
                 cod_comune_capacitas=286,
                 codice_catastale="A368",
@@ -985,6 +1008,19 @@ def test_import_distretti_excel_resolves_local_comune_aliases_and_sections() -> 
                 sezione_catastale=None,
                 foglio="3",
                 particella="101",
+                subalterno=None,
+                num_distretto="10",
+                nome_distretto="Distretto 10",
+                is_current=True,
+            ),
+            CatParticella(
+                comune_id=comune_san_vero_milis.id,
+                cod_comune_capacitas=179,
+                codice_catastale="I384",
+                nome_comune="San Vero Milis",
+                sezione_catastale=None,
+                foglio="5",
+                particella="55",
                 subalterno=None,
                 num_distretto="10",
                 nome_distretto="Distretto 10",
@@ -1019,6 +1055,26 @@ def test_import_distretti_excel_resolves_local_comune_aliases_and_sections() -> 
             {
                 "ANNO": "2025",
                 "N_DISTRETTO": "42",
+                "DISTRETTO": "Ollastra",
+                "COMUNE": "OLLASTRA SIMAXIS",
+                "SEZIONE": None,
+                "FOGLIO": "8",
+                "PARTIC": "44",
+                "SUB": None,
+            },
+            {
+                "ANNO": "2025",
+                "N_DISTRETTO": "43",
+                "DISTRETTO": "San Vero Milis",
+                "COMUNE": "SAN VERO MILIS",
+                "SEZIONE": None,
+                "FOGLIO": "5",
+                "PARTIC": "55",
+                "SUB": None,
+            },
+            {
+                "ANNO": "2025",
+                "N_DISTRETTO": "44",
                 "DISTRETTO": "Arcidano",
                 "COMUNE": "SAN NICOLO ARCIDANO",
                 "SEZIONE": None,
@@ -1046,18 +1102,30 @@ def test_import_distretti_excel_resolves_local_comune_aliases_and_sections() -> 
         .filter(CatParticella.comune_id == comune_simaxis.id, CatParticella.foglio == "7", CatParticella.particella == "33")
         .one()
     )
+    updated_ollastra = (
+        db.query(CatParticella)
+        .filter(CatParticella.comune_id == comune_ollastra.id, CatParticella.foglio == "8", CatParticella.particella == "44")
+        .one()
+    )
     updated_arcidano = (
         db.query(CatParticella)
         .filter(CatParticella.comune_id == comune_arcidano.id, CatParticella.foglio == "3", CatParticella.particella == "101")
         .one()
     )
+    updated_san_vero_milis = (
+        db.query(CatParticella)
+        .filter(CatParticella.comune_id == comune_san_vero_milis.id, CatParticella.foglio == "5", CatParticella.particella == "55")
+        .one()
+    )
 
     assert batch.report_json["righe_scartate_comune_non_risolto"] == 0
     assert batch.report_json["righe_senza_match_particella"] == 0
-    assert batch.report_json["particelle_aggiornate"] == 3
+    assert batch.report_json["particelle_aggiornate"] == 5
     assert updated_oristano.num_distretto == "40"
     assert updated_simaxis.num_distretto == "41"
-    assert updated_arcidano.num_distretto == "42"
+    assert updated_ollastra.num_distretto == "42"
+    assert updated_san_vero_milis.num_distretto == "43"
+    assert updated_arcidano.num_distretto == "44"
     db.close()
 
 
@@ -1444,6 +1512,415 @@ def test_anomalie_endpoint_supports_combined_filters_and_pagination() -> None:
 
     assert second_page.status_code == 200
     assert second_page.json()["items"] == []
+
+
+def test_anomalie_summary_endpoint_groups_by_tipo() -> None:
+    db = TestingSessionLocal()
+    try:
+        seed_anomalie_workflow_data(db)
+    finally:
+        db.close()
+
+    response = client.get("/catasto/anomalie/summary?status=aperta&anno=2025", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] >= 1
+    assert any(item["tipo"] == "VAL-06-imponibile" for item in payload["buckets"])
+
+
+def test_anomalie_cf_wizard_lists_open_cf_items_with_context() -> None:
+    db = TestingSessionLocal()
+    try:
+        batch_id = db.query(CatImportBatch).filter(CatImportBatch.hash_file == "seed-hash").one().id
+        particella = db.query(CatParticella).filter(CatParticella.foglio == "5").one()
+        utenza = CatUtenzaIrrigua(
+            import_batch_id=batch_id,
+            anno_campagna=2025,
+            cco="UT-CF-WIZARD-2025",
+            cod_comune_capacitas=165,
+            num_distretto=10,
+            nome_comune="Arborea",
+            foglio="5",
+            particella="120",
+            particella_id=particella.id,
+            denominazione="Mario Rossi",
+            codice_fiscale="INVALIDCF123",
+            codice_fiscale_raw="INVALIDCF123",
+            anomalia_cf_invalido=True,
+        )
+        db.add(utenza)
+        db.flush()
+        db.add(
+            CatAnomalia(
+                utenza_id=utenza.id,
+                particella_id=particella.id,
+                anno_campagna=2025,
+                tipo="VAL-02-cf_invalido",
+                severita="error",
+                status="aperta",
+                descrizione="CF da correggere",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get("/catasto/anomalie/wizard/cf/items?status=aperta&anno=2025", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] >= 1
+    assert any(item["tipo"] == "VAL-02-cf_invalido" and item["denominazione"] == "Mario Rossi" for item in payload["items"])
+
+
+def test_anomalie_cf_wizard_apply_updates_utenza_and_closes_related_anomalies() -> None:
+    db = TestingSessionLocal()
+    try:
+        batch_id = db.query(CatImportBatch).filter(CatImportBatch.hash_file == "seed-hash").one().id
+        particella = db.query(CatParticella).filter(CatParticella.foglio == "5").one()
+        utenza = CatUtenzaIrrigua(
+            import_batch_id=batch_id,
+            anno_campagna=2025,
+            cco="UT-CF-APPLY-2025",
+            cod_comune_capacitas=165,
+            num_distretto=10,
+            nome_comune="Arborea",
+            foglio="5",
+            particella="120",
+            particella_id=particella.id,
+            denominazione="Impresa Test",
+            codice_fiscale=None,
+            codice_fiscale_raw=None,
+            anomalia_cf_invalido=True,
+            anomalia_cf_mancante=True,
+        )
+        db.add(utenza)
+        db.flush()
+        invalid_anomalia = CatAnomalia(
+            utenza_id=utenza.id,
+            particella_id=particella.id,
+            anno_campagna=2025,
+            tipo="VAL-02-cf_invalido",
+            severita="error",
+            status="aperta",
+            descrizione="CF invalido",
+        )
+        missing_anomalia = CatAnomalia(
+            utenza_id=utenza.id,
+            particella_id=particella.id,
+            anno_campagna=2025,
+            tipo="VAL-03-cf_mancante",
+            severita="warning",
+            status="aperta",
+            descrizione="CF mancante",
+        )
+        db.add_all([invalid_anomalia, missing_anomalia])
+        db.commit()
+        invalid_id = invalid_anomalia.id
+        utenza_id = utenza.id
+    finally:
+        db.close()
+
+    response = client.post(
+        "/catasto/anomalie/wizard/cf/apply",
+        headers=auth_headers(),
+        json={
+            "items": [
+                {
+                    "anomalia_id": str(invalid_id),
+                    "codice_fiscale": "RSSMRA80A01H501U",
+                    "note_operatore": "Correzione da test",
+                }
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["applied_count"] == 1
+    assert payload["updated_utenze"] == 1
+    assert payload["closed_anomalies"] == 2
+
+    db = TestingSessionLocal()
+    try:
+        utenza = db.get(CatUtenzaIrrigua, utenza_id)
+        assert utenza is not None
+        assert utenza.codice_fiscale == "RSSMRA80A01H501U"
+        assert utenza.codice_fiscale_raw == "RSSMRA80A01H501U"
+        assert utenza.anomalia_cf_invalido is False
+        assert utenza.anomalia_cf_mancante is False
+
+        anomalies = (
+            db.query(CatAnomalia)
+            .filter(CatAnomalia.utenza_id == utenza_id, CatAnomalia.tipo.in_(["VAL-02-cf_invalido", "VAL-03-cf_mancante"]))
+            .all()
+        )
+        assert all(item.status == "chiusa" for item in anomalies)
+        assert all(item.note_operatore == "Correzione da test" for item in anomalies)
+    finally:
+        db.close()
+
+
+def test_anomalie_comune_wizard_lists_candidates() -> None:
+    db = TestingSessionLocal()
+    try:
+        batch_id = db.query(CatImportBatch).filter(CatImportBatch.hash_file == "seed-hash").one().id
+        utenza = CatUtenzaIrrigua(
+            import_batch_id=batch_id,
+            anno_campagna=2025,
+            cco="UT-COMUNE-WIZARD-2025",
+            cod_comune_capacitas=999999,
+            num_distretto=10,
+            nome_comune="Cabras",
+            foglio="5",
+            particella="120",
+            denominazione="Utenza comune invalido",
+            anomalia_comune_invalido=True,
+        )
+        db.add(utenza)
+        db.flush()
+        db.add(
+            CatAnomalia(
+                utenza_id=utenza.id,
+                anno_campagna=2025,
+                tipo="VAL-04-comune_invalido",
+                severita="error",
+                status="aperta",
+                descrizione="Comune da correggere",
+                dati_json={"cod_istat": 999999},
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get("/catasto/anomalie/wizard/comune/items?status=aperta&anno=2025", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    matched = next(item for item in payload["items"] if item["denominazione"] == "Utenza comune invalido")
+    assert matched["tipo"] == "VAL-04-comune_invalido"
+    assert matched["source_cod_comune_capacitas"] == 999999
+    assert len(matched["candidates"]) >= 1
+    assert matched["candidates"][0]["nome_comune"] == "Cabras"
+
+
+def test_anomalie_comune_wizard_apply_updates_utenza_and_closes_related_anomalies() -> None:
+    db = TestingSessionLocal()
+    try:
+        batch_id = db.query(CatImportBatch).filter(CatImportBatch.hash_file == "seed-hash").one().id
+        comune = db.query(CatComune).filter(CatComune.nome_comune == "Cabras").one()
+        utenza = CatUtenzaIrrigua(
+            import_batch_id=batch_id,
+            anno_campagna=2025,
+            cco="UT-COMUNE-APPLY-2025",
+            cod_comune_capacitas=999999,
+            num_distretto=10,
+            nome_comune="Cabras",
+            foglio="5",
+            particella="120",
+            denominazione="Utenza comune da applicare",
+            anomalia_comune_invalido=True,
+        )
+        db.add(utenza)
+        db.flush()
+        db.add_all(
+            [
+                CatAnomalia(
+                    utenza_id=utenza.id,
+                    anno_campagna=2025,
+                    tipo="VAL-04-comune_invalido",
+                    severita="error",
+                    status="aperta",
+                    descrizione="Comune da correggere",
+                    dati_json={"cod_istat": 999999},
+                ),
+                CatAnomalia(
+                    utenza_id=utenza.id,
+                    anno_campagna=2025,
+                    tipo="VAL-04-comune_invalido",
+                    severita="error",
+                    status="aperta",
+                    descrizione="Comune da correggere ancora",
+                    dati_json={"cod_istat": 999999},
+                ),
+            ]
+        )
+        db.commit()
+        anomalia_id = str(
+            db.query(CatAnomalia)
+            .filter(CatAnomalia.utenza_id == utenza.id, CatAnomalia.tipo == "VAL-04-comune_invalido")
+            .order_by(CatAnomalia.created_at.asc())
+            .first()
+            .id
+        )
+        comune_id = str(comune.id)
+        utenza_id = utenza.id
+    finally:
+        db.close()
+
+    response = client.post(
+        "/catasto/anomalie/wizard/comune/apply",
+        headers=auth_headers(),
+        json={
+            "items": [
+                {
+                    "anomalia_id": anomalia_id,
+                    "comune_id": comune_id,
+                    "note_operatore": "Correzione comune da test",
+                }
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["applied_count"] == 1
+    assert payload["updated_utenze"] == 1
+    assert payload["closed_anomalies"] == 2
+
+    db = TestingSessionLocal()
+    try:
+        utenza = db.get(CatUtenzaIrrigua, utenza_id)
+        assert utenza is not None
+        assert utenza.comune_id is not None
+        assert utenza.cod_comune_capacitas == 212
+        assert utenza.nome_comune == "Cabras"
+        assert utenza.anomalia_comune_invalido is False
+
+        anomalies = (
+            db.query(CatAnomalia)
+            .filter(CatAnomalia.utenza_id == utenza_id, CatAnomalia.tipo == "VAL-04-comune_invalido")
+            .all()
+        )
+        assert all(item.status == "chiusa" for item in anomalies)
+        assert all(item.note_operatore == "Correzione comune da test" for item in anomalies)
+    finally:
+        db.close()
+
+
+def test_anomalie_particella_wizard_lists_candidates() -> None:
+    db = TestingSessionLocal()
+    try:
+        batch_id = db.query(CatImportBatch).filter(CatImportBatch.hash_file == "seed-hash").one().id
+        particella = db.query(CatParticella).filter(CatParticella.foglio == "5", CatParticella.particella == "120").one()
+        utenza = CatUtenzaIrrigua(
+            import_batch_id=batch_id,
+            anno_campagna=2025,
+            cco="UT-PART-WIZARD-2025",
+            cod_comune_capacitas=165,
+            num_distretto=10,
+            nome_comune="Arborea",
+            sezione_catastale=particella.sezione_catastale,
+            foglio=particella.foglio,
+            particella=particella.particella,
+            subalterno=particella.subalterno,
+            particella_id=None,
+            denominazione="Utenza senza particella",
+            anomalia_particella_assente=True,
+        )
+        db.add(utenza)
+        db.flush()
+        db.add(
+            CatAnomalia(
+                utenza_id=utenza.id,
+                particella_id=None,
+                anno_campagna=2025,
+                tipo="VAL-05-particella_assente",
+                severita="warning",
+                status="aperta",
+                descrizione="Particella da riallineare",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get("/catasto/anomalie/wizard/particella/items?status=aperta&anno=2025", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] >= 1
+    matched = next(item for item in payload["items"] if item["denominazione"] == "Utenza senza particella")
+    assert matched["tipo"] == "VAL-05-particella_assente"
+    assert len(matched["candidates"]) >= 1
+    assert matched["candidates"][0]["foglio"] == "5"
+
+
+def test_anomalie_particella_wizard_apply_links_particella_and_closes_related_anomalies() -> None:
+    db = TestingSessionLocal()
+    try:
+        batch_id = db.query(CatImportBatch).filter(CatImportBatch.hash_file == "seed-hash").one().id
+        particella = db.query(CatParticella).filter(CatParticella.foglio == "5", CatParticella.particella == "120").one()
+        utenza = CatUtenzaIrrigua(
+            import_batch_id=batch_id,
+            anno_campagna=2025,
+            cco="UT-PART-APPLY-2025",
+            cod_comune_capacitas=165,
+            num_distretto=10,
+            nome_comune="Arborea",
+            sezione_catastale=particella.sezione_catastale,
+            foglio=particella.foglio,
+            particella=particella.particella,
+            subalterno=particella.subalterno,
+            particella_id=None,
+            denominazione="Utenza riallineata a particella",
+            anomalia_particella_assente=True,
+        )
+        db.add(utenza)
+        db.flush()
+        anomalia = CatAnomalia(
+            utenza_id=utenza.id,
+            particella_id=None,
+            anno_campagna=2025,
+            tipo="VAL-05-particella_assente",
+            severita="warning",
+            status="aperta",
+            descrizione="Particella assente",
+        )
+        db.add(anomalia)
+        db.commit()
+        anomalia_id = anomalia.id
+        utenza_id = utenza.id
+        particella_id = particella.id
+    finally:
+        db.close()
+
+    response = client.post(
+        "/catasto/anomalie/wizard/particella/apply",
+        headers=auth_headers(),
+        json={
+            "items": [
+                {
+                    "anomalia_id": str(anomalia_id),
+                    "particella_id": str(particella_id),
+                    "note_operatore": "Match particella da test",
+                }
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["applied_count"] == 1
+    assert payload["updated_utenze"] == 1
+    assert payload["closed_anomalies"] == 1
+
+    db = TestingSessionLocal()
+    try:
+        utenza = db.get(CatUtenzaIrrigua, utenza_id)
+        assert utenza is not None
+        assert utenza.particella_id == particella_id
+        assert utenza.anomalia_particella_assente is False
+
+        anomalia = db.get(CatAnomalia, anomalia_id)
+        assert anomalia is not None
+        assert anomalia.particella_id == particella_id
+        assert anomalia.status == "chiusa"
+        assert anomalia.note_operatore == "Match particella da test"
+    finally:
+        db.close()
 
 
 def test_anomalie_endpoint_patch_updates_workflow_fields() -> None:

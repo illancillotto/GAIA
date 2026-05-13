@@ -94,6 +94,26 @@ def _looks_like_number(s: str) -> bool:
         return False
 
 
+_COMUNE_ALIASES = {
+    "SILI'*ORISTANO": "SILI",
+    "OLLASTRA SIMAXIS": "OLLASTRA",
+    "SAN NICOLO ARCIDANO": "SAN NICOLO D'ARCIDANO",
+}
+
+
+def _normalize_partita_comune_nome(raw: str) -> str:
+    """
+    Normalizza il nome comune presente nelle righe "BENI IN COMUNE DI".
+
+    I DMP Capacitas possono appendere quote catastali al comune o usare nomi
+    storici/alias non allineati a catasto_comuni. Questa normalizzazione evita
+    di creare particelle di appoggio non risolvibili durante l'import Ruolo.
+    """
+    value = re.sub(r"\s+", " ", raw.strip())
+    value = re.sub(r"\s*\([^)]*\)\s*$", "", value).strip()
+    return _COMUNE_ALIASES.get(value.upper(), value)
+
+
 # ---------------------------------------------------------------------------
 # Prefisso NP
 # ---------------------------------------------------------------------------
@@ -217,6 +237,36 @@ def _parse_particella_positional(
         importo_irrig=safe_decimal(vals.get("irrig", "")),
         importo_ist=safe_decimal(vals.get("ist", "")),
     )
+
+
+_NON_PARTICELLA_PAYLOAD_PATTERNS = (
+    "DOMANDA IRRIGUA",
+    "FOGLIO CATASTALE",
+    "PARTICELLA CATASTALE",
+    "SUPERFICIE CATASTALE",
+    "SUPERFICIE IRRIGATA",
+    "CODICE DISTRETTO",
+    "SUBALTERNO",
+    "MANUTENZIONE",
+    "IRRIGAZIONE",
+    "ISTITUZIONALE",
+    "COLTURA",
+    "CONSUMI DA CONTATORE",
+    "CONTATORE",
+    "LEGENDA",
+    "FINALE IN AVVISO",
+    "ELENCO DELLE PARTITE",
+)
+
+
+def _is_non_particella_np_payload(raw: str) -> bool:
+    """Riconosce righe NP descrittive che non devono essere lette come particelle."""
+    value = raw.strip().upper()
+    if not value:
+        return True
+    if set(value) <= {"=", "-", " "}:
+        return True
+    return any(pattern in value for pattern in _NON_PARTICELLA_PAYLOAD_PATTERNS)
 
 
 def _parse_particella_line(values: list[str]) -> ParsedParticella | None:
@@ -438,7 +488,14 @@ _RE_NP_HEADER_PART = re.compile(
 )
 _RE_NP_LINE = re.compile(r'^NP\s+(\d+)\s+(.*)')
 _RE_NP_STOP_PARTICELLE = re.compile(
-    r'NP\s+\d+\s+(?:CONSUMI DA CONTATORE:|ANNO DOMANDA DISTRETTO|LEGENDA:|DOM\.=DOMANDA IRRIGUA|SUP\.CATA\.=SUPERFICIE CATASTALE|MANUT\.\s*=MANUTENZIONE|IST\.=ISTITUZIONALE)',
+    r'NP\s+\d+\s+(?:'
+    r'CONSUMI DA CONTATORE:|ANNO DOMANDA DISTRETTO|LEGENDA:|'
+    r'DOM\.=DOMANDA IRRIGUA|DIS\.=CODICE DISTRETTO|'
+    r'FOG\.=FOGLIO CATASTALE|PART\.=PARTICELLA CATASTALE|'
+    r'SUP\.CATA\.=SUPERFICIE CATASTALE|SUP\.IRR\.=SUPERFICIE IRRIGATA|'
+    r'MANUT\.\s*=MANUTENZIONE|IRRIG\.=IRRIGAZIONE|IST\.=ISTITUZIONALE|'
+    r'FINALE IN AVVISO|ELENCO DELLE PARTITE|=+'
+    r')',
     re.IGNORECASE,
 )
 
@@ -462,7 +519,7 @@ def _parse_partite_block(block: str) -> list[ParsedPartita]:
                 partite.append(current_partita)
             current_partita = ParsedPartita(
                 codice_partita=m_partita.group(1).strip(),
-                comune_nome=m_partita.group(2).strip(),
+                comune_nome=_normalize_partita_comune_nome(m_partita.group(2)),
                 contribuente_cf=None,
                 co_intestati_raw=None,
                 importo_0648=None,
@@ -521,7 +578,7 @@ def _parse_partite_block(block: str) -> list[ParsedPartita]:
         if m_np and in_particelle:
             data_content, _ = _strip_np_prefix(line)
             stripped = data_content.strip()
-            if not stripped or set(stripped) == {"="}:
+            if _is_non_particella_np_payload(stripped):
                 continue
             if col_positions:
                 particella = _parse_particella_positional(data_content, col_positions)

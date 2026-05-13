@@ -112,6 +112,12 @@ class RuoloParticella(Base):
     catasto_parcel_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("catasto_parcels.id", ondelete="SET NULL"), nullable=True, index=True
     )
+    cat_particella_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cat_particelle.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    cat_particella_match_status: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
+    cat_particella_match_confidence: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
+    cat_particella_match_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

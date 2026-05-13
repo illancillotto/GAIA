@@ -226,6 +226,68 @@ N4
     assert len(result[0].partite[0].particelle) == 2
 
 
+def test_parse_partita_normalizza_comune_con_quota():
+    sample = """\
+<qm500>--Partita CNC 01.02025000000001------------------------------------------<017.743><01.A><02025000000001><inizio>
+N2 RSSMRA75T50A331X 00000000 00 N
+ROSSI MARIA
+NP   4 PARTITA 000000001/00000 BENI IN COMUNE DI URAS                      (QUOTA 1/30)
+NP   5 CONTRIBUENTE: ROSSI MARIA                        C.F. RSSMRA75T50A331X
+NP  9  DOM. DIS. FOG. PART.  SUB SUP.CATA.  SUP.IRR. COLT.     MANUT.   IRRIG.     IST.
+NP  10         7    8   752          1.870                       6,83              4,87
+----------------<017.743><01.A><02025000000001><-fine->
+"""
+    result = parse_ruolo_file(sample)
+    assert result[0].partite[0].comune_nome == "URAS"
+    assert len(result[0].partite[0].particelle) == 1
+
+
+def test_parse_partita_normalizza_alias_comune_storico():
+    sample = """\
+<qm500>--Partita CNC 01.02025000000002------------------------------------------<017.743><01.A><02025000000002><inizio>
+N2 RSSMRA75T50A331X 00000000 00 N
+ROSSI MARIA
+NP   4 PARTITA 000000002/00000 BENI IN COMUNE DI SILI'*ORISTANO
+NP   5 CONTRIBUENTE: ROSSI MARIA                        C.F. RSSMRA75T50A331X
+NP  9  DOM. DIS. FOG. PART.  SUB SUP.CATA.  SUP.IRR. COLT.     MANUT.   IRRIG.     IST.
+NP  10         7    8   752          1.870                       6,83              4,87
+----------------<017.743><01.A><02025000000002><-fine->
+
+---------Partita CNC 01.02025000000003------------------------------------------<017.743><01.A><02025000000003><inizio>
+N2 VRDPLA75T50A331X 00000000 00 N
+VERDI PAOLA
+NP   4 PARTITA 000000003/00000 BENI IN COMUNE DI OLLASTRA SIMAXIS
+NP   5 CONTRIBUENTE: VERDI PAOLA                        C.F. VRDPLA75T50A331X
+NP  9  DOM. DIS. FOG. PART.  SUB SUP.CATA.  SUP.IRR. COLT.     MANUT.   IRRIG.     IST.
+NP  10         7    9    27    A     5.565                      20,31             14,51
+----------------<017.743><01.A><02025000000003><-fine->
+"""
+    result = parse_ruolo_file(sample)
+    assert result[0].partite[0].comune_nome == "SILI"
+    assert result[1].partite[0].comune_nome == "OLLASTRA"
+
+
+def test_parse_particelle_ignora_legenda_e_header_estesi():
+    sample = """\
+<qm500>--Partita CNC 01.02025000000004------------------------------------------<017.743><01.A><02025000000004><inizio>
+N2 RSSMRA75T50A331X 00000000 00 N
+ROSSI MARIA
+NP   4 PARTITA 000000004/00000 BENI IN COMUNE DI MOGORO
+NP   5 CONTRIBUENTE: ROSSI MARIA                        C.F. RSSMRA75T50A331X
+NP  9  DOM. DIS. FOG. PART.  SUB SUP.CATA.  SUP.IRR. COLT.     MANUT.   IRRIG.     IST.
+NP  10         7    8   752          1.870                       6,83              4,87
+NP  11      DOM.=DOMANDA IRRIGUA           DIS.=CODICE DISTRETTO
+NP  12      FOG.=FOGLIO CATASTALE         PART.=PARTICELLA CATASTALE   SUB=SUBALTERNO
+NP  13 SUP.CATA.=SUPERFICIE CATASTALE  SUP.IRR.=SUPERFICIE IRRIGATA  COLT.=COLTURA
+NP  14   MANUT. =MANUTENZIONE(0648)      IRRIG.=IRRIGAZIONE(0668)
+NP  15 ================================================================================
+----------------<017.743><01.A><02025000000004><-fine->
+"""
+    result = parse_ruolo_file(sample)
+    assert len(result[0].partite[0].particelle) == 1
+    assert result[0].partite[0].particelle[0].foglio == "8"
+
+
 # ---------------------------------------------------------------------------
 # Test helper: _parse_header
 # ---------------------------------------------------------------------------

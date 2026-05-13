@@ -233,9 +233,13 @@ Singola particella catastale all'interno di una partita. Fotografia al momento d
 | `importo_irrig` | Numeric(10,2) NULL | tributo 0668 |
 | `importo_ist` | Numeric(10,2) NULL | tributo 0985 |
 | `catasto_parcel_id` | UUID FK → catasto_parcels NULL | link catastale |
+| `cat_particella_id` | UUID FK → cat_particelle NULL | link risolto alla particella GAIA quando il match e univoco |
+| `cat_particella_match_status` | VARCHAR(20) NULL | `matched`, `unmatched`, `ambiguous` |
+| `cat_particella_match_confidence` | VARCHAR(40) NULL | es. `exact_no_sub`, `exact_sub`, `base_without_sub` |
+| `cat_particella_match_reason` | TEXT NULL | motivazione tecnica per fallback o mancato match |
 | `created_at` | TIMESTAMPTZ | |
 
-Indici: `(partita_id)`, `(anno_tributario, foglio, particella)`, `(catasto_parcel_id)`
+Indici: `(partita_id)`, `(anno_tributario, foglio, particella)`, `(catasto_parcel_id)`, `(cat_particella_id)`, `(cat_particella_match_status)`
 
 ---
 
@@ -367,12 +371,36 @@ La chiave primaria di collegamento è il **codice fiscale** (persona fisica) o l
 - Re-import dello stesso file: upsert senza duplicati
 - Re-import su anno già presente: avvertimento, non blocco automatico
 - `catasto_parcels`: logica temporale esplicita, mai sovrascrittura diretta
+- Il comune letto da `BENI IN COMUNE DI ...` viene normalizzato prima della persistenza:
+  quote tra parentesi e alias storici vengono rimossi per evitare chiavi catastali sporche.
+- La risoluzione del comune deve essere esatta e case-insensitive. Non usare match parziali
+  tipo `ILIKE '%ARBOREA%'`, perche possono collegare il ruolo al comune sbagliato
+  (`ARBOREA` vs `PALMAS ARBOREA`).
+- Le righe legenda/header del DMP non devono mai alimentare `ruolo_particelle` o
+  `catasto_parcels`; foglio e particella devono restare valori catastali numerici.
 
 ### 7.3 Storicità particelle
 Una particella può cambiare superficie nel tempo per frazionamento o accorpamento.
 Il dato in `ruolo_particelle` è una **fotografia storica** dell'anno tributario.
 Il dato in `catasto_parcels` è il **registro aggiornato** con tracciamento temporale.
 I due livelli coesistono e si collegano via `catasto_parcel_id`.
+Quando il match con `cat_particelle` e deterministico, `ruolo_particelle.cat_particella_id`
+viene valorizzato come collegamento risolto verso la particella ufficiale/geometrica GAIA.
+Se il ruolo contiene un subalterno ma `cat_particelle` contiene solo la particella base,
+il collegamento e ammesso solo se la particella base e univoca e viene marcato con
+`cat_particella_match_confidence = base_without_sub`. I casi ambigui restano senza FK.
+Per risolvere `catasto_parcels.comune_codice`, l'import usa `catasto_comuni` come prima fonte;
+se il comune non e presente ma esiste in `cat_particelle`, usa il codice catastale univoco
+di `cat_particelle` come fallback.
+Per la coppia storica `Arborea`/`Terralba`, il collegamento a `cat_particelle` replica la
+regola della sync Terreni Capacitas: se la particella non esiste sul comune sorgente del
+Ruolo, viene provato l'altro comune della coppia e il match viene marcato con
+`cat_particella_match_reason = swapped_arborea_terralba`.
+Per le frazioni catastali del comune di Oristano il solo codice catastale `G113` non e
+sufficiente a risolvere una particella in modo sicuro: il resolver Ruolo deve applicare
+gli stessi vincoli di sezione usati dai flussi Capacitas/Agenzia (`SILI -> E`,
+`NURAXINIEDDU -> D`, `MASSAMA -> C`, `DONIGALA -> B`) prima di valorizzare
+`cat_particella_id`.
 
 ### 7.4 Avvisi orfani
 Un avviso con `subject_id = NULL` non è un errore di sistema: significa che il

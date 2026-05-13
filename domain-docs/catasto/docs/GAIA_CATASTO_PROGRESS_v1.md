@@ -64,7 +64,7 @@ Legend: 🔴 Non iniziato · 🟡 In corso · 🟢 Completato · ⚫ Bloccato
 | 6.1 | Routes distretti (lista, dettaglio, kpi, geojson) | 🟢 | `backend/app/modules/catasto/routes/distretti.py` | GeoJSON senza hard-deps `geoalchemy2` |
 | 6.2 | Routes particelle (lista, dettaglio, utenze, anomalie, geojson) | 🟢 | `backend/app/modules/catasto/routes/particelle.py` | `utenze` e `anomalie` per particella incluse |
 | 6.3 | Routes import (upload, finalize, status, report, history) | 🟢 | `backend/app/modules/catasto/routes/import_routes.py` | Include finalize shapefile |
-| 6.4 | Routes anomalie (lista, patch) | 🟢 | `backend/app/modules/catasto/routes/anomalie.py` | Include `PATCH /catasto/anomalie/{id}` |
+| 6.4 | Routes anomalie (lista, patch, summary, wizard CF/comune/particella) | 🟢 | `backend/app/modules/catasto/routes/anomalie.py` | Include `PATCH /catasto/anomalie/{id}`, `GET /catasto/anomalie/summary`, `GET /catasto/anomalie/wizard/cf/items`, `POST /catasto/anomalie/wizard/cf/apply`, `GET /catasto/anomalie/wizard/comune/items`, `POST /catasto/anomalie/wizard/comune/apply`, `GET /catasto/anomalie/wizard/particella/items`, `POST /catasto/anomalie/wizard/particella/apply` |
 | 6.5 | Dashboard aggregata | 🟢 | `backend/app/modules/catasto/routes/dashboard.py` | `GET /catasto/dashboard/summary` espone stato import, copertura particelle, utenze, anomalie e KPI distretti in una sola chiamata |
 | 6.6 | Registrazione router in main/catasto module | 🟢 | `backend/app/modules/catasto/routes/__init__.py` + `backend/app/modules/catasto/router.py` | Router incluso in API |
 
@@ -83,7 +83,7 @@ Legend: 🔴 Non iniziato · 🟡 In corso · 🟢 Completato · ⚫ Bloccato
 | F5 | Lista Distretti `/catasto/distretti` | 🟢 | `frontend/src/app/catasto/distretti/page.tsx` | |
 | F6 | Dettaglio Distretto `/catasto/distretti/[id]` | 🟢 | `frontend/src/app/catasto/distretti/[id]/page.tsx` | Tab anomalie distretto collegata |
 | F7 | Scheda Particella `/catasto/particelle/[id]` | 🟢 | `frontend/src/app/catasto/particelle/[id]/page.tsx` | Sezioni utenze+anomalie collegate |
-| F8 | Lista Anomalie `/catasto/anomalie` | 🟢 | `frontend/src/app/catasto/anomalie/page.tsx` | Azioni rapide via `PATCH` |
+| F8 | Console Anomalie `/catasto/anomalie` | 🟢 | `frontend/src/app/catasto/anomalie/page.tsx` | Summary per famiglia, sezione `Code di lavoro`, triage tabellare e wizard attivi per `VAL-02/03`, `VAL-04` e `VAL-05` |
 | F9 | Layout + navigazione catasto | 🟢 | `frontend/src/app/catasto/layout.tsx` + sidebar | |
 | F10 | Elaborazioni massive `/catasto/elaborazioni-massive` | 🟢 | `frontend/src/components/catasto/anagrafica/AnagraficaBulkPanel.tsx` | Storico locale ultime 5 operazioni; `MULTIPLE_MATCHES` esporta tutte le particelle candidate con `match_rank` |
 
@@ -178,6 +178,7 @@ Legend: 🔴 Non iniziato · 🟡 In corso · 🟢 Completato · ⚫ Bloccato
 - `Terreni` batch: supporta `auto_resume` esplicito per i job che devono essere ripianificati automaticamente dopo restart backend; i batch manuali senza flag restano recuperabili solo via monitor/rerun esplicito
 - `Storico anagrafica Capacitas`: ora usa un modello job persistente dedicato con monitor frontend, progress report incrementale, cleanup stale e auto-resume dopo restart backend
 - `Catasto > Particelle`: la sync singola Capacitas è disponibile direttamente nella dialog/lista particelle e nella scheda dettaglio, con label di ultimo aggiornamento (`capacitas_last_sync_at/status/error`) e route dedicata `POST /catasto/particelle/{id}/capacitas-sync`
+- `Catasto > Particelle/GIS`: le particelle collegate dal Ruolo con reason `swapped_arborea_terralba` espongono `swapped_capacitas` nel dettaglio particella e nel popup GIS, mostrando comune reale GAIA e comune sorgente Capacitas/Ruolo.
 - `Catasto > GIS`: l'import Excel delle particelle usa `POST /catasto/gis/resolve-refs` per generare il layer GeoJSON temporaneo; le selezioni possono essere salvate lato backend con nome/colore, riaperte dalle sessioni successive e rigenerate dalle geometrie correnti delle particelle.
 - `codicefiscale` Python su PyPI: https://pypi.org/project/codicefiscale/
 - Copernicus Data Space gratuito per enti EU: https://dataspace.copernicus.eu

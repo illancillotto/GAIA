@@ -7,12 +7,19 @@ import type {
   CatAnagraficaBulkJobDetail,
   CatAnagraficaBulkJobListResponse,
   CatDashboardSummary,
+  CatAnomaliaComuneWizardApplyResponse,
+  CatAnomaliaComuneWizardListResponse,
+  CatAnomaliaCfWizardApplyResponse,
+  CatAnomaliaCfWizardListResponse,
+  CatAnomaliaParticellaWizardApplyResponse,
+  CatAnomaliaParticellaWizardListResponse,
   CatDistrettiExcelAnalysisResponse,
   CatDistretto,
   CatDistrettoKpi,
   CatImportBatch,
   CatImportStartResponse,
   CatImportSummary,
+  CatAnomaliaSummary,
   CatParticella,
   CatParticellaCapacitasSyncResponse,
   CatParticellaConsorzio,
@@ -479,6 +486,103 @@ export async function catastoUpdateAnomalia(
     method: "PATCH",
     headers: { ...authHeaders(token), "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+  });
+}
+
+export async function catastoGetAnomalieSummary(
+  token: string,
+  params?: { status?: string; severita?: string; anno?: number; distretto?: string },
+): Promise<CatAnomaliaSummary> {
+  const query = new URLSearchParams();
+  if (params?.status) query.set("status", params.status);
+  if (params?.severita) query.set("severita", params.severita);
+  if (params?.anno != null) query.set("anno", String(params.anno));
+  if (params?.distretto) query.set("distretto", params.distretto);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+
+  return request<CatAnomaliaSummary>(`/catasto/anomalie/summary${suffix}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function catastoGetCfWizardItems(
+  token: string,
+  params?: { status?: string; anno?: number; distretto?: string; limit?: number },
+): Promise<CatAnomaliaCfWizardListResponse> {
+  const query = new URLSearchParams();
+  if (params?.status) query.set("status", params.status);
+  if (params?.anno != null) query.set("anno", String(params.anno));
+  if (params?.distretto) query.set("distretto", params.distretto);
+  if (params?.limit != null) query.set("limit", String(params.limit));
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+
+  return request<CatAnomaliaCfWizardListResponse>(`/catasto/anomalie/wizard/cf/items${suffix}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function catastoApplyCfWizard(
+  token: string,
+  items: Array<{ anomalia_id: string; codice_fiscale: string; note_operatore?: string }>,
+): Promise<CatAnomaliaCfWizardApplyResponse> {
+  return request<CatAnomaliaCfWizardApplyResponse>("/catasto/anomalie/wizard/cf/apply", {
+    method: "POST",
+    headers: { ...authHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify({ items }),
+  });
+}
+
+export async function catastoGetComuneWizardItems(
+  token: string,
+  params?: { status?: string; anno?: number; distretto?: string; limit?: number },
+): Promise<CatAnomaliaComuneWizardListResponse> {
+  const query = new URLSearchParams();
+  if (params?.status) query.set("status", params.status);
+  if (params?.anno != null) query.set("anno", String(params.anno));
+  if (params?.distretto) query.set("distretto", params.distretto);
+  if (params?.limit != null) query.set("limit", String(params.limit));
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+
+  return request<CatAnomaliaComuneWizardListResponse>(`/catasto/anomalie/wizard/comune/items${suffix}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function catastoApplyComuneWizard(
+  token: string,
+  items: Array<{ anomalia_id: string; comune_id: string; note_operatore?: string }>,
+): Promise<CatAnomaliaComuneWizardApplyResponse> {
+  return request<CatAnomaliaComuneWizardApplyResponse>("/catasto/anomalie/wizard/comune/apply", {
+    method: "POST",
+    headers: { ...authHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify({ items }),
+  });
+}
+
+export async function catastoGetParticellaWizardItems(
+  token: string,
+  params?: { status?: string; anno?: number; distretto?: string; limit?: number },
+): Promise<CatAnomaliaParticellaWizardListResponse> {
+  const query = new URLSearchParams();
+  if (params?.status) query.set("status", params.status);
+  if (params?.anno != null) query.set("anno", String(params.anno));
+  if (params?.distretto) query.set("distretto", params.distretto);
+  if (params?.limit != null) query.set("limit", String(params.limit));
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+
+  return request<CatAnomaliaParticellaWizardListResponse>(`/catasto/anomalie/wizard/particella/items${suffix}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function catastoApplyParticellaWizard(
+  token: string,
+  items: Array<{ anomalia_id: string; particella_id: string; note_operatore?: string }>,
+): Promise<CatAnomaliaParticellaWizardApplyResponse> {
+  return request<CatAnomaliaParticellaWizardApplyResponse>("/catasto/anomalie/wizard/particella/apply", {
+    method: "POST",
+    headers: { ...authHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify({ items }),
   });
 }
 

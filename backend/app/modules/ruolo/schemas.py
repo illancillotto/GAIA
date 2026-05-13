@@ -79,6 +79,10 @@ class RuoloParticellaResponse(BaseModel):
     importo_irrig: float | None = None
     importo_ist: float | None = None
     catasto_parcel_id: uuid.UUID | None = None
+    cat_particella_id: uuid.UUID | None = None
+    cat_particella_match_status: str | None = None
+    cat_particella_match_confidence: str | None = None
+    cat_particella_match_reason: str | None = None
     created_at: datetime
 
 

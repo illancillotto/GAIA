@@ -61,6 +61,142 @@ export type CatAnomaliaListResponse = {
   page_size: number;
 };
 
+export type CatAnomaliaSummaryBucket = {
+  tipo: string;
+  label: string;
+  severita: CatAnomaliaSeverita | string;
+  count: number;
+};
+
+export type CatAnomaliaSummary = {
+  total: number;
+  buckets: CatAnomaliaSummaryBucket[];
+};
+
+export type CatAnomaliaCfWizardItem = {
+  anomalia_id: UUID;
+  utenza_id: UUID | null;
+  particella_id: UUID | null;
+  anno_campagna: number | null;
+  tipo: string;
+  severita: CatAnomaliaSeverita | string;
+  descrizione: string | null;
+  status: CatAnomaliaStatus;
+  denominazione: string | null;
+  codice_fiscale: string | null;
+  codice_fiscale_raw: string | null;
+  num_distretto: number | null;
+  nome_comune: string | null;
+  sezione_catastale: string | null;
+  foglio: string | null;
+  particella: string | null;
+  subalterno: string | null;
+  error_code: string | null;
+  suggested_codice_fiscale: string | null;
+  created_at: string;
+};
+
+export type CatAnomaliaCfWizardListResponse = {
+  items: CatAnomaliaCfWizardItem[];
+  total: number;
+};
+
+export type CatAnomaliaCfWizardApplyResponse = {
+  applied_count: number;
+  updated_utenze: number;
+  closed_anomalies: number;
+};
+
+export type CatAnomaliaComuneCandidate = {
+  id: UUID;
+  nome_comune: string;
+  nome_comune_legacy: string | null;
+  codice_catastale: string | null;
+  cod_comune_capacitas: number;
+  codice_comune_formato_numerico: number | null;
+  codice_comune_numerico_2017_2025: number | null;
+  sigla_provincia: string | null;
+  match_score: number;
+};
+
+export type CatAnomaliaComuneWizardItem = {
+  anomalia_id: UUID;
+  utenza_id: UUID | null;
+  anno_campagna: number | null;
+  tipo: string;
+  severita: CatAnomaliaSeverita | string;
+  descrizione: string | null;
+  status: CatAnomaliaStatus;
+  denominazione: string | null;
+  nome_comune: string | null;
+  cod_comune_capacitas: number | null;
+  source_cod_comune_capacitas: number | null;
+  num_distretto: number | null;
+  sezione_catastale: string | null;
+  foglio: string | null;
+  particella: string | null;
+  subalterno: string | null;
+  candidates: CatAnomaliaComuneCandidate[];
+  created_at: string;
+};
+
+export type CatAnomaliaComuneWizardListResponse = {
+  items: CatAnomaliaComuneWizardItem[];
+  total: number;
+};
+
+export type CatAnomaliaComuneWizardApplyResponse = {
+  applied_count: number;
+  updated_utenze: number;
+  closed_anomalies: number;
+};
+
+export type CatAnomaliaParticellaCandidate = {
+  id: UUID;
+  cod_comune_capacitas: number;
+  codice_catastale: string | null;
+  nome_comune: string | null;
+  sezione_catastale: string | null;
+  foglio: string;
+  particella: string;
+  subalterno: string | null;
+  num_distretto: string | null;
+  nome_distretto: string | null;
+  ha_anagrafica: boolean;
+  match_score: number;
+};
+
+export type CatAnomaliaParticellaWizardItem = {
+  anomalia_id: UUID;
+  utenza_id: UUID | null;
+  anno_campagna: number | null;
+  tipo: string;
+  severita: CatAnomaliaSeverita | string;
+  descrizione: string | null;
+  status: CatAnomaliaStatus;
+  denominazione: string | null;
+  nome_comune: string | null;
+  sezione_catastale: string | null;
+  foglio: string | null;
+  particella: string | null;
+  subalterno: string | null;
+  cod_comune_capacitas: number | null;
+  num_distretto: number | null;
+  candidates: CatAnomaliaParticellaCandidate[];
+  created_at: string;
+};
+
+export type CatAnomaliaParticellaWizardListResponse = {
+  items: CatAnomaliaParticellaWizardItem[];
+  total: number;
+};
+
+export type CatAnomaliaParticellaWizardApplyResponse = {
+  applied_count: number;
+  updated_utenze: number;
+  closed_anomalies: number;
+};
+
 export type CatDistrettiExcelAnalysisItem = {
   row_number: number;
   comune_input: string | null;
@@ -118,10 +254,23 @@ export type CatParticella = {
   ha_anagrafica: boolean;
   utenza_cf: string | null;
   utenza_denominazione: string | null;
+  swapped_capacitas: CatParticellaSwappedCapacitas | null;
 };
 
 export type CatParticellaDetail = CatParticella & {
   fuori_distretto: boolean;
+};
+
+export type CatParticellaSwappedCapacitas = {
+  source_codice_catastale: string | null;
+  source_comune_nome: string | null;
+  source_foglio: string | null;
+  source_particella: string | null;
+  source_subalterno: string | null;
+  anno_tributario_latest: number | null;
+  match_confidence: string | null;
+  match_reason: string | null;
+  n_righe_ruolo: number;
 };
 
 export type CatParticellaCapacitasSyncResponse = {

@@ -70,6 +70,172 @@ class CatAnomaliaListResponse(BaseModel):
     page_size: int
 
 
+class CatAnomaliaSummaryBucketResponse(BaseModel):
+    tipo: str
+    label: str
+    severita: str
+    count: int
+
+
+class CatAnomaliaSummaryResponse(BaseModel):
+    total: int
+    buckets: list[CatAnomaliaSummaryBucketResponse]
+
+
+class CatAnomaliaCfWizardItemResponse(BaseModel):
+    anomalia_id: UUID
+    utenza_id: UUID | None
+    particella_id: UUID | None
+    anno_campagna: int | None
+    tipo: str
+    severita: str
+    descrizione: str | None
+    status: str
+    denominazione: str | None
+    codice_fiscale: str | None
+    codice_fiscale_raw: str | None
+    num_distretto: int | None
+    nome_comune: str | None
+    sezione_catastale: str | None
+    foglio: str | None
+    particella: str | None
+    subalterno: str | None
+    error_code: str | None
+    suggested_codice_fiscale: str | None
+    created_at: datetime
+
+
+class CatAnomaliaCfWizardListResponse(BaseModel):
+    items: list[CatAnomaliaCfWizardItemResponse]
+    total: int
+
+
+class CatAnomaliaCfWizardApplyItemInput(BaseModel):
+    anomalia_id: UUID
+    codice_fiscale: str
+    note_operatore: str | None = None
+
+
+class CatAnomaliaCfWizardApplyInput(BaseModel):
+    items: list[CatAnomaliaCfWizardApplyItemInput]
+
+
+class CatAnomaliaCfWizardApplyResponse(BaseModel):
+    applied_count: int
+    updated_utenze: int
+    closed_anomalies: int
+
+
+class CatAnomaliaParticellaCandidateResponse(BaseModel):
+    id: UUID
+    cod_comune_capacitas: int
+    codice_catastale: str | None
+    nome_comune: str | None
+    sezione_catastale: str | None
+    foglio: str
+    particella: str
+    subalterno: str | None
+    num_distretto: str | None
+    nome_distretto: str | None
+    ha_anagrafica: bool = False
+    match_score: int
+
+
+class CatAnomaliaParticellaWizardItemResponse(BaseModel):
+    anomalia_id: UUID
+    utenza_id: UUID | None
+    anno_campagna: int | None
+    tipo: str
+    severita: str
+    descrizione: str | None
+    status: str
+    denominazione: str | None
+    nome_comune: str | None
+    sezione_catastale: str | None
+    foglio: str | None
+    particella: str | None
+    subalterno: str | None
+    cod_comune_capacitas: int | None
+    num_distretto: int | None
+    candidates: list[CatAnomaliaParticellaCandidateResponse]
+    created_at: datetime
+
+
+class CatAnomaliaParticellaWizardListResponse(BaseModel):
+    items: list[CatAnomaliaParticellaWizardItemResponse]
+    total: int
+
+
+class CatAnomaliaParticellaWizardApplyItemInput(BaseModel):
+    anomalia_id: UUID
+    particella_id: UUID
+    note_operatore: str | None = None
+
+
+class CatAnomaliaParticellaWizardApplyInput(BaseModel):
+    items: list[CatAnomaliaParticellaWizardApplyItemInput]
+
+
+class CatAnomaliaParticellaWizardApplyResponse(BaseModel):
+    applied_count: int
+    updated_utenze: int
+    closed_anomalies: int
+
+
+class CatAnomaliaComuneCandidateResponse(BaseModel):
+    id: UUID
+    nome_comune: str
+    nome_comune_legacy: str | None
+    codice_catastale: str | None
+    cod_comune_capacitas: int
+    codice_comune_formato_numerico: int | None
+    codice_comune_numerico_2017_2025: int | None
+    sigla_provincia: str | None
+    match_score: int
+
+
+class CatAnomaliaComuneWizardItemResponse(BaseModel):
+    anomalia_id: UUID
+    utenza_id: UUID | None
+    anno_campagna: int | None
+    tipo: str
+    severita: str
+    descrizione: str | None
+    status: str
+    denominazione: str | None
+    nome_comune: str | None
+    cod_comune_capacitas: int | None
+    source_cod_comune_capacitas: int | None
+    num_distretto: int | None
+    sezione_catastale: str | None
+    foglio: str | None
+    particella: str | None
+    subalterno: str | None
+    candidates: list[CatAnomaliaComuneCandidateResponse]
+    created_at: datetime
+
+
+class CatAnomaliaComuneWizardListResponse(BaseModel):
+    items: list[CatAnomaliaComuneWizardItemResponse]
+    total: int
+
+
+class CatAnomaliaComuneWizardApplyItemInput(BaseModel):
+    anomalia_id: UUID
+    comune_id: UUID
+    note_operatore: str | None = None
+
+
+class CatAnomaliaComuneWizardApplyInput(BaseModel):
+    items: list[CatAnomaliaComuneWizardApplyItemInput]
+
+
+class CatAnomaliaComuneWizardApplyResponse(BaseModel):
+    applied_count: int
+    updated_utenze: int
+    closed_anomalies: int
+
+
 class CatDistrettiExcelAnalysisItemResponse(BaseModel):
     row_number: int
     comune_input: str | None
@@ -101,6 +267,18 @@ class CatAnomaliaUpdateInput(BaseModel):
     status: str | None = None
     note_operatore: str | None = None
     assigned_to: int | None = None
+
+
+class CatParticellaSwappedCapacitasResponse(BaseModel):
+    source_codice_catastale: str | None = None
+    source_comune_nome: str | None = None
+    source_foglio: str | None = None
+    source_particella: str | None = None
+    source_subalterno: str | None = None
+    anno_tributario_latest: int | None = None
+    match_confidence: str | None = None
+    match_reason: str | None = None
+    n_righe_ruolo: int = 0
 
 
 class CatParticellaResponse(BaseModel):
@@ -135,6 +313,7 @@ class CatParticellaResponse(BaseModel):
     ha_anagrafica: bool = False
     utenza_cf: str | None = None
     utenza_denominazione: str | None = None
+    swapped_capacitas: CatParticellaSwappedCapacitasResponse | None = None
 
 
 class CatParticellaDetailResponse(CatParticellaResponse):

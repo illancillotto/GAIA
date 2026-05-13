@@ -30,7 +30,7 @@ COMUNE_ALIAS_WITH_SECTION: dict[str, tuple[str, str | None]] = {
     "SILI’*ORISTANO": ("ORISTANO", "E"),
     "CABRAS": ("CABRAS", "A"),
     "SOLANAS*CABRAS": ("CABRAS", "B"),
-    "OLLASTRA SIMAXIS": ("SIMAXIS", "A"),
+    "OLLASTRA SIMAXIS": ("OLLASTRA", None),
     "SAN VERO CONGIUS*SIMAXIS": ("SIMAXIS", "B"),
     "SIMAXIS*SIMAXIS": ("SIMAXIS", "A"),
     "SAN NICOLO ARCIDANO": ("SAN NICOLO D'ARCIDANO", None),

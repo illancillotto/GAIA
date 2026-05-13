@@ -10,6 +10,7 @@ from app.core.security import hash_password
 from app.db.base import Base
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.models.catasto import CatastoComune
+from app.models.catasto_phase1 import CatParticella
 from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob, RuoloParticella, RuoloPartita
 from app.modules.ruolo.services import import_service as import_service_module
 from app.modules.ruolo.services.import_service import create_import_job
@@ -123,6 +124,17 @@ def setup_database(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, Non
             CatastoComune(nome="ZEDDIANI", codice_sister="M153", ufficio="ORISTANO Territorio"),
         ]
     )
+    db.add(
+        CatParticella(
+            cod_comune_capacitas=384,
+            codice_catastale="I384",
+            nome_comune="SAN VERO MILIS",
+            foglio="9",
+            particella="877",
+            subalterno=None,
+            is_current=True,
+        )
+    )
 
     subject_1 = AnagraficaSubject(source_name_raw="PODDIGHE ANNA MARIA", subject_type="person", source_system="gaia")
     subject_2 = AnagraficaSubject(source_name_raw="SERRA DOMENICO FELICE", subject_type="person", source_system="gaia")
@@ -222,6 +234,10 @@ def test_run_import_job_with_realistic_2025_blocks_exercises_parser_and_report(
         assert merged_particella.coltura == "FRUTTETO"
         assert float(merged_particella.importo_manut) == 2.94
         assert float(merged_particella.importo_irrig) == 3.40
+        assert merged_particella.cat_particella_id is not None
+        assert merged_particella.cat_particella_match_status == "matched"
+        assert merged_particella.cat_particella_match_confidence == "base_without_sub"
+        assert merged_particella.cat_particella_match_reason == "ruolo_sub_not_present_in_cat_particelle"
 
         assert not any(item.foglio == "2025" for item in particelle)
         assert not any(item.particella == "1846000490" for item in particelle)
