@@ -1905,7 +1905,7 @@ export default function CatastoGisPage() {
           </div>
 
           {!isExpanded ? (
-            <aside className="z-10 flex h-full min-h-0 flex-col overflow-hidden border-t border-slate-200 bg-white/95 shadow-[-18px_0_50px_rgba(15,23,42,0.18)] backdrop-blur lg:border-l lg:border-t-0">
+            <aside className="z-10 flex h-full min-h-0 flex-col overflow-y-auto overscroll-contain border-t border-slate-200 bg-white/95 shadow-[-18px_0_50px_rgba(15,23,42,0.18)] backdrop-blur lg:border-l lg:border-t-0">
 
               {/* ── Controls ── */}
               <div className="shrink-0 border-b border-slate-200 bg-[linear-gradient(180deg,#ffffff_0%,#f8faf7_100%)] px-4 py-4">
