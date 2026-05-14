@@ -128,6 +128,8 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   assert.match(elaborazioniAdeAlignmentWorkspace, /catastoGisPreviewAdeAlignmentApply/);
   assert.match(elaborazioniAdeAlignmentWorkspace, /catastoGisApplyAdeAlignment/);
   assert.match(elaborazioniAdeAlignmentWorkspace, /catastoGisGetLatestAdeWfsRunStatus/);
+  assert.match(elaborazioniAdeAlignmentWorkspace, /progress_percent/);
+  assert.match(elaborazioniAdeAlignmentWorkspace, /tiles_completed/);
   assert.match(read("src/components/elaborazioni/capacitas-workspace.tsx"), /listCapacitasCredentials/);
   assert.match(read("src/components/elaborazioni/capacitas-workspace.tsx"), /CAPACITAS_SECTIONS/);
   assert.match(read("src/components/elaborazioni/capacitas-workspace.tsx"), /PREVIEW_ROWS_LIMIT/);
@@ -207,6 +209,7 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   assert.match(mapContainer, /id: "distretti-outline"/);
   assert.match(gisPage, /Stato allineamento AdE/);
   assert.match(gisPage, /\/elaborazioni\/ade-alignment/);
+  assert.match(gisPage, /progress_message/);
   assert.match(requestWorkspace, /createElaborazioneBatch/);
   assert.match(requestWorkspace, /startElaborazioneBatch/);
   assert.match(requestWorkspace, /Scarica template CSV/);

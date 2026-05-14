@@ -130,12 +130,33 @@ def sync_ade_wfs_bbox_async(
     return AdeWfsSyncBboxResponse(
         run_id=str(run.id),
         status=run.status,
+        progress_phase=run.progress_phase,
+        progress_message=run.progress_message,
         requested_bbox=run.request_bbox_json,
         tiles=int(run.tiles or 0),
+        tiles_completed=int(run.tiles_completed or 0),
+        progress_percent=0,
         features=0,
         upserted=0,
         with_geometry=0,
     )
+
+
+@router.get(
+    "/ade-wfs/runs/latest",
+    response_model=AdeWfsRunStatusResponse,
+    summary="Ultimo run download WFS AdE",
+    description="Restituisce l'ultimo run AdE disponibile per dashboard e superfici informative.",
+)
+def get_latest_ade_wfs_run_status(
+    db: Session = Depends(get_db),
+    _: ApplicationUser = Depends(require_active_user),
+) -> AdeWfsRunStatusResponse:
+    try:
+        result = get_latest_ade_sync_run_status(db)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return AdeWfsRunStatusResponse(**result)
 
 
 @router.get(
@@ -153,23 +174,6 @@ def get_ade_wfs_run_status(
         result = get_ade_sync_run_status(db, run_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return AdeWfsRunStatusResponse(**result)
-
-
-@router.get(
-    "/ade-wfs/runs/latest",
-    response_model=AdeWfsRunStatusResponse,
-    summary="Ultimo run download WFS AdE",
-    description="Restituisce l'ultimo run AdE disponibile per dashboard e superfici informative.",
-)
-def get_latest_ade_wfs_run_status(
-    db: Session = Depends(get_db),
-    _: ApplicationUser = Depends(require_active_user),
-) -> AdeWfsRunStatusResponse:
-    try:
-        result = get_latest_ade_sync_run_status(db)
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
     return AdeWfsRunStatusResponse(**result)
 
 

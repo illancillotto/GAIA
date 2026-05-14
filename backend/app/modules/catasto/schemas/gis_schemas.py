@@ -84,8 +84,12 @@ class AdeWfsSyncBboxRequest(BaseModel):
 class AdeWfsSyncBboxResponse(BaseModel):
     run_id: str
     status: str = "completed"
+    progress_phase: str = "completed"
+    progress_message: str | None = None
     requested_bbox: dict[str, float]
     tiles: int
+    tiles_completed: int = 0
+    progress_percent: float = 0
     features: int
     upserted: int
     with_geometry: int
@@ -105,8 +109,12 @@ class AdeWfsSyncBboxAsyncRequest(BaseModel):
 class AdeWfsRunStatusResponse(BaseModel):
     run_id: str
     status: str
+    progress_phase: str
+    progress_message: str | None = None
     requested_bbox: dict[str, float]
     tiles: int
+    tiles_completed: int
+    progress_percent: float
     features: int
     upserted: int
     with_geometry: int

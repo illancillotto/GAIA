@@ -97,6 +97,13 @@ const ADE_RUN_STATUS_LABELS: Record<string, string> = {
   completed: "Completato",
   failed: "Fallito",
 };
+const ADE_RUN_PHASE_LABELS: Record<string, string> = {
+  queued: "In coda",
+  fetching: "Download tile",
+  persisting: "Persistenza",
+  completed: "Completato",
+  failed: "Fallito",
+};
 
 function toNullableCellString(value: unknown): string | null {
   if (value == null) return null;
@@ -1173,11 +1180,12 @@ export default function CatastoGisPage() {
               </span>
             </div>
             <div className="mt-1">
-              {adeRunStatus.tiles.toLocaleString("it-IT")} tile · {adeRunStatus.features.toLocaleString("it-IT")} feature · {adeRunStatus.with_geometry.toLocaleString("it-IT")} con geometria
+              {adeRunStatus.tiles_completed.toLocaleString("it-IT")} / {adeRunStatus.tiles.toLocaleString("it-IT")} tile · {adeRunStatus.features.toLocaleString("it-IT")} feature · {adeRunStatus.with_geometry.toLocaleString("it-IT")} con geometria
             </div>
             <div className="mt-1 text-[11px]">
-              Avvio {formatDateTime(adeRunStatus.started_at)} · fine {formatDateTime(adeRunStatus.completed_at)}
+              {ADE_RUN_PHASE_LABELS[adeRunStatus.progress_phase] ?? adeRunStatus.progress_phase} · {adeRunStatus.progress_percent.toLocaleString("it-IT", { maximumFractionDigits: 1 })}% · Avvio {formatDateTime(adeRunStatus.started_at)} · fine {formatDateTime(adeRunStatus.completed_at)}
             </div>
+            {adeRunStatus.progress_message ? <div className="mt-2 text-[11px]">{adeRunStatus.progress_message}</div> : null}
             {adeRunStatus.error ? <div className="mt-2 text-rose-700">{adeRunStatus.error}</div> : null}
           </>
         ) : (

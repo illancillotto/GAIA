@@ -282,6 +282,16 @@ def _bbox_payload(bbox: AdeWfsBbox) -> dict[str, float]:
     }
 
 
+def _run_progress_percent(tiles_completed: int, tiles_total: int, phase: str) -> float:
+    if tiles_total <= 0:
+        return 100.0 if phase == "completed" else 0.0
+    if phase == "completed":
+        return 100.0
+    if phase == "persisting":
+        return 99.0
+    return round(min(max((tiles_completed / tiles_total) * 100.0, 0.0), 99.0), 1)
+
+
 def create_ade_sync_run(
     db: Session,
     bbox: AdeWfsBbox,
@@ -299,12 +309,15 @@ def create_ade_sync_run(
 
     run = CatAdeSyncRun(
         status=status,
+        progress_phase=status,
+        progress_message=f"Run AdE accodato: {len(tiles)} tile stimate.",
         request_bbox_json=_bbox_payload(bbox),
         max_tile_km2=Decimal(str(max_tile_km2)),
         max_tiles=max_tiles,
         count_per_page=count,
         max_pages_per_tile=max_pages_per_tile,
         tiles=len(tiles),
+        tiles_completed=0,
         created_by=created_by,
     )
     db.add(run)
@@ -344,24 +357,66 @@ def execute_ade_sync_run(
         raise ValueError(f"Area troppo ampia: {len(tiles)} tile stimati, limite {max_tiles}.")
 
     run.status = "processing"
+    run.progress_phase = "fetching"
+    run.progress_message = f"Download AdE avviato: 0/{len(tiles)} tile completate."
     run.error = None
     run.completed_at = None
+    run.tiles_completed = 0
+    run.features = 0
+    run.upserted = 0
+    run.with_geometry = 0
     db.add(run)
     db.commit()
 
     ade_client = client or AdeWfsClient()
     try:
         deduped: dict[str, AdeParcelFeature] = {}
-        for tile in tiles:
+        with_geometry_refs: set[str] = set()
+        for tile_index, tile in enumerate(tiles, start=1):
             for feature in ade_client.fetch_parcels_bbox(tile, count=count, max_pages=max_pages_per_tile):
+                previous = deduped.get(feature.national_cadastral_reference)
                 deduped[feature.national_cadastral_reference] = feature
+                if feature.geometry_wkt_6706:
+                    with_geometry_refs.add(feature.national_cadastral_reference)
+                elif previous and previous.geometry_wkt_6706:
+                    with_geometry_refs.add(feature.national_cadastral_reference)
+
+            run = db.get(CatAdeSyncRun, run_uuid)
+            if run is None:
+                raise ValueError("Run AdE non trovato durante l'aggiornamento progresso.")
+            run.tiles_completed = tile_index
+            run.features = len(deduped)
+            run.with_geometry = len(with_geometry_refs)
+            run.progress_phase = "fetching"
+            run.progress_message = (
+                f"Scaricate {tile_index}/{len(tiles)} tile AdE. "
+                f"Particelle univoche rilevate: {len(deduped)}."
+            )
+            db.add(run)
+            db.commit()
 
         features = list(deduped.values())
+        run = db.get(CatAdeSyncRun, run_uuid)
+        if run is None:
+            raise ValueError("Run AdE non trovato prima della persistenza.")
+        run.progress_phase = "persisting"
+        run.progress_message = f"Persistenza staging AdE in corso: {len(features)} particelle univoche."
+        run.features = len(features)
+        run.with_geometry = len(with_geometry_refs)
+        db.add(run)
+        db.commit()
+
         persisted = upsert_ade_parcels(db, features, run_id=str(run.id))
         run = db.get(CatAdeSyncRun, run.id)
         if run is None:
             raise ValueError("Run AdE non trovato dopo persistenza.")
         run.status = "completed"
+        run.progress_phase = "completed"
+        run.progress_message = (
+            f"Run AdE completato: {len(features)} particelle, "
+            f"{persisted['with_geometry']} con geometria, {persisted['upserted']} upsert."
+        )
+        run.tiles_completed = len(tiles)
         run.features = len(features)
         run.upserted = persisted["upserted"]
         run.with_geometry = persisted["with_geometry"]
@@ -371,8 +426,12 @@ def execute_ade_sync_run(
         return {
             "run_id": str(run.id),
             "status": run.status,
+            "progress_phase": run.progress_phase,
+            "progress_message": run.progress_message,
             "requested_bbox": _bbox_payload(bbox),
             "tiles": len(tiles),
+            "tiles_completed": len(tiles),
+            "progress_percent": _run_progress_percent(len(tiles), len(tiles), run.progress_phase),
             "features": len(features),
             **persisted,
         }
@@ -381,7 +440,9 @@ def execute_ade_sync_run(
         run = db.get(CatAdeSyncRun, run_uuid)
         if run is not None:
             run.status = "failed"
+            run.progress_phase = "failed"
             run.error = str(exc)
+            run.progress_message = f"Run AdE fallito dopo {int(run.tiles_completed or 0)}/{int(run.tiles or 0)} tile: {exc}"
             run.completed_at = datetime.now(timezone.utc)
             db.add(run)
             db.commit()
@@ -531,8 +592,12 @@ def get_ade_sync_run_status(db: Session, run_id: str) -> dict[str, Any]:
     return {
         "run_id": str(run.id),
         "status": run.status,
+        "progress_phase": run.progress_phase,
+        "progress_message": run.progress_message,
         "requested_bbox": run.request_bbox_json,
         "tiles": int(run.tiles or 0),
+        "tiles_completed": int(run.tiles_completed or 0),
+        "progress_percent": _run_progress_percent(int(run.tiles_completed or 0), int(run.tiles or 0), run.progress_phase),
         "features": int(run.features or 0),
         "upserted": int(run.upserted or 0),
         "with_geometry": int(run.with_geometry or 0),
@@ -554,8 +619,12 @@ def get_latest_ade_sync_run_status(db: Session) -> dict[str, Any]:
     return {
         "run_id": str(run.id),
         "status": run.status,
+        "progress_phase": run.progress_phase,
+        "progress_message": run.progress_message,
         "requested_bbox": run.request_bbox_json,
         "tiles": int(run.tiles or 0),
+        "tiles_completed": int(run.tiles_completed or 0),
+        "progress_percent": _run_progress_percent(int(run.tiles_completed or 0), int(run.tiles or 0), run.progress_phase),
         "features": int(run.features or 0),
         "upserted": int(run.upserted or 0),
         "with_geometry": int(run.with_geometry or 0),

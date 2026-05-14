@@ -264,6 +264,7 @@ Note:
 
 - `catasto/gis` non governa più direttamente il run comprensorio AdE: mostra stato ultimo run, report differenze e preview mappa dell'ultimo allineamento disponibile.
 - `elaborazioni/ade-alignment` è il workspace operativo per il comprensorio AdE: avvio `sync-bbox-async`, polling stato, dry-run apply e apply reale.
+- Lo stato run AdE esposto dalle API deve includere anche progresso leggibile: `progress_phase`, `progress_message`, `tiles_completed` e percentuale derivata, oltre ai contatori live `features / with_geometry` durante il download.
 - il match restituisce dati catastali, entrambe le superfici (`superficie_mq` catastale e `superficie_grafica_mq` GIS), ultima utenza, intestatari disponibili e top anomalie
 - la vista risultati anagrafica espone anche `CCO` e `denominazione` dell'ultima utenza quando disponibili
 - il filtro per nome comune usa l'anagrafica canonica `cat_comuni` come fallback applicativo e non dipende solo dal campo denormalizzato `cat_particelle.nome_comune`

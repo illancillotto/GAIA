@@ -68,8 +68,12 @@ export interface AdeWfsSyncBboxRequest {
 export interface AdeWfsSyncBboxResponse {
   run_id: string;
   status: string;
+  progress_phase: string;
+  progress_message?: string | null;
   requested_bbox: Record<string, number>;
   tiles: number;
+  tiles_completed: number;
+  progress_percent: number;
   features: number;
   upserted: number;
   with_geometry: number;
@@ -78,8 +82,12 @@ export interface AdeWfsSyncBboxResponse {
 export interface AdeWfsRunStatusResponse {
   run_id: string;
   status: string;
+  progress_phase: string;
+  progress_message?: string | null;
   requested_bbox: Record<string, number>;
   tiles: number;
+  tiles_completed: number;
+  progress_percent: number;
   features: number;
   upserted: number;
   with_geometry: number;

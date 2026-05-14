@@ -107,6 +107,23 @@ function renderRunTone(status: string): string {
   }
 }
 
+function renderPhaseLabel(phase: string): string {
+  switch (phase) {
+    case "queued":
+      return "In coda";
+    case "fetching":
+      return "Download tile";
+    case "persisting":
+      return "Persistenza";
+    case "completed":
+      return "Completato";
+    case "failed":
+      return "Fallito";
+    default:
+      return phase;
+  }
+}
+
 export function ElaborazioniAdeAlignmentWorkspace() {
   const [dashboard, setDashboard] = useState<CatDashboardSummary | null>(null);
   const [distretti, setDistretti] = useState<CatDistretto[]>([]);
@@ -185,6 +202,7 @@ export function ElaborazioniAdeAlignmentWorkspace() {
     () => distretti.filter((distretto) => distretto.attivo && distretto.num_distretto !== "FD"),
     [distretti],
   );
+  const runTileProgressLabel = runStatus ? `${runStatus.tiles_completed}/${runStatus.tiles}` : "0/0";
   const confirmationPhrase = report ? `APPLICA ${report.run_id.slice(0, 8)}` : "";
   const canApply = Boolean(
     report &&
@@ -231,8 +249,12 @@ export function ElaborazioniAdeAlignmentWorkspace() {
       setRunStatus({
         run_id: response.run_id,
         status: response.status,
+        progress_phase: response.progress_phase,
+        progress_message: response.progress_message,
         requested_bbox: response.requested_bbox,
         tiles: response.tiles,
+        tiles_completed: response.tiles_completed,
+        progress_percent: response.progress_percent,
         features: response.features,
         upserted: response.upserted,
         with_geometry: response.with_geometry,
@@ -322,11 +344,11 @@ export function ElaborazioniAdeAlignmentWorkspace() {
             <ElaborazioneMiniStat
               eyebrow="Run corrente"
               value={runStatus ? runStatus.run_id.slice(0, 8) : "—"}
-              description={runStatus?.status ?? "nessun run"}
+              description={runStatus ? `${renderPhaseLabel(runStatus.progress_phase)} · ${runStatus.status}` : "nessun run"}
             />
-            <ElaborazioneMiniStat eyebrow="Tile stimati" value={runStatus?.tiles ?? 0} description="scope bbox attuale" />
-            <ElaborazioneMiniStat eyebrow="Nuove AdE" value={dashboard?.ade_alignment.nuove_in_ade ?? 0} description="ultimo report disponibile" />
-            <ElaborazioneMiniStat eyebrow="Geom. variate" value={dashboard?.ade_alignment.geometrie_variate ?? 0} description="ultimo report disponibile" />
+            <ElaborazioneMiniStat eyebrow="Tile scaricate" value={runTileProgressLabel} description="avanzamento download" />
+            <ElaborazioneMiniStat eyebrow="Particelle live" value={runStatus?.features ?? 0} description="univoche rilevate finora" />
+            <ElaborazioneMiniStat eyebrow="Geom. live" value={runStatus?.with_geometry ?? 0} description="feature con geometria finora" />
           </ModuleWorkspaceKpiRow>
         </ElaborazioneHero>
 
@@ -367,10 +389,24 @@ export function ElaborazioniAdeAlignmentWorkspace() {
               </div>
               {runStatus ? (
                 <div className="mt-3 space-y-2 text-sm text-gray-600">
+                  <div>
+                    <div className="mb-2 flex items-center justify-between gap-3 text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">
+                      <span>{renderPhaseLabel(runStatus.progress_phase)}</span>
+                      <span>{runStatus.progress_percent.toLocaleString("it-IT", { maximumFractionDigits: 1 })}%</span>
+                    </div>
+                    <div className="h-2 overflow-hidden rounded-full bg-slate-100">
+                      <div
+                        className="h-full rounded-full bg-[#1D4E35] transition-[width] duration-500"
+                        style={{ width: `${Math.max(0, Math.min(runStatus.progress_percent, 100))}%` }}
+                      />
+                    </div>
+                  </div>
                   <p>Run: <span className="font-medium text-gray-900">{runStatus.run_id}</span></p>
-                  <p>Tile: <span className="font-medium text-gray-900">{runStatus.tiles}</span></p>
-                  <p>Feature: <span className="font-medium text-gray-900">{runStatus.features}</span></p>
+                  <p>Tile completate: <span className="font-medium text-gray-900">{runStatus.tiles_completed} / {runStatus.tiles}</span></p>
+                  <p>Particelle rilevate: <span className="font-medium text-gray-900">{runStatus.features}</span></p>
                   <p>Con geometria: <span className="font-medium text-gray-900">{runStatus.with_geometry}</span></p>
+                  <p>Upsert eseguiti: <span className="font-medium text-gray-900">{runStatus.upserted}</span></p>
+                  {runStatus.progress_message ? <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700">{runStatus.progress_message}</p> : null}
                   <p>Avviato: <span className="font-medium text-gray-900">{formatDateTime(runStatus.started_at ?? null)}</span></p>
                   <p>Completato: <span className="font-medium text-gray-900">{formatDateTime(runStatus.completed_at ?? null)}</span></p>
                   {runStatus.error ? <p className="text-rose-700">{runStatus.error}</p> : null}
