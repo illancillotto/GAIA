@@ -535,6 +535,14 @@ def get_popup_data(db: Session, particella_id: str) -> ParticellaPopupData:
     particella = db.get(CatParticella, particella_uuid)
     if particella is None or not particella.is_current:
         raise HTTPException(status_code=404, detail="Particella non trovata")
+    if (
+        particella.suppressed
+        or particella.cod_comune_capacitas <= 0
+        or _norm_str(particella.codice_catastale) is None
+        or _norm_str(particella.foglio) is None
+        or _norm_str(particella.particella) is None
+    ):
+        raise HTTPException(status_code=404, detail="Particella GIS senza chiave catastale completa")
 
     n_anomalie_aperte = db.scalar(
         select(func.count(CatAnomalia.id))

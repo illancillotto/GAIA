@@ -322,6 +322,7 @@ def finalize_shapefile_import(
     staged AS (
       -- Deduplica frammenti con stessa chiave operativa (es. particelle spezzate da overlay con distretti).
       -- Geometria: ST_Union di tutti i frammenti. Distretto: quello del frammento con area maggiore.
+      -- I record senza chiave catastale completa sono poligoni tecnici/non operativi: non devono entrare nel layer particelle.
       SELECT
         MAX(codice_catastale)                                                          AS codice_catastale,
         (array_agg(comune_id ORDER BY comune_id NULLS LAST))[1]                       AS comune_id,
@@ -340,6 +341,10 @@ def finalize_shapefile_import(
         BOOL_OR(suppressed)                                                            AS suppressed,
         ST_Multi(ST_Union(geometry))                                                   AS geometry
       FROM raw_staged
+      WHERE cod_comune_capacitas > 0
+        AND NULLIF(BTRIM(codice_catastale), '') IS NOT NULL
+        AND NULLIF(BTRIM(foglio), '') IS NOT NULL
+        AND NULLIF(BTRIM(particella), '') IS NOT NULL
       GROUP BY cod_comune_capacitas, foglio, particella, subalterno
     )
     """
