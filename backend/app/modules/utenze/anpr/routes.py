@@ -241,7 +241,7 @@ async def put_job_config(
     try:
         config = await update_config(db, payload, current_user.id)
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
     return AnprSyncConfigRead.model_validate(config)
 
 

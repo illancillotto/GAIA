@@ -290,7 +290,7 @@ async def import_anagrafica_storico(
         return result
     except CapacitasAnagraficaHistoryImportError as exc:
         db.rollback()
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
     except Exception as exc:
         logger.exception("Errore import storico anagrafica Capacitas: cred_id=%d err=%s", credential.id, exc)
         db.rollback()
@@ -319,7 +319,7 @@ async def import_anagrafica_storico_file(
         )
         payload.continue_on_error = continue_on_error
     except CapacitasAnagraficaHistoryImportError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
     return await import_anagrafica_storico(payload, _, db)
 
 
@@ -889,7 +889,7 @@ async def resolve_particella_frazione(
     try:
         pid = _UUID(particella_id)
     except ValueError:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="particella_id non valido")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="particella_id non valido")
 
     particella = db.get(CatParticella, pid)
     if particella is None:
@@ -897,7 +897,7 @@ async def resolve_particella_frazione(
 
     comune = db.get(CatComune, particella.comune_id) if particella.comune_id else None
     if comune is None:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Comune non disponibile sulla particella")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Comune non disponibile sulla particella")
 
     credential = pick_credential(db)
     if credential is None:

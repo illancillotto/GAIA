@@ -90,3 +90,34 @@ def test_parse_historical_visura_real_arborea_pdf_fixture() -> None:
         {"foglio": "25", "particella": "214", "subalterno": None},
     ]
     assert len(payload["events"]) >= 5
+
+
+def test_parse_historical_visura_real_san_vero_milis_pdf_fixture() -> None:
+    fixture_path = Path(__file__).resolve().parents[2] / "data-example" / "DOC_1998476900.pdf"
+
+    payload = parse_historical_visura_pdf(fixture_path)
+
+    assert payload["classification"] == "suppressed"
+    assert payload["requested"] == {
+        "comune": "SAN VERO MILIS",
+        "codice": "I384",
+        "sezione": None,
+        "foglio": "18",
+        "particella": "1174",
+        "subalterno": None,
+    }
+    assert payload["suppression"] == {
+        "is_suppressed": True,
+        "suppressed_from": "25/05/2023",
+        "act_type": "TIPO MAPPALE",
+        "act_reference": "20842.1/2023",
+    }
+    assert payload["originated_or_varied_parcels"] == [
+        {"foglio": "18", "particella": "4180", "subalterno": None},
+        {"foglio": "18", "particella": "4181", "subalterno": None},
+        {"foglio": "18", "particella": "4182", "subalterno": None},
+    ]
+    assert payload["first_variation"]["suppressed_parcels"] == []
+    assert {"foglio": "18", "particella": "1175", "subalterno": None} in payload["first_variation"]["varied_parcels"]
+    assert {"foglio": "18", "particella": "1649", "subalterno": None} in payload["first_variation"]["varied_parcels"]
+    assert len(payload["events"]) >= 3

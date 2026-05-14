@@ -211,7 +211,7 @@ def post_import_preview(
     try:
         return AnagraficaImportPreviewResponse.model_validate(preview_import(payload.letter, service=service))
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
     except NasConnectorError as exc:
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
 
@@ -249,7 +249,7 @@ def post_import_run(
             }
         )
     except ValueError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
     except NasConnectorError as exc:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
@@ -265,7 +265,7 @@ async def post_import_run_from_subjects(
         job_id = start_registry_bulk_import_job(db, current_user)
     except ValueError as exc:
         db.rollback()
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
 
     job = db.get(AnagraficaImportJob, job_id)
     if job is None:
@@ -646,17 +646,17 @@ async def import_subjects_csv(
 ) -> AnagraficaCsvImportResponse:
     filename = (file.filename or "").lower()
     if filename and not filename.endswith(".csv"):
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Il file deve essere un CSV")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Il file deve essere un CSV")
 
     file_bytes = await file.read()
     if not file_bytes:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="File CSV vuoto")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="File CSV vuoto")
 
     try:
         result = import_subjects_from_csv(db, current_user=current_user, file_bytes=file_bytes)
     except ValueError as exc:
         db.rollback()
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
 
     return AnagraficaCsvImportResponse.model_validate(
         {
@@ -686,11 +686,11 @@ async def import_subjects_xlsx(
 ) -> XlsxImportStartResponse:
     filename = (file.filename or "").strip()
     if not filename.lower().endswith((".xlsx", ".xls")):
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Il file deve essere un Excel (.xlsx)")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Il file deve essere un Excel (.xlsx)")
 
     file_bytes = await file.read()
     if not file_bytes:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="File Excel vuoto")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="File Excel vuoto")
 
     batch = AnagraficaXlsxImportBatch(
         requested_by_user_id=current_user.id,
@@ -797,7 +797,7 @@ def post_import_subject_from_nas(
         )
     except ValueError as exc:
         db.rollback()
-        status_code = status.HTTP_404_NOT_FOUND if "not found" in str(exc).lower() else status.HTTP_422_UNPROCESSABLE_ENTITY
+        status_code = status.HTTP_404_NOT_FOUND if "not found" in str(exc).lower() else status.HTTP_422_UNPROCESSABLE_CONTENT
         raise HTTPException(status_code=status_code, detail=str(exc)) from exc
     except NasConnectorError as exc:
         db.rollback()
@@ -960,11 +960,11 @@ async def upload_subject_document(
 ) -> AnagraficaPreviewDocumentResponse:
     filename = (file.filename or "").strip()
     if not filename:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Nome file mancante")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Nome file mancante")
 
     file_bytes = await file.read()
     if not file_bytes:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="File vuoto")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="File vuoto")
 
     try:
         document = create_manual_document(
@@ -1080,7 +1080,7 @@ def post_reset_anagrafica(
     confirm_text = payload.confirm.strip().upper()
     if confirm_text not in {"RESET UTENZE", "RESET ANAGRAFICA"}:
         raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="Conferma non valida. Usa esattamente 'RESET UTENZE'.",
         )
 
@@ -1279,13 +1279,13 @@ def _require_subject_exists(db: Session, subject_id: uuid.UUID) -> AnagraficaSub
 
 def _validate_subject_payload(subject_type: str, person: object, company: object, allow_empty: bool = False) -> None:
     if subject_type == "person" and person is None and not allow_empty:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Person payload required")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Person payload required")
     if subject_type == "company" and company is None and not allow_empty:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Company payload required")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Company payload required")
     if subject_type == "person" and company is not None:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Company payload not allowed")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Company payload not allowed")
     if subject_type == "company" and person is not None:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Person payload not allowed")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Person payload not allowed")
 
 
 def _apply_subject_payload(db: Session, subject: AnagraficaSubject, subject_type: str, person: object, company: object) -> None:
@@ -1487,9 +1487,9 @@ def _infer_staging_subject_type(staging: BonificaUserStaging) -> str:
 def _build_staging_person_payload(staging: BonificaUserStaging) -> AnagraficaPersonPayload:
     normalized_tax = _normalize_bonifica_tax(staging.tax)
     if normalized_tax is None:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Codice fiscale mancante nel record Bonifica")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Codice fiscale mancante nel record Bonifica")
     if not staging.first_name or not staging.last_name:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Nome e cognome sono obbligatori per approvare un consorziato persona fisica")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Nome e cognome sono obbligatori per approvare un consorziato persona fisica")
     return AnagraficaPersonPayload(
         cognome=staging.last_name,
         nome=staging.first_name,
@@ -1503,9 +1503,9 @@ def _build_staging_person_payload(staging: BonificaUserStaging) -> AnagraficaPer
 def _build_staging_company_payload(staging: BonificaUserStaging) -> AnagraficaCompanyPayload:
     normalized_tax = _normalize_bonifica_tax(staging.tax)
     if normalized_tax is None:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Partita IVA / codice fiscale mancante nel record Bonifica")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Partita IVA / codice fiscale mancante nel record Bonifica")
     if not staging.business_name:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Ragione sociale mancante nel record Bonifica")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Ragione sociale mancante nel record Bonifica")
     company_cf = None if normalized_tax.isdigit() and len(normalized_tax) == 11 else normalized_tax
     return AnagraficaCompanyPayload(
         ragione_sociale=staging.business_name,
@@ -1535,7 +1535,7 @@ def _approve_bonifica_staging_item(
         person_payload = None
         company_payload = _build_staging_company_payload(staging)
     else:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Impossibile inferire il tipo soggetto dal record Bonifica")
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Impossibile inferire il tipo soggetto dal record Bonifica")
 
     if staging.review_status == "new":
         subject = AnagraficaSubject(

@@ -236,7 +236,7 @@ async def create_batch(
             name=name,
         )
     except BatchValidationError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.to_detail()) from exc
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=exc.to_detail()) from exc
     return build_batch_detail_response(batch, get_batch_requests(db, batch.id))
 
 
@@ -365,7 +365,7 @@ def create_single_visura(
     try:
         batch = create_single_visura_batch(db, current_user.id, payload)
     except BatchValidationError as exc:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=exc.to_detail()) from exc
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=exc.to_detail()) from exc
     except (BatchConflictError, ElaborazioneCredentialConfigurationError) as exc:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     return build_batch_detail_response(batch, get_batch_requests(db, batch.id))
