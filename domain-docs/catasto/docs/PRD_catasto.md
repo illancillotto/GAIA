@@ -234,6 +234,9 @@ Note:
 - `GET /catasto/particelle/{particella_id}`
 - `GET /catasto/particelle/{particella_id}/history`
 - `GET /catasto/particelle/{particella_id}/utenze`
+- `POST /catasto/gis/ade-wfs/sync-bbox-async`
+- `GET /catasto/gis/ade-wfs/runs/{run_id}`
+- `GET /catasto/gis/ade-wfs/runs/latest`
 - `GET /catasto/anomalie/`
 - `GET /catasto/anomalie/summary`
 - `GET /catasto/anomalie/wizard/cf/items`
@@ -256,6 +259,11 @@ Nota UI obbligatoria per `Distretti Excel`:
 Note:
 
 - la funzionalità è solo in modalità massiva: accetta file `.xlsx` o `.csv` lato frontend e normalizza il payload verso il backend
+
+### UX AdE
+
+- `catasto/gis` non governa più direttamente il run comprensorio AdE: mostra stato ultimo run, report differenze e preview mappa dell'ultimo allineamento disponibile.
+- `elaborazioni/ade-alignment` è il workspace operativo per il comprensorio AdE: avvio `sync-bbox-async`, polling stato, dry-run apply e apply reale.
 - il match restituisce dati catastali, entrambe le superfici (`superficie_mq` catastale e `superficie_grafica_mq` GIS), ultima utenza, intestatari disponibili e top anomalie
 - la vista risultati anagrafica espone anche `CCO` e `denominazione` dell'ultima utenza quando disponibili
 - il filtro per nome comune usa l'anagrafica canonica `cat_comuni` come fallback applicativo e non dipende solo dal campo denormalizzato `cat_particelle.nome_comune`

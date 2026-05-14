@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import httpx
-from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user
-from app.core.database import get_db
+from app.core.database import SessionLocal, get_db
 from app.models.application_user import ApplicationUser
 from app.modules.catasto.schemas.gis_schemas import (
     AdeAlignmentApplyRequest,
@@ -13,6 +13,8 @@ from app.modules.catasto.schemas.gis_schemas import (
     AdeAlignmentApplyPreviewRequest,
     AdeAlignmentApplyPreviewResponse,
     AdeAlignmentReportResponse,
+    AdeWfsRunStatusResponse,
+    AdeWfsSyncBboxAsyncRequest,
     AdeWfsSyncBboxRequest,
     AdeWfsSyncBboxResponse,
     GisExportFormat,
@@ -29,6 +31,10 @@ from app.modules.catasto.schemas.gis_schemas import (
 from app.modules.catasto.services.ade_wfs import (
     AdeWfsBbox,
     apply_ade_alignment,
+    create_ade_sync_run,
+    execute_ade_sync_run,
+    get_ade_sync_run_status,
+    get_latest_ade_sync_run_status,
     get_ade_alignment_report,
     preview_ade_alignment_apply,
     sync_ade_parcels_bbox,
@@ -37,6 +43,14 @@ from app.modules.catasto.services import gis_service
 
 
 router = APIRouter(prefix="/catasto/gis", tags=["catasto-gis"])
+
+
+def _run_ade_wfs_sync_background(run_id: str) -> None:
+    db = SessionLocal()
+    try:
+        execute_ade_sync_run(db, run_id)
+    finally:
+        db.close()
 
 
 @router.post(
@@ -75,6 +89,88 @@ def sync_ade_wfs_bbox(
     except httpx.HTTPError as exc:
         raise HTTPException(status_code=502, detail=f"WFS Agenzia Entrate non raggiungibile: {exc}") from exc
     return AdeWfsSyncBboxResponse(**result)
+
+
+@router.post(
+    "/ade-wfs/sync-bbox-async",
+    response_model=AdeWfsSyncBboxResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Accoda download particelle catastali AdE per bbox",
+    description=(
+        "Crea un run AdE persistito e avvia il download WFS in background. "
+        "Usare l'endpoint stato run per polling fino al completamento."
+    ),
+)
+def sync_ade_wfs_bbox_async(
+    body: AdeWfsSyncBboxAsyncRequest,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(require_active_user),
+) -> AdeWfsSyncBboxResponse:
+    try:
+        run = create_ade_sync_run(
+            db,
+            AdeWfsBbox(
+                min_lon=body.min_lon,
+                min_lat=body.min_lat,
+                max_lon=body.max_lon,
+                max_lat=body.max_lat,
+            ),
+            max_tile_km2=body.max_tile_km2,
+            max_tiles=body.max_tiles,
+            count=body.count,
+            max_pages_per_tile=body.max_pages_per_tile,
+            created_by=current_user.id,
+            status="queued",
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    background_tasks.add_task(_run_ade_wfs_sync_background, str(run.id))
+    return AdeWfsSyncBboxResponse(
+        run_id=str(run.id),
+        status=run.status,
+        requested_bbox=run.request_bbox_json,
+        tiles=int(run.tiles or 0),
+        features=0,
+        upserted=0,
+        with_geometry=0,
+    )
+
+
+@router.get(
+    "/ade-wfs/runs/{run_id}",
+    response_model=AdeWfsRunStatusResponse,
+    summary="Stato run download WFS AdE",
+    description="Restituisce stato, contatori ed eventuale errore del run AdE persistito.",
+)
+def get_ade_wfs_run_status(
+    run_id: str,
+    db: Session = Depends(get_db),
+    _: ApplicationUser = Depends(require_active_user),
+) -> AdeWfsRunStatusResponse:
+    try:
+        result = get_ade_sync_run_status(db, run_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return AdeWfsRunStatusResponse(**result)
+
+
+@router.get(
+    "/ade-wfs/runs/latest",
+    response_model=AdeWfsRunStatusResponse,
+    summary="Ultimo run download WFS AdE",
+    description="Restituisce l'ultimo run AdE disponibile per dashboard e superfici informative.",
+)
+def get_latest_ade_wfs_run_status(
+    db: Session = Depends(get_db),
+    _: ApplicationUser = Depends(require_active_user),
+) -> AdeWfsRunStatusResponse:
+    try:
+        result = get_latest_ade_sync_run_status(db)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return AdeWfsRunStatusResponse(**result)
 
 
 @router.get(

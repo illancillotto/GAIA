@@ -12,7 +12,7 @@ import { ModuleWorkspaceKpiRow, ModuleWorkspaceKpiTile } from "@/components/layo
 import { ElaborazioneOperationMessage } from "@/components/elaborazioni/operation-message";
 import { ElaborazioneWorkspaceModal } from "@/components/elaborazioni/workspace-modal";
 import { EmptyState } from "@/components/ui/empty-state";
-import { FolderIcon, LockIcon, RefreshIcon, SearchIcon, UsersIcon } from "@/components/ui/icons";
+import { FolderIcon, GridIcon, LockIcon, RefreshIcon, SearchIcon, UsersIcon } from "@/components/ui/icons";
 import {
   getElaborazioneBatches,
   getElaborazioneCaptchaSummary,
@@ -57,6 +57,12 @@ const QUICK_ACTIONS = [
     title: "Pool operativo dedicato",
     description: "Capacitas e monitor del pool account operativo.",
     icon: UsersIcon,
+  },
+  {
+    href: "/elaborazioni/ade-alignment",
+    title: "Allineamento AdE",
+    description: "Run comprensorio, monitor e apply fuori dal GIS.",
+    icon: GridIcon,
   },
 ] as const;
 

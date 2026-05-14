@@ -106,6 +106,14 @@ export async function catastoGisGetAdeWfsRunStatus(
   });
 }
 
+export async function catastoGisGetLatestAdeWfsRunStatus(
+  token: string,
+): Promise<AdeWfsRunStatusResponse> {
+  return request<AdeWfsRunStatusResponse>("/catasto/gis/ade-wfs/runs/latest", {
+    headers: authHeaders(token),
+  });
+}
+
 export async function catastoGisGetAdeAlignmentReport(
   token: string,
   runId: string,

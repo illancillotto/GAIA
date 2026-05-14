@@ -83,11 +83,36 @@ class AdeWfsSyncBboxRequest(BaseModel):
 
 class AdeWfsSyncBboxResponse(BaseModel):
     run_id: str
+    status: str = "completed"
     requested_bbox: dict[str, float]
     tiles: int
     features: int
     upserted: int
     with_geometry: int
+
+
+class AdeWfsSyncBboxAsyncRequest(BaseModel):
+    min_lon: float = Field(..., ge=-180, le=180)
+    min_lat: float = Field(..., ge=-90, le=90)
+    max_lon: float = Field(..., ge=-180, le=180)
+    max_lat: float = Field(..., ge=-90, le=90)
+    max_tile_km2: float = Field(default=4.0, gt=0, le=10)
+    max_tiles: int = Field(default=400, ge=1, le=1000)
+    count: int = Field(default=1000, ge=1, le=5000)
+    max_pages_per_tile: int = Field(default=20, ge=1, le=50)
+
+
+class AdeWfsRunStatusResponse(BaseModel):
+    run_id: str
+    status: str
+    requested_bbox: dict[str, float]
+    tiles: int
+    features: int
+    upserted: int
+    with_geometry: int
+    error: str | None = None
+    started_at: datetime
+    completed_at: datetime | None = None
 
 
 class AdeAlignmentReportCounters(BaseModel):

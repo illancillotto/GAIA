@@ -282,6 +282,112 @@ def _bbox_payload(bbox: AdeWfsBbox) -> dict[str, float]:
     }
 
 
+def create_ade_sync_run(
+    db: Session,
+    bbox: AdeWfsBbox,
+    *,
+    max_tile_km2: float = MAX_TILE_KM2,
+    count: int = DEFAULT_COUNT,
+    max_tiles: int = 25,
+    max_pages_per_tile: int = DEFAULT_MAX_PAGES,
+    created_by: int | None = None,
+    status: str = "processing",
+) -> CatAdeSyncRun:
+    tiles = split_bbox(bbox, max_tile_km2=max_tile_km2)
+    if len(tiles) > max_tiles:
+        raise ValueError(f"Area troppo ampia: {len(tiles)} tile stimati, limite {max_tiles}.")
+
+    run = CatAdeSyncRun(
+        status=status,
+        request_bbox_json=_bbox_payload(bbox),
+        max_tile_km2=Decimal(str(max_tile_km2)),
+        max_tiles=max_tiles,
+        count_per_page=count,
+        max_pages_per_tile=max_pages_per_tile,
+        tiles=len(tiles),
+        created_by=created_by,
+    )
+    db.add(run)
+    db.commit()
+    db.refresh(run)
+    return run
+
+
+def execute_ade_sync_run(
+    db: Session,
+    run_id: str,
+    *,
+    client: AdeWfsClient | None = None,
+) -> dict[str, Any]:
+    try:
+        run_uuid = UUID(str(run_id))
+    except ValueError as exc:
+        raise ValueError("Run AdE non valido.") from exc
+
+    run = db.get(CatAdeSyncRun, run_uuid)
+    if run is None:
+        raise ValueError("Run AdE non trovato.")
+
+    bbox_json = run.request_bbox_json
+    bbox = AdeWfsBbox(
+        min_lon=float(bbox_json["min_lon"]),
+        min_lat=float(bbox_json["min_lat"]),
+        max_lon=float(bbox_json["max_lon"]),
+        max_lat=float(bbox_json["max_lat"]),
+    )
+    max_tile_km2 = float(run.max_tile_km2) if run.max_tile_km2 is not None else MAX_TILE_KM2
+    count = int(run.count_per_page or DEFAULT_COUNT)
+    max_tiles = int(run.max_tiles or 25)
+    max_pages_per_tile = int(run.max_pages_per_tile or DEFAULT_MAX_PAGES)
+    tiles = split_bbox(bbox, max_tile_km2=max_tile_km2)
+    if len(tiles) > max_tiles:
+        raise ValueError(f"Area troppo ampia: {len(tiles)} tile stimati, limite {max_tiles}.")
+
+    run.status = "processing"
+    run.error = None
+    run.completed_at = None
+    db.add(run)
+    db.commit()
+
+    ade_client = client or AdeWfsClient()
+    try:
+        deduped: dict[str, AdeParcelFeature] = {}
+        for tile in tiles:
+            for feature in ade_client.fetch_parcels_bbox(tile, count=count, max_pages=max_pages_per_tile):
+                deduped[feature.national_cadastral_reference] = feature
+
+        features = list(deduped.values())
+        persisted = upsert_ade_parcels(db, features, run_id=str(run.id))
+        run = db.get(CatAdeSyncRun, run.id)
+        if run is None:
+            raise ValueError("Run AdE non trovato dopo persistenza.")
+        run.status = "completed"
+        run.features = len(features)
+        run.upserted = persisted["upserted"]
+        run.with_geometry = persisted["with_geometry"]
+        run.completed_at = datetime.now(timezone.utc)
+        db.add(run)
+        db.commit()
+        return {
+            "run_id": str(run.id),
+            "status": run.status,
+            "requested_bbox": _bbox_payload(bbox),
+            "tiles": len(tiles),
+            "features": len(features),
+            **persisted,
+        }
+    except Exception as exc:
+        db.rollback()
+        run = db.get(CatAdeSyncRun, run_uuid)
+        if run is not None:
+            run.status = "failed"
+            run.error = str(exc)
+            run.completed_at = datetime.now(timezone.utc)
+            db.add(run)
+            db.commit()
+        raise
+
+
 def upsert_ade_parcels(db: Session, features: list[AdeParcelFeature], *, run_id: str | None = None) -> dict[str, int]:
     if not features:
         return {"upserted": 0, "with_geometry": 0}
@@ -400,55 +506,63 @@ def sync_ade_parcels_bbox(
     max_pages_per_tile: int = DEFAULT_MAX_PAGES,
     created_by: int | None = None,
 ) -> dict[str, Any]:
-    tiles = split_bbox(bbox, max_tile_km2=max_tile_km2)
-    if len(tiles) > max_tiles:
-        raise ValueError(f"Area troppo ampia: {len(tiles)} tile stimati, limite {max_tiles}.")
-
-    run = CatAdeSyncRun(
-        status="processing",
-        request_bbox_json=_bbox_payload(bbox),
-        max_tile_km2=Decimal(str(max_tile_km2)),
+    run = create_ade_sync_run(
+        db,
+        bbox,
+        max_tile_km2=max_tile_km2,
+        count=count,
         max_tiles=max_tiles,
-        count_per_page=count,
         max_pages_per_tile=max_pages_per_tile,
-        tiles=len(tiles),
         created_by=created_by,
     )
-    db.add(run)
-    db.commit()
-    db.refresh(run)
+    return execute_ade_sync_run(db, str(run.id), client=client)
 
-    ade_client = client or AdeWfsClient()
+
+def get_ade_sync_run_status(db: Session, run_id: str) -> dict[str, Any]:
     try:
-        deduped: dict[str, AdeParcelFeature] = {}
-        for tile in tiles:
-            for feature in ade_client.fetch_parcels_bbox(tile, count=count, max_pages=max_pages_per_tile):
-                deduped[feature.national_cadastral_reference] = feature
+        run_uuid = UUID(str(run_id))
+    except ValueError as exc:
+        raise ValueError("Run AdE non valido.") from exc
 
-        features = list(deduped.values())
-        persisted = upsert_ade_parcels(db, features, run_id=str(run.id))
-        run.status = "completed"
-        run.features = len(features)
-        run.upserted = persisted["upserted"]
-        run.with_geometry = persisted["with_geometry"]
-        run.completed_at = datetime.now(timezone.utc)
-        db.commit()
-        return {
-            "run_id": str(run.id),
-            "requested_bbox": _bbox_payload(bbox),
-            "tiles": len(tiles),
-            "features": len(features),
-            **persisted,
-        }
-    except Exception as exc:
-        db.rollback()
-        run = db.get(CatAdeSyncRun, run.id)
-        if run is not None:
-            run.status = "failed"
-            run.error = str(exc)
-            run.completed_at = datetime.now(timezone.utc)
-            db.commit()
-        raise
+    run = db.get(CatAdeSyncRun, run_uuid)
+    if run is None:
+        raise ValueError("Run AdE non trovato.")
+
+    return {
+        "run_id": str(run.id),
+        "status": run.status,
+        "requested_bbox": run.request_bbox_json,
+        "tiles": int(run.tiles or 0),
+        "features": int(run.features or 0),
+        "upserted": int(run.upserted or 0),
+        "with_geometry": int(run.with_geometry or 0),
+        "error": run.error,
+        "started_at": run.started_at,
+        "completed_at": run.completed_at,
+    }
+
+
+def get_latest_ade_sync_run_status(db: Session) -> dict[str, Any]:
+    run = (
+        db.query(CatAdeSyncRun)
+        .order_by(CatAdeSyncRun.started_at.desc(), CatAdeSyncRun.id.desc())
+        .first()
+    )
+    if run is None:
+        raise ValueError("Nessun run AdE disponibile.")
+
+    return {
+        "run_id": str(run.id),
+        "status": run.status,
+        "requested_bbox": run.request_bbox_json,
+        "tiles": int(run.tiles or 0),
+        "features": int(run.features or 0),
+        "upserted": int(run.upserted or 0),
+        "with_geometry": int(run.with_geometry or 0),
+        "error": run.error,
+        "started_at": run.started_at,
+        "completed_at": run.completed_at,
+    }
 
 
 def get_ade_alignment_report(db: Session, run_id: str, *, geometry_threshold_m: float = 1.0) -> dict[str, Any]:

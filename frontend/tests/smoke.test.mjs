@@ -96,6 +96,9 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   const anomaliePage = read("src/app/catasto/anomalie/page.tsx");
   const anagraficaPage = read("src/app/catasto/elaborazioni-massive/page.tsx");
   const anagraficaBulkPanel = read("src/components/catasto/anagrafica/AnagraficaBulkPanel.tsx");
+  const elaborazioniAdeAlignmentPage = read("src/app/elaborazioni/ade-alignment/page.tsx");
+  const elaborazioniAdeAlignmentWorkspace = read("src/components/elaborazioni/ade-alignment-workspace.tsx");
+  const gisPage = read("src/app/catasto/gis/page.tsx");
   const mapContainer = read("src/components/catasto/gis/MapContainer.tsx");
   const catastoApi = read("src/lib/api/catasto.ts");
   const catastoTypes = read("src/types/catasto.ts");
@@ -104,6 +107,8 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   assert.match(dashboardPage, /catastoGetDashboardSummary/);
   assert.match(dashboardPage, /Cruscotto dati catastali/);
   assert.match(catastoApi, /catastoGetDashboardSummary/);
+  assert.match(catastoApi, /catastoGisSyncAdeWfsBboxAsync/);
+  assert.match(catastoApi, /catastoGisGetAdeWfsRunStatus/);
   assert.match(catastoTypes, /CatDashboardSummary/);
   assert.match(catastoPageWrapper, /ProtectedPage/);
   assert.doesNotMatch(catastoPageWrapper, /CatastoPhase1Nav/);
@@ -112,11 +117,17 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   assert.match(catastoCapacitasPage, /redirect\("\/elaborazioni\/capacitas"\)/);
   assert.match(elaborazioniDashboardPage, /GAIA Elaborazioni/);
   assert.match(elaborazioniDashboardPage, /\/elaborazioni\/capacitas/);
+  assert.match(elaborazioniDashboardPage, /\/elaborazioni\/ade-alignment/);
   assert.match(elaborazioniSettingsPage, /ElaborazioniSettingsWorkspace/);
   assert.match(read("src/components/elaborazioni/settings-workspace.tsx"), /createCapacitasCredential/);
   assert.match(read("src/components/elaborazioni/settings-workspace.tsx"), /updateCapacitasCredential/);
   assert.match(read("src/components/elaborazioni/settings-workspace.tsx"), /listCapacitasCredentials/);
   assert.match(elaborazioniCapacitasPage, /ElaborazioniCapacitasWorkspace/);
+  assert.match(elaborazioniAdeAlignmentPage, /ElaborazioniAdeAlignmentWorkspace/);
+  assert.match(elaborazioniAdeAlignmentWorkspace, /catastoGisSyncAdeWfsBboxAsync/);
+  assert.match(elaborazioniAdeAlignmentWorkspace, /catastoGisPreviewAdeAlignmentApply/);
+  assert.match(elaborazioniAdeAlignmentWorkspace, /catastoGisApplyAdeAlignment/);
+  assert.match(elaborazioniAdeAlignmentWorkspace, /catastoGisGetLatestAdeWfsRunStatus/);
   assert.match(read("src/components/elaborazioni/capacitas-workspace.tsx"), /listCapacitasCredentials/);
   assert.match(read("src/components/elaborazioni/capacitas-workspace.tsx"), /CAPACITAS_SECTIONS/);
   assert.match(read("src/components/elaborazioni/capacitas-workspace.tsx"), /PREVIEW_ROWS_LIMIT/);
@@ -194,6 +205,8 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   assert.match(mapContainer, /"source-layer": "cat_distretti"/);
   assert.match(mapContainer, /id: "distretti-fill"/);
   assert.match(mapContainer, /id: "distretti-outline"/);
+  assert.match(gisPage, /Stato allineamento AdE/);
+  assert.match(gisPage, /\/elaborazioni\/ade-alignment/);
   assert.match(requestWorkspace, /createElaborazioneBatch/);
   assert.match(requestWorkspace, /startElaborazioneBatch/);
   assert.match(requestWorkspace, /Scarica template CSV/);

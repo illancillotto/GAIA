@@ -67,11 +67,25 @@ export interface AdeWfsSyncBboxRequest {
 
 export interface AdeWfsSyncBboxResponse {
   run_id: string;
+  status: string;
   requested_bbox: Record<string, number>;
   tiles: number;
   features: number;
   upserted: number;
   with_geometry: number;
+}
+
+export interface AdeWfsRunStatusResponse {
+  run_id: string;
+  status: string;
+  requested_bbox: Record<string, number>;
+  tiles: number;
+  features: number;
+  upserted: number;
+  with_geometry: number;
+  error?: string | null;
+  started_at: string;
+  completed_at?: string | null;
 }
 
 export interface AdeAlignmentReportCounters {
