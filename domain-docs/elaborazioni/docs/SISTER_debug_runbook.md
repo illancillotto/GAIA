@@ -49,6 +49,9 @@ Il worker oggi:
 - salva screenshot e HTML nei passaggi critici
 - aggiorna `current_operation` con fasi più parlanti
 - gestisce l'informativa privacy
+- nel test credenziali di `/elaborazioni/settings`, considera riuscita la prova solo se dopo l'autenticazione viene eseguito anche il logout applicativo SISTER
+- a fine batch/richiesta operativa, prima di chiudere Playwright, tenta il logout applicativo SISTER per ridurre il rischio di sessioni server-side appese
+- isola il pool credenziali SISTER per utente GAIA: il DB accetta lo stesso `sister_username` su utenti diversi, ma lo rende univoco dentro il singolo pool tramite `UNIQUE (user_id, sister_username)`
 - prova a chiudere una sessione SISTER già attiva
 - aspetta alcuni secondi dopo `CloseSessionsSis` prima di ritentare il login
 - usa OCR locale Tesseract per i CAPTCHA testuali
@@ -114,6 +117,24 @@ Gestione implementata:
 - click automatico su `Conferma`
 - attesa del `domcontentloaded`
 
+### 2.1 Informativa Visure
+
+Caso osservato durante la richiesta di visura storica sintetica:
+
+- dopo il login e il click su `Visure catastali`, SISTER apre `Visure/Informativa.do`
+- il flusso puo arrivare gia in area Visure prima di `open_visura_form()`
+- il comando `Conferma Lettura` puo essere renderizzato come `input submit` e non come button ARIA
+
+Gestione implementata:
+
+- `open_visura_form()` non ripete la navigazione menu se la pagina e gia in `/Visure/` o se il form catastale e gia disponibile
+- la conferma dell'informativa Visure usa candidati multipli (`input`, `button`, `a`, testo) prima di procedere
+- dopo la conferma viene atteso `domcontentloaded` e tracciato lo stato `visura-informativa-confirmed`
+- dopo la scelta provincia, il form iniziale puo restare su `Persona fisica`; per le richieste immobile il worker forza il click sulla voce `Immobile` prima della compilazione
+- nella pagina CAPTCHA della visura immobile il campo corrente osservato e `input[name='inCaptchaChars']`; il vecchio selettore `codSicurezza` non e piu valido per questo flusso
+- nella pagina `Tipo di visura`, i valori radio osservati sono `0=Completa`, `3=Storica Analitica`, `4=Storica Sintetica`; la scansione `ade_status_scan` usa `request_type=STORICA` e `tipo_visura=Sintetica`, quindi deve selezionare valore `4`
+- dopo la scelta del tipo visura, SISTER puo mostrare una pagina intermedia senza CAPTCHA e senza bottone `Salva`; in questo caso il worker esegue un click preliminare su `Inoltra` e poi attende la comparsa del CAPTCHA o del download PDF
+
 ### 3. Menu servizi
 
 Caso osservato:
@@ -145,10 +166,17 @@ Caso osservato anche come:
 Gestione implementata:
 
 - classificazione come sessione bloccata
-- click automatico su `Chiudi` oppure `goto` diretto a `CloseSessionsSis`
+- click automatico solo su link `Chiudi` con `href` verso `CloseSessionsSis`; il link `Esci` dell'header non viene mai cliccato dalla recovery
+- fallback a `goto` diretto su `CloseSessionsSis` solo se la pagina non espone link cliccabili verso l'endpoint
 - attesa post chiusura sessione
 - nuovo tentativo di login una sola volta
 - stop immediato del flusso menu se il post-login e' gia' classificato come sessione bloccata
+
+Nota per `/elaborazioni/settings`:
+
+- il test credenziali non deve limitarsi a chiudere il browser Playwright
+- dopo il login deve chiamare esplicitamente il logout SISTER/`CloseSessionsSis`
+- se l'autenticazione riesce ma il logout non viene confermato, il test viene marcato fallito e la credenziale non viene aggiornata come verificata
 
 Limite noto:
 

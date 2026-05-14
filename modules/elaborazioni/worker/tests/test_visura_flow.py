@@ -25,12 +25,16 @@ class FakeCaptchaSolver:
 class FakeBrowser:
     def __init__(self) -> None:
         self.submit_attempts: list[str] = []
+        self.captcha_captures = 0
 
     async def open_visura_form(self) -> None:
         return None
 
     async def fill_visura_form(self, _request) -> None:
         return None
+
+    async def prepare_captcha_or_download(self) -> str:
+        return "captcha"
 
     async def open_subject_form(self, _subject_kind: str) -> None:
         return None
@@ -42,6 +46,7 @@ class FakeBrowser:
         return None
 
     async def capture_captcha_image(self) -> bytes:
+        self.captcha_captures += 1
         return b"fake-captcha"
 
     async def submit_captcha(self, text: str) -> bool:
@@ -161,3 +166,124 @@ def test_visura_flow_status_scan_downloads_historical_pdf() -> None:
     assert result.file_size is not None
     assert "Download PDF in corso" in operations
     assert browser.submit_attempts == ["AB12"]
+
+
+def test_visura_flow_downloads_when_sister_skips_captcha_after_inoltra() -> None:
+    class DownloadReadyBrowser(FakeBrowser):
+        async def prepare_captcha_or_download(self) -> str:
+            return "download"
+
+    browser = DownloadReadyBrowser()
+    operations: list[str] = []
+
+    async def fake_manual_solver(_image_path: Path) -> ManualCaptchaDecision:
+        raise AssertionError("Manual CAPTCHA should not be requested")
+
+    with TemporaryDirectory() as tmp_dir:
+        result = asyncio.run(
+            execute_visura_flow(
+                browser=browser,
+                request=FakeRequest(),
+                document_path=Path(tmp_dir) / "visura.pdf",
+                captcha_dir=Path(tmp_dir) / "captcha",
+                captcha_solver=FakeCaptchaSolver(),
+                max_ocr_attempts=1,
+                get_manual_captcha_decision=fake_manual_solver,
+                solve_external_captcha=None,
+                update_operation=operations.append,
+            )
+        )
+
+    assert result.status == "completed"
+    assert result.file_path is not None
+    assert result.file_size is not None
+    assert "Download PDF in corso" in operations
+    assert browser.captcha_captures == 0
+    assert browser.submit_attempts == []
+
+
+def test_visura_flow_accepts_manual_captcha_after_ocr_failure() -> None:
+    browser = FakeBrowser()
+    operations: list[str] = []
+    manual_paths: list[Path] = []
+
+    async def fake_manual_solver(image_path: Path) -> ManualCaptchaDecision:
+        manual_paths.append(image_path)
+        assert image_path.exists()
+        return ManualCaptchaDecision(text="AB12")
+
+    with TemporaryDirectory() as tmp_dir:
+        result = asyncio.run(
+            execute_visura_flow(
+                browser=browser,
+                request=FakeRequest(),
+                document_path=Path(tmp_dir) / "visura.pdf",
+                captcha_dir=Path(tmp_dir) / "captcha",
+                captcha_solver=FakeCaptchaSolver(),
+                max_ocr_attempts=1,
+                get_manual_captcha_decision=fake_manual_solver,
+                solve_external_captcha=None,
+                update_operation=operations.append,
+            )
+        )
+
+    assert result.status == "completed"
+    assert result.captcha_method == "manual"
+    assert result.last_ocr_text == "AB12"
+    assert browser.submit_attempts == ["AB12"]
+    assert len(manual_paths) == 1
+    assert "Richiesta CAPTCHA manuale" in operations
+
+
+def test_visura_flow_skips_when_manual_captcha_is_skipped() -> None:
+    browser = FakeBrowser()
+
+    async def fake_manual_solver(_image_path: Path) -> ManualCaptchaDecision:
+        return ManualCaptchaDecision(text=None, skip=True)
+
+    with TemporaryDirectory() as tmp_dir:
+        result = asyncio.run(
+            execute_visura_flow(
+                browser=browser,
+                request=FakeRequest(),
+                document_path=Path(tmp_dir) / "visura.pdf",
+                captcha_dir=Path(tmp_dir) / "captcha",
+                captcha_solver=FakeCaptchaSolver(),
+                max_ocr_attempts=1,
+                get_manual_captcha_decision=fake_manual_solver,
+                solve_external_captcha=None,
+                update_operation=None,
+            )
+        )
+
+    assert result.status == "skipped"
+    assert result.captcha_method == "manual"
+    assert "Skipped after manual CAPTCHA request" in (result.error_message or "")
+    assert browser.submit_attempts == []
+
+
+def test_visura_flow_fails_when_manual_captcha_is_rejected() -> None:
+    browser = FakeBrowser()
+
+    async def fake_manual_solver(_image_path: Path) -> ManualCaptchaDecision:
+        return ManualCaptchaDecision(text="WRONG")
+
+    with TemporaryDirectory() as tmp_dir:
+        result = asyncio.run(
+            execute_visura_flow(
+                browser=browser,
+                request=FakeRequest(),
+                document_path=Path(tmp_dir) / "visura.pdf",
+                captcha_dir=Path(tmp_dir) / "captcha",
+                captcha_solver=FakeCaptchaSolver(),
+                max_ocr_attempts=1,
+                get_manual_captcha_decision=fake_manual_solver,
+                solve_external_captcha=None,
+                update_operation=None,
+            )
+        )
+
+    assert result.status == "failed"
+    assert result.captcha_method == "manual"
+    assert "Manual CAPTCHA solution rejected" in (result.error_message or "")
+    assert browser.submit_attempts == ["WRONG"]

@@ -93,7 +93,16 @@ def test_parse_historical_visura_real_arborea_pdf_fixture() -> None:
 
 
 def test_parse_historical_visura_real_san_vero_milis_pdf_fixture() -> None:
-    fixture_path = Path(__file__).resolve().parents[2] / "data-example" / "DOC_1998476900.pdf"
+    fixture_path = next(
+        (
+            parent / "data-example" / "DOC_1998476900.pdf"
+            for parent in Path(__file__).resolve().parents
+            if (parent / "data-example" / "DOC_1998476900.pdf").exists()
+        ),
+        None,
+    )
+    if fixture_path is None:
+        pytest.skip("real AdE PDF fixture not available")
 
     payload = parse_historical_visura_pdf(fixture_path)
 
@@ -121,3 +130,43 @@ def test_parse_historical_visura_real_san_vero_milis_pdf_fixture() -> None:
     assert {"foglio": "18", "particella": "1175", "subalterno": None} in payload["first_variation"]["varied_parcels"]
     assert {"foglio": "18", "particella": "1649", "subalterno": None} in payload["first_variation"]["varied_parcels"]
     assert len(payload["events"]) >= 3
+
+
+def test_parse_historical_visura_current_sister_suppressed_text() -> None:
+    text = """
+    Comune di SAN VERO MILIS (I384) (OR)
+    Foglio 18 Particella 1174
+    Numeri di mappa soppressi - Partita speciale 0
+    Variazione in soppressione del 25/05/2023 , pratica
+    n. OR0020842, in atti dal 25/05/2023 - Tipo Mappale -
+    presentato il 25/05/2023(n.20842.1/2023)
+    La dichiarazione di Tipo Mappale presentato il
+    25/05/2023 ha:
+    Comune: SAN VERO MILIS (I384) (OR)
+    - costituito i seguenti immobili:
+    Foglio 18 Particella 4180
+    Foglio 18 Particella 4181
+    Foglio 18 Particella 4182
+    - soppresso i seguenti immobili:
+    Foglio 18 Particella 1174
+    """
+
+    payload = parse_historical_visura_text(text)
+
+    assert payload["classification"] == "suppressed"
+    assert payload["requested"] == {
+        "comune": "SAN VERO MILIS",
+        "codice": "I384",
+        "sezione": None,
+        "foglio": "18",
+        "particella": "1174",
+        "subalterno": None,
+    }
+    assert payload["suppression"]["suppressed_from"] == "25/05/2023"
+    assert payload["suppression"]["act_type"] == "TIPO MAPPALE"
+    assert payload["suppression"]["act_reference"] == "20842.1/2023"
+    assert payload["originated_or_varied_parcels"] == [
+        {"foglio": "18", "particella": "4180", "subalterno": None},
+        {"foglio": "18", "particella": "4181", "subalterno": None},
+        {"foglio": "18", "particella": "4182", "subalterno": None},
+    ]

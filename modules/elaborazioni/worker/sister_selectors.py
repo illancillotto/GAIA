@@ -38,7 +38,7 @@ class SisterSelectorsConfig:
     subject_open_visura_button_selectors: list[str] | None = None
     subject_result_selector_candidates: list[str] | None = None
     tipo_visura_selector: str = "input[name='tipoVisura']"
-    captcha_field_selector: str = "input[name='codSicurezza']"
+    captcha_field_selector: str = "input[name='inCaptchaChars']"
     captcha_image_selector: str = "img[src*='captcha' i]"
     inoltra_button_selector: str = "input[name='inoltra'][value='Inoltra']"
     save_button_selector: str = "input[name='metodo'][value='Salva']"

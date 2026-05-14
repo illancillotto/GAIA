@@ -47,7 +47,7 @@
     "input[type='checkbox']"
   ],
   "tipo_visura_selector": "input[name='tipoVisura']",
-  "captcha_field_selector": "input[name='codSicurezza']",
+  "captcha_field_selector": "input[name='inCaptchaChars']",
   "captcha_image_selector": "img[src*='captcha' i]",
   "inoltra_button_selector": "input[name='inoltra'][value='Inoltra']",
   "save_button_selector": "input[name='metodo'][value='Salva']"

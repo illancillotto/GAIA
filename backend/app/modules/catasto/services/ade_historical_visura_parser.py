@@ -24,10 +24,7 @@ def parse_historical_visura_text(text: str) -> dict[str, object]:
     upper = normalized.upper()
     requested = _parse_requested_parcel(normalized)
     suppression = _parse_suppression(normalized)
-    originated = _parse_parcels_after(
-        normalized,
-        "La soppressione ha originato e/o variato i seguenti immobili",
-    )
+    originated = _parse_originated_or_varied_parcels(normalized)
     first_variation = _parse_first_variation(normalized)
     events = _parse_events(normalized)
 
@@ -57,9 +54,17 @@ def _normalize_text(text: str) -> str:
 
 
 def _parse_requested_parcel(text: str) -> dict[str, str | None]:
-    comune_match = re.search(r"Comune di\s+(.+?)\s+\(Codice:([A-Z0-9]+)\)", text, re.IGNORECASE)
+    comune_match = re.search(
+        r"Comune di\s+(.+?)\s+\((?:Codice:)?([A-Z0-9]+)\)(?:\s+\([A-Z]{2}\))?",
+        text,
+        re.IGNORECASE,
+    )
     sezione_match = re.search(r"Sezione\s+(.+?)\s+\(Provincia", text, re.IGNORECASE)
-    parcel_match = re.search(r"Foglio:\s*([A-Z0-9]+)\s+Particella:\s*([A-Z0-9]+)(?:\s+Sub(?:alterno)?:\s*([A-Z0-9]+))?", text, re.IGNORECASE)
+    parcel_match = re.search(
+        r"Foglio[: ]+\s*([A-Z0-9]+)\s+Particella[: ]+\s*([A-Z0-9]+)(?:\s+Sub(?:alterno)?[: ]+\s*([A-Z0-9]+))?",
+        text,
+        re.IGNORECASE,
+    )
     return {
         "comune": comune_match.group(1).strip() if comune_match else None,
         "codice": comune_match.group(2).strip() if comune_match else None,
@@ -71,18 +76,35 @@ def _parse_requested_parcel(text: str) -> dict[str, str | None]:
 
 
 def _parse_suppression(text: str) -> dict[str, object]:
-    match = re.search(r"Numero di mappa soppresso dal\s+(\d{2}/\d{2}/\d{4})", text, re.IGNORECASE)
-    act_match = re.search(
+    match = re.search(
+        r"(?:Numero di mappa soppresso dal|soppressione del)\s+(\d{2}/\d{2}/\d{4})",
+        text,
+        re.IGNORECASE,
+    )
+    act_matches = list(re.finditer(
         r"(FRAZIONAMENTO|VARIAZIONE|TIPO MAPPALE|FUSIONE|DIVISIONE).{0,180}?\(n\.\s*([^)]+)\)",
         text,
         re.IGNORECASE | re.DOTALL,
-    )
+    ))
+    act_match = _best_act_match(act_matches)
+    act_type = act_match.group(1).upper() if act_match else None
+    if act_type == "VARIAZIONE" and re.search(r"TIPO\s+MAPPALE", act_match.group(0), re.IGNORECASE):
+        act_type = "TIPO MAPPALE"
     return {
         "is_suppressed": match is not None or " SOPPRESSO " in f" {text.upper()} ",
         "suppressed_from": match.group(1) if match else None,
-        "act_type": act_match.group(1).upper() if act_match else None,
+        "act_type": act_type,
         "act_reference": act_match.group(2).strip() if act_match else None,
     }
+
+
+def _best_act_match(matches: list[re.Match[str]]) -> re.Match[str] | None:
+    if not matches:
+        return None
+    for match in reversed(matches):
+        if match.group(1).upper() != "VARIAZIONE":
+            return match
+    return matches[-1]
 
 
 def _parse_first_variation(text: str) -> dict[str, list[dict[str, str | None]]]:
@@ -120,13 +142,33 @@ def _parse_events(text: str) -> list[dict[str, object]]:
     return events
 
 
+def _parse_originated_or_varied_parcels(text: str) -> list[dict[str, str | None]]:
+    markers = [
+        "La soppressione ha originato e/o variato i seguenti immobili",
+        "costituito i seguenti immobili",
+        "costituiti i seguenti immobili",
+        "costituite le seguenti particelle",
+        "costituito le seguenti particelle",
+    ]
+    parcels: list[dict[str, str | None]] = []
+    seen: set[tuple[str | None, str | None, str | None]] = set()
+    for marker in markers:
+        for parcel in _parse_parcels_after(text, marker):
+            key = (parcel.get("foglio"), parcel.get("particella"), parcel.get("subalterno"))
+            if key in seen:
+                continue
+            seen.add(key)
+            parcels.append(parcel)
+    return parcels
+
+
 def _parse_parcels_after(text: str, marker: str) -> list[dict[str, str | None]]:
     marker_index = text.lower().find(marker.lower())
     if marker_index < 0:
         return []
     window = text[marker_index + len(marker): marker_index + len(marker) + 500]
     stop = re.search(
-        r"\n\s*\n|Situazione|L'intestazione|DATI DERIVANTI|Sono stati inoltre variati",
+        r"\n\s*\n|Situazione|L'intestazione|DATI DERIVANTI|Sono stati inoltre variati|soppresso i seguenti|soppressi i seguenti",
         window,
         re.IGNORECASE,
     )

@@ -74,6 +74,15 @@ async def execute_visura_flow(
             update_operation("Compilazione dati visura")
         logger.info("Richiesta %s compilazione form visura", request.id)
         await browser.fill_visura_form(request)
+        prepare_captcha_or_download = getattr(browser, "prepare_captcha_or_download", None)
+        if callable(prepare_captcha_or_download):
+            next_step = await prepare_captcha_or_download()
+            if next_step == "download":
+                if update_operation is not None:
+                    update_operation("Download PDF in corso")
+                logger.info("Richiesta %s pronta al download senza CAPTCHA", request.id)
+                file_size = await browser.download_pdf(document_path)
+                return VisuraFlowResult(status="completed", file_path=document_path, file_size=file_size)
 
     last_ocr_text: str | None = None
     for attempt in range(1, max_ocr_attempts + 1):

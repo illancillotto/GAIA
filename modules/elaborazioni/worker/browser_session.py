@@ -82,6 +82,7 @@ class BrowserSession:
     async def test_connection(self, username: str, password: str) -> BrowserConnectionProbeResult:
         page = self.page
         reachable = False
+        authenticated = False
         try:
             logger.info("Avvio probe connessione SISTER")
             await page.goto(self.selectors.login_url, wait_until="domcontentloaded")
@@ -95,28 +96,40 @@ class BrowserSession:
             await self._maybe_click_xpath(self.selectors.confirm_button_xpath)
             await self._trace_state("connection-probe-after-submit")
             await page.get_by_role("link", name=self.selectors.consultazioni_link_name).wait_for(timeout=12000)
+            authenticated = True
             logger.info("Probe connessione SISTER autenticato con successo")
             await self._trace_state("connection-probe-authenticated")
+            await self.logout()
             return BrowserConnectionProbeResult(
                 reachable=True,
                 authenticated=True,
-                message="Autenticazione SISTER confermata dal worker.",
+                message="Autenticazione SISTER confermata dal worker e logout finale eseguito.",
             )
         except TimeoutError:
+            if authenticated:
+                with contextlib.suppress(Exception):
+                    await self.logout()
             url, title, body_excerpt = await self._read_page_state()
             issue_message = self._classify_login_issue(url, title, body_excerpt)
             debug_context = await self._collect_debug_context("connection-probe-timeout", url, title, body_excerpt)
             logger.warning("Timeout probe connessione SISTER: %s", debug_context)
+            if authenticated:
+                issue_message = "Autenticazione SISTER riuscita, ma logout finale non confermato entro il timeout"
             return BrowserConnectionProbeResult(
                 reachable=reachable,
                 authenticated=False,
                 message=f"{issue_message or 'Portale raggiunto ma autenticazione SISTER non confermata.'} {debug_context}",
             )
         except Exception as exc:
+            if authenticated:
+                with contextlib.suppress(Exception):
+                    await self.logout()
             url, title, body_excerpt = await self._read_page_state()
             issue_message = self._classify_login_issue(url, title, body_excerpt)
             debug_context = await self._collect_debug_context("connection-probe-error", url, title, body_excerpt)
             logger.exception("Probe connessione SISTER fallito: %s", debug_context)
+            if authenticated:
+                issue_message = f"Autenticazione SISTER riuscita, ma logout finale non confermato: {exc}"
             return BrowserConnectionProbeResult(
                 reachable=reachable,
                 authenticated=False,
@@ -179,21 +192,30 @@ class BrowserSession:
         if self.config.debug_pause:
             await page.pause()
 
+    async def logout(self) -> None:
+        page = self.page
+        logger.info("Logout SISTER / chiusura sessione applicativa")
+        close_session_url = "https://sister3.agenziaentrate.gov.it/Servizi/CloseSessionsSis"
+        if not await self._click_close_sessions_link(prefer_text="Chiudi"):
+            await page.goto(close_session_url, wait_until="domcontentloaded")
+        await page.wait_for_load_state("domcontentloaded")
+        await self._trace_state("sister-logout-completed")
+
     async def open_visura_form(self) -> None:
         page = self.page
         logger.info("Apertura form visura SISTER")
         await self._maybe_accept_privacy_notice()
-        await self._goto_visura_menu_with_retry()
-        if "Informativa.do" in page.url:
-            logger.info("Informativa visure rilevata, click su '%s'", self.selectors.conferma_lettura_button_name)
-            await page.get_by_role("button", name=self.selectors.conferma_lettura_button_name).click()
-            await self._trace_state("visura-informativa-confirmed")
+        if not await self._is_visura_area_ready():
+            await self._goto_visura_menu_with_retry()
+        await self._confirm_visura_informativa_if_present()
         if await page.locator(self.selectors.territorio_selector).count() > 0:
             await page.select_option(self.selectors.territorio_selector, value=self.selectors.territorio_value)
             await page.get_by_role("button", name=self.selectors.territorio_apply_button_name).click()
             await self._trace_state("visura-after-territorio")
-        logger.info("Click link '%s'", self.selectors.immobile_link_name)
-        await page.get_by_role("link", name=self.selectors.immobile_link_name).click()
+        immobile_link = page.get_by_role("link", name=self.selectors.immobile_link_name)
+        if await immobile_link.count() > 0:
+            logger.info("Click link '%s'", self.selectors.immobile_link_name)
+            await immobile_link.first.click()
         await page.wait_for_selector(self.selectors.catasto_selector)
         logger.info("Form visura SISTER pronto")
         await self._trace_state("visura-form-ready")
@@ -441,6 +463,30 @@ class BrowserSession:
         await self.page.wait_for_selector(self.selectors.captcha_image_selector)
         return await self.page.locator(self.selectors.captcha_image_selector).screenshot(type="png")
 
+    async def prepare_captcha_or_download(self) -> str:
+        page = self.page
+        if await self._first_visible_count(self.selectors.save_button_selector) > 0:
+            return "download"
+        if await self._first_visible_count(self.selectors.captcha_image_selector) > 0:
+            return "captcha"
+
+        inoltra = page.locator(self.selectors.inoltra_button_selector).first
+        if await inoltra.count() > 0 and await inoltra.is_visible():
+            logger.info("Pagina tipo visura senza CAPTCHA visibile, click preliminare su Inoltra")
+            await inoltra.click(timeout=10000)
+            with contextlib.suppress(Exception):
+                await page.wait_for_load_state("domcontentloaded", timeout=5000)
+
+        for _ in range(30):
+            if await self._first_visible_count(self.selectors.save_button_selector) > 0:
+                return "download"
+            if await self._first_visible_count(self.selectors.captcha_image_selector) > 0:
+                return "captcha"
+            await asyncio.sleep(0.5)
+
+        await self._trace_state("captcha-or-download-timeout")
+        raise TimeoutError("SISTER non ha mostrato ne CAPTCHA ne pulsante Salva dopo Inoltra")
+
     async def submit_captcha(self, text: str) -> bool:
         page = self.page
         logger.info("Invio candidato CAPTCHA con %s caratteri", len(text))
@@ -482,7 +528,39 @@ class BrowserSession:
         await page.get_by_role("link", name=self.selectors.visure_link_name).click()
         logger.info("Link '%s' aperto", self.selectors.visure_link_name)
         await self._trace_state("menu-after-visure-click")
-        await self._maybe_click_text(self.selectors.conferma_lettura_button_name)
+        await self._confirm_visura_informativa_if_present()
+
+    async def _is_visura_area_ready(self) -> bool:
+        page = self.page
+        if await page.locator(self.selectors.catasto_selector).count() > 0:
+            return True
+        return "/Visure/" in page.url or "Visure/" in page.url
+
+    async def _confirm_visura_informativa_if_present(self) -> None:
+        page = self.page
+        body_text = ""
+        with contextlib.suppress(Exception):
+            body_text = await page.locator("body").inner_text(timeout=2000)
+
+        if "Informativa.do" not in page.url and self.selectors.conferma_lettura_button_name not in body_text:
+            return
+
+        logger.info("Informativa visure rilevata, click su '%s'", self.selectors.conferma_lettura_button_name)
+        await self._trace_state("visura-informativa-detected")
+        await self._click_first_visible(
+            [
+                f"input[type='submit'][value='{self.selectors.conferma_lettura_button_name}']",
+                f"input[type='button'][value='{self.selectors.conferma_lettura_button_name}']",
+                f"input[value='{self.selectors.conferma_lettura_button_name}']",
+                f"button:has-text('{self.selectors.conferma_lettura_button_name}')",
+                f"a:has-text('{self.selectors.conferma_lettura_button_name}')",
+                f"text={self.selectors.conferma_lettura_button_name}",
+                "input[type='submit'][value*='Conferma']",
+                "button:has-text('Conferma')",
+            ]
+        )
+        await page.wait_for_load_state("domcontentloaded")
+        await self._trace_state("visura-informativa-confirmed")
 
     async def _goto_visura_menu_with_retry(self) -> None:
         last_error: TimeoutError | None = None
@@ -543,6 +621,12 @@ class BrowserSession:
         if last_error is not None:
             raise last_error
         raise TimeoutError(f"No clickable selector found in candidates: {selectors}")
+
+    async def _first_visible_count(self, selector: str) -> int:
+        locator = self.page.locator(selector).first
+        if await locator.count() == 0:
+            return 0
+        return 1 if await locator.is_visible() else 0
 
     async def _fill_subject_identifier(self, subject_id: str) -> None:
         normalized = (subject_id or "").strip().upper()
@@ -620,14 +704,8 @@ class BrowserSession:
         await self._trace_state("privacy-notice-confirmed")
 
     async def _recover_locked_session(self) -> None:
-        page = self.page
         logger.info("Tentativo chiusura sessione SISTER gia' attiva")
-        close_link = page.get_by_role("link", name="Chiudi")
-        if await close_link.count() > 0:
-            await close_link.first.click()
-        else:
-            await page.goto("https://sister3.agenziaentrate.gov.it/Servizi/CloseSessionsSis", wait_until="domcontentloaded")
-        await page.wait_for_load_state("domcontentloaded")
+        await self.logout()
         await self._trace_state("session-recovery-close")
         logger.info("Richiesta chiusura sessione SISTER inviata")
         logger.info("Attendo %s secondi per il rilascio della sessione SISTER", SESSION_RECOVERY_WAIT_SEC)
@@ -637,6 +715,24 @@ class BrowserSession:
         await self.start()
         await self.page.goto(self.selectors.login_url, wait_until="domcontentloaded")
         await self._trace_state("session-recovery-wait-complete")
+
+    async def _click_close_sessions_link(self, prefer_text: str = "Chiudi") -> bool:
+        locator = self.page.locator(f"a[href*='CloseSessionsSis']:has-text('{prefer_text}')")
+        count = await locator.count()
+        if count == 0:
+            return False
+
+        for index in range(count):
+            candidate = locator.nth(index)
+            if not await candidate.is_visible():
+                continue
+            text = ""
+            with contextlib.suppress(Exception):
+                text = (await candidate.inner_text(timeout=1000)).strip()
+            if prefer_text.lower() in text.lower():
+                await candidate.click(timeout=5000)
+                return True
+        return False
 
     async def _wait_for_post_login_state(self) -> str:
         page = self.page
@@ -765,4 +861,9 @@ class BrowserSession:
 
     @staticmethod
     def tipo_visura_value(tipo_visura: str) -> str:
-        return "3" if tipo_visura == "Sintetica" else "2"
+        normalized = (tipo_visura or "").strip().lower()
+        if normalized == "sintetica":
+            return "4"
+        if normalized == "analitica":
+            return "3"
+        return "0"

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import logging
@@ -402,6 +403,8 @@ class CatastoWorker:
             logger.exception("Batch %s fallito prima del completamento", batch_id)
             self._fail_batch(batch_id, str(exc))
         finally:
+            with contextlib.suppress(Exception):
+                await browser.logout()
             await browser.stop()
 
     def _fail_batch(self, batch_id, message: str) -> None:
