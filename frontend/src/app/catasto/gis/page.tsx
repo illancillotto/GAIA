@@ -2045,7 +2045,7 @@ export default function CatastoGisPage() {
                             <span className={`h-1.5 w-1.5 rounded-full transition-colors ${showDistretti ? "bg-emerald-500" : "bg-gray-300"}`} />
                             Distretti
                           </button>
-                          <div className="pointer-events-none absolute left-0 top-full z-10 mt-2 w-52 translate-y-1 rounded-2xl border border-blue-100 bg-white/95 p-3 opacity-0 shadow-xl ring-1 ring-black/5 backdrop-blur transition-all duration-150 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100">
+                          <div className="pointer-events-none absolute left-0 top-full z-10 w-52 translate-y-1 rounded-2xl border border-blue-100 bg-white/95 p-3 pt-5 opacity-0 shadow-xl ring-1 ring-black/5 backdrop-blur transition-all duration-150 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100">
                             <button
                               type="button"
                               onClick={() => setShowDistrettiFill((v) => !v)}
@@ -2088,7 +2088,7 @@ export default function CatastoGisPage() {
                             <span className={`h-1.5 w-1.5 rounded-full transition-colors ${showParticelle ? "bg-indigo-400" : "bg-gray-300"}`} />
                             Particelle
                           </button>
-                          <div className="pointer-events-none absolute left-0 top-full z-10 mt-2 w-52 translate-y-1 rounded-2xl border border-indigo-100 bg-white/95 p-3 opacity-0 shadow-xl ring-1 ring-black/5 backdrop-blur transition-all duration-150 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100">
+                          <div className="pointer-events-none absolute left-0 top-full z-10 w-52 translate-y-1 rounded-2xl border border-indigo-100 bg-white/95 p-3 pt-5 opacity-0 shadow-xl ring-1 ring-black/5 backdrop-blur transition-all duration-150 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100">
                             <button
                               type="button"
                               onClick={() => setShowParticelleFill((v) => !v)}
@@ -2182,7 +2182,7 @@ export default function CatastoGisPage() {
                         <span className={`h-1.5 w-1.5 rounded-full transition-colors ${showDistretti ? "bg-emerald-500" : "bg-gray-300"}`} />
                         Distretti
                       </button>
-                      <div className="pointer-events-none absolute left-0 top-full z-10 mt-2 w-52 translate-y-1 rounded-2xl border border-blue-100 bg-white/95 p-3 opacity-0 shadow-xl ring-1 ring-black/5 backdrop-blur transition-all duration-150 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100">
+                      <div className="pointer-events-none absolute left-0 top-full z-10 w-52 translate-y-1 rounded-2xl border border-blue-100 bg-white/95 p-3 pt-5 opacity-0 shadow-xl ring-1 ring-black/5 backdrop-blur transition-all duration-150 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100">
                         <button
                           type="button"
                           onClick={() => setShowDistrettiFill((v) => !v)}
@@ -2225,7 +2225,7 @@ export default function CatastoGisPage() {
                         <span className={`h-1.5 w-1.5 rounded-full transition-colors ${showParticelle ? "bg-indigo-400" : "bg-gray-300"}`} />
                         Particelle
                       </button>
-                      <div className="pointer-events-none absolute left-0 top-full z-10 mt-2 w-52 translate-y-1 rounded-2xl border border-indigo-100 bg-white/95 p-3 opacity-0 shadow-xl ring-1 ring-black/5 backdrop-blur transition-all duration-150 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100">
+                      <div className="pointer-events-none absolute left-0 top-full z-10 w-52 translate-y-1 rounded-2xl border border-indigo-100 bg-white/95 p-3 pt-5 opacity-0 shadow-xl ring-1 ring-black/5 backdrop-blur transition-all duration-150 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100">
                         <button
                           type="button"
                           onClick={() => setShowParticelleFill((v) => !v)}
