@@ -118,6 +118,17 @@ class RuoloParticella(Base):
     cat_particella_match_status: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)
     cat_particella_match_confidence: Mapped[str | None] = mapped_column(String(40), nullable=True, index=True)
     cat_particella_match_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ade_scan_status: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    ade_scan_classification: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    ade_scan_checked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    ade_scan_request_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("catasto_visure_requests.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    ade_scan_document_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("catasto_documents.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    ade_scan_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    ade_scan_payload_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

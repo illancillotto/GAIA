@@ -200,6 +200,12 @@ class CatastoVisuraRequest(Base):
         index=True,
     )
     row_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    purpose: Mapped[str] = mapped_column(String(40), default="visura_pdf", nullable=False, index=True)
+    target_ruolo_particella_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid,
+        nullable=True,
+        index=True,
+    )
     search_mode: Mapped[str] = mapped_column(String(32), default="immobile", nullable=False, index=True)
     comune: Mapped[str | None] = mapped_column(String(255), nullable=True)
     comune_codice: Mapped[str | None] = mapped_column(String(255), nullable=True)

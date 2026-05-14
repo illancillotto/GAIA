@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import asdict
 import re
 from uuid import UUID
 
@@ -12,9 +13,20 @@ from app.api.deps import require_active_user, require_admin_user
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
 from app.models.catasto_phase1 import CatAnomalia, CatComune, CatParticella, CatUtenzaIrrigua
+from app.modules.catasto.services.ade_status_scan import (
+    create_ade_status_scan_batch,
+    get_ade_status_scan_summary,
+    list_ade_status_scan_candidates,
+)
 from app.modules.catasto.services.import_capacitas import ANOMALIA_TYPES
 from app.modules.catasto.services.validation import validate_codice_fiscale
+from app.services.elaborazioni_credentials import ElaborazioneCredentialNotFoundError
 from app.schemas.catasto_phase1 import (
+    CatAdeStatusScanCandidateListResponse,
+    CatAdeStatusScanCandidateResponse,
+    CatAdeStatusScanRunInput,
+    CatAdeStatusScanRunResponse,
+    CatAdeStatusScanSummaryResponse,
     CatAnomaliaComuneCandidateResponse,
     CatAnomaliaComuneWizardApplyInput,
     CatAnomaliaComuneWizardApplyResponse,
@@ -295,6 +307,40 @@ def anomalie_summary(
         key=lambda item: (-SEVERITY_RANK.get(item.severita, 0), -item.count, item.label.lower()),
     )
     return CatAnomaliaSummaryResponse(total=sum(item.count for item in buckets), buckets=buckets)
+
+
+@router.get("/ade-scan/summary", response_model=CatAdeStatusScanSummaryResponse)
+def ade_status_scan_summary(
+    db: Session = Depends(get_db),
+    _: ApplicationUser = Depends(require_active_user),
+) -> CatAdeStatusScanSummaryResponse:
+    return CatAdeStatusScanSummaryResponse(**get_ade_status_scan_summary(db))
+
+
+@router.get("/ade-scan/candidates", response_model=CatAdeStatusScanCandidateListResponse)
+def ade_status_scan_candidates(
+    limit: int = Query(100, ge=1, le=500),
+    db: Session = Depends(get_db),
+    _: ApplicationUser = Depends(require_active_user),
+) -> CatAdeStatusScanCandidateListResponse:
+    items = list_ade_status_scan_candidates(db, limit=limit)
+    return CatAdeStatusScanCandidateListResponse(
+        items=[CatAdeStatusScanCandidateResponse(**asdict(item)) for item in items],
+        total=len(items),
+    )
+
+
+@router.post("/ade-scan/run", response_model=CatAdeStatusScanRunResponse)
+def run_ade_status_scan(
+    payload: CatAdeStatusScanRunInput,
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(require_active_user),
+) -> CatAdeStatusScanRunResponse:
+    try:
+        result = create_ade_status_scan_batch(db, user_id=current_user.id, limit=max(1, min(payload.limit, 500)))
+    except ElaborazioneCredentialNotFoundError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    return CatAdeStatusScanRunResponse(**result)
 
 
 @router.get("/wizard/cf/items", response_model=CatAnomaliaCfWizardListResponse)

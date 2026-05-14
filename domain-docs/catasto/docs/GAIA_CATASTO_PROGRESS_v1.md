@@ -67,6 +67,7 @@ Legend: 🔴 Non iniziato · 🟡 In corso · 🟢 Completato · ⚫ Bloccato
 | 6.4 | Routes anomalie (lista, patch, summary, wizard CF/comune/particella) | 🟢 | `backend/app/modules/catasto/routes/anomalie.py` | Include `PATCH /catasto/anomalie/{id}`, `GET /catasto/anomalie/summary`, `GET /catasto/anomalie/wizard/cf/items`, `POST /catasto/anomalie/wizard/cf/apply`, `GET /catasto/anomalie/wizard/comune/items`, `POST /catasto/anomalie/wizard/comune/apply`, `GET /catasto/anomalie/wizard/particella/items`, `POST /catasto/anomalie/wizard/particella/apply` |
 | 6.5 | Dashboard aggregata | 🟢 | `backend/app/modules/catasto/routes/dashboard.py` | `GET /catasto/dashboard/summary` espone stato import, copertura particelle, utenze, anomalie e KPI distretti in una sola chiamata |
 | 6.6 | Registrazione router in main/catasto module | 🟢 | `backend/app/modules/catasto/routes/__init__.py` + `backend/app/modules/catasto/router.py` | Router incluso in API |
+| 6.7 | Visure storiche AdE particelle ruolo non collegate | 🟢 | `backend/app/modules/catasto/services/ade_status_scan.py` + `ade_historical_visura_parser.py` + `routes/anomalie.py` + `modules/elaborazioni/worker` | `GET /catasto/anomalie/ade-scan/summary`, `GET /catasto/anomalie/ade-scan/candidates`, `POST /catasto/anomalie/ade-scan/run`; crea batch SISTER con `purpose=ade_status_scan`, scarica visura storica sintetica, salva PDF e payload in `ruolo_particelle.ade_scan_*` |
 
 ### Frontend
 
@@ -83,7 +84,7 @@ Legend: 🔴 Non iniziato · 🟡 In corso · 🟢 Completato · ⚫ Bloccato
 | F5 | Lista Distretti `/catasto/distretti` | 🟢 | `frontend/src/app/catasto/distretti/page.tsx` | |
 | F6 | Dettaglio Distretto `/catasto/distretti/[id]` | 🟢 | `frontend/src/app/catasto/distretti/[id]/page.tsx` | Tab anomalie distretto collegata |
 | F7 | Scheda Particella `/catasto/particelle/[id]` | 🟢 | `frontend/src/app/catasto/particelle/[id]/page.tsx` | Sezioni utenze+anomalie collegate |
-| F8 | Console Anomalie `/catasto/anomalie` | 🟢 | `frontend/src/app/catasto/anomalie/page.tsx` | Summary per famiglia, sezione `Code di lavoro`, triage tabellare e wizard attivi per `VAL-02/03`, `VAL-04` e `VAL-05` |
+| F8 | Console Anomalie `/catasto/anomalie` | 🟢 | `frontend/src/app/catasto/anomalie/page.tsx` | Summary per famiglia, sezione `Code di lavoro`, triage tabellare, wizard attivi per `VAL-02/03`, `VAL-04` e `VAL-05`, e pannello `Scansione AdE particelle non collegate` per avviare/monitorare batch SISTER dedicati |
 | F9 | Layout + navigazione catasto | 🟢 | `frontend/src/app/catasto/layout.tsx` + sidebar | |
 | F10 | Elaborazioni massive `/catasto/elaborazioni-massive` | 🟢 | `frontend/src/components/catasto/anagrafica/AnagraficaBulkPanel.tsx` | Storico locale ultime 5 operazioni; `MULTIPLE_MATCHES` esporta tutte le particelle candidate con `match_rank` |
 
@@ -114,6 +115,7 @@ Legend: 🔴 Non iniziato · 🟡 In corso · 🟢 Completato · ⚫ Bloccato
 | 2.16 | Dry-run apply allineamento AdE | 🟢 | `backend/app/modules/catasto/services/ade_wfs.py` + `routes/gis.py` + `frontend/src/app/catasto/gis/page.tsx` | `POST /catasto/gis/ade-wfs/alignment-apply-preview/{run_id}` stima inserimenti, update geometria, soppressioni e impatti sui riferimenti collegati senza modificare `cat_particelle`; il wizard mostra la preview e i match ambigui sono esclusi |
 | 2.17 | Apply backend allineamento AdE | 🟢 | `backend/app/modules/catasto/services/ade_wfs.py` + `routes/gis.py` | `POST /catasto/gis/ade-wfs/alignment-apply/{run_id}` richiede `confirm=true`, inserisce nuove AdE risolvibili su comune, aggiorna geometrie in-place con history e consente soppressione mancanti solo con flag esplicito |
 | 2.18 | Apply guidato GIS AdE | 🟢 | `frontend/src/app/catasto/gis/page.tsx` + `frontend/src/lib/api/catasto.ts` | Il wizard consente apply non soppressivo solo dopo dry-run, senza match ambigui e con conferma testuale `APPLICA <run>`; dopo l'apply aggiorna report e overlay |
+| 2.19 | Batch/worker per `Allinea comprensorio AdE` | 🔴 | `backend/app/modules/catasto/services/ade_wfs.py` + `routes/gis.py` + `frontend/src/app/catasto/gis/page.tsx` | Da introdurre per comprensori molto ampi: il flusso attuale `sync-bbox` è sincrono e protetto da `max_tiles`; valutare job asincrono con progress per evitare di alzare soltanto il limite tile |
 
 ---
 
@@ -124,6 +126,7 @@ Legend: 🔴 Non iniziato · 🟡 In corso · 🟢 Completato · ⚫ Bloccato
 | 3.1 | Endpoint batch visure per anomalie CF | 🔴 | | |
 | 3.2 | Aggiornamento `cat_intestatari` da risultati Sister | 🔴 | | |
 | 3.3 | UI: pulsante "Verifica Sister" in scheda particella | 🔴 | | |
+| 3.4 | Visura storica sintetica AdE per anomalie ruolo | 🟢 | `modules/elaborazioni/worker/visura_flow.py` + `browser_session.py` + parser PDF | Per richieste `purpose=ade_status_scan`, il worker usa `request_type=STORICA`, scarica PDF sintetico, crea `catasto_documents` e parsa soppressioni/origini/variazioni |
 
 ---
 

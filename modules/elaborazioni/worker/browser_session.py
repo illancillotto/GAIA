@@ -222,6 +222,7 @@ class BrowserSession:
             request.subalterno,
             request.tipo_visura,
         )
+        await self._select_request_type_if_present(getattr(request, "request_type", None) or "ATTUALITA")
         await page.select_option(self.selectors.catasto_selector, label=request.catasto)
         await page.select_option(self.selectors.comune_selector, value=request.comune_codice)
 
@@ -241,6 +242,36 @@ class BrowserSession:
         await page.check(f"{self.selectors.tipo_visura_selector}[value='{self.tipo_visura_value(request.tipo_visura)}']")
         logger.info("Form visura inviato per richiesta %s", request.id)
         await self._trace_state(f"visura-form-submitted-{request.id}")
+
+    async def search_immobile_status(self, request) -> dict[str, object]:
+        page = self.page
+        logger.info(
+            "Ricerca stato AdE per richiesta %s comune=%s foglio=%s particella=%s subalterno=%s",
+            request.id,
+            request.comune,
+            request.foglio,
+            request.particella,
+            request.subalterno,
+        )
+        await page.select_option(self.selectors.catasto_selector, label=request.catasto)
+        await page.select_option(self.selectors.comune_selector, value=request.comune_codice)
+
+        if request.sezione:
+            if await page.locator(self.selectors.sezione_select_selector).count() > 0:
+                await page.select_option(self.selectors.sezione_select_selector, label=request.sezione)
+            elif await page.locator(self.selectors.sezione_input_selector).count() > 0:
+                await page.fill(self.selectors.sezione_input_selector, request.sezione)
+
+        await page.fill(self.selectors.foglio_selector, request.foglio)
+        await page.fill(self.selectors.particella_selector, request.particella)
+        if request.subalterno:
+            await page.fill(self.selectors.subalterno_selector, request.subalterno)
+        await page.select_option(self.selectors.motivo_selector, value=self.selectors.motivo_value)
+        await page.click(self.selectors.visura_button_selector)
+        await page.wait_for_timeout(1500)
+        payload = await self._read_immobile_status_payload()
+        await self._trace_state(f"ade-status-scan-{request.id}-{payload.get('classification')}")
+        return payload
 
     async def fill_subject_form(self, request) -> None:
         page = self.page
@@ -317,6 +348,94 @@ class BrowserSession:
         if any(marker in normalized_text for marker in markers):
             return f"Nessuna corrispondenza catastale per {(subject_kind or 'SOGGETTO').strip()} '{(subject_id or '').strip()}'"
         return None
+
+    async def _read_immobile_status_payload(self) -> dict[str, object]:
+        url, title, body_excerpt = await self._read_page_state()
+        try:
+            body_text = await self.page.locator("body").inner_text(timeout=3000)
+        except Exception:
+            body_text = body_excerpt
+        normalized = re.sub(r"\s+", " ", body_text).strip()
+        haystack = normalized.upper()
+
+        if self._classify_login_issue(url, title, body_excerpt):
+            return {
+                "classification": "blocked",
+                "message": self._classify_login_issue(url, title, body_excerpt),
+                "url": url,
+                "title": title,
+                "raw_text_excerpt": normalized[:1000],
+            }
+
+        if await self.page.locator(self.selectors.tipo_visura_selector).count() > 0:
+            return {
+                "classification": "current",
+                "message": "Particella valida: AdE ha aperto la scelta tipo visura.",
+                "url": url,
+                "title": title,
+                "raw_text_excerpt": normalized[:1000],
+            }
+
+        immobili_count = self._extract_immobili_count(normalized)
+        if "SOPPRESSO" in haystack:
+            return {
+                "classification": "suppressed",
+                "message": "Particella presente in AdE ma soppressa.",
+                "immobili_count": immobili_count,
+                "suppressed_at": self._extract_suppressed_date(normalized),
+                "url": url,
+                "title": title,
+                "raw_text_excerpt": normalized[:1000],
+            }
+
+        not_found_markers = [
+            "IMMOBILI INDIVIDUATI: 0",
+            "NESSUN IMMOBILE",
+            "NESSUNA CORRISPONDENZA",
+            "NON SONO STATI TROVATI",
+            "NESSUN DATO TROVATO",
+        ]
+        if any(marker in haystack for marker in not_found_markers):
+            return {
+                "classification": "not_found",
+                "message": "Nessun immobile individuato da AdE.",
+                "immobili_count": immobili_count,
+                "url": url,
+                "title": title,
+                "raw_text_excerpt": normalized[:1000],
+            }
+
+        if "ELENCO IMMOBILI" in haystack or (immobili_count is not None and immobili_count > 0):
+            return {
+                "classification": "current",
+                "message": "Particella presente in elenco immobili AdE.",
+                "immobili_count": immobili_count,
+                "url": url,
+                "title": title,
+                "raw_text_excerpt": normalized[:1000],
+            }
+
+        return {
+            "classification": "unknown",
+            "message": "Risposta AdE non classificata automaticamente.",
+            "url": url,
+            "title": title,
+            "raw_text_excerpt": normalized[:1000],
+        }
+
+    @staticmethod
+    def _extract_immobili_count(text: str) -> int | None:
+        match = re.search(r"Immobili\s+individuati\s*:\s*(\d+)", text, re.IGNORECASE)
+        return int(match.group(1)) if match else None
+
+    @staticmethod
+    def _extract_suppressed_date(text: str) -> str | None:
+        suppressed_index = text.upper().find("SOPPRESSO")
+        if suppressed_index < 0:
+            return None
+        window = text[max(0, suppressed_index - 120): suppressed_index + 180]
+        match = re.search(r"\b(\d{2}/\d{2}/\d{4})\b", window)
+        return match.group(1) if match else None
 
     async def capture_captcha_image(self) -> bytes:
         await self.page.wait_for_selector(self.selectors.captcha_image_selector)

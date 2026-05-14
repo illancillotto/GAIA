@@ -154,6 +154,8 @@ class CatastoVisuraRequestResponse(BaseModel):
     batch_id: UUID
     user_id: int
     row_index: int
+    purpose: str
+    target_ruolo_particella_id: UUID | None
     search_mode: str
     comune: str | None
     comune_codice: str | None

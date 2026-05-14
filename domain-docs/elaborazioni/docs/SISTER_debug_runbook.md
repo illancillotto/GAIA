@@ -259,6 +259,22 @@ Riferimenti ufficiali usati per l'integrazione:
 - `ImageToTextTask`: `https://anti-captcha.com/it/apidoc/task-types/ImageToTextTask`
 - errori API: `https://anti-captcha.com/it/apidoc/errors`
 
+## Visure storiche sintetiche per anomalie AdE
+
+Il worker supporta anche richieste `CatastoVisuraRequest` con `purpose=ade_status_scan`.
+
+Questo flusso è usato dal modulo Catasto > Anomalie per verificare su SISTER le `ruolo_particelle` non collegate a `cat_particelle` scaricando la visura storica sintetica:
+
+- usa solo `search_mode=immobile`
+- compila comune, catasto, sezione, foglio, particella e subalterno se presenti
+- imposta `request_type=STORICA` e `tipo_visura=Sintetica`
+- segue il normale flusso CAPTCHA e download PDF
+- salva il PDF in `catasto_documents` e lo collega alla richiesta e a `ruolo_particelle.ade_scan_document_id`
+- estrae dal PDF soppressioni, particelle originate/variate, particelle soppresse nella variazione e cronologia essenziale
+- salva payload strutturato, data verifica ed errore sulle colonne `ruolo_particelle.ade_scan_*`
+
+Il caso `SOPPRESSO` viene determinato dal contenuto della visura storica, non dalla sola pagina `Elenco immobili`, perché la pagina AdE non contiene la catena completa di frazionamento/accorpamento.
+
 ## Informazioni da tracciare sempre
 
 Quando si aggiungono nuovi automatismi sul portale, mantenere sempre questi punti:

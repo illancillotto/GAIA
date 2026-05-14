@@ -28,6 +28,7 @@ class VisuraFlowResult:
     captcha_method: str | None = None
     last_ocr_text: str | None = None
     error_message: str | None = None
+    ade_status_payload: dict | None = None
 
 
 async def execute_visura_flow(
@@ -42,6 +43,14 @@ async def execute_visura_flow(
     update_operation: Callable[[str], None] | None = None,
 ) -> VisuraFlowResult:
     search_mode = str(getattr(request, "search_mode", "immobile") or "immobile").strip().lower()
+    purpose = str(getattr(request, "purpose", "visura_pdf") or "visura_pdf").strip().lower()
+    if purpose == "ade_status_scan":
+        if search_mode != "immobile":
+            return VisuraFlowResult(
+                status="failed",
+                error_message="La scansione storica AdE supporta solo ricerche per immobile.",
+            )
+
     if search_mode == "soggetto":
         if update_operation is not None:
             update_operation("Apertura form visura per soggetto")

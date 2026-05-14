@@ -96,7 +96,7 @@ CREATE INDEX idx_cat_distretti_geom ON cat_distretti USING GIST (geometry);
 
 I batch shapefile delle particelle non devono più eseguire `ST_Union` per popolare `cat_distretti`: il ricalcolo dei confini avviene solo tramite import shapefile distretti dedicato (`/catasto/import/distretti/*`), che aggiorna `cat_distretti` e scrive una nuova versione geometrica corrente.
 
-Per Martin è stata aggiunta una migration dedicata che crea la view `cat_particelle_current`, filtrata su `is_current = TRUE` e arricchita con `ha_anomalie`. La view evita di pubblicare nei tiles lo storico particelle non corrente.
+Per Martin è stata aggiunta una migration dedicata che crea la view `cat_particelle_current`, filtrata su `is_current = TRUE`. I flag usati dai layer GIS (`ha_ruolo`, `ha_anomalie`) non vengono ricalcolati dentro la view a ogni tile: sono mantenuti nella cache `cat_particelle_gis_flags`, aggiornata da funzioni/trigger DB su `ruolo_particelle`, `cat_anomalie`, `cat_utenze_irrigue` e `cat_particelle`. La view evita di pubblicare nei tiles lo storico particelle non corrente e fa solo una join per chiave primaria verso la cache.
 
 L'unica verifica da fare è che PostGIS sia abilitato con `ST_Transform` disponibile (richiede PROJ). Questo è garantito dall'immagine Docker `postgis/postgis` già usata in GAIA.
 
@@ -408,7 +408,7 @@ Responsabilità:
 - Gestisce click su distretto → emette evento verso SelectionPanel
 - Mantiene un layer hitbox particelle sempre visibile e quasi trasparente, separato da fill/bordi, per consentire il click anche quando il layer particelle e disattivato.
 - Riceve geometria disegnata da DrawingTools → chiama `POST /catasto/gis/select`
-- Evidenzia le particelle a ruolo direttamente nel fill MVT usando la property booleana `ha_ruolo` esposta dalla view `cat_particelle_current`; la property viene calcolata via `catasto_parcels` su codice catastale comune/foglio/particella/subalterno, non tramite UUID diretto tra `ruolo_particelle` e `cat_particelle`
+- Evidenzia le particelle a ruolo direttamente nel fill MVT usando la property booleana `ha_ruolo` esposta dalla view `cat_particelle_current`; la property deriva dalla cache `cat_particelle_gis_flags` e usa `ruolo_particelle.cat_particella_id` come collegamento canonico verso `cat_particelle`, evitando fallback dinamici per tile.
 - Filtra rapidamente i layer particelle su `Tutte` e `A ruolo`, combinando `ha_ruolo` e l'eventuale filtro distretto anche sull'hitbox di click; le particelle a ruolo con anomalie restano evidenziate dal colore rosso.
 - Quando un filtro rapido particelle viene attivato sotto il livello minimo dei tile particelle, la mappa porta automaticamente lo zoom a 13 per rendere visibili i risultati.
 - Permette di cambiare sfondo tra OpenStreetMap, imagery satellite raster e Google Map Tiles API; Google resta disabilitato finche non e disponibile `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`

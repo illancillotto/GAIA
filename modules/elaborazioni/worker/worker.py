@@ -49,6 +49,8 @@ from app.services.elaborazioni_capacitas_terreni import (
     expire_stale_terreni_sync_jobs,
     prepare_terreni_sync_jobs_for_recovery,
 )
+from app.modules.catasto.services.ade_status_scan import ADE_SCAN_PURPOSE, persist_ade_status_scan_result
+from app.modules.catasto.services.ade_historical_visura_parser import parse_historical_visura_pdf
 from anti_captcha_client import AntiCaptchaClient
 from browser_session import BrowserSession, BrowserSessionConfig
 from captcha_solver import CaptchaSolver
@@ -419,6 +421,16 @@ class CatastoWorker:
                     CatastoVisuraRequestStatus.PROCESSING.value,
                     CatastoVisuraRequestStatus.AWAITING_CAPTCHA.value,
                 }:
+                    if request.purpose == ADE_SCAN_PURPOSE and request.target_ruolo_particella_id is not None:
+                        persist_ade_status_scan_result(
+                            db,
+                            ruolo_particella_id=request.target_ruolo_particella_id,
+                            request_id=request.id,
+                            status="failed",
+                            classification="blocked",
+                            payload={"classification": "blocked", "message": user_message},
+                            error=user_message,
+                        )
                     request.status = CatastoVisuraRequestStatus.FAILED.value
                     request.current_operation = "Failed before visura execution"
                     request.error_message = user_message
@@ -617,28 +629,51 @@ class CatastoWorker:
 
             terminal_status = classify_terminal_status(result.status)
 
-            if terminal_status == "completed" and result.file_path is not None and result.file_size is not None:
-                document = CatastoDocument(
-                    user_id=request.user_id,
-                    request_id=request.id,
-                    search_mode=request.search_mode,
-                    comune=request.comune,
-                    foglio=request.foglio,
-                    particella=request.particella,
-                    subalterno=request.subalterno,
-                    catasto=request.catasto,
-                    tipo_visura=request.tipo_visura,
-                    subject_kind=request.subject_kind,
-                    subject_id=request.subject_id,
-                    request_type=request.request_type,
-                    intestazione=request.intestazione,
-                    filename=result.file_path.name,
-                    filepath=str(result.file_path),
-                    file_size=result.file_size,
-                    codice_fiscale=codice_fiscale,
+            if request.purpose == ADE_SCAN_PURPOSE:
+                document: CatastoDocument | None = None
+                payload = result.ade_status_payload
+                classification = None
+                if terminal_status == "completed" and result.file_path is not None and result.file_size is not None:
+                    document = self._create_document(db, request, codice_fiscale, result.file_path, result.file_size)
+                    request.document_id = document.id
+                    try:
+                        payload = parse_historical_visura_pdf(result.file_path)
+                        payload["document_id"] = str(document.id)
+                        payload["document_path"] = str(result.file_path)
+                    except Exception as exc:
+                        logger.exception("Parsing visura storica AdE fallito per richiesta %s", request.id)
+                        payload = {
+                            "source": "ade_historical_synthetic_pdf",
+                            "classification": "parse_failed",
+                            "document_id": str(document.id),
+                            "document_path": str(result.file_path),
+                            "error": str(exc),
+                        }
+                    classification = str(payload.get("classification") or "unknown") if isinstance(payload, dict) else "unknown"
+                elif isinstance(payload, dict):
+                    classification = str(payload.get("classification") or "unknown")
+                if request.target_ruolo_particella_id is not None:
+                    persist_ade_status_scan_result(
+                        db,
+                        ruolo_particella_id=request.target_ruolo_particella_id,
+                        request_id=request.id,
+                        status=terminal_status,
+                        classification=classification,
+                        document_id=document.id if document is not None else None,
+                        payload=payload,
+                        error=result.error_message,
+                    )
+                request.status = (
+                    CatastoVisuraRequestStatus.COMPLETED.value
+                    if terminal_status in {"completed", "not_found"}
+                    else CatastoVisuraRequestStatus.FAILED.value
                 )
-                db.add(document)
-                db.flush()
+                request.current_operation = "Visura storica AdE acquisita" if request.status == "completed" else "Visura storica AdE fallita"
+                request.error_message = result.error_message
+                request.processed_at = datetime.now(timezone.utc)
+                batch.current_operation = f"Visura storica AdE riga {request.row_index}: {classification or terminal_status}"
+            elif terminal_status == "completed" and result.file_path is not None and result.file_size is not None:
+                document = self._create_document(db, request, codice_fiscale, result.file_path, result.file_size)
                 request.document_id = document.id
                 request.status = CatastoVisuraRequestStatus.COMPLETED.value
                 request.current_operation = "PDF scaricato"
@@ -674,6 +709,37 @@ class CatastoWorker:
             batch_id,
             result.status,
         )
+
+    def _create_document(
+        self,
+        db: Session,
+        request: CatastoVisuraRequest,
+        codice_fiscale: str,
+        file_path: Path,
+        file_size: int,
+    ) -> CatastoDocument:
+        document = CatastoDocument(
+            user_id=request.user_id,
+            request_id=request.id,
+            search_mode=request.search_mode,
+            comune=request.comune,
+            foglio=request.foglio,
+            particella=request.particella,
+            subalterno=request.subalterno,
+            catasto=request.catasto,
+            tipo_visura=request.tipo_visura,
+            subject_kind=request.subject_kind,
+            subject_id=request.subject_id,
+            request_type=request.request_type,
+            intestazione=request.intestazione,
+            filename=file_path.name,
+            filepath=str(file_path),
+            file_size=file_size,
+            codice_fiscale=codice_fiscale,
+        )
+        db.add(document)
+        db.flush()
+        return document
 
     def _finalize_batch(self, batch_id) -> None:
         with SessionLocal() as db:

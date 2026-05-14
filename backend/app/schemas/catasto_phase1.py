@@ -82,6 +82,50 @@ class CatAnomaliaSummaryResponse(BaseModel):
     buckets: list[CatAnomaliaSummaryBucketResponse]
 
 
+class CatAdeStatusScanBucketResponse(BaseModel):
+    status: str
+    classification: str
+    count: int
+
+
+class CatAdeStatusScanSummaryResponse(BaseModel):
+    total_unmatched: int
+    pending: int
+    last_checked_at: datetime | None
+    buckets: list[CatAdeStatusScanBucketResponse]
+
+
+class CatAdeStatusScanCandidateResponse(BaseModel):
+    ruolo_particella_id: UUID
+    anno_tributario: int
+    comune_nome: str
+    comune_codice: str | None
+    sezione: str | None
+    foglio: str
+    particella: str
+    subalterno: str | None
+    match_reason: str | None
+    ade_scan_status: str | None
+    ade_scan_classification: str | None
+    ade_scan_checked_at: datetime | None
+    ade_scan_document_id: UUID | None
+
+
+class CatAdeStatusScanCandidateListResponse(BaseModel):
+    items: list[CatAdeStatusScanCandidateResponse]
+    total: int
+
+
+class CatAdeStatusScanRunInput(BaseModel):
+    limit: int = 50
+
+
+class CatAdeStatusScanRunResponse(BaseModel):
+    batch_id: UUID | None
+    created: int
+    skipped: int
+
+
 class CatAnomaliaCfWizardItemResponse(BaseModel):
     anomalia_id: UUID
     utenza_id: UUID | None

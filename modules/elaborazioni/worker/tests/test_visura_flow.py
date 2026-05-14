@@ -120,3 +120,44 @@ def test_visura_flow_marks_subject_not_found_as_terminal() -> None:
     assert result.status == "not_found"
     assert "Nessuna corrispondenza" in (result.error_message or "")
     assert "Ricerca soggetto" in operations
+
+
+def test_visura_flow_status_scan_downloads_historical_pdf() -> None:
+    class ScanRequest(FakeRequest):
+        purpose = "ade_status_scan"
+        search_mode = "immobile"
+        request_type = "STORICA"
+        tipo_visura = "Sintetica"
+
+    class StatusBrowser(FakeBrowser):
+        pass
+
+    browser = StatusBrowser()
+    operations: list[str] = []
+
+    async def fake_external_solver(_image_bytes: bytes) -> str | None:
+        return "AB12"
+
+    async def fake_manual_solver(_image_path: Path) -> ManualCaptchaDecision:
+        raise AssertionError("Manual CAPTCHA should not be requested")
+
+    with TemporaryDirectory() as tmp_dir:
+        result = asyncio.run(
+            execute_visura_flow(
+                browser=browser,
+                request=ScanRequest(),
+                document_path=Path(tmp_dir) / "visura.pdf",
+                captcha_dir=Path(tmp_dir) / "captcha",
+                captcha_solver=FakeCaptchaSolver(),
+                max_ocr_attempts=1,
+                get_manual_captcha_decision=fake_manual_solver,
+                solve_external_captcha=fake_external_solver,
+                update_operation=operations.append,
+            )
+        )
+
+    assert result.status == "completed"
+    assert result.file_path is not None
+    assert result.file_size is not None
+    assert "Download PDF in corso" in operations
+    assert browser.submit_attempts == ["AB12"]

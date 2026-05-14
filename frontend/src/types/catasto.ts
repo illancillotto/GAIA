@@ -73,6 +73,46 @@ export type CatAnomaliaSummary = {
   buckets: CatAnomaliaSummaryBucket[];
 };
 
+export type CatAdeStatusScanBucket = {
+  status: string;
+  classification: string;
+  count: number;
+};
+
+export type CatAdeStatusScanSummary = {
+  total_unmatched: number;
+  pending: number;
+  last_checked_at: string | null;
+  buckets: CatAdeStatusScanBucket[];
+};
+
+export type CatAdeStatusScanCandidate = {
+  ruolo_particella_id: UUID;
+  anno_tributario: number;
+  comune_nome: string;
+  comune_codice: string | null;
+  sezione: string | null;
+  foglio: string;
+  particella: string;
+  subalterno: string | null;
+  match_reason: string | null;
+  ade_scan_status: string | null;
+  ade_scan_classification: string | null;
+  ade_scan_checked_at: string | null;
+  ade_scan_document_id: string | null;
+};
+
+export type CatAdeStatusScanCandidateListResponse = {
+  items: CatAdeStatusScanCandidate[];
+  total: number;
+};
+
+export type CatAdeStatusScanRunResponse = {
+  batch_id: UUID | null;
+  created: number;
+  skipped: number;
+};
+
 export type CatAnomaliaCfWizardItem = {
   anomalia_id: UUID;
   utenza_id: UUID | null;

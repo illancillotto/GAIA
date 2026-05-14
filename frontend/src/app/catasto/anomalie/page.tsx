@@ -16,17 +16,22 @@ import {
   catastoApplyComuneWizard,
   catastoApplyCfWizard,
   catastoApplyParticellaWizard,
+  catastoGetAdeStatusScanCandidates,
+  catastoGetAdeStatusScanSummary,
   catastoGetAnomalieSummary,
   catastoGetComuneWizardItems,
   catastoGetCfWizardItems,
   catastoGetParticellaWizardItems,
   catastoListAnomalie,
+  catastoRunAdeStatusScan,
   catastoUpdateAnomalia,
 } from "@/lib/api/catasto";
 import { getStoredAccessToken } from "@/lib/auth";
 import { formatDateTime } from "@/lib/presentation";
 import type {
   CatAnomalia,
+  CatAdeStatusScanCandidate,
+  CatAdeStatusScanSummary,
   CatAnomaliaComuneWizardItem,
   CatAnomaliaCfWizardItem,
   CatAnomaliaParticellaWizardItem,
@@ -133,6 +138,11 @@ export default function CatastoAnomaliePage() {
   const [particellaDrafts, setParticellaDrafts] = useState<ParticellaDraftState>({});
   const [particellaFilterMode, setParticellaFilterMode] = useState<ParticellaFilterMode>("all");
   const [particellaBatchNote, setParticellaBatchNote] = useState("Collegamento particella batch da console anomalie");
+  const [adeScanSummary, setAdeScanSummary] = useState<CatAdeStatusScanSummary | null>(null);
+  const [adeScanCandidates, setAdeScanCandidates] = useState<CatAdeStatusScanCandidate[]>([]);
+  const [adeScanBusy, setAdeScanBusy] = useState(false);
+  const [adeScanMessage, setAdeScanMessage] = useState<string | null>(null);
+  const [adeScanError, setAdeScanError] = useState<string | null>(null);
 
   const loadOverview = useCallback(async (): Promise<void> => {
     const token = getStoredAccessToken();
@@ -282,6 +292,28 @@ export default function CatastoAnomaliePage() {
     }
   }, [filters.anno, filters.distretto, wizardMode]);
 
+  const loadAdeScan = useCallback(async (): Promise<void> => {
+    const token = getStoredAccessToken();
+    if (!token) {
+      return;
+    }
+
+    setAdeScanBusy(true);
+    try {
+      const [summaryData, candidateData] = await Promise.all([
+        catastoGetAdeStatusScanSummary(token),
+        catastoGetAdeStatusScanCandidates(token, { limit: 8 }),
+      ]);
+      setAdeScanSummary(summaryData);
+      setAdeScanCandidates(candidateData.items);
+      setAdeScanError(null);
+    } catch (loadError) {
+      setAdeScanError(loadError instanceof Error ? loadError.message : "Errore caricamento scansione AdE");
+    } finally {
+      setAdeScanBusy(false);
+    }
+  }, []);
+
   useEffect(() => {
     void loadOverview();
   }, [loadOverview]);
@@ -297,6 +329,10 @@ export default function CatastoAnomaliePage() {
   useEffect(() => {
     void loadParticellaWizard();
   }, [loadParticellaWizard]);
+
+  useEffect(() => {
+    void loadAdeScan();
+  }, [loadAdeScan]);
 
   const handleUpdateStatus = useCallback(async (id: string, status: string): Promise<void> => {
     const token = getStoredAccessToken();
@@ -477,6 +513,30 @@ export default function CatastoAnomaliePage() {
       setParticellaError(applyError instanceof Error ? applyError.message : "Errore batch collegamento particelle");
     } finally {
       setApplyingParticellaAnomaliaId(null);
+    }
+  }
+
+  async function handleRunAdeScan(limit: number): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) {
+      return;
+    }
+
+    setAdeScanBusy(true);
+    setAdeScanError(null);
+    setAdeScanMessage(null);
+    try {
+      const response = await catastoRunAdeStatusScan(token, { limit });
+      setAdeScanMessage(
+        response.created > 0
+          ? `Batch scansione AdE creato: ${response.created} richieste in coda${response.skipped ? `, ${response.skipped} saltate` : ""}.`
+          : "Nessuna nuova particella da mettere in coda.",
+      );
+      await loadAdeScan();
+    } catch (runError) {
+      setAdeScanError(runError instanceof Error ? runError.message : "Errore avvio scansione AdE");
+    } finally {
+      setAdeScanBusy(false);
     }
   }
 
@@ -802,6 +862,86 @@ export default function CatastoAnomaliePage() {
                 </div>
               </div>
             ))}
+          </div>
+        </article>
+
+        <article className="panel-card border-emerald-100 bg-gradient-to-br from-white via-[#f7fbf7] to-[#eef8f2]">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+            <div>
+              <p className="section-title">Scansione AdE particelle non collegate</p>
+              <p className="section-copy mt-1">
+                Scarica tramite SISTER/Visure la visura storica sintetica delle `ruolo_particelle` non collegate a `cat_particelle`, archivia il PDF e salva catena di soppressione, frazionamento, origine/variazione e data scansione.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <button className="btn-secondary" type="button" disabled={adeScanBusy} onClick={() => void loadAdeScan()}>
+                Aggiorna
+              </button>
+              <button className="btn-primary" type="button" disabled={adeScanBusy} onClick={() => void handleRunAdeScan(50)}>
+                {adeScanBusy ? "Preparazione..." : "Scarica 50 visure storiche"}
+              </button>
+            </div>
+          </div>
+
+          {adeScanError ? (
+            <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{adeScanError}</div>
+          ) : null}
+          {adeScanMessage ? (
+            <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{adeScanMessage}</div>
+          ) : null}
+
+          <div className="mt-5 grid gap-4 md:grid-cols-3">
+            <div className="rounded-2xl border border-white bg-white/80 p-4 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Non collegate</p>
+              <p className="mt-2 text-3xl font-semibold text-[#1D4E35]">{adeScanSummary?.total_unmatched ?? "—"}</p>
+            </div>
+            <div className="rounded-2xl border border-white bg-white/80 p-4 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">In coda SISTER</p>
+              <p className="mt-2 text-3xl font-semibold text-[#1D4E35]">{adeScanSummary?.pending ?? "—"}</p>
+            </div>
+            <div className="rounded-2xl border border-white bg-white/80 p-4 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Ultima scansione</p>
+              <p className="mt-2 text-sm font-semibold text-gray-900">
+                {adeScanSummary?.last_checked_at ? formatDateTime(adeScanSummary.last_checked_at) : "Mai eseguita"}
+              </p>
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-4 xl:grid-cols-2">
+            <div className="rounded-2xl border border-white bg-white/80 p-4 shadow-sm">
+              <p className="text-sm font-semibold text-gray-900">Esiti scansione</p>
+              <div className="mt-3 space-y-2">
+                {(adeScanSummary?.buckets ?? []).slice(0, 6).map((bucket) => (
+                  <div key={`${bucket.status}-${bucket.classification}`} className="flex items-center justify-between rounded-xl bg-gray-50 px-3 py-2 text-sm">
+                    <span className="font-medium text-gray-700">{bucket.status} / {bucket.classification}</span>
+                    <span className="font-semibold text-[#1D4E35]">{bucket.count}</span>
+                  </div>
+                ))}
+                {adeScanSummary && adeScanSummary.buckets.length === 0 ? (
+                  <p className="text-sm text-gray-500">Nessun esito AdE salvato.</p>
+                ) : null}
+              </div>
+            </div>
+            <div className="rounded-2xl border border-white bg-white/80 p-4 shadow-sm">
+              <p className="text-sm font-semibold text-gray-900">Prime righe candidate</p>
+              <div className="mt-3 space-y-2">
+                {adeScanCandidates.map((item) => (
+                  <div key={item.ruolo_particella_id} className="rounded-xl bg-gray-50 px-3 py-2 text-sm text-gray-600">
+                    <p className="font-medium text-gray-900">
+                      {item.comune_nome} {item.sezione ? `sez. ${item.sezione} ` : ""}Fg. {item.foglio} Part. {item.particella}
+                      {item.subalterno ? ` Sub. ${item.subalterno}` : ""}
+                    </p>
+                    <p className="mt-1">
+                      Motivo: {item.match_reason || "—"} · Stato AdE: {item.ade_scan_status || "non scansionata"}
+                      {item.ade_scan_document_id ? " · PDF acquisito" : ""}
+                    </p>
+                  </div>
+                ))}
+                {adeScanCandidates.length === 0 ? (
+                  <p className="text-sm text-gray-500">Nessuna candidata immediatamente disponibile.</p>
+                ) : null}
+              </div>
+            </div>
           </div>
         </article>
 

@@ -196,6 +196,21 @@ class CatParticella(Base):
         return self.num_distretto == "FD"
 
 
+class CatParticellaGisFlag(Base):
+    __tablename__ = "cat_particelle_gis_flags"
+
+    particella_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("cat_particelle.id", ondelete="CASCADE"), primary_key=True
+    )
+    ha_ruolo: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    ha_anomalie: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    ruolo_anno_latest: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    anomalie_aperte_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
 class CatAdeParticella(Base):
     __tablename__ = "cat_ade_particelle"
     __table_args__ = (
@@ -705,6 +720,7 @@ __all__ = [
     "CatImportBatch",
     "CatIntestatario",
     "CatParticella",
+    "CatParticellaGisFlag",
     "CatParticellaHistory",
     "CatSchemaContributo",
     "CatUtenzaIntestatario",

@@ -2,6 +2,9 @@ import { createQueryString, request, requestBlob, requestFormDataWithUploadProgr
 import type {
   CatAnomaliaListResponse,
   CatAnomalia,
+  CatAdeStatusScanCandidateListResponse,
+  CatAdeStatusScanRunResponse,
+  CatAdeStatusScanSummary,
   CatAnagraficaBulkSearchRequest,
   CatAnagraficaBulkSearchResponse,
   CatAnagraficaBulkJobDetail,
@@ -38,6 +41,7 @@ import type {
   AdeAlignmentReportResponse,
   AdeWfsSyncBboxRequest,
   AdeWfsSyncBboxResponse,
+  AdeWfsRunStatusResponse,
   GisFilters,
   GisParticellaRef,
   GisResolveRefsResponse,
@@ -79,6 +83,26 @@ export async function catastoGisSyncAdeWfsBbox(
     method: "POST",
     headers: { ...authHeaders(token), "Content-Type": "application/json" },
     body: JSON.stringify(payload),
+  });
+}
+
+export async function catastoGisSyncAdeWfsBboxAsync(
+  token: string,
+  payload: AdeWfsSyncBboxRequest,
+): Promise<AdeWfsSyncBboxResponse> {
+  return request<AdeWfsSyncBboxResponse>("/catasto/gis/ade-wfs/sync-bbox-async", {
+    method: "POST",
+    headers: { ...authHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function catastoGisGetAdeWfsRunStatus(
+  token: string,
+  runId: string,
+): Promise<AdeWfsRunStatusResponse> {
+  return request<AdeWfsRunStatusResponse>(`/catasto/gis/ade-wfs/runs/${runId}`, {
+    headers: authHeaders(token),
   });
 }
 
@@ -502,6 +526,35 @@ export async function catastoGetAnomalieSummary(
 
   return request<CatAnomaliaSummary>(`/catasto/anomalie/summary${suffix}`, {
     headers: authHeaders(token),
+  });
+}
+
+export async function catastoGetAdeStatusScanSummary(token: string): Promise<CatAdeStatusScanSummary> {
+  return request<CatAdeStatusScanSummary>("/catasto/anomalie/ade-scan/summary", {
+    headers: authHeaders(token),
+  });
+}
+
+export async function catastoGetAdeStatusScanCandidates(
+  token: string,
+  params?: { limit?: number },
+): Promise<CatAdeStatusScanCandidateListResponse> {
+  const query = new URLSearchParams();
+  if (params?.limit != null) query.set("limit", String(params.limit));
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<CatAdeStatusScanCandidateListResponse>(`/catasto/anomalie/ade-scan/candidates${suffix}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function catastoRunAdeStatusScan(
+  token: string,
+  payload: { limit: number },
+): Promise<CatAdeStatusScanRunResponse> {
+  return request<CatAdeStatusScanRunResponse>("/catasto/anomalie/ade-scan/run", {
+    method: "POST",
+    headers: { ...authHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
   });
 }
 
