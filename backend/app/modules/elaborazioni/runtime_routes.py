@@ -93,8 +93,9 @@ def get_utenze_anpr_summary(
     _: Annotated[ApplicationUser, Depends(require_active_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> ElaborazioneAnprSummaryResponse:
-    config = db.get(AnprSyncConfig, 1) or AnprSyncConfig(id=1)
-    effective_daily_limit = min(config.max_calls_per_day, settings.anpr_daily_call_hard_limit)
+    config = db.get(AnprSyncConfig, 1)
+    configured_daily_limit = config.max_calls_per_day if config is not None else settings.anpr_daily_call_hard_limit
+    effective_daily_limit = min(configured_daily_limit, settings.anpr_daily_call_hard_limit)
     local_today = datetime.now(ZoneInfo(settings.anpr_job_timezone)).date()
     latest_run = db.execute(select(AnprJobRun).order_by(AnprJobRun.started_at.desc()).limit(1)).scalar_one_or_none()
     calls_today = db.execute(
@@ -104,12 +105,29 @@ def get_utenze_anpr_summary(
 
     return ElaborazioneAnprSummaryResponse(
         calls_today=int(calls_today or 0),
-        configured_daily_limit=config.max_calls_per_day,
+        configured_daily_limit=configured_daily_limit,
         hard_daily_limit=settings.anpr_daily_call_hard_limit,
         effective_daily_limit=effective_daily_limit,
         batch_size=settings.anpr_job_batch_size,
         ruolo_year=latest_run.ruolo_year if latest_run is not None else settings.anpr_job_ruolo_year,
-        recent_runs=[ElaborazioneAnprRunItemResponse.model_validate(item, from_attributes=True) for item in recent_runs],
+        recent_runs=[
+            ElaborazioneAnprRunItemResponse(
+                id=str(item.id),
+                run_date=item.run_date,
+                ruolo_year=item.ruolo_year,
+                status=item.status,
+                daily_calls_before=item.daily_calls_before,
+                daily_calls_after=item.daily_calls_after,
+                subjects_selected=item.subjects_selected,
+                subjects_processed=item.subjects_processed,
+                deceased_found=item.deceased_found,
+                errors=item.errors,
+                calls_used=item.calls_used,
+                started_at=item.started_at,
+                completed_at=item.completed_at,
+            )
+            for item in recent_runs
+        ],
     )
 
 

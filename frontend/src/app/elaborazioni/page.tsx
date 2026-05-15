@@ -55,6 +55,12 @@ const QUICK_ACTIONS = [
     icon: SearchIcon,
   },
   {
+    href: "/elaborazioni/anpr",
+    title: "ANPR batch",
+    description: "Storico run e consumo chiamate giornaliere ANPR.",
+    icon: UsersIcon,
+  },
+  {
     href: "/elaborazioni/capacitas",
     title: "Pool operativo dedicato",
     description: "Capacitas e monitor del pool account operativo.",
@@ -248,12 +254,21 @@ export default function ElaborazioniPage() {
               : "Workspace unico per visure singole e import batch.",
           };
         }
+        if (action.title === "ANPR batch") {
+          return {
+            ...action,
+            description: anprSummary
+              ? `${anprSummary.calls_today}/${anprSummary.effective_daily_limit} chiamate oggi · ultimo stato ${anprSummary.recent_runs[0]?.status ?? "n/d"}`
+              : "Storico run e consumo chiamate giornaliere ANPR.",
+          };
+        }
         return action;
       }),
     [
       activeCapacitasCredentials.length,
       activeSisterCredentials.length,
       bonificaSyncStatus,
+      anprSummary,
       capacitasCredentials.length,
       capacitasWarningCount,
       credentialStatus,

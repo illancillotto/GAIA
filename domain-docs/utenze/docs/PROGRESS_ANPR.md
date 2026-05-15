@@ -40,6 +40,7 @@
 - introdotta finestra oraria locale `ANPR_JOB_START_HOUR` / `ANPR_JOB_END_HOUR` e batch size `ANPR_JOB_BATCH_SIZE`; il cron di default è ora `0 8-17 * * *` nel timezone `ANPR_JOB_TIMEZONE`
 - aggiunta tabella `anpr_job_runs` per tracciare ogni esecuzione batch giorno per giorno con budget prima/dopo, soggetti selezionati/processati, errori e deceduti rilevati
 - esteso endpoint `GET /utenze/stats` e dashboard `frontend/src/app/utenze/page.tsx` con i KPI `deceased_updates_last_24h`, `deceased_updates_current_month`, `deceased_updates_current_year`
+- aggiunto monitor dedicato nel modulo `elaborazioni`: endpoint `GET /elaborazioni/utenze-anpr/summary`, route frontend `/elaborazioni/anpr` e collegamento da dashboard/sidebar per consultare consumo chiamate e storico `anpr_job_runs`
 
 ## Verifiche Eseguite
 

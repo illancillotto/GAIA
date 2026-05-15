@@ -1,5 +1,5 @@
 from collections.abc import Generator
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from io import BytesIO
 import zipfile
 
@@ -16,6 +16,7 @@ from app.core.security import hash_password
 from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
+from app.modules.utenze.anpr.models import AnprJobRun, AnprSyncConfig
 from app.models.catasto import (
     CatastoBatch,
     CatastoConnectionTest,
@@ -218,6 +219,115 @@ def create_completed_connection_test() -> str:
         return str(connection_test.id)
     finally:
         db.close()
+
+
+def test_elaborazioni_anpr_summary_returns_defaults_when_no_runs(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("app.modules.elaborazioni.runtime_routes.settings.anpr_daily_call_hard_limit", 90)
+    monkeypatch.setattr("app.modules.elaborazioni.runtime_routes.settings.anpr_job_batch_size", 10)
+    monkeypatch.setattr("app.modules.elaborazioni.runtime_routes.settings.anpr_job_ruolo_year", None)
+
+    response = client.get("/elaborazioni/utenze-anpr/summary", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["calls_today"] == 0
+    assert payload["configured_daily_limit"] == 90
+    assert payload["hard_daily_limit"] == 90
+    assert payload["effective_daily_limit"] == 90
+    assert payload["batch_size"] == 10
+    assert payload["ruolo_year"] is None
+    assert payload["recent_runs"] == []
+
+
+def test_elaborazioni_anpr_summary_returns_recent_runs(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("app.modules.elaborazioni.runtime_routes.settings.anpr_daily_call_hard_limit", 90)
+    monkeypatch.setattr("app.modules.elaborazioni.runtime_routes.settings.anpr_job_batch_size", 10)
+    monkeypatch.setattr("app.modules.elaborazioni.runtime_routes.settings.anpr_job_ruolo_year", None)
+    monkeypatch.setattr("app.modules.elaborazioni.runtime_routes.settings.anpr_job_timezone", "Europe/Rome")
+
+    db = TestingSessionLocal()
+    try:
+        db.add(
+            AnprSyncConfig(
+                id=1,
+                max_calls_per_day=70,
+                job_enabled=True,
+                job_cron="0 8-17 * * *",
+                lookback_years=1,
+                retry_not_found_days=90,
+            )
+        )
+        db.add_all(
+            [
+                AnprJobRun(
+                    run_date=date(2026, 5, 15),
+                    ruolo_year=2025,
+                    triggered_by="job",
+                    status="limit_reached",
+                    batch_size=10,
+                    hard_daily_limit=90,
+                    configured_daily_limit=70,
+                    daily_calls_before=70,
+                    daily_calls_after=70,
+                    subjects_selected=0,
+                    subjects_processed=0,
+                    deceased_found=0,
+                    errors=0,
+                    calls_used=0,
+                    notes="daily limit reached",
+                    payload_json=None,
+                    started_at=datetime(2026, 5, 15, 10, 35, tzinfo=UTC),
+                    completed_at=datetime(2026, 5, 15, 10, 35, tzinfo=UTC),
+                ),
+                AnprJobRun(
+                    run_date=date(2026, 5, 15),
+                    ruolo_year=2025,
+                    triggered_by="job",
+                    status="completed",
+                    batch_size=10,
+                    hard_daily_limit=90,
+                    configured_daily_limit=70,
+                    daily_calls_before=60,
+                    daily_calls_after=70,
+                    subjects_selected=10,
+                    subjects_processed=10,
+                    deceased_found=2,
+                    errors=1,
+                    calls_used=10,
+                    notes="job completed",
+                    payload_json=None,
+                    started_at=datetime(2026, 5, 15, 8, 0, tzinfo=UTC),
+                    completed_at=datetime(2026, 5, 15, 8, 20, tzinfo=UTC),
+                ),
+            ]
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            current = datetime(2026, 5, 15, 12, 0, tzinfo=UTC)
+            return current if tz is None else current.astimezone(tz)
+
+    monkeypatch.setattr("app.modules.elaborazioni.runtime_routes.datetime", FrozenDateTime)
+
+    response = client.get("/elaborazioni/utenze-anpr/summary", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["calls_today"] == 10
+    assert payload["configured_daily_limit"] == 70
+    assert payload["hard_daily_limit"] == 90
+    assert payload["effective_daily_limit"] == 70
+    assert payload["batch_size"] == 10
+    assert payload["ruolo_year"] == 2025
+    assert len(payload["recent_runs"]) == 2
+    assert payload["recent_runs"][0]["status"] == "limit_reached"
+    assert payload["recent_runs"][0]["daily_calls_before"] == 70
+    assert payload["recent_runs"][1]["calls_used"] == 10
+    assert payload["recent_runs"][1]["deceased_found"] == 2
 
 
 def test_credentials_are_encrypted_and_hidden_from_api() -> None:

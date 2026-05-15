@@ -229,6 +229,7 @@ Regola runtime per job monitorabili:
 - lo stesso criterio e applicato al layer UI con namespace dedicato `frontend/src/components/elaborazioni/*`
 - il dettaglio batch runtime, i componenti UI di base e i workspace operativi principali sono ora implementati direttamente sotto `elaborazioni`
 - il dominio `utenze` usa anche un job schedulato ANPR con stato persistito su DB (`anpr_job_runs`, `anpr_check_log`): la coda e filtrata sui soli soggetti `a ruolo` dell'anno operativo, con hard cap giornaliero da `.env` e KPI sintetici esposti nella dashboard utenze
+- il monitor operativo di questo job vive anche nel modulo `elaborazioni` tramite route dedicata frontend `/elaborazioni/anpr` e summary backend `/elaborazioni/utenze-anpr/summary`, cosi il tracciamento esecutivo resta nel workspace dei job
 - il backend non espone piu alias runtime sotto `/catasto`; le route operative canoniche sono solo sotto `/elaborazioni`
 - gli helper tecnici condivisi tra dominio `catasto` e runtime `elaborazioni` sono stati spostati in `backend/app/modules/shared/` per evitare dipendenze inverse sul dominio
 - per la sync WhiteCompany, il rilancio di una singola entity date-aware riusa il range persistito nell'ultimo `wc_sync_job` se l'utente non passa un nuovo intervallo esplicito

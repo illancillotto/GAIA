@@ -9,6 +9,7 @@ import { ElaborazioneArchiveWorkspaceContent } from "@/components/elaborazioni/a
 import { ElaborazioneBatchDetailWorkspace } from "@/components/elaborazioni/batch-detail-workspace";
 import { ElaborazioniCapacitasWorkspace } from "@/components/elaborazioni/capacitas-workspace";
 import { ElaborazioniAdeAlignmentWorkspace } from "@/components/elaborazioni/ade-alignment-workspace";
+import { ElaborazioniAnprWorkspace } from "@/components/elaborazioni/anpr-workspace";
 import { ElaborazioniBonificaSyncWorkspace } from "@/components/elaborazioni/bonifica-sync-workspace";
 import { ElaborazioneRequestWorkspace } from "@/components/elaborazioni/request-workspace";
 import { ElaborazioniSettingsWorkspace } from "@/components/elaborazioni/settings-workspace";
@@ -132,6 +133,10 @@ function NativeWorkspaceRenderer({
 
   if (href === "/elaborazioni/bonifica") {
     return <ElaborazioniBonificaSyncWorkspace embedded />;
+  }
+
+  if (href === "/elaborazioni/anpr") {
+    return <ElaborazioniAnprWorkspace embedded />;
   }
 
   if (href === "/elaborazioni/ade-alignment") {

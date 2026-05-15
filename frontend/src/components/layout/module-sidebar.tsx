@@ -113,8 +113,10 @@ export function ModuleSidebar({
 
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Operazioni</p>
         <NavItem href="/elaborazioni/bonifica" icon={RefreshIcon} label="WhiteCompany Sync" match="prefix" />
+        <NavItem href="/elaborazioni/anpr" icon={UserIcon} label="ANPR batch" match="prefix" />
         <NavItem href="/elaborazioni/new-single" icon={SearchIcon} label="Visure" match="prefix" />
         <NavItem href="/elaborazioni/capacitas" icon={SearchIcon} label="Capacitas" match="prefix" />
+        <NavItem href="/elaborazioni/ade-alignment" icon={GridIcon} label="Allineamento AdE" match="prefix" />
 
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Configurazioni</p>
         <NavItem href="/elaborazioni/settings" icon={LockIcon} label="Credenziali" />
