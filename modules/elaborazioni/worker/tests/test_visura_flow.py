@@ -679,3 +679,193 @@ def test_llm_none_result_falls_through_to_manual() -> None:
     assert result.captcha_method == "manual"
     assert manual_called
     assert browser.submit_attempts == ["neorave"]
+
+
+# ---------------------------------------------------------------------------
+# update_operation callback
+# ---------------------------------------------------------------------------
+
+def test_update_operation_fires_during_polling() -> None:
+    """update_operation deve essere chiamata quando il flusso entra in polling."""
+    class PollingBrowser(FakeBrowser):
+        async def submit_captcha(self, text: str) -> bool:
+            raise DocumentNotYetProducedError(richieste_url="https://sister/richieste")
+
+    operations: list[str] = []
+
+    async def fake_llm(_b: bytes) -> str | None:
+        return "qualsiasi"
+
+    with TemporaryDirectory() as tmp:
+        result = run_flow(
+            browser=PollingBrowser(),
+            request=FakeRequest(),
+            document_path=Path(tmp) / "visura.pdf",
+            captcha_dir=Path(tmp) / "captcha",
+            get_manual_captcha_decision=_no_manual_async,
+            solve_llm_captcha=fake_llm,
+            update_operation=operations.append,
+        )
+
+    assert result.status == "completed"
+    assert any("ConsultazioneRichieste" in op for op in operations)
+
+
+def test_update_operation_fires_on_immobile_direct_download() -> None:
+    """update_operation('Download PDF in corso') deve essere chiamata nel branch download diretto immobile."""
+    class DownloadReadyBrowser(FakeBrowser):
+        async def prepare_captcha_or_download(self) -> str:
+            return "download"
+
+    operations: list[str] = []
+
+    with TemporaryDirectory() as tmp:
+        result = run_flow(
+            browser=DownloadReadyBrowser(),
+            request=FakeRequest(),
+            document_path=Path(tmp) / "visura.pdf",
+            captcha_dir=Path(tmp) / "captcha",
+            get_manual_captcha_decision=_no_manual_async,
+            update_operation=operations.append,
+        )
+
+    assert result.status == "completed"
+    assert any("Download PDF" in op for op in operations)
+
+
+def test_update_operation_fires_on_subject_flow() -> None:
+    """update_operation deve essere chiamata nelle fasi apertura/compilazione/ricerca soggetto."""
+    class SubjectBrowser(FakeBrowser):
+        async def open_subject_form(self, _kind: str) -> None: ...
+        async def fill_subject_form(self, _request) -> None: ...
+        async def search_subject_and_open_visura(self, _request) -> str | None:
+            return None
+
+    operations: list[str] = []
+
+    async def fake_llm(_b: bytes) -> str | None:
+        return "neorave"
+
+    browser = SubjectBrowser(correct_answer="neorave")
+
+    with TemporaryDirectory() as tmp:
+        result = run_flow(
+            browser=browser,
+            request=SubjectRequest(),
+            document_path=Path(tmp) / "visura.pdf",
+            captcha_dir=Path(tmp) / "captcha",
+            get_manual_captcha_decision=_no_manual_async,
+            solve_llm_captcha=fake_llm,
+            update_operation=operations.append,
+        )
+
+    assert result.status == "completed"
+    assert any("soggetto" in op.lower() for op in operations)
+
+
+def test_update_operation_fires_on_subject_direct_download() -> None:
+    """update_operation('Download PDF in corso') nel branch download diretto soggetto."""
+    class EarlyDownloadBrowser(FakeBrowser):
+        async def open_subject_form(self, _kind: str) -> None: ...
+        async def fill_subject_form(self, _request) -> None: ...
+        async def search_subject_and_open_visura(self, _request) -> str | None:
+            return None
+        async def prepare_captcha_or_download(self) -> str:
+            return "download"
+
+    operations: list[str] = []
+
+    with TemporaryDirectory() as tmp:
+        result = run_flow(
+            browser=EarlyDownloadBrowser(),
+            request=SubjectRequest(),
+            document_path=Path(tmp) / "visura.pdf",
+            captcha_dir=Path(tmp) / "captcha",
+            get_manual_captcha_decision=_no_manual_async,
+            update_operation=operations.append,
+        )
+
+    assert result.status == "completed"
+    assert any("Download PDF" in op for op in operations)
+
+
+def test_update_operation_fires_before_manual_captcha() -> None:
+    """update_operation('Richiesta CAPTCHA manuale') deve essere chiamata prima del manuale."""
+    operations: list[str] = []
+
+    async def manual(_p: Path) -> ManualCaptchaDecision:
+        return ManualCaptchaDecision(text="neorave")
+
+    browser = FakeBrowser(correct_answer="neorave")
+
+    with TemporaryDirectory() as tmp:
+        result = run_flow(
+            browser=browser,
+            request=FakeRequest(),
+            document_path=Path(tmp) / "visura.pdf",
+            captcha_dir=Path(tmp) / "captcha",
+            get_manual_captcha_decision=manual,
+            update_operation=operations.append,
+        )
+
+    assert result.status == "completed"
+    assert any("manuale" in op.lower() for op in operations)
+
+
+# ---------------------------------------------------------------------------
+# External solver: stringa vuota
+# ---------------------------------------------------------------------------
+
+def test_external_empty_string_falls_through_to_manual() -> None:
+    """Se external restituisce '' (stringa vuota) il flusso deve arrivare al manuale."""
+    browser = FakeBrowser(correct_answer="neorave")
+    manual_called = False
+
+    async def empty_ext(_b: bytes) -> str | None:
+        return ""
+
+    async def manual(_p: Path) -> ManualCaptchaDecision:
+        nonlocal manual_called
+        manual_called = True
+        return ManualCaptchaDecision(text="neorave")
+
+    with TemporaryDirectory() as tmp:
+        result = run_flow(
+            browser=browser,
+            request=FakeRequest(),
+            document_path=Path(tmp) / "visura.pdf",
+            captcha_dir=Path(tmp) / "captcha",
+            get_manual_captcha_decision=manual,
+            solve_llm_captcha=None,
+            solve_external_captcha=empty_ext,
+            max_external_attempts=2,
+        )
+
+    assert result.status == "completed"
+    assert result.captcha_method == "manual"
+    assert manual_called
+
+
+# ---------------------------------------------------------------------------
+# Manuale: text=None senza skip
+# ---------------------------------------------------------------------------
+
+def test_manual_null_text_without_skip_returns_failed() -> None:
+    """ManualCaptchaDecision(text=None, skip=False) deve restituire status=failed."""
+    browser = FakeBrowser()
+
+    async def manual(_p: Path) -> ManualCaptchaDecision:
+        return ManualCaptchaDecision(text=None, skip=False)
+
+    with TemporaryDirectory() as tmp:
+        result = run_flow(
+            browser=browser,
+            request=FakeRequest(),
+            document_path=Path(tmp) / "visura.pdf",
+            captcha_dir=Path(tmp) / "captcha",
+            get_manual_captcha_decision=manual,
+        )
+
+    assert result.status == "failed"
+    assert "missing" in (result.error_message or "").lower()
+    assert result.captcha_method == "manual"
