@@ -337,6 +337,98 @@ def test_no_captcha_when_sister_skips_after_inoltra() -> None:
     assert browser.submit_attempts == []
 
 
+# ---------------------------------------------------------------------------
+# Flusso soggetto (CF)
+# ---------------------------------------------------------------------------
+
+class SubjectRequest(FakeRequest):
+    search_mode = "soggetto"
+    subject_kind = "PF"
+    subject_id = "RSSMRA80A01H501U"
+    request_type = "ATTUALITA"
+
+
+def test_subject_captcha_flow_completes() -> None:
+    """Flusso soggetto: search → CAPTCHA → download."""
+    class SubjectBrowser(FakeBrowser):
+        def __init__(self) -> None:
+            super().__init__(correct_answer="neorave")
+            self.search_called = False
+
+        async def open_subject_form(self, _kind: str) -> None: ...
+        async def fill_subject_form(self, _request) -> None: ...
+        async def search_subject_and_open_visura(self, _request) -> str | None:
+            self.search_called = True
+            return None
+
+    browser = SubjectBrowser()
+
+    async def fake_llm(_b: bytes) -> str | None:
+        return "neorave"
+
+    with TemporaryDirectory() as tmp:
+        result = run_flow(
+            browser=browser,
+            request=SubjectRequest(),
+            document_path=Path(tmp) / "visura.pdf",
+            captcha_dir=Path(tmp) / "captcha",
+            get_manual_captcha_decision=_no_manual_async,
+            solve_llm_captcha=fake_llm,
+        )
+
+    assert result.status == "completed"
+    assert browser.search_called
+    assert browser.submit_attempts == ["neorave"]
+
+
+def test_subject_skips_captcha_when_download_ready() -> None:
+    """Se SISTER mostra il pulsante Salva subito dopo la ricerca soggetto, non chiede CAPTCHA."""
+    class EarlyDownloadBrowser(FakeBrowser):
+        async def open_subject_form(self, _kind: str) -> None: ...
+        async def fill_subject_form(self, _request) -> None: ...
+        async def search_subject_and_open_visura(self, _request) -> str | None:
+            return None
+        async def prepare_captcha_or_download(self) -> str:
+            return "download"
+
+    browser = EarlyDownloadBrowser()
+
+    with TemporaryDirectory() as tmp:
+        result = run_flow(
+            browser=browser,
+            request=SubjectRequest(),
+            document_path=Path(tmp) / "visura.pdf",
+            captcha_dir=Path(tmp) / "captcha",
+            get_manual_captcha_decision=_no_manual_async,
+        )
+
+    assert result.status == "completed"
+    assert browser.captcha_captures == 0
+    assert browser.submit_attempts == []
+
+
+def test_subject_not_yet_produced_goes_to_polling() -> None:
+    """DocumentNotYetProducedError da prepare_captcha_or_download nel branch soggetto."""
+    class PollingBrowser(FakeBrowser):
+        async def open_subject_form(self, _kind: str) -> None: ...
+        async def fill_subject_form(self, _request) -> None: ...
+        async def search_subject_and_open_visura(self, _request) -> str | None:
+            return None
+        async def prepare_captcha_or_download(self) -> str:
+            raise DocumentNotYetProducedError(richieste_url="https://sister/richieste")
+
+    with TemporaryDirectory() as tmp:
+        result = run_flow(
+            browser=PollingBrowser(),
+            request=SubjectRequest(),
+            document_path=Path(tmp) / "visura.pdf",
+            captcha_dir=Path(tmp) / "captcha",
+            get_manual_captcha_decision=_no_manual_async,
+        )
+        assert result.status == "completed"
+        assert Path(result.file_path).exists()
+
+
 def test_subject_not_found_returns_terminal_status() -> None:
     class SubjectRequest(FakeRequest):
         search_mode = "soggetto"
@@ -424,3 +516,166 @@ def test_external_exception_does_not_crash_flow() -> None:
         )
 
     assert result.status == "completed"
+
+
+# ---------------------------------------------------------------------------
+# DocumentNotYetProducedError / polling
+# ---------------------------------------------------------------------------
+
+def test_document_not_yet_produced_during_submit_goes_to_polling() -> None:
+    """SISTER accetta il CAPTCHA ma il documento non è ancora pronto → polling."""
+    class PollingBrowser(FakeBrowser):
+        async def submit_captcha(self, text: str) -> bool:
+            raise DocumentNotYetProducedError(richieste_url="https://sister/richieste")
+
+    browser = PollingBrowser()
+
+    async def fake_llm(_b: bytes) -> str | None:
+        return "qualsiasi"
+
+    with TemporaryDirectory() as tmp:
+        result = run_flow(
+            browser=browser,
+            request=FakeRequest(),
+            document_path=Path(tmp) / "visura.pdf",
+            captcha_dir=Path(tmp) / "captcha",
+            get_manual_captcha_decision=_no_manual_async,
+            solve_llm_captcha=fake_llm,
+        )
+        assert result.status == "completed"
+        assert Path(result.file_path).exists()
+
+
+def test_document_not_yet_produced_during_prepare_goes_to_polling() -> None:
+    """SISTER non mostra CAPTCHA ma il documento non è pronto → polling diretto."""
+    class EarlyPollingBrowser(FakeBrowser):
+        async def prepare_captcha_or_download(self) -> str:
+            raise DocumentNotYetProducedError(richieste_url="https://sister/richieste")
+
+    browser = EarlyPollingBrowser()
+
+    with TemporaryDirectory() as tmp:
+        result = run_flow(
+            browser=browser,
+            request=FakeRequest(),
+            document_path=Path(tmp) / "visura.pdf",
+            captcha_dir=Path(tmp) / "captcha",
+            get_manual_captcha_decision=_no_manual_async,
+        )
+
+    assert result.status == "completed"
+    assert browser.captcha_captures == 0
+    assert browser.submit_attempts == []
+
+
+def test_non_evadibile_during_polling_returns_correct_status() -> None:
+    """Il polling ConsultazioneRichieste rileva richiesta non evadibile."""
+    class NonEvadibileBrowser(FakeBrowser):
+        async def submit_captcha(self, text: str) -> bool:
+            raise DocumentNotYetProducedError(richieste_url="https://sister/richieste")
+
+        async def poll_richieste_for_download(self, destination: Path, richieste_url: str | None = None) -> int:
+            raise DocumentNonEvadibileError("non evadibile")
+
+    async def fake_llm(_b: bytes) -> str | None:
+        return "qualsiasi"
+
+    with TemporaryDirectory() as tmp:
+        result = run_flow(
+            browser=NonEvadibileBrowser(),
+            request=FakeRequest(),
+            document_path=Path(tmp) / "visura.pdf",
+            captcha_dir=Path(tmp) / "captcha",
+            get_manual_captcha_decision=_no_manual_async,
+            solve_llm_captcha=fake_llm,
+        )
+
+    assert result.status == "non_evadibile"
+    assert result.error_message is not None
+
+
+# ---------------------------------------------------------------------------
+# reload_captcha tra i tentativi
+# ---------------------------------------------------------------------------
+
+def test_reload_captcha_called_between_llm_attempts() -> None:
+    """reload_captcha deve essere chiamato dopo ogni tentativo fallito, non dopo l'ultimo."""
+    browser = FakeBrowser(correct_answer="neorave")
+    call_count = 0
+
+    async def fake_llm(_b: bytes) -> str | None:
+        nonlocal call_count
+        call_count += 1
+        return "neorave" if call_count == 3 else "wrong"
+
+    with TemporaryDirectory() as tmp:
+        run_flow(
+            browser=browser,
+            request=FakeRequest(),
+            document_path=Path(tmp) / "visura.pdf",
+            captcha_dir=Path(tmp) / "captcha",
+            get_manual_captcha_decision=_no_manual_async,
+            solve_llm_captcha=fake_llm,
+            max_llm_attempts=3,
+        )
+
+    # 2 tentativi falliti → 2 reload; il terzo riesce → nessun reload dopo
+    assert browser.reload_calls == 2
+
+
+def test_reload_captcha_called_between_external_attempts() -> None:
+    ext_calls = 0
+
+    async def flaky_ext(_b: bytes) -> str | None:
+        nonlocal ext_calls
+        ext_calls += 1
+        return "neorave" if ext_calls == 2 else "wrong"
+
+    browser = FakeBrowser(correct_answer="neorave")
+    with TemporaryDirectory() as tmp:
+        run_flow(
+            browser=browser,
+            request=FakeRequest(),
+            document_path=Path(tmp) / "visura.pdf",
+            captcha_dir=Path(tmp) / "captcha",
+            get_manual_captcha_decision=_no_manual_async,
+            solve_llm_captcha=None,
+            solve_external_captcha=flaky_ext,
+            max_external_attempts=3,
+        )
+
+    assert browser.reload_calls == 1
+
+
+# ---------------------------------------------------------------------------
+# LLM restituisce None / stringa vuota
+# ---------------------------------------------------------------------------
+
+def test_llm_none_result_falls_through_to_manual() -> None:
+    """Se LLM restituisce sempre None, il flusso deve arrivare al manuale."""
+    browser = FakeBrowser(correct_answer="neorave")
+    manual_called = False
+
+    async def none_llm(_b: bytes) -> str | None:
+        return None
+
+    async def manual(_p: Path) -> ManualCaptchaDecision:
+        nonlocal manual_called
+        manual_called = True
+        return ManualCaptchaDecision(text="neorave")
+
+    with TemporaryDirectory() as tmp:
+        result = run_flow(
+            browser=browser,
+            request=FakeRequest(),
+            document_path=Path(tmp) / "visura.pdf",
+            captcha_dir=Path(tmp) / "captcha",
+            get_manual_captcha_decision=manual,
+            solve_llm_captcha=none_llm,
+            max_llm_attempts=3,
+        )
+
+    assert result.status == "completed"
+    assert result.captcha_method == "manual"
+    assert manual_called
+    assert browser.submit_attempts == ["neorave"]

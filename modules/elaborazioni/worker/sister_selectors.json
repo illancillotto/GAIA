@@ -12,6 +12,8 @@
   "visure_link_name": "Visure catastali",
   "conferma_lettura_button_name": "Conferma Lettura",
   "immobile_link_name": "Immobile",
+  "subject_pf_link_name": "Persona Fisica",
+  "subject_pnf_link_name": "Persona non Fisica",
   "subject_pf_url": "https://sister3.agenziaentrate.gov.it/Visure/SceltaLink.do?lista=PF&codUfficio=OR",
   "subject_pnf_url": "https://sister3.agenziaentrate.gov.it/Visure/SceltaLink.do?lista=PNF&codUfficio=OR",
   "catasto_selector": "select[name='tipoCatasto']",

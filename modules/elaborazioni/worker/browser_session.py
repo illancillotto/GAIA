@@ -233,14 +233,27 @@ class BrowserSession:
     async def open_subject_form(self, subject_kind: str) -> None:
         page = self.page
         normalized_kind = (subject_kind or "PF").strip().upper()
+        link_name = (
+            self.selectors.subject_pf_link_name if normalized_kind == "PF"
+            else self.selectors.subject_pnf_link_name
+        )
         subject_url = self.selectors.subject_pf_url if normalized_kind == "PF" else self.selectors.subject_pnf_url
         logger.info("Apertura form visura soggetto kind=%s", normalized_kind)
         await self._maybe_accept_privacy_notice()
-        await page.goto(subject_url, wait_until="domcontentloaded")
+        if not await self._is_visura_area_ready():
+            await self._goto_visura_menu_with_retry()
+        await self._confirm_visura_informativa_if_present()
         if await page.locator(self.selectors.territorio_selector).count() > 0:
             await page.select_option(self.selectors.territorio_selector, value=self.selectors.territorio_value)
             await page.get_by_role("button", name=self.selectors.territorio_apply_button_name).click()
             await self._trace_state(f"subject-after-territorio-{normalized_kind}")
+        subject_link = page.get_by_role("link", name=link_name)
+        if await subject_link.count() > 0:
+            logger.info("Click link '%s'", link_name)
+            await subject_link.first.click()
+        else:
+            logger.warning("Link '%s' non trovato, navigazione diretta a %s", link_name, subject_url)
+            await page.goto(subject_url, wait_until="domcontentloaded")
         await self._trace_state(f"subject-form-ready-{normalized_kind}")
 
     async def fill_visura_form(self, request) -> None:

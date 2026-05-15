@@ -22,6 +22,8 @@ class SisterSelectorsConfig:
     visure_link_name: str = "Visure catastali"
     conferma_lettura_button_name: str = "Conferma Lettura"
     immobile_link_name: str = "Immobile"
+    subject_pf_link_name: str = "Persona Fisica"
+    subject_pnf_link_name: str = "Persona non Fisica"
     subject_pf_url: str = "https://sister3.agenziaentrate.gov.it/Visure/SceltaLink.do?lista=PF&codUfficio=OR"
     subject_pnf_url: str = "https://sister3.agenziaentrate.gov.it/Visure/SceltaLink.do?lista=PNF&codUfficio=OR"
     catasto_selector: str = "select[name='tipoCatasto']"

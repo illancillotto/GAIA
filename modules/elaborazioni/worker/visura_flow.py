@@ -131,6 +131,21 @@ async def execute_visura_flow(
         subject_not_found = await browser.search_subject_and_open_visura(request)
         if subject_not_found:
             return VisuraFlowResult(status="not_found", error_message=subject_not_found)
+        prepare_captcha_or_download = getattr(browser, "prepare_captcha_or_download", None)
+        if callable(prepare_captcha_or_download):
+            try:
+                next_step = await prepare_captcha_or_download()
+            except DocumentNotYetProducedError as exc:
+                return await _poll_and_download(
+                    browser, document_path, None, None, None,
+                    exc.richieste_url, update_operation,
+                )
+            if next_step == "download":
+                if update_operation is not None:
+                    update_operation("Download PDF in corso")
+                logger.info("Richiesta %s pronta al download senza CAPTCHA (soggetto)", request.id)
+                file_size = await browser.download_pdf(document_path)
+                return VisuraFlowResult(status="completed", file_path=document_path, file_size=file_size)
     else:
         if update_operation is not None:
             update_operation("Apertura form visura")

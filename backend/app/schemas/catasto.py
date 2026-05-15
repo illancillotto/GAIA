@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+_CF_PF_RE = re.compile(r"^[A-Z]{6}\d{2}[A-Z]\d{2}[A-Z]\d{3}[A-Z]$")
+_PIVA_RE = re.compile(r"^\d{11}$")
 
 
 class CatastoCredentialCreateRequest(BaseModel):
@@ -122,10 +126,22 @@ class CatastoSingleVisuraCreateRequest(BaseModel):
         if mode == "soggetto":
             if not self.subject_id or not self.subject_id.strip():
                 raise ValueError("subject_id is required for search_mode='soggetto'")
+            self.subject_id = self.subject_id.strip().upper()
+            if not self.subject_kind:
+                self.subject_kind = "PNF" if _PIVA_RE.match(self.subject_id) else "PF"
+            if self.subject_kind == "PF" and not _CF_PF_RE.match(self.subject_id):
+                raise ValueError(
+                    f"Codice fiscale non valido: '{self.subject_id}'. "
+                    "Formato atteso: 6 lettere + 2 cifre + lettera + 2 cifre + lettera + 3 cifre + lettera."
+                )
+            if self.subject_kind == "PNF" and not _PIVA_RE.match(self.subject_id):
+                raise ValueError(
+                    f"Partita IVA non valida: '{self.subject_id}'. Formato atteso: 11 cifre."
+                )
             return self
 
         if mode != "immobile":
-            raise ValueError("search_mode must be either 'immobile' or 'soggetto'")
+            raise ValueError("search_mode must be either 'immobile' o 'soggetto'")
 
         missing = [
             field_name
