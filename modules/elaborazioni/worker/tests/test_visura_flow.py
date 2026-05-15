@@ -9,6 +9,7 @@ WORKER_ROOT = Path(__file__).resolve().parents[1]
 if str(WORKER_ROOT) not in sys.path:
     sys.path.insert(0, str(WORKER_ROOT))
 
+from sister_exceptions import DocumentNonEvadibileError, DocumentNotYetProducedError
 from visura_flow import ManualCaptchaDecision, execute_visura_flow
 
 
@@ -22,6 +23,7 @@ class FakeBrowser:
     def __init__(self, correct_answer: str = "neorave") -> None:
         self.submit_attempts: list[str] = []
         self.captcha_captures = 0
+        self.reload_calls = 0
         self._correct = correct_answer
 
     async def open_visura_form(self) -> None: ...
@@ -32,7 +34,7 @@ class FakeBrowser:
     async def search_subject_and_open_visura(self, _request) -> str | None: return None
 
     async def reload_captcha(self) -> None:
-        pass
+        self.reload_calls += 1
 
     async def capture_captcha_image(self) -> bytes:
         self.captcha_captures += 1
@@ -46,6 +48,11 @@ class FakeBrowser:
         document_path.parent.mkdir(parents=True, exist_ok=True)
         document_path.write_bytes(b"%PDF-1.4\n")
         return document_path.stat().st_size
+
+    async def poll_richieste_for_download(self, destination: Path, richieste_url: str | None = None) -> int:
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(b"%PDF-1.4\n")
+        return destination.stat().st_size
 
 
 def _no_manual(_image_path: Path) -> ManualCaptchaDecision:
