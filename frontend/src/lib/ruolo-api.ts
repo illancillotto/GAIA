@@ -89,6 +89,7 @@ export async function getImportJob(token: string, jobId: string): Promise<RuoloI
 export type ListAvvisiParams = {
   anno?: number;
   subject_id?: string;
+  q?: string;
   codice_fiscale?: string;
   comune?: string;
   codice_utenza?: string;
@@ -104,6 +105,7 @@ export async function listAvvisi(
   const qs = new URLSearchParams();
   if (params.anno != null) qs.set("anno", String(params.anno));
   if (params.subject_id) qs.set("subject_id", params.subject_id);
+  if (params.q) qs.set("q", params.q);
   if (params.codice_fiscale) qs.set("codice_fiscale", params.codice_fiscale);
   if (params.comune) qs.set("comune", params.comune);
   if (params.codice_utenza) qs.set("codice_utenza", params.codice_utenza);
@@ -128,6 +130,7 @@ export function buildExportCsvUrl(params: ListAvvisiParams): string {
   const qs = new URLSearchParams();
   if (params.anno != null) qs.set("anno", String(params.anno));
   if (params.subject_id) qs.set("subject_id", params.subject_id);
+  if (params.q) qs.set("q", params.q);
   if (params.codice_fiscale) qs.set("codice_fiscale", params.codice_fiscale);
   if (params.comune) qs.set("comune", params.comune);
   if (params.codice_utenza) qs.set("codice_utenza", params.codice_utenza);

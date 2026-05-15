@@ -8,12 +8,11 @@ import {
   ModuleWorkspaceHero,
   ModuleWorkspaceKpiRow,
   ModuleWorkspaceKpiTile,
-  ModuleWorkspaceMiniStat,
   ModuleWorkspaceNoticeCard,
 } from "@/components/layout/module-workspace-hero";
 import { RuoloModulePage } from "@/components/ruolo/module-page";
 import { EmptyState } from "@/components/ui/empty-state";
-import { DocumentIcon, FolderIcon, LockIcon, SearchIcon } from "@/components/ui/icons";
+import { DocumentIcon, LockIcon, SearchIcon } from "@/components/ui/icons";
 import { getStoredAccessToken } from "@/lib/auth";
 import { buildExportCsvUrl, listAvvisi } from "@/lib/ruolo-api";
 import type { RuoloAvvisoListItemResponse } from "@/types/ruolo";
@@ -42,19 +41,44 @@ function RuoloAvvisiPageContent() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [selectedAvviso, setSelectedAvviso] = useState<RuoloAvvisoListItemResponse | null>(null);
 
-  const anno = searchParams.get("anno") ? Number(searchParams.get("anno")) : undefined;
-  const codice_fiscale = searchParams.get("cf") ?? undefined;
-  const comune = searchParams.get("comune") ?? undefined;
-  const codice_utenza = searchParams.get("utenza") ?? undefined;
+  const query = searchParams.get("q")?.trim() || "";
   const unlinked = searchParams.get("unlinked") === "true";
   const page = Math.max(1, Number(searchParams.get("page") ?? 1));
 
-  const [filterAnno, setFilterAnno] = useState(anno?.toString() ?? "");
-  const [filterCf, setFilterCf] = useState(codice_fiscale ?? "");
-  const [filterComune, setFilterComune] = useState(comune ?? "");
-  const [filterUtenza, setFilterUtenza] = useState(codice_utenza ?? "");
+  const [filterQuery, setFilterQuery] = useState(query);
   const [filterUnlinked, setFilterUnlinked] = useState(unlinked);
+
+  useEffect(() => {
+    setFilterQuery(query);
+  }, [query]);
+
+  useEffect(() => {
+    setFilterUnlinked(unlinked);
+  }, [unlinked]);
+
+  useEffect(() => {
+    const normalizedQuery = filterQuery.trim();
+    const currentQuery = query.trim();
+
+    if (normalizedQuery.length > 0 && normalizedQuery.length < 3) {
+      return;
+    }
+    if (normalizedQuery === currentQuery && filterUnlinked === unlinked) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      const qs = new URLSearchParams();
+      if (normalizedQuery) qs.set("q", normalizedQuery);
+      if (filterUnlinked) qs.set("unlinked", "true");
+      qs.set("page", "1");
+      router.replace(`/ruolo/avvisi?${qs}`);
+    }, 350);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [filterQuery, filterUnlinked, query, router, unlinked]);
 
   useEffect(() => {
     setToken(getStoredAccessToken());
@@ -65,10 +89,7 @@ function RuoloAvvisiPageContent() {
     setLoading(true);
     setError(null);
     listAvvisi(token, {
-      anno,
-      codice_fiscale,
-      comune,
-      codice_utenza,
+      q: query || undefined,
       unlinked,
       page,
       page_size: PAGE_SIZE,
@@ -79,19 +100,7 @@ function RuoloAvvisiPageContent() {
       })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : "Errore"))
       .finally(() => setLoading(false));
-  }, [token, anno, codice_fiscale, comune, codice_utenza, unlinked, page]);
-
-  function applyFilters(e: React.FormEvent) {
-    e.preventDefault();
-    const qs = new URLSearchParams();
-    if (filterAnno) qs.set("anno", filterAnno);
-    if (filterCf) qs.set("cf", filterCf);
-    if (filterComune) qs.set("comune", filterComune);
-    if (filterUtenza) qs.set("utenza", filterUtenza);
-    if (filterUnlinked) qs.set("unlinked", "true");
-    qs.set("page", "1");
-    router.push(`/ruolo/avvisi?${qs}`);
-  }
+  }, [token, query, unlinked, page]);
 
   function setPage(nextPage: number) {
     const qs = new URLSearchParams(searchParams.toString());
@@ -100,7 +109,7 @@ function RuoloAvvisiPageContent() {
   }
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
-  const exportUrl = buildExportCsvUrl({ anno, codice_fiscale, comune, codice_utenza, unlinked });
+  const exportUrl = buildExportCsvUrl({ q: query || undefined, unlinked });
 
   const linkedCount = useMemo(() => avvisi.filter((item) => item.is_linked).length, [avvisi]);
   const orphanCount = avvisi.length - linkedCount;
@@ -128,6 +137,37 @@ function RuoloAvvisiPageContent() {
       }
     >
       <div className="space-y-8">
+        {selectedAvviso ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">
+            <div className="flex h-full max-h-[94vh] w-full max-w-6xl flex-col rounded-2xl bg-white shadow-2xl">
+              <div className="flex items-center justify-between gap-4 border-b border-gray-100 px-6 py-4">
+                <div className="min-w-0">
+                  <p className="section-title">Dettaglio avviso</p>
+                  <p className="mt-1 truncate text-sm text-gray-500">
+                    {selectedAvviso.display_name ?? selectedAvviso.nominativo_raw ?? selectedAvviso.codice_cnc}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Link className="btn-secondary" href={`/ruolo/avvisi/${selectedAvviso.id}`} target="_blank">
+                    Apri pagina
+                  </Link>
+                  <button className="btn-secondary" type="button" onClick={() => setSelectedAvviso(null)}>
+                    Chiudi
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 overflow-hidden p-4">
+                <iframe
+                  key={selectedAvviso.id}
+                  src={`/ruolo/avvisi/${selectedAvviso.id}?embedded=1`}
+                  title={`Dettaglio avviso ${selectedAvviso.codice_cnc}`}
+                  className="h-full w-full rounded-xl border border-gray-200 bg-white"
+                />
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         <ModuleWorkspaceHero
           badge={
             <>
@@ -136,15 +176,15 @@ function RuoloAvvisiPageContent() {
             </>
           }
           title="Ricerca, filtra e apri gli avvisi del ruolo consortile."
-          description="Usa i filtri URL-driven per restringere il perimetro, controllare gli orfani anagrafici e passare dal cruscotto alla scheda puntuale senza perdere il contesto operativo."
+          description="Ricerca rapida, indicatori di collegamento anagrafico e accesso al dettaglio avviso senza uscire dal cruscotto."
           actions={
             <>
               <ModuleWorkspaceNoticeCard
                 title={loading ? "Caricamento dataset" : `${total} avvisi nel risultato`}
                 description={
-                  anno
-                    ? `Filtro attivo sull'anno ${anno}.`
-                    : "Nessun filtro annuale attivo: stai consultando l'intero storico disponibile."
+                  query
+                    ? `Ricerca attiva su "${query}".`
+                    : "Nessun filtro testuale attivo: stai consultando l'intero storico disponibile."
                 }
                 tone={loading ? "warning" : "info"}
               />
@@ -186,61 +226,30 @@ function RuoloAvvisiPageContent() {
           </ModuleWorkspaceKpiRow>
         </ModuleWorkspaceHero>
 
-        <section className="grid gap-4 xl:grid-cols-[1.05fr,0.95fr]">
-          <article className="rounded-[28px] border border-[#d8dfd3] bg-white shadow-panel">
-            <div className="border-b border-[#edf1eb] bg-[linear-gradient(135deg,_rgba(29,78,53,0.06),_rgba(255,255,255,0.92))] px-6 py-5">
-              <p className="inline-flex items-center gap-2 rounded-full bg-[#e8f2ec] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#1D4E35]">
-                <SearchIcon className="h-3.5 w-3.5" />
-                Filtri ricerca
-              </p>
-              <p className="mt-3 text-lg font-semibold text-gray-900">Imposta il perimetro di consultazione.</p>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600">
-                I filtri aggiornano la querystring, così puoi condividere la vista corrente o rientrare esattamente sullo stesso set di risultati.
+        <section className="grid gap-4">
+          <article className="panel-card">
+            <div className="mb-4">
+              <p className="section-title">Ricerca avvisi</p>
+              <p className="section-copy">
+                Inserisci almeno 3 lettere o un riferimento utile come CF, comune, anno, codice utenza o CNC.
               </p>
             </div>
-            <div className="p-6">
-              <form onSubmit={applyFilters} className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                <label className="block">
-                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Anno</span>
-                  <input
-                    type="number"
-                    placeholder="Anno"
-                    value={filterAnno}
-                    onChange={(e) => setFilterAnno(e.target.value)}
-                    className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-[#1D4E35] focus:outline-none"
-                  />
+            <div className="space-y-4">
+              <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+                <label className="block flex-1">
+                  <span className="sr-only">Cerca avviso</span>
+                  <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+                    <SearchIcon className="h-5 w-5 text-gray-400" />
+                    <input
+                      type="search"
+                      placeholder="Es. Rossi, RSSMRA80A01H501Z, Oristano, 2025, U12345, CNC-001"
+                      value={filterQuery}
+                      onChange={(e) => setFilterQuery(e.target.value)}
+                      className="w-full border-0 bg-transparent text-sm text-gray-900 outline-none placeholder:text-gray-400"
+                    />
+                  </div>
                 </label>
-                <label className="block">
-                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">CF / P.IVA</span>
-                  <input
-                    type="text"
-                    placeholder="CF / PIVA"
-                    value={filterCf}
-                    onChange={(e) => setFilterCf(e.target.value)}
-                    className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-[#1D4E35] focus:outline-none"
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Comune</span>
-                  <input
-                    type="text"
-                    placeholder="Comune"
-                    value={filterComune}
-                    onChange={(e) => setFilterComune(e.target.value)}
-                    className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-[#1D4E35] focus:outline-none"
-                  />
-                </label>
-                <label className="block">
-                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-500">Codice utenza</span>
-                  <input
-                    type="text"
-                    placeholder="Cod. utenza"
-                    value={filterUtenza}
-                    onChange={(e) => setFilterUtenza(e.target.value)}
-                    className="mt-2 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm focus:border-[#1D4E35] focus:outline-none"
-                  />
-                </label>
-                <label className="flex items-center gap-3 rounded-2xl border border-[#e3e9e0] bg-[#fbfcfb] px-4 py-3 text-sm text-gray-700 md:col-span-2 xl:col-span-1">
+                <label className="flex items-center gap-3 rounded-2xl border border-[#e3e9e0] bg-[#fbfcfb] px-4 py-3 text-sm text-gray-700 xl:shrink-0">
                   <input
                     type="checkbox"
                     checked={filterUnlinked}
@@ -249,20 +258,21 @@ function RuoloAvvisiPageContent() {
                   />
                   Solo avvisi non collegati
                 </label>
-                <div className="flex items-end gap-3 md:col-span-2 xl:col-span-1">
-                  <button
-                    type="submit"
-                    className="rounded-xl bg-[#1D4E35] px-4 py-2.5 text-sm font-medium text-white transition hover:bg-[#163d29]"
-                  >
-                    Filtra
-                  </button>
+              </div>
+              {filterQuery.trim().length === 0 ? (
+                <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3">
+                  <p className="text-sm font-medium text-gray-900">Ricerca pronta</p>
+                  <p className="mt-1 text-sm text-gray-500">Digita le prime 3 lettere per vedere i soggetti corrispondenti.</p>
+                </div>
+              ) : null}
+              {filterQuery.trim().length > 0 && filterQuery.trim().length < 3 ? (
+                <p className="text-sm text-gray-500">Inserisci almeno 3 caratteri per avviare la ricerca.</p>
+              ) : null}
+                <div className="flex flex-wrap items-end gap-3">
                   <button
                     type="button"
                     onClick={() => {
-                      setFilterAnno("");
-                      setFilterCf("");
-                      setFilterComune("");
-                      setFilterUtenza("");
+                      setFilterQuery("");
                       setFilterUnlinked(false);
                       router.push("/ruolo/avvisi?page=1");
                     }}
@@ -271,49 +281,9 @@ function RuoloAvvisiPageContent() {
                     Reset
                   </button>
                 </div>
-              </form>
             </div>
           </article>
 
-          <article className="rounded-[28px] border border-[#d8dfd3] bg-white p-6 shadow-panel">
-            <div>
-              <p className="inline-flex items-center gap-2 rounded-full bg-[#eef3ec] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#1D4E35]">
-                <FolderIcon className="h-3.5 w-3.5" />
-                Stato vista
-              </p>
-              <p className="mt-3 text-lg font-semibold text-gray-900">Lettura rapida del risultato corrente.</p>
-              <p className="mt-2 text-sm leading-6 text-gray-600">
-                Le mini-stat riassumono il peso economico e il livello di collegamento anagrafico della pagina selezionata.
-              </p>
-            </div>
-            <div className="mt-6 grid gap-3">
-              <ModuleWorkspaceMiniStat
-                eyebrow="Anno filtro"
-                value={anno ?? "Tutti"}
-                description={anno ? "La lista è limitata all'anno tributario selezionato." : "La vista include tutte le annualità disponibili."}
-                compact
-              />
-              <ModuleWorkspaceMiniStat
-                eyebrow="Record in pagina"
-                value={avvisi.length}
-                description={loading ? "Il caricamento è ancora in corso." : `${total} record totali disponibili sul dataset.`}
-                compact
-              />
-              <ModuleWorkspaceMiniStat
-                eyebrow="Collegamento"
-                value={`${linkedCount}/${avvisi.length || 0}`}
-                description={orphanCount > 0 ? `${orphanCount} avvisi orfani nella pagina corrente.` : "Nessun orfano nei risultati attualmente visibili."}
-                tone={orphanCount > 0 ? "warning" : "success"}
-                compact
-              />
-              <ModuleWorkspaceMiniStat
-                eyebrow="Totale economico"
-                value={formatEuro(pageTotal)}
-                description="Somma degli importi totali degli avvisi nella pagina corrente."
-                compact
-              />
-            </div>
-          </article>
         </section>
 
         <section className="rounded-[28px] border border-[#d8dfd3] bg-white shadow-panel">
@@ -324,7 +294,7 @@ function RuoloAvvisiPageContent() {
             </p>
             <p className="mt-3 text-lg font-semibold text-gray-900">Risultati del filtro corrente.</p>
             <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600">
-              Apri la scheda puntuale di ogni avviso per leggere importi, partite e particelle storicizzate del ruolo consortile.
+              Apri ogni avviso in modal per leggere importi, partite e particelle storicizzate del ruolo consortile senza perdere il contesto della lista.
             </p>
           </div>
           <div className="p-6">
@@ -341,10 +311,11 @@ function RuoloAvvisiPageContent() {
             ) : (
               <div className="space-y-3">
                 {avvisi.map((a) => (
-                  <Link
+                  <button
                     key={a.id}
-                    href={`/ruolo/avvisi/${a.id}`}
-                    className="group grid gap-3 rounded-[24px] border border-[#e6ebe5] bg-[linear-gradient(180deg,_#ffffff,_#fbfcfa)] px-4 py-4 transition hover:-translate-y-0.5 hover:border-[#c9d6cd] hover:shadow-sm md:grid-cols-[minmax(0,1fr),auto]"
+                    type="button"
+                    onClick={() => setSelectedAvviso(a)}
+                    className="group grid w-full gap-3 rounded-[24px] border border-[#e6ebe5] bg-[linear-gradient(180deg,_#ffffff,_#fbfcfa)] px-4 py-4 text-left transition hover:-translate-y-0.5 hover:border-[#c9d6cd] hover:shadow-sm md:grid-cols-[minmax(0,1fr),auto]"
                   >
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
@@ -366,7 +337,7 @@ function RuoloAvvisiPageContent() {
                       </div>
                       <span className="text-sm text-gray-300 transition group-hover:text-[#1D4E35]">→</span>
                     </div>
-                  </Link>
+                  </button>
                 ))}
               </div>
             )}

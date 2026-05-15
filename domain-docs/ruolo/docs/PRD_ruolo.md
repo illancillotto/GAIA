@@ -96,11 +96,13 @@ con ~9.810 partite per il ruolo 2024.
 | Req | Priorità | Descrizione |
 |-----|----------|-------------|
 | RF-AV-01 | MUST | Lista avvisi con filtri: anno, soggetto, CF/PIVA, comune, codice utenza |
+| RF-AV-01b | MUST | Ricerca unificata `q` nella lista avvisi con matching su nominativo, CF/PIVA, comune, anno, codice utenza e codice CNC |
 | RF-AV-02 | MUST | Dettaglio avviso: dati contribuente, elenco partite per comune, tabella particelle, totali per tributo |
 | RF-AV-03 | MUST | Storico avvisi per soggetto: tutti gli anni disponibili |
 | RF-AV-04 | SHOULD | Ricerca full-text per nominativo o CF/PIVA nell'elenco avvisi |
 | RF-AV-05 | SHOULD | Export CSV/XLSX della lista avvisi filtrata |
 | RF-AV-06 | COULD | Confronto importi anno corrente vs anno precedente per stesso soggetto |
+| RF-AV-07 | SHOULD | Apertura rapida del dettaglio avviso in modale embedded senza uscire dalla lista risultati |
 
 ---
 

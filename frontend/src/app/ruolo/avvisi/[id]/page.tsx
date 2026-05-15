@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
 import {
@@ -129,7 +129,9 @@ function PartitaCard({ partita }: { partita: RuoloPartitaResponse }) {
 
 export default function AvvisoDetailPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const id = params.id as string;
+  const isEmbedded = searchParams.get("embedded") === "1";
 
   const [token, setToken] = useState<string | null>(null);
   const [avviso, setAvviso] = useState<RuoloAvvisoDetailResponse | null>(null);
@@ -174,22 +176,24 @@ export default function AvvisoDetailPage() {
       breadcrumb="Dettaglio avviso"
     >
       <div className="space-y-8">
-        <div className="flex items-center justify-between gap-4">
-          <Link
-            href="/ruolo/avvisi"
-            className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-[#1D4E35]"
-          >
-            ← Torna agli avvisi
-          </Link>
-          {avviso.subject_id ? (
+        {!isEmbedded ? (
+          <div className="flex items-center justify-between gap-4">
             <Link
-              href={`/utenze/${avviso.subject_id}`}
-              className="rounded-xl border border-[#d6e5db] bg-white px-4 py-2 text-sm font-medium text-[#1D4E35] transition hover:bg-[#f3f8f5]"
+              href="/ruolo/avvisi"
+              className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-[#1D4E35]"
             >
-              Apri soggetto GAIA
+              ← Torna agli avvisi
             </Link>
-          ) : null}
-        </div>
+            {avviso.subject_id ? (
+              <Link
+                href={`/utenze/${avviso.subject_id}`}
+                className="rounded-xl border border-[#d6e5db] bg-white px-4 py-2 text-sm font-medium text-[#1D4E35] transition hover:bg-[#f3f8f5]"
+              >
+                Apri soggetto GAIA
+              </Link>
+            ) : null}
+          </div>
+        ) : null}
 
         <ModuleWorkspaceHero
           badge={

@@ -4,7 +4,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.catasto import CatastoParcel
@@ -67,6 +67,7 @@ def list_avvisi(
     db: Session,
     anno: int | None = None,
     subject_id: str | None = None,
+    q: str | None = None,
     codice_fiscale: str | None = None,
     comune: str | None = None,
     codice_utenza: str | None = None,
@@ -74,21 +75,37 @@ def list_avvisi(
     page: int = 1,
     page_size: int = 20,
 ) -> tuple[list[dict], int]:
-    q = select(RuoloAvviso)
+    query = select(RuoloAvviso)
 
     if anno is not None:
-        q = q.where(RuoloAvviso.anno_tributario == anno)
+        query = query.where(RuoloAvviso.anno_tributario == anno)
     if subject_id:
         try:
             sid = uuid.UUID(subject_id)
-            q = q.where(RuoloAvviso.subject_id == sid)
+            query = query.where(RuoloAvviso.subject_id == sid)
         except ValueError:
             pass
+    if q:
+        search_term = f"%{q.strip()}%"
+        query = query.where(
+            or_(
+                RuoloAvviso.codice_cnc.ilike(search_term),
+                func.coalesce(RuoloAvviso.nominativo_raw, "").ilike(search_term),
+                func.coalesce(RuoloAvviso.codice_fiscale_raw, "").ilike(search_term),
+                func.coalesce(RuoloAvviso.codice_utenza, "").ilike(search_term),
+                cast(RuoloAvviso.anno_tributario, String).ilike(search_term),
+                RuoloAvviso.id.in_(
+                    select(RuoloPartita.avviso_id).where(
+                        func.coalesce(RuoloPartita.comune_nome, "").ilike(search_term)
+                    )
+                ),
+            )
+        )
     if codice_fiscale:
-        q = q.where(RuoloAvviso.codice_fiscale_raw.ilike(f"%{codice_fiscale}%"))
+        query = query.where(RuoloAvviso.codice_fiscale_raw.ilike(f"%{codice_fiscale}%"))
     if comune:
         # Filtra per comune tramite join partite
-        q = q.where(
+        query = query.where(
             RuoloAvviso.id.in_(
                 select(RuoloPartita.avviso_id).where(
                     RuoloPartita.comune_nome.ilike(f"%{comune}%")
@@ -96,14 +113,14 @@ def list_avvisi(
             )
         )
     if codice_utenza:
-        q = q.where(RuoloAvviso.codice_utenza == codice_utenza)
+        query = query.where(RuoloAvviso.codice_utenza == codice_utenza)
     if unlinked:
-        q = q.where(RuoloAvviso.subject_id.is_(None))
+        query = query.where(RuoloAvviso.subject_id.is_(None))
 
-    q = q.order_by(RuoloAvviso.anno_tributario.desc(), RuoloAvviso.nominativo_raw)
+    query = query.order_by(RuoloAvviso.anno_tributario.desc(), RuoloAvviso.nominativo_raw)
 
-    total = db.scalar(select(func.count()).select_from(q.subquery()))
-    avvisi = db.scalars(q.offset((page - 1) * page_size).limit(page_size)).all()
+    total = db.scalar(select(func.count()).select_from(query.subquery()))
+    avvisi = db.scalars(query.offset((page - 1) * page_size).limit(page_size)).all()
 
     # Arricchisci con display_name del soggetto
     results = []

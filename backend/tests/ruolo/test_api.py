@@ -26,7 +26,8 @@ from app.core.security import hash_password
 from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
-from app.modules.ruolo.models import RuoloImportJob
+from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob, RuoloPartita
+from app.modules.utenze.models import AnagraficaSubject
 
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
@@ -105,3 +106,75 @@ def test_import_job_endpoints_serialize_uuid_ids() -> None:
     assert detail_payload["id"] == expected_job_id
     assert detail_payload["anno_tributario"] == 2025
     assert detail_payload["filename"] == "RUOLO_BONIFICA_2025.dmp"
+
+
+def test_list_avvisi_supports_unified_search_query() -> None:
+    db = TestingSessionLocal()
+    job = RuoloImportJob(
+        anno_tributario=2025,
+        filename="RUOLO_BONIFICA_2025.dmp",
+        status="completed",
+    )
+    linked_subject = AnagraficaSubject(source_name_raw="Mario Rossi")
+    db.add_all([job, linked_subject])
+    db.flush()
+
+    avviso_cf = RuoloAvviso(
+        import_job_id=job.id,
+        codice_cnc="CNC-001",
+        anno_tributario=2025,
+        codice_fiscale_raw="CNTMRC67P66A357L",
+        nominativo_raw="CONTU MARIA CRISTINA",
+        codice_utenza="U12345",
+        importo_totale_euro=120.50,
+    )
+    avviso_comune = RuoloAvviso(
+        import_job_id=job.id,
+        codice_cnc="CNC-002",
+        anno_tributario=2024,
+        nominativo_raw="PINNA GIOVANNI",
+        codice_utenza="UX9988",
+        importo_totale_euro=89.10,
+        subject_id=linked_subject.id,
+    )
+    db.add_all([avviso_cf, avviso_comune])
+    db.flush()
+    db.add(
+        RuoloPartita(
+            avviso_id=avviso_comune.id,
+            codice_partita="P-001",
+            comune_nome="Nurachi",
+        )
+    )
+    db.commit()
+    db.close()
+
+    response = client.get("/ruolo/avvisi?q=Contu", headers=auth_headers())
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 1
+    assert payload["items"][0]["codice_cnc"] == "CNC-001"
+
+    response = client.get("/ruolo/avvisi?q=CNTMRC67P66A357L", headers=auth_headers())
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 1
+    assert payload["items"][0]["codice_cnc"] == "CNC-001"
+
+    response = client.get("/ruolo/avvisi?q=Nurachi", headers=auth_headers())
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 1
+    assert payload["items"][0]["codice_cnc"] == "CNC-002"
+
+    response = client.get("/ruolo/avvisi?q=2025", headers=auth_headers())
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 1
+    assert payload["items"][0]["codice_cnc"] == "CNC-001"
+
+    response = client.get("/ruolo/avvisi?q=U12345&unlinked=true", headers=auth_headers())
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 1
+    assert payload["items"][0]["codice_cnc"] == "CNC-001"

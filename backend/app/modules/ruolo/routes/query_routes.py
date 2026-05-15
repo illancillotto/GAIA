@@ -98,6 +98,7 @@ def _partita_to_response(db: Session, partita: RuoloPartita) -> RuoloPartitaResp
 def list_avvisi(
     anno: int | None = None,
     subject_id: str | None = None,
+    q: str | None = Query(default=None, min_length=1),
     codice_fiscale: str | None = None,
     comune: str | None = None,
     codice_utenza: str | None = None,
@@ -111,6 +112,7 @@ def list_avvisi(
         db,
         anno=anno,
         subject_id=subject_id,
+        q=q,
         codice_fiscale=codice_fiscale,
         comune=comune,
         codice_utenza=codice_utenza,
@@ -129,6 +131,7 @@ def list_avvisi(
 def export_avvisi_csv(
     anno: int | None = None,
     subject_id: str | None = None,
+    q: str | None = Query(default=None, min_length=1),
     codice_fiscale: str | None = None,
     comune: str | None = None,
     codice_utenza: str | None = None,
@@ -141,6 +144,7 @@ def export_avvisi_csv(
         db,
         anno=anno,
         subject_id=subject_id,
+        q=q,
         codice_fiscale=codice_fiscale,
         comune=comune,
         codice_utenza=codice_utenza,

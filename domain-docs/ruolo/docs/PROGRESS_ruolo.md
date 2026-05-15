@@ -108,6 +108,7 @@
 - [x] `/ruolo` — dashboard riallineata al pattern UI/UX dei moduli maturi (hero workspace, KPI, action cards, pannelli)
 - [x] `/ruolo/import` — upload + lista job + polling automatico, riallineata al pattern UI/UX dei moduli maturi
 - [x] `/ruolo/avvisi` — lista con filtri URL-driven + paginazione, riallineata al pattern UI/UX dei moduli maturi
+- [x] `/ruolo/avvisi` — ricerca unificata live (`q`) con debounce, soglia minima 3 caratteri, toggle `Solo avvisi non collegati` inline e dettaglio avviso in modale embedded
 - [x] `/ruolo/avvisi/[id]` — dettaglio completo con partite espandibili, riallineato al pattern UI/UX dei moduli maturi
 - [x] `/ruolo/stats` — statistiche per anno e per comune interattive, riallineate al pattern UI/UX dei moduli maturi
 - [x] Integrazione scheda soggetto `RuoloAvvisiSection`, riallineata al pattern UI/UX del modulo con hero compatta, mini-stat e CTA coerenti
@@ -144,8 +145,10 @@
   - Estesa al Ruolo la regola storica gia usata da sync Terreni Capacitas per lo scambio Arborea/Terralba: se la particella non esiste sul comune sorgente, il resolver prova l'altro comune della coppia e marca il match con `swapped_arborea_terralba`; recuperate 249 righe ulteriori, non collegate residue a 2.334
   - Allineata la risoluzione Ruolo delle frazioni catastali di Oristano alla logica Capacitas/Agenzia: `SILI -> sezione E`, `NURAXINIEDDU -> D`, `MASSAMA -> C`, `DONIGALA -> B`. Il repair `--repair-oristano-frazione-sections` ricalcola anche righe gia collegate per evitare match permissivi su solo `G113 + foglio + particella`.
 - [x] `backend/tests/ruolo/test_import.py` — import service, report job, skipped/error preview
+- [x] `backend/tests/ruolo/test_api.py` — filtro unificato `GET /ruolo/avvisi?q=...` su nominativo, CF, comune, anno e codice utenza
 - [x] `backend/tests/ruolo/test_catasto_parcels.py` — logica temporale `catasto_parcels`
 - [x] `backend/tests/ruolo/test_import_integration.py` — smoke `integration-light` su blocchi DMP 2025 realistici con parser reale, merge duplicati, skipped report e filtro sezioni `CONSUMI`
+- [x] `frontend/tests/e2e/ruolo-avvisi.spec.ts` — soglia minima 3 caratteri, debounce live search e apertura modale dettaglio
 - [ ] Import completo file Ruolo 2024 (~9.810 partite) su dati reali (pendente)
 
 ---
@@ -192,3 +195,9 @@
 - `/ruolo/import` ora prova a rilevare automaticamente l'anno tributario dal file selezionato (contenuto PDF/testo o filename) e consente comunque override manuale.
 - Euristica anno `ruolo` resa deterministica: priorità a filename `R2024...`, poi pattern `Partita CNC 01.02021000039305` da cui viene estratto `2021`, infine fallback testuali.
 - Aumentato il limite upload Nginx del progetto per supportare file `ruolo` fino a 128 MB senza errore `413 Request Entity Too Large`.
+
+### 2026-05-15
+- `GET /ruolo/avvisi` e `GET /ruolo/avvisi/export` supportano ora il parametro `q`, con matching su `codice_cnc`, `nominativo_raw`, `codice_fiscale_raw`, `codice_utenza`, `anno_tributario` e `comune_nome` delle partite collegate.
+- `/ruolo/avvisi` e stata riallineata alla UX di `utenze`: campo singolo di ricerca, stato iniziale “Ricerca pronta”, avvio automatico dopo 3 caratteri, debounce client-side e aggiornamento URL con `router.replace` per evitare raffiche di chiamate.
+- Le card avviso aprono una modale con iframe embedded del dettaglio; `/ruolo/avvisi/[id]` nasconde il top header quando riceve `?embedded=1`.
+- Aggiunti test backend sul filtro `q` e test Playwright sul comportamento live search + apertura modale.
