@@ -9,6 +9,7 @@ from typing import Any, Callable
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
+from app.core.config import settings
 from app.modules.utenze.anpr.service import get_config, run_daily_job
 
 logger = logging.getLogger(__name__)
@@ -56,7 +57,7 @@ async def register_anpr_scheduler(scheduler: AsyncIOScheduler, get_db: Callable[
 
     scheduler.add_job(
         _run_job_wrapper,
-        trigger=CronTrigger.from_crontab(config.job_cron),
+        trigger=CronTrigger.from_crontab(config.job_cron, timezone=settings.anpr_job_timezone),
         id="anpr_daily_check",
         replace_existing=True,
         misfire_grace_time=3600,

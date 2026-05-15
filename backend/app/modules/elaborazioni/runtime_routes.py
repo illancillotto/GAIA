@@ -3,18 +3,22 @@ from __future__ import annotations
 import asyncio
 from io import BytesIO
 from pathlib import Path
+from datetime import datetime
 from typing import Annotated
 from uuid import UUID
 import zipfile
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect, status
 from fastapi.responses import FileResponse, StreamingResponse
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user
 from app.core.config import settings
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
+from app.modules.utenze.anpr.models import AnprCheckLog, AnprJobRun, AnprSyncConfig
 from app.modules.shared.http_shared import (
     build_batch_detail_response,
     build_connection_test_response,
@@ -27,6 +31,8 @@ from app.modules.shared.http_shared import (
 from app.schemas.elaborazioni import (
     ElaborazioneBatchDetailResponse,
     ElaborazioneBatchResponse,
+    ElaborazioneAnprRunItemResponse,
+    ElaborazioneAnprSummaryResponse,
     ElaborazioneCaptchaSolveRequest,
     ElaborazioneCaptchaSummaryResponse,
     ElaborazioneCredentialCreateRequest,
@@ -80,6 +86,31 @@ from app.services.elaborazioni_credentials import (
 from app.services.catasto_documents import list_documents_for_batch
 
 router = APIRouter(prefix="/elaborazioni", tags=["elaborazioni"])
+
+
+@router.get("/utenze-anpr/summary", response_model=ElaborazioneAnprSummaryResponse)
+def get_utenze_anpr_summary(
+    _: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> ElaborazioneAnprSummaryResponse:
+    config = db.get(AnprSyncConfig, 1) or AnprSyncConfig(id=1)
+    effective_daily_limit = min(config.max_calls_per_day, settings.anpr_daily_call_hard_limit)
+    local_today = datetime.now(ZoneInfo(settings.anpr_job_timezone)).date()
+    latest_run = db.execute(select(AnprJobRun).order_by(AnprJobRun.started_at.desc()).limit(1)).scalar_one_or_none()
+    calls_today = db.execute(
+        select(func.coalesce(func.sum(AnprJobRun.calls_used), 0)).where(AnprJobRun.run_date == local_today)
+    ).scalar_one()
+    recent_runs = db.execute(select(AnprJobRun).order_by(AnprJobRun.started_at.desc()).limit(10)).scalars().all()
+
+    return ElaborazioneAnprSummaryResponse(
+        calls_today=int(calls_today or 0),
+        configured_daily_limit=config.max_calls_per_day,
+        hard_daily_limit=settings.anpr_daily_call_hard_limit,
+        effective_daily_limit=effective_daily_limit,
+        batch_size=settings.anpr_job_batch_size,
+        ruolo_year=latest_run.ruolo_year if latest_run is not None else settings.anpr_job_ruolo_year,
+        recent_runs=[ElaborazioneAnprRunItemResponse.model_validate(item, from_attributes=True) for item in recent_runs],
+    )
 
 
 @router.post("/credentials", response_model=ElaborazioneCredentialResponse)

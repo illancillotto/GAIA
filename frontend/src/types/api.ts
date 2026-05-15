@@ -344,6 +344,9 @@ export type AnagraficaStats = {
   active_subjects: number;
   inactive_subjects: number;
   documents_unclassified: number;
+  deceased_updates_last_24h: number;
+  deceased_updates_current_month: number;
+  deceased_updates_current_year: number;
   by_letter: Record<string, number>;
 };
 
@@ -1612,3 +1615,29 @@ export type ElaborazioneBatchCaptchaEvent = CatastoBatchCaptchaEvent;
 export type ElaborazioneBatchCompletedEvent = CatastoBatchCompletedEvent;
 export type ElaborazioneRichiestaCompletedEvent = CatastoVisuraCompletedEvent;
 export type ElaborazioneBatchWebSocketEvent = CatastoBatchWebSocketEvent;
+
+export type ElaborazioneAnprRunItem = {
+  id: string;
+  run_date: string;
+  ruolo_year: number;
+  status: string;
+  daily_calls_before: number;
+  daily_calls_after: number;
+  subjects_selected: number;
+  subjects_processed: number;
+  deceased_found: number;
+  errors: number;
+  calls_used: number;
+  started_at: string;
+  completed_at: string | null;
+};
+
+export type ElaborazioneAnprSummary = {
+  calls_today: number;
+  configured_daily_limit: number;
+  hard_daily_limit: number;
+  effective_daily_limit: number;
+  batch_size: number;
+  ruolo_year: number | null;
+  recent_runs: ElaborazioneAnprRunItem[];
+};

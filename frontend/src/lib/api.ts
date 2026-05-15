@@ -31,6 +31,7 @@ import type {
   CatastoDocument,
   CatastoComune,
   ElaborazioneBatch,
+  ElaborazioneAnprSummary,
   ElaborazioneBatchDetail,
   ElaborazioneCaptchaSummary,
   ElaborazioneCredential,
@@ -1887,6 +1888,14 @@ export async function getPendingElaborazioneCaptcha(token: string): Promise<Elab
 
 export async function getElaborazioneCaptchaSummary(token: string): Promise<ElaborazioneCaptchaSummary> {
   return request<ElaborazioneCaptchaSummary>("/elaborazioni/captcha/summary", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getElaborazioneAnprSummary(token: string): Promise<ElaborazioneAnprSummary> {
+  return request<ElaborazioneAnprSummary>("/elaborazioni/utenze-anpr/summary", {
     headers: {
       Authorization: `Bearer ${token}`,
     },

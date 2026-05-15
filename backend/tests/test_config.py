@@ -29,6 +29,12 @@ def test_settings_use_expected_defaults(monkeypatch) -> None:
         "ANPR_BASE_URL",
         "ANPR_CA_BUNDLE_PATH",
         "ANPR_SSL_VERIFY",
+        "ANPR_DAILY_CALL_HARD_LIMIT",
+        "ANPR_JOB_BATCH_SIZE",
+        "ANPR_JOB_START_HOUR",
+        "ANPR_JOB_END_HOUR",
+        "ANPR_JOB_TIMEZONE",
+        "ANPR_JOB_RUOLO_YEAR",
         "PDND_FRUITORE_USER_ID",
         "PDND_FRUITORE_USER_LOCATION",
         "PDND_LOA",
@@ -71,6 +77,12 @@ def test_settings_use_expected_defaults(monkeypatch) -> None:
     assert settings.anpr_base_url == "https://modipa-val.anpr.interno.it/govway/rest/in/MinInternoPortaANPR-PDND"
     assert settings.anpr_ca_bundle_path == ""
     assert settings.anpr_ssl_verify is True
+    assert settings.anpr_daily_call_hard_limit == 90
+    assert settings.anpr_job_batch_size == 10
+    assert settings.anpr_job_start_hour == 8
+    assert settings.anpr_job_end_hour == 18
+    assert settings.anpr_job_timezone == "Europe/Rome"
+    assert settings.anpr_job_ruolo_year is None
     assert settings.pdnd_fruitore_user_id == "GAIA-CBO"
     assert settings.pdnd_fruitore_user_location == "GAIA-SRV"
     assert settings.pdnd_loa == "LOW"
@@ -116,6 +128,12 @@ def test_settings_allow_environment_override(monkeypatch) -> None:
     monkeypatch.setenv("ANPR_BASE_URL", "https://anpr.example.test")
     monkeypatch.setenv("ANPR_CA_BUNDLE_PATH", "/tmp/anpr-ca.pem")
     monkeypatch.setenv("ANPR_SSL_VERIFY", "false")
+    monkeypatch.setenv("ANPR_DAILY_CALL_HARD_LIMIT", "45")
+    monkeypatch.setenv("ANPR_JOB_BATCH_SIZE", "6")
+    monkeypatch.setenv("ANPR_JOB_START_HOUR", "9")
+    monkeypatch.setenv("ANPR_JOB_END_HOUR", "17")
+    monkeypatch.setenv("ANPR_JOB_TIMEZONE", "UTC")
+    monkeypatch.setenv("ANPR_JOB_RUOLO_YEAR", "2027")
     monkeypatch.setenv("PDND_FRUITORE_USER_ID", "GAIA-TEST")
     monkeypatch.setenv("PDND_FRUITORE_USER_LOCATION", "GAIA-TEST-SRV")
     monkeypatch.setenv("PDND_LOA", "HIGH")
@@ -151,6 +169,12 @@ def test_settings_allow_environment_override(monkeypatch) -> None:
     assert settings.anpr_base_url == "https://anpr.example.test"
     assert settings.anpr_ca_bundle_path == "/tmp/anpr-ca.pem"
     assert settings.anpr_ssl_verify is False
+    assert settings.anpr_daily_call_hard_limit == 45
+    assert settings.anpr_job_batch_size == 6
+    assert settings.anpr_job_start_hour == 9
+    assert settings.anpr_job_end_hour == 17
+    assert settings.anpr_job_timezone == "UTC"
+    assert settings.anpr_job_ruolo_year == 2027
     assert settings.pdnd_fruitore_user_id == "GAIA-TEST"
     assert settings.pdnd_fruitore_user_location == "GAIA-TEST-SRV"
     assert settings.pdnd_loa == "HIGH"

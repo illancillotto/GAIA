@@ -1,12 +1,13 @@
 from typing import Annotated
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from io import BytesIO, StringIO
 import csv
 import mimetypes
 from pathlib import Path
 import secrets
 import threading
+from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, Header, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse, StreamingResponse
@@ -19,6 +20,7 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
 from app.models.catasto import CatastoDocument
+from app.modules.utenze.anpr.models import AnprCheckLog
 from app.modules.utenze.models import (
     AnagraficaAuditLog,
     AnagraficaClassificationSource,
@@ -117,6 +119,10 @@ def _job_progress(db: Session, job_id: uuid.UUID) -> dict[str, int]:
         "completed_items": sum(1 for item in items if item.status == AnagraficaImportJobItemStatus.COMPLETED.value),
         "failed_items": sum(1 for item in items if item.status == AnagraficaImportJobItemStatus.FAILED.value),
     }
+
+
+def _utenze_stats_timezone() -> ZoneInfo:
+    return ZoneInfo(settings.anpr_job_timezone)
 
 
 def _serialize_import_job(db: Session, job: AnagraficaImportJob) -> AnagraficaImportJobResponse:
@@ -1101,6 +1107,11 @@ def get_stats(
     __: Annotated[ApplicationUser, RequireUtenzeModule],
     db: Annotated[Session, Depends(get_db)],
 ) -> AnagraficaStatsResponse:
+    now_utc = datetime.now(timezone.utc)
+    local_tz = _utenze_stats_timezone()
+    now_local = now_utc.astimezone(local_tz)
+    month_start_utc = now_local.replace(day=1, hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+    year_start_utc = now_local.replace(month=1, day=1, hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
     visible_document_condition = _visible_document_condition()
 
     total_subjects = db.scalar(select(func.count()).select_from(AnagraficaSubject)) or 0
@@ -1130,6 +1141,30 @@ def get_stats(
         .select_from(AnagraficaDocument)
         .where(AnagraficaDocument.doc_type == AnagraficaDocType.ALTRO.value, visible_document_condition)
     ) or 0
+    deceased_updates_last_24h = db.scalar(
+        select(func.count(func.distinct(AnprCheckLog.subject_id)))
+        .where(
+            AnprCheckLog.call_type == "C004",
+            AnprCheckLog.esito == "deceased",
+            AnprCheckLog.created_at >= now_utc - timedelta(hours=24),
+        )
+    ) or 0
+    deceased_updates_current_month = db.scalar(
+        select(func.count(func.distinct(AnprCheckLog.subject_id)))
+        .where(
+            AnprCheckLog.call_type == "C004",
+            AnprCheckLog.esito == "deceased",
+            AnprCheckLog.created_at >= month_start_utc,
+        )
+    ) or 0
+    deceased_updates_current_year = db.scalar(
+        select(func.count(func.distinct(AnprCheckLog.subject_id)))
+        .where(
+            AnprCheckLog.call_type == "C004",
+            AnprCheckLog.esito == "deceased",
+            AnprCheckLog.created_at >= year_start_utc,
+        )
+    ) or 0
     letter_rows = db.execute(
         select(AnagraficaSubject.nas_folder_letter, func.count())
         .group_by(AnagraficaSubject.nas_folder_letter)
@@ -1146,6 +1181,9 @@ def get_stats(
         active_subjects=active_subjects,
         inactive_subjects=inactive_subjects,
         documents_unclassified=documents_unclassified,
+        deceased_updates_last_24h=deceased_updates_last_24h,
+        deceased_updates_current_month=deceased_updates_current_month,
+        deceased_updates_current_year=deceased_updates_current_year,
         by_letter=by_letter,
     )
 

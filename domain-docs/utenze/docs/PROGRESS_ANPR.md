@@ -33,6 +33,13 @@
 - verificato runtime ANPR `prod`: C004 richiede `verifica.datiDecesso`; aggiunto `dataEvento=ieri` per evitare l'errore `EN148`
 - estesa la test suite backend ANPR con casi service-level su stop anticipato dopo `C030 not_found`, gestione errore `C004` in preview e vincoli runtime emersi su header/payload
 - aggiunto test route-level sul contratto `POST /utenze/anpr/sync/{subject_id}`: gli errori operativi ANPR restano `200` con `success=false`, mentre i soli problemi di configurazione PDND continuano a esporre `503`
+- sostituita la coda batch basata su `CatUtenzaIrrigua` con una coda basata su `ruolo_avvisi.subject_id`; se `ANPR_JOB_RUOLO_YEAR` non è valorizzato il job usa automaticamente l'ultimo `anno_tributario` disponibile, escludendo tutti i soggetti non a ruolo
+- ordinamento batch ANPR fissato per data di nascita crescente (`più anziano -> più giovane`) con esclusione dei soggetti già processati nella stessa giornata locale
+- esclusione esplicita dalla coda dei soggetti già marcati `stato_anpr = deceased`
+- introdotto hard cap giornaliero da `.env` (`ANPR_DAILY_CALL_HARD_LIMIT`) applicato come tetto invalicabile rispetto al valore operativo `anpr_sync_config.max_calls_per_day`
+- introdotta finestra oraria locale `ANPR_JOB_START_HOUR` / `ANPR_JOB_END_HOUR` e batch size `ANPR_JOB_BATCH_SIZE`; il cron di default è ora `0 8-17 * * *` nel timezone `ANPR_JOB_TIMEZONE`
+- aggiunta tabella `anpr_job_runs` per tracciare ogni esecuzione batch giorno per giorno con budget prima/dopo, soggetti selezionati/processati, errori e deceduti rilevati
+- esteso endpoint `GET /utenze/stats` e dashboard `frontend/src/app/utenze/page.tsx` con i KPI `deceased_updates_last_24h`, `deceased_updates_current_month`, `deceased_updates_current_year`
 
 ## Verifiche Eseguite
 
@@ -42,14 +49,17 @@
 - `pytest tests/test_anpr_service.py` ✅ (include lookup CF)
 - `pytest tests/test_anpr_routes.py` ✅ (include `preview-lookup` e ruoli)
 - `pytest tests/test_anpr_scheduler.py` ✅ (`4 passed`)
+- `pytest backend/tests/test_anpr_service.py backend/tests/test_anpr_scheduler.py backend/tests/test_config.py -q` ✅ (`33 passed`)
 - `npx tsc --noEmit` in `frontend` ✅
+- `npm run build` in `frontend` ✅
 
 ## Note Aperte
 
 - il mapping definitivo della risposta C004 resta marcato come non validato via `_RESPONSE_MAP_VALIDATED = False` finché non viene confermato su ambiente ANPR di test
 - restano da eseguire i test di integrazione end-to-end con credenziali PDND reali e soggetti di test ANPR/SOGEI
+- il tracciamento giornaliero `anpr_job_runs` è persistito lato backend ma non è ancora esposto in una vista dedicata del workspace `elaborazioni`
 
 ## Prossimo Step
 
-- implementazione locale completata fino allo step documentale
-- prossimo passo utile: validazione su ambiente ANPR di test e chiusura del mapping C004 con evidenza dei payload reali
+- implementazione locale completata per batch a ruolo, cap giornaliero e KPI dashboard
+- prossimo passo utile: esporre `anpr_job_runs` nel workspace `elaborazioni` e validare in runtime il throughput giornaliero reale con dati di ruolo 2025

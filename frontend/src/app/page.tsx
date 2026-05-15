@@ -148,6 +148,9 @@ const emptyUtenzeSummary: AnagraficaStats = {
   active_subjects: 0,
   inactive_subjects: 0,
   documents_unclassified: 0,
+  deceased_updates_last_24h: 0,
+  deceased_updates_current_month: 0,
+  deceased_updates_current_year: 0,
   by_letter: {},
 };
 

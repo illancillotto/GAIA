@@ -12,11 +12,11 @@
 ```
 backend/app/modules/utenze/anpr/
 ├── __init__.py
-├── models.py          # AnprCheckLog, AnprSyncConfig (SQLAlchemy)
+├── models.py          # AnprCheckLog, AnprSyncConfig, AnprJobRun (SQLAlchemy)
 ├── schemas.py         # Pydantic request/response schemas
 ├── client.py          # ANPR API client: C030 + C004
 ├── auth.py            # PDND JWT client assertion + voucher management
-├── service.py         # Business logic: coda prioritizzata, sync singola
+├── service.py         # Business logic: coda ruolo, sync singola, batch scheduler
 ├── scheduler.py       # APScheduler job registration
 └── routes.py          # FastAPI router /utenze/anpr/*
 ```
@@ -72,13 +72,40 @@ class AnprSyncConfig(Base):
     __tablename__ = "anpr_sync_config"
 
     id = Column(Integer, primary_key=True, default=1)       # singleton row
-    max_calls_per_day = Column(Integer, default=100, nullable=False)
+    max_calls_per_day = Column(Integer, default=90, nullable=False)
     job_enabled = Column(Boolean, default=True, nullable=False)
-    job_cron = Column(String(50), default="0 2 * * *", nullable=False)
+    job_cron = Column(String(50), default="0 8-17 * * *", nullable=False)
     lookback_years = Column(Integer, default=1, nullable=False)
     retry_not_found_days = Column(Integer, default=90, nullable=False)
     updated_at = Column(DateTime(timezone=True), onupdate=lambda: datetime.now(timezone.utc))
     updated_by_user_id = Column(Integer, ForeignKey("application_users.id"), nullable=True)
+```
+
+### 2.4 AnprJobRun
+
+```python
+class AnprJobRun(Base):
+    __tablename__ = "anpr_job_runs"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    run_date = Column(Date, nullable=False, index=True)
+    ruolo_year = Column(Integer, nullable=False)
+    triggered_by = Column(String(50), nullable=False)
+    status = Column(String(30), nullable=False)
+    batch_size = Column(Integer, nullable=False)
+    hard_daily_limit = Column(Integer, nullable=False)
+    configured_daily_limit = Column(Integer, nullable=False)
+    daily_calls_before = Column(Integer, nullable=False)
+    daily_calls_after = Column(Integer, nullable=False)
+    subjects_selected = Column(Integer, nullable=False)
+    subjects_processed = Column(Integer, nullable=False)
+    deceased_found = Column(Integer, nullable=False)
+    errors = Column(Integer, nullable=False)
+    calls_used = Column(Integer, nullable=False)
+    notes = Column(Text, nullable=True)
+    payload_json = Column(JSON, nullable=True)
+    started_at = Column(DateTime(timezone=True), nullable=False)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
 ```
 
 ---
@@ -106,6 +133,12 @@ ANPR_BASE_URL_PROD=https://modipa.anpr.interno.it/govway/rest/in/MinInternoPorta
 ANPR_CA_BUNDLE_PATH=/run/secrets/sogei-ca-test.pem
 ANPR_SSL_VERIFY=true
 ANPR_ENV=test  # test | prod
+ANPR_DAILY_CALL_HARD_LIMIT=90
+ANPR_JOB_BATCH_SIZE=10
+ANPR_JOB_START_HOUR=8
+ANPR_JOB_END_HOUR=18
+ANPR_JOB_TIMEZONE=Europe/Rome
+ANPR_JOB_RUOLO_YEAR=   # opzionale: se vuoto usa l'ultimo anno ruolo disponibile
 
 # Ente fruitore (per claims audit)
 PDND_FRUITORE_USER_ID=GAIA-CBO  # userID da includere nel tracking
@@ -285,24 +318,23 @@ Per C030, `idOperazioneClient` è alfanumerico — usare `str(uuid4())`.
 
 ## 5. Service Layer (`service.py`)
 
-### 5.1 Costruzione coda prioritizzata
+### 5.1 Costruzione coda batch a ruolo
 
 ```python
-async def build_check_queue(db: AsyncSession, config: AnprSyncConfig) -> list[str]:
+async def build_check_queue(db: AsyncSession, config: AnprSyncConfig) -> list[AnprQueueItem]:
     """
-    Ritorna lista ordinata di subject_id (UUID str) da verificare.
-    
-    Priorità:
-    1. Soggetti con utenza irrigua solo nell'anno precedente (non nell'anno corrente)
-       JOIN cat_utenze_irrigue WHERE anno = YEAR-1 AND NOT EXISTS (anno = YEAR)
-    2. Esclusione soggetti già deceased
-    3. Ordinamento per data_nascita ASC (più anziani prima)
-    4. Limitato a max_calls_per_day (considerando che per soggetti senza anpr_id
-       servono 2 chiamate: C030 + C004)
+    Ritorna lista ordinata di soggetti a ruolo.
+
+    Regole:
+    1. solo subject_id presenti in ruolo_avvisi per ANPR_JOB_RUOLO_YEAR oppure, se assente, per l'ultimo anno ruolo disponibile
+    2. esclude soggetti già deceased
+    3. esclude soggetti già processati nella stessa giornata locale
+    4. ordina per data_nascita ASC (più anziani prima)
+    5. stima il costo chiamate: 1 se anpr_id già noto, 2 altrimenti
     """
 ```
 
-**Query SQL logica** (da tradurre in SQLAlchemy):
+**Query SQL logica**:
 
 ```sql
 WITH candidati AS (
@@ -310,41 +342,28 @@ WITH candidati AS (
         s.id AS subject_id,
         p.data_nascita,
         p.anpr_id,
-        p.stato_anpr,
-        p.last_anpr_check_at,
-        -- Flag priorità 1: presente nel ruolo anno scorso ma non quest'anno
-        EXISTS (
-            SELECT 1 FROM cat_utenze_irrigue u
-            WHERE u.codice_fiscale = p.codice_fiscale
-            AND u.anno_campagna = EXTRACT(YEAR FROM NOW()) - 1
-        ) AS in_ruolo_anno_prec,
-        NOT EXISTS (
-            SELECT 1 FROM cat_utenze_irrigue u
-            WHERE u.codice_fiscale = p.codice_fiscale
-            AND u.anno_campagna = EXTRACT(YEAR FROM NOW())
-        ) AS non_in_ruolo_corrente
+        p.stato_anpr
     FROM ana_subjects s
     JOIN ana_persons p ON p.subject_id = s.id
+    JOIN ruolo_avvisi r ON r.subject_id = s.id
     WHERE s.subject_type = 'person'
+      AND r.anno_tributario = :ruolo_year
       AND p.codice_fiscale IS NOT NULL
       AND (p.stato_anpr IS NULL OR p.stato_anpr NOT IN ('deceased'))
-      -- Non ritentare not_found troppo spesso
       AND (
           p.stato_anpr != 'not_found_anpr'
           OR p.last_anpr_check_at < NOW() - INTERVAL ':retry_days days'
       )
+      AND (p.last_anpr_check_at IS NULL OR p.last_anpr_check_at < :day_start_utc)
+      AND (p.last_c030_check_at IS NULL OR p.last_c030_check_at < :day_start_utc)
 )
-SELECT subject_id
+SELECT subject_id, anpr_id
 FROM candidati
-ORDER BY
-    (in_ruolo_anno_prec AND non_in_ruolo_corrente) DESC,   -- priorità 1 prima
-    data_nascita ASC NULLS LAST                            -- più anziani prima
-LIMIT :max_calls_budget
+ORDER BY data_nascita ASC NULLS LAST
 ```
 
-**Budget chiamate**: poiché soggetti senza `anpr_id` richiedono C030 + C004 (2 chiamate),
-il budget reale di soggetti verificabili è `max_calls_per_day / 1.5` in media. La logica
-deve calcolare a runtime quante chiamate residue restano e fermarsi quando esaurite.
+**Budget chiamate**: la logica valuta il costo stimato del prossimo soggetto e si ferma se il
+budget residuo non basta, senza saltare avanti a soggetti più giovani.
 
 ### 5.2 sync_single_subject()
 
@@ -368,14 +387,14 @@ async def sync_single_subject(
 async def run_daily_job() -> AnprJobSummary:
     """
     1. Legge AnprSyncConfig
-    2. Se job_enabled == False → ritorna subito
-    3. Costruisce coda via build_check_queue()
-    4. Per ogni subject_id nella coda:
-        a. Chiama sync_single_subject(triggered_by="job")
-        b. Incrementa contatore chiamate usate
-        c. Se calls_used >= max_calls_per_day → interrompe
-        d. Sleep configurabile tra chiamate (ANPR rate limiting)
-    5. Ritorna summary: totale verificati, deceduti trovati, errori
+    2. Verifica finestra locale 08:00-18:00
+    3. Calcola cap effettivo = min(config.max_calls_per_day, ANPR_DAILY_CALL_HARD_LIMIT)
+    4. Conta le chiamate già consumate oggi su anpr_check_log
+    5. Costruisce coda via build_check_queue()
+    6. Processa al massimo ANPR_JOB_BATCH_SIZE soggetti senza superare il budget residuo
+    7. Aggiorna ana_persons + anpr_check_log
+    8. Persiste un record anpr_job_runs
+    9. Ritorna summary: totale verificati, deceduti trovati, errori
     """
 ```
 
@@ -396,12 +415,17 @@ def register_anpr_jobs(scheduler: AsyncIOScheduler, app_state):
     """
     scheduler.add_job(
         run_daily_job_wrapper,
-        trigger=CronTrigger.from_crontab(config.job_cron),
+        trigger=CronTrigger.from_crontab(config.job_cron, timezone=ANPR_JOB_TIMEZONE),
         id="anpr_daily_check",
         replace_existing=True,
         misfire_grace_time=3600,  # 1h di tolleranza su avvio ritardato
     )
 ```
+
+Metriche dashboard collegate al job:
+- `deceased_updates_last_24h`
+- `deceased_updates_current_month`
+- `deceased_updates_current_year`
 
 ---
 

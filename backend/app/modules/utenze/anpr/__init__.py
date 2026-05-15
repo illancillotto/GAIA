@@ -1,3 +1,3 @@
-from app.modules.utenze.anpr.models import AnprCheckLog, AnprSyncConfig
+from app.modules.utenze.anpr.models import AnprCheckLog, AnprJobRun, AnprSyncConfig
 
-__all__ = ["AnprCheckLog", "AnprSyncConfig"]
+__all__ = ["AnprCheckLog", "AnprJobRun", "AnprSyncConfig"]

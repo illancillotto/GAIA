@@ -9,6 +9,7 @@ import {
   ModuleWorkspaceHero,
   ModuleWorkspaceKpiRow,
   ModuleWorkspaceKpiTile,
+  ModuleWorkspaceMiniStat,
   ModuleWorkspaceNoticeCard,
 } from "@/components/layout/module-workspace-hero";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -27,6 +28,9 @@ const emptyStats: UtenzeStats = {
   active_subjects: 0,
   inactive_subjects: 0,
   documents_unclassified: 0,
+  deceased_updates_last_24h: 0,
+  deceased_updates_current_month: 0,
+  deceased_updates_current_year: 0,
   by_letter: {},
 };
 
@@ -342,6 +346,35 @@ function DashboardContent({ token }: { token: string }) {
             hint={`${jobs.filter((job) => job.status === "completed").length} completi`}
           />
         </ModuleWorkspaceKpiRow>
+        <div className="mt-4 grid gap-3 lg:grid-cols-4">
+          <ModuleWorkspaceNoticeCard
+            title="Monitor decessi ANPR"
+            description="Conteggi aggiornati dal job schedulato sui soli soggetti a ruolo dell'anno operativo."
+            tone={stats.deceased_updates_last_24h > 0 ? "warning" : "neutral"}
+            compact
+          />
+          <ModuleWorkspaceMiniStat
+            eyebrow="Ultime 24h"
+            value={stats.deceased_updates_last_24h}
+            description="Deceduti rilevati nelle ultime 24 ore"
+            tone={stats.deceased_updates_last_24h > 0 ? "warning" : "default"}
+            compact
+          />
+          <ModuleWorkspaceMiniStat
+            eyebrow="Mese corrente"
+            value={stats.deceased_updates_current_month}
+            description="Deceduti rilevati nel mese corrente"
+            tone={stats.deceased_updates_current_month > 0 ? "warning" : "default"}
+            compact
+          />
+          <ModuleWorkspaceMiniStat
+            eyebrow="Anno corrente"
+            value={stats.deceased_updates_current_year}
+            description="Deceduti rilevati dall'inizio dell'anno"
+            tone={stats.deceased_updates_current_year > 0 ? "warning" : "default"}
+            compact
+          />
+        </div>
       </ModuleWorkspaceHero>
 
       <article className="panel-card">

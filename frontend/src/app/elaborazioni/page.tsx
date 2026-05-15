@@ -15,6 +15,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { FolderIcon, GridIcon, LockIcon, RefreshIcon, SearchIcon, UsersIcon } from "@/components/ui/icons";
 import {
   getElaborazioneBatches,
+  getElaborazioneAnprSummary,
   getElaborazioneCaptchaSummary,
   getElaborazioneCredentials,
   getBonificaSyncStatus,
@@ -32,6 +33,7 @@ import type {
   CapacitasCredential,
   CapacitasParticelleSyncJob,
   CapacitasParticelleSyncJobResult,
+  ElaborazioneAnprSummary,
   ElaborazioneBatch,
   ElaborazioneCaptchaSummary,
   ElaborazioneCredentialStatus,
@@ -110,6 +112,7 @@ export default function ElaborazioniPage() {
   const [batches, setBatches] = useState<ElaborazioneBatch[]>([]);
   const [credentialStatus, setCredentialStatus] = useState<ElaborazioneCredentialStatus | null>(null);
   const [captchaSummary, setCaptchaSummary] = useState<ElaborazioneCaptchaSummary | null>(null);
+  const [anprSummary, setAnprSummary] = useState<ElaborazioneAnprSummary | null>(null);
   const [capacitasCredentials, setCapacitasCredentials] = useState<CapacitasCredential[]>([]);
   const [particelleSyncJobs, setParticelleSyncJobs] = useState<CapacitasParticelleSyncJob[]>([]);
   const [bonificaCredentials, setBonificaCredentials] = useState<BonificaOristaneseCredential[]>([]);
@@ -127,6 +130,7 @@ export default function ElaborazioniPage() {
         credentialsResult,
         batchesResult,
         captchaSummaryResult,
+        anprSummaryResult,
         capacitasResult,
         particelleSyncResult,
         bonificaResult,
@@ -135,6 +139,7 @@ export default function ElaborazioniPage() {
         getElaborazioneCredentials(token),
         getElaborazioneBatches(token),
         getElaborazioneCaptchaSummary(token),
+        getElaborazioneAnprSummary(token),
         listCapacitasCredentials(token),
         listCapacitasParticelleSyncJobs(token),
         listBonificaOristaneseCredentials(token),
@@ -143,6 +148,7 @@ export default function ElaborazioniPage() {
       setCredentialStatus(credentialsResult);
       setBatches(batchesResult.slice(0, 50));
       setCaptchaSummary(captchaSummaryResult);
+      setAnprSummary(anprSummaryResult);
       setCapacitasCredentials(capacitasResult);
       setParticelleSyncJobs(particelleSyncResult);
       setBonificaCredentials(bonificaResult);
@@ -414,6 +420,49 @@ export default function ElaborazioniPage() {
             hint={latestCapacitasUsage ? formatDateTime(latestCapacitasUsage) : "mai"}
           />
         </ModuleWorkspaceKpiRow>
+        <div className="mt-4 grid gap-3 lg:grid-cols-[1.1fr,1fr,1fr]">
+          <ElaborazioneNoticeCard
+            title="ANPR batch a ruolo"
+            description={
+              anprSummary
+                ? `${anprSummary.calls_today}/${anprSummary.effective_daily_limit} chiamate oggi · batch ${anprSummary.batch_size} · ruolo ${anprSummary.ruolo_year ?? "auto"}`
+                : "Monitor chiamate e run ANPR sui soggetti a ruolo."
+            }
+            tone={
+              anprSummary && anprSummary.calls_today >= anprSummary.effective_daily_limit
+                ? "warning"
+                : "neutral"
+            }
+            compact
+          />
+          <div className="rounded-2xl border border-gray-100 bg-white/80 px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">Ultimo run ANPR</p>
+            <p className="mt-2 text-sm font-semibold text-gray-900">
+              {anprSummary?.recent_runs[0] ? formatDateTime(anprSummary.recent_runs[0].started_at) : "Nessun run"}
+            </p>
+            <p className="mt-1 text-xs text-gray-500">
+              {anprSummary?.recent_runs[0]
+                ? `${anprSummary.recent_runs[0].status} · ${anprSummary.recent_runs[0].calls_used} chiamate · ${anprSummary.recent_runs[0].subjects_processed} soggetti`
+                : "Nessuna esecuzione registrata"}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-gray-100 bg-white/80 px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">Storico run</p>
+            {anprSummary?.recent_runs.length ? (
+              <div className="mt-2 space-y-2">
+                {anprSummary.recent_runs.slice(0, 3).map((run) => (
+                  <div key={run.id} className="flex items-center justify-between gap-3 text-xs text-gray-600">
+                    <span className="truncate">{formatDateTime(run.started_at)}</span>
+                    <span className="shrink-0">{run.calls_used} call</span>
+                    <span className="shrink-0">{run.status}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-2 text-xs text-gray-500">Nessun run registrato.</p>
+            )}
+          </div>
+        </div>
       </ElaborazioneHero>
 
       <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">

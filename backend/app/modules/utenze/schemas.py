@@ -389,6 +389,9 @@ class AnagraficaStatsResponse(BaseModel):
     active_subjects: int
     inactive_subjects: int
     documents_unclassified: int
+    deceased_updates_last_24h: int = 0
+    deceased_updates_current_month: int = 0
+    deceased_updates_current_year: int = 0
     by_letter: dict[str, int] = Field(default_factory=dict)
 
 

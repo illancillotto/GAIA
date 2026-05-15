@@ -396,6 +396,9 @@ def test_subjects_crud_search_and_stats() -> None:
     stats = stats_response.json()
     assert stats["total_subjects"] >= 1
     assert stats["total_persons"] >= 1
+    assert "deceased_updates_last_24h" in stats
+    assert "deceased_updates_current_month" in stats
+    assert "deceased_updates_current_year" in stats
     assert stats["by_letter"]["R"] >= 1
 
     deactivate_response = client.delete(f"/utenze/subjects/{subject_id}", headers=headers)

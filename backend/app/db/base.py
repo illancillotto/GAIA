@@ -57,7 +57,8 @@ from app.modules.utenze.models import (
     AnagraficaSubject,
     BonificaUserStaging,
 )
-from app.modules.utenze.anpr.models import AnprCheckLog, AnprSyncConfig
+from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob, RuoloParticella, RuoloPartita
+from app.modules.utenze.anpr.models import AnprCheckLog, AnprJobRun, AnprSyncConfig
 from app.models.catasto import (
     CatastoBatch,
     CatastoCaptchaLog,
@@ -97,6 +98,7 @@ __all__ = [
     "AnagraficaPersonSnapshot",
     "AnagraficaSubject",
     "AnprCheckLog",
+    "AnprJobRun",
     "AnprSyncConfig",
     "BonificaUserStaging",
     "Base",
@@ -137,6 +139,10 @@ __all__ = [
     "NetworkScanDevice",
     "PermissionEntry",
     "Review",
+    "RuoloAvviso",
+    "RuoloImportJob",
+    "RuoloParticella",
+    "RuoloPartita",
     "RiordinoAppeal",
     "RiordinoChecklistItem",
     "RiordinoDocument",

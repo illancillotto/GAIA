@@ -5,15 +5,18 @@ import inspect
 import logging
 import uuid
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
 from typing import Any, Callable
+from zoneinfo import ZoneInfo
 
-from sqlalchemy import and_, case, exists, func, not_, or_, select
+import anyio
+from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.catasto_phase1 import CatUtenzaIrrigua
+from app.core.config import settings
+from app.modules.ruolo.models import RuoloAvviso
 from app.modules.utenze.anpr.client import AnprClient
-from app.modules.utenze.anpr.models import AnprCheckLog, AnprSyncConfig
+from app.modules.utenze.anpr.models import AnprCheckLog, AnprJobRun, AnprSyncConfig
 from app.modules.utenze.anpr.schemas import (
     AnprPreviewLookupResponse,
     AnprSyncConfigUpdate,
@@ -34,6 +37,12 @@ class AnprJobSummary:
     errors: int
     calls_used: int
     message: str
+
+
+@dataclass(slots=True)
+class AnprQueueItem:
+    subject_id: str
+    estimated_calls: int
 
 
 async def get_config(db: AsyncSession) -> AnprSyncConfig:
@@ -57,35 +66,27 @@ async def update_config(db: AsyncSession, update: AnprSyncConfigUpdate, user_id:
     return config
 
 
-async def build_check_queue(db: AsyncSession, config: AnprSyncConfig) -> list[str]:
+async def build_check_queue(db: AsyncSession, config: AnprSyncConfig, *, limit: int | None = None) -> list[AnprQueueItem]:
     now = datetime.now(UTC)
-    current_year = now.year
     retry_threshold = now - timedelta(days=config.retry_not_found_days)
+    day_start_utc, _ = _local_day_bounds_utc(now)
+    queue_limit = limit or settings.anpr_job_batch_size
+    ruolo_year = await _resolve_ruolo_year(db)
 
-    prev_year_exists = exists(
-        select(1).where(
-            and_(
-                CatUtenzaIrrigua.codice_fiscale == AnagraficaPerson.codice_fiscale,
-                CatUtenzaIrrigua.anno_campagna == current_year - 1,
-            )
+    ruolo_subjects = (
+        select(RuoloAvviso.subject_id)
+        .where(
+            RuoloAvviso.anno_tributario == ruolo_year,
+            RuoloAvviso.subject_id.is_not(None),
         )
-    )
-    current_year_exists = exists(
-        select(1).where(
-            and_(
-                CatUtenzaIrrigua.codice_fiscale == AnagraficaPerson.codice_fiscale,
-                CatUtenzaIrrigua.anno_campagna == current_year,
-            )
-        )
-    )
-    priority_flag = case(
-        (and_(prev_year_exists, not_(current_year_exists)), 1),
-        else_=0,
+        .distinct()
+        .subquery()
     )
 
     stmt = (
-        select(AnagraficaSubject.id)
+        select(AnagraficaSubject.id, AnagraficaPerson.anpr_id)
         .join(AnagraficaPerson, AnagraficaPerson.subject_id == AnagraficaSubject.id)
+        .join(ruolo_subjects, ruolo_subjects.c.subject_id == AnagraficaSubject.id)
         .where(AnagraficaSubject.subject_type == AnagraficaSubjectType.PERSON.value)
         .where(AnagraficaPerson.codice_fiscale.is_not(None))
         .where(or_(AnagraficaPerson.stato_anpr.is_(None), AnagraficaPerson.stato_anpr != "deceased"))
@@ -97,12 +98,27 @@ async def build_check_queue(db: AsyncSession, config: AnprSyncConfig) -> list[st
                 AnagraficaPerson.last_anpr_check_at < retry_threshold,
             )
         )
-        .order_by(priority_flag.desc(), AnagraficaPerson.data_nascita.asc().nulls_last())
-        .limit(config.max_calls_per_day)
+        .where(
+            or_(
+                AnagraficaPerson.last_anpr_check_at.is_(None),
+                AnagraficaPerson.last_anpr_check_at < day_start_utc,
+            )
+        )
+        .where(
+            or_(
+                AnagraficaPerson.last_c030_check_at.is_(None),
+                AnagraficaPerson.last_c030_check_at < day_start_utc,
+            )
+        )
+        .order_by(AnagraficaPerson.data_nascita.asc().nulls_last(), AnagraficaSubject.created_at.asc())
+        .limit(queue_limit)
     )
 
     result = await _maybe_await(db.execute(stmt))
-    return [str(subject_id) for subject_id in result.scalars().all()]
+    return [
+        AnprQueueItem(subject_id=str(subject_id), estimated_calls=1 if anpr_id else 2)
+        for subject_id, anpr_id in result.all()
+    ]
 
 
 async def sync_single_subject(
@@ -287,38 +303,121 @@ async def run_daily_job(db_factory: Callable[[], Any]) -> AnprJobSummary:
                 message="job disabled",
             )
 
-        queue = await build_check_queue(db, config)
-        calls_budget = config.max_calls_per_day
+        if not _is_within_processing_window(started_at):
+            await _record_job_run(
+                db,
+                started_at=started_at,
+                status="outside_window",
+                configured_daily_limit=config.max_calls_per_day,
+                hard_daily_limit=settings.anpr_daily_call_hard_limit,
+                daily_calls_before=await _count_calls_for_local_day(db, started_at),
+                calls_used=0,
+                subjects_selected=0,
+                subjects_processed=0,
+                deceased_found=0,
+                errors=0,
+                notes="outside processing window",
+            )
+            return AnprJobSummary(
+                started_at=started_at,
+                subjects_processed=0,
+                deceased_found=0,
+                errors=0,
+                calls_used=0,
+                message="outside processing window",
+            )
+
+        effective_daily_limit = min(config.max_calls_per_day, settings.anpr_daily_call_hard_limit)
+        daily_calls_before = await _count_calls_for_local_day(db, started_at)
+        if daily_calls_before >= effective_daily_limit:
+            await _record_job_run(
+                db,
+                started_at=started_at,
+                status="limit_reached",
+                configured_daily_limit=config.max_calls_per_day,
+                hard_daily_limit=settings.anpr_daily_call_hard_limit,
+                daily_calls_before=daily_calls_before,
+                calls_used=0,
+                subjects_selected=0,
+                subjects_processed=0,
+                deceased_found=0,
+                errors=0,
+                notes="daily call limit reached",
+            )
+            return AnprJobSummary(
+                started_at=started_at,
+                subjects_processed=0,
+                deceased_found=0,
+                errors=0,
+                calls_used=0,
+                message="daily call limit reached",
+            )
+
+        queue = await build_check_queue(db, config, limit=settings.anpr_job_batch_size)
+        calls_budget = effective_daily_limit - daily_calls_before
         processed = 0
         deceased_found = 0
         errors = 0
         calls_used = 0
+        subjects_selected = 0
 
         from app.modules.utenze.anpr.auth import PdndAuthManager
 
         auth = PdndAuthManager()
         client = AnprClient(auth)
 
-        for queued_subject_id in queue:
-            if calls_budget <= 0:
+        for queue_item in queue:
+            if calls_budget <= 0 or subjects_selected >= settings.anpr_job_batch_size:
+                break
+            if queue_item.estimated_calls > calls_budget:
                 break
 
-            result = await sync_single_subject(queued_subject_id, db, "job", auth, client)
-            calls_budget -= result.calls_made
-            calls_used += result.calls_made
-            processed += 1
-            if result.esito == "deceased":
-                deceased_found += 1
-            if not result.success:
+            subjects_selected += 1
+            try:
+                result = await sync_single_subject(queue_item.subject_id, db, "job", auth, client)
+                calls_budget -= result.calls_made
+                calls_used += result.calls_made
+                processed += 1
+                if result.esito == "deceased":
+                    deceased_found += 1
+                if not result.success:
+                    errors += 1
+            except Exception:
+                logger.exception("ANPR batch job failed for subject_id=%s", queue_item.subject_id)
+                rollback = getattr(db, "rollback", None)
+                if rollback is not None:
+                    await _maybe_await(rollback())
+                calls_budget = max(calls_budget - queue_item.estimated_calls, 0)
+                calls_used += queue_item.estimated_calls
                 errors += 1
-            await asyncio.sleep(0.5)
+                break
+            await anyio.sleep(0.5)
 
+        completed_at = datetime.now(UTC)
+        status = "completed" if errors == 0 else "completed_with_errors"
+        await _record_job_run(
+            db,
+            started_at=started_at,
+            completed_at=completed_at,
+            status=status,
+            configured_daily_limit=config.max_calls_per_day,
+            hard_daily_limit=settings.anpr_daily_call_hard_limit,
+            daily_calls_before=daily_calls_before,
+            calls_used=calls_used,
+            subjects_selected=subjects_selected,
+            subjects_processed=processed,
+            deceased_found=deceased_found,
+            errors=errors,
+            notes="job completed" if processed else "no eligible role subjects",
+        )
         logger.info(
-            "ANPR daily job completed processed=%s deceased=%s errors=%s calls_used=%s",
+            "ANPR ruolo batch completed processed=%s deceased=%s errors=%s calls_used=%s daily_calls_before=%s daily_limit=%s",
             processed,
             deceased_found,
             errors,
             calls_used,
+            daily_calls_before,
+            effective_daily_limit,
         )
         return AnprJobSummary(
             started_at=started_at,
@@ -346,6 +445,91 @@ async def _maybe_await(value: Any) -> Any:
     if inspect.isawaitable(value):
         return await value
     return value
+
+
+def _processing_timezone() -> ZoneInfo:
+    return ZoneInfo(settings.anpr_job_timezone)
+
+
+def _local_day_bounds_utc(reference: datetime) -> tuple[datetime, datetime]:
+    local_tz = _processing_timezone()
+    local_reference = reference.astimezone(local_tz)
+    start_local = datetime.combine(local_reference.date(), time.min, tzinfo=local_tz)
+    end_local = start_local + timedelta(days=1)
+    return start_local.astimezone(UTC), end_local.astimezone(UTC)
+
+
+def _is_within_processing_window(reference: datetime) -> bool:
+    local_reference = reference.astimezone(_processing_timezone())
+    return settings.anpr_job_start_hour <= local_reference.hour < settings.anpr_job_end_hour
+
+
+async def _count_calls_for_local_day(db: AsyncSession, reference: datetime) -> int:
+    day_start_utc, day_end_utc = _local_day_bounds_utc(reference)
+    stmt = (
+        select(func.count())
+        .select_from(AnprCheckLog)
+        .where(AnprCheckLog.created_at >= day_start_utc, AnprCheckLog.created_at < day_end_utc)
+    )
+    return int((await _maybe_await(db.execute(stmt))).scalar_one())
+
+
+async def _resolve_ruolo_year(db: AsyncSession) -> int:
+    if settings.anpr_job_ruolo_year is not None:
+        return settings.anpr_job_ruolo_year
+
+    stmt = select(func.max(RuoloAvviso.anno_tributario)).where(RuoloAvviso.subject_id.is_not(None))
+    latest_year = (await _maybe_await(db.execute(stmt))).scalar_one_or_none()
+    if latest_year is None:
+        raise ValueError("Nessun ruolo disponibile per costruire la coda ANPR")
+    return int(latest_year)
+
+
+async def _record_job_run(
+    db: AsyncSession,
+    *,
+    started_at: datetime,
+    status: str,
+    configured_daily_limit: int,
+    hard_daily_limit: int,
+    daily_calls_before: int,
+    calls_used: int,
+    subjects_selected: int,
+    subjects_processed: int,
+    deceased_found: int,
+    errors: int,
+    notes: str,
+    completed_at: datetime | None = None,
+) -> None:
+    local_date = started_at.astimezone(_processing_timezone()).date()
+    ruolo_year = await _resolve_ruolo_year(db)
+    db.add(
+        AnprJobRun(
+            run_date=local_date,
+            ruolo_year=ruolo_year,
+            triggered_by="job",
+            status=status,
+            batch_size=settings.anpr_job_batch_size,
+            hard_daily_limit=hard_daily_limit,
+            configured_daily_limit=configured_daily_limit,
+            daily_calls_before=daily_calls_before,
+            daily_calls_after=daily_calls_before + calls_used,
+            subjects_selected=subjects_selected,
+            subjects_processed=subjects_processed,
+            deceased_found=deceased_found,
+            errors=errors,
+            calls_used=calls_used,
+            notes=notes,
+            payload_json={
+                "timezone": settings.anpr_job_timezone,
+                "window_start_hour": settings.anpr_job_start_hour,
+                "window_end_hour": settings.anpr_job_end_hour,
+            },
+            started_at=started_at,
+            completed_at=completed_at or datetime.now(UTC),
+        )
+    )
+    await _maybe_await(db.commit())
 
 
 def _map_person_status(esito: str) -> str:
