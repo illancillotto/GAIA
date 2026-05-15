@@ -189,6 +189,35 @@ def test_post_sync_subject_returns_503_for_pdnd_misconfiguration(monkeypatch: py
     assert response.json()["detail"] == "PDND private key not configured: set PDND_PRIVATE_KEY_PATH or PDND_PRIVATE_KEY_PEM"
 
 
+def test_post_sync_subject_returns_200_with_operational_anpr_error_payload(monkeypatch: pytest.MonkeyPatch) -> None:
+    reviewer = _create_user(ApplicationUserRole.REVIEWER.value)
+    subject_id = uuid.uuid4()
+
+    async def fake_sync_single_subject(subject_id: str, db, triggered_by: str, auth, client):
+        assert triggered_by == f"user:{reviewer.id}"
+        return {
+            "subject_id": subject_id,
+            "success": False,
+            "esito": "error",
+            "data_decesso": None,
+            "anpr_id": "ANPR-123",
+            "calls_made": 2,
+            "message": "EN148 | E | Devi specificare la sezione verifica dati decesso per questo caso d'uso",
+        }
+
+    monkeypatch.setattr("app.modules.utenze.anpr.routes.sync_single_subject", fake_sync_single_subject)
+
+    response = client.post(f"/utenze/anpr/sync/{subject_id}", headers=_auth_headers(reviewer.username))
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["success"] is False
+    assert body["esito"] == "error"
+    assert body["anpr_id"] == "ANPR-123"
+    assert body["calls_made"] == 2
+    assert "EN148" in body["message"]
+
+
 def test_get_config_returns_admin_config(monkeypatch: pytest.MonkeyPatch) -> None:
     admin = _create_user(ApplicationUserRole.ADMIN.value)
 

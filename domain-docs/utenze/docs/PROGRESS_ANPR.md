@@ -24,6 +24,15 @@
 - `domain-docs/utenze/docs/specs/SpecificaAPI_C030.yaml`
 - completata la suite test dedicata backend per auth, client, service esteso (**preview lookup** senza soggetto), routes e scheduler
 - aggiunta validazione esplicita della configurazione PDND (`PDND_CLIENT_ID`, `PDND_KID`, `PDND_PRIVATE_KEY_PATH`/`PDND_PRIVATE_KEY_PEM`) con risposta API `503` invece di `500` grezzo quando il backend non ha credenziali ANPR utilizzabili
+- corretta la generazione del voucher PDND: `client_assertion` con audience configurabile/derivata, supporto `purposeId` opzionale e cache separata per purpose, per evitare `403` sul token endpoint quando C030/C004 usano credenziali o scopi distinti
+- corretto il default `PDND_AUTH_URL` su `https://auth.interop.pagopa.it/token.oauth2` dopo verifica runtime: l'endpoint precedente `/as/token.oauth2` rispondeva `403 {"message":"Missing Authentication Token"}` con le stesse credenziali
+- verificato nei log backend che il nuovo blocco residuo è TLS verso `modipa-val.anpr.interno.it`: certificato emesso da `Sogei Certification Authority Test`; aggiunto supporto config `ANPR_CA_BUNDLE_PATH` e `ANPR_SSL_VERIFY` per fidare la CA test nel container
+- dopo il fix TLS, l'errore runtime si è spostato su `401 AuthenticationRequired / Errore nella validazione del JWT`; riallineati gli header verso GovWay con `Digest` HTTP, `aud` ANPR normalizzato, `iss/sub`, `nbf` e `purposeId` nei JWS `Agid-JWT-*`
+- aggiunto binding tra `Agid-JWT-TrackingEvidence` e `client_assertion` PDND tramite digest SHA-256 del tracking JWT, in linea con il flusso operativo documentato per il profilo interoperabilità
+- verificato runtime ANPR `prod`: `idOperazioneClient` di C030 non può superare 30 caratteri; adeguata la generazione a identificatori numerici compatti
+- verificato runtime ANPR `prod`: C004 richiede `verifica.datiDecesso`; aggiunto `dataEvento=ieri` per evitare l'errore `EN148`
+- estesa la test suite backend ANPR con casi service-level su stop anticipato dopo `C030 not_found`, gestione errore `C004` in preview e vincoli runtime emersi su header/payload
+- aggiunto test route-level sul contratto `POST /utenze/anpr/sync/{subject_id}`: gli errori operativi ANPR restano `200` con `success=false`, mentre i soli problemi di configurazione PDND continuano a esporre `503`
 
 ## Verifiche Eseguite
 

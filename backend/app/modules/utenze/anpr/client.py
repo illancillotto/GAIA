@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import base64
+import hashlib
 import json
 import logging
+import ssl
 import time
 from dataclasses import dataclass
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
 from uuid import uuid4
 
+import certifi
 import httpx
 
 from app.core.config import settings
@@ -45,8 +50,28 @@ class AnprClient:
         self.auth_manager = auth_manager or PdndAuthManager()
         self.base_url = (base_url or settings.anpr_base_url).rstrip("/")
 
+    @staticmethod
+    def _build_operation_id() -> str:
+        # Keep the identifier compact and numeric to satisfy ANPR length constraints.
+        return str(int(time.time() * 1000))
+
+    @staticmethod
+    def _resolve_verify() -> bool | ssl.SSLContext:
+        if not settings.anpr_ssl_verify:
+            return False
+        bundle_path = (settings.anpr_ca_bundle_path or "").strip()
+        if bundle_path:
+            if not Path(bundle_path).exists():
+                logger.warning("ANPR_CA_BUNDLE_PATH does not exist: %s", bundle_path)
+                return True
+            context = ssl.create_default_context(cafile=certifi.where())
+            context.load_verify_locations(cafile=bundle_path)
+            return context
+        return True
+
     async def c030_get_anpr_id(self, codice_fiscale: str, subject_id_short: str) -> C030Result:
-        id_operazione_client = str(uuid4())
+        id_operazione_client = self._build_operation_id()
+        purpose_id = (settings.purpose_id_c030 or "").strip() or None
         request_payload = {
             "idOperazioneClient": id_operazione_client,
             "criteriRicerca": {
@@ -64,6 +89,7 @@ class AnprClient:
                 "/C030-servizioAccertamentoIdUnicoNazionale/v1/anpr-service-e002",
                 request_payload,
                 motivo_richiesta=f"GAIA-CHECK-{subject_id_short}",
+                purpose_id=purpose_id,
             )
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 404:
@@ -142,11 +168,17 @@ class AnprClient:
         )
 
     async def c004_check_death(self, anpr_id: str, subject_id_short: str) -> C004Result:
-        id_operazione_client = str(int(time.time() * 1000))
+        id_operazione_client = self._build_operation_id()
+        purpose_id = (settings.purpose_id_c004 or "").strip() or None
         request_payload = {
             "idOperazioneClient": id_operazione_client,
             "criteriRicerca": {
                 "idANPR": anpr_id,
+            },
+            "verifica": {
+                "datiDecesso": {
+                    "dataEvento": (date.today() - timedelta(days=1)).isoformat(),
+                }
             },
             "datiRichiesta": {
                 "dataRiferimentoRichiesta": date.today().isoformat(),
@@ -160,6 +192,7 @@ class AnprClient:
                 "/C004-servizioVerificaDichDecesso/v1/anpr-service-e002",
                 request_payload,
                 motivo_richiesta=f"GAIA-CHECK-{subject_id_short}",
+                purpose_id=purpose_id,
             )
         except httpx.HTTPStatusError as exc:
             if exc.response.status_code == 404:
@@ -223,24 +256,50 @@ class AnprClient:
             raw_response=payload,
         )
 
-    async def _post_json(self, path: str, payload: dict, *, motivo_richiesta: str) -> httpx.Response:
+    async def _post_json(self, path: str, payload: dict, *, motivo_richiesta: str, purpose_id: str | None) -> httpx.Response:
+        endpoint_url = f"{self.base_url}{path}"
         payload_bytes = json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
-        headers = await self._build_headers(payload_bytes, motivo_richiesta=motivo_richiesta)
-        async with httpx.AsyncClient(timeout=ANPR_TIMEOUT_SECONDS) as client:
+        headers = await self._build_headers(
+            payload_bytes,
+            endpoint_url=endpoint_url,
+            motivo_richiesta=motivo_richiesta,
+            purpose_id=purpose_id,
+        )
+        async with httpx.AsyncClient(timeout=ANPR_TIMEOUT_SECONDS, verify=self._resolve_verify()) as client:
             response = await client.post(
-                f"{self.base_url}{path}",
+                endpoint_url,
                 content=payload_bytes,
                 headers=headers,
             )
             response.raise_for_status()
             return response
 
-    async def _build_headers(self, payload_bytes: bytes, *, motivo_richiesta: str) -> dict[str, str]:
-        voucher = await self.auth_manager.get_voucher()
+    async def _build_headers(
+        self,
+        payload_bytes: bytes,
+        *,
+        endpoint_url: str,
+        motivo_richiesta: str,
+        purpose_id: str | None,
+    ) -> dict[str, str]:
+        tracking_evidence = self.auth_manager.build_agid_jwt_tracking_evidence(
+            endpoint_url=endpoint_url,
+            purpose_id=purpose_id,
+        )
+        tracking_digest = hashlib.sha256(tracking_evidence.encode("utf-8")).hexdigest()
+        voucher = await self.auth_manager.get_voucher(purpose_id=purpose_id, tracking_digest=tracking_digest)
+        digest_value = base64.b64encode(hashlib.sha256(payload_bytes).digest()).decode("ascii")
+        digest_header = f"SHA-256={digest_value}"
         return {
             "Authorization": f"Bearer {voucher}",
-            "Agid-JWT-Signature": self.auth_manager.build_agid_jwt_signature(payload_bytes),
-            "Agid-JWT-TrackingEvidence": self.auth_manager.build_agid_jwt_tracking_evidence(motivo_richiesta),
+            "Accept": "application/json",
+            "Digest": digest_header,
+            "Agid-JWT-Signature": self.auth_manager.build_agid_jwt_signature(
+                payload_bytes,
+                endpoint_url=endpoint_url,
+                digest_header=digest_header,
+            ),
+            "Agid-JWT-TrackingEvidence": tracking_evidence,
             "Content-Type": "application/json",
         }
 

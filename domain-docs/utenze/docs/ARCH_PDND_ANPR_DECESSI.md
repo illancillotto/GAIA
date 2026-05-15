@@ -96,12 +96,15 @@ PDND_PRIVATE_KEY_PATH=/run/secrets/pdnd_private_key.pem
 PDND_PRIVATE_KEY_PEM=<contenuto PEM — solo per sviluppo>
 
 # PDND Auth Server
-PDND_AUTH_URL=https://auth.interop.pagopa.it/as/token.oauth2
+PDND_AUTH_URL=https://auth.interop.pagopa.it/token.oauth2
+PDND_CLIENT_ASSERTION_AUDIENCE=auth.interop.pagopa.it/client-assertion
 PDND_AUDIENCE=https://interop.pagopa.it/
 
 # ANPR API endpoints
 ANPR_BASE_URL_TEST=https://modipa-val.anpr.interno.it/govway/rest/in/MinInternoPortaANPR-PDND
 ANPR_BASE_URL_PROD=https://modipa.anpr.interno.it/govway/rest/in/MinInternoPortaANPR-PDND
+ANPR_CA_BUNDLE_PATH=/run/secrets/sogei-ca-test.pem
+ANPR_SSL_VERIFY=true
 ANPR_ENV=test  # test | prod
 
 # Ente fruitore (per claims audit)
@@ -119,6 +122,7 @@ Validazioni runtime minime:
 Comportamento applicativo:
 - la sync manuale `POST /utenze/anpr/sync/{subject_id}` restituisce `503 Service Unavailable` con dettaglio esplicito se la configurazione PDND è assente o non valida
 - in assenza di queste variabili il backend non può ottenere il voucher PDND né firmare gli header `Agid-JWT-*`
+- sull'ambiente ANPR di collaudo con CA privata Sogei, il container backend deve fidarsi del certificato via `ANPR_CA_BUNDLE_PATH`; `ANPR_SSL_VERIFY=false` va considerato solo workaround temporaneo di sviluppo
 
 ### 3.2 Flusso autenticazione
 
@@ -128,26 +132,37 @@ Comportamento applicativo:
 │                                                                   │
 │  1. build_client_assertion()                                      │
 │     └─ JWT firmato con chiave privata RSA:                        │
-│        { iss: client_id, sub: client_id, aud: pdnd_auth_url,     │
+│        { iss: client_id, sub: client_id,                          │
+│          aud: pdnd_client_assertion_audience                      │
+│               oppure <host_di_pdnd_auth_url>/client-assertion,    │
+│          purposeId: opzionale per servizio,                       │
+│          digest: opzionale con hash del TrackingEvidence,         │
 │          jti: uuid4(), iat: now, exp: now+60s }                   │
 │                                                                   │
-│  2. get_voucher()  [cached, rinnovato 5min prima di scadenza]     │
+│  2. get_voucher(purpose_id)  [cached per purpose,                 │
+│                               rinnovato 5min prima di scadenza]   │
 │     └─ POST PDND_AUTH_URL                                         │
+│        client_id=<PDND_CLIENT_ID>                                 │
 │        client_assertion_type=urn:ietf:params:oauth:...jwt-bearer  │
 │        client_assertion=<JWT firmato>                             │
 │        grant_type=client_credentials                              │
+│        tracking digest derivato da `Agid-JWT-TrackingEvidence`    │
 │        └─ ritorna: { access_token, expires_in }                   │
 │                                                                   │
 │  3. build_agid_jwt_signature(payload_bytes)                       │
 │     └─ JWS del payload request (INTEGRITY_REST_02)               │
 │        header: { alg: RS256, kid: KID, typ: JWT }                 │
-│        payload: { digest: { alg: SHA256, value: b64(sha256) },    │
-│                   signed_headers: [...], iat, exp, jti }          │
+│        payload: { iss, sub, aud=<endpoint ANPR normalizzato>,     │
+│                   nbf, iat, exp, jti,                             │
+│                   digest: { alg: SHA256, value: b64url(sha256) }, │
+│                   signed_headers: [Digest, Content-Type] }        │
 │                                                                   │
-│  4. build_agid_jwt_tracking_evidence(motivo, user_id)             │
+│  4. build_agid_jwt_tracking_evidence(endpoint, purpose_id)        │
 │     └─ JWS per AUDIT_REST_02                                      │
-│        claims: { userID, userLocation, LoA, iat, exp, jti,       │
-│                  purposeId (se richiesto) }                        │
+│        claims: { iss, sub, aud=<endpoint ANPR normalizzato>,      │
+│                  nbf, iat, exp, jti,                              │
+│                  userID, userLocation, LoA,                       │
+│                  purposeId (se richiesto) }                       │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
@@ -182,6 +197,8 @@ Comportamento applicativo:
 **Headers**:
 ```
 Authorization: Bearer <voucher>
+Accept: application/json
+Digest: SHA-256=<base64 sha256 body>
 Agid-JWT-Signature: <JWS payload>
 Agid-JWT-TrackingEvidence: <JWS tracking>
 Content-Type: application/json
@@ -231,6 +248,10 @@ Content-Type: application/json
 servizio risponde con lo stato ANPR del soggetto alla data di riferimento senza confrontare
 dati di decesso forniti dall'ente. I valori restituiti nel campo `infoSoggettoEnte` vanno
 interpretati secondo il mapping AgID/ANPR (da validare sull'ambiente di test):
+
+**Aggiornamento runtime**: l'ambiente ANPR/GovWay in uso risponde con `EN148` se la sezione
+`verifica.datiDecesso` non viene inviata per `C004`. Il payload operativo GAIA include quindi
+`verifica.datiDecesso.dataEvento = ieri` come minimo set richiesto dal caso d'uso.
 
 | Chiave ANPR attesa | Valore | Significato |
 |---|---|---|

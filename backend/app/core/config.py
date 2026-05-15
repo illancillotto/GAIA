@@ -90,12 +90,15 @@ class Settings(BaseSettings):
     pdnd_kid: str = Field(default="", alias="PDND_KID")
     pdnd_private_key_path: str = Field(default="", alias="PDND_PRIVATE_KEY_PATH")
     pdnd_private_key_pem: str = Field(default="", alias="PDND_PRIVATE_KEY_PEM")
-    pdnd_auth_url: str = Field(default="https://auth.interop.pagopa.it/as/token.oauth2", alias="PDND_AUTH_URL")
+    pdnd_auth_url: str = Field(default="https://auth.interop.pagopa.it/token.oauth2", alias="PDND_AUTH_URL")
+    pdnd_client_assertion_audience: str = Field(default="", alias="PDND_CLIENT_ASSERTION_AUDIENCE")
     pdnd_audience: str = Field(default="https://interop.pagopa.it/", alias="PDND_AUDIENCE")
     anpr_base_url: str = Field(
         default="https://modipa-val.anpr.interno.it/govway/rest/in/MinInternoPortaANPR-PDND",
         alias="ANPR_BASE_URL",
     )
+    anpr_ca_bundle_path: str = Field(default="", alias="ANPR_CA_BUNDLE_PATH")
+    anpr_ssl_verify: bool = Field(default=True, alias="ANPR_SSL_VERIFY")
     pdnd_fruitore_user_id: str = Field(default="GAIA-CBO", alias="PDND_FRUITORE_USER_ID")
     pdnd_fruitore_user_location: str = Field(default="GAIA-SRV", alias="PDND_FRUITORE_USER_LOCATION")
     pdnd_loa: str = Field(default="LOW", alias="PDND_LOA")

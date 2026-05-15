@@ -256,6 +256,44 @@ async def test_sync_single_deceased(db_session: Session) -> None:
 
 
 @pytest.mark.anyio
+async def test_sync_single_c030_not_found_stops_before_c004_and_persists_status(db_session: Session) -> None:
+    subject = _create_person_subject(db_session, "RSSMRA80A01H501Q")
+    client = AsyncMock()
+    client.c030_get_anpr_id = AsyncMock(
+        return_value=C030Result(
+            success=False,
+            anpr_id=None,
+            id_operazione_anpr="op-c030-miss",
+            esito="not_found",
+            error_detail="EN122 | E | Soggetto non registrato in ANPR",
+            id_operazione_client="client-c030-miss",
+        )
+    )
+    client.c004_check_death = AsyncMock()
+
+    result = await sync_single_subject(str(subject.id), db_session, "test", object(), client)
+
+    db_session.expire_all()
+    person = db_session.get(AnagraficaPerson, subject.id)
+    logs = db_session.scalars(select(AnprCheckLog).where(AnprCheckLog.subject_id == subject.id)).all()
+
+    assert result.success is False
+    assert result.esito == "not_found"
+    assert result.calls_made == 1
+    assert "EN122" in result.message
+    assert person is not None
+    assert person.stato_anpr == "not_found_anpr"
+    assert person.anpr_id is None
+    assert person.last_c030_check_at is not None
+    assert person.last_anpr_check_at is None
+    assert len(logs) == 1
+    assert logs[0].call_type == "C030"
+    assert logs[0].esito == "not_found"
+    client.c030_get_anpr_id.assert_awaited_once()
+    client.c004_check_death.assert_not_awaited()
+
+
+@pytest.mark.anyio
 async def test_config_singleton(db_session: Session) -> None:
     first = await AnprSyncConfig.get_or_create_default(db_session)
     db_session.commit()
@@ -418,3 +456,39 @@ async def test_lookup_anpr_by_codice_fiscale_returns_after_c030_not_found_single
     assert result.success is True
     assert result.stato_anpr == "not_found_anpr"
     assert result.calls_made == 1
+
+
+@pytest.mark.anyio
+async def test_lookup_anpr_by_codice_fiscale_returns_error_after_c004_failure() -> None:
+    class FakeClient:
+        async def c030_get_anpr_id(self, cf: str, key: str) -> C030Result:
+            assert cf == "RSSMRA80A01H501U"
+            assert key == "preview"
+            return C030Result(
+                success=True,
+                anpr_id="ANPR-X",
+                id_operazione_anpr="op1",
+                esito="anpr_id_found",
+                error_detail=None,
+                id_operazione_client="cli1",
+            )
+
+        async def c004_check_death(self, anpr_id: str, key: str) -> C004Result:
+            assert anpr_id == "ANPR-X"
+            assert key == "preview"
+            return C004Result(
+                success=False,
+                esito="error",
+                data_decesso=None,
+                id_operazione_anpr="op2",
+                error_detail="EN148 | E | Devi specificare la sezione verifica dati decesso per questo caso d'uso",
+                id_operazione_client="cli2",
+                raw_response=None,
+            )
+
+    result = await lookup_anpr_by_codice_fiscale("RSSMRA80A01H501U", client=FakeClient())
+
+    assert result.success is False
+    assert result.anpr_id == "ANPR-X"
+    assert result.calls_made == 2
+    assert "EN148" in result.message

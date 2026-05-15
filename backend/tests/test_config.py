@@ -24,8 +24,11 @@ def test_settings_use_expected_defaults(monkeypatch) -> None:
         "PDND_PRIVATE_KEY_PATH",
         "PDND_PRIVATE_KEY_PEM",
         "PDND_AUTH_URL",
+        "PDND_CLIENT_ASSERTION_AUDIENCE",
         "PDND_AUDIENCE",
         "ANPR_BASE_URL",
+        "ANPR_CA_BUNDLE_PATH",
+        "ANPR_SSL_VERIFY",
         "PDND_FRUITORE_USER_ID",
         "PDND_FRUITORE_USER_LOCATION",
         "PDND_LOA",
@@ -62,9 +65,12 @@ def test_settings_use_expected_defaults(monkeypatch) -> None:
     assert settings.pdnd_kid == ""
     assert settings.pdnd_private_key_path == ""
     assert settings.pdnd_private_key_pem == ""
-    assert settings.pdnd_auth_url == "https://auth.interop.pagopa.it/as/token.oauth2"
+    assert settings.pdnd_auth_url == "https://auth.interop.pagopa.it/token.oauth2"
+    assert settings.pdnd_client_assertion_audience == ""
     assert settings.pdnd_audience == "https://interop.pagopa.it/"
     assert settings.anpr_base_url == "https://modipa-val.anpr.interno.it/govway/rest/in/MinInternoPortaANPR-PDND"
+    assert settings.anpr_ca_bundle_path == ""
+    assert settings.anpr_ssl_verify is True
     assert settings.pdnd_fruitore_user_id == "GAIA-CBO"
     assert settings.pdnd_fruitore_user_location == "GAIA-SRV"
     assert settings.pdnd_loa == "LOW"
@@ -105,8 +111,11 @@ def test_settings_allow_environment_override(monkeypatch) -> None:
     monkeypatch.setenv("PDND_PRIVATE_KEY_PATH", "/tmp/pdnd.pem")
     monkeypatch.setenv("PDND_PRIVATE_KEY_PEM", "pem-inline")
     monkeypatch.setenv("PDND_AUTH_URL", "https://auth.example.test/token")
+    monkeypatch.setenv("PDND_CLIENT_ASSERTION_AUDIENCE", "auth.example.test/client-assertion")
     monkeypatch.setenv("PDND_AUDIENCE", "https://audience.example.test/")
     monkeypatch.setenv("ANPR_BASE_URL", "https://anpr.example.test")
+    monkeypatch.setenv("ANPR_CA_BUNDLE_PATH", "/tmp/anpr-ca.pem")
+    monkeypatch.setenv("ANPR_SSL_VERIFY", "false")
     monkeypatch.setenv("PDND_FRUITORE_USER_ID", "GAIA-TEST")
     monkeypatch.setenv("PDND_FRUITORE_USER_LOCATION", "GAIA-TEST-SRV")
     monkeypatch.setenv("PDND_LOA", "HIGH")
@@ -137,8 +146,11 @@ def test_settings_allow_environment_override(monkeypatch) -> None:
     assert settings.pdnd_private_key_path == "/tmp/pdnd.pem"
     assert settings.pdnd_private_key_pem == "pem-inline"
     assert settings.pdnd_auth_url == "https://auth.example.test/token"
+    assert settings.pdnd_client_assertion_audience == "auth.example.test/client-assertion"
     assert settings.pdnd_audience == "https://audience.example.test/"
     assert settings.anpr_base_url == "https://anpr.example.test"
+    assert settings.anpr_ca_bundle_path == "/tmp/anpr-ca.pem"
+    assert settings.anpr_ssl_verify is False
     assert settings.pdnd_fruitore_user_id == "GAIA-TEST"
     assert settings.pdnd_fruitore_user_location == "GAIA-TEST-SRV"
     assert settings.pdnd_loa == "HIGH"
