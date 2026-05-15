@@ -97,7 +97,9 @@ export function ModuleSidebar({
         />
         <NavItem href="/catasto/import" icon={RefreshIcon} label="Import" match="prefix" />
 
-        <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Legacy</p>
+        <NavItem href="/utenze" icon={UserIcon} label="Utenze" match="prefix" />
+
+        <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Link rapidi</p>
         <NavItem href="/catasto/archive" icon={DocumentIcon} label="Archivio documenti" match="prefix" />
       </div>
     );
