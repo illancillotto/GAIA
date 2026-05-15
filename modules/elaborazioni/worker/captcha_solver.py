@@ -6,7 +6,7 @@ from PIL import Image, ImageFilter, ImageOps
 import pytesseract
 
 
-OCR_CONFIG = "--psm 7 --oem 3 -c tessedit_char_whitelist=ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+OCR_CONFIG = "--psm 7 --oem 3 -c tessedit_char_whitelist=abcdefghijklmnopqrstuvwxyz"
 
 
 class CaptchaSolver:
@@ -17,5 +17,5 @@ class CaptchaSolver:
         image = image.point(lambda value: 255 if value > 145 else 0)
         image = image.filter(ImageFilter.MedianFilter(size=3))
         text = pytesseract.image_to_string(image, config=OCR_CONFIG)
-        normalized = "".join(char for char in text.upper() if char.isalnum())
+        normalized = "".join(char for char in text if char.isalpha())
         return normalized or None

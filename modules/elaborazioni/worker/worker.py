@@ -54,7 +54,8 @@ from app.modules.catasto.services.ade_status_scan import ADE_SCAN_PURPOSE, persi
 from app.modules.catasto.services.ade_historical_visura_parser import parse_historical_visura_pdf
 from anti_captcha_client import AntiCaptchaClient
 from browser_session import BrowserSession, BrowserSessionConfig
-from captcha_solver import CaptchaSolver
+from sister_exceptions import SisterServerError
+from llm_captcha_solver import LLMCaptchaSolver
 from credential_vault import WorkerCredentialVault
 from reporting import write_batch_report
 from runtime_policy import classify_terminal_status
@@ -68,11 +69,14 @@ def env_value(primary: str, legacy: str, default: str) -> str:
 
 
 POLL_INTERVAL_SEC = int(env_value("ELABORAZIONI_POLL_INTERVAL_SEC", "CATASTO_POLL_INTERVAL_SEC", "3"))
-CAPTCHA_MAX_OCR_ATTEMPTS = int(os.getenv("CAPTCHA_MAX_OCR_ATTEMPTS", "3"))
 CAPTCHA_MANUAL_TIMEOUT_SEC = int(os.getenv("CAPTCHA_MANUAL_TIMEOUT_SEC", "300"))
 ANTI_CAPTCHA_API_KEY = os.getenv("ANTI_CAPTCHA_API_KEY", "").strip()
 ANTI_CAPTCHA_POLL_INTERVAL_SEC = int(os.getenv("ANTI_CAPTCHA_POLL_INTERVAL_SEC", "3"))
 ANTI_CAPTCHA_TIMEOUT_SEC = int(os.getenv("ANTI_CAPTCHA_TIMEOUT_SEC", "120"))
+CAPTCHA_LLM_AGENT_CMD = os.getenv("CAPTCHA_LLM_AGENT_CMD", "agent").strip()
+CAPTCHA_LLM_ENABLED = os.getenv("CAPTCHA_LLM_ENABLED", "true").lower() != "false"
+CAPTCHA_LLM_ATTEMPTS = int(os.getenv("CAPTCHA_LLM_ATTEMPTS", "3"))
+CAPTCHA_EXTERNAL_ATTEMPTS = int(os.getenv("CAPTCHA_EXTERNAL_ATTEMPTS", "3"))
 BETWEEN_VISURE_DELAY_SEC = int(os.getenv("BETWEEN_VISURE_DELAY_SEC", "5"))
 SESSION_TIMEOUT_SEC = int(os.getenv("SESSION_TIMEOUT_SEC", "1680"))
 DOCUMENT_STORAGE_PATH = Path(env_value("ELABORAZIONI_DOCUMENT_STORAGE_PATH", "CATASTO_DOCUMENT_STORAGE_PATH", "/data/catasto/documents"))
@@ -101,7 +105,6 @@ class CatastoWorker:
     def __init__(self) -> None:
         self.state = WorkerState()
         self.vault = WorkerCredentialVault(CREDENTIAL_MASTER_KEY)
-        self.captcha_solver = CaptchaSolver()
         self.anti_captcha_client = (
             AntiCaptchaClient(
                 api_key=ANTI_CAPTCHA_API_KEY,
@@ -111,6 +114,7 @@ class CatastoWorker:
             if ANTI_CAPTCHA_API_KEY
             else None
         )
+        self.llm_captcha_solver = LLMCaptchaSolver(agent_cmd=CAPTCHA_LLM_AGENT_CMD) if CAPTCHA_LLM_ENABLED else None
         DEBUG_ARTIFACTS_PATH.mkdir(parents=True, exist_ok=True)
         REPORT_STORAGE_PATH.mkdir(parents=True, exist_ok=True)
 
@@ -351,22 +355,24 @@ class CatastoWorker:
                 return
             batch.current_operation = "Batch preso in carico dal worker"
             db.commit()
-            credentials = list(
+            all_credentials = list(
                 db.scalars(
                     select(CatastoCredential)
                     .where(CatastoCredential.user_id == batch.user_id)
                     .order_by(CatastoCredential.is_default.desc(), CatastoCredential.active.desc(), CatastoCredential.updated_at.desc())
                 ).all()
             )
-            credential = next(
-                (item for item in credentials if item.is_default and item.active),
-                next((item for item in credentials if item.active), None),
-            )
-            if credential is None:
+            active_credentials = [c for c in all_credentials if c.active]
+            if not active_credentials:
                 batch.status = CatastoBatchStatus.FAILED.value
                 batch.current_operation = "Credenziali SISTER attive mancanti"
                 db.commit()
                 return
+            credential = next(
+                (c for c in active_credentials if c.is_default),
+                active_credentials[0],
+            )
+            credential_idx = active_credentials.index(credential)
             password = self.vault.decrypt(credential.sister_password_encrypted)
             logger.info("Batch %s preso in carico per utente %s", batch_id, batch.user_id)
 
@@ -395,7 +401,31 @@ class CatastoWorker:
                 if next_request is None:
                     self._finalize_batch(batch_id)
                     return
-                await self._process_request(browser, credential, batch_id, next_request)
+                try:
+                    await self._process_request(browser, credential, batch_id, next_request)
+                except SisterServerError as exc:
+                    logger.warning(
+                        "Batch %s SisterServerError su richiesta %s: %s — rotazione credenziale",
+                        batch_id, next_request, exc,
+                    )
+                    self._reset_request_for_retry(next_request, "Errore SISTER 500, in coda per nuovo tentativo")
+                    with contextlib.suppress(Exception):
+                        await browser.logout()
+                    if len(active_credentials) > 1:
+                        credential_idx = (credential_idx + 1) % len(active_credentials)
+                        credential = active_credentials[credential_idx]
+                        password = self.vault.decrypt(credential.sister_password_encrypted)
+                        logger.info("Rotazione credenziale verso %s dopo errore 500", credential.sister_username)
+                        self._set_batch_operation(
+                            batch_id,
+                            f"Errore 500 SISTER, switch a {credential.sister_username}, attesa 60s",
+                        )
+                    else:
+                        self._set_batch_operation(batch_id, "Errore 500 SISTER, nessuna credenziale alternativa, attesa 60s")
+                        logger.warning("Errore 500 SISTER, unica credenziale disponibile")
+                    await asyncio.sleep(60)
+                    await browser.ensure_authenticated(credential.sister_username, password)
+                    continue
                 if self.state.stop_requested:
                     return
                 await asyncio.sleep(BETWEEN_VISURE_DELAY_SEC)
@@ -445,6 +475,15 @@ class CatastoWorker:
             batch.current_operation = user_message
             batch.completed_at = datetime.now(timezone.utc)
             self._refresh_batch_counts(db, batch)
+            db.commit()
+
+    def _reset_request_for_retry(self, request_id, operation: str) -> None:
+        with SessionLocal() as db:
+            request = db.get(CatastoVisuraRequest, request_id)
+            if request is None:
+                return
+            request.status = CatastoVisuraRequestStatus.PENDING.value
+            request.current_operation = operation
             db.commit()
 
     def _next_request_id(self, batch_id):
@@ -562,10 +601,11 @@ class CatastoWorker:
             request=request_snapshot,
             document_path=self._build_document_path(credential.sister_username, request_snapshot),
             captcha_dir=CAPTCHA_STORAGE_PATH / str(batch_id),
-            captcha_solver=self.captcha_solver,
-            max_ocr_attempts=CAPTCHA_MAX_OCR_ATTEMPTS,
             get_manual_captcha_decision=lambda image_path: self._wait_for_manual_captcha(batch_id, request_id, image_path),
+            solve_llm_captcha=self._solve_llm_captcha if self.llm_captcha_solver is not None else None,
             solve_external_captcha=self._solve_external_captcha if self.anti_captcha_client is not None else None,
+            max_llm_attempts=CAPTCHA_LLM_ATTEMPTS,
+            max_external_attempts=CAPTCHA_EXTERNAL_ATTEMPTS,
             update_operation=lambda operation: self._set_request_operation(request_id, operation),
         )
         logger.info(
@@ -612,6 +652,14 @@ class CatastoWorker:
         logger.warning("Richiesta %s timeout CAPTCHA manuale", request_id)
         return ManualCaptchaDecision(text=None, skip=False)
 
+    async def _solve_llm_captcha(self, image_bytes: bytes) -> str | None:
+        if self.llm_captcha_solver is None:
+            return None
+        logger.info("Invio CAPTCHA al solver LLM")
+        text = await self.llm_captcha_solver.solve(image_bytes)
+        logger.info("Risposta ricevuta dal solver LLM: testo_presente=%s", bool(text))
+        return text
+
     async def _solve_external_captcha(self, image_bytes: bytes) -> str | None:
         if self.anti_captcha_client is None:
             return None
@@ -631,6 +679,35 @@ class CatastoWorker:
                 request.captcha_image_path = str(result.captcha_image_path)
 
             terminal_status = classify_terminal_status(result.status)
+
+            if terminal_status == "non_evadibile":
+                attempts = request.attempts or 0
+                if attempts < 3:
+                    request.status = CatastoVisuraRequestStatus.PENDING.value
+                    request.current_operation = f"Non evadibile (tentativo {attempts}), in coda per nuovo tentativo"
+                    request.error_message = None
+                    batch.current_operation = f"Non evadibile riga {request.row_index}, nuovo tentativo"
+                else:
+                    request.status = CatastoVisuraRequestStatus.FAILED.value
+                    request.current_operation = "Non evadibile dopo 3 tentativi"
+                    request.error_message = result.error_message or "Richiesta non evadibile da SISTER"
+                    request.processed_at = datetime.now(timezone.utc)
+                    batch.current_operation = f"Non evadibile riga {request.row_index}"
+                    if request.purpose == ADE_SCAN_PURPOSE and request.target_ruolo_particella_id is not None:
+                        persist_ade_status_scan_result(
+                            db,
+                            ruolo_particella_id=request.target_ruolo_particella_id,
+                            request_id=request.id,
+                            status="failed",
+                            classification="non_evadibile",
+                            error=result.error_message,
+                        )
+                request.captcha_manual_solution = None
+                request.captcha_skip_requested = False
+                self._log_captcha_attempt(db, request_id, result)
+                self._refresh_batch_counts(db, batch)
+                db.commit()
+                return
 
             if request.purpose == ADE_SCAN_PURPOSE:
                 document: CatastoDocument | None = None
@@ -812,7 +889,7 @@ class CatastoWorker:
             CatastoCaptchaLog(
                 request_id=request_id,
                 image_path=str(result.captcha_image_path),
-                ocr_text=result.last_ocr_text if method in {"ocr", "external"} else None,
+                ocr_text=result.last_ocr_text if method in {"ocr", "external", "llm"} else None,
                 manual_text=result.last_ocr_text if method == "manual" else None,
                 is_correct=result.status == "completed",
                 method=method,

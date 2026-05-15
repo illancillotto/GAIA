@@ -337,7 +337,12 @@ def run_ade_status_scan(
     current_user: ApplicationUser = Depends(require_active_user),
 ) -> CatAdeStatusScanRunResponse:
     try:
-        result = create_ade_status_scan_batch(db, user_id=current_user.id, limit=max(1, min(payload.limit, 500)))
+        result = create_ade_status_scan_batch(
+                db,
+                user_id=current_user.id,
+                limit=max(1, min(payload.limit, 500)),
+                match_reasons=payload.match_reasons or None,
+            )
     except ElaborazioneCredentialNotFoundError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return CatAdeStatusScanRunResponse(**result)

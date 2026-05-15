@@ -62,8 +62,13 @@ def resolve_ade_section(comune_codice: str | None, partita_comune_nome: str | No
     return None
 
 
-def list_ade_status_scan_candidates(db: Session, *, limit: int = 200) -> list[AdeStatusScanCandidate]:
-    rows = db.execute(
+def list_ade_status_scan_candidates(
+    db: Session,
+    *,
+    limit: int = 200,
+    match_reasons: list[str] | None = None,
+) -> list[AdeStatusScanCandidate]:
+    query = (
         select(
             RuoloParticella.id,
             RuoloParticella.anno_tributario,
@@ -86,13 +91,15 @@ def list_ade_status_scan_candidates(db: Session, *, limit: int = 200) -> list[Ad
             RuoloParticella.ade_scan_status.is_(None)
             | (RuoloParticella.ade_scan_status == "failed")
         )
-        .order_by(
-            RuoloParticella.ade_scan_checked_at.asc().nullsfirst(),
-            RuoloParticella.anno_tributario.desc(),
-            RuoloParticella.id.asc(),
-        )
-        .limit(limit)
-    ).all()
+    )
+    if match_reasons:
+        query = query.where(RuoloParticella.cat_particella_match_reason.in_(match_reasons))
+    query = query.order_by(
+        RuoloParticella.ade_scan_checked_at.asc().nullsfirst(),
+        RuoloParticella.anno_tributario.desc(),
+        RuoloParticella.id.asc(),
+    ).limit(limit)
+    rows = db.execute(query).all()
 
     candidates: list[AdeStatusScanCandidate] = []
     for row in rows:
@@ -128,14 +135,12 @@ def get_ade_status_scan_summary(db: Session) -> dict[str, object]:
         .select_from(RuoloParticella)
         .where(RuoloParticella.ade_scan_status.in_(ADE_SCAN_PENDING_STATUSES))
     )
+    status_col = func.coalesce(RuoloParticella.ade_scan_status, literal("not_scanned"))
+    classification_col = func.coalesce(RuoloParticella.ade_scan_classification, literal("unknown"))
     buckets = db.execute(
-        select(
-            func.coalesce(RuoloParticella.ade_scan_status, literal("not_scanned")),
-            func.coalesce(RuoloParticella.ade_scan_classification, literal("unknown")),
-            func.count(),
-        )
+        select(status_col, classification_col, func.count())
         .where(RuoloParticella.cat_particella_id.is_(None))
-        .group_by(1, 2)
+        .group_by(status_col, classification_col)
         .order_by(func.count().desc())
     ).all()
     last_checked_at = db.scalar(select(func.max(RuoloParticella.ade_scan_checked_at)))
@@ -150,9 +155,15 @@ def get_ade_status_scan_summary(db: Session) -> dict[str, object]:
     }
 
 
-def create_ade_status_scan_batch(db: Session, *, user_id: int, limit: int = 50) -> dict[str, object]:
+def create_ade_status_scan_batch(
+    db: Session,
+    *,
+    user_id: int,
+    limit: int = 50,
+    match_reasons: list[str] | None = None,
+) -> dict[str, object]:
     require_credentials_for_user(db, user_id)
-    candidates = list_ade_status_scan_candidates(db, limit=limit)
+    candidates = list_ade_status_scan_candidates(db, limit=limit, match_reasons=match_reasons)
     if not candidates:
         return {"batch_id": None, "created": 0, "skipped": 0}
 

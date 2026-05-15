@@ -10,12 +10,15 @@ import re
 
 from playwright.async_api import Browser, BrowserContext, Download, Page, Playwright, TimeoutError, async_playwright
 
+from sister_exceptions import DocumentNonEvadibileError, DocumentNotYetProducedError, SisterServerError
 from sister_selectors import SisterSelectorsConfig
 
 logger = logging.getLogger(__name__)
 MENU_NAVIGATION_RETRIES = 3
 MENU_NAVIGATION_RETRY_DELAY_SEC = 2
-SESSION_RECOVERY_WAIT_SEC = 45
+SESSION_RECOVERY_WAIT_SEC = 120
+RICHIESTE_POLL_ATTEMPTS = 10
+RICHIESTE_POLL_INTERVAL_SEC = 30
 
 
 @dataclass(slots=True)
@@ -55,7 +58,14 @@ class BrowserSession:
         self._playwright = await async_playwright().start()
         self._browser = await self._playwright.chromium.launch(headless=self.config.headless)
         self._context = await self._browser.new_context(accept_downloads=True)
+        # Blocco analytics Matomo — nessun impatto sul flusso visura
+        await self._context.route(
+            "**/etws-analytics.sogei.it/**",
+            lambda route: route.abort()
+        )
         self._page = await self._context.new_page()
+        # Timeout globale aumentato per gestire la lentezza del portale SISTER nelle ore di punta
+        self._page.set_default_timeout(60000)
         logger.info("Sessione browser Playwright pronta")
         await self._trace_state("browser-started")
 
@@ -250,7 +260,8 @@ class BrowserSession:
 
         if request.sezione:
             if await page.locator(self.selectors.sezione_select_selector).count() > 0:
-                await page.select_option(self.selectors.sezione_select_selector, label=request.sezione)
+                await self._ensure_sezione_options_loaded(request.id)
+                await page.select_option(self.selectors.sezione_select_selector, value=request.sezione)
             elif await page.locator(self.selectors.sezione_input_selector).count() > 0:
                 await page.fill(self.selectors.sezione_input_selector, request.sezione)
 
@@ -280,7 +291,8 @@ class BrowserSession:
 
         if request.sezione:
             if await page.locator(self.selectors.sezione_select_selector).count() > 0:
-                await page.select_option(self.selectors.sezione_select_selector, label=request.sezione)
+                await self._ensure_sezione_options_loaded(request.id)
+                await page.select_option(self.selectors.sezione_select_selector, value=request.sezione)
             elif await page.locator(self.selectors.sezione_input_selector).count() > 0:
                 await page.fill(self.selectors.sezione_input_selector, request.sezione)
 
@@ -459,6 +471,18 @@ class BrowserSession:
         match = re.search(r"\b(\d{2}/\d{2}/\d{4})\b", window)
         return match.group(1) if match else None
 
+    async def reload_captcha(self) -> None:
+        """Ricarica immagine CAPTCHA e attende il riallineamento del codice in sessione server."""
+        with contextlib.suppress(Exception):
+            await self.page.evaluate(
+                "(function(){"
+                "  if(typeof reload === 'function') reload();"
+                "  else if(typeof reloadImg === 'function') reloadImg();"
+                "})()"
+            )
+        # reload() usa setTimeout('StartMeUp()', 1000) lato server — attendere riallineamento
+        await asyncio.sleep(1.2)
+
     async def capture_captcha_image(self) -> bytes:
         await self.page.wait_for_selector(self.selectors.captcha_image_selector)
         return await self.page.locator(self.selectors.captcha_image_selector).screenshot(type="png")
@@ -477,20 +501,29 @@ class BrowserSession:
             with contextlib.suppress(Exception):
                 await page.wait_for_load_state("domcontentloaded", timeout=5000)
 
-        for _ in range(30):
+        for iteration in range(30):
             if await self._first_visible_count(self.selectors.save_button_selector) > 0:
                 return "download"
             if await self._first_visible_count(self.selectors.captcha_image_selector) > 0:
                 return "captcha"
+            if iteration % 4 == 3:
+                await self._raise_if_server_error()
+                await self._raise_if_document_not_yet_produced()
             await asyncio.sleep(0.5)
 
         await self._trace_state("captcha-or-download-timeout")
+        await self._raise_if_server_error()
+        await self._raise_if_document_not_yet_produced()
         raise TimeoutError("SISTER non ha mostrato ne CAPTCHA ne pulsante Salva dopo Inoltra")
 
     async def submit_captcha(self, text: str) -> bool:
         page = self.page
         logger.info("Invio candidato CAPTCHA con %s caratteri", len(text))
-        await page.fill(self.selectors.captcha_field_selector, text)
+        await page.click(self.selectors.captcha_field_selector)
+        await page.fill(self.selectors.captcha_field_selector, "")
+        await page.type(self.selectors.captcha_field_selector, text, delay=80)
+        # Il bottone Inoltra è un plain submit senza onclick — la validazione CAPTCHA
+        # avviene server-side su InoltraRichiestaVis.do (non via checkCode JS).
         await page.click(self.selectors.inoltra_button_selector)
 
         try:
@@ -498,9 +531,14 @@ class BrowserSession:
             logger.info("CAPTCHA accettato da SISTER")
             return True
         except TimeoutError:
-            accepted = await page.locator(self.selectors.save_button_selector).count() > 0
-            logger.info("CAPTCHA accettato dopo fallback timeout=%s", accepted)
-            return accepted
+            await self._trace_state("captcha-rejected")
+            if await page.locator(self.selectors.save_button_selector).count() > 0:
+                logger.info("CAPTCHA accettato da SISTER (fallback count)")
+                return True
+            await self._raise_if_server_error()
+            await self._raise_if_document_not_yet_produced()
+            logger.info("CAPTCHA rifiutato da SISTER (save button non trovato)")
+            return False
 
     async def download_pdf(self, destination: Path) -> int:
         page = self.page
@@ -516,6 +554,121 @@ class BrowserSession:
     async def capture_debug_snapshot(self, target_dir: Path, label: str) -> list[str]:
         target_dir.mkdir(parents=True, exist_ok=True)
         return await self._write_artifacts_to_dir(target_dir, label)
+
+    async def poll_richieste_for_download(self, destination: Path, richieste_url: str | None = None) -> int:
+        """Poll ConsultazioneRichieste.do fino a che il documento è pronto o non evadibile."""
+        base_url = "https://sister3.agenziaentrate.gov.it"
+        url = richieste_url or f"{base_url}/Visure/ConsultazioneRichieste.do?metodo=lista"
+        page = self.page
+        destination.parent.mkdir(parents=True, exist_ok=True)
+
+        for poll in range(1, RICHIESTE_POLL_ATTEMPTS + 1):
+            logger.info("Poll ConsultazioneRichieste %s/%s url=%s", poll, RICHIESTE_POLL_ATTEMPTS, url)
+            await page.goto(url, wait_until="domcontentloaded")
+            await page.wait_for_timeout(1500)
+            await self._trace_state(f"richieste-poll-{poll}")
+
+            body_text = ""
+            with contextlib.suppress(Exception):
+                body_text = await page.locator("body").inner_text(timeout=3000)
+            normalized = re.sub(r"\s+", " ", body_text)
+            upper = normalized.upper()
+
+            await self._raise_if_server_error()
+
+            non_evad = re.search(r"NON EVADIBIL[^0-9]*([0-9]+)", upper)
+            if non_evad and int(non_evad.group(1)) > 0:
+                logger.warning("Richiesta SISTER non evadibile (poll %s): count=%s", poll, non_evad.group(1))
+                raise DocumentNonEvadibileError("Richiesta SISTER non evadibile in ConsultazioneRichieste")
+
+            espletate = re.search(r"ESPLETATE?[^0-9]*([0-9]+)", upper)
+            if espletate and int(espletate.group(1)) > 0:
+                logger.info("Documento espletato rilevato (poll %s): count=%s", poll, espletate.group(1))
+                try:
+                    return await self._download_from_richieste_espletate(destination)
+                except Exception as exc:
+                    logger.warning("Download da espletate fallito (poll %s): %s — check salva diretto", poll, exc)
+                    if await self._first_visible_count(self.selectors.save_button_selector) > 0:
+                        return await self.download_pdf(destination)
+
+            if await self._first_visible_count(self.selectors.save_button_selector) > 0:
+                return await self.download_pdf(destination)
+
+            if poll < RICHIESTE_POLL_ATTEMPTS:
+                logger.info("Documento non ancora disponibile, attesa %ss", RICHIESTE_POLL_INTERVAL_SEC)
+                await asyncio.sleep(RICHIESTE_POLL_INTERVAL_SEC)
+
+        raise TimeoutError(
+            f"Documento SISTER non disponibile dopo {RICHIESTE_POLL_ATTEMPTS} poll "
+            f"({RICHIESTE_POLL_ATTEMPTS * RICHIESTE_POLL_INTERVAL_SEC}s)"
+        )
+
+    async def _download_from_richieste_espletate(self, destination: Path) -> int:
+        """Naviga nella tab espletate e scarica il primo documento disponibile."""
+        page = self.page
+
+        for tab_text in ("Espletate", "espletate"):
+            tab = page.locator(f"a:has-text('{tab_text}'), td:has-text('{tab_text}')").first
+            if await tab.count() > 0 and await tab.is_visible():
+                with contextlib.suppress(Exception):
+                    await tab.click(timeout=5000)
+                    await page.wait_for_load_state("domcontentloaded", timeout=5000)
+                break
+
+        await page.wait_for_timeout(1000)
+
+        if await self._first_visible_count(self.selectors.save_button_selector) > 0:
+            return await self.download_pdf(destination)
+
+        row_link_selectors = [
+            "table a[href*='ConsultazioneRichieste']",
+            "table tr td:not(:empty) a",
+            "table a[href*='Visure']",
+        ]
+        for selector in row_link_selectors:
+            link = page.locator(selector).first
+            if await link.count() > 0 and await link.is_visible():
+                with contextlib.suppress(Exception):
+                    await link.click(timeout=8000)
+                    await page.wait_for_load_state("domcontentloaded", timeout=8000)
+                    await page.wait_for_timeout(1000)
+                if await self._first_visible_count(self.selectors.save_button_selector) > 0:
+                    return await self.download_pdf(destination)
+                break
+
+        raise TimeoutError("Salva button non trovato in ConsultazioneRichieste espletate")
+
+    async def _raise_if_server_error(self) -> None:
+        """Solleva SisterServerError se la pagina corrente mostra un errore 500."""
+        url = self.page.url
+        with contextlib.suppress(Exception):
+            body_text = await self.page.locator("body").inner_text(timeout=1500)
+            upper = re.sub(r"\s+", " ", body_text).upper()
+            if "ERROR 500" in upper or "NULLPOINTEREXCEPTION" in upper or "HTTP STATUS 500" in upper:
+                logger.error("Errore SISTER 500 rilevato: url=%s", url)
+                raise SisterServerError(f"SISTER 500 su {url}")
+
+    async def _raise_if_document_not_yet_produced(self) -> None:
+        """Solleva DocumentNotYetProducedError se siamo su CheckRichiesta.do o equivalente."""
+        page = self.page
+        url = page.url
+        body_text = ""
+        with contextlib.suppress(Exception):
+            body_text = await page.locator("body").inner_text(timeout=2000)
+        upper = re.sub(r"\s+", " ", body_text).upper()
+        if (
+            "NON E' STATO ANCORA PRODOTTO" in upper
+            or "NON È STATO ANCORA PRODOTTO" in upper
+            or "CHECKRICHIESTA.DO" in url.upper()
+        ):
+            richieste_url: str | None = None
+            with contextlib.suppress(Exception):
+                href = await page.locator("a[href*='ConsultazioneRichieste']").first.get_attribute("href", timeout=2000)
+                if href:
+                    base = "https://sister3.agenziaentrate.gov.it"
+                    richieste_url = href if href.startswith("http") else base + href
+            logger.info("Documento SISTER non ancora prodotto, richieste_url=%s", richieste_url)
+            raise DocumentNotYetProducedError(richieste_url)
 
     async def _goto_visura_menu(self) -> None:
         page = self.page
@@ -623,10 +776,13 @@ class BrowserSession:
         raise TimeoutError(f"No clickable selector found in candidates: {selectors}")
 
     async def _first_visible_count(self, selector: str) -> int:
-        locator = self.page.locator(selector).first
-        if await locator.count() == 0:
+        try:
+            locator = self.page.locator(selector).first
+            if await locator.count() == 0:
+                return 0
+            return 1 if await locator.is_visible() else 0
+        except Exception:
             return 0
-        return 1 if await locator.is_visible() else 0
 
     async def _fill_subject_identifier(self, subject_id: str) -> None:
         normalized = (subject_id or "").strip().upper()
@@ -733,6 +889,26 @@ class BrowserSession:
                 await candidate.click(timeout=5000)
                 return True
         return False
+
+    async def _ensure_sezione_options_loaded(self, request_id: str) -> None:
+        """Clicca 'scegli la sezione' se il select sezione è vuoto (popolazione server-side via submit)."""
+        page = self.page
+        options_count = await page.evaluate(
+            """selector => {
+                const el = document.querySelector(selector);
+                return el ? el.options.length : 0;
+            }""",
+            arg=self.selectors.sezione_select_selector,
+        )
+        if options_count > 1:
+            return
+        sel_sezione = page.locator("input[name='selSezione']")
+        if await sel_sezione.count() == 0:
+            return
+        logger.info("Richiesta %s click 'scegli la sezione' per popolare opzioni sezione", request_id)
+        await sel_sezione.click()
+        await page.wait_for_load_state("domcontentloaded")
+        await self._trace_state(f"visura-after-sel-sezione-{request_id}")
 
     async def _wait_for_post_login_state(self) -> str:
         page = self.page

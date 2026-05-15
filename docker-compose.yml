@@ -146,6 +146,7 @@ services:
       dockerfile: ./modules/elaborazioni/worker/Dockerfile
     container_name: gaia-elaborazioni-worker
     restart: unless-stopped
+    stop_grace_period: "30s"
     dns:
       - 1.1.1.1
       - 8.8.8.8
@@ -154,8 +155,12 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL}
       CREDENTIAL_MASTER_KEY: ${CREDENTIAL_MASTER_KEY}
-      CAPTCHA_MAX_OCR_ATTEMPTS: ${CAPTCHA_MAX_OCR_ATTEMPTS:-3}
       BETWEEN_VISURE_DELAY_SEC: ${BETWEEN_VISURE_DELAY_SEC:-5}
+      CAPTCHA_LLM_AGENT_CMD: ${CAPTCHA_LLM_AGENT_CMD:-/home/cbo/.local/share/cursor-agent/versions/2026.05.09-0afadcc/cursor-agent}
+      HOME: /home/cbo
+      CAPTCHA_LLM_ENABLED: ${CAPTCHA_LLM_ENABLED:-true}
+      CAPTCHA_LLM_ATTEMPTS: ${CAPTCHA_LLM_ATTEMPTS:-3}
+      CAPTCHA_EXTERNAL_ATTEMPTS: ${CAPTCHA_EXTERNAL_ATTEMPTS:-3}
       ELABORAZIONI_DOCUMENT_STORAGE_PATH: ${ELABORAZIONI_DOCUMENT_STORAGE_PATH:-${CATASTO_DOCUMENT_STORAGE_PATH:-/data/catasto/documents}}
       ELABORAZIONI_CAPTCHA_STORAGE_PATH: ${ELABORAZIONI_CAPTCHA_STORAGE_PATH:-${CATASTO_CAPTCHA_STORAGE_PATH:-/data/catasto/captcha}}
       ELABORAZIONI_DEBUG_ARTIFACTS_PATH: ${ELABORAZIONI_DEBUG_ARTIFACTS_PATH:-${CATASTO_DEBUG_ARTIFACTS_PATH:-/data/catasto/debug}}
@@ -166,6 +171,9 @@ services:
         condition: service_healthy
     volumes:
       - catasto-data:/data/catasto
+      - /home/cbo/.local/share/cursor-agent:/home/cbo/.local/share/cursor-agent:ro
+      - /home/cbo/.cursor:/home/cbo/.cursor:rw
+      - /home/cbo/.config/cursor:/home/cbo/.config/cursor:ro
 
   scanner:
     build:

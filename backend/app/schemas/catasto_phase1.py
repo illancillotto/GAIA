@@ -118,6 +118,7 @@ class CatAdeStatusScanCandidateListResponse(BaseModel):
 
 class CatAdeStatusScanRunInput(BaseModel):
     limit: int = 50
+    match_reasons: list[str] | None = None
 
 
 class CatAdeStatusScanRunResponse(BaseModel):

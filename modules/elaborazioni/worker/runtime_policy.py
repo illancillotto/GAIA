@@ -10,6 +10,6 @@ def can_retry_request_status(status: str) -> bool:
 
 def classify_terminal_status(flow_status: str) -> str:
     normalized = (flow_status or "").strip().lower()
-    if normalized in {"completed", "failed", "skipped", "not_found"}:
+    if normalized in {"completed", "failed", "skipped", "not_found", "non_evadibile"}:
         return normalized
     return "failed"
