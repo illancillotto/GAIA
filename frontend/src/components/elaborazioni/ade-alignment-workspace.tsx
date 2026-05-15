@@ -124,7 +124,7 @@ function renderPhaseLabel(phase: string): string {
   }
 }
 
-export function ElaborazioniAdeAlignmentWorkspace() {
+export function ElaborazioniAdeAlignmentWorkspace({ embedded = false }: { embedded?: boolean }) {
   const [dashboard, setDashboard] = useState<CatDashboardSummary | null>(null);
   const [distretti, setDistretti] = useState<CatDistretto[]>([]);
   const [runStatus, setRunStatus] = useState<AdeWfsRunStatusResponse | null>(null);
@@ -318,17 +318,13 @@ export function ElaborazioniAdeAlignmentWorkspace() {
     }
   }
 
-  return (
-    <ProtectedPage
-      title="Allineamento AdE"
-      description="Console operativa del run Agenzia Entrate: avvio comprensorio, monitoraggio asincrono, preview differenze e apply controllato."
-      requiredRoles={["admin", "super_admin"]}
-    >
-      <div className="page-stack">
+  const content = (
+    <div className={embedded ? "space-y-6" : "page-stack"}>
         <ElaborazioneHero
           badge="Elaborazioni / AdE"
           title="Allineamento AdE"
           description="Console operativa del run Agenzia Entrate: avvio comprensorio, monitoraggio asincrono, preview differenze e apply controllato."
+          compact={embedded}
           actions={(
             <div className="flex flex-wrap gap-2">
               <Link className="btn-secondary" href="/catasto/gis">
@@ -531,7 +527,20 @@ export function ElaborazioniAdeAlignmentWorkspace() {
             </Link>
           </div>
         </section>
-      </div>
+    </div>
+  );
+
+  if (embedded) {
+    return content;
+  }
+
+  return (
+    <ProtectedPage
+      title="Allineamento AdE"
+      description="Console operativa del run Agenzia Entrate: avvio comprensorio, monitoraggio asincrono, preview differenze e apply controllato."
+      requiredRoles={["admin", "super_admin"]}
+    >
+      {content}
     </ProtectedPage>
   );
 }

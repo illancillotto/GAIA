@@ -1150,7 +1150,7 @@ export default function CatastoGisPage() {
             Stato allineamento AdE
           </p>
           <p className={`mt-1 text-xs leading-5 ${isDark ? "text-white/60" : "text-slate-600"}`}>
-            Il workflow operativo di run, monitor e apply è stato spostato in `Elaborazioni`. Nel GIS restano l'ultimo stato disponibile, il report differenze e la preview cartografica.
+            Il workflow operativo di run, monitor e apply è stato spostato in `Elaborazioni`. Nel GIS restano l&apos;ultimo stato disponibile, il report differenze e la preview cartografica.
           </p>
         </div>
         <Link

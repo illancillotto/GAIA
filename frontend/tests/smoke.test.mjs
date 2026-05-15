@@ -130,6 +130,7 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   assert.match(elaborazioniAdeAlignmentWorkspace, /catastoGisGetLatestAdeWfsRunStatus/);
   assert.match(elaborazioniAdeAlignmentWorkspace, /progress_percent/);
   assert.match(elaborazioniAdeAlignmentWorkspace, /tiles_completed/);
+  assert.match(read("src/components/elaborazioni/workspace-modal.tsx"), /ElaborazioniAdeAlignmentWorkspace embedded/);
   assert.match(read("src/components/elaborazioni/capacitas-workspace.tsx"), /listCapacitasCredentials/);
   assert.match(read("src/components/elaborazioni/capacitas-workspace.tsx"), /CAPACITAS_SECTIONS/);
   assert.match(read("src/components/elaborazioni/capacitas-workspace.tsx"), /PREVIEW_ROWS_LIMIT/);

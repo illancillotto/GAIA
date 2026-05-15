@@ -8,6 +8,7 @@ import { CatastoDocumentDetailWorkspace } from "@/components/catasto/document-de
 import { ElaborazioneArchiveWorkspaceContent } from "@/components/elaborazioni/archive-workspace";
 import { ElaborazioneBatchDetailWorkspace } from "@/components/elaborazioni/batch-detail-workspace";
 import { ElaborazioniCapacitasWorkspace } from "@/components/elaborazioni/capacitas-workspace";
+import { ElaborazioniAdeAlignmentWorkspace } from "@/components/elaborazioni/ade-alignment-workspace";
 import { ElaborazioniBonificaSyncWorkspace } from "@/components/elaborazioni/bonifica-sync-workspace";
 import { ElaborazioneRequestWorkspace } from "@/components/elaborazioni/request-workspace";
 import { ElaborazioniSettingsWorkspace } from "@/components/elaborazioni/settings-workspace";
@@ -131,6 +132,10 @@ function NativeWorkspaceRenderer({
 
   if (href === "/elaborazioni/bonifica") {
     return <ElaborazioniBonificaSyncWorkspace embedded />;
+  }
+
+  if (href === "/elaborazioni/ade-alignment") {
+    return <ElaborazioniAdeAlignmentWorkspace embedded />;
   }
 
   if (href === "/catasto/archive?view=documents") {
