@@ -88,6 +88,7 @@ export function ModuleSidebar({
         <NavItem href="/catasto/gis" icon={GridIcon} label="GIS" match="prefix" />
         <NavItem href="/catasto/distretti" icon={SearchIcon} label="Distretti" match="prefix" />
         <NavItem href="/catasto/particelle" icon={FolderIcon} label="Particelle" match="prefix" />
+        <NavItem href="/catasto/letture-contatori" icon={DocumentIcon} label="Contatori irrigui" match="prefix" />
         <NavItem href="/catasto/anomalie" icon={AlertTriangleIcon} label="Anomalie" match="prefix" />
         <NavItem
           href="/catasto/elaborazioni-massive"

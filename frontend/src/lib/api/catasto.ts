@@ -22,6 +22,11 @@ import type {
   CatImportBatch,
   CatImportStartResponse,
   CatImportSummary,
+  CatMeterReading,
+  CatMeterReadingImport,
+  CatMeterReadingImportPreview,
+  CatMeterReadingImportRunResponse,
+  CatMeterReadingListResponse,
   CatAnomaliaSummary,
   CatParticella,
   CatParticellaCapacitasSyncResponse,
@@ -349,6 +354,108 @@ export async function catastoGetImportSummary(
     tipo: params?.tipo || undefined,
   });
   return request<CatImportSummary>("/catasto/import/summary" + query, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function catastoValidateMeterReadingsImport(
+  token: string,
+  file: File,
+  params?: { anno?: number; distrettoId?: UUID; onProgress?: (percent: number) => void },
+): Promise<CatMeterReadingImportPreview> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const query = new URLSearchParams();
+  if (params?.anno != null) query.set("anno", String(params.anno));
+  if (params?.distrettoId) query.set("distretto_id", params.distrettoId);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return requestFormDataWithUploadProgress<CatMeterReadingImportPreview>(
+    `/catasto/meter-readings/import/validate${suffix}`,
+    formData,
+    token,
+    params?.onProgress,
+  );
+}
+
+export async function catastoImportMeterReadings(
+  token: string,
+  file: File,
+  params?: {
+    anno?: number;
+    distrettoId?: UUID;
+    mode?: "import" | "upsert" | "replace";
+    onProgress?: (percent: number) => void;
+  },
+): Promise<CatMeterReadingImportRunResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const query = new URLSearchParams();
+  if (params?.anno != null) query.set("anno", String(params.anno));
+  if (params?.distrettoId) query.set("distretto_id", params.distrettoId);
+  if (params?.mode) query.set("mode", params.mode);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return requestFormDataWithUploadProgress<CatMeterReadingImportRunResponse>(
+    `/catasto/meter-readings/import${suffix}`,
+    formData,
+    token,
+    params?.onProgress,
+  );
+}
+
+export async function catastoListMeterReadingImports(token: string): Promise<CatMeterReadingImport[]> {
+  return request<CatMeterReadingImport[]>("/catasto/meter-readings/imports", {
+    headers: authHeaders(token),
+  });
+}
+
+export async function catastoGetMeterReadingImport(token: string, importId: UUID): Promise<CatMeterReadingImport> {
+  return request<CatMeterReadingImport>(`/catasto/meter-readings/imports/${importId}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function catastoListMeterReadings(
+  token: string,
+  params?: {
+    anno?: number;
+    distrettoId?: UUID;
+    codiceFiscale?: string;
+    puntoConsegna?: string;
+    matricola?: string;
+    subjectId?: UUID;
+    hasWarnings?: boolean;
+    interventoDaEseguire?: boolean;
+    source?: string;
+    page?: number;
+    pageSize?: number;
+  },
+): Promise<CatMeterReadingListResponse> {
+  const query = createQueryString({
+    anno: params?.anno != null ? String(params.anno) : undefined,
+    distretto_id: params?.distrettoId,
+    codice_fiscale: params?.codiceFiscale || undefined,
+    punto_consegna: params?.puntoConsegna || undefined,
+    matricola: params?.matricola || undefined,
+    subject_id: params?.subjectId,
+    has_warnings: params?.hasWarnings ? "true" : undefined,
+    intervento_da_eseguire: params?.interventoDaEseguire ? "true" : undefined,
+    source: params?.source || undefined,
+    page: params?.page != null ? String(params.page) : undefined,
+    page_size: params?.pageSize != null ? String(params.pageSize) : undefined,
+  });
+  return request<CatMeterReadingListResponse>(`/catasto/meter-readings${query}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function catastoGetMeterReading(token: string, id: UUID): Promise<CatMeterReading> {
+  return request<CatMeterReading>(`/catasto/meter-readings/${id}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function catastoGetMeterReadingsBySubject(token: string, subjectId: UUID): Promise<CatMeterReading[]> {
+  return request<CatMeterReading[]>(`/catasto/meter-readings/by-subject/${subjectId}`, {
     headers: authHeaders(token),
   });
 }

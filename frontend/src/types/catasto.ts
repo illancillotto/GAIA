@@ -34,6 +34,121 @@ export type CatImportSummary = {
   ultimo_completed_at: string | null;
 };
 
+export type CatMeterReadingValidationMessage = {
+  level: "error" | "warning" | "info";
+  code: string;
+  message: string;
+  field: string | null;
+};
+
+export type CatMeterReadingImport = {
+  id: UUID;
+  distretto_id: UUID;
+  anno: number;
+  filename_originale: string;
+  file_hash: string | null;
+  stato: string;
+  totale_righe: number;
+  righe_importate: number;
+  righe_con_warning: number;
+  righe_scartate: number;
+  uploaded_by: number | null;
+  uploaded_at: string;
+  processed_at: string | null;
+  error_report: Record<string, unknown> | Array<unknown> | null;
+};
+
+export type CatMeterReading = {
+  id: UUID;
+  import_id: UUID | null;
+  distretto_id: UUID;
+  anno: number;
+  row_number: number | null;
+  excel_id: string | null;
+  punto_consegna: string;
+  matricola: string | null;
+  sigillo: string | null;
+  tipologia_idrante: string | null;
+  firmware_version: string | null;
+  battery_level: string | null;
+  lettura_iniziale: string | null;
+  lettura_finale: string | null;
+  consumo_mc: string | null;
+  data_lettura: string | null;
+  operatore_lettura: string | null;
+  intervento_da_eseguire: string | null;
+  intervento_eseguito: string | null;
+  operatore_intervento: string | null;
+  data_intervento: string | null;
+  dui: string | null;
+  codice_fiscale: string | null;
+  codice_fiscale_normalizzato: string | null;
+  subject_id: UUID | null;
+  subject_display_name: string | null;
+  coltura: string | null;
+  tariffa: string | null;
+  fondo_chiuso: string | null;
+  telefono: string | null;
+  note: string | null;
+  validation_status: string;
+  validation_messages: CatMeterReadingValidationMessage[];
+  source: string;
+  mobile_session_id: string | null;
+  gps_lat: string | null;
+  gps_lng: string | null;
+  photo_url: string | null;
+  offline_created_at: string | null;
+  synced_at: string | null;
+  sync_status: string | null;
+  device_id: string | null;
+  mobile_operator_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CatMeterReadingListResponse = {
+  items: CatMeterReading[];
+  total: number;
+  page: number;
+  page_size: number;
+};
+
+export type CatMeterReadingImportPreviewItem = {
+  row_number: number;
+  punto_consegna: string | null;
+  codice_fiscale: string | null;
+  codice_fiscale_normalizzato: string | null;
+  subject_id: UUID | null;
+  subject_display_name: string | null;
+  validation_status: string;
+  validation_messages: CatMeterReadingValidationMessage[];
+  data: Record<string, unknown>;
+};
+
+export type CatMeterReadingImportPreview = {
+  anno: number | null;
+  distretto_id: UUID | null;
+  distretto_numero: string | null;
+  distretto_nome: string | null;
+  filename: string;
+  totale_righe: number;
+  righe_valide: number;
+  righe_con_warning: number;
+  righe_con_errori: number;
+  items: CatMeterReadingImportPreviewItem[];
+};
+
+export type CatMeterReadingImportRunResponse = {
+  import_id: UUID;
+  anno: number;
+  distretto_id: UUID;
+  stato: string;
+  totale_righe: number;
+  righe_importate: number;
+  righe_con_warning: number;
+  righe_scartate: number;
+};
+
 export type CatAnomaliaSeverita = "error" | "warning" | "info";
 export type CatAnomaliaStatus = "aperta" | "chiusa" | "ignora" | string;
 

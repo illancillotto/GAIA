@@ -44,6 +44,129 @@ class CatImportSummaryResponse(BaseModel):
     ultimo_completed_at: datetime | None
 
 
+class CatMeterReadingValidationMessageResponse(BaseModel):
+    level: Literal["error", "warning", "info"]
+    code: str
+    message: str
+    field: str | None = None
+
+
+class CatMeterReadingImportListResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    distretto_id: UUID
+    anno: int
+    filename_originale: str
+    file_hash: str | None
+    stato: str
+    totale_righe: int
+    righe_importate: int
+    righe_con_warning: int
+    righe_scartate: int
+    uploaded_by: int | None
+    uploaded_at: datetime
+    processed_at: datetime | None
+    error_report: dict | list | None
+
+
+class CatMeterReadingImportDetailResponse(CatMeterReadingImportListResponse):
+    pass
+
+
+class CatMeterReadingResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    import_id: UUID | None
+    distretto_id: UUID
+    anno: int
+    row_number: int | None
+    excel_id: str | None
+    punto_consegna: str
+    matricola: str | None
+    sigillo: str | None
+    tipologia_idrante: str | None
+    firmware_version: str | None
+    battery_level: str | None
+    lettura_iniziale: Decimal | None
+    lettura_finale: Decimal | None
+    consumo_mc: Decimal | None
+    data_lettura: date | None
+    operatore_lettura: str | None
+    intervento_da_eseguire: str | None
+    intervento_eseguito: str | None
+    operatore_intervento: str | None
+    data_intervento: date | None
+    dui: str | None
+    codice_fiscale: str | None
+    codice_fiscale_normalizzato: str | None
+    subject_id: UUID | None
+    subject_display_name: str | None = None
+    coltura: str | None
+    tariffa: str | None
+    fondo_chiuso: str | None
+    telefono: str | None
+    note: str | None
+    validation_status: str
+    validation_messages: list[CatMeterReadingValidationMessageResponse] = []
+    source: str
+    mobile_session_id: str | None
+    gps_lat: Decimal | None
+    gps_lng: Decimal | None
+    photo_url: str | None
+    offline_created_at: datetime | None
+    synced_at: datetime | None
+    sync_status: str | None
+    device_id: str | None
+    mobile_operator_id: str | None
+    created_at: datetime
+    updated_at: datetime
+
+
+class CatMeterReadingListResponse(BaseModel):
+    items: list[CatMeterReadingResponse]
+    total: int
+    page: int
+    page_size: int
+
+
+class CatMeterReadingImportPreviewItemResponse(BaseModel):
+    row_number: int
+    punto_consegna: str | None
+    codice_fiscale: str | None
+    codice_fiscale_normalizzato: str | None
+    subject_id: UUID | None
+    subject_display_name: str | None = None
+    validation_status: str
+    validation_messages: list[CatMeterReadingValidationMessageResponse] = []
+    data: dict[str, Any]
+
+
+class CatMeterReadingImportPreviewResponse(BaseModel):
+    anno: int | None
+    distretto_id: UUID | None
+    distretto_numero: str | None = None
+    distretto_nome: str | None = None
+    filename: str
+    totale_righe: int
+    righe_valide: int
+    righe_con_warning: int
+    righe_con_errori: int
+    items: list[CatMeterReadingImportPreviewItemResponse]
+
+
+class CatMeterReadingImportRunResponse(BaseModel):
+    import_id: UUID
+    anno: int
+    distretto_id: UUID
+    stato: str
+    totale_righe: int
+    righe_importate: int
+    righe_con_warning: int
+    righe_scartate: int
+
+
 class CatAnomaliaResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

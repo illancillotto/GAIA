@@ -5,6 +5,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { AnprStatusCard } from "@/components/anagrafica/AnprStatusCard";
+import { MeterReadingsTable } from "@/components/catasto/meter-readings-table";
 import { UtenzeModulePage } from "@/components/utenze/utenze-module-page";
 import {
   createElaborazioneRichiesta,
@@ -1447,6 +1448,14 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
             ))}
           </div>
         )}
+      </article>
+
+      <article className="panel-card">
+        <div className="mb-4">
+          <p className="section-title">Letture contatori</p>
+          <p className="section-copy">Letture irrigue collegate al soggetto tramite anagrafica e codice fiscale normalizzato.</p>
+        </div>
+        <MeterReadingsTable subjectId={subject.id} />
       </article>
 
       <article className="panel-card">

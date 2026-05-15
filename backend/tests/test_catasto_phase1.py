@@ -5,11 +5,12 @@ from io import BytesIO
 from pathlib import Path
 from types import SimpleNamespace
 from uuid import UUID
+from openpyxl import Workbook
 
 from fastapi.testclient import TestClient
 import pandas as pd
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -30,6 +31,8 @@ from app.models.catasto_phase1 import (
     CatConsorzioUnitSegment,
     CatDistretto,
     CatImportBatch,
+    CatMeterReading,
+    CatMeterReadingImport,
     CatParticella,
     CatParticellaHistory,
     CatSchemaContributo,
@@ -45,6 +48,8 @@ from app.modules.catasto.services.import_capacitas import CapacitasImportDuplica
 from app.modules.catasto.services.comuni_reference import load_comuni_reference
 from app.modules.catasto.services.import_distretti_excel import import_distretti_excel
 from app.modules.catasto.services import import_distretti_excel as import_distretti_excel_module
+from app.modules.catasto.services.meter_reading_import_service import prepare_meter_readings_import
+from app.modules.catasto.services.meter_reading_linker import normalize_tax_code
 from app.modules.catasto.services.ade_wfs import (
     AdeWfsBbox,
     AdeWfsClient,
@@ -115,6 +120,7 @@ def setup_database() -> Generator[None, None, None]:
         )
     )
     db.add(CatDistretto(num_distretto="10", nome_distretto="Distretto 10"))
+    db.add(CatDistretto(num_distretto="1", nome_distretto="Sinis"))
     db.add(
         CatAnomalia(
             tipo="VAL-02-cf_invalido",
@@ -5289,3 +5295,339 @@ def test_finalize_distretti_shapefile_route_returns_service_payload(monkeypatch:
     assert response.json()["status"] == "completed"
     assert captured["created_by"] > 0
     assert captured["cleanup_staging"] is True
+
+
+def _build_meter_readings_workbook(
+    rows: list[list[object]] | None = None,
+    headers: list[str] | None = None,
+) -> bytes:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "Foglio1"
+    sheet.append([None, None, None])
+    sheet.append(
+        headers
+        or [
+            "ID",
+            "PUNTO_CONS",
+            "COD_CONT",
+            "LETTURA FINALE 2024",
+            "LETTURA FINALE 2025",
+            "TOTALE m3 2025",
+            "TITOLARE DUI 2025",
+            "COD. FISC",
+            "TELEFONO",
+            "NOTE",
+        ]
+    )
+    for row in (rows or [
+        [1, "C51A_1", "MTR-01", 100, 135, 35, "DUI001", "RSSMRA80A01H501U", "3331234567", "ok"],
+        [2, "C51A_2", "MTR-02", 200, 180, 20, "DUI002", "", "12", "warning"],
+    ]):
+        sheet.append(row)
+    output = BytesIO()
+    workbook.save(output)
+    return output.getvalue()
+
+
+def test_meter_reading_prepare_import_detects_header_aliases_and_links_subject() -> None:
+    db = TestingSessionLocal()
+    try:
+        subject = AnagraficaSubject(subject_type="person", status="active", source_system="gaia", source_name_raw="Mario Rossi")
+        db.add(subject)
+        db.flush()
+        db.add(
+            AnagraficaPerson(
+                subject_id=subject.id,
+                cognome="Rossi",
+                nome="Mario",
+                codice_fiscale="RSSMRA80A01H501U",
+            )
+        )
+        db.commit()
+
+        prepared = prepare_meter_readings_import(
+            db,
+            file_bytes=_build_meter_readings_workbook(),
+            filename="D01-Sinis 2025.xlsx",
+        )
+
+        assert prepared.anno == 2025
+        assert prepared.distretto is not None
+        assert prepared.distretto.num_distretto == "1"
+        assert len(prepared.items) == 2
+        assert prepared.items[0].payload["matricola"] == "MTR-01"
+        assert prepared.items[0].payload["codice_fiscale_normalizzato"] == "RSSMRA80A01H501U"
+        assert prepared.items[0].payload["subject_id"] == subject.id
+        assert prepared.items[0].validation_status == "valid"
+        assert prepared.items[1].validation_status == "warning"
+    finally:
+        db.close()
+
+
+def test_meter_reading_normalize_tax_code_strips_symbols() -> None:
+    assert normalize_tax_code(" rss mra80a01h501u ") == "RSSMRA80A01H501U"
+
+
+def test_meter_reading_validate_endpoint_returns_preview() -> None:
+    response = client.post(
+        "/catasto/meter-readings/import/validate?anno=2025",
+        headers=auth_headers(),
+        files={"file": ("D01-Sinis 2025.xlsx", _build_meter_readings_workbook(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["anno"] == 2025
+    assert payload["totale_righe"] == 2
+    assert payload["righe_con_warning"] == 2
+    assert payload["items"][0]["punto_consegna"] == "C51A_1"
+
+
+def test_meter_reading_import_endpoint_upserts_rows() -> None:
+    db = TestingSessionLocal()
+    try:
+        subject = AnagraficaSubject(subject_type="person", status="active", source_system="gaia", source_name_raw="Mario Rossi")
+        db.add(subject)
+        db.flush()
+        db.add(
+            AnagraficaPerson(
+                subject_id=subject.id,
+                cognome="Rossi",
+                nome="Mario",
+                codice_fiscale="RSSMRA80A01H501U",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.post(
+        "/catasto/meter-readings/import?mode=upsert&anno=2025",
+        headers=auth_headers(),
+        files={"file": ("D01-Sinis 2025.xlsx", _build_meter_readings_workbook(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["righe_importate"] == 2
+    assert payload["righe_con_warning"] == 1
+
+    db = TestingSessionLocal()
+    try:
+        imports = db.execute(select(CatMeterReadingImport)).scalars().all()
+        readings = db.execute(select(CatMeterReading).order_by(CatMeterReading.punto_consegna.asc())).scalars().all()
+        assert len(imports) == 1
+        assert len(readings) == 2
+        assert readings[0].subject_id is not None
+        assert readings[1].validation_status == "warning"
+    finally:
+        db.close()
+
+
+def test_meter_reading_list_and_by_subject_endpoints() -> None:
+    db = TestingSessionLocal()
+    try:
+        subject = AnagraficaSubject(subject_type="person", status="active", source_system="gaia", source_name_raw="Mario Rossi")
+        db.add(subject)
+        db.flush()
+        db.add(
+            AnagraficaPerson(
+                subject_id=subject.id,
+                cognome="Rossi",
+                nome="Mario",
+                codice_fiscale="RSSMRA80A01H501U",
+            )
+        )
+        distretto = db.execute(select(CatDistretto).where(CatDistretto.num_distretto == "1")).scalar_one()
+        import_record = CatMeterReadingImport(
+            distretto_id=distretto.id,
+            anno=2025,
+            filename_originale="seed.xlsx",
+            stato="completed",
+            totale_righe=1,
+            righe_importate=1,
+            righe_con_warning=0,
+            righe_scartate=0,
+        )
+        db.add(import_record)
+        db.flush()
+        db.add(
+            CatMeterReading(
+                import_id=import_record.id,
+                distretto_id=distretto.id,
+                anno=2025,
+                punto_consegna="PC-001",
+                codice_fiscale="RSSMRA80A01H501U",
+                codice_fiscale_normalizzato="RSSMRA80A01H501U",
+                subject_id=subject.id,
+                validation_status="valid",
+                validation_messages=[],
+                source="excel",
+            )
+        )
+        db.commit()
+        subject_id = str(subject.id)
+    finally:
+        db.close()
+
+    list_response = client.get("/catasto/meter-readings?anno=2025", headers=auth_headers())
+    assert list_response.status_code == 200
+    list_payload = list_response.json()
+    assert list_payload["total"] == 1
+    assert list_payload["items"][0]["subject_display_name"] == "Rossi Mario"
+
+    subject_response = client.get(f"/catasto/meter-readings/by-subject/{subject_id}", headers=auth_headers())
+    assert subject_response.status_code == 200
+    subject_payload = subject_response.json()
+    assert len(subject_payload) == 1
+    assert subject_payload[0]["punto_consegna"] == "PC-001"
+
+
+def test_meter_reading_detail_and_import_routes() -> None:
+    db = TestingSessionLocal()
+    try:
+        distretto = db.execute(select(CatDistretto).where(CatDistretto.num_distretto == "1")).scalar_one()
+        import_record = CatMeterReadingImport(
+            distretto_id=distretto.id,
+            anno=2025,
+            filename_originale="detail.xlsx",
+            stato="completed",
+            totale_righe=1,
+            righe_importate=1,
+            righe_con_warning=0,
+            righe_scartate=0,
+        )
+        db.add(import_record)
+        db.flush()
+        reading = CatMeterReading(
+            import_id=import_record.id,
+            distretto_id=distretto.id,
+            anno=2025,
+            punto_consegna="PC-DET",
+            validation_status="valid",
+            validation_messages=[],
+            source="excel",
+        )
+        db.add(reading)
+        db.commit()
+        reading_id = str(reading.id)
+        import_id = str(import_record.id)
+    finally:
+        db.close()
+
+    imports_response = client.get("/catasto/meter-readings/imports", headers=auth_headers())
+    assert imports_response.status_code == 200
+    assert any(item["id"] == import_id for item in imports_response.json())
+
+    import_detail_response = client.get(f"/catasto/meter-readings/imports/{import_id}", headers=auth_headers())
+    assert import_detail_response.status_code == 200
+    assert import_detail_response.json()["filename_originale"] == "detail.xlsx"
+
+    detail_response = client.get(f"/catasto/meter-readings/{reading_id}", headers=auth_headers())
+    assert detail_response.status_code == 200
+    assert detail_response.json()["punto_consegna"] == "PC-DET"
+
+
+def test_meter_reading_import_mode_rejects_existing_rows() -> None:
+    db = TestingSessionLocal()
+    try:
+        distretto = db.execute(select(CatDistretto).where(CatDistretto.num_distretto == "1")).scalar_one()
+        db.add(
+            CatMeterReading(
+                distretto_id=distretto.id,
+                anno=2025,
+                punto_consegna="C51A_1",
+                validation_status="valid",
+                validation_messages=[],
+                source="excel",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.post(
+        "/catasto/meter-readings/import?mode=import&anno=2025",
+        headers=auth_headers(),
+        files={"file": ("D01-Sinis 2025.xlsx", _build_meter_readings_workbook(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+    )
+
+    assert response.status_code == 400
+    assert "Esistono già letture" in response.json()["detail"]
+
+
+def test_meter_reading_replace_mode_replaces_existing_rows() -> None:
+    db = TestingSessionLocal()
+    try:
+        distretto = db.execute(select(CatDistretto).where(CatDistretto.num_distretto == "1")).scalar_one()
+        db.add(
+            CatMeterReading(
+                distretto_id=distretto.id,
+                anno=2025,
+                punto_consegna="OLD-PC",
+                validation_status="valid",
+                validation_messages=[],
+                source="excel",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.post(
+        "/catasto/meter-readings/import?mode=replace&anno=2025",
+        headers=auth_headers(),
+        files={"file": ("D01-Sinis 2025.xlsx", _build_meter_readings_workbook(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+    )
+    assert response.status_code == 201
+
+    db = TestingSessionLocal()
+    try:
+        rows = db.execute(select(CatMeterReading).where(CatMeterReading.anno == 2025).order_by(CatMeterReading.punto_consegna)).scalars().all()
+        assert [row.punto_consegna for row in rows] == ["C51A_1", "C51A_2"]
+    finally:
+        db.close()
+
+
+def test_meter_reading_validate_detects_duplicate_and_specific_warnings() -> None:
+    headers = [
+        "ID",
+        "PUNTO_CONS",
+        "COD_CONT",
+        "BATTERIA",
+        "LETTURA FINALE 2024",
+        "LETTURA FINALE 2025",
+        "TOTALE m3 2025",
+        "INTERVENTO DA ESEGUIRE",
+        "COD. FISC",
+        "TELEFONO",
+    ]
+    rows = [
+        [1, "DUP-1", "MTR-10", "15%", 100, 95, 99, "Sostituire", "RSSMRA80A01H501U", "123"],
+        [2, "DUP-1", "MTR-11", "15%", 100, 95, 99, "Sostituire", "RSSMRA80A01H501U", "123"],
+    ]
+    response = client.post(
+        "/catasto/meter-readings/import/validate?anno=2025",
+        headers=auth_headers(),
+        files={
+            "file": (
+                "D01-Sinis 2025.xlsx",
+                _build_meter_readings_workbook(rows=rows, headers=headers),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["righe_con_errori"] == 1
+    assert payload["righe_con_warning"] >= 1
+    second_row_codes = {item["code"] for item in payload["items"][1]["validation_messages"]}
+    first_row_codes = {item["code"] for item in payload["items"][0]["validation_messages"]}
+    assert "DUPLICATO_FILE" in second_row_codes
+    assert "BATTERIA_BASSA" in first_row_codes
+    assert "LETTURA_INVERTITA" in first_row_codes
+    assert "CONSUMO_INCOERENTE" in first_row_codes
+    assert "INTERVENTO_APERTO" in first_row_codes
+    assert "TELEFONO_ANOMALO" in first_row_codes

@@ -96,6 +96,12 @@ class CatDistretto(Base):
     geometry_versions: Mapped[list["CatDistrettoGeometryVersion"]] = relationship(
         back_populates="distretto", cascade="all, delete-orphan"
     )
+    meter_reading_imports: Mapped[list["CatMeterReadingImport"]] = relationship(
+        back_populates="distretto", cascade="all, delete-orphan"
+    )
+    meter_readings: Mapped[list["CatMeterReading"]] = relationship(
+        back_populates="distretto", cascade="all, delete-orphan"
+    )
 
 
 class CatDistrettoGeometryVersion(Base):
@@ -656,6 +662,95 @@ class CatUtenzaIntestatario(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     utenza_record: Mapped["CatUtenzaIrrigua"] = relationship(back_populates="intestatari_annuali")
+
+
+class CatMeterReadingImport(Base):
+    __tablename__ = "catasto_meter_reading_imports"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    distretto_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("cat_distretti.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    anno: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    filename_originale: Mapped[str] = mapped_column(String(255), nullable=False)
+    file_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    stato: Mapped[str] = mapped_column(String(32), default="processing", nullable=False, index=True)
+    totale_righe: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    righe_importate: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    righe_con_warning: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    righe_scartate: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    uploaded_by: Mapped[int | None] = mapped_column(ForeignKey("application_users.id"), nullable=True)
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    error_report: Mapped[dict | list | None] = mapped_column(JSON, nullable=True)
+
+    distretto: Mapped["CatDistretto"] = relationship(back_populates="meter_reading_imports")
+    readings: Mapped[list["CatMeterReading"]] = relationship(
+        back_populates="import_record", cascade="all, delete-orphan"
+    )
+
+
+class CatMeterReading(Base):
+    __tablename__ = "catasto_meter_readings"
+    __table_args__ = (
+        UniqueConstraint("anno", "distretto_id", "punto_consegna", name="uq_catasto_meter_readings_ref"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    import_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("catasto_meter_reading_imports.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    distretto_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("cat_distretti.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    anno: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    row_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    excel_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    punto_consegna: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    matricola: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    sigillo: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    tipologia_idrante: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    firmware_version: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    battery_level: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    lettura_iniziale: Mapped[Decimal | None] = mapped_column(Numeric(14, 3), nullable=True)
+    lettura_finale: Mapped[Decimal | None] = mapped_column(Numeric(14, 3), nullable=True)
+    consumo_mc: Mapped[Decimal | None] = mapped_column(Numeric(14, 3), nullable=True)
+    data_lettura: Mapped[date | None] = mapped_column(Date, nullable=True)
+    operatore_lettura: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    intervento_da_eseguire: Mapped[str | None] = mapped_column(Text, nullable=True)
+    intervento_eseguito: Mapped[str | None] = mapped_column(Text, nullable=True)
+    operatore_intervento: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    data_intervento: Mapped[date | None] = mapped_column(Date, nullable=True)
+    dui: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    codice_fiscale: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    codice_fiscale_normalizzato: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    subject_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ana_subjects.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    coltura: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    tariffa: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    fondo_chiuso: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    telefono: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    validation_status: Mapped[str] = mapped_column(String(32), default="valid", nullable=False, index=True)
+    validation_messages: Mapped[list | dict | None] = mapped_column(JSON, nullable=True)
+    source: Mapped[str] = mapped_column(String(20), default="excel", nullable=False, index=True)
+    mobile_session_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    gps_lat: Mapped[Decimal | None] = mapped_column(Numeric(10, 7), nullable=True)
+    gps_lng: Mapped[Decimal | None] = mapped_column(Numeric(10, 7), nullable=True)
+    photo_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    offline_created_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    sync_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    device_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    mobile_operator_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    import_record: Mapped["CatMeterReadingImport | None"] = relationship(back_populates="readings")
+    distretto: Mapped["CatDistretto"] = relationship(back_populates="meter_readings")
 
 
 class CatCapacitasTerrenoDetail(Base):

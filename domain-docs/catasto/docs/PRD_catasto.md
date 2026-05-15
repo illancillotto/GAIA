@@ -17,6 +17,7 @@ Questo PRD descrive quindi il perimetro reale di `catasto` oggi:
 - archivio documenti catastali
 - consultazione e dettaglio dei documenti
 - anagrafica territoriale `cat_*` per distretti, particelle, utenze irrigue e anomalie
+- letture contatori irrigui collegate al dominio Catasto e consultabili dal dettaglio utente tramite API dedicate
 - distinzione esplicita tra catasto catastale ufficiale e catasto consortile operativo
 - import Capacitas Fase 1 e basi geospaziali PostGIS
 - ricerca anagrafica da riferimenti catastali, singola e massiva

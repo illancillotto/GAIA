@@ -4,9 +4,9 @@
 
 ## Stato generale
 
-Stato: **pianificato**
+Stato: **implementazione base completata**
 
-La funzionalità non risulta ancora implementata nel runtime. Il presente documento traccia le attività necessarie per portare in GAIA la gestione delle letture contatori oggi gestite tramite file Excel distrettuali.
+La funzionalità risulta implementata nel runtime Catasto per il perimetro fase 1: validazione/import Excel, persistenza, linking anagrafico, consultazione da Catasto e sezione dedicata nel dettaglio utente.
 
 ## Decisioni approvate
 
@@ -26,41 +26,41 @@ La funzionalità non risulta ancora implementata nel runtime. Il presente docume
 
 | Attività | Stato | Note |
 |---|---|---|
-| PRD funzionale | completato | documento iniziale predisposto |
-| Implementation Plan | completato | documento iniziale predisposto |
+| PRD funzionale | completato | documento operativo disponibile |
+| Implementation Plan | completato | piano operativo aggiunto alla cartella letture |
 | Prompt Codex | completato | pronto per sviluppo |
-| Aggiornamento PRD Catasto principale | da fare | aggiungere sezione sintetica |
+| Aggiornamento PRD Catasto principale | completato | riferimento sintetico aggiunto |
 
 ### Backend
 
 | Attività | Stato | Note |
 |---|---|---|
-| Analisi struttura Catasto esistente | da fare | verificare modelli e router esistenti |
-| Definizione tabelle | pianificato | `catasto_meter_reading_imports`, `catasto_meter_readings` |
-| Migration Alembic | da fare | includere vincolo unico |
-| Parser Excel | da fare | supporto alias colonne |
-| Validatore dati | da fare | errori e warning |
-| Linking utenze tramite CF | da fare | usare CF normalizzato |
-| API import validate | da fare | validazione senza salvataggio |
-| API import definitivo | da fare | modalità import/upsert/replace |
-| API lista letture | da fare | con filtri |
-| API dettaglio lettura | da fare | singolo record |
-| API letture per soggetto | da fare | per dettaglio utenza |
-| Test backend | da fare | parser, import, linking |
+| Analisi struttura Catasto esistente | completato | allineata a route/models/schemas reali del repository |
+| Definizione tabelle | completato | `catasto_meter_reading_imports`, `catasto_meter_readings` |
+| Migration Alembic | completato | con vincolo unico e indici principali |
+| Parser Excel | completato | supporto alias colonne e header autodetect |
+| Validatore dati | completato | errori bloccanti e warning fase 1 |
+| Linking utenze tramite CF | completato | linking verso `ana_subjects` via CF normalizzato |
+| API import validate | completato | validazione senza salvataggio |
+| API import definitivo | completato | modalità `import/upsert/replace` |
+| API lista letture | completato | con filtri base e paginazione |
+| API dettaglio lettura | completato | singolo record |
+| API letture per soggetto | completato | per dettaglio utenza |
+| Test backend | completato | parser, import, linking, API principali |
 
 ### Frontend
 
 | Attività | Stato | Note |
 |---|---|---|
-| API client Catasto letture | da fare | `catasto-meter-readings.ts` |
-| Pagina `Contatori irrigui` | da fare | route Catasto |
-| Pannello import Excel | da fare | upload + validazione |
-| Report anomalie import | da fare | warning/errori |
-| Tabella letture | da fare | filtri e paginazione |
-| Drawer dettaglio lettura | da fare | dati completi |
-| Sidebar Catasto | da fare | aggiungere voce |
-| Sezione dettaglio utente | da fare | mostrare letture collegate |
-| Test frontend | da fare | smoke + eventuali component test |
+| API client Catasto letture | completato | integrato nel client Catasto esistente |
+| Pagina `Contatori irrigui` | completato | route Catasto dedicata |
+| Pannello import Excel | completato | upload + validazione + import |
+| Report anomalie import | completato | report sintetico preview |
+| Tabella letture | completato | filtri base e apertura dettaglio |
+| Drawer dettaglio lettura | completato | dati completi e validazione |
+| Sidebar Catasto | completato | voce `Contatori irrigui` aggiunta |
+| Sezione dettaglio utente | completato | consume API Catasto per soggetto |
+| Test frontend | parziale | integrazione UI implementata, test e2e dedicati da estendere |
 
 ### GAIA Mobile
 
@@ -85,9 +85,6 @@ La funzionalità non risulta ancora implementata nel runtime. Il presente docume
 
 ## Prossimo step consigliato
 
-1. Verificare nel repository i modelli esistenti del dominio Utenze/Anagrafica per individuare il campo CF ufficiale.
-2. Creare migration e modelli Catasto.
-3. Implementare parser Excel con fixture reale `D01-Sinis 2025.xlsx`.
-4. Implementare validazione e report anomalie.
-5. Implementare linking utenze.
-6. Integrare pagina Catasto e dettaglio utente.
+1. Eseguire test frontend mirati sulle nuove route Catasto e sulla sezione in `utenze/[id]`.
+2. Valutare KPI/dashlet dedicati per consumi e warning in homepage Catasto.
+3. Stabilire eventuali regole aggiuntive su replace logico, storicizzazione e reimport duplicati.
