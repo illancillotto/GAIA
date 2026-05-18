@@ -202,6 +202,7 @@ export function ModuleSidebar({
 
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Dati</p>
         <NavItem href="/ruolo/avvisi" icon={DocumentIcon} label="Avvisi" match="prefix" />
+        <NavItem href="/ruolo/particelle" icon={FolderIcon} label="Particelle" match="prefix" />
         <NavItem href="/ruolo/stats" icon={SearchIcon} label="Statistiche" match="prefix" />
 
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Gestione</p>

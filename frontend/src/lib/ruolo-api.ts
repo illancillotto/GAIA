@@ -6,6 +6,8 @@ import type {
   RuoloImportJobResponse,
   RuoloImportUploadResponse,
   RuoloImportYearDetectionResponse,
+  RuoloParticellaResponse,
+  RuoloParticelleSummaryResponse,
   RuoloStatsResponse,
   RuoloStatsComuneResponse,
 } from "@/types/ruolo";
@@ -126,6 +128,31 @@ export async function getAvvisiBySubject(
   return ruoloRequest<RuoloAvvisoDetailResponse[]>(`/ruolo/soggetti/${subjectId}/avvisi`, token);
 }
 
+export type ListRuoloParticelleParams = {
+  anno?: number;
+  foglio?: string;
+  particella?: string;
+  comune?: string;
+  unmatched_only?: boolean;
+  page?: number;
+  page_size?: number;
+};
+
+export async function listRuoloParticelle(
+  token: string,
+  params: ListRuoloParticelleParams = {},
+): Promise<RuoloParticellaResponse[]> {
+  const qs = new URLSearchParams();
+  if (params.anno != null) qs.set("anno", String(params.anno));
+  if (params.foglio) qs.set("foglio", params.foglio);
+  if (params.particella) qs.set("particella", params.particella);
+  if (params.comune) qs.set("comune", params.comune);
+  if (params.unmatched_only) qs.set("unmatched_only", "true");
+  qs.set("page", String(params.page ?? 1));
+  qs.set("page_size", String(params.page_size ?? 50));
+  return ruoloRequest<RuoloParticellaResponse[]>(`/ruolo/particelle?${qs}`, token);
+}
+
 export function buildExportCsvUrl(params: ListAvvisiParams): string {
   const qs = new URLSearchParams();
   if (params.anno != null) qs.set("anno", String(params.anno));
@@ -144,6 +171,15 @@ export async function getRuoloStats(token: string, anno?: number): Promise<Ruolo
   const qs = new URLSearchParams();
   if (anno != null) qs.set("anno", String(anno));
   return ruoloRequest<RuoloStatsResponse>(`/ruolo/stats?${qs}`, token);
+}
+
+export async function getRuoloParticelleSummary(
+  token: string,
+  anno?: number,
+): Promise<RuoloParticelleSummaryResponse> {
+  const qs = new URLSearchParams();
+  if (anno != null) qs.set("anno", String(anno));
+  return ruoloRequest<RuoloParticelleSummaryResponse>(`/ruolo/stats/particelle?${qs}`, token);
 }
 
 export async function getRuoloStatsComuni(

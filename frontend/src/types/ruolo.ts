@@ -93,6 +93,8 @@ export type RuoloParticellaResponse = {
   id: string;
   partita_id: string;
   anno_tributario: number;
+  comune_nome: string | null;
+  comune_codice: string | null;
   domanda_irrigua: string | null;
   distretto: string | null;
   foglio: string;
@@ -106,6 +108,12 @@ export type RuoloParticellaResponse = {
   importo_irrig: number | null;
   importo_ist: number | null;
   catasto_parcel_id: string | null;
+  cat_particella_id: string | null;
+  cat_particella_match_status: string | null;
+  cat_particella_match_confidence: string | null;
+  cat_particella_match_reason: string | null;
+  ade_scan_status: string | null;
+  ade_scan_classification: string | null;
   created_at: string;
 };
 
@@ -170,6 +178,14 @@ export type RuoloStatsByAnnoResponse = {
 
 export type RuoloStatsResponse = {
   items: RuoloStatsByAnnoResponse[];
+};
+
+export type RuoloParticelleSummaryResponse = {
+  anno_tributario: number | null;
+  total_particelle: number;
+  collegate_catasto: number;
+  non_collegate_catasto: number;
+  soppresse_ade: number;
 };
 
 export type RuoloStatsComuneItem = {

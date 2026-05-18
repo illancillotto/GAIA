@@ -105,6 +105,7 @@ const menuSearchRoutes: SearchRoute[] = [
   // Ruolo
   { label: "Ruolo · Dashboard", href: "/ruolo", moduleKey: "ruolo" },
   { label: "Ruolo · Avvisi", href: "/ruolo/avvisi", moduleKey: "ruolo" },
+  { label: "Ruolo · Particelle", href: "/ruolo/particelle", moduleKey: "ruolo", requiredSection: "ruolo.avvisi", keywords: ["particelle", "mappali", "ruolo"] },
   { label: "Ruolo · Statistiche", href: "/ruolo/stats", moduleKey: "ruolo", keywords: ["analytics"] },
   { label: "Ruolo · Import Ruolo", href: "/ruolo/import", moduleKey: "ruolo", keywords: ["import"] },
 

@@ -20,6 +20,7 @@ from app.modules.ruolo.schemas import (
     RuoloAvvisoListItemResponse,
     RuoloAvvisoListResponse,
     RuoloParticellaResponse,
+    RuoloParticelleSummaryResponse,
     RuoloPartitaResponse,
     RuoloStatsByAnnoResponse,
     RuoloStatsComuneItem,
@@ -51,10 +52,13 @@ def _avviso_to_list_item(avviso: RuoloAvviso, display_name: str | None, is_linke
 
 
 def _particella_to_response(p: RuoloParticella) -> RuoloParticellaResponse:
+    partita = p.partita
     return RuoloParticellaResponse(
         id=str(p.id),
         partita_id=str(p.partita_id),
         anno_tributario=p.anno_tributario,
+        comune_nome=partita.comune_nome if partita else None,
+        comune_codice=partita.comune_codice if partita else None,
         domanda_irrigua=p.domanda_irrigua,
         distretto=p.distretto,
         foglio=p.foglio,
@@ -68,6 +72,12 @@ def _particella_to_response(p: RuoloParticella) -> RuoloParticellaResponse:
         importo_irrig=p.importo_irrig,
         importo_ist=p.importo_ist,
         catasto_parcel_id=str(p.catasto_parcel_id) if p.catasto_parcel_id else None,
+        cat_particella_id=str(p.cat_particella_id) if p.cat_particella_id else None,
+        cat_particella_match_status=p.cat_particella_match_status,
+        cat_particella_match_confidence=p.cat_particella_match_confidence,
+        cat_particella_match_reason=p.cat_particella_match_reason,
+        ade_scan_status=p.ade_scan_status,
+        ade_scan_classification=p.ade_scan_classification,
         created_at=p.created_at,
     )
 
@@ -245,13 +255,14 @@ def search_particelle(
     foglio: str | None = None,
     particella: str | None = None,
     comune: str | None = None,
+    unmatched_only: bool = False,
     page: int = 1,
     page_size: int = 50,
     db: Session = Depends(get_db),
     current_user: ApplicationUser = Depends(require_module("ruolo")),
 ) -> list[RuoloParticellaResponse]:
     items, _ = repo.search_particelle(
-        db, anno=anno, foglio=foglio, particella=particella, comune=comune,
+        db, anno=anno, foglio=foglio, particella=particella, comune=comune, unmatched_only=unmatched_only,
         page=page, page_size=page_size,
     )
     return [_particella_to_response(p) for p in items]
@@ -282,6 +293,15 @@ def get_stats(
         for d in data
     ]
     return RuoloStatsResponse(items=items)
+
+
+@router.get("/stats/particelle", response_model=RuoloParticelleSummaryResponse)
+def get_particelle_stats(
+    anno: int | None = None,
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(require_module("ruolo")),
+) -> RuoloParticelleSummaryResponse:
+    return RuoloParticelleSummaryResponse(**repo.get_particelle_summary(db, anno=anno))
 
 
 @router.get("/stats/comuni", response_model=RuoloStatsComuneResponse)

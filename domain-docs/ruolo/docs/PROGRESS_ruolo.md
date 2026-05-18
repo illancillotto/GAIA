@@ -110,6 +110,7 @@
 - [x] `/ruolo/avvisi` — lista con filtri URL-driven + paginazione, riallineata al pattern UI/UX dei moduli maturi
 - [x] `/ruolo/avvisi` — ricerca unificata live (`q`) con debounce, soglia minima 3 caratteri, toggle `Solo avvisi non collegati` inline e dettaglio avviso in modale embedded
 - [x] `/ruolo/avvisi/[id]` — dettaglio completo con partite espandibili, riallineato al pattern UI/UX dei moduli maturi
+- [x] `/ruolo/particelle` — vista dedicata al dataset storico `ruolo_particelle`, con filtri ruolo, stato di collegamento a `cat_particelle` e classificazione AdE
 - [x] `/ruolo/stats` — statistiche per anno e per comune interattive, riallineate al pattern UI/UX dei moduli maturi
 - [x] Integrazione scheda soggetto `RuoloAvvisiSection`, riallineata al pattern UI/UX del modulo con hero compatta, mini-stat e CTA coerenti
 - [x] Nessun errore lint (`ReadLints` verde)
@@ -185,7 +186,7 @@
 - M1 completata: migration applicata, modelli ORM, enums, parser con 14 test unitari, import service asincrono.
 - M2 completata: schemas Pydantic, repository, 10 endpoint REST (import + query + export CSV + catasto parcels).
 - M3 completata: bootstrap section keys, flag `module_ruolo` su ApplicationUser, router registrato.
-- M4 completata: 5 pagine frontend (`/ruolo`, `/ruolo/avvisi`, `/ruolo/avvisi/[id]`, `/ruolo/stats`, `/ruolo/import`), widget soggetto, navigazione aggiornata.
+- M4 completata: 6 pagine frontend (`/ruolo`, `/ruolo/avvisi`, `/ruolo/avvisi/[id]`, `/ruolo/particelle`, `/ruolo/stats`, `/ruolo/import`), widget soggetto, navigazione aggiornata.
 - M5 parziale: permessi `require_module` attivi; test di integrazione API pendenti.
 
 ### 2026-04-17
@@ -201,3 +202,11 @@
 - `/ruolo/avvisi` e stata riallineata alla UX di `utenze`: campo singolo di ricerca, stato iniziale “Ricerca pronta”, avvio automatico dopo 3 caratteri, debounce client-side e aggiornamento URL con `router.replace` per evitare raffiche di chiamate.
 - Le card avviso aprono una modale con iframe embedded del dettaglio; `/ruolo/avvisi/[id]` nasconde il top header quando riceve `?embedded=1`.
 - Aggiunti test backend sul filtro `q` e test Playwright sul comportamento live search + apertura modale.
+
+### 2026-05-18
+- Aggiunta la page frontend `/ruolo/particelle` come vista del dataset storico `ruolo_particelle`, non limitata a `cat_particelle`.
+- Esteso `GET /ruolo/particelle` con comune di partita, stato di match verso `cat_particelle` e classificazione/stato scansione AdE.
+- La dashboard `Ruolo`, la sidebar modulo e la ricerca globale ora espongono il nuovo accesso rapido alle particelle a ruolo.
+- La dashboard `Ruolo` separa ora gli `avvisi non collegati` dai `non collegati a catasto` e dai casi `soppresse AdE`, eliminando l'indicatore ambiguo precedente.
+- `/ruolo/particelle` supporta ora apertura riga in modale con dettaglio storico e link al Catasto quando il match esiste.
+- Il workspace `/ruolo/particelle` riusa la section permission `ruolo.avvisi` per evitare blocchi operativi su ambienti dove non sia stato riallineato il catalogo sezioni.

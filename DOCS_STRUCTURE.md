@@ -120,6 +120,13 @@ La documentazione del progetto e distribuita principalmente in due aree:
 - `domain-docs/riordino/docs/PROMPT_CODEX_riordino_fullstack_v2.md`
 - `domain-docs/riordino/docs/PROGRESS_riordino_v2.md`
 
+### Ruolo
+
+- `domain-docs/ruolo/docs/PRD_ruolo.md`
+- `domain-docs/ruolo/docs/EXECUTION_PLAN_ruolo.md`
+- `domain-docs/ruolo/docs/PROGRESS_ruolo.md`
+- `domain-docs/ruolo/docs/PROMPT_CODEX_ruolo.md`
+
 ## Struttura sintetica del repository
 
 ```text
@@ -178,6 +185,8 @@ GAIA/
 │   │   └── docs/
 │   ├── riordino/
 │   │   └── docs/
+│   ├── ruolo/
+│   │   └── docs/
 │   └── utenze/
 │       └── docs/
 ├── frontend/
@@ -189,10 +198,12 @@ GAIA/
 │   │   │   ├── catasto/
 │   │   │   ├── elaborazioni/
 │   │   │   ├── operazioni/
+│   │   │   ├── ruolo/
 │   │   │   └── riordino/
 │   │   ├── components/
 │   │   │   ├── catasto/
 │   │   │   ├── operazioni/
+│   │   │   ├── ruolo/
 │   │   │   └── riordino/
 │   │   ├── features/
 │   │   ├── hooks/

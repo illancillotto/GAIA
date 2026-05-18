@@ -66,6 +66,8 @@ class RuoloParticellaResponse(BaseModel):
     id: uuid.UUID
     partita_id: uuid.UUID
     anno_tributario: int
+    comune_nome: str | None = None
+    comune_codice: str | None = None
     domanda_irrigua: str | None = None
     distretto: str | None = None
     foglio: str
@@ -83,6 +85,8 @@ class RuoloParticellaResponse(BaseModel):
     cat_particella_match_status: str | None = None
     cat_particella_match_confidence: str | None = None
     cat_particella_match_reason: str | None = None
+    ade_scan_status: str | None = None
+    ade_scan_classification: str | None = None
     created_at: datetime
 
 
@@ -181,6 +185,14 @@ class RuoloStatsByAnnoResponse(BaseModel):
 
 class RuoloStatsResponse(BaseModel):
     items: list[RuoloStatsByAnnoResponse]
+
+
+class RuoloParticelleSummaryResponse(BaseModel):
+    anno_tributario: int | None = None
+    total_particelle: int
+    collegate_catasto: int
+    non_collegate_catasto: int
+    soppresse_ade: int
 
 
 class RuoloStatsComuneItem(BaseModel):

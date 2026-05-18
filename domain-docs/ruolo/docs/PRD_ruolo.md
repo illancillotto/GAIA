@@ -111,6 +111,7 @@ con ~9.810 partite per il ruolo 2024.
 | Req | Priorità | Descrizione |
 |-----|----------|-------------|
 | RF-PAR-01 | MUST | Ricerca particelle per comune, foglio, numero, anno tributario |
+| RF-PAR-01b | MUST | Workspace dedicato nel modulo Ruolo per la consultazione del dataset storico `ruolo_particelle`, incluse righe non collegate al Catasto corrente e casi classificati come soppressi da AdE |
 | RF-PAR-02 | MUST | Storico temporale della particella: variazioni superficie negli anni |
 | RF-PAR-03 | SHOULD | Da particella: navigare verso gli avvisi che la contengono |
 | RF-PAR-04 | SHOULD | Da avviso: navigare verso le particelle catastali |
@@ -319,6 +320,7 @@ Tutti sotto prefisso `/ruolo`.
 | Metodo | Path | Descrizione |
 |--------|------|-------------|
 | `GET` | `/ruolo/particelle` | Ricerca: `anno`, `foglio`, `particella`, `comune` |
+| `GET` | `/ruolo/stats/particelle` | Riepilogo particelle ruolo: totale, collegate a Catasto, non collegate, soppresse AdE |
 | `GET` | `/catasto/parcels` | (modulo catasto) Lista particelle con storico `valid_from`/`valid_to` |
 | `GET` | `/catasto/parcels/{id}/history` | Storico variazioni di una particella |
 
@@ -338,6 +340,7 @@ Tutti sotto prefisso `/ruolo`.
 | `/ruolo` | Dashboard: card metriche anno corrente, avvisi non collegati, link rapidi |
 | `/ruolo/avvisi` | Lista avvisi con ricerca, filtri, paginazione |
 | `/ruolo/avvisi/[avviso_id]` | Dettaglio avviso: dati soggetto, partite per comune, tabella particelle, totali |
+| `/ruolo/particelle` | Vista storica delle `ruolo_particelle`, con filtri ruolo e diagnostica su collegamento Catasto / classificazione AdE |
 | `/ruolo/import` | Upload file + anno, lista job con stato |
 | `/ruolo/import/[job_id]` | Log dettagliato job: contatori, preview errori, link agli avvisi importati |
 | `/ruolo/stats` | Statistiche e aggregati per anno |

@@ -154,6 +154,7 @@ def search_particelle(
     foglio: str | None = None,
     particella: str | None = None,
     comune: str | None = None,
+    unmatched_only: bool = False,
     page: int = 1,
     page_size: int = 50,
 ) -> tuple[list[RuoloParticella], int]:
@@ -173,6 +174,8 @@ def search_particelle(
                 )
             )
         )
+    if unmatched_only:
+        q = q.where(RuoloParticella.cat_particella_id.is_(None))
 
     total = db.scalar(select(func.count()).select_from(q.subquery()))
     items = db.scalars(
@@ -231,6 +234,29 @@ def get_stats(db: Session, anno: int | None = None) -> list[dict]:
             "totale_euro": float(totale_euro) if totale_euro else None,
         })
     return results
+
+
+def get_particelle_summary(db: Session, anno: int | None = None) -> dict:
+    base_query = select(RuoloParticella)
+    if anno is not None:
+        base_query = base_query.where(RuoloParticella.anno_tributario == anno)
+    base_sq = base_query.subquery()
+
+    total_particelle = db.scalar(select(func.count()).select_from(base_sq)) or 0
+    collegate_catasto = db.scalar(
+        select(func.count()).select_from(base_sq).where(base_sq.c.cat_particella_id.is_not(None))
+    ) or 0
+    non_collegate_catasto = total_particelle - collegate_catasto
+    soppresse_ade = db.scalar(
+        select(func.count()).select_from(base_sq).where(base_sq.c.ade_scan_classification == "suppressed")
+    ) or 0
+    return {
+        "anno_tributario": anno,
+        "total_particelle": int(total_particelle),
+        "collegate_catasto": int(collegate_catasto),
+        "non_collegate_catasto": int(non_collegate_catasto),
+        "soppresse_ade": int(soppresse_ade),
+    }
 
 
 def get_stats_comuni(db: Session, anno: int) -> list[dict]:

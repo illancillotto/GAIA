@@ -15,8 +15,8 @@ import { RuoloWorkspaceModal } from "@/components/ruolo/workspace-modal";
 import { EmptyState } from "@/components/ui/empty-state";
 import { AlertTriangleIcon, CalendarIcon, DocumentIcon, FolderIcon, LockIcon, RefreshIcon, SearchIcon } from "@/components/ui/icons";
 import { getStoredAccessToken } from "@/lib/auth";
-import { getRuoloStats, listImportJobs } from "@/lib/ruolo-api";
-import type { RuoloStatsByAnnoResponse, RuoloImportJobResponse } from "@/types/ruolo";
+import { getRuoloParticelleSummary, getRuoloStats, listImportJobs } from "@/lib/ruolo-api";
+import type { RuoloParticelleSummaryResponse, RuoloStatsByAnnoResponse, RuoloImportJobResponse } from "@/types/ruolo";
 
 function formatEuro(value: number | null): string {
   if (value == null) return "—";
@@ -40,6 +40,7 @@ function StatusBadge({ status }: { status: string }) {
 export default function RuoloDashboardPage() {
   const [token, setToken] = useState<string | null>(null);
   const [stats, setStats] = useState<RuoloStatsByAnnoResponse[]>([]);
+  const [particelleSummary, setParticelleSummary] = useState<RuoloParticelleSummaryResponse | null>(null);
   const [recentJobs, setRecentJobs] = useState<RuoloImportJobResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [workspaceModal, setWorkspaceModal] = useState<{ href: string; title: string; description?: string | null } | null>(null);
@@ -52,10 +53,12 @@ export default function RuoloDashboardPage() {
     if (!token) return;
     Promise.all([
       getRuoloStats(token),
+      getRuoloParticelleSummary(token),
       listImportJobs(token, undefined, 1, 5),
     ])
-      .then(([statsData, jobsData]) => {
+      .then(([statsData, particelleData, jobsData]) => {
         setStats(statsData.items);
+        setParticelleSummary(particelleData);
         setRecentJobs(jobsData.items);
       })
       .catch(console.error)
@@ -73,12 +76,11 @@ export default function RuoloDashboardPage() {
     return stats.reduce(
       (acc, item) => {
         acc.avvisi += item.total_avvisi;
-        acc.collegati += item.avvisi_collegati;
-        acc.nonCollegati += item.avvisi_non_collegati;
+        acc.nonCollegatiAnagrafica += item.avvisi_non_collegati;
         acc.totaleEuro += item.totale_euro ?? 0;
         return acc;
       },
-      { avvisi: 0, collegati: 0, nonCollegati: 0, totaleEuro: 0 },
+      { avvisi: 0, nonCollegatiAnagrafica: 0, totaleEuro: 0 },
     );
   }, [stats]);
 
@@ -108,14 +110,14 @@ export default function RuoloDashboardPage() {
                 </>
               }
               title="Cruscotto operativo del ruolo consortile."
-              description="Monitora gli anni importati, individua gli avvisi non collegati all'anagrafica e apri rapidamente import, dettaglio avvisi e statistiche senza perdere il contesto del modulo."
+              description="Monitora gli anni importati, separa gli scarti anagrafici dai mancati collegamenti catastali e apri rapidamente import, dettaglio avvisi e statistiche senza perdere il contesto del modulo."
               actions={
                 <>
                   <ModuleWorkspaceNoticeCard
                     title={latestYearStats ? `Ultimo anno disponibile: ${latestYearStats.anno_tributario}` : "Nessun anno disponibile"}
                     description={
                       latestYearStats
-                        ? `${latestYearStats.total_avvisi} avvisi, ${latestYearStats.avvisi_non_collegati} non collegati e totale ${formatEuro(latestYearStats.totale_euro)}.`
+                        ? `${latestYearStats.total_avvisi} avvisi e totale ${formatEuro(latestYearStats.totale_euro)}. I collegamenti anagrafici e catastali sono letti separatamente nel cruscotto.`
                         : "Carica il primo file Ruolo per iniziare a popolare dashboard, avvisi e statistiche."
                     }
                     tone={latestYearStats ? "info" : "warning"}
@@ -143,16 +145,22 @@ export default function RuoloDashboardPage() {
                   hint={stats.length > 0 ? `${stats.length} anni importati` : "Nessun anno"}
                 />
                 <ModuleWorkspaceKpiTile
-                  label="Avvisi collegati"
-                  value={totals.collegati}
-                  hint="Mappati su soggetti GAIA"
-                  variant="emerald"
+                  label="Avvisi non collegati"
+                  value={totals.nonCollegatiAnagrafica}
+                  hint="Non mappati su soggetti GAIA"
+                  variant={totals.nonCollegatiAnagrafica > 0 ? "amber" : "default"}
                 />
                 <ModuleWorkspaceKpiTile
-                  label="Non collegati"
-                  value={totals.nonCollegati}
-                  hint="Da verificare in anagrafica"
-                  variant={totals.nonCollegati > 0 ? "amber" : "default"}
+                  label="Particelle non collegate"
+                  value={particelleSummary?.non_collegate_catasto ?? "—"}
+                  hint="Assenti in `cat_particelle`"
+                  variant={(particelleSummary?.non_collegate_catasto ?? 0) > 0 ? "amber" : "default"}
+                />
+                <ModuleWorkspaceKpiTile
+                  label="Soppresse AdE"
+                  value={particelleSummary?.soppresse_ade ?? "—"}
+                  hint="Classificate `suppressed`"
+                  variant={(particelleSummary?.soppresse_ade ?? 0) > 0 ? "amber" : "default"}
                 />
                 <ModuleWorkspaceKpiTile
                   label="Importi complessivi"
@@ -171,10 +179,10 @@ export default function RuoloDashboardPage() {
                   </p>
                   <p className="mt-3 text-lg font-semibold text-gray-900">Apri i flussi principali del modulo.</p>
                   <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600">
-                    Usa i workspace rapidi per import, consultazione avvisi e analisi statistiche mantenendo il contesto della dashboard.
+                    Usa i workspace rapidi per import, consultazione avvisi, ricerca particelle a ruolo e analisi statistiche mantenendo il contesto della dashboard.
                   </p>
                 </div>
-                <div className="grid gap-4 p-6 md:grid-cols-3">
+                <div className="grid gap-4 p-6 md:grid-cols-2 xl:grid-cols-4">
                   <button
                     type="button"
                     onClick={() => openWorkspaceModal("/ruolo/import", "Import Ruolo", "Carica un file Ruolo senza uscire dalla dashboard.")}
@@ -191,6 +199,14 @@ export default function RuoloDashboardPage() {
                     <SearchIcon className="h-5 w-5 text-[#1D4E35]" />
                     <p className="mt-4 text-sm font-semibold text-gray-900">Avvisi</p>
                     <p className="mt-1 text-sm leading-6 text-gray-600">Filtra per anno, CF, comune, utenza e individua gli orfani.</p>
+                  </Link>
+                  <Link
+                    href="/ruolo/particelle"
+                    className="rounded-2xl border border-[#d8dfd3] bg-[linear-gradient(180deg,_#ffffff,_#f6faf7)] p-5 shadow-sm transition hover:border-[#8CB39D] hover:shadow"
+                  >
+                    <FolderIcon className="h-5 w-5 text-[#1D4E35]" />
+                    <p className="mt-4 text-sm font-semibold text-gray-900">Particelle a ruolo</p>
+                    <p className="mt-1 text-sm leading-6 text-gray-600">Apri la vista storica del ruolo, incluse particelle non collegate o soppresse da AdE.</p>
                   </Link>
                   <Link
                     href="/ruolo/stats"
@@ -229,6 +245,13 @@ export default function RuoloDashboardPage() {
                     value={latestYearStats ? `${latestYearStats.avvisi_collegati}/${latestYearStats.total_avvisi}` : "0/0"}
                     description={latestYearStats ? `${latestYearStats.avvisi_non_collegati} avvisi dell'anno più recente richiedono ancora collegamento.` : "L'indicatore sarà disponibile dopo il primo import."}
                     tone={latestYearStats && latestYearStats.avvisi_non_collegati > 0 ? "warning" : "success"}
+                    compact
+                  />
+                  <ModuleWorkspaceMiniStat
+                    eyebrow="Allineamento catasto"
+                    value={particelleSummary ? `${particelleSummary.collegate_catasto}/${particelleSummary.total_particelle}` : "0/0"}
+                    description={particelleSummary ? `${particelleSummary.non_collegate_catasto} particelle ruolo non trovano un match in catasto corrente; ${particelleSummary.soppresse_ade} risultano soppresse da AdE.` : "L'indicatore sarà disponibile dopo il primo import."}
+                    tone={particelleSummary && particelleSummary.non_collegate_catasto > 0 ? "warning" : "success"}
                     compact
                   />
                   <ModuleWorkspaceMiniStat
