@@ -6579,6 +6579,26 @@ def test_meter_reading_prepare_import_resolves_distretto_from_name_in_filename()
         db.close()
 
 
+def test_meter_reading_prepare_import_resolves_composite_distretto_code_from_filename() -> None:
+    db = TestingSessionLocal()
+    try:
+        db.add(CatDistretto(num_distretto="291", nome_distretto="3 Distretto Terralba - Zona Uras"))
+        db.add(CatDistretto(num_distretto="29a", nome_distretto="3 Distr Terralba - Uras"))
+        db.commit()
+
+        prepared = prepare_meter_readings_import(
+            db,
+            file_bytes=_build_meter_readings_workbook(),
+            filename="D29-1 Uras 2025.xlsx",
+        )
+
+        assert prepared.anno == 2025
+        assert prepared.distretto is not None
+        assert prepared.distretto.num_distretto == "291"
+    finally:
+        db.close()
+
+
 def test_meter_reading_prepare_import_keeps_tipo_and_tipologia_separate() -> None:
     db = TestingSessionLocal()
     try:
@@ -7035,5 +7055,71 @@ def test_meter_reading_import_creates_anomalia_for_cont_no_tes_without_cf() -> N
         assert len(anomalie) == 1
         assert anomalie[0].status == "aperta"
         assert anomalie[0].dati_json["punto_consegna"] == "CNT-001"
+    finally:
+        db.close()
+
+
+def test_meter_reading_import_keeps_open_anomalie_from_other_districts() -> None:
+    db = TestingSessionLocal()
+    try:
+        distretto_sinis = db.execute(select(CatDistretto).where(CatDistretto.num_distretto == "1")).scalar_one()
+        distretto_dieci = db.execute(select(CatDistretto).where(CatDistretto.num_distretto == "10")).scalar_one()
+        other_anomalia = CatAnomalia(
+            anno_campagna=2025,
+            tipo="MR-02-cont_no_tes_cf_mancante",
+            severita="warning",
+            status="aperta",
+            descrizione="Contatore non tessera senza codice fiscale utenza",
+            dati_json={
+                "distretto_id": str(distretto_dieci.id),
+                "distretto_numero": distretto_dieci.num_distretto,
+                "punto_consegna": "DIST10-001",
+                "row_number": 1,
+            },
+        )
+        db.add(other_anomalia)
+        db.commit()
+        other_anomalia_id = other_anomalia.id
+    finally:
+        db.close()
+
+    headers = [
+        "ID",
+        "PUNTO_CONS",
+        "TIPO",
+        "COD_CONT",
+        "LETTURA FINALE 2024",
+        "LETTURA FINALE 2025",
+        "TOTALE m3 2025",
+        "COD. FISC",
+    ]
+    rows = [
+        [1, "CNT-777", "CONT_NO_TES", "MTR-777", 100, 120, 20, ""],
+    ]
+    response = client.post(
+        "/catasto/meter-readings/import?mode=upsert&anno=2025",
+        headers=auth_headers(),
+        files={
+            "file": (
+                "D01-Sinis 2025.xlsx",
+                _build_meter_readings_workbook(rows=rows, headers=headers),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert response.status_code == 201
+
+    db = TestingSessionLocal()
+    try:
+        preserved = db.get(CatAnomalia, other_anomalia_id)
+        assert preserved is not None
+        assert preserved.status == "aperta"
+        anomalie = db.execute(
+            select(CatAnomalia).where(CatAnomalia.tipo == "MR-02-cont_no_tes_cf_mancante")
+        ).scalars().all()
+        assert len(anomalie) == 2
+        assert any(item.dati_json.get("punto_consegna") == "CNT-777" for item in anomalie)
+        assert any(item.dati_json.get("punto_consegna") == "DIST10-001" for item in anomalie)
     finally:
         db.close()

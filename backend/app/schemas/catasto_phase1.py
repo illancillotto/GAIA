@@ -86,6 +86,9 @@ class CatMeterReadingResponse(BaseModel):
     punto_consegna: str
     matricola: str | None
     sigillo: str | None
+    record_type: str | None
+    record_kind: str | None
+    operational_state: str | None
     tipologia_idrante: str | None
     firmware_version: str | None
     battery_level: str | None
@@ -240,7 +243,7 @@ class CatAdeStatusScanCandidateListResponse(BaseModel):
 
 
 class CatAdeStatusScanRunInput(BaseModel):
-    limit: int = 50
+    limit: int | None = None
     match_reasons: list[str] | None = None
 
 

@@ -11,6 +11,7 @@ from app.core.database import get_db
 from app.models.application_user import ApplicationUser
 from app.models.catasto_phase1 import CatMeterReading, CatMeterReadingImport
 from app.modules.catasto.services.meter_reading_import_service import import_meter_readings, prepare_meter_readings_import
+from app.modules.catasto.services.meter_reading_parser import MeterReadingsParseError
 from app.modules.utenze.models import AnagraficaCompany, AnagraficaPerson
 from app.schemas.catasto_phase1 import (
     CatMeterReadingImportDetailResponse,
@@ -51,6 +52,9 @@ def _serialize_reading(item: CatMeterReading, subject_display_name: str | None =
         punto_consegna=item.punto_consegna,
         matricola=item.matricola,
         sigillo=item.sigillo,
+        record_type=item.record_type,
+        record_kind=item.record_kind,
+        operational_state=item.operational_state,
         tipologia_idrante=item.tipologia_idrante,
         firmware_version=item.firmware_version,
         battery_level=item.battery_level,
@@ -98,13 +102,16 @@ def validate_meter_readings_import(
     db: Session = Depends(get_db),
     _: ApplicationUser = Depends(require_active_user),
 ) -> CatMeterReadingImportPreviewResponse:
-    prepared = prepare_meter_readings_import(
-        db,
-        file_bytes=file.file.read(),
-        filename=file.filename or "meter-readings.xlsx",
-        anno=anno,
-        distretto_id=distretto_id,
-    )
+    try:
+        prepared = prepare_meter_readings_import(
+            db,
+            file_bytes=file.file.read(),
+            filename=file.filename or "meter-readings.xlsx",
+            anno=anno,
+            distretto_id=distretto_id,
+        )
+    except MeterReadingsParseError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return CatMeterReadingImportPreviewResponse(
         anno=prepared.anno,
         distretto_id=prepared.distretto.id if prepared.distretto else None,
@@ -151,6 +158,8 @@ def run_meter_readings_import(
             anno=anno,
             distretto_id=distretto_id,
         )
+    except MeterReadingsParseError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return CatMeterReadingImportRunResponse(

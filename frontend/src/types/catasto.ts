@@ -68,6 +68,9 @@ export type CatMeterReading = {
   punto_consegna: string;
   matricola: string | null;
   sigillo: string | null;
+  record_type: string | null;
+  record_kind: string | null;
+  operational_state: string | null;
   tipologia_idrante: string | null;
   firmware_version: string | null;
   battery_level: string | null;

@@ -31,6 +31,10 @@ export function MeterReadingDetailDrawer({
           {[
             ["Matricola", reading.matricola],
             ["Sigillo", reading.sigillo],
+            ["Tipo record", reading.record_type],
+            ["Classe record", reading.record_kind],
+            ["Stato operativo", reading.operational_state],
+            ["Tipologia apparato", reading.tipologia_idrante],
             ["Codice fiscale", reading.codice_fiscale_normalizzato ?? reading.codice_fiscale],
             ["Soggetto", reading.subject_display_name],
             ["Lettura iniziale", reading.lettura_iniziale],

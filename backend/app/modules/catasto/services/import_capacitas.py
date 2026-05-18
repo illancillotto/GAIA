@@ -67,6 +67,8 @@ ANOMALIA_TYPES = {
     "VAL-05-particella_assente": "Particella assente in anagrafica",
     "VAL-06-imponibile": "Imponibile incoerente",
     "VAL-07-importi": "Importi incoerenti",
+    "MR-01-cont_tesser_cf_mancante": "Contatore tessera senza codice fiscale utenza",
+    "MR-02-cont_no_tes_cf_mancante": "Contatore non tessera senza codice fiscale utenza",
 }
 
 

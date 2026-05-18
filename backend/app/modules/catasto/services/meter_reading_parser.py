@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from io import BytesIO
 from pathlib import Path
 from typing import Any
+from xml.etree import ElementTree as ET
+from zipfile import BadZipFile, ZIP_DEFLATED, ZipFile
 
 from openpyxl import load_workbook
 
@@ -21,7 +24,7 @@ HEADER_ALIASES: dict[str, str] = {
     "SIGILLO": "sigillo",
     "TIPOLOGIA": "tipologia_idrante",
     "TIPOLOGIA IDRANTE": "tipologia_idrante",
-    "TIPO": "tipologia_idrante",
+    "TIPO": "record_type",
     "FIRMWARE": "firmware_version",
     "VERSIONE FIRMWARE": "firmware_version",
     "BATTERIA": "battery_level",
@@ -48,6 +51,13 @@ HEADER_ALIASES: dict[str, str] = {
     "NOTE": "note",
     "TELEFONO": "telefono",
 }
+
+
+class MeterReadingsParseError(ValueError):
+    """Raised when the uploaded workbook cannot be parsed safely."""
+
+
+_SPREADSHEETML_NS = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
 
 
 @dataclass
@@ -134,14 +144,74 @@ def _detect_header_row(sheet) -> int:
 def _extract_filename_metadata(filename: str) -> tuple[str | None, int | None]:
     stem = Path(filename).stem
     year_match = re.search(r"(20\d{2})", stem)
-    distretto_match = re.search(r"\bD?\s*0*([0-9]{1,3}[A-Za-z]?)\b", stem, flags=re.IGNORECASE)
     anno = int(year_match.group(1)) if year_match else None
-    distretto_code = distretto_match.group(1) if distretto_match else None
+    distretto_code: str | None = None
+
+    explicit_match = re.search(r"\bD(?:ISTRETTO)?\s*[-_ ]?\s*0*([0-9]{1,3}[A-Za-z]?)\b", stem, flags=re.IGNORECASE)
+    if explicit_match:
+        distretto_code = explicit_match.group(1)
+    else:
+        normalized_stem = unicodedata.normalize("NFD", stem)
+        normalized_stem = "".join(char for char in normalized_stem if not unicodedata.combining(char))
+        for candidate in re.findall(r"\b0*([0-9]{1,3}[A-Za-z]?)\b", normalized_stem):
+            if anno is not None and candidate.isdigit() and int(candidate) == anno:
+                continue
+            distretto_code = candidate
+            break
+
     return (distretto_code.upper() if distretto_code else None, anno)
 
 
+def _sanitize_stylesheet_font_family(file_bytes: bytes) -> bytes | None:
+    try:
+        with ZipFile(BytesIO(file_bytes), "r") as source:
+            if "xl/styles.xml" not in source.namelist():
+                return None
+            styles_xml = source.read("xl/styles.xml")
+            root = ET.fromstring(styles_xml)
+            changed = False
+            for family in root.findall(f".//{{{_SPREADSHEETML_NS}}}family"):
+                raw = family.get("val")
+                if raw is None:
+                    continue
+                try:
+                    numeric = int(raw)
+                except ValueError:
+                    continue
+                if numeric > 14:
+                    family.set("val", "14")
+                    changed = True
+            if not changed:
+                return None
+
+            updated_styles = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+            output = BytesIO()
+            with ZipFile(output, "w", compression=ZIP_DEFLATED) as target:
+                for name in source.namelist():
+                    payload = updated_styles if name == "xl/styles.xml" else source.read(name)
+                    target.writestr(name, payload)
+            return output.getvalue()
+    except (BadZipFile, ET.ParseError, KeyError):
+        return None
+
+
+def _load_workbook_with_fallback(file_bytes: bytes):
+    try:
+        return load_workbook(filename=BytesIO(file_bytes), read_only=True, data_only=True)
+    except Exception as exc:
+        repaired = _sanitize_stylesheet_font_family(file_bytes)
+        if repaired is not None:
+            try:
+                return load_workbook(filename=BytesIO(repaired), read_only=True, data_only=True)
+            except Exception:
+                pass
+        raise MeterReadingsParseError(
+            "File Excel non leggibile. Salvare nuovamente il file come .xlsx da Excel o LibreOffice e riprovare."
+        ) from exc
+
+
 def parse_meter_readings_excel(file_bytes: bytes, filename: str) -> ParsedMeterReadingsFile:
-    workbook = load_workbook(filename=BytesIO(file_bytes), read_only=True, data_only=True)
+    workbook = _load_workbook_with_fallback(file_bytes)
     sheet = workbook[workbook.sheetnames[0]]
     header_row = _detect_header_row(sheet)
     header_values = next(sheet.iter_rows(min_row=header_row, max_row=header_row, values_only=True))

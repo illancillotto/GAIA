@@ -90,13 +90,13 @@ export function MeterReadingImportPanel() {
           <CatastoFilePicker
             id="catasto-meter-readings-file"
             label="File Excel"
-            accept=".xlsx,.xls"
+            accept=".xlsx"
             files={selectedFiles}
             multiple
             disabled={busy !== null}
             onChange={() => undefined}
             onChangeFiles={(files) => setSelectedFiles(files)}
-            hint="Nomi attesi nel formato tipo `D01-Sinis 2025.xlsx`, cosi distretto e anno restano deducibili dal backend."
+            hint="Usa file `.xlsx` nel formato tipo `D01-Sinis 2025.xlsx`. Se un file export non viene letto, riaprilo e salvalo di nuovo come `.xlsx`."
           />
           <label className="block text-sm font-medium text-slate-700">
             Anno override

@@ -151,6 +151,7 @@ export function MeterReadingsTable({ subjectId }: { subjectId?: string }) {
                 <th className="px-4 py-3 font-medium">Anno</th>
                 <th className="px-4 py-3 font-medium">Punto consegna</th>
                 <th className="px-4 py-3 font-medium">Matricola</th>
+                <th className="px-4 py-3 font-medium">Tipo</th>
                 <th className="px-4 py-3 font-medium">Soggetto</th>
                 <th className="px-4 py-3 font-medium">Consumo</th>
                 <th className="px-4 py-3 font-medium">Stato</th>
@@ -166,6 +167,7 @@ export function MeterReadingsTable({ subjectId }: { subjectId?: string }) {
                   <td className="px-4 py-3">{item.anno}</td>
                   <td className="px-4 py-3 font-medium text-slate-900">{item.punto_consegna}</td>
                   <td className="px-4 py-3">{item.matricola ?? "—"}</td>
+                  <td className="px-4 py-3">{item.record_type ?? item.tipologia_idrante ?? "—"}</td>
                   <td className="px-4 py-3">{item.subject_display_name ?? item.codice_fiscale_normalizzato ?? "Non collegato"}</td>
                   <td className="px-4 py-3">{item.consumo_mc ?? "—"}</td>
                   <td className="px-4 py-3">
@@ -185,7 +187,7 @@ export function MeterReadingsTable({ subjectId }: { subjectId?: string }) {
               ))}
               {!loading && (data?.items.length ?? 0) === 0 ? (
                 <tr>
-                  <td className="px-4 py-6 text-slate-500" colSpan={6}>
+                  <td className="px-4 py-6 text-slate-500" colSpan={7}>
                     Nessuna lettura trovata.
                   </td>
                 </tr>

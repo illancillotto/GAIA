@@ -10,6 +10,8 @@ from sqlalchemy.orm import Session
 from app.modules.catasto.services.meter_reading_linker import link_subject_by_tax_code, normalize_tax_code
 from app.modules.catasto.services.validation import validate_codice_fiscale
 
+METER_READING_TYPES = {"CONT_TESSER", "CONT_NO_TES"}
+
 
 @dataclass
 class ValidationMessage:
@@ -42,6 +44,38 @@ def _decimal_abs(value: Decimal | None) -> Decimal | None:
     return value.copy_abs()
 
 
+def normalize_meter_record_type(value: str | None) -> str | None:
+    if not value:
+        return None
+    return re.sub(r"[^A-Z0-9]+", "_", value.strip().upper()).strip("_") or None
+
+
+def classify_meter_record_type(value: str | None) -> str:
+    normalized = normalize_meter_record_type(value)
+    if normalized is None:
+        return "meter_reading"
+    return "meter_reading" if normalized in METER_READING_TYPES else "operator_activity"
+
+
+def detect_operational_state(
+    *,
+    record_type: str | None,
+    asset_description: str | None,
+    note: str | None,
+) -> str:
+    note_text = (note or "").strip().lower()
+    asset_text = (asset_description or "").strip().lower()
+    normalized_record_type = normalize_meter_record_type(record_type)
+
+    if "dismess" in asset_text or "dismess" in note_text:
+        return "dismissed_point"
+    if "inutilizz" in note_text:
+        return "inactive"
+    if normalized_record_type in METER_READING_TYPES:
+        return "active"
+    return "activity"
+
+
 def validate_meter_reading_row(
     db: Session,
     *,
@@ -51,29 +85,82 @@ def validate_meter_reading_row(
     duplicate_key_seen: bool,
 ) -> tuple[str, list[ValidationMessage], dict[str, Any]]:
     messages: list[ValidationMessage] = []
+    normalized_record_type = normalize_meter_record_type(row_data.get("record_type"))
+    record_kind = classify_meter_record_type(row_data.get("record_type"))
+    operational_state = detect_operational_state(
+        record_type=row_data.get("record_type"),
+        asset_description=row_data.get("tipologia_idrante"),
+        note=row_data.get("note"),
+    )
+    if operational_state == "dismissed_point":
+        record_kind = "dismissed_point"
+    is_meter_reading = record_kind == "meter_reading"
+    is_dismissed_or_inactive = operational_state in {"inactive", "dismissed_point"}
 
     punto_consegna = (row_data.get("punto_consegna") or "").strip() if row_data.get("punto_consegna") else ""
-    if not punto_consegna:
+    if is_meter_reading and not punto_consegna:
         messages.append(ValidationMessage(level="error", code="PUNTO_CONSEGNA_MANCANTE", message="Punto consegna mancante.", field="punto_consegna"))
     if anno is None:
         messages.append(ValidationMessage(level="error", code="ANNO_MANCANTE", message="Anno mancante.", field="anno"))
     if not distretto_id:
         messages.append(ValidationMessage(level="error", code="DISTRETTO_MANCANTE", message="Distretto mancante o non deducibile.", field="distretto_id"))
-    if duplicate_key_seen:
+    if is_meter_reading and duplicate_key_seen:
         messages.append(ValidationMessage(level="error", code="DUPLICATO_FILE", message="Duplicato nel file sulla chiave tecnica.", field="punto_consegna"))
 
     cf_raw = row_data.get("codice_fiscale")
     cf_validation = validate_codice_fiscale(cf_raw)
     cf_normalizzato = normalize_tax_code(str(cf_validation.get("cf_normalizzato")) if cf_validation.get("cf_normalizzato") else None)
-    if not cf_normalizzato:
-        messages.append(ValidationMessage(level="warning", code="CF_MANCANTE", message="Codice fiscale mancante.", field="codice_fiscale"))
-    elif not bool(cf_validation.get("is_valid")):
-        messages.append(ValidationMessage(level="warning", code="CF_ANOMALO", message="Codice fiscale anomalo.", field="codice_fiscale"))
+    if is_meter_reading:
+        if not cf_normalizzato:
+            if normalized_record_type == "CONT_TESSER":
+                messages.append(ValidationMessage(
+                    level="info" if is_dismissed_or_inactive else "warning",
+                    code="CF_MANCANTE_CONT_TESSER",
+                    message="Contatore tessera senza codice fiscale utenza.",
+                    field="codice_fiscale",
+                ))
+            else:
+                messages.append(ValidationMessage(
+                    level="info" if is_dismissed_or_inactive else "warning",
+                    code="CF_MANCANTE_CONT_NO_TES",
+                    message="Contatore non tessera senza codice fiscale utenza.",
+                    field="codice_fiscale",
+                ))
+        elif not bool(cf_validation.get("is_valid")):
+            messages.append(ValidationMessage(level="warning", code="CF_ANOMALO", message="Codice fiscale anomalo.", field="codice_fiscale"))
+    else:
+        messages.append(
+            ValidationMessage(
+                level="info",
+                code="ATTIVITA_OPERATORE",
+                message="Riga registrata come attività operatore e non come lettura contatore standard.",
+                field="record_type",
+            )
+        )
 
-    link = link_subject_by_tax_code(db, cf_normalizzato)
-    if cf_normalizzato and link.match_count == 0:
+    if operational_state == "inactive":
+        messages.append(
+            ValidationMessage(
+                level="info",
+                code="CONTATORE_INUTILIZZATO",
+                message="Contatore marcato come inutilizzato nelle note operative.",
+                field="note",
+            )
+        )
+    elif operational_state == "dismissed_point":
+        messages.append(
+            ValidationMessage(
+                level="info",
+                code="PUNTO_DISMESSO",
+                message="Punto di consegna dismesso o fuori servizio.",
+                field="tipologia_idrante",
+            )
+        )
+
+    link = link_subject_by_tax_code(db, cf_normalizzato) if is_meter_reading else link_subject_by_tax_code(db, None)
+    if is_meter_reading and cf_normalizzato and link.match_count == 0:
         messages.append(ValidationMessage(level="warning", code="UTENZA_NON_TROVATA", message="Soggetto non trovato per codice fiscale.", field="codice_fiscale"))
-    elif cf_normalizzato and link.match_count > 1:
+    elif is_meter_reading and cf_normalizzato and link.match_count > 1:
         messages.append(ValidationMessage(level="warning", code="UTENZE_MULTIPLE", message="Più soggetti trovati per lo stesso codice fiscale.", field="codice_fiscale"))
 
     if _phone_is_anomalous(row_data.get("telefono")):
@@ -105,6 +192,9 @@ def validate_meter_reading_row(
         status = "warning"
 
     resolved = {
+        "record_kind": record_kind,
+        "normalized_record_type": normalized_record_type,
+        "operational_state": operational_state,
         "codice_fiscale_normalizzato": cf_normalizzato,
         "subject_id": link.subject_id,
         "subject_display_name": link.subject_display_name,
