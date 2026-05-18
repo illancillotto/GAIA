@@ -47,7 +47,10 @@ def _decimal_abs(value: Decimal | None) -> Decimal | None:
 def normalize_meter_record_type(value: str | None) -> str | None:
     if not value:
         return None
-    return re.sub(r"[^A-Z0-9]+", "_", value.strip().upper()).strip("_") or None
+    normalized = re.sub(r"[^A-Z0-9]+", "_", value.strip().upper()).strip("_") or None
+    if normalized == "CONT_TES":
+        return "CONT_TESSER"
+    return normalized
 
 
 def classify_meter_record_type(value: str | None) -> str:
@@ -67,7 +70,7 @@ def detect_operational_state(
     asset_text = (asset_description or "").strip().lower()
     normalized_record_type = normalize_meter_record_type(record_type)
 
-    if "dismess" in asset_text or "dismess" in note_text:
+    if normalized_record_type == "DISMESSO" or "dismess" in asset_text or "dismess" in note_text:
         return "dismissed_point"
     if "inutilizz" in note_text:
         return "inactive"
@@ -83,6 +86,7 @@ def validate_meter_reading_row(
     anno: int | None,
     distretto_id: str | None,
     duplicate_key_seen: bool,
+    allow_missing_distretto: bool = False,
 ) -> tuple[str, list[ValidationMessage], dict[str, Any]]:
     messages: list[ValidationMessage] = []
     normalized_record_type = normalize_meter_record_type(row_data.get("record_type"))
@@ -102,7 +106,16 @@ def validate_meter_reading_row(
         messages.append(ValidationMessage(level="error", code="PUNTO_CONSEGNA_MANCANTE", message="Punto consegna mancante.", field="punto_consegna"))
     if anno is None:
         messages.append(ValidationMessage(level="error", code="ANNO_MANCANTE", message="Anno mancante.", field="anno"))
-    if not distretto_id:
+    if not distretto_id and allow_missing_distretto:
+        messages.append(
+            ValidationMessage(
+                level="info",
+                code="DISTRETTO_GENERICO",
+                message="File progetto gestito senza assegnazione a un distretto specifico.",
+                field="distretto_id",
+            )
+        )
+    elif not distretto_id:
         messages.append(ValidationMessage(level="error", code="DISTRETTO_MANCANTE", message="Distretto mancante o non deducibile.", field="distretto_id"))
     if is_meter_reading and duplicate_key_seen:
         messages.append(ValidationMessage(level="error", code="DUPLICATO_FILE", message="Duplicato nel file sulla chiave tecnica.", field="punto_consegna"))

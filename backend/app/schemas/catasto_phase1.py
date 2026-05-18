@@ -55,7 +55,7 @@ class CatMeterReadingImportListResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
-    distretto_id: UUID
+    distretto_id: UUID | None
     anno: int
     filename_originale: str
     file_hash: str | None
@@ -79,7 +79,7 @@ class CatMeterReadingResponse(BaseModel):
 
     id: UUID
     import_id: UUID | None
-    distretto_id: UUID
+    distretto_id: UUID | None
     anno: int
     row_number: int | None
     excel_id: str | None
@@ -162,7 +162,7 @@ class CatMeterReadingImportPreviewResponse(BaseModel):
 class CatMeterReadingImportRunResponse(BaseModel):
     import_id: UUID
     anno: int
-    distretto_id: UUID
+    distretto_id: UUID | None
     stato: str
     totale_righe: int
     righe_importate: int

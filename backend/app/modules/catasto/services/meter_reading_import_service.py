@@ -16,6 +16,7 @@ from app.modules.catasto.services.meter_reading_parser import ParsedMeterReading
 from app.modules.catasto.services.meter_reading_validation import (
     ValidationMessage,
     classify_meter_record_type,
+    detect_operational_state,
     validate_meter_reading_row,
 )
 
@@ -43,6 +44,7 @@ class PreparedMeterReadingsImport:
     filename: str
     anno: int | None
     distretto: CatDistretto | None
+    is_generic_project: bool
     items: list[PreparedMeterReadingItem]
 
 
@@ -85,6 +87,19 @@ def _normalize_filename_token(value: str | None) -> str:
     normalized = normalized.upper()
     normalized = re.sub(r"[^A-Z0-9]+", " ", normalized)
     return re.sub(r"\s+", " ", normalized).strip()
+
+
+def _is_generic_project_filename(filename: str | None) -> bool:
+    normalized = _normalize_filename_token(filename)
+    return "PROGETTO" in normalized.split()
+
+
+def _normalize_meter_serial(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    return str(value).strip().upper()
 
 
 def resolve_distretto(
@@ -148,14 +163,23 @@ def prepare_meter_readings_import(
         distretto_code=parsed.distretto_code,
         filename=filename,
     )
+    is_generic_project = distretto is None and _is_generic_project_filename(filename)
 
-    duplicate_keys: set[tuple[int | None, UUID | None, str]] = set()
+    duplicate_keys: set[tuple[int | None, UUID | None, str, str]] = set()
     items: list[PreparedMeterReadingItem] = []
     for row in parsed.rows:
         point = (row.data.get("punto_consegna") or "").strip().upper()
-        key = (effective_anno, distretto.id if distretto else None, point)
-        duplicate_seen = bool(point and key in duplicate_keys)
-        if point:
+        meter_serial = _normalize_meter_serial(row.data.get("matricola"))
+        preclassified_kind = classify_meter_record_type(row.data.get("record_type"))
+        preclassified_state = detect_operational_state(
+            record_type=row.data.get("record_type"),
+            asset_description=row.data.get("tipologia_idrante"),
+            note=row.data.get("note"),
+        )
+        key = (effective_anno, distretto.id if distretto else None, point, meter_serial)
+        duplicate_seen = False
+        if point and preclassified_kind == "meter_reading" and preclassified_state != "dismissed_point":
+            duplicate_seen = key in duplicate_keys
             duplicate_keys.add(key)
         validation_status, validation_messages, resolved = validate_meter_reading_row(
             db,
@@ -163,6 +187,7 @@ def prepare_meter_readings_import(
             anno=effective_anno,
             distretto_id=str(distretto.id) if distretto else None,
             duplicate_key_seen=duplicate_seen,
+            allow_missing_distretto=is_generic_project,
         )
         payload = {
             **row.data,
@@ -187,7 +212,13 @@ def prepare_meter_readings_import(
             )
         )
 
-    return PreparedMeterReadingsImport(filename=filename, anno=effective_anno, distretto=distretto, items=items)
+    return PreparedMeterReadingsImport(
+        filename=filename,
+        anno=effective_anno,
+        distretto=distretto,
+        is_generic_project=is_generic_project,
+        items=items,
+    )
 
 
 def _desired_anomaly_type(item: PreparedMeterReadingItem) -> str | None:
@@ -289,14 +320,16 @@ def import_meter_readings(
     distretto_id: UUID | None = None,
 ) -> tuple[CatMeterReadingImport, PreparedMeterReadingsImport]:
     prepared = prepare_meter_readings_import(db, file_bytes=file_bytes, filename=filename, anno=anno, distretto_id=distretto_id)
-    if prepared.anno is None or prepared.distretto is None:
-        raise ValueError("Anno o distretto non risolti.")
+    if prepared.anno is None:
+        raise ValueError("Anno non risolto.")
+    if prepared.distretto is None and not prepared.is_generic_project:
+        raise ValueError("Distretto non risolto.")
 
     if mode == "import":
         existing = db.execute(
             select(func.count()).select_from(CatMeterReading).where(
                 CatMeterReading.anno == prepared.anno,
-                CatMeterReading.distretto_id == prepared.distretto.id,
+                CatMeterReading.distretto_id == (prepared.distretto.id if prepared.distretto else None),
             )
         ).scalar_one()
         if existing:
@@ -305,13 +338,13 @@ def import_meter_readings(
         db.execute(
             delete(CatMeterReading).where(
                 CatMeterReading.anno == prepared.anno,
-                CatMeterReading.distretto_id == prepared.distretto.id,
+                CatMeterReading.distretto_id == (prepared.distretto.id if prepared.distretto else None),
             )
         )
 
     file_hash = hashlib.sha256(file_bytes).hexdigest()
     import_record = CatMeterReadingImport(
-        distretto_id=prepared.distretto.id,
+        distretto_id=prepared.distretto.id if prepared.distretto else None,
         anno=prepared.anno,
         filename_originale=filename,
         file_hash=file_hash,
@@ -341,14 +374,14 @@ def import_meter_readings(
         existing = db.execute(
             select(CatMeterReading).where(
                 CatMeterReading.anno == prepared.anno,
-                CatMeterReading.distretto_id == prepared.distretto.id,
+                CatMeterReading.distretto_id == (prepared.distretto.id if prepared.distretto else None),
                 CatMeterReading.punto_consegna == item.payload["punto_consegna"],
             )
         ).scalar_one_or_none()
 
         target = existing or CatMeterReading(
             anno=prepared.anno,
-            distretto_id=prepared.distretto.id,
+            distretto_id=prepared.distretto.id if prepared.distretto else None,
             punto_consegna=item.payload["punto_consegna"],
         )
         target.import_id = import_record.id

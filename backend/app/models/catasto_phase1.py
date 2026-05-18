@@ -108,8 +108,8 @@ class CatDistrettoGeometryVersion(Base):
     __tablename__ = "cat_distretti_geometry_versions"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    distretto_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("cat_distretti.id", ondelete="CASCADE"), nullable=False, index=True
+    distretto_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cat_distretti.id", ondelete="CASCADE"), nullable=True, index=True
     )
     source_batch_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("cat_import_batches.id", ondelete="SET NULL"), nullable=True, index=True
@@ -668,8 +668,8 @@ class CatMeterReadingImport(Base):
     __tablename__ = "catasto_meter_reading_imports"
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
-    distretto_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("cat_distretti.id", ondelete="CASCADE"), nullable=False, index=True
+    distretto_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cat_distretti.id", ondelete="CASCADE"), nullable=True, index=True
     )
     anno: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     filename_originale: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -684,7 +684,7 @@ class CatMeterReadingImport(Base):
     processed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     error_report: Mapped[dict | list | None] = mapped_column(JSON, nullable=True)
 
-    distretto: Mapped["CatDistretto"] = relationship(back_populates="meter_reading_imports")
+    distretto: Mapped["CatDistretto | None"] = relationship(back_populates="meter_reading_imports")
     readings: Mapped[list["CatMeterReading"]] = relationship(
         back_populates="import_record", cascade="all, delete-orphan"
     )
@@ -700,8 +700,8 @@ class CatMeterReading(Base):
     import_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("catasto_meter_reading_imports.id", ondelete="SET NULL"), nullable=True, index=True
     )
-    distretto_id: Mapped[uuid.UUID] = mapped_column(
-        ForeignKey("cat_distretti.id", ondelete="CASCADE"), nullable=False, index=True
+    distretto_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("cat_distretti.id", ondelete="CASCADE"), nullable=True, index=True
     )
     anno: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     row_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -753,7 +753,7 @@ class CatMeterReading(Base):
     )
 
     import_record: Mapped["CatMeterReadingImport | None"] = relationship(back_populates="readings")
-    distretto: Mapped["CatDistretto"] = relationship(back_populates="meter_readings")
+    distretto: Mapped["CatDistretto | None"] = relationship(back_populates="meter_readings")
 
 
 class CatCapacitasTerrenoDetail(Base):

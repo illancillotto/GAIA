@@ -54,6 +54,7 @@ from app.modules.catasto.services import import_distretti_excel as import_distre
 from app.modules.catasto.services.anagrafica_live import CapacitasLiveAuthoritativeSanitizer
 from app.modules.catasto.services.meter_reading_import_service import prepare_meter_readings_import
 from app.modules.catasto.services.meter_reading_linker import normalize_tax_code
+from app.modules.catasto.services.meter_reading_parser import parse_meter_readings_excel
 from app.modules.catasto.services.ade_wfs import (
     AdeWfsBbox,
     AdeWfsClient,
@@ -6697,13 +6698,207 @@ def test_meter_reading_prepare_import_detects_header_aliases_and_links_subject()
         assert prepared.distretto.num_distretto == "1"
         assert len(prepared.items) == 2
         assert prepared.items[0].payload["matricola"] == "MTR-01"
-        assert prepared.items[0].payload["record_type"] is None
+        assert prepared.items[0].payload["record_type"] == "CONT_NO_TES"
         assert prepared.items[0].payload["codice_fiscale_normalizzato"] == "RSSMRA80A01H501U"
         assert prepared.items[0].payload["subject_id"] == subject.id
         assert prepared.items[0].validation_status == "valid"
         assert prepared.items[1].validation_status == "warning"
     finally:
         db.close()
+
+
+def test_meter_reading_parser_supports_2024_headers_without_tipo() -> None:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(
+        [
+            "ID",
+            "PUNTO DI CONSEGNA ",
+            "TIPOLOGIA IDRANTE ",
+            "MATRIC.",
+            "lettura iniziale 2024",
+            "lettura finale 2024",
+            "TOTALE m3 2024",
+            "DUI",
+            "codice fiscale",
+            "note",
+        ]
+    )
+    sheet.append([1, "C1A_5", "Idrometro volumetrico TECNIDRO dn_100", "R2007373", 389, 621, 232, "Uda Salvatore", "DUASVT72R22I605P", None])
+    sheet.append([2, "C1A_1", "colonnina flangiata Ø 100", None, None, None, None, None, None, None])
+    output = BytesIO()
+    workbook.save(output)
+
+    parsed = parse_meter_readings_excel(output.getvalue(), "D02-Santa Maria letture 2024.xlsx")
+
+    assert parsed.anno == 2024
+    assert parsed.distretto_code == "2"
+    assert parsed.rows[0].data["punto_consegna"] == "C1A_5"
+    assert parsed.rows[0].data["record_type"] == "CONT_NO_TES"
+    assert parsed.rows[0].data["lettura_iniziale"] == Decimal("389")
+    assert parsed.rows[0].data["lettura_finale"] == Decimal("621")
+    assert parsed.rows[1].data["record_type"] == "FLANGIA"
+
+
+def test_meter_reading_parser_supports_2023_xmc_headers() -> None:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(
+        [
+            "ID",
+            "punto di consegna",
+            "tipologia idrte",
+            "codice contatore",
+            "letture iniziali 2023",
+            "Lettura finale 2023",
+            "M3 finali 2023",
+            "DATA LETTURA FINALE 2023",
+            "OPERATORE LETTURA FINALE 2023",
+            "CodiceF_2023",
+            "Utente_2023",
+            "TARIFFA_2023",
+            "Note e colture ipotizzate sulla base della coltura in atto durante la lettura finale",
+        ]
+    )
+    sheet.append([1, "7E_1-35A", "idrometro Bermad dn. 125", "10000", 341, 8177, 7836, "13.11.2023", "Pala_Tuveri", "DSSFNC55C02E400C", "DESSI FRANCO", "C", "Mais_loietto"])
+    output = BytesIO()
+    workbook.save(output)
+
+    parsed = parse_meter_readings_excel(output.getvalue(), "D24-Lotto Sud Arborea Letture XMC 2023.xlsx")
+
+    row = parsed.rows[0].data
+    assert parsed.anno == 2023
+    assert parsed.distretto_code == "24"
+    assert row["punto_consegna"] == "7E_1-35A"
+    assert row["matricola"] == "10000"
+    assert row["record_type"] == "CONT_NO_TES"
+    assert row["codice_fiscale"] == "DSSFNC55C02E400C"
+    assert row["dui"] == "DESSI FRANCO"
+    assert row["tariffa"] == "C"
+
+
+def test_meter_reading_parser_supports_2022_headers_without_id_column() -> None:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(
+        [
+            "PUNTO DI CONSEGNA ",
+            "Tipologia idrante",
+            "MATRIC.",
+            "Sigillo",
+            "livello batteria",
+            "versione firmware",
+            "lettura iniz. 2022",
+            "lettura finale 2022",
+            "tot. M3",
+            "data lettura ",
+            "operatore ",
+            "CODICE FISCALE",
+            "TITOLARE DOMANDA IRRIGUA 2022",
+            "NUMERO DI TELEFONO",
+            "note",
+        ]
+    )
+    sheet.append(["C1A_2", "Hydropass ACMO bi_flangia DN_100", 834, "C.B.O. 10964", "3.22", "3.40", 5, 5, 0, "04.03.2023", "Corona_Murru", "701790958", "La Casa Dell'Oliva", None, None])
+    output = BytesIO()
+    workbook.save(output)
+
+    parsed = parse_meter_readings_excel(output.getvalue(), "Letture_D02_S.Maria.xlsx")
+
+    row = parsed.rows[0].data
+    assert parsed.distretto_code == "2"
+    assert row["punto_consegna"] == "C1A_2"
+    assert row["battery_level"] == "3.22"
+    assert row["firmware_version"] == "3.40"
+    assert row["record_type"] == "CONT_NO_TES"
+    assert row["dui"] == "La Casa Dell'Oliva"
+
+
+def test_meter_reading_parser_supports_2026_shifted_header_row() -> None:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append([None, None, None])
+    sheet.append(
+        [
+            "ID",
+            "PUNTO DI CONSEGNA ",
+            "TIPOLOGIA IDRANTE ",
+            "MATRIC.",
+            "Sigillo",
+            "versione firmware",
+            "LIVELLO BATTERIA",
+            "lettura iniziale 2025",
+            "LETTURA FINALE 2025",
+            "LETTURA INIZIALE 2026",
+            "consumo 2025 tot. M3",
+            "data lettura",
+            "operatore",
+            "INTERVENTO DA ESEGUIRE",
+            "INTERVENTO ESEGUITO 2026",
+            "OPERATORE",
+            "DATA",
+            "note",
+            "FONDO CHIUSO",
+            "COLTURA",
+            "D.U.I.",
+            "COD FISCALE",
+            "numero di telefono",
+            "tariffa",
+        ]
+    )
+    sheet.append([1, "C51A_5", "Hydropass ACMO bi_flangia DN_100", "9001", None, "3.5", "80", 100, 120, 150, 30, "15.01.2026", "Operatore A", None, None, None, None, None, None, "OLIVO", "DUI001", "RSSMRA80A01H501U", "3331234567", "P"])
+    output = BytesIO()
+    workbook.save(output)
+
+    parsed = parse_meter_readings_excel(output.getvalue(), "D01-Sinis 2026.xlsx")
+
+    row = parsed.rows[0].data
+    assert parsed.anno == 2026
+    assert parsed.distretto_code == "1"
+    assert row["record_type"] == "CONT_NO_TES"
+    assert row["lettura_iniziale"] == Decimal("150")
+    assert row["consumo_mc"] == Decimal("30")
+
+
+def test_meter_reading_parser_infers_diramatore_and_idrovalvola_cases() -> None:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(
+        [
+            "DIRAMATORE PUNTO DI CONSEGNA",
+            "TIPOLOGIA PUNTO DI CONSEGNA",
+            "NOTE",
+            "UTENTE2024",
+        ]
+    )
+    sheet.append(["7E_1", "diramatore punti di consegna", None, None])
+    sheet.append(["15EN1B", "Idrovalvola TECNIDRO DN100", None, "Pinos Paolo"])
+    sheet.append(["C54bB_1", "inacessibile", None, None])
+    output = BytesIO()
+    workbook.save(output)
+
+    parsed = parse_meter_readings_excel(output.getvalue(), "D25 CENSIMENTO IDROVALVOLE 2026.xlsx")
+
+    assert parsed.rows[0].data["punto_consegna"] == "7E_1"
+    assert parsed.rows[0].data["record_type"] == "DIRAMATORE"
+    assert parsed.rows[1].data["record_type"] == "IDROVALVOLA"
+    assert parsed.rows[1].data["dui"] == "Pinos Paolo"
+    assert parsed.rows[2].data["record_type"] == "DA CENSIRE"
+
+
+def test_meter_reading_parser_infers_da_verificare_and_linea_sotterranea_cases() -> None:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(["PUNTO DI CONSEGNA", "TIPOLOGIA IDRANTE", "NOTE"])
+    sheet.append(["C60B_25", "da verificare", None])
+    sheet.append([None, "n. 2 idro. x linea sotterranea Ø 100(non allacciate)", None])
+    output = BytesIO()
+    workbook.save(output)
+
+    parsed = parse_meter_readings_excel(output.getvalue(), "D31-Sant'Anna 2026.xlsx")
+
+    assert parsed.rows[0].data["record_type"] == "DA CENSIRE"
+    assert parsed.rows[1].data["record_type"] == "IDROVALVOLA"
 
 
 def test_meter_reading_prepare_import_resolves_distretto_from_name_in_filename() -> None:
@@ -6999,7 +7194,7 @@ def test_meter_reading_validate_detects_duplicate_and_specific_warnings() -> Non
     ]
     rows = [
         [1, "DUP-1", "MTR-10", "15%", 100, 95, 99, "Sostituire", "RSSMRA80A01H501U", "123"],
-        [2, "DUP-1", "MTR-11", "15%", 100, 95, 99, "Sostituire", "RSSMRA80A01H501U", "123"],
+        [2, "DUP-1", "MTR-10", "15%", 100, 95, 99, "Sostituire", "RSSMRA80A01H501U", "123"],
     ]
     response = client.post(
         "/catasto/meter-readings/import/validate?anno=2025",
@@ -7025,6 +7220,181 @@ def test_meter_reading_validate_detects_duplicate_and_specific_warnings() -> Non
     assert "CONSUMO_INCOERENTE" in first_row_codes
     assert "INTERVENTO_APERTO" in first_row_codes
     assert "TELEFONO_ANOMALO" in first_row_codes
+
+
+def test_meter_reading_validate_allows_same_point_with_different_meter_serials() -> None:
+    headers = [
+        "ID",
+        "PUNTO_CONS",
+        "COD_CONT",
+        "TIPO",
+        "LETTURA FINALE 2024",
+        "LETTURA FINALE 2025",
+        "TOTALE m3 2025",
+        "COD. FISC",
+    ]
+    rows = [
+        [1, "C_53_4", "930", "CONT_NO_TES", 13498, 14486, 988, "FLRTRS67P51F272Z"],
+        [2, "C_53_4", "171", "CONT_TESSER", 19710, 32146, 12436, "FLRTRS67P51F272Z"],
+    ]
+    response = client.post(
+        "/catasto/meter-readings/import/validate?anno=2025",
+        headers=auth_headers(),
+        files={
+            "file": (
+                "D29-2 Morimenta letture 2025.xlsx",
+                _build_meter_readings_workbook(rows=rows, headers=headers),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    row_codes = [{item["code"] for item in row["validation_messages"]} for row in payload["items"]]
+    assert all("DUPLICATO_FILE" not in codes for codes in row_codes)
+
+
+def test_meter_reading_validate_normalizes_cont_tes_alias() -> None:
+    headers = [
+        "ID",
+        "PUNTO DI CONSEGNA",
+        "MATRIC.",
+        "TIPO",
+        "LETTURA FINALE 2025",
+        "TOTALE m3 2025",
+    ]
+    rows = [
+        [1, "AII2_1", "2204", "CONT_TES", 9, 9],
+    ]
+    response = client.post(
+        "/catasto/meter-readings/import/validate?anno=2025",
+        headers=auth_headers(),
+        files={
+            "file": (
+                "D05-Tramatza 2025.xlsx",
+                _build_meter_readings_workbook(rows=rows, headers=headers),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["items"][0]["data"]["record_kind"] == "meter_reading"
+    assert payload["items"][0]["data"]["normalized_record_type"] == "CONT_TESSER"
+
+
+def test_meter_reading_validate_allows_generic_project_without_distretto() -> None:
+    headers = [
+        "ID",
+        "PUNTO_CONS",
+        "COD_CONT",
+        "TIPO",
+        "LETTURA FINALE 2024",
+        "LETTURA FINALE 2025",
+        "TOTALE m3 2025",
+        "COD. FISC",
+    ]
+    rows = [
+        [1, "C1_1", "6074", "CONT_TESSER", 1057, 5958, 49010, "MTTSFN67M24G113E"],
+    ]
+    response = client.post(
+        "/catasto/meter-readings/import/validate?anno=2025",
+        headers=auth_headers(),
+        files={
+            "file": (
+                "PROGETTO RISAIE MATTA 2025.xlsx",
+                _build_meter_readings_workbook(rows=rows, headers=headers),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["distretto_id"] is None
+    assert payload["righe_con_errori"] == 0
+    codes = {item["code"] for item in payload["items"][0]["validation_messages"]}
+    assert "DISTRETTO_GENERICO" in codes
+    assert "DISTRETTO_MANCANTE" not in codes
+
+
+def test_meter_reading_import_allows_generic_project_without_distretto() -> None:
+    headers = [
+        "ID",
+        "PUNTO_CONS",
+        "COD_CONT",
+        "TIPO",
+        "LETTURA FINALE 2024",
+        "LETTURA FINALE 2025",
+        "TOTALE m3 2025",
+        "COD. FISC",
+    ]
+    rows = [
+        [1, "C1_1", "6074", "CONT_TESSER", 1057, 5958, 49010, "MTTSFN67M24G113E"],
+    ]
+    response = client.post(
+        "/catasto/meter-readings/import?mode=upsert&anno=2025",
+        headers=auth_headers(),
+        files={
+            "file": (
+                "PROGETTO RISAIE MATTA 2025.xlsx",
+                _build_meter_readings_workbook(rows=rows, headers=headers),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["distretto_id"] is None
+
+    db = TestingSessionLocal()
+    try:
+        import_record = db.get(CatMeterReadingImport, UUID(payload["import_id"]))
+        assert import_record is not None
+        assert import_record.distretto_id is None
+        reading = db.execute(select(CatMeterReading).where(CatMeterReading.punto_consegna == "C1_1")).scalar_one()
+        assert reading.distretto_id is None
+    finally:
+        db.close()
+
+
+def test_meter_reading_validate_does_not_flag_operator_activity_as_duplicate_of_meter_reading() -> None:
+    headers = [
+        "ID",
+        "PUNTO_CONS",
+        "TIPO",
+        "COD_CONT",
+        "NOTE",
+        "LETTURA FINALE 2024",
+        "LETTURA FINALE 2025",
+        "TOTALE m3 2025",
+    ]
+    rows = [
+        [1, "C_6_6", "FLANGIA", "", "", "", "", ""],
+        [2, "C_6_6", "CONT_NO_TES", "MTR-66", "", 100, 120, 20],
+    ]
+    response = client.post(
+        "/catasto/meter-readings/import/validate?anno=2025",
+        headers=auth_headers(),
+        files={
+            "file": (
+                "D29-1 Uras 2025.xlsx",
+                _build_meter_readings_workbook(rows=rows, headers=headers),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    first_row_codes = {item["code"] for item in payload["items"][0]["validation_messages"]}
+    second_row_codes = {item["code"] for item in payload["items"][1]["validation_messages"]}
+    assert "ATTIVITA_OPERATORE" in first_row_codes
+    assert "DUPLICATO_FILE" not in first_row_codes
+    assert "DUPLICATO_FILE" not in second_row_codes
 
 
 def test_meter_reading_validate_classifies_operator_activity_without_cf_warning() -> None:
