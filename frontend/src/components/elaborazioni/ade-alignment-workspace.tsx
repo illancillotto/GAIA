@@ -20,6 +20,7 @@ import {
   catastoGisGetAdeAlignmentReport,
   catastoGisGetAdeWfsRunStatus,
   catastoGisGetLatestAdeWfsRunStatus,
+  catastoGisMarkAdeWfsRunFailed,
   catastoGisPreviewAdeAlignmentApply,
   catastoGisSyncAdeWfsBboxAsync,
   catastoListDistretti,
@@ -318,6 +319,23 @@ export function ElaborazioniAdeAlignmentWorkspace({ embedded = false }: { embedd
     }
   }
 
+  async function handleMarkRunFailed(): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token || !runStatus || !["queued", "processing"].includes(runStatus.status)) return;
+
+    setBusy(true);
+    setError(null);
+    try {
+      const nextStatus = await catastoGisMarkAdeWfsRunFailed(token, runStatus.run_id);
+      setRunStatus(nextStatus);
+      setMessage("Run AdE marcato come fallito.");
+    } catch (markError) {
+      setError(markError instanceof Error ? markError.message : "Errore interruzione run AdE");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const content = (
     <div className={embedded ? "space-y-6" : "page-stack"}>
         <ElaborazioneHero
@@ -406,6 +424,11 @@ export function ElaborazioniAdeAlignmentWorkspace({ embedded = false }: { embedd
                   <p>Avviato: <span className="font-medium text-gray-900">{formatDateTime(runStatus.started_at ?? null)}</span></p>
                   <p>Completato: <span className="font-medium text-gray-900">{formatDateTime(runStatus.completed_at ?? null)}</span></p>
                   {runStatus.error ? <p className="text-rose-700">{runStatus.error}</p> : null}
+                  {["queued", "processing"].includes(runStatus.status) ? (
+                    <button className="btn-secondary mt-2" disabled={busy} onClick={() => void handleMarkRunFailed()} type="button">
+                      Segna come fallito
+                    </button>
+                  ) : null}
                 </div>
               ) : (
                 <div className="mt-4">

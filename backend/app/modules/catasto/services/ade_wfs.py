@@ -23,6 +23,7 @@ MAX_TILE_KM2 = 4.0
 DEFAULT_COUNT = 1000
 DEFAULT_MAX_PAGES = 20
 ADE_APPLY_CATEGORIES = {"nuove_in_ade", "geometrie_variate", "mancanti_in_ade"}
+ADE_SYNC_ACTIVE_STATUSES = {"queued", "processing"}
 
 NS = {
     "wfs": "http://www.opengis.net/wfs/2.0",
@@ -324,6 +325,64 @@ def create_ade_sync_run(
     db.commit()
     db.refresh(run)
     return run
+
+
+def prepare_ade_sync_runs_for_recovery(
+    db: Session,
+    *,
+    recovery_message: str = "Run AdE rimesso in coda dopo riavvio worker.",
+) -> int:
+    active_runs = (
+        db.query(CatAdeSyncRun)
+        .filter(CatAdeSyncRun.status == "processing")
+        .all()
+    )
+    if not active_runs:
+        return 0
+
+    for run in active_runs:
+        run.status = "queued"
+        run.progress_phase = "queued"
+        run.error = None
+        run.progress_message = recovery_message
+        run.completed_at = None
+        db.add(run)
+
+    db.commit()
+    return len(active_runs)
+
+
+def mark_ade_sync_run_failed(
+    db: Session,
+    run_id: str,
+    *,
+    interruption_reason: str = "Run AdE interrotto manualmente dall'operatore.",
+) -> dict[str, Any]:
+    try:
+        run_uuid = UUID(str(run_id))
+    except ValueError as exc:
+        raise ValueError("Run AdE non valido.") from exc
+
+    run = db.get(CatAdeSyncRun, run_uuid)
+    if run is None:
+        raise ValueError("Run AdE non trovato.")
+    if run.status not in ADE_SYNC_ACTIVE_STATUSES:
+        raise ValueError(f"Run AdE non interrompibile dallo stato corrente: {run.status}.")
+
+    completed_tiles = int(run.tiles_completed or 0)
+    total_tiles = int(run.tiles or 0)
+    run.status = "failed"
+    run.progress_phase = "failed"
+    run.error = interruption_reason
+    run.progress_message = (
+        f"Run AdE interrotto manualmente dopo {completed_tiles}/{total_tiles} tile. "
+        "Rilanciare il comprensorio."
+    )
+    run.completed_at = datetime.now(timezone.utc)
+    db.add(run)
+    db.commit()
+    db.refresh(run)
+    return get_ade_sync_run_status(db, str(run.id))
 
 
 def execute_ade_sync_run(

@@ -20,6 +20,7 @@ from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.models.catasto_phase1 import (
+    CatAdeSyncRun,
     CatAnomalia,
     CatCapacitasCertificato,
     CatCapacitasIntestatario,
@@ -53,8 +54,10 @@ from app.modules.catasto.services.meter_reading_linker import normalize_tax_code
 from app.modules.catasto.services.ade_wfs import (
     AdeWfsBbox,
     AdeWfsClient,
+    create_ade_sync_run,
     parse_national_cadastral_reference,
     parse_wfs_feature_collection,
+    prepare_ade_sync_runs_for_recovery,
     split_bbox,
 )
 from app.modules.elaborazioni.capacitas.models import CapacitasAnagraficaDetail, CapacitasIntestatario, CapacitasTerrenoCertificato
@@ -275,6 +278,74 @@ def test_ade_wfs_sync_bbox_route_stages_without_updating_cat_particelle(monkeypa
     }
 
 
+def test_ade_wfs_sync_bbox_async_route_queues_run_for_worker() -> None:
+    response = client.post(
+        "/catasto/gis/ade-wfs/sync-bbox-async",
+        headers=auth_headers(),
+        json={
+            "min_lon": 8.58,
+            "min_lat": 39.88,
+            "max_lon": 8.59,
+            "max_lat": 39.89,
+            "max_tile_km2": 4,
+            "max_tiles": 3,
+            "count": 500,
+            "max_pages_per_tile": 2,
+        },
+    )
+
+    assert response.status_code == 202
+    payload = response.json()
+    assert payload["status"] == "queued"
+    assert payload["progress_phase"] == "queued"
+    assert payload["tiles"] == 1
+    assert payload["tiles_completed"] == 0
+    assert payload["features"] == 0
+
+    db = TestingSessionLocal()
+    try:
+        run = db.get(CatAdeSyncRun, UUID(payload["run_id"]))
+    finally:
+        db.close()
+
+    assert run is not None
+    assert run.status == "queued"
+    assert run.progress_phase == "queued"
+    assert run.progress_message == "Run AdE accodato: 1 tile stimate."
+
+
+def test_prepare_ade_sync_runs_for_recovery_requeues_processing_run() -> None:
+    db = TestingSessionLocal()
+    try:
+        run = create_ade_sync_run(
+            db,
+            AdeWfsBbox(min_lon=8.58, min_lat=39.88, max_lon=8.59, max_lat=39.89),
+            max_tile_km2=4.0,
+            max_tiles=3,
+            count=500,
+            max_pages_per_tile=2,
+            created_by=1,
+            status="processing",
+        )
+        run.progress_phase = "fetching"
+        run.progress_message = "Scaricate 1/1 tile AdE. Particelle univoche rilevate: 12."
+        run.tiles_completed = 1
+        db.add(run)
+        db.commit()
+
+        recovered = prepare_ade_sync_runs_for_recovery(db)
+        db.refresh(run)
+    finally:
+        db.close()
+
+    assert recovered == 1
+    assert run.status == "queued"
+    assert run.progress_phase == "queued"
+    assert run.error is None
+    assert run.completed_at is None
+    assert run.progress_message == "Run AdE rimesso in coda dopo riavvio worker."
+
+
 def test_ade_wfs_alignment_report_route_returns_report(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, object] = {}
 
@@ -483,6 +554,73 @@ def test_ade_wfs_alignment_apply_route_returns_apply_result(monkeypatch: pytest.
         "confirm": True,
         "allow_suppress_missing": False,
     }
+
+
+def test_ade_wfs_mark_failed_route_marks_active_run_failed() -> None:
+    db = TestingSessionLocal()
+    try:
+        run = CatAdeSyncRun(
+            status="processing",
+            progress_phase="fetching",
+            progress_message="Scaricate 75/324 tile AdE. Particelle univoche rilevate: 0.",
+            request_bbox_json={"min_lon": 8.58, "min_lat": 39.88, "max_lon": 8.59, "max_lat": 39.89},
+            tiles=324,
+            tiles_completed=75,
+            features=0,
+            upserted=0,
+            with_geometry=0,
+            created_by=1,
+        )
+        db.add(run)
+        db.commit()
+        run_id = str(run.id)
+    finally:
+        db.close()
+
+    response = client.post(
+        f"/catasto/gis/ade-wfs/runs/{run_id}/mark-failed",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["run_id"] == run_id
+    assert payload["status"] == "failed"
+    assert payload["progress_phase"] == "failed"
+    assert payload["error"] == "Run AdE interrotto manualmente dall'operatore."
+    assert payload["progress_message"] == "Run AdE interrotto manualmente dopo 75/324 tile. Rilanciare il comprensorio."
+    assert payload["completed_at"] is not None
+
+
+def test_ade_wfs_mark_failed_route_rejects_completed_run() -> None:
+    db = TestingSessionLocal()
+    try:
+        run = CatAdeSyncRun(
+            status="completed",
+            progress_phase="completed",
+            progress_message="Run AdE completato.",
+            request_bbox_json={"min_lon": 8.58, "min_lat": 39.88, "max_lon": 8.59, "max_lat": 39.89},
+            tiles=1,
+            tiles_completed=1,
+            features=10,
+            upserted=10,
+            with_geometry=10,
+            created_by=1,
+            completed_at=datetime.now(timezone.utc),
+        )
+        db.add(run)
+        db.commit()
+        run_id = str(run.id)
+    finally:
+        db.close()
+
+    response = client.post(
+        f"/catasto/gis/ade-wfs/runs/{run_id}/mark-failed",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 400
+    assert "non interrompibile" in response.json()["detail"]
 
 
 def seed_phase1_lookup_data(db: Session) -> None:

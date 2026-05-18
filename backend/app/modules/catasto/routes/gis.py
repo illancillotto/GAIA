@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import httpx
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user
-from app.core.database import SessionLocal, get_db
+from app.core.database import get_db
 from app.models.application_user import ApplicationUser
 from app.modules.catasto.schemas.gis_schemas import (
     AdeAlignmentApplyRequest,
@@ -32,10 +32,10 @@ from app.modules.catasto.services.ade_wfs import (
     AdeWfsBbox,
     apply_ade_alignment,
     create_ade_sync_run,
-    execute_ade_sync_run,
     get_ade_sync_run_status,
     get_latest_ade_sync_run_status,
     get_ade_alignment_report,
+    mark_ade_sync_run_failed,
     preview_ade_alignment_apply,
     sync_ade_parcels_bbox,
 )
@@ -43,14 +43,6 @@ from app.modules.catasto.services import gis_service
 
 
 router = APIRouter(prefix="/catasto/gis", tags=["catasto-gis"])
-
-
-def _run_ade_wfs_sync_background(run_id: str) -> None:
-    db = SessionLocal()
-    try:
-        execute_ade_sync_run(db, run_id)
-    finally:
-        db.close()
 
 
 @router.post(
@@ -103,7 +95,6 @@ def sync_ade_wfs_bbox(
 )
 def sync_ade_wfs_bbox_async(
     body: AdeWfsSyncBboxAsyncRequest,
-    background_tasks: BackgroundTasks,
     db: Session = Depends(get_db),
     current_user: ApplicationUser = Depends(require_active_user),
 ) -> AdeWfsSyncBboxResponse:
@@ -126,7 +117,6 @@ def sync_ade_wfs_bbox_async(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    background_tasks.add_task(_run_ade_wfs_sync_background, str(run.id))
     return AdeWfsSyncBboxResponse(
         run_id=str(run.id),
         status=run.status,
@@ -172,6 +162,27 @@ def get_ade_wfs_run_status(
 ) -> AdeWfsRunStatusResponse:
     try:
         result = get_ade_sync_run_status(db, run_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return AdeWfsRunStatusResponse(**result)
+
+
+@router.post(
+    "/ade-wfs/runs/{run_id}/mark-failed",
+    response_model=AdeWfsRunStatusResponse,
+    summary="Marca un run download WFS AdE come fallito",
+    description=(
+        "Interrompe manualmente un run AdE rimasto in coda o processing e lo marca failed "
+        "con messaggio operativo esplicito."
+    ),
+)
+def mark_ade_wfs_run_failed(
+    run_id: str,
+    db: Session = Depends(get_db),
+    _: ApplicationUser = Depends(require_active_user),
+) -> AdeWfsRunStatusResponse:
+    try:
+        result = mark_ade_sync_run_failed(db, run_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return AdeWfsRunStatusResponse(**result)

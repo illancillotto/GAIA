@@ -51,6 +51,7 @@ from app.services.elaborazioni_capacitas_terreni import (
     prepare_terreni_sync_jobs_for_recovery,
 )
 from app.modules.catasto.services.ade_status_scan import ADE_SCAN_PURPOSE, persist_ade_status_scan_result
+from app.modules.catasto.services.ade_wfs import execute_ade_sync_run, prepare_ade_sync_runs_for_recovery
 from app.modules.catasto.services.ade_historical_visura_parser import parse_historical_visura_pdf
 from anti_captcha_client import AntiCaptchaClient
 from browser_session import BrowserSession, BrowserSessionConfig
@@ -143,6 +144,12 @@ class CatastoWorker:
                 await self._process_registry_import_job(registry_job_id)
                 continue
 
+            ade_sync_run_id = self._next_ade_sync_run_id()
+            if ade_sync_run_id is not None:
+                logger.info("Run AdE %s prelevato dalla coda", ade_sync_run_id)
+                await self._process_ade_sync_run(ade_sync_run_id)
+                continue
+
             batch_id = self._next_batch_id()
             if batch_id is None:
                 await asyncio.sleep(POLL_INTERVAL_SEC)
@@ -182,6 +189,7 @@ class CatastoWorker:
             terreni_ids = prepare_terreni_sync_jobs_for_recovery(db)
             particelle_ids = prepare_particelle_sync_jobs_for_recovery(db)
             registry_ids = prepare_registry_import_jobs_for_recovery(db)
+            ade_sync_runs = prepare_ade_sync_runs_for_recovery(db)
             if history_ids:
                 logger.info("Recuperati %d job Capacitas storico anagrafica", len(history_ids))
             if terreni_ids:
@@ -190,6 +198,8 @@ class CatastoWorker:
                 logger.info("Recuperati %d job Capacitas particelle", len(particelle_ids))
             if registry_ids:
                 logger.info("Recuperati %d job REGISTRY utenze", len(registry_ids))
+            if ade_sync_runs:
+                logger.info("Recuperati %d run AdE WFS", ade_sync_runs)
             db.commit()
 
     def _next_connection_test_id(self):
@@ -264,6 +274,24 @@ class CatastoWorker:
 
     async def _process_registry_import_job(self, job_id) -> None:
         await asyncio.to_thread(run_registry_bulk_import_job_by_id, job_id)
+
+    def _next_ade_sync_run_id(self) -> str | None:
+        from app.models.catasto_phase1 import CatAdeSyncRun
+
+        with SessionLocal() as db:
+            run = db.scalar(
+                select(CatAdeSyncRun)
+                .where(CatAdeSyncRun.status == "queued")
+                .order_by(CatAdeSyncRun.started_at.asc(), CatAdeSyncRun.id.asc())
+            )
+            return str(run.id) if run is not None else None
+
+    async def _process_ade_sync_run(self, run_id: str) -> None:
+        try:
+            with SessionLocal() as db:
+                execute_ade_sync_run(db, run_id)
+        except Exception:
+            logger.exception("Run AdE worker %s fallito", run_id)
 
     async def _process_connection_test(self, connection_test_id) -> None:
         browser = BrowserSession(
