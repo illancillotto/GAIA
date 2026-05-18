@@ -64,6 +64,27 @@ function formatConsorzioEsitoForExport(presenteInConsorzio: boolean): string {
   return presenteInConsorzio ? "Particella presente in Catasto Consorzio" : "Particella non presente in Catasto Consorzio";
 }
 
+function hasRptCertificatoContext(match: CatAnagraficaMatch): boolean {
+  return Boolean(
+    match.utenza_latest?.cco?.trim()
+    && match.cert_com?.trim()
+    && match.cert_pvc?.trim()
+    && match.cert_fra?.trim(),
+  );
+}
+
+function buildRptCertificatoUrl(match: CatAnagraficaMatch): string {
+  if (!hasRptCertificatoContext(match)) return "";
+  const params = new URLSearchParams({
+    CCO: match.utenza_latest?.cco?.trim() ?? "",
+    COM: match.cert_com?.trim() ?? "",
+    PVC: match.cert_pvc?.trim() ?? "",
+    FRA: match.cert_fra?.trim() ?? "",
+    CCS: match.cert_ccs?.trim() || "00000",
+  });
+  return `https://involture1.servizicapacitas.com/pages/rptCertificato.aspx?${params.toString()}`;
+}
+
 async function resolveCapacitasRptCertificatoUrls(
   token: string,
   matches: CatAnagraficaMatch[],
@@ -72,7 +93,7 @@ async function resolveCapacitasRptCertificatoUrls(
   const unique = Array.from(
     new Map(
       matches
-        .filter((match) => Boolean(match.utenza_latest?.cco))
+        .filter(hasRptCertificatoContext)
         .map((match) => {
           const cco = match.utenza_latest?.cco?.trim() ?? "";
           const key = [cco, match.cert_com ?? "", match.cert_pvc ?? "", match.cert_fra ?? "", match.cert_ccs ?? ""].join("|");
@@ -99,7 +120,7 @@ async function resolveCapacitasRptCertificatoUrls(
             fra: current.cert_fra,
             ccs: current.cert_ccs,
           });
-          resolved = url || "";
+          resolved = url || buildRptCertificatoUrl(current);
           break;
         } catch {
           // backoff minimo prima del retry
@@ -574,6 +595,11 @@ export function AnagraficaBulkPanel() {
           match?.cert_fra ?? "",
           match?.cert_ccs ?? "",
         ].join("|");
+      const buildLinkValue = (match?: (typeof matches)[0]): string => (
+        match && hasRptCertificatoContext(match)
+          ? urlByMatchKey.get(buildMatchLinkKey(match)) ?? buildRptCertificatoUrl(match)
+          : ""
+      );
       const buildBase = (m?: (typeof matches)[0]) =>
         kind === "CF_PIVA_PARTICELLE"
           ? {
@@ -586,7 +612,7 @@ export function AnagraficaBulkPanel() {
               esito: formatEsitoForExport(r.esito),
               "trovato in esito consorzio": formatConsorzioEsitoForExport(Boolean(m?.presente_in_catasto_consorzio)),
               cco: m?.utenza_latest?.cco ?? "",
-              link_involture: m?.utenza_latest?.cco ? urlByMatchKey.get(buildMatchLinkKey(m)) ?? "" : "",
+              link_involture: buildLinkValue(m),
               apri_involture: "",
               stato_ruolo: m?.stato_ruolo ?? "",
               stato_cnc: m?.stato_cnc ?? "",
@@ -600,7 +626,7 @@ export function AnagraficaBulkPanel() {
               esito: formatEsitoForExport(r.esito),
               "trovato in esito consorzio": formatConsorzioEsitoForExport(Boolean(m?.presente_in_catasto_consorzio)),
               cco: m?.utenza_latest?.cco ?? "",
-              link_involture: m?.utenza_latest?.cco ? urlByMatchKey.get(buildMatchLinkKey(m)) ?? "" : "",
+              link_involture: buildLinkValue(m),
               apri_involture: "",
               stato_ruolo: m?.stato_ruolo ?? "",
               stato_cnc: m?.stato_cnc ?? "",

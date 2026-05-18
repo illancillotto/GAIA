@@ -2,9 +2,11 @@ from collections.abc import Generator
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from io import BytesIO
+from zipfile import ZIP_DEFLATED, ZipFile
+from xml.etree import ElementTree as ET
 from pathlib import Path
 from types import SimpleNamespace
-from uuid import UUID
+from uuid import UUID, uuid4
 from openpyxl import Workbook
 
 from fastapi.testclient import TestClient
@@ -40,7 +42,7 @@ from app.models.catasto_phase1 import (
     CatUtenzaIntestatario,
     CatUtenzaIrrigua,
 )
-from app.models.catasto import CatastoParcel
+from app.models.catasto import CatastoElaborazioniMassiveJob, CatastoParcel
 from app.modules.utenze.models import AnagraficaCompany, AnagraficaPerson, AnagraficaPersonSnapshot, AnagraficaSubject
 from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob, RuoloParticella, RuoloPartita
 from app.modules.catasto.routes import import_routes as import_routes_module
@@ -62,6 +64,7 @@ from app.modules.catasto.services.ade_wfs import (
 )
 from app.modules.elaborazioni.capacitas.models import CapacitasAnagraficaDetail, CapacitasIntestatario, CapacitasTerrenoCertificato
 from app.modules.elaborazioni.capacitas.models import CapacitasLookupOption, CapacitasTerreniSearchResult
+from app.schemas.catasto_phase1 import CatIntestatarioResponse
 from app.modules.catasto.services.validation import (
     validate_codice_fiscale,
     validate_comune,
@@ -3108,6 +3111,7 @@ def test_bulk_search_presente_consorzio_true_when_utenza_without_consorzio_unit(
         )
         db.add(particella)
         db.flush()
+        particella_id = particella.id
         db.add(
             CatUtenzaIrrigua(
                 import_batch_id=batch.id,
@@ -3407,6 +3411,7 @@ def test_bulk_search_anagrafica_uses_latest_utenza_context_when_cco_exists_on_mu
         )
         db.add(particella)
         db.flush()
+        particella_id = particella.id
         db.add(
             CatUtenzaIrrigua(
                 import_batch_id=batch.id,
@@ -3471,6 +3476,795 @@ def test_bulk_search_anagrafica_uses_latest_utenza_context_when_cco_exists_on_mu
     payload = response.json()["results"][0]["match"]
     assert payload["cert_com"] == "289"
     assert payload["cert_fra"] == "38"
+
+
+def test_bulk_search_anagrafica_live_authoritative_does_not_fallback_to_latest_utenza_owner_when_intestatari_rows_are_missing() -> None:
+    db = TestingSessionLocal()
+    try:
+        batch = CatImportBatch(filename="test.xlsx", tipo="test", status="completed")
+        db.add(batch)
+        db.flush()
+        comune_uras = CatComune(
+            nome_comune="Uras",
+            codice_catastale="L496",
+            cod_comune_capacitas=289,
+            codice_comune_formato_numerico=115081,
+            codice_comune_numerico_2017_2025=95078,
+            nome_comune_legacy="Uras",
+            cod_provincia=115,
+            sigla_provincia="OR",
+            regione="Sardegna",
+        )
+        db.add(comune_uras)
+        db.flush()
+        particella = CatParticella(
+            comune_id=comune_uras.id,
+            cod_comune_capacitas=289,
+            codice_catastale="L496",
+            nome_comune="Uras",
+            foglio="14",
+            particella="2047",
+            subalterno=None,
+            is_current=True,
+        )
+        db.add(particella)
+        db.flush()
+        particella_id = particella.id
+        db.add(
+            CatUtenzaIrrigua(
+                import_batch_id=batch.id,
+                anno_campagna=2025,
+                cco="000000401",
+                comune_id=comune_uras.id,
+                cod_comune_capacitas=289,
+                cod_frazione=38,
+                nome_comune="Uras",
+                foglio="14",
+                particella="2047",
+                particella_id=particella.id,
+                denominazione="Sonis Gesuino",
+                codice_fiscale="SNSGSN23E11L496A",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.post(
+        "/catasto/elaborazioni-massive/particelle",
+        headers=auth_headers(),
+        json={"rows": [{"row_index": 1, "comune": "Uras", "foglio": "14", "particella": "2047"}]},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["results"][0]["match"]
+    assert payload["utenza_latest"]["cco"] == "000000401"
+    assert payload["intestatari"] == []
+    assert payload["stato_ruolo"] is None
+    assert payload["stato_cnc"] is None
+
+
+def test_bulk_search_anagrafica_does_not_reuse_foreign_cert_context_when_latest_utenza_context_has_no_match() -> None:
+    db = TestingSessionLocal()
+    try:
+        batch = CatImportBatch(filename="test.xlsx", tipo="test", status="completed")
+        db.add(batch)
+        db.flush()
+        comune_uras = CatComune(
+            nome_comune="Uras",
+            codice_catastale="L496",
+            cod_comune_capacitas=289,
+            codice_comune_formato_numerico=115081,
+            codice_comune_numerico_2017_2025=95078,
+            nome_comune_legacy="Uras",
+            cod_provincia=115,
+            sigla_provincia="OR",
+            regione="Sardegna",
+        )
+        db.add(comune_uras)
+        db.flush()
+        particella = CatParticella(
+            comune_id=comune_uras.id,
+            cod_comune_capacitas=289,
+            codice_catastale="L496",
+            nome_comune="Uras",
+            foglio="14",
+            particella="2095",
+            subalterno=None,
+            is_current=True,
+        )
+        db.add(particella)
+        db.flush()
+        particella_id = particella.id
+        db.add(
+            CatUtenzaIrrigua(
+                import_batch_id=batch.id,
+                anno_campagna=2025,
+                cco="000000252",
+                comune_id=comune_uras.id,
+                cod_comune_capacitas=289,
+                cod_frazione=38,
+                nome_comune="Uras",
+                foglio="14",
+                particella="2095",
+                particella_id=particella.id,
+                denominazione="Muru Filomena",
+                codice_fiscale="MRUFMN48P69L496W",
+            )
+        )
+        wrong_cert = CatCapacitasCertificato(
+            cco="000000252",
+            com="170",
+            pvc="097",
+            fra="06",
+            ccs="00000",
+            collected_at=datetime(2026, 5, 7, 9, 0, tzinfo=timezone.utc),
+            ruolo_status="iscrivibile",
+            utenza_status="non_iscritta",
+        )
+        db.add(wrong_cert)
+        db.flush()
+        db.add(
+            CatCapacitasIntestatario(
+                certificato_id=wrong_cert.id,
+                denominazione="Zoccheddu Stefanina",
+                codice_fiscale="Z",
+                collected_at=wrong_cert.collected_at,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.post(
+        "/catasto/elaborazioni-massive/particelle",
+        headers=auth_headers(),
+        json={"rows": [{"row_index": 1, "comune": "Uras", "foglio": "14", "particella": "2095"}]},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["results"][0]["match"]
+    assert payload["cert_com"] is None
+    assert payload["cert_fra"] is None
+    assert payload["stato_ruolo"] is None
+    assert payload["stato_cnc"] is None
+    assert payload["intestatari"] == []
+
+
+def test_bulk_search_anagrafica_prefers_live_sync_over_foreign_cco_snapshot_when_context_is_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db = TestingSessionLocal()
+    try:
+        batch = CatImportBatch(filename="test.xlsx", tipo="test", status="completed")
+        db.add(batch)
+        db.flush()
+        comune = CatComune(
+            nome_comune="Marrubiu",
+            codice_catastale="E972",
+            cod_comune_capacitas=283,
+            codice_comune_formato_numerico=115046,
+            codice_comune_numerico_2017_2025=95045,
+            nome_comune_legacy="Marrubiu",
+            cod_provincia=115,
+            sigla_provincia="OR",
+            regione="Sardegna",
+        )
+        db.add(comune)
+        db.flush()
+        particella = CatParticella(
+            comune_id=comune.id,
+            cod_comune_capacitas=283,
+            codice_catastale="E972",
+            nome_comune="Marrubiu",
+            foglio="26",
+            particella="1907",
+            subalterno=None,
+            is_current=True,
+        )
+        db.add(particella)
+        db.flush()
+        particella_id = particella.id
+        db.add(
+            CatUtenzaIrrigua(
+                import_batch_id=batch.id,
+                anno_campagna=2025,
+                cco="000001065",
+                comune_id=comune.id,
+                cod_comune_capacitas=283,
+                cod_frazione=32,
+                nome_comune="Marrubiu",
+                foglio="26",
+                particella="1907",
+                particella_id=particella.id,
+                denominazione="Murgia Claudia",
+                codice_fiscale="MRGCLD76D66E972R",
+            )
+        )
+        unit = CatConsorzioUnit(
+            comune_id=comune.id,
+            cod_comune_capacitas=283,
+            particella_id=particella.id,
+            foglio="26",
+            particella="1907",
+            is_active=True,
+        )
+        db.add(unit)
+        db.flush()
+        db.add(
+            CatCapacitasCertificato(
+                cco="000001065",
+                com="280",
+                pvc="097",
+                fra="37",
+                ccs="00000",
+                collected_at=datetime(2026, 5, 12, 15, 20, tzinfo=timezone.utc),
+                ruolo_status="Iscrivibile a ruolo",
+                utenza_status="Lista 1",
+            )
+        )
+        particella_id = particella.id
+        unit_id = unit.id
+        db.commit()
+    finally:
+        db.close()
+
+    sync_calls: list[UUID] = []
+
+    async def fake_sync(self, p: CatParticella) -> bool:
+        sync_calls.append(p.id)
+        self._db.add(
+            CatConsorzioOccupancy(
+                unit_id=unit_id,
+                cco="000001065",
+                com="283",
+                pvc="097",
+                fra="32",
+                ccs="00000",
+                source_type="capacitas_terreni",
+                relationship_type="utilizzatore_reale",
+                is_current=True,
+                valid_from=date(2025, 1, 1),
+            )
+        )
+        self.dirty = True
+        self._db.flush()
+        return True
+
+    async def fake_fetch_certificato(self, cco: str, com: str, pvc: str, fra: str, ccs: str) -> CapacitasTerrenoCertificato | None:
+        assert cco == "000001065"
+        assert com == "283"
+        assert pvc == "097"
+        assert fra == "32"
+        return CapacitasTerrenoCertificato(
+            cco=cco,
+            com=com,
+            pvc=pvc,
+            fra=fra,
+            ccs=ccs,
+            ruolo_status="Iscrivibile a ruolo",
+            utenza_status="Lista 1",
+            intestatari=[],
+        )
+
+    monkeypatch.setattr("app.modules.catasto.routes.anagrafica._CapacitasLiveResolver._sync_particella_from_live_terreni", fake_sync)
+    monkeypatch.setattr("app.modules.catasto.routes.anagrafica._CapacitasLiveResolver._fetch_certificato", fake_fetch_certificato)
+
+    response = client.post(
+        "/catasto/elaborazioni-massive/particelle",
+        headers=auth_headers(),
+        json={"rows": [{"row_index": 1, "comune": "Marrubiu", "foglio": "26", "particella": "1907"}]},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["results"][0]["match"]
+    assert sync_calls == [particella_id]
+    assert payload["utenza_latest"]["cco"] == "000001065"
+    assert payload["cert_com"] == "283"
+    assert payload["cert_pvc"] == "097"
+    assert payload["cert_fra"] == "32"
+    assert payload["cert_ccs"] == "00000"
+    assert payload["stato_ruolo"] == "Iscrivibile a ruolo"
+    assert payload["stato_cnc"] == "Lista 1"
+
+
+def test_bulk_search_anagrafica_matches_zero_padded_cert_context_with_numeric_latest_utenza_codes() -> None:
+    db = TestingSessionLocal()
+    try:
+        batch = CatImportBatch(filename="test.xlsx", tipo="test", status="completed")
+        db.add(batch)
+        db.flush()
+        comune = CatComune(
+            nome_comune="Mogoro",
+            codice_catastale="F272",
+            cod_comune_capacitas=50,
+            codice_comune_formato_numerico=115044,
+            codice_comune_numerico_2017_2025=95044,
+            nome_comune_legacy="Mogoro",
+            cod_provincia=115,
+            sigla_provincia="OR",
+            regione="Sardegna",
+        )
+        db.add(comune)
+        db.flush()
+        particella = CatParticella(
+            comune_id=comune.id,
+            cod_comune_capacitas=50,
+            codice_catastale="F272",
+            nome_comune="Mogoro",
+            foglio="12",
+            particella="1079",
+            subalterno=None,
+            is_current=True,
+        )
+        db.add(particella)
+        db.flush()
+        db.add(
+            CatUtenzaIrrigua(
+                import_batch_id=batch.id,
+                anno_campagna=2025,
+                cco="RF3000525",
+                comune_id=comune.id,
+                cod_comune_capacitas=50,
+                cod_frazione=33,
+                nome_comune="Mogoro",
+                foglio="12",
+                particella="1079",
+                particella_id=particella.id,
+                denominazione="Maccioni Antonina",
+                codice_fiscale="MCCNNN46C69F272K",
+            )
+        )
+        cert = CatCapacitasCertificato(
+            cco="RF3000525",
+            com="050",
+            pvc="097",
+            fra="33",
+            ccs="00000",
+            collected_at=datetime(2026, 5, 18, 9, 21, 1, tzinfo=timezone.utc),
+            ruolo_status="Iscrivibile a ruolo",
+            utenza_status="Lista 1",
+        )
+        db.add(cert)
+        db.flush()
+        db.add(
+            CatCapacitasIntestatario(
+                certificato_id=cert.id,
+                denominazione="Maccioni Antonina",
+                codice_fiscale="MCCNNN46C69F272K",
+                collected_at=cert.collected_at,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.post(
+        "/catasto/elaborazioni-massive/particelle",
+        headers=auth_headers(),
+        json={"rows": [{"row_index": 1, "comune": "Mogoro", "foglio": "12", "particella": "1079"}]},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["results"][0]["match"]
+    assert payload["utenza_latest"]["cco"] == "RF3000525"
+    assert payload["cert_com"] == "050"
+    assert payload["cert_pvc"] == "097"
+    assert payload["cert_fra"] == "33"
+    assert payload["cert_ccs"] == "00000"
+    assert payload["stato_ruolo"] is None
+    assert payload["stato_cnc"] is None
+    assert payload["intestatari"] == []
+
+
+def test_bulk_search_anagrafica_ignores_deadlock_cert_snapshot_and_uses_previous_valid_one() -> None:
+    db = TestingSessionLocal()
+    try:
+        comune = CatComune(
+            nome_comune="Santa Giusta",
+            codice_catastale="I205",
+            cod_comune_capacitas=239,
+            codice_comune_formato_numerico=115048,
+            codice_comune_numerico_2017_2025=95048,
+            nome_comune_legacy="Santa Giusta",
+            cod_provincia=115,
+            sigla_provincia="OR",
+            regione="Sardegna",
+        )
+        db.add(comune)
+        db.flush()
+        particella = CatParticella(
+            comune_id=comune.id,
+            cod_comune_capacitas=239,
+            codice_catastale="I205",
+            nome_comune="Santa Giusta",
+            foglio="20",
+            particella="185",
+            subalterno=None,
+            is_current=True,
+        )
+        db.add(particella)
+        db.flush()
+        unit = CatConsorzioUnit(
+            comune_id=comune.id,
+            cod_comune_capacitas=239,
+            source_comune_label="Santa Giusta",
+            foglio="20",
+            particella="185",
+            subalterno="A",
+            is_active=True,
+        )
+        db.add(unit)
+        db.flush()
+        db.add(
+            CatConsorzioOccupancy(
+                unit_id=unit.id,
+                cco="014000486",
+                com="239",
+                pvc="097",
+                fra="14",
+                ccs="00000",
+                source_type="capacitas_terreni",
+                relationship_type="utilizzatore_reale",
+                is_current=True,
+                valid_from=date(1992, 1, 1),
+            )
+        )
+        valid_cert = CatCapacitasCertificato(
+            cco="014000486",
+            com="239",
+            pvc="097",
+            fra="14",
+            ccs="00000",
+            partita_code="014000486/14/00000",
+            utenza_code="U000000001",
+            utenza_status="Lista 1",
+            ruolo_status="Iscrivibile a ruolo",
+            parsed_json={
+                "cco": "014000486",
+                "com": "239",
+                "pvc": "097",
+                "fra": "14",
+                "ccs": "00000",
+                "partita_code": "014000486/14/00000",
+                "utenza_code": "U000000001",
+                "intestatari": [{"denominazione": "Comune Di Santa Giusta"}],
+                "terreni": [{"foglio": "20", "particella": "185", "sub": "A"}],
+                "raw_text": "PARTITA: 014000486/14/00000 - SANTA GIUSTA - STATO: Iscrivibile a ruolo",
+            },
+            collected_at=datetime(2026, 5, 18, 7, 0, tzinfo=timezone.utc),
+        )
+        db.add(valid_cert)
+        db.flush()
+        db.add(
+            CatCapacitasIntestatario(
+                certificato_id=valid_cert.id,
+                denominazione="Comune Di Santa Giusta",
+                codice_fiscale="00072260953",
+                collected_at=valid_cert.collected_at,
+            )
+        )
+        db.add(
+            CatCapacitasCertificato(
+                cco="014000486",
+                com="239",
+                pvc="097",
+                fra="14",
+                ccs="00000",
+                parsed_json={
+                    "cco": "014000486",
+                    "com": "239",
+                    "pvc": "097",
+                    "fra": "14",
+                    "ccs": "00000",
+                    "intestatari": [],
+                    "terreni": [],
+                    "raw_text": "Errore La transazione e stata interrotta a causa di un deadlock. Ripetere la transazione.",
+                },
+                collected_at=datetime(2026, 5, 18, 8, 0, tzinfo=timezone.utc),
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.post(
+        "/catasto/elaborazioni-massive/particelle",
+        headers=auth_headers(),
+        json={"rows": [{"row_index": 1, "comune": "Santa Giusta", "foglio": "20", "particella": "185", "sub": "A"}]},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["results"][0]["match"]
+    assert payload["utenza_latest"]["cco"] == "014000486"
+    assert payload["intestatari"][0]["denominazione"] == "Comune Di Santa Giusta"
+
+
+def test_bulk_search_anagrafica_exposes_cert_context_from_occupancy_even_when_latest_utenza_exists() -> None:
+    db = TestingSessionLocal()
+    try:
+        batch = CatImportBatch(filename="test.xlsx", tipo="test", status="completed")
+        db.add(batch)
+        db.flush()
+        comune = CatComune(
+            nome_comune="Santa Giusta",
+            codice_catastale="I205",
+            cod_comune_capacitas=239,
+            codice_comune_formato_numerico=115048,
+            codice_comune_numerico_2017_2025=95048,
+            nome_comune_legacy="Santa Giusta",
+            cod_provincia=115,
+            sigla_provincia="OR",
+            regione="Sardegna",
+        )
+        db.add(comune)
+        db.flush()
+        particella = CatParticella(
+            comune_id=comune.id,
+            cod_comune_capacitas=239,
+            codice_catastale="I205",
+            nome_comune="Santa Giusta",
+            foglio="22",
+            particella="143",
+            subalterno=None,
+            is_current=True,
+        )
+        db.add(particella)
+        db.flush()
+        db.add(
+            CatUtenzaIrrigua(
+                import_batch_id=batch.id,
+                anno_campagna=2025,
+                cco="014000294",
+                comune_id=comune.id,
+                cod_comune_capacitas=239,
+                cod_frazione=14,
+                nome_comune="Santa Giusta",
+                foglio="22",
+                particella="143",
+                particella_id=particella.id,
+                denominazione="GARAU SALVATORE",
+                codice_fiscale="GRASVT44R03G113S",
+            )
+        )
+        unit = CatConsorzioUnit(
+            comune_id=comune.id,
+            cod_comune_capacitas=239,
+            particella_id=particella.id,
+            foglio="22",
+            particella="143",
+            is_active=True,
+        )
+        db.add(unit)
+        db.flush()
+        db.add(
+            CatConsorzioOccupancy(
+                unit_id=unit.id,
+                cco="014000294",
+                com="239",
+                pvc="097",
+                fra="14",
+                ccs="00000",
+                source_type="capacitas_terreni",
+                relationship_type="utilizzatore_reale",
+                is_current=True,
+                valid_from=date(2015, 1, 1),
+            )
+        )
+        particella_id = particella.id
+        comune_id = comune.id
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.post(
+        "/catasto/elaborazioni-massive/particelle",
+        headers=auth_headers(),
+        json={"rows": [{"row_index": 1, "comune": "Santa Giusta", "foglio": "22", "particella": "143"}]},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["results"][0]["match"]
+    assert payload["utenza_latest"]["cco"] == "014000294"
+    assert payload["cert_com"] == "239"
+    assert payload["cert_pvc"] == "097"
+    assert payload["cert_fra"] == "14"
+    assert payload["cert_ccs"] == "00000"
+
+
+def test_bulk_search_job_detail_rehydrates_live_first_context_for_saved_results(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db = TestingSessionLocal()
+    try:
+        batch = CatImportBatch(filename="test.xlsx", tipo="test", status="completed")
+        db.add(batch)
+        db.flush()
+        comune = CatComune(
+            nome_comune="Santa Giusta",
+            codice_catastale="I205",
+            cod_comune_capacitas=239,
+            codice_comune_formato_numerico=115048,
+            codice_comune_numerico_2017_2025=95048,
+            nome_comune_legacy="Santa Giusta",
+            cod_provincia=115,
+            sigla_provincia="OR",
+            regione="Sardegna",
+        )
+        db.add(comune)
+        db.flush()
+        particella = CatParticella(
+            comune_id=comune.id,
+            cod_comune_capacitas=239,
+            codice_catastale="I205",
+            nome_comune="Santa Giusta",
+            foglio="22",
+            particella="143",
+            subalterno=None,
+            is_current=True,
+        )
+        db.add(particella)
+        db.flush()
+        db.add(
+            CatUtenzaIrrigua(
+                import_batch_id=batch.id,
+                anno_campagna=2025,
+                cco="014000294",
+                comune_id=comune.id,
+                cod_comune_capacitas=239,
+                cod_frazione=14,
+                nome_comune="Santa Giusta",
+                foglio="22",
+                particella="143",
+                particella_id=particella.id,
+                denominazione="GARAU SALVATORE",
+                codice_fiscale="GRASVT44R03G113S",
+            )
+        )
+        unit = CatConsorzioUnit(
+            comune_id=comune.id,
+            cod_comune_capacitas=239,
+            particella_id=particella.id,
+            foglio="22",
+            particella="143",
+            is_active=True,
+        )
+        db.add(unit)
+        db.flush()
+        db.add(
+            CatConsorzioOccupancy(
+                unit_id=unit.id,
+                cco="014000294",
+                com="239",
+                pvc="097",
+                fra="14",
+                ccs="00000",
+                source_type="capacitas_terreni",
+                relationship_type="utilizzatore_reale",
+                is_current=True,
+                valid_from=date(2015, 1, 1),
+            )
+        )
+        particella_id = particella.id
+        comune_id = comune.id
+        db.commit()
+    finally:
+        db.close()
+
+    async def fake_login(self) -> None:
+        return None
+
+    async def fake_activate_app(self, app_name: str) -> None:
+        assert app_name == "involture"
+
+    async def fake_close(self) -> None:
+        return None
+
+    async def fake_fetch_certificato(self, **kwargs) -> CapacitasTerrenoCertificato:
+        assert kwargs["cco"] == "014000294"
+        assert kwargs["com"] == "239"
+        assert kwargs["pvc"] == "097"
+        assert kwargs["fra"] == "14"
+        return CapacitasTerrenoCertificato(
+            cco="014000294",
+            com="239",
+            pvc="097",
+            fra="14",
+            ccs="00000",
+            intestatari=[],
+        )
+
+    monkeypatch.setattr("app.modules.catasto.routes.anagrafica.pick_credential", lambda db, credential_id: (SimpleNamespace(id=1, username="live-user"), "secret"))
+    monkeypatch.setattr("app.modules.catasto.routes.anagrafica.mark_credential_used", lambda db, credential_id: None)
+    monkeypatch.setattr("app.modules.catasto.routes.anagrafica.mark_credential_error", lambda db, credential_id, error: None)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.login", fake_login)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.activate_app", fake_activate_app)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.session.CapacitasSessionManager.close", fake_close)
+    monkeypatch.setattr("app.modules.elaborazioni.capacitas.apps.involture.client.InVoltureClient.fetch_certificato", fake_fetch_certificato)
+
+    save_response = client.post(
+        "/catasto/elaborazioni-massive/particelle/jobs/save",
+        headers=auth_headers(),
+        json={
+            "source_filename": "saved.xlsx",
+            "payload": {
+                "rows": [{"row_index": 1, "comune": "Santa Giusta", "foglio": "22", "particella": "143"}],
+            },
+            "results": [
+                {
+                    "row_index": 1,
+                    "comune_input": "Santa Giusta",
+                    "foglio_input": "22",
+                    "particella_input": "143",
+                    "esito": "FOUND",
+                    "message": "OK",
+                    "particella_id": str(particella_id),
+                    "match": {
+                        "particella_id": str(particella_id),
+                        "comune_id": str(comune_id),
+                        "comune": "Santa Giusta",
+                        "cod_comune_capacitas": 239,
+                        "codice_catastale": "I205",
+                        "foglio": "22",
+                        "particella": "143",
+                        "presente_in_catasto_consorzio": True,
+                        "utenza_latest": {
+                            "id": str(uuid4()),
+                            "cco": "014000294",
+                            "anno_campagna": 2025,
+                            "stato": None,
+                            "num_distretto": None,
+                            "nome_distretto": None,
+                            "sup_irrigabile_mq": None,
+                            "denominazione": "GARAU SALVATORE",
+                            "codice_fiscale": "GRASVT44R03G113S",
+                            "ha_anomalie": False,
+                        },
+                        "cert_com": None,
+                        "cert_pvc": None,
+                        "cert_fra": None,
+                        "cert_ccs": None,
+                        "stato_ruolo": None,
+                        "stato_cnc": None,
+                        "intestatari": [],
+                        "anomalie_count": 0,
+                        "anomalie_top": [],
+                        "note": None,
+                    },
+                    "matches": None,
+                    "matches_count": 1,
+                }
+            ],
+        },
+    )
+
+    assert save_response.status_code == 200
+    job_id = save_response.json()["id"]
+
+    detail_response = client.get(
+        f"/catasto/elaborazioni-massive/particelle/jobs/{job_id}",
+        headers=auth_headers(),
+    )
+
+    assert detail_response.status_code == 200
+    payload = detail_response.json()["results"][0]["match"]
+    assert payload["utenza_latest"]["cco"] == "014000294"
+    assert payload["cert_com"] == "239"
+    assert payload["cert_pvc"] == "097"
+    assert payload["cert_fra"] == "14"
+    assert payload["cert_ccs"] == "00000"
+
+    db = TestingSessionLocal()
+    try:
+        job = db.execute(select(CatastoElaborazioniMassiveJob)).scalars().one()
+        assert job.payload_json["include_capacitas_live"] is True
+        refreshed = job.results_json["results"][0]["match"]
+        assert refreshed["cert_com"] == "239"
+        assert refreshed["cert_pvc"] == "097"
+        assert refreshed["cert_fra"] == "14"
+        assert refreshed["cert_ccs"] == "00000"
+    finally:
+        db.close()
 
 
 def test_bulk_search_anagrafica_sub_matches_preserve_case_variants() -> None:
@@ -3691,8 +4485,8 @@ def test_bulk_search_anagrafica_sub_historical_falls_back_to_current_base_owner(
     assert len(matches) == 1
     assert matches[0]["subalterno"] == "A"
     assert matches[0]["utenza_latest"]["cco"] == "0A1260895"
-    assert matches[0]["intestatari"][0]["denominazione"] == "D'ettorre Carmine"
-    assert matches[0]["note"] == "Presenti dati non aggiornati/storici del sub: intestatario corrente derivato dalla particella base"
+    assert matches[0]["intestatari"] == []
+    assert matches[0]["note"] == "Presenti dati non aggiornati/storici del sub: intestatario corrente non disponibile"
 
 
 def test_bulk_search_anagrafica_live_enriches_sub_matches(
@@ -3844,6 +4638,253 @@ def test_bulk_search_anagrafica_live_enriches_sub_matches(
     assert len(matches) == 1
     assert matches[0]["subalterno"] == "c"
     assert matches[0]["intestatari"][0]["denominazione"] == "Figus Maddalena"
+
+
+def test_bulk_search_anagrafica_live_authoritative_still_syncs_when_only_local_owner_signal_exists(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db = TestingSessionLocal()
+    try:
+        batch = CatImportBatch(filename="test.xlsx", tipo="test", status="completed")
+        db.add(batch)
+        db.flush()
+        comune_uras = CatComune(
+            nome_comune="Uras",
+            codice_catastale="L496",
+            cod_comune_capacitas=289,
+            codice_comune_formato_numerico=115081,
+            codice_comune_numerico_2017_2025=95078,
+            nome_comune_legacy="Uras",
+            cod_provincia=115,
+            sigla_provincia="OR",
+            regione="Sardegna",
+        )
+        db.add(comune_uras)
+        db.flush()
+        particella = CatParticella(
+            comune_id=comune_uras.id,
+            cod_comune_capacitas=289,
+            codice_catastale="L496",
+            nome_comune="Uras",
+            foglio="14",
+            particella="2095",
+            subalterno=None,
+            is_current=True,
+        )
+        db.add(particella)
+        db.flush()
+        db.add(
+            CatUtenzaIrrigua(
+                import_batch_id=batch.id,
+                anno_campagna=2025,
+                cco="000000252",
+                comune_id=comune_uras.id,
+                cod_comune_capacitas=289,
+                cod_frazione=38,
+                nome_comune="Uras",
+                foglio="14",
+                particella="2095",
+                particella_id=particella.id,
+                denominazione="Muru Filomena",
+                codice_fiscale="MRUFMN48P69L496W",
+            )
+        )
+        wrong_cert = CatCapacitasCertificato(
+            cco="000000252",
+            com="170",
+            pvc="097",
+            fra="06",
+            ccs="00000",
+            collected_at=datetime(2026, 5, 7, 9, 0, tzinfo=timezone.utc),
+        )
+        db.add(wrong_cert)
+        db.flush()
+        db.add(
+            CatCapacitasIntestatario(
+                certificato_id=wrong_cert.id,
+                denominazione="Zoccheddu Stefanina",
+                codice_fiscale="Z",
+                collected_at=wrong_cert.collected_at,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    sync_calls: list[UUID] = []
+
+    async def record_sync(self, p: CatParticella) -> bool:
+        sync_calls.append(p.id)
+        return False
+
+    monkeypatch.setattr(
+        "app.modules.catasto.routes.anagrafica._CapacitasLiveResolver._sync_particella_from_live_terreni",
+        record_sync,
+    )
+
+    response = client.post(
+        "/catasto/elaborazioni-massive/particelle",
+        headers=auth_headers(),
+        json={
+            "include_capacitas_live": True,
+            "rows": [{"row_index": 1, "comune": "Uras", "foglio": "14", "particella": "2095"}],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["results"][0]["match"]
+    assert sync_calls == [UUID(payload["particella_id"])]
+    assert payload["utenza_latest"]["cco"] == "000000252"
+    assert payload["intestatari"] == []
+
+
+def test_bulk_search_anagrafica_live_fetches_certificato_for_historical_sub_when_context_is_coherent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db = TestingSessionLocal()
+    try:
+        comune_mogoro = CatComune(
+            nome_comune="Mogoro",
+            codice_catastale="F272",
+            cod_comune_capacitas=239,
+            codice_comune_formato_numerico=115042,
+            codice_comune_numerico_2017_2025=95028,
+            nome_comune_legacy="Mogoro",
+            cod_provincia=115,
+            sigla_provincia="OR",
+            regione="Sardegna",
+        )
+        db.add(comune_mogoro)
+        db.flush()
+        particella = CatParticella(
+            comune_id=comune_mogoro.id,
+            cod_comune_capacitas=239,
+            codice_catastale="F272",
+            nome_comune="Mogoro",
+            foglio="30",
+            particella="719",
+            subalterno=None,
+            is_current=True,
+        )
+        db.add(particella)
+        db.flush()
+        unit = CatConsorzioUnit(
+            cod_comune_capacitas=239,
+            comune_id=comune_mogoro.id,
+            source_comune_label="Mogoro",
+            particella_id=None,
+            foglio="30",
+            particella="719",
+            subalterno="a",
+            is_active=True,
+            descrizione="Sub storico senza intestatario corrente",
+        )
+        db.add(unit)
+        db.flush()
+        db.add(
+            CatConsorzioOccupancy(
+                unit_id=unit.id,
+                cco="0A1522088",
+                fra="33",
+                ccs="00000",
+                pvc="097",
+                com="050",
+                source_type="capacitas_terreni",
+                relationship_type="utilizzatore_reale",
+                valid_from=date(2016, 1, 1),
+                valid_to=date(2018, 12, 31),
+                is_current=False,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    async def fail_sync(self, p: CatParticella) -> bool:
+        raise AssertionError("historical sub with coherent cert context should not trigger speculative terreni sync")
+
+    async def fake_fetch_certificato(
+        self,
+        cco: str,
+        com: str,
+        pvc: str,
+        fra: str,
+        ccs: str,
+    ) -> CapacitasTerrenoCertificato | None:
+        assert (cco, com, pvc, fra, ccs) == ("0A1522088", "050", "097", "33", "00000")
+        return CapacitasTerrenoCertificato(
+            cco=cco,
+            com=com,
+            pvc=pvc,
+            fra=fra,
+            ccs=ccs,
+            intestatari=[
+                CapacitasIntestatario(
+                    idxana="IDX-MOG-719A",
+                    idxesa="IDX-ESA-MOG-719A",
+                    codice_fiscale="FLRMRA70A01F272X",
+                    denominazione="Floris Mario",
+                    luogo_nascita="Mogoro",
+                )
+            ],
+        )
+
+    async def fake_resolve_intestatario(
+        self,
+        intestatario: CapacitasIntestatario,
+    ) -> CatIntestatarioResponse | None:
+        assert intestatario.codice_fiscale == "FLRMRA70A01F272X"
+        return CatIntestatarioResponse(
+            id=uuid4(),
+            codice_fiscale="FLRMRA70A01F272X",
+            denominazione="Floris Mario",
+            tipo="PF",
+            cognome="Floris",
+            nome="Mario",
+            data_nascita=date(1970, 1, 1),
+            luogo_nascita="Mogoro",
+            indirizzo="Via Roma 1",
+            comune_residenza="Mogoro",
+            cap="09095",
+            email=None,
+            telefono=None,
+            ragione_sociale=None,
+            source="capacitas",
+            last_verified_at=None,
+            deceduto=None,
+        )
+
+    monkeypatch.setattr(
+        "app.modules.catasto.routes.anagrafica._CapacitasLiveResolver._sync_particella_from_live_terreni",
+        fail_sync,
+    )
+    monkeypatch.setattr(
+        "app.modules.catasto.routes.anagrafica._CapacitasLiveResolver._fetch_certificato",
+        fake_fetch_certificato,
+    )
+    monkeypatch.setattr(
+        "app.modules.catasto.routes.anagrafica._CapacitasLiveResolver._resolve_intestatario",
+        fake_resolve_intestatario,
+    )
+
+    response = client.post(
+        "/catasto/elaborazioni-massive/particelle",
+        headers=auth_headers(),
+        json={
+            "include_capacitas_live": True,
+            "rows": [{"row_index": 1, "comune": "Mogoro", "foglio": "30", "particella": "719", "sub": "a"}],
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()["results"][0]
+    assert payload["esito"] == "FOUND"
+    sub_match = payload["match"]
+    assert sub_match["subalterno"] == "a"
+    assert sub_match["utenza_latest"]["cco"] == "0A1522088"
+    assert sub_match["cert_com"] == "050"
+    assert sub_match["cert_fra"] == "33"
+    assert sub_match["intestatari"][0]["denominazione"] == "Floris Mario"
 
 
 def test_bulk_search_anagrafica_falls_back_to_live_capacitas_for_missing_intestatario(
@@ -5468,6 +6509,23 @@ def _build_meter_readings_workbook(
     return output.getvalue()
 
 
+def _corrupt_meter_readings_workbook_styles(file_bytes: bytes) -> bytes:
+    source_buffer = BytesIO(file_bytes)
+    output = BytesIO()
+    with ZipFile(source_buffer, "r") as source, ZipFile(output, "w", compression=ZIP_DEFLATED) as target:
+        styles_xml = source.read("xl/styles.xml")
+        root = ET.fromstring(styles_xml)
+        namespace = {"main": "http://schemas.openxmlformats.org/spreadsheetml/2006/main"}
+        family = root.find(".//main:family", namespace)
+        assert family is not None
+        family.set("val", "99")
+        updated_styles = ET.tostring(root, encoding="utf-8", xml_declaration=True)
+        for name in source.namelist():
+            payload = updated_styles if name == "xl/styles.xml" else source.read(name)
+            target.writestr(name, payload)
+    return output.getvalue()
+
+
 def test_meter_reading_prepare_import_detects_header_aliases_and_links_subject() -> None:
     db = TestingSessionLocal()
     try:
@@ -5495,10 +6553,44 @@ def test_meter_reading_prepare_import_detects_header_aliases_and_links_subject()
         assert prepared.distretto.num_distretto == "1"
         assert len(prepared.items) == 2
         assert prepared.items[0].payload["matricola"] == "MTR-01"
+        assert prepared.items[0].payload["record_type"] is None
         assert prepared.items[0].payload["codice_fiscale_normalizzato"] == "RSSMRA80A01H501U"
         assert prepared.items[0].payload["subject_id"] == subject.id
         assert prepared.items[0].validation_status == "valid"
         assert prepared.items[1].validation_status == "warning"
+    finally:
+        db.close()
+
+
+def test_meter_reading_prepare_import_resolves_distretto_from_name_in_filename() -> None:
+    db = TestingSessionLocal()
+    try:
+        prepared = prepare_meter_readings_import(
+            db,
+            file_bytes=_build_meter_readings_workbook(),
+            filename="Letture Sinis campagna 2025.xlsx",
+        )
+
+        assert prepared.anno == 2025
+        assert prepared.distretto is not None
+        assert prepared.distretto.num_distretto == "1"
+        assert prepared.distretto.nome_distretto == "Sinis"
+    finally:
+        db.close()
+
+
+def test_meter_reading_prepare_import_keeps_tipo_and_tipologia_separate() -> None:
+    db = TestingSessionLocal()
+    try:
+        headers = ["ID", "PUNTO_CONS", "TIPOLOGIA", "TIPO", "COD_CONT", "LETTURA FINALE 2024", "LETTURA FINALE 2025", "TOTALE m3 2025"]
+        rows = [[1, "PC-100", "colonnina flangiata", "FLANGIA", None, None, None, 0]]
+        prepared = prepare_meter_readings_import(
+            db,
+            file_bytes=_build_meter_readings_workbook(rows=rows, headers=headers),
+            filename="D01-Sinis 2025.xlsx",
+        )
+        assert prepared.items[0].payload["record_type"] == "FLANGIA"
+        assert prepared.items[0].payload["tipologia_idrante"] == "colonnina flangiata"
     finally:
         db.close()
 
@@ -5769,3 +6861,179 @@ def test_meter_reading_validate_detects_duplicate_and_specific_warnings() -> Non
     assert "CONSUMO_INCOERENTE" in first_row_codes
     assert "INTERVENTO_APERTO" in first_row_codes
     assert "TELEFONO_ANOMALO" in first_row_codes
+
+
+def test_meter_reading_validate_classifies_operator_activity_without_cf_warning() -> None:
+    headers = [
+        "ID",
+        "PUNTO_CONS",
+        "TIPO",
+        "COD_CONT",
+        "NOTE",
+    ]
+    rows = [
+        [1, "ATT-001", "FLANGIA", "MTR-77", "attivita"],
+    ]
+    response = client.post(
+        "/catasto/meter-readings/import/validate?anno=2025",
+        headers=auth_headers(),
+        files={
+            "file": (
+                "D01-Sinis 2025.xlsx",
+                _build_meter_readings_workbook(rows=rows, headers=headers),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["righe_con_warning"] == 0
+    messages = payload["items"][0]["validation_messages"]
+    codes = {item["code"] for item in messages}
+    assert "ATTIVITA_OPERATORE" in codes
+    assert "CF_MANCANTE_CONT_NO_TES" not in codes
+    assert payload["items"][0]["data"]["record_kind"] == "operator_activity"
+
+
+def test_meter_reading_validate_marks_blank_type_dismesso_as_dismissed_point() -> None:
+    headers = ["ID", "PUNTO_CONS", "TIPOLOGIA", "TIPO", "TOTALE m3 2025", "NOTE"]
+    rows = [
+        [1, "DIS-001", "punto di consegna dismesso", "", 0, ""],
+    ]
+    response = client.post(
+        "/catasto/meter-readings/import/validate?anno=2025",
+        headers=auth_headers(),
+        files={
+            "file": (
+                "D29-1 Uras 2025.xlsx",
+                _build_meter_readings_workbook(rows=rows, headers=headers),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["items"][0]["data"]["record_kind"] == "dismissed_point"
+    codes = {item["code"] for item in payload["items"][0]["validation_messages"]}
+    assert "PUNTO_DISMESSO" in codes
+
+
+def test_meter_reading_import_skips_anomalia_for_inutilizzato_without_cf() -> None:
+    headers = [
+        "ID",
+        "PUNTO_CONS",
+        "TIPO",
+        "COD_CONT",
+        "LETTURA FINALE 2024",
+        "LETTURA FINALE 2025",
+        "TOTALE m3 2025",
+        "COD. FISC",
+        "NOTE",
+    ]
+    rows = [
+        [1, "CNT-009", "CONT_TESSER", "MTR-999", 100, 100, 0, "", "inutilizzato"],
+    ]
+    response = client.post(
+        "/catasto/meter-readings/import?mode=upsert&anno=2025",
+        headers=auth_headers(),
+        files={
+            "file": (
+                "D01-Sinis 2025.xlsx",
+                _build_meter_readings_workbook(rows=rows, headers=headers),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert response.status_code == 201
+
+    db = TestingSessionLocal()
+    try:
+        anomalie = db.execute(
+            select(CatAnomalia).where(CatAnomalia.tipo == "MR-01-cont_tesser_cf_mancante")
+        ).scalars().all()
+        assert len(anomalie) == 0
+        reading = db.execute(select(CatMeterReading).where(CatMeterReading.punto_consegna == "CNT-009")).scalar_one()
+        assert reading.record_type == "CONT_TESSER"
+        assert reading.record_kind == "meter_reading"
+        assert reading.operational_state == "inactive"
+        assert reading.tipologia_idrante is None
+    finally:
+        db.close()
+
+
+def test_meter_reading_validate_repairs_known_invalid_stylesheet_family() -> None:
+    response = client.post(
+        "/catasto/meter-readings/import/validate?anno=2025",
+        headers=auth_headers(),
+        files={
+            "file": (
+                "D01-Sinis 2025.xlsx",
+                _corrupt_meter_readings_workbook_styles(_build_meter_readings_workbook()),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["totale_righe"] == 2
+
+
+def test_meter_reading_validate_returns_400_for_unreadable_workbook() -> None:
+    response = client.post(
+        "/catasto/meter-readings/import/validate?anno=2025",
+        headers=auth_headers(),
+        files={
+            "file": (
+                "D01-Sinis 2025.xlsx",
+                b"not-a-real-xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert response.status_code == 400
+    assert "File Excel non leggibile" in response.json()["detail"]
+
+
+def test_meter_reading_import_creates_anomalia_for_cont_no_tes_without_cf() -> None:
+    headers = [
+        "ID",
+        "PUNTO_CONS",
+        "TIPO",
+        "COD_CONT",
+        "LETTURA FINALE 2024",
+        "LETTURA FINALE 2025",
+        "TOTALE m3 2025",
+        "COD. FISC",
+    ]
+    rows = [
+        [1, "CNT-001", "CONT_NO_TES", "MTR-501", 100, 120, 20, ""],
+    ]
+    response = client.post(
+        "/catasto/meter-readings/import?mode=upsert&anno=2025",
+        headers=auth_headers(),
+        files={
+            "file": (
+                "D01-Sinis 2025.xlsx",
+                _build_meter_readings_workbook(rows=rows, headers=headers),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert response.status_code == 201
+
+    db = TestingSessionLocal()
+    try:
+        anomalie = db.execute(
+            select(CatAnomalia).where(CatAnomalia.tipo == "MR-02-cont_no_tes_cf_mancante")
+        ).scalars().all()
+        assert len(anomalie) == 1
+        assert anomalie[0].status == "aperta"
+        assert anomalie[0].dati_json["punto_consegna"] == "CNT-001"
+    finally:
+        db.close()

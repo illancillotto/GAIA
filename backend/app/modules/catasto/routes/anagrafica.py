@@ -8,7 +8,7 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Body, Depends
 from fastapi import HTTPException, Query, status
-from sqlalchemy import desc, func, select
+from sqlalchemy import and_, desc, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user
@@ -56,6 +56,28 @@ from app.services.elaborazioni_capacitas_terreni import (
 router = APIRouter(prefix="/catasto/elaborazioni-massive/particelle", tags=["catasto-elaborazioni-massive"])
 logger = logging.getLogger(__name__)
 
+
+def _infer_bulk_kind(
+    payload: CatAnagraficaBulkSearchRequest,
+) -> Literal["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"]:
+    if payload.kind in ("CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"):
+        return payload.kind
+    has_particella_keys = any((r.comune or r.foglio or r.particella or r.sub or r.sezione) for r in payload.rows)
+    has_tax_keys = any((r.codice_fiscale or r.partita_iva) for r in payload.rows)
+    if has_particella_keys and not has_tax_keys:
+        return "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"
+    if has_tax_keys and not has_particella_keys:
+        return "CF_PIVA_PARTICELLE"
+    if has_tax_keys and has_particella_keys:
+        return "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"
+    return "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"
+
+
+def _normalize_bulk_payload(payload: CatAnagraficaBulkSearchRequest) -> CatAnagraficaBulkSearchRequest:
+    kind = _infer_bulk_kind(payload)
+    include_live = payload.include_capacitas_live or kind == "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"
+    return payload.model_copy(update={"kind": kind, "include_capacitas_live": include_live})
+
 _FOGLIO_WITH_SEZIONE_RE = r"^\s*(?P<foglio>[^\s]+)\s+sez\.?\s*(?P<sezione>[A-Za-z0-9]+)(?:\s+.*)?$"
 _COMUNE_LIVE_SWAP_LOOKUP: dict[str, str] = {
     "arborea": "Terralba",
@@ -93,6 +115,19 @@ def _safe_int(value: str | int | None) -> int | None:
         return None
 
 
+def _normalize_capacitas_code(value: str | int | None, *, width: int) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, int):
+        return str(value).zfill(width)
+    normalized = _norm_str(value)
+    if not normalized:
+        return None
+    if normalized.isdigit():
+        return normalized.zfill(width)
+    return normalized
+
+
 def _build_denominazione(cognome: str | None, nome: str | None) -> str | None:
     value = " ".join(part for part in [cognome, nome] if part and part.strip()).strip()
     return value or None
@@ -104,7 +139,19 @@ def _normalize_cf(value: str | None) -> str | None:
 
 
 def _normalize_ccs(value: str | None) -> str:
-    return _norm_str(value) or "00000"
+    return _normalize_capacitas_code(value, width=5) or "00000"
+
+
+def _normalize_com(value: str | int | None) -> str | None:
+    return _normalize_capacitas_code(value, width=3)
+
+
+def _normalize_pvc(value: str | int | None) -> str | None:
+    return _normalize_capacitas_code(value, width=3)
+
+
+def _normalize_fra(value: str | int | None) -> str | None:
+    return _normalize_capacitas_code(value, width=2)
 
 
 def _normalize_sezione_value(value: str | None) -> str | None:
@@ -317,7 +364,9 @@ class _CapacitasLiveResolver:
             self._client = None
 
     async def enrich_match(self, p: CatParticella, match: CatAnagraficaMatch) -> CatAnagraficaMatch:
-        if match.utenza_latest is None:
+        should_skip_live_sync = self._should_skip_live_sync(match)
+
+        if match.utenza_latest is None and not should_skip_live_sync:
             synced = await self._sync_particella_from_live_terreni(p)
             if synced:
                 match = _build_match(
@@ -325,21 +374,55 @@ class _CapacitasLiveResolver:
                     p,
                     presente_in_catasto_consorzio=(p.id in _load_consorzio_presence_by_particella_ids(self._db, {p.id})),
                 )
+                logger.info(
+                    "Capacitas live terreni sync riuscita: particella_id=%s comune=%s sezione=%s foglio=%s particella=%s",
+                    p.id,
+                    p.nome_comune,
+                    p.sezione_catastale,
+                    p.foglio,
+                    p.particella,
+                )
 
         cert_params = self._resolve_cert_params(p, match)
         if cert_params is None:
+            logger.info(
+                "Capacitas live contesto certificato mancante: particella_id=%s comune=%s sezione=%s foglio=%s particella=%s cco=%s",
+                p.id,
+                p.nome_comune,
+                p.sezione_catastale,
+                p.foglio,
+                p.particella,
+                match.utenza_latest.cco if match.utenza_latest is not None else None,
+            )
+            if should_skip_live_sync:
+                return match
             synced = await self._sync_particella_from_live_terreni(p)
             if synced:
                 match = _build_match(
                     self._db,
                     p,
                     presente_in_catasto_consorzio=(p.id in _load_consorzio_presence_by_particella_ids(self._db, {p.id})),
+                )
+                logger.info(
+                    "Capacitas live terreni sync riuscita dopo contesto mancante: particella_id=%s comune=%s sezione=%s foglio=%s particella=%s",
+                    p.id,
+                    p.nome_comune,
+                    p.sezione_catastale,
+                    p.foglio,
+                    p.particella,
                 )
                 cert_params = self._resolve_cert_params(p, match)
         if cert_params is None:
             return match
 
+        match.cert_com = cert_params[1]
+        match.cert_pvc = cert_params[2]
+        match.cert_fra = cert_params[3]
+        match.cert_ccs = cert_params[4]
         certificato = await self._fetch_certificato(*cert_params)
+        if certificato is not None:
+            match.stato_ruolo = certificato.ruolo_status or match.stato_ruolo
+            match.stato_cnc = certificato.utenza_status or match.stato_cnc
         if certificato is None or not certificato.intestatari:
             return match
 
@@ -359,6 +442,10 @@ class _CapacitasLiveResolver:
             match.intestatari = resolved
             match.presente_in_catasto_consorzio = True
         return match
+
+    def _should_skip_live_sync(self, match: CatAnagraficaMatch) -> bool:
+        note = (match.note or "").strip().casefold()
+        return bool(match.unit_id and note.startswith("presenti dati non aggiornati/storici del sub:"))
 
     async def find_live_only_matches(
         self,
@@ -688,39 +775,20 @@ class _CapacitasLiveResolver:
                 match.cert_ccs or "00000",
             )
 
-        if utenza is not None:
-            occupancy = self._db.execute(
-                select(CatConsorzioOccupancy)
-                .where(CatConsorzioOccupancy.utenza_id == utenza.id)
-                .where(CatConsorzioOccupancy.com.is_not(None))
-                .order_by(desc(CatConsorzioOccupancy.updated_at))
-                .limit(1)
-            ).scalar_one_or_none()
-            if occupancy is not None:
-                return (cco, occupancy.com or "", occupancy.pvc or "", occupancy.fra or "", occupancy.ccs or "00000")
-
-        certificato = self._db.execute(
-            select(CatCapacitasCertificato)
-            .where(CatCapacitasCertificato.cco == cco)
-            .where(CatCapacitasCertificato.com.is_not(None))
-            .order_by(desc(CatCapacitasCertificato.collected_at))
-            .limit(1)
-        ).scalar_one_or_none()
-        if certificato is not None:
-            return (cco, certificato.com or "", certificato.pvc or "", certificato.fra or "", certificato.ccs or "00000")
-
-        row = self._db.execute(
-            select(CatCapacitasTerrenoRow)
-            .join(CatConsorzioUnit, CatConsorzioUnit.id == CatCapacitasTerrenoRow.unit_id)
-            .where(CatConsorzioUnit.particella_id == p.id)
-            .where(CatCapacitasTerrenoRow.cco == cco)
-            .where(CatCapacitasTerrenoRow.com.is_not(None))
-            .order_by(desc(CatCapacitasTerrenoRow.collected_at))
-            .limit(1)
-        ).scalar_one_or_none()
-        if row is None:
+        latest_utenza = self._db.get(CatUtenzaIrrigua, utenza.id) if utenza is not None else None
+        latest_occupancy = None
+        if match.unit_id is not None:
+            latest_occupancy = _best_occupancy_for_unit(self._db, match.unit_id)
+        cert_context = _resolve_particella_cert_context(
+            self._db,
+            p,
+            cco,
+            latest_utenza,
+            latest_occupancy,
+        )
+        if not all(cert_context[:3]):
             return None
-        return (cco, row.com or "", row.pvc or "", row.fra or "", row.ccs or "00000")
+        return (cco, cert_context[0] or "", cert_context[1] or "", cert_context[2] or "", cert_context[3] or "00000")
 
     async def _ensure_client(self) -> InVoltureClient | None:
         if self._disabled:
@@ -957,6 +1025,45 @@ def _intestatario_response_from_utenza_row(
     )
 
 
+def _intestatario_response_from_utenza_record(row: CatUtenzaIrrigua) -> CatIntestatarioResponse | None:
+    codice_fiscale = _normalize_cf(row.codice_fiscale) or ""
+    denominazione = _norm_str(row.denominazione)
+    if not codice_fiscale and not denominazione:
+        return None
+
+    cognome: str | None = None
+    nome: str | None = None
+    ragione_sociale: str | None = None
+    tipo: str | None = None
+    if codice_fiscale:
+        if len(codice_fiscale) == 16:
+            tipo = "PF"
+            cognome, nome = _split_denominazione(denominazione)
+        else:
+            tipo = "PG"
+            ragione_sociale = denominazione
+
+    return CatIntestatarioResponse(
+        id=row.id,
+        codice_fiscale=codice_fiscale,
+        denominazione=denominazione,
+        tipo=tipo,
+        cognome=cognome,
+        nome=nome,
+        data_nascita=None,
+        luogo_nascita=None,
+        indirizzo=None,
+        comune_residenza=None,
+        cap=None,
+        email=None,
+        telefono=None,
+        ragione_sociale=ragione_sociale,
+        source="capacitas_import",
+        last_verified_at=row.created_at,
+        deceduto=None,
+    )
+
+
 def _load_intestatari_by_utenza_ids(db: Session, utenza_ids: list[UUID]) -> list[CatIntestatarioResponse]:
     if not utenza_ids:
         return []
@@ -1061,9 +1168,9 @@ def _find_certificato_snapshot(
 ) -> CatCapacitasCertificato | None:
     query = select(CatCapacitasCertificato).where(CatCapacitasCertificato.cco == cco)
 
-    com_norm = _norm_str(com)
-    pvc_norm = _norm_str(pvc)
-    fra_norm = _norm_str(fra)
+    com_norm = _normalize_com(com)
+    pvc_norm = _normalize_pvc(pvc)
+    fra_norm = _normalize_fra(fra)
     ccs_norm = _normalize_ccs(ccs) if any(value is not None for value in (com, pvc, fra, ccs)) else None
 
     if com_norm is not None:
@@ -1075,7 +1182,25 @@ def _find_certificato_snapshot(
     if ccs_norm is not None:
         query = query.where(func.coalesce(CatCapacitasCertificato.ccs, "00000") == ccs_norm)
 
-    return db.execute(query.order_by(desc(CatCapacitasCertificato.collected_at)).limit(1)).scalars().first()
+    snapshots = db.execute(query.order_by(desc(CatCapacitasCertificato.collected_at))).scalars().all()
+    if not snapshots:
+        return None
+    valid = [snap for snap in snapshots if _is_usable_certificato_snapshot(snap)]
+    return valid[0] if valid else snapshots[0]
+
+
+def _is_usable_certificato_snapshot(snapshot: CatCapacitasCertificato) -> bool:
+    payload = snapshot.parsed_json or {}
+    if not isinstance(payload, dict):
+        return False
+    raw_text = str(payload.get("raw_text") or "").casefold()
+    if "deadlock" in raw_text or "ripetere la transazione" in raw_text:
+        return False
+    if payload.get("partita_code") or payload.get("utenza_code"):
+        return True
+    if payload.get("intestatari") or payload.get("terreni"):
+        return True
+    return False
 
 
 def _load_intestatari_from_cert_context(
@@ -1112,9 +1237,9 @@ def _context_from_occupancy(occupancy: CatConsorzioOccupancy | None) -> tuple[st
     if occupancy is None:
         return (None, None, None, None)
     return (
-        _norm_str(occupancy.com),
-        _norm_str(occupancy.pvc),
-        _norm_str(occupancy.fra),
+        _normalize_com(occupancy.com),
+        _normalize_pvc(occupancy.pvc),
+        _normalize_fra(occupancy.fra),
         _normalize_ccs(occupancy.ccs),
     )
 
@@ -1125,7 +1250,7 @@ def _context_from_values(
     fra: str | None,
     ccs: str | None,
 ) -> tuple[str | None, str | None, str | None, str | None]:
-    return (_norm_str(com), _norm_str(pvc), _norm_str(fra), _normalize_ccs(ccs))
+    return (_normalize_com(com), _normalize_pvc(pvc), _normalize_fra(fra), _normalize_ccs(ccs))
 
 
 def _collect_local_cert_contexts(db: Session, *, cco: str) -> list[tuple[str, str, str, str]]:
@@ -1195,6 +1320,17 @@ def _best_occupancy_for_unit(db: Session, unit_id: UUID) -> CatConsorzioOccupanc
     ).scalars().first()
 
 
+def _particella_unit_match_clause(p: CatParticella):
+    return or_(
+        CatConsorzioUnit.particella_id == p.id,
+        and_(
+            CatConsorzioUnit.foglio == p.foglio,
+            CatConsorzioUnit.particella == p.particella,
+            CatConsorzioUnit.cod_comune_capacitas == p.cod_comune_capacitas,
+        ),
+    )
+
+
 def _resolve_particella_cert_context(
     db: Session,
     p: CatParticella,
@@ -1205,6 +1341,8 @@ def _resolve_particella_cert_context(
     cco_norm = _norm_str(cco)
     if not cco_norm:
         return (None, None, None, None)
+    latest_utenza_com = _normalize_com(latest_utenza.cod_comune_capacitas) if latest_utenza and latest_utenza.cod_comune_capacitas is not None else None
+    latest_utenza_fra = _normalize_fra(latest_utenza.cod_frazione) if latest_utenza and latest_utenza.cod_frazione is not None else None
 
     if latest_occupancy is not None and _norm_str(latest_occupancy.cco) == cco_norm:
         return _context_from_occupancy(latest_occupancy)
@@ -1214,7 +1352,7 @@ def _resolve_particella_cert_context(
             select(CatConsorzioOccupancy)
             .join(CatConsorzioUnit, CatConsorzioUnit.id == CatConsorzioOccupancy.unit_id)
             .where(
-                CatConsorzioUnit.particella_id == p.id,
+                _particella_unit_match_clause(p),
                 CatConsorzioOccupancy.cco == cco_norm,
                 CatConsorzioOccupancy.com.is_not(None),
             )
@@ -1232,9 +1370,7 @@ def _resolve_particella_cert_context(
         return _context_from_occupancy(occupancy)
 
     if latest_utenza is not None:
-        utenza_com = str(latest_utenza.cod_comune_capacitas) if latest_utenza.cod_comune_capacitas is not None else None
-        utenza_fra = str(latest_utenza.cod_frazione) if latest_utenza.cod_frazione is not None else None
-        cert = _find_certificato_snapshot(db, cco=cco_norm, com=utenza_com, fra=utenza_fra)
+        cert = _find_certificato_snapshot(db, cco=cco_norm, com=latest_utenza_com, fra=latest_utenza_fra)
         if cert is not None:
             return _context_from_values(cert.com, cert.pvc, cert.fra, cert.ccs)
 
@@ -1244,7 +1380,7 @@ def _resolve_particella_cert_context(
                 select(CatCapacitasTerrenoRow)
                 .join(CatConsorzioUnit, CatConsorzioUnit.id == CatCapacitasTerrenoRow.unit_id)
                 .where(
-                    CatConsorzioUnit.particella_id == p.id,
+                    _particella_unit_match_clause(p),
                     CatCapacitasTerrenoRow.cco == cco_norm,
                     CatCapacitasTerrenoRow.com.is_not(None),
                 )
@@ -1257,6 +1393,12 @@ def _resolve_particella_cert_context(
         if row is not None:
             return _context_from_values(row.com, row.pvc, row.fra, row.ccs)
 
+    # Se la riga ruolo locale porta gia un comune/frazione espliciti ma nessun certificato
+    # coerente, non dobbiamo riutilizzare un contesto generico trovato per solo CCO:
+    # alcuni CCO sono riusati su comuni/frazioni diversi e porterebbero link/stati errati.
+    if latest_utenza_com is not None or latest_utenza_fra is not None:
+        return (None, None, None, None)
+
     unique_contexts = _collect_local_cert_contexts(db, cco=cco_norm)
     if len(unique_contexts) == 1:
         return unique_contexts[0]
@@ -1267,6 +1409,8 @@ def _resolve_particella_cert_context(
 def _current_base_match_data(
     db: Session,
     p: CatParticella,
+    *,
+    live_authoritative: bool = False,
 ) -> tuple[
     CatAnagraficaUtenzaSummary | None,
     list[CatIntestatarioResponse],
@@ -1304,32 +1448,45 @@ def _current_base_match_data(
     cco = (latest_utenza.cco if latest_utenza is not None else None) or (current_occupancy.cco if current_occupancy is not None else None)
     cert_context = _resolve_particella_cert_context(db, p, cco, latest_utenza, current_occupancy)
 
-    utenza_ids: list[UUID] = [latest_utenza.id] if latest_utenza is not None else []
-    intestatari = _load_intestatari_by_utenza_ids(db, utenza_ids) if utenza_ids else []
-    if not intestatari and cco and not _is_sentinel_cco(cco):
-        cert_com, cert_pvc, cert_fra, cert_ccs = cert_context
-        intestatari = _load_intestatari_from_cert_context(
-            db,
-            cco=cco,
-            com=cert_com,
-            pvc=cert_pvc,
-            fra=cert_fra,
-            ccs=cert_ccs,
-        )
+    intestatari: list[CatIntestatarioResponse] = []
+    if not live_authoritative:
+        utenza_ids: list[UUID] = [latest_utenza.id] if latest_utenza is not None else []
+        intestatari = _load_intestatari_by_utenza_ids(db, utenza_ids) if utenza_ids else []
+        if not intestatari and latest_utenza is not None and latest_utenza.codice_fiscale:
+            intestatari_by_cf = _load_intestatari_by_cf(db, {_normalize_cf(latest_utenza.codice_fiscale) or ""})
+            intestatari = [item for item in intestatari_by_cf.values()]
+        if not intestatari and cco and not _is_sentinel_cco(cco):
+            cert_com, cert_pvc, cert_fra, cert_ccs = cert_context
+            intestatari = _load_intestatari_from_cert_context(
+                db,
+                cco=cco,
+                com=cert_com,
+                pvc=cert_pvc,
+                fra=cert_fra,
+                ccs=cert_ccs,
+            )
+        if not intestatari and latest_utenza is not None:
+            fallback_owner = _intestatario_response_from_utenza_record(latest_utenza)
+            if fallback_owner is not None:
+                intestatari = [fallback_owner]
 
-    status_context = _load_cert_status_from_context(
-        db,
-        cco=cco,
-        com=cert_context[0],
-        pvc=cert_context[1],
-        fra=cert_context[2],
-        ccs=cert_context[3],
+    status_context = (
+        _load_cert_status_from_context(
+            db,
+            cco=cco if all(cert_context[:3]) else None,
+            com=cert_context[0],
+            pvc=cert_context[1],
+            fra=cert_context[2],
+            ccs=cert_context[3],
+        )
+        if not live_authoritative
+        else (None, None)
     )
 
     return utenza_summary, intestatari, cert_context, status_context
 
 
-def _build_consorzio_sub_matches(db: Session, p: CatParticella) -> list[CatAnagraficaMatch]:
+def _build_consorzio_sub_matches(db: Session, p: CatParticella, *, live_authoritative: bool = False) -> list[CatAnagraficaMatch]:
     """Returns one CatAnagraficaMatch per sub-level CatConsorzioUnit for the given particella.
 
     Sub-level units are those with subalterno IS NOT NULL linked to the same
@@ -1355,7 +1512,11 @@ def _build_consorzio_sub_matches(db: Session, p: CatParticella) -> list[CatAnagr
 
     comune_record = db.get(CatComune, p.comune_id) if p.comune_id else None
     matches: list[CatAnagraficaMatch] = []
-    base_utenza_summary, base_intestatari, base_cert_context, base_status_context = _current_base_match_data(db, p)
+    base_utenza_summary, base_intestatari, base_cert_context, base_status_context = _current_base_match_data(
+        db,
+        p,
+        live_authoritative=live_authoritative,
+    )
 
     for unit in sub_units:
         occupancy = _best_occupancy_for_unit(db, unit.id)
@@ -1369,7 +1530,7 @@ def _build_consorzio_sub_matches(db: Session, p: CatParticella) -> list[CatAnagr
         utenza_summary = _utenza_summary_from_occupancy(occupancy) if occupancy else None
         if cco and _is_sentinel_cco(cco):
             note = "CCO provvisorio Capacitas: dati intestatario non disponibili"
-        elif cco and not is_stale:
+        elif cco and not is_stale and not live_authoritative:
             intestatari = _load_intestatari_from_cert_context(
                 db,
                 cco=cco,
@@ -1379,7 +1540,7 @@ def _build_consorzio_sub_matches(db: Session, p: CatParticella) -> list[CatAnagr
                 ccs=cert_ccs,
             )
             note = None
-        elif base_utenza_summary is not None and base_intestatari:
+        elif base_utenza_summary is not None and base_intestatari and not live_authoritative:
             utenza_summary = base_utenza_summary
             intestatari = list(base_intestatari)
             cert_com, cert_pvc, cert_fra, cert_ccs = base_cert_context
@@ -1427,6 +1588,8 @@ def _find_consorzio_sub_match(
     particella: str,
     sub: str,
     comune_norm: str,
+    *,
+    live_authoritative: bool = False,
 ) -> CatAnagraficaMatch | None:
     """Fallback: looks up a sub-level CatConsorzioUnit directly when CatParticella has no entry for that sub.
 
@@ -1487,10 +1650,14 @@ def _find_consorzio_sub_match(
     base_cert_context: tuple[str | None, str | None, str | None, str | None] = (None, None, None, None)
     base_status_context: tuple[str | None, str | None] = (None, None)
     if base_particella is not None:
-        base_utenza_summary, base_intestatari, base_cert_context, base_status_context = _current_base_match_data(db, base_particella)
+        base_utenza_summary, base_intestatari, base_cert_context, base_status_context = _current_base_match_data(
+            db,
+            base_particella,
+            live_authoritative=live_authoritative,
+        )
     if cco and _is_sentinel_cco(cco):
         note = "CCO provvisorio Capacitas: dati intestatario non disponibili"
-    elif cco and not is_stale:
+    elif cco and not is_stale and not live_authoritative:
         intestatari = _load_intestatari_from_cert_context(
             db,
             cco=cco,
@@ -1500,7 +1667,7 @@ def _find_consorzio_sub_match(
             ccs=cert_ccs,
         )
         note = None
-    elif base_utenza_summary is not None and base_intestatari:
+    elif base_utenza_summary is not None and base_intestatari and not live_authoritative:
         utenza_summary = base_utenza_summary
         intestatari = list(base_intestatari)
         cert_com, cert_pvc, cert_fra, cert_ccs = base_cert_context
@@ -1570,7 +1737,13 @@ def _particelle_with_utenza_irrigua(db: Session, particella_ids: set[UUID]) -> s
     return {pid for pid in rows if pid is not None}
 
 
-def _build_match(db: Session, p: CatParticella, *, presente_in_catasto_consorzio: bool) -> CatAnagraficaMatch:
+def _build_match(
+    db: Session,
+    p: CatParticella,
+    *,
+    presente_in_catasto_consorzio: bool,
+    live_authoritative: bool = False,
+) -> CatAnagraficaMatch:
     comune_record = db.get(CatComune, p.comune_id) if p.comune_id else None
     latest_utenza = (
         db.execute(
@@ -1582,26 +1755,24 @@ def _build_match(db: Session, p: CatParticella, *, presente_in_catasto_consorzio
         .scalars()
         .first()
     )
-    latest_occupancy = None
-    if latest_utenza is None:
-        latest_occupancy = (
-            db.execute(
-                select(CatConsorzioOccupancy)
-                .join(CatConsorzioUnit, CatConsorzioUnit.id == CatConsorzioOccupancy.unit_id)
-                .where(
-                    CatConsorzioUnit.particella_id == p.id,
-                    CatConsorzioOccupancy.cco.is_not(None),
-                )
-                .order_by(
-                    desc(CatConsorzioOccupancy.is_current),
-                    desc(CatConsorzioOccupancy.valid_from),
-                    desc(CatConsorzioOccupancy.updated_at),
-                )
-                .limit(1)
+    latest_occupancy = (
+        db.execute(
+            select(CatConsorzioOccupancy)
+            .join(CatConsorzioUnit, CatConsorzioUnit.id == CatConsorzioOccupancy.unit_id)
+            .where(
+                _particella_unit_match_clause(p),
+                CatConsorzioOccupancy.cco.is_not(None),
             )
-            .scalars()
-            .first()
+            .order_by(
+                desc(CatConsorzioOccupancy.is_current),
+                desc(CatConsorzioOccupancy.valid_from),
+                desc(CatConsorzioOccupancy.updated_at),
+            )
+            .limit(1)
         )
+        .scalars()
+        .first()
+    )
 
     utenze = db.execute(
         select(CatUtenzaIrrigua)
@@ -1610,12 +1781,18 @@ def _build_match(db: Session, p: CatParticella, *, presente_in_catasto_consorzio
         .limit(25)
     ).scalars().all()
 
-    utenza_ids = [u.id for u in utenze]
-    intestatari = _load_intestatari_by_utenza_ids(db, utenza_ids)
-    if not intestatari:
-        cfs = {u.codice_fiscale.strip().upper() for u in utenze if u.codice_fiscale and u.codice_fiscale.strip()}
-        intestatari_by_cf = _load_intestatari_by_cf(db, cfs)
-        intestatari = list(intestatari_by_cf.values())
+    intestatari: list[CatIntestatarioResponse] = []
+    if not live_authoritative:
+        utenza_ids = [u.id for u in utenze]
+        intestatari = _load_intestatari_by_utenza_ids(db, utenza_ids)
+        if not intestatari:
+            cfs = {u.codice_fiscale.strip().upper() for u in utenze if u.codice_fiscale and u.codice_fiscale.strip()}
+            intestatari_by_cf = _load_intestatari_by_cf(db, cfs)
+            intestatari = list(intestatari_by_cf.values())
+        if not intestatari and latest_utenza is not None:
+            fallback_owner = _intestatario_response_from_utenza_record(latest_utenza)
+            if fallback_owner is not None:
+                intestatari = [fallback_owner]
 
     anomalie_count = db.execute(
         select(func.count())
@@ -1649,13 +1826,20 @@ def _build_match(db: Session, p: CatParticella, *, presente_in_catasto_consorzio
         latest_utenza,
         latest_occupancy,
     )
-    stato_ruolo, stato_cnc = _load_cert_status_from_context(
-        db,
-        cco=(latest_utenza.cco if latest_utenza is not None else None) or (latest_occupancy.cco if latest_occupancy is not None else None),
-        com=cert_com,
-        pvc=cert_pvc,
-        fra=cert_fra,
-        ccs=cert_ccs,
+    status_cco = (
+        (latest_utenza.cco if latest_utenza is not None else None) or (latest_occupancy.cco if latest_occupancy is not None else None)
+    ) if all([cert_com, cert_pvc, cert_fra]) else None
+    stato_ruolo, stato_cnc = (
+        _load_cert_status_from_context(
+            db,
+            cco=status_cco,
+            com=cert_com,
+            pvc=cert_pvc,
+            fra=cert_fra,
+            ccs=cert_ccs,
+        )
+        if not live_authoritative
+        else (None, None)
     )
 
     return CatAnagraficaMatch(
@@ -1748,6 +1932,8 @@ def _load_intestatari_by_particella_ids(
 def _refresh_saved_particelle_matches(
     db: Session,
     results: list[CatAnagraficaBulkSearchRowResult],
+    *,
+    live_authoritative: bool = False,
 ) -> list[CatAnagraficaBulkSearchRowResult]:
     particella_ids: set[UUID] = set()
     for row in results:
@@ -1758,7 +1944,9 @@ def _refresh_saved_particelle_matches(
 
     consorzio_unit_ids = _load_consorzio_presence_by_particella_ids(db, particella_ids)
     particelle_con_utenza = _particelle_with_utenza_irrigua(db, particella_ids)
-    intestatari_by_particella = _load_intestatari_by_particella_ids(db, particella_ids)
+    intestatari_by_particella = (
+        {} if live_authoritative else _load_intestatari_by_particella_ids(db, particella_ids)
+    )
 
     def refresh_match(match: CatAnagraficaMatch | None) -> CatAnagraficaMatch | None:
         if match is None:
@@ -1773,26 +1961,38 @@ def _refresh_saved_particelle_matches(
             cert_com, cert_pvc, cert_fra, cert_ccs = _context_from_occupancy(occupancy)
             base_particella = db.get(CatParticella, match.particella_id)
             if cco and not is_stale:
-                match.intestatari = _load_intestatari_from_cert_context(
-                    db,
-                    cco=cco,
-                    com=cert_com,
-                    pvc=cert_pvc,
-                    fra=cert_fra,
-                    ccs=cert_ccs,
+                match.intestatari = (
+                    []
+                    if live_authoritative
+                    else _load_intestatari_from_cert_context(
+                        db,
+                        cco=cco,
+                        com=cert_com,
+                        pvc=cert_pvc,
+                        fra=cert_fra,
+                        ccs=cert_ccs,
+                    )
                 )
                 match.utenza_latest = _utenza_summary_from_occupancy(occupancy) if occupancy else match.utenza_latest
                 match.note = None
-                match.stato_ruolo, match.stato_cnc = _load_cert_status_from_context(
-                    db,
-                    cco=cco,
-                    com=cert_com,
-                    pvc=cert_pvc,
-                    fra=cert_fra,
-                    ccs=cert_ccs,
+                match.stato_ruolo, match.stato_cnc = (
+                    (None, None)
+                    if live_authoritative
+                    else _load_cert_status_from_context(
+                        db,
+                        cco=cco,
+                        com=cert_com,
+                        pvc=cert_pvc,
+                        fra=cert_fra,
+                        ccs=cert_ccs,
+                    )
                 )
             elif base_particella is not None:
-                base_utenza_summary, base_intestatari, base_cert_context, base_status_context = _current_base_match_data(db, base_particella)
+                base_utenza_summary, base_intestatari, base_cert_context, base_status_context = _current_base_match_data(
+                    db,
+                    base_particella,
+                    live_authoritative=live_authoritative,
+                )
                 if base_utenza_summary is not None and base_intestatari:
                     match.utenza_latest = base_utenza_summary
                     match.intestatari = list(base_intestatari)
@@ -1817,6 +2017,67 @@ def _refresh_saved_particelle_matches(
         if intestatari:
             match.intestatari = intestatari
         pid = match.particella_id
+        particella = db.get(CatParticella, pid)
+        if particella is not None:
+            latest_utenza = (
+                db.execute(
+                    select(CatUtenzaIrrigua)
+                    .where(CatUtenzaIrrigua.particella_id == pid)
+                    .order_by(desc(CatUtenzaIrrigua.anno_campagna))
+                    .limit(1)
+                )
+                .scalars()
+                .first()
+            )
+            latest_occupancy = (
+                db.execute(
+                    select(CatConsorzioOccupancy)
+                    .join(CatConsorzioUnit, CatConsorzioUnit.id == CatConsorzioOccupancy.unit_id)
+                    .where(
+                        _particella_unit_match_clause(particella),
+                        CatConsorzioOccupancy.cco.is_not(None),
+                    )
+                    .order_by(
+                        desc(CatConsorzioOccupancy.is_current),
+                        desc(CatConsorzioOccupancy.valid_from),
+                        desc(CatConsorzioOccupancy.updated_at),
+                    )
+                    .limit(1)
+                )
+                .scalars()
+                .first()
+            )
+            cco = (
+                (latest_utenza.cco if latest_utenza is not None else None)
+                or (latest_occupancy.cco if latest_occupancy is not None else None)
+                or (match.utenza_latest.cco if match.utenza_latest is not None else None)
+            )
+            cert_com, cert_pvc, cert_fra, cert_ccs = _resolve_particella_cert_context(
+                db,
+                particella,
+                cco,
+                latest_utenza,
+                latest_occupancy,
+            )
+            match.cert_com = cert_com
+            match.cert_pvc = cert_pvc
+            match.cert_fra = cert_fra
+            match.cert_ccs = cert_ccs
+            match.stato_ruolo, match.stato_cnc = (
+                (None, None)
+                if live_authoritative
+                else _load_cert_status_from_context(
+                    db,
+                    cco=cco if all([cert_com, cert_pvc, cert_fra]) else None,
+                    com=cert_com,
+                    pvc=cert_pvc,
+                    fra=cert_fra,
+                    ccs=cert_ccs,
+                )
+            )
+            refreshed_utenza = _utenza_summary_from_record(latest_utenza) or _utenza_summary_from_occupancy(latest_occupancy)
+            if refreshed_utenza is not None:
+                match.utenza_latest = refreshed_utenza
         match.presente_in_catasto_consorzio = (
             pid in consorzio_unit_ids
             or pid in particelle_con_utenza
@@ -1832,12 +2093,31 @@ def _refresh_saved_particelle_matches(
     return results
 
 
+def _match_needs_live_context_refresh(match: CatAnagraficaMatch | None) -> bool:
+    if match is None or match.utenza_latest is None:
+        return False
+    if not _norm_str(match.utenza_latest.cco):
+        return False
+    return not all((_norm_str(match.cert_com), _norm_str(match.cert_pvc), _norm_str(match.cert_fra)))
+
+
+def _results_need_live_refresh(results: list[CatAnagraficaBulkSearchRowResult]) -> bool:
+    for row in results:
+        if _match_needs_live_context_refresh(row.match):
+            return True
+        for sub_match in row.matches or []:
+            if _match_needs_live_context_refresh(sub_match):
+                return True
+    return False
+
+
 @router.post("", response_model=CatAnagraficaBulkSearchResponse)
 async def bulk_search_anagrafica(
     payload: CatAnagraficaBulkSearchRequest = Body(...),
     db: Session = Depends(get_db),
     _: ApplicationUser = Depends(require_active_user),
 ) -> CatAnagraficaBulkSearchResponse:
+    payload = _normalize_bulk_payload(payload)
     results: list[CatAnagraficaBulkSearchRowResult] = []
     live_resolver = _CapacitasLiveResolver(db) if payload.include_capacitas_live else None
 
@@ -1856,6 +2136,7 @@ async def bulk_search_anagrafica(
         return "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"
 
     kind: Literal["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"] = infer_kind()
+    live_authoritative = kind == "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"
 
     try:
         for row in payload.rows:
@@ -1977,7 +2258,14 @@ async def bulk_search_anagrafica(
                     # Fallback: sub explicitly given but not in CatParticella — try CatConsorzioUnit directly
                     sub_match: CatAnagraficaMatch | None = None
                     if sub_norm and foglio_norm and particella_norm and comune_norm:
-                        sub_match = _find_consorzio_sub_match(db, foglio_norm, particella_norm, sub_norm, comune_norm)
+                        sub_match = _find_consorzio_sub_match(
+                            db,
+                            foglio_norm,
+                            particella_norm,
+                            sub_norm,
+                            comune_norm,
+                            live_authoritative=live_authoritative,
+                        )
                     if sub_match is not None and live_resolver is not None:
                         particella_ref = db.get(CatParticella, sub_match.particella_id)
                         if particella_ref is not None:
@@ -2078,6 +2366,7 @@ async def bulk_search_anagrafica(
                             db,
                             item,
                             presente_in_catasto_consorzio=(item.id in consorzio_present_ids),
+                            live_authoritative=live_authoritative,
                         )
                         if live_resolver is not None:
                             candidate = await live_resolver.enrich_match(item, candidate)
@@ -2108,13 +2397,18 @@ async def bulk_search_anagrafica(
                     db,
                     items[0],
                     presente_in_catasto_consorzio=(items[0].id in consorzio_present_ids),
+                    live_authoritative=live_authoritative,
                 )
                 if live_resolver is not None:
                     match = await live_resolver.enrich_match(items[0], match)
 
                 sub_matches: list[CatAnagraficaMatch] | None = None
                 if not sub_norm:
-                    sub_matches = _build_consorzio_sub_matches(db, items[0]) or None
+                    sub_matches = _build_consorzio_sub_matches(
+                        db,
+                        items[0],
+                        live_authoritative=live_authoritative,
+                    ) or None
                     if sub_matches and live_resolver is not None:
                         sub_matches = [await live_resolver.enrich_match(items[0], sub_match) for sub_match in sub_matches]
 
@@ -2168,22 +2462,8 @@ async def create_bulk_search_job(
     db: Session = Depends(get_db),
     user: ApplicationUser = Depends(require_active_user),
 ) -> CatAnagraficaBulkJobDetail:
-    payload = request.payload
-    # Determine the effective kind exactly like the search endpoint.
-    def infer_kind() -> Literal["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"]:
-        if payload.kind in ("CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"):
-            return payload.kind
-        has_particella_keys = any((r.comune or r.foglio or r.particella or r.sub or r.sezione) for r in payload.rows)
-        has_tax_keys = any((r.codice_fiscale or r.partita_iva) for r in payload.rows)
-        if has_particella_keys and not has_tax_keys:
-            return "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"
-        if has_tax_keys and not has_particella_keys:
-            return "CF_PIVA_PARTICELLE"
-        if has_tax_keys and has_particella_keys:
-            return "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"
-        return "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"
-
-    kind: Literal["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"] = infer_kind()
+    payload = _normalize_bulk_payload(request.payload)
+    kind: Literal["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"] = _infer_bulk_kind(payload)
 
     response = await bulk_search_anagrafica(payload=payload, db=db, _=user)
 
@@ -2218,20 +2498,8 @@ async def save_bulk_search_job(
     db: Session = Depends(get_db),
     user: ApplicationUser = Depends(require_active_user),
 ) -> CatAnagraficaBulkJobDetail:
-    payload = request.payload
-
-    def infer_kind() -> Literal["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"]:
-        if payload.kind in ("CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"):
-            return payload.kind
-        has_particella_keys = any((r.comune or r.foglio or r.particella or r.sub or r.sezione) for r in payload.rows)
-        has_tax_keys = any((r.codice_fiscale or r.partita_iva) for r in payload.rows)
-        if has_particella_keys and not has_tax_keys:
-            return "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"
-        if has_tax_keys and not has_particella_keys:
-            return "CF_PIVA_PARTICELLE"
-        return "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"
-
-    kind = infer_kind()
+    payload = _normalize_bulk_payload(request.payload)
+    kind = _infer_bulk_kind(payload)
     summary = _build_summary(request.results)
     job = CatastoElaborazioniMassiveJob(
         user_id=user.id,
@@ -2335,8 +2603,14 @@ async def get_bulk_search_job(
         isinstance(job.payload_json, dict)
         and bool(job.payload_json.get("include_capacitas_live"))
     )
-    if job.kind == "COMUNE_FOGLIO_PARTICELLA_INTESTATARI" and not payload_has_live_results:
-        results = _refresh_saved_particelle_matches(db, results)
+    should_refresh_live_results = (
+        job.kind == "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"
+        and (not payload_has_live_results or _results_need_live_refresh(results))
+    )
+    if should_refresh_live_results:
+        payload = _normalize_bulk_payload(CatAnagraficaBulkSearchRequest.model_validate(job.payload_json))
+        results = (await bulk_search_anagrafica(payload=payload, db=db, _=user)).results
+        job.payload_json = payload.model_dump(mode="json")
         job.results_json = {"results": [r.model_dump(mode="json") for r in results]}
         job.summary_json = _build_summary(results)
         db.commit()
