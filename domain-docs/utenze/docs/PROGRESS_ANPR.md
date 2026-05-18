@@ -47,6 +47,8 @@
 - corretto il client inVOLTURE: la ricerca anagrafica `ajaxRicerca.aspx` usa `GET` come nel browser Capacitas; la precedente chiamata `POST` restituiva `Nessun criterio di ricerca impostato` e impediva il refresh massivo dei flag di decesso
 - reso il prefiltro Capacitas più conservativo: un flag `capacitas_deceduto = true` non esclude dalla coda soggetti già confermati `alive` da ANPR
 - esteso il dettaglio soggetto `frontend/src/app/utenze/[id]/page.tsx` con campi manuali `Soggetto deceduto`, `Data decesso`, `Luogo decesso`, persistiti tramite `PUT /utenze/subjects/{id}`
+- il batch ANPR continua con i soggetti successivi anche quando un singolo item genera un'eccezione inattesa; il soggetto viene marcato `error` e registrato con log tecnico `JOBERR`
+- il monitor `frontend/src/components/elaborazioni/anpr-workspace.tsx` ora include la sezione `Utenze ANPR in errore` con ultimo dettaglio errore e link diretto alla scheda soggetto per verifica manuale
 
 ## Verifiche Eseguite
 

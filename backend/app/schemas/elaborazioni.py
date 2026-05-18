@@ -20,6 +20,7 @@ from pydantic import BaseModel, Field
 __all__ = [
     "ElaborazioneBatchDetailResponse",
     "ElaborazioneBatchResponse",
+    "ElaborazioneAnprErrorSubjectItemResponse",
     "ElaborazioneCaptchaSolveRequest",
     "ElaborazioneCaptchaSummaryResponse",
     "ElaborazioneCredentialCreateRequest",
@@ -34,6 +35,19 @@ __all__ = [
     "ElaborazioneRichiestaCreateRequest",
     "ElaborazioneRichiestaResponse",
 ]
+
+
+class ElaborazioneAnprErrorSubjectItemResponse(BaseModel):
+    subject_id: str
+    display_name: str
+    codice_fiscale: str
+    data_nascita: date | None = None
+    stato_anpr: str
+    last_anpr_check_at: datetime | None = None
+    latest_error_at: datetime | None = None
+    latest_error_detail: str | None = None
+    capacitas_deceduto: bool | None = None
+    capacitas_last_check_at: datetime | None = None
 
 
 class ElaborazioneAnprRunItemResponse(BaseModel):
@@ -59,4 +73,6 @@ class ElaborazioneAnprSummaryResponse(BaseModel):
     effective_daily_limit: int
     batch_size: int
     ruolo_year: int | None = None
+    total_error_subjects: int = 0
+    error_subjects: list[ElaborazioneAnprErrorSubjectItemResponse] = Field(default_factory=list)
     recent_runs: list[ElaborazioneAnprRunItemResponse] = Field(default_factory=list)

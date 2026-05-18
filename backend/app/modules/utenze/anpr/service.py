@@ -62,6 +62,36 @@ class AnprCapacitasCandidate:
     stato_anpr: str | None
 
 
+async def _persist_unexpected_subject_error(
+    db: AsyncSession,
+    *,
+    subject_id: str,
+    triggered_by: str,
+    error_detail: str,
+    created_at: datetime,
+) -> None:
+    subject_uuid = uuid.UUID(subject_id)
+    person = await _maybe_await(db.get(AnagraficaPerson, subject_uuid))
+    if person is not None:
+        person.stato_anpr = "error"
+        person.last_anpr_check_at = created_at
+
+    db.add(
+        AnprCheckLog(
+            subject_id=subject_uuid,
+            call_type="JOBERR",
+            id_operazione_client=f"joberr-{created_at.strftime('%Y%m%d%H%M%S%f')}",
+            id_operazione_anpr=None,
+            esito="error",
+            error_detail=error_detail,
+            data_decesso_anpr=None,
+            triggered_by=triggered_by,
+            created_at=created_at,
+        )
+    )
+    await _maybe_await(db.commit())
+
+
 async def get_config(db: AsyncSession) -> AnprSyncConfig:
     return await AnprSyncConfig.get_or_create_default(db)
 
@@ -603,15 +633,23 @@ async def run_daily_job(db_factory: Callable[[], Any]) -> AnprJobSummary:
                     deceased_found += 1
                 if not result.success:
                     errors += 1
-            except Exception:
+            except Exception as exc:
                 logger.exception("ANPR batch job failed for subject_id=%s", queue_item.subject_id)
                 rollback = getattr(db, "rollback", None)
                 if rollback is not None:
                     await _maybe_await(rollback())
+                error_at = datetime.now(UTC)
+                await _persist_unexpected_subject_error(
+                    db,
+                    subject_id=queue_item.subject_id,
+                    triggered_by="job",
+                    error_detail=f"Errore inatteso batch ANPR: {exc}",
+                    created_at=error_at,
+                )
                 calls_budget = max(calls_budget - queue_item.estimated_calls, 0)
                 calls_used += queue_item.estimated_calls
                 errors += 1
-                break
+                continue
             await anyio.sleep(0.5)
 
         completed_at = datetime.now(UTC)
@@ -692,7 +730,11 @@ async def _count_calls_for_local_day(db: AsyncSession, reference: datetime) -> i
     stmt = (
         select(func.count())
         .select_from(AnprCheckLog)
-        .where(AnprCheckLog.created_at >= day_start_utc, AnprCheckLog.created_at < day_end_utc)
+        .where(
+            AnprCheckLog.created_at >= day_start_utc,
+            AnprCheckLog.created_at < day_end_utc,
+            AnprCheckLog.call_type.in_(("C030", "C004")),
+        )
     )
     return int((await _maybe_await(db.execute(stmt))).scalar_one())
 

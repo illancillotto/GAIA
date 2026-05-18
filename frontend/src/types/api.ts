@@ -1636,6 +1636,19 @@ export type ElaborazioneAnprRunItem = {
   completed_at: string | null;
 };
 
+export type ElaborazioneAnprErrorSubjectItem = {
+  subject_id: string;
+  display_name: string;
+  codice_fiscale: string;
+  data_nascita: string | null;
+  stato_anpr: string;
+  last_anpr_check_at: string | null;
+  latest_error_at: string | null;
+  latest_error_detail: string | null;
+  capacitas_deceduto: boolean | null;
+  capacitas_last_check_at: string | null;
+};
+
 export type ElaborazioneAnprSummary = {
   calls_today: number;
   configured_daily_limit: number;
@@ -1643,5 +1656,7 @@ export type ElaborazioneAnprSummary = {
   effective_daily_limit: number;
   batch_size: number;
   ruolo_year: number | null;
+  total_error_subjects: number;
+  error_subjects: ElaborazioneAnprErrorSubjectItem[];
   recent_runs: ElaborazioneAnprRunItem[];
 };

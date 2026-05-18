@@ -11,7 +11,8 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect, status
 from fastapi.responses import FileResponse, StreamingResponse
-from sqlalchemy import func, select
+from sqlalchemy import and_, func, select
+from sqlalchemy.orm import aliased
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user
@@ -19,6 +20,8 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
 from app.modules.utenze.anpr.models import AnprCheckLog, AnprJobRun, AnprSyncConfig
+from app.modules.ruolo.models import RuoloAvviso
+from app.modules.utenze.models import AnagraficaPerson, AnagraficaSubject
 from app.modules.shared.http_shared import (
     build_batch_detail_response,
     build_connection_test_response,
@@ -31,6 +34,7 @@ from app.modules.shared.http_shared import (
 from app.schemas.elaborazioni import (
     ElaborazioneBatchDetailResponse,
     ElaborazioneBatchResponse,
+    ElaborazioneAnprErrorSubjectItemResponse,
     ElaborazioneAnprRunItemResponse,
     ElaborazioneAnprSummaryResponse,
     ElaborazioneCaptchaSolveRequest,
@@ -116,10 +120,104 @@ def get_utenze_anpr_summary(
     effective_daily_limit = min(configured_daily_limit, settings.anpr_daily_call_hard_limit)
     local_today = datetime.now(ZoneInfo(settings.anpr_job_timezone)).date()
     latest_run = db.execute(select(AnprJobRun).order_by(AnprJobRun.started_at.desc()).limit(1)).scalar_one_or_none()
+    ruolo_year = (
+        latest_run.ruolo_year
+        if latest_run is not None
+        else db.execute(select(func.max(RuoloAvviso.anno_tributario)).where(RuoloAvviso.subject_id.is_not(None))).scalar_one_or_none()
+    )
     calls_today = db.execute(
         select(func.coalesce(func.sum(AnprJobRun.calls_used), 0)).where(AnprJobRun.run_date == local_today)
     ).scalar_one()
     recent_runs = db.execute(select(AnprJobRun).order_by(AnprJobRun.started_at.desc()).limit(10)).scalars().all()
+    error_subjects: list[ElaborazioneAnprErrorSubjectItemResponse] = []
+    total_error_subjects = 0
+
+    if ruolo_year is not None:
+        ruolo_subjects = (
+            select(RuoloAvviso.subject_id)
+            .where(
+                RuoloAvviso.anno_tributario == ruolo_year,
+                RuoloAvviso.subject_id.is_not(None),
+            )
+            .distinct()
+            .subquery()
+        )
+        latest_error_subquery = (
+            select(
+                AnprCheckLog.subject_id.label("subject_id"),
+                func.max(AnprCheckLog.created_at).label("latest_error_at"),
+            )
+            .where(AnprCheckLog.esito == "error")
+            .group_by(AnprCheckLog.subject_id)
+            .subquery()
+        )
+        latest_error_log = aliased(AnprCheckLog)
+        error_base_stmt = (
+            select(
+                AnagraficaSubject.id,
+                AnagraficaPerson.cognome,
+                AnagraficaPerson.nome,
+                AnagraficaPerson.codice_fiscale,
+                AnagraficaPerson.data_nascita,
+                AnagraficaPerson.stato_anpr,
+                AnagraficaPerson.last_anpr_check_at,
+                AnagraficaPerson.capacitas_deceduto,
+                AnagraficaPerson.capacitas_last_check_at,
+                latest_error_subquery.c.latest_error_at,
+                latest_error_log.error_detail,
+            )
+            .join(AnagraficaPerson, AnagraficaPerson.subject_id == AnagraficaSubject.id)
+            .join(ruolo_subjects, ruolo_subjects.c.subject_id == AnagraficaSubject.id)
+            .outerjoin(latest_error_subquery, latest_error_subquery.c.subject_id == AnagraficaSubject.id)
+            .outerjoin(
+                latest_error_log,
+                and_(
+                    latest_error_log.subject_id == latest_error_subquery.c.subject_id,
+                    latest_error_log.created_at == latest_error_subquery.c.latest_error_at,
+                    latest_error_log.esito == "error",
+                ),
+            )
+            .where(AnagraficaSubject.subject_type == "person")
+            .where(AnagraficaPerson.stato_anpr == "error")
+        )
+        total_error_subjects = int(
+            db.execute(select(func.count()).select_from(error_base_stmt.subquery())).scalar_one()
+        )
+        error_rows = db.execute(
+            error_base_stmt.order_by(
+                latest_error_subquery.c.latest_error_at.desc().nullslast(),
+                AnagraficaPerson.data_nascita.asc().nullslast(),
+                AnagraficaPerson.cognome.asc(),
+                AnagraficaPerson.nome.asc(),
+            ).limit(100)
+        ).all()
+        error_subjects = [
+            ElaborazioneAnprErrorSubjectItemResponse(
+                subject_id=str(subject_id),
+                display_name=f"{(cognome or '').strip()} {(nome or '').strip()}".strip() or codice_fiscale,
+                codice_fiscale=codice_fiscale,
+                data_nascita=data_nascita,
+                stato_anpr=stato_anpr,
+                last_anpr_check_at=last_anpr_check_at,
+                latest_error_at=latest_error_at,
+                latest_error_detail=error_detail,
+                capacitas_deceduto=capacitas_deceduto,
+                capacitas_last_check_at=capacitas_last_check_at,
+            )
+            for (
+                subject_id,
+                cognome,
+                nome,
+                codice_fiscale,
+                data_nascita,
+                stato_anpr,
+                last_anpr_check_at,
+                capacitas_deceduto,
+                capacitas_last_check_at,
+                latest_error_at,
+                error_detail,
+            ) in error_rows
+        ]
 
     return ElaborazioneAnprSummaryResponse(
         calls_today=int(calls_today or 0),
@@ -127,7 +225,9 @@ def get_utenze_anpr_summary(
         hard_daily_limit=settings.anpr_daily_call_hard_limit,
         effective_daily_limit=effective_daily_limit,
         batch_size=settings.anpr_job_batch_size,
-        ruolo_year=latest_run.ruolo_year if latest_run is not None else settings.anpr_job_ruolo_year,
+        ruolo_year=ruolo_year,
+        total_error_subjects=total_error_subjects,
+        error_subjects=error_subjects,
         recent_runs=[
             ElaborazioneAnprRunItemResponse(
                 id=str(item.id),

@@ -239,6 +239,11 @@ Effetto sulla coda:
 - `build_check_queue()` esclude i soggetti con `ana_persons.capacitas_deceduto = true`, ma non lascia che Capacitas soppianti un precedente esito ANPR positivo `alive`
 - il job ANPR continua a governare solo gli stati ANPR (`alive`, `deceased`, `not_found_anpr`, ...)
 
+Monitor operativo:
+- il batch ANPR non interrompe più l'esecuzione sull'intera coda quando un singolo soggetto genera un'eccezione inattesa
+- in questi casi il soggetto viene marcato `stato_anpr = error` e viene registrato un log tecnico `JOBERR`
+- il monitor `GET /elaborazioni/utenze-anpr/summary` espone anche la lista dei soggetti del ruolo corrente ancora in errore, con ultimo dettaglio disponibile e apertura diretta della scheda soggetto per verifica manuale
+
 **Request body**:
 ```json
 {

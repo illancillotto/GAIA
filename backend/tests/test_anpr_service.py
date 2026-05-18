@@ -709,6 +709,98 @@ async def test_run_daily_job_second_run_same_day_stops_at_limit_reached(
     assert runs[1].daily_calls_after == 2
 
 
+@pytest.mark.anyio
+async def test_run_daily_job_continues_after_unexpected_subject_exception(
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    import app.modules.utenze.anpr.service as service_module
+
+    frozen_now = datetime(2026, 5, 15, 8, 30, tzinfo=UTC)
+
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return frozen_now if tz is None else frozen_now.astimezone(tz)
+
+        @classmethod
+        def combine(cls, d, t, tzinfo=None):
+            return datetime.combine(d, t, tzinfo=tzinfo)
+
+    monkeypatch.setattr(service_module, "datetime", FrozenDateTime)
+    monkeypatch.setattr(service_module.settings, "anpr_job_timezone", "Europe/Rome")
+    monkeypatch.setattr(service_module.settings, "anpr_job_start_hour", 8)
+    monkeypatch.setattr(service_module.settings, "anpr_job_end_hour", 18)
+    monkeypatch.setattr(service_module.settings, "anpr_job_ruolo_year", 2025)
+    monkeypatch.setattr(service_module.settings, "anpr_job_batch_size", 2)
+    monkeypatch.setattr(service_module.settings, "anpr_daily_call_hard_limit", 10)
+
+    subject_one = _create_person_subject(db_session, "ERRCNT80A01H501U", data_nascita=date(1940, 1, 1), anpr_id="ANPR-1")
+    subject_two = _create_person_subject(db_session, "ERRCNT80A01H501V", data_nascita=date(1950, 1, 1), anpr_id="ANPR-2")
+    subject_one_id = subject_one.id
+    subject_two_id = subject_two.id
+    ruolo_2025 = _create_ruolo_job(db_session, anno_tributario=2025)
+    _add_ruolo_row(db_session, batch_id=ruolo_2025.id, anno_tributario=2025, subject_id=subject_one_id)
+    _add_ruolo_row(db_session, batch_id=ruolo_2025.id, anno_tributario=2025, subject_id=subject_two_id)
+
+    async def fake_get_config(_db):
+        return AnprSyncConfig(
+            id=1,
+            max_calls_per_day=20,
+            job_enabled=True,
+            job_cron="0 8-17 * * *",
+            lookback_years=1,
+            retry_not_found_days=90,
+        )
+
+    class FakeClient:
+        async def c004_check_death(self, anpr_id: str, key: str) -> C004Result:
+            return C004Result(
+                success=True,
+                esito="alive",
+                data_decesso=None,
+                id_operazione_anpr=f"op-{anpr_id}",
+                error_detail=None,
+                id_operazione_client=f"cli-{key}",
+                raw_response={},
+            )
+
+    class FakeAuth:
+        pass
+
+    original_sync_single_subject = service_module.sync_single_subject
+
+    async def fake_sync_single_subject(subject_id: str, db, triggered_by: str, auth, client):
+        if subject_id == str(subject_one_id):
+            raise RuntimeError("boom")
+        return await original_sync_single_subject(subject_id, db, triggered_by, auth, client)
+
+    monkeypatch.setattr(service_module, "get_config", fake_get_config)
+    monkeypatch.setattr("app.modules.utenze.anpr.auth.PdndAuthManager", FakeAuth)
+    monkeypatch.setattr(service_module, "AnprClient", lambda auth: FakeClient())
+    monkeypatch.setattr(service_module, "sync_single_subject", fake_sync_single_subject)
+
+    async def db_factory():
+        return db_session
+
+    summary = await run_daily_job(db_factory)
+    db_session.expire_all()
+    first_person = db_session.get(AnagraficaPerson, subject_one_id)
+    second_person = db_session.get(AnagraficaPerson, subject_two_id)
+    joberr_logs = db_session.scalars(
+        select(AnprCheckLog).where(AnprCheckLog.subject_id == subject_one_id, AnprCheckLog.call_type == "JOBERR")
+    ).all()
+
+    assert summary.subjects_processed == 1
+    assert summary.errors == 1
+    assert first_person is not None
+    assert first_person.stato_anpr == "error"
+    assert second_person is not None
+    assert second_person.stato_anpr == "alive"
+    assert len(joberr_logs) == 1
+    assert "boom" in (joberr_logs[0].error_detail or "")
+
+
 def test_get_stats_reports_deceased_kpis(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(utenze_router.settings, "anpr_job_timezone", "Europe/Rome")
 
