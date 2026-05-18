@@ -13,6 +13,7 @@ from pandas.errors import EmptyDataError
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.models.elaborazioni import (
     ElaborazioneBatch,
     ElaborazioneBatchStatus,
@@ -434,7 +435,49 @@ def create_batch_from_validated_rows(
     return batch, requests
 
 
+def expire_stale_pending_batches(db: Session, user_id: int | None = None) -> int:
+    timeout_minutes = max(settings.elaborazioni_pending_start_timeout_minutes, 1)
+    now = datetime.now(UTC)
+    stale_cutoff = now.timestamp() - (timeout_minutes * 60)
+    statement = select(ElaborazioneBatch).where(
+        ElaborazioneBatch.status == ElaborazioneBatchStatus.PENDING.value,
+        ElaborazioneBatch.started_at.is_(None),
+        ElaborazioneBatch.completed_at.is_(None),
+    )
+    if user_id is not None:
+        statement = statement.where(ElaborazioneBatch.user_id == user_id)
+
+    stale_batches = list(db.scalars(statement).all())
+    expired_count = 0
+    for batch in stale_batches:
+        reference_at = batch.created_at
+        if reference_at is None or reference_at.timestamp() >= stale_cutoff:
+            continue
+
+        requests = get_batch_requests(db, batch.id)
+        for request in requests:
+            if request.status != ElaborazioneRichiestaStatus.PENDING.value:
+                continue
+            request.status = ElaborazioneRichiestaStatus.FAILED.value
+            request.current_operation = "Scaduta prima dell'avvio"
+            request.error_message = (
+                f"Richiesta non eseguita entro {timeout_minutes} minuti dalla creazione batch."
+            )
+            request.processed_at = now
+
+        batch.status = ElaborazioneBatchStatus.FAILED.value
+        batch.current_operation = f"Batch scaduto prima dell'avvio ({timeout_minutes} min)"
+        batch.completed_at = now
+        recalculate_batch_counters(batch, requests)
+        expired_count += 1
+
+    if expired_count:
+        db.commit()
+    return expired_count
+
+
 def list_batches_for_user(db: Session, user_id: int, status: str | None = None) -> list[ElaborazioneBatch]:
+    expire_stale_pending_batches(db, user_id)
     statement = select(ElaborazioneBatch).where(ElaborazioneBatch.user_id == user_id)
     if status:
         statement = statement.where(ElaborazioneBatch.status == status)
@@ -442,6 +485,7 @@ def list_batches_for_user(db: Session, user_id: int, status: str | None = None) 
 
 
 def get_batch_for_user(db: Session, user_id: int, batch_id: UUID) -> ElaborazioneBatch:
+    expire_stale_pending_batches(db, user_id)
     batch = db.scalar(
         select(ElaborazioneBatch).where(ElaborazioneBatch.id == batch_id, ElaborazioneBatch.user_id == user_id),
     )
@@ -483,6 +527,7 @@ def ensure_no_processing_batch(db: Session, user_id: int, current_batch_id: UUID
 
 
 def start_batch(db: Session, user_id: int, batch_id: UUID) -> ElaborazioneBatch:
+    expire_stale_pending_batches(db, user_id)
     batch = get_batch_for_user(db, user_id, batch_id)
     try:
         require_credentials_for_user(db, user_id)
@@ -509,6 +554,7 @@ def start_batch(db: Session, user_id: int, batch_id: UUID) -> ElaborazioneBatch:
 
 
 def cancel_batch(db: Session, user_id: int, batch_id: UUID) -> ElaborazioneBatch:
+    expire_stale_pending_batches(db, user_id)
     batch = get_batch_for_user(db, user_id, batch_id)
     if batch.status in {ElaborazioneBatchStatus.COMPLETED.value, ElaborazioneBatchStatus.CANCELLED.value}:
         raise BatchConflictError(f"Batch cannot be cancelled from status '{batch.status}'")
@@ -535,6 +581,7 @@ def cancel_batch(db: Session, user_id: int, batch_id: UUID) -> ElaborazioneBatch
 
 
 def retry_failed_batch(db: Session, user_id: int, batch_id: UUID) -> ElaborazioneBatch:
+    expire_stale_pending_batches(db, user_id)
     batch = get_batch_for_user(db, user_id, batch_id)
     if batch.status == ElaborazioneBatchStatus.PROCESSING.value:
         raise BatchConflictError("Cannot retry failed items while batch is processing")

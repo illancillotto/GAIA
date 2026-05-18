@@ -2019,6 +2019,14 @@ export async function downloadElaborazioneRequestArtifactsBlob(token: string, re
   });
 }
 
+export async function fetchElaborazioneRequestArtifactPreviewBlob(token: string, requestId: string): Promise<Blob> {
+  return requestBlob(`/elaborazioni/requests/${requestId}/artifacts/preview`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
 export async function downloadSelectedCatastoDocumentsZipBlob(
   token: string,
   documentIds: string[],

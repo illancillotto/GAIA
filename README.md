@@ -257,7 +257,8 @@ Se la variabile e vuota/non impostata, la password non viene richiesta.
   - ricerca per immobile con comune, foglio, particella e subalterno
   - ricerca per soggetto con `subject_id`, inferenza PF/PNF e richiesta `ATTUALITA`/`STORICA`
 - Report batch `JSON` e `Markdown` persistiti dal worker
-- Artifact per richiesta con path persistito e download ZIP dal runtime `elaborazioni`
+- Artifact per richiesta con path persistito, download ZIP dal runtime `elaborazioni` e preview immagine autenticata nel dettaglio batch; per i `not_found` su ricerca soggetto il worker salva anche una preview focalizzata sul blocco diagnostico SISTER
+- I batch `pending` mai avviati scadono automaticamente dopo `ELABORAZIONI_PENDING_START_TIMEOUT_MINUTES` e vengono marcati `failed`, evitando code orfane nello storico operativo
 
 ## Network MVP
 

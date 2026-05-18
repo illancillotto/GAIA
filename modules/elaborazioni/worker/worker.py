@@ -615,6 +615,8 @@ class CatastoWorker:
             result.error_message,
         )
         if request_snapshot.artifact_dir:
+            if result.status == "not_found" and request_snapshot.search_mode == "soggetto":
+                await browser.capture_subject_not_found_preview(Path(request_snapshot.artifact_dir))
             await browser.capture_debug_snapshot(Path(request_snapshot.artifact_dir), f"final-{result.status}")
         self._persist_flow_result(batch_id, request_id, credential.sister_username, result)
 
@@ -767,10 +769,18 @@ class CatastoWorker:
                 batch.current_operation = f"Saltata riga {request.row_index}"
             elif terminal_status == "not_found":
                 request.status = CatastoVisuraRequestStatus.NOT_FOUND.value
-                request.current_operation = "Nessuna corrispondenza"
+                request.current_operation = (
+                    "Utente non è titolare di terreni o immobili"
+                    if request.search_mode == "soggetto"
+                    else "Nessuna corrispondenza"
+                )
                 request.error_message = result.error_message
                 request.processed_at = datetime.now(timezone.utc)
-                batch.current_operation = f"Nessuna corrispondenza riga {request.row_index}"
+                batch.current_operation = (
+                    f"Utente senza titolarità catastale riga {request.row_index}"
+                    if request.search_mode == "soggetto"
+                    else f"Nessuna corrispondenza riga {request.row_index}"
+                )
             else:
                 request.status = CatastoVisuraRequestStatus.FAILED.value
                 request.current_operation = "Fallita"

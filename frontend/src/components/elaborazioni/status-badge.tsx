@@ -32,7 +32,7 @@ const STATUS_CONFIG: Record<StatusValue, { label: string; className: string; dot
     dotClassName: "bg-red-500",
   },
   not_found: {
-    label: "Non trovato",
+    label: "Nessun risultato",
     className: "bg-orange-100 text-orange-700",
     dotClassName: "bg-orange-500",
   },

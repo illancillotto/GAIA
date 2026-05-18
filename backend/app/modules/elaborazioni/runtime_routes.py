@@ -88,6 +88,24 @@ from app.services.catasto_documents import list_documents_for_batch
 router = APIRouter(prefix="/elaborazioni", tags=["elaborazioni"])
 
 
+def _resolve_request_artifact_preview_path(artifact_dir: Path) -> Path | None:
+    candidates = [
+        artifact_dir / "preview-not-found.png",
+        artifact_dir / "final-not_found.png",
+        artifact_dir / "final-failed.png",
+        artifact_dir / "final-skipped.png",
+    ]
+    for candidate in candidates:
+        if candidate.exists() and candidate.is_file():
+            return candidate
+
+    for pattern in ("*.png", "*.jpg", "*.jpeg", "*.webp"):
+        for candidate in sorted(artifact_dir.glob(pattern)):
+            if candidate.is_file():
+                return candidate
+    return None
+
+
 @router.get("/utenze-anpr/summary", response_model=ElaborazioneAnprSummaryResponse)
 def get_utenze_anpr_summary(
     _: Annotated[ApplicationUser, Depends(require_active_user)],
@@ -461,6 +479,27 @@ def download_request_artifacts(
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.get("/requests/{request_id}/artifacts/preview")
+def get_request_artifact_preview(
+    request_id: UUID,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> FileResponse:
+    try:
+        request = get_request_for_user(db, current_user.id, request_id)
+    except RequestNotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    if not request.artifact_dir:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No artifact directory stored for request")
+    artifact_dir = Path(request.artifact_dir)
+    if not artifact_dir.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stored request artifacts are missing")
+    preview_path = _resolve_request_artifact_preview_path(artifact_dir)
+    if preview_path is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No artifact preview available for request")
+    return FileResponse(preview_path)
 
 
 @router.get("/captcha/pending", response_model=list[ElaborazioneRichiestaResponse])

@@ -1,4 +1,5 @@
 from collections.abc import Generator
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 import sys
 import types
@@ -17,7 +18,7 @@ from app.models.elaborazioni import ElaborazioneCredential
 from app.modules.catasto.services.ade_status_scan import ADE_SCAN_PURPOSE, create_ade_status_scan_batch
 from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob, RuoloParticella, RuoloPartita
 from app.services.catasto_credentials import get_credential_fernet
-from app.services.elaborazioni_batches import BatchConflictError, retry_failed_batch, validate_visure_records
+from app.services.elaborazioni_batches import BatchConflictError, expire_stale_pending_batches, retry_failed_batch, validate_visure_records
 
 
 WORKER_ROOT = Path(__file__).resolve().parents[2] / "modules" / "elaborazioni" / "worker"
@@ -163,6 +164,108 @@ def test_retry_failed_batch_does_not_retry_not_found_requests() -> None:
 
         with pytest.raises(BatchConflictError, match="No failed requests available for retry"):
             retry_failed_batch(db, user.id, batch.id)
+    finally:
+        db.close()
+
+
+def test_persist_flow_result_uses_subject_specific_message_for_not_found() -> None:
+    db = TestingSessionLocal()
+    try:
+        user = db.query(ApplicationUser).filter(ApplicationUser.username == "worker").one()
+        batch = CatastoBatch(
+            user_id=user.id,
+            name="Batch not found subject",
+            status="processing",
+            total_items=1,
+        )
+        db.add(batch)
+        db.flush()
+        request = CatastoVisuraRequest(
+            batch_id=batch.id,
+            user_id=user.id,
+            row_index=1,
+            search_mode="soggetto",
+            subject_kind="PF",
+            subject_id="CNCFTN98A02B314E",
+            request_type="ATTUALITA",
+            tipo_visura="Sintetica",
+            status=CatastoVisuraRequestStatus.PROCESSING.value,
+        )
+        db.add(request)
+        db.commit()
+        batch_id = batch.id
+        request_id = request.id
+    finally:
+        db.close()
+
+    worker = worker_module.CatastoWorker.__new__(worker_module.CatastoWorker)
+    worker._persist_flow_result(
+        batch_id,
+        request_id,
+        "SISTERUSER",
+        worker_module.VisuraFlowResult(
+            status="not_found",
+            error_message="Nessuna corrispondenza catastale per PF 'CNCFTN98A02B314E'",
+        ),
+    )
+
+    db = TestingSessionLocal()
+    try:
+        request = db.get(CatastoVisuraRequest, request_id)
+        batch = db.get(CatastoBatch, batch_id)
+        assert request is not None
+        assert batch is not None
+        assert request.status == CatastoVisuraRequestStatus.NOT_FOUND.value
+        assert request.current_operation == "Utente non è titolare di terreni o immobili"
+        assert batch.current_operation == "Utente senza titolarità catastale riga 1"
+    finally:
+        db.close()
+
+
+def test_expire_stale_pending_batch_marks_batch_and_requests_failed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("app.services.elaborazioni_batches.settings.elaborazioni_pending_start_timeout_minutes", 25)
+
+    db = TestingSessionLocal()
+    try:
+        user = db.query(ApplicationUser).filter(ApplicationUser.username == "worker").one()
+        batch = CatastoBatch(
+            user_id=user.id,
+            name="Batch pending stale",
+            status="pending",
+            total_items=1,
+            current_operation="Awaiting start",
+            created_at=datetime.now(UTC) - timedelta(hours=2),
+        )
+        db.add(batch)
+        db.flush()
+        request = CatastoVisuraRequest(
+            batch_id=batch.id,
+            user_id=user.id,
+            row_index=1,
+            search_mode="soggetto",
+            subject_kind="PNF",
+            subject_id="00042370957",
+            request_type="ATTUALITA",
+            tipo_visura="Sintetica",
+            status=CatastoVisuraRequestStatus.PENDING.value,
+            current_operation="Pending",
+        )
+        db.add(request)
+        db.commit()
+
+        expired = expire_stale_pending_batches(db, user.id)
+        assert expired == 1
+
+        db.refresh(batch)
+        db.refresh(request)
+        assert batch.status == "failed"
+        assert batch.current_operation == "Batch scaduto prima dell'avvio (25 min)"
+        assert batch.completed_at is not None
+        assert batch.failed_items == 1
+        assert request.status == CatastoVisuraRequestStatus.FAILED.value
+        assert request.current_operation == "Scaduta prima dell'avvio"
+        assert "25 minuti" in (request.error_message or "")
+        assert request.processed_at is not None
     finally:
         db.close()
 

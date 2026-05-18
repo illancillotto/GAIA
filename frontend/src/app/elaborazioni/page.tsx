@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ProtectedPage } from "@/components/app/protected-page";
 import {
@@ -10,11 +10,16 @@ import {
 } from "@/components/elaborazioni/module-chrome";
 import { ModuleWorkspaceKpiRow, ModuleWorkspaceKpiTile } from "@/components/layout/module-workspace-hero";
 import { ElaborazioneOperationMessage } from "@/components/elaborazioni/operation-message";
+import { ElaborazioneStatusBadge } from "@/components/elaborazioni/status-badge";
 import { ElaborazioneWorkspaceModal } from "@/components/elaborazioni/workspace-modal";
 import { EmptyState } from "@/components/ui/empty-state";
 import { FolderIcon, GridIcon, LockIcon, RefreshIcon, SearchIcon, UsersIcon } from "@/components/ui/icons";
 import {
+  downloadCatastoDocumentBlob,
+  downloadElaborazioneRequestArtifactsBlob,
+  fetchElaborazioneRequestArtifactPreviewBlob,
   getElaborazioneBatches,
+  getElaborazioneBatch,
   getElaborazioneAnprSummary,
   getElaborazioneCaptchaSummary,
   getElaborazioneCredentials,
@@ -33,8 +38,10 @@ import type {
   CapacitasCredential,
   CapacitasParticelleSyncJob,
   CapacitasParticelleSyncJobResult,
+  CatastoDocument,
   ElaborazioneAnprSummary,
   ElaborazioneBatch,
+  ElaborazioneBatchDetail,
   ElaborazioneCaptchaSummary,
   ElaborazioneCredentialStatus,
 } from "@/types/api";
@@ -114,8 +121,43 @@ function isParticelleSyncJobResult(value: CapacitasParticelleSyncJob["result_jso
   return value != null && !Array.isArray(value) && typeof value === "object" && "progress_percent" in value;
 }
 
+function triggerDownload(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const anchor = window.document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function renderRequestLabel(request: ElaborazioneBatchDetail["requests"][number]): string {
+  if (request.search_mode === "soggetto") {
+    const primary = `${request.subject_kind ?? "SOGGETTO"} ${request.subject_id ?? ""}`.trim();
+    const suffix = request.request_type ? ` · ${request.request_type}` : "";
+    return `${primary}${suffix}`;
+  }
+  return request.comune ?? "—";
+}
+
+function renderRequestReference(request: ElaborazioneBatchDetail["requests"][number]): string {
+  if (request.search_mode === "soggetto") {
+    return request.intestazione ?? "Ricerca soggetto";
+  }
+  return `Fg.${request.foglio ?? "-"} Part.${request.particella ?? "-"}${request.subalterno ? ` Sub.${request.subalterno}` : ""}`;
+}
+
+function getArtifactActionClassName(disabled = false): string {
+  return [
+    "inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-semibold transition",
+    disabled
+      ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400"
+      : "border-[#cfe0d5] bg-[#f3f8f4] text-[#1D4E35] hover:border-[#1D4E35] hover:bg-[#e8f2eb]",
+  ].join(" ");
+}
+
 export default function ElaborazioniPage() {
   const [batches, setBatches] = useState<ElaborazioneBatch[]>([]);
+  const [batchDetails, setBatchDetails] = useState<Record<string, ElaborazioneBatchDetail>>({});
   const [credentialStatus, setCredentialStatus] = useState<ElaborazioneCredentialStatus | null>(null);
   const [captchaSummary, setCaptchaSummary] = useState<ElaborazioneCaptchaSummary | null>(null);
   const [anprSummary, setAnprSummary] = useState<ElaborazioneAnprSummary | null>(null);
@@ -125,7 +167,14 @@ export default function ElaborazioniPage() {
   const [bonificaSyncStatus, setBonificaSyncStatus] = useState<BonificaSyncStatusResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retryBusyId, setRetryBusyId] = useState<string | null>(null);
+  const [artifactBusyRequestId, setArtifactBusyRequestId] = useState<string | null>(null);
+  const [downloadingDocumentId, setDownloadingDocumentId] = useState<string | null>(null);
+  const [artifactPreviewUrls, setArtifactPreviewUrls] = useState<Record<string, string>>({});
+  const [artifactPreviewLoadingIds, setArtifactPreviewLoadingIds] = useState<Record<string, boolean>>({});
+  const [artifactPreviewFailedIds, setArtifactPreviewFailedIds] = useState<Record<string, boolean>>({});
+  const [previewModalRequest, setPreviewModalRequest] = useState<{ requestId: string; label: string; reference: string } | null>(null);
   const [modalState, setModalState] = useState<DashboardModalState | null>(null);
+  const artifactPreviewUrlsRef = useRef<Record<string, string>>({});
 
   const loadDashboard = useCallback(async (): Promise<void> => {
     const token = getStoredAccessToken();
@@ -153,6 +202,15 @@ export default function ElaborazioniPage() {
       ]);
       setCredentialStatus(credentialsResult);
       setBatches(batchesResult.slice(0, 50));
+      setBatchDetails((current) => {
+        const next: Record<string, ElaborazioneBatchDetail> = {};
+        batchesResult.slice(0, 50).forEach((batch) => {
+          if (current[batch.id]) {
+            next[batch.id] = current[batch.id];
+          }
+        });
+        return next;
+      });
       setCaptchaSummary(captchaSummaryResult);
       setAnprSummary(anprSummaryResult);
       setCapacitasCredentials(capacitasResult);
@@ -168,6 +226,31 @@ export default function ElaborazioniPage() {
   useEffect(() => {
     void loadDashboard();
   }, [loadDashboard]);
+
+  useEffect(() => {
+    artifactPreviewUrlsRef.current = artifactPreviewUrls;
+  }, [artifactPreviewUrls]);
+
+  useEffect(() => {
+    return () => {
+      Object.values(artifactPreviewUrlsRef.current).forEach((url) => URL.revokeObjectURL(url));
+    };
+  }, []);
+
+  const batchesForTable = useMemo(() => {
+    const isRunning = (status: ElaborazioneBatch["status"]): boolean => status === "pending" || status === "processing";
+
+    return [...batches]
+      .sort((left, right) => {
+        const runningDelta = Number(isRunning(right.status)) - Number(isRunning(left.status));
+        if (runningDelta !== 0) return runningDelta;
+
+        const leftTime = Date.parse(left.created_at);
+        const rightTime = Date.parse(right.created_at);
+        return rightTime - leftTime;
+      })
+      .slice(0, 6);
+  }, [batches]);
 
   useEffect(() => {
     function handleVisibilityChange(): void {
@@ -190,6 +273,102 @@ export default function ElaborazioniPage() {
     };
   }, [loadDashboard]);
 
+  useEffect(() => {
+    const token = getStoredAccessToken();
+    if (!token || batchesForTable.length === 0) {
+      return;
+    }
+
+    batchesForTable.forEach((batch) => {
+      if (batchDetails[batch.id]) {
+        return;
+      }
+      void getElaborazioneBatch(token, batch.id)
+        .then((detail) => {
+          setBatchDetails((current) => ({ ...current, [batch.id]: detail }));
+        })
+        .catch(() => {
+          return;
+        });
+    });
+  }, [batchDetails, batchesForTable]);
+
+  useEffect(() => {
+    const token = getStoredAccessToken();
+    if (!token) {
+      return;
+    }
+
+    const eligibleRequests = Object.values(batchDetails)
+      .flatMap((batch) => batch.requests)
+      .filter((request) => request.artifact_dir && request.status === "not_found");
+    const eligibleRequestIds = new Set(eligibleRequests.map((request) => request.id));
+
+    setArtifactPreviewUrls((current) => {
+      let changed = false;
+      const next: Record<string, string> = {};
+      Object.entries(current).forEach(([requestId, url]) => {
+        if (eligibleRequestIds.has(requestId)) {
+          next[requestId] = url;
+          return;
+        }
+        URL.revokeObjectURL(url);
+        changed = true;
+      });
+      return changed ? next : current;
+    });
+    setArtifactPreviewLoadingIds((current) => {
+      const next = Object.fromEntries(Object.entries(current).filter(([requestId]) => eligibleRequestIds.has(requestId)));
+      const sameKeys =
+        Object.keys(next).length === Object.keys(current).length &&
+        Object.keys(next).every((requestId) => current[requestId] === next[requestId]);
+      return sameKeys ? current : next;
+    });
+    setArtifactPreviewFailedIds((current) => {
+      const next = Object.fromEntries(Object.entries(current).filter(([requestId]) => eligibleRequestIds.has(requestId)));
+      const sameKeys =
+        Object.keys(next).length === Object.keys(current).length &&
+        Object.keys(next).every((requestId) => current[requestId] === next[requestId]);
+      return sameKeys ? current : next;
+    });
+
+    eligibleRequests.forEach((request) => {
+      if (artifactPreviewUrls[request.id] || artifactPreviewLoadingIds[request.id] || artifactPreviewFailedIds[request.id]) {
+        return;
+      }
+
+      setArtifactPreviewLoadingIds((current) => ({ ...current, [request.id]: true }));
+      void fetchElaborazioneRequestArtifactPreviewBlob(token, request.id)
+        .then((blob) => {
+          const url = URL.createObjectURL(blob);
+          setArtifactPreviewUrls((current) => {
+            if (current[request.id]) {
+              URL.revokeObjectURL(url);
+              return current;
+            }
+            return { ...current, [request.id]: url };
+          });
+          setArtifactPreviewFailedIds((current) => {
+            if (!current[request.id]) return current;
+            const next = { ...current };
+            delete next[request.id];
+            return next;
+          });
+        })
+        .catch(() => {
+          setArtifactPreviewFailedIds((current) => ({ ...current, [request.id]: true }));
+        })
+        .finally(() => {
+          setArtifactPreviewLoadingIds((current) => {
+            if (!current[request.id]) return current;
+            const next = { ...current };
+            delete next[request.id];
+            return next;
+          });
+        });
+    });
+  }, [artifactPreviewFailedIds, artifactPreviewLoadingIds, artifactPreviewUrls, batchDetails]);
+
   async function handleRetryBatch(batch: ElaborazioneBatch): Promise<void> {
     const token = getStoredAccessToken();
     if (!token) return;
@@ -207,6 +386,49 @@ export default function ElaborazioniPage() {
     } finally {
       setRetryBusyId(null);
     }
+  }
+
+  async function handleDownloadRequestArtifacts(requestId: string): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) return;
+
+    setArtifactBusyRequestId(requestId);
+    try {
+      const blob = await downloadElaborazioneRequestArtifactsBlob(token, requestId);
+      triggerDownload(blob, `request-${requestId}-artifacts.zip`);
+      setError(null);
+    } catch (downloadError) {
+      setError(downloadError instanceof Error ? downloadError.message : "Errore download artifact richiesta");
+    } finally {
+      setArtifactBusyRequestId(null);
+    }
+  }
+
+  async function handleDownloadDocument(documentItem: CatastoDocument): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) return;
+
+    setDownloadingDocumentId(documentItem.id);
+    try {
+      const blob = await downloadCatastoDocumentBlob(token, documentItem.id);
+      triggerDownload(blob, documentItem.filename);
+      setError(null);
+    } catch (downloadError) {
+      setError(downloadError instanceof Error ? downloadError.message : "Errore download PDF");
+    } finally {
+      setDownloadingDocumentId(null);
+    }
+  }
+
+  function handleOpenPreviewModal(request: ElaborazioneBatchDetail["requests"][number]): void {
+    if (!artifactPreviewUrls[request.id]) {
+      return;
+    }
+    setPreviewModalRequest({
+      requestId: request.id,
+      label: renderRequestLabel(request),
+      reference: renderRequestReference(request),
+    });
   }
 
   const activeCapacitasCredentials = capacitasCredentials.filter((credential) => credential.active);
@@ -355,24 +577,11 @@ export default function ElaborazioniPage() {
     });
   }, [batches, bonificaSyncStatus, particelleSyncJobs]);
 
-  const batchesForTable = useMemo(() => {
-    const isRunning = (status: ElaborazioneBatch["status"]): boolean => status === "pending" || status === "processing";
-
-    return [...batches]
-      .sort((left, right) => {
-        const runningDelta = Number(isRunning(right.status)) - Number(isRunning(left.status));
-        if (runningDelta !== 0) return runningDelta;
-
-        const leftTime = Date.parse(left.created_at);
-        const rightTime = Date.parse(right.created_at);
-        return rightTime - leftTime;
-      })
-      .slice(0, 6);
-  }, [batches]);
-
   function openWorkspaceModal(href: string, title: string, description?: string): void {
     setModalState({ href, title, description });
   }
+
+  const previewModalUrl = previewModalRequest ? artifactPreviewUrls[previewModalRequest.requestId] ?? null : null;
 
   return (
     <ProtectedPage
@@ -653,7 +862,7 @@ export default function ElaborazioniPage() {
             </>
           }
           title="Ultimi lotti creati dall'utente corrente"
-          description="Sotto restano solo l'elenco batch e le azioni di retry, senza duplicare i pannelli operativi superiori."
+          description="Da qui puoi aprire il dettaglio batch oppure usare direttamente azioni rapide di preview, artifact e download risultato quando il lotto le rende disponibili."
         />
         {batches.length === 0 ? (
           <div className="p-5">
@@ -690,23 +899,89 @@ export default function ElaborazioniPage() {
                         {batch.name ?? batch.id}
                       </button>
                     </td>
-                    <td>{batch.status}</td>
+                    <td><ElaborazioneStatusBadge status={batch.status} /></td>
                     <td>{batch.total_items}</td>
                     <td><ElaborazioneOperationMessage value={batch.current_operation} /></td>
                     <td>{formatDateTime(batch.created_at)}</td>
                     <td>
-                      {batch.current_operation === "Retry queued" || (batch.status === "failed" && batch.failed_items > 0) ? (
-                        <button
-                          className="text-sm text-[#1D4E35] transition hover:text-[#143726] disabled:cursor-not-allowed disabled:text-gray-300"
-                          disabled={retryBusyId === batch.id}
-                          onClick={() => void handleRetryBatch(batch)}
-                          type="button"
-                        >
-                          {retryBusyId === batch.id ? "Riprovo..." : "Riprova"}
-                        </button>
-                      ) : (
-                        "—"
-                      )}
+                      <div className="flex flex-wrap items-center gap-3">
+                        {batch.current_operation === "Retry queued" || (batch.status === "failed" && batch.failed_items > 0) ? (
+                          <button
+                            className="text-sm text-[#1D4E35] transition hover:text-[#143726] disabled:cursor-not-allowed disabled:text-gray-300"
+                            disabled={retryBusyId === batch.id}
+                            onClick={() => void handleRetryBatch(batch)}
+                            type="button"
+                          >
+                            {retryBusyId === batch.id ? "Riprovo..." : "Riprova"}
+                          </button>
+                        ) : null}
+                        {(() => {
+                          const detail = batchDetails[batch.id];
+                          if (!detail || detail.requests.length !== 1) {
+                            return null;
+                          }
+                          const request = detail.requests[0];
+                          const downloadPdfItem: CatastoDocument = {
+                            id: request.document_id ?? "",
+                            user_id: 0,
+                            request_id: request.id,
+                            batch_id: batch.id,
+                            search_mode: request.search_mode,
+                            comune: request.comune,
+                            foglio: request.foglio,
+                            particella: request.particella,
+                            subalterno: request.subalterno,
+                            catasto: request.catasto,
+                            tipo_visura: request.tipo_visura,
+                            subject_kind: request.subject_kind,
+                            subject_id: request.subject_id,
+                            request_type: request.request_type,
+                            intestazione: request.intestazione,
+                            filename: `${batch.name ?? batch.id}.pdf`,
+                            file_size: null,
+                            codice_fiscale: null,
+                            created_at: batch.created_at,
+                          };
+                          return (
+                            <>
+                              {request.artifact_dir ? (
+                                <button
+                                  className={getArtifactActionClassName(artifactBusyRequestId === request.id)}
+                                  disabled={artifactBusyRequestId === request.id}
+                                  onClick={() => void handleDownloadRequestArtifacts(request.id)}
+                                  type="button"
+                                >
+                                  {artifactBusyRequestId === request.id ? "Download artifact..." : "Scarica artifact"}
+                                </button>
+                              ) : null}
+                              {artifactPreviewLoadingIds[request.id] ? <span className="text-[11px] text-gray-400">Caricamento preview...</span> : null}
+                              {artifactPreviewUrls[request.id] ? (
+                                <button
+                                  className={getArtifactActionClassName()}
+                                  onClick={() => handleOpenPreviewModal(request)}
+                                  type="button"
+                                >
+                                  Preview screen
+                                </button>
+                              ) : null}
+                              {request.document_id ? (
+                                <button
+                                  className={getArtifactActionClassName(downloadingDocumentId === request.document_id)}
+                                  disabled={downloadingDocumentId === request.document_id}
+                                  onClick={() => void handleDownloadDocument(downloadPdfItem)}
+                                  type="button"
+                                >
+                                  {downloadingDocumentId === request.document_id ? "Download PDF..." : "Scarica PDF"}
+                                </button>
+                              ) : null}
+                            </>
+                          );
+                        })()}
+                        {!(batch.current_operation === "Retry queued" || (batch.status === "failed" && batch.failed_items > 0)) &&
+                        !batchDetails[batch.id] ? (
+                          "—"
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -722,6 +997,32 @@ export default function ElaborazioniPage() {
         open={modalState != null}
         title={modalState?.title ?? "Workspace"}
       />
+      {previewModalRequest && previewModalUrl ? (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 px-4 py-6 backdrop-blur-sm">
+          <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-[28px] border border-gray-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.24)]">
+            <div className="flex items-center justify-between gap-4 border-b border-gray-100 px-6 py-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1D4E35]">Preview screen</p>
+                <h2 className="mt-1 text-lg font-semibold text-gray-900">{previewModalRequest.label}</h2>
+                <p className="mt-1 text-sm text-gray-500">{previewModalRequest.reference}</p>
+              </div>
+              <button className="btn-secondary" onClick={() => setPreviewModalRequest(null)} type="button">
+                Chiudi
+              </button>
+            </div>
+            <div className="overflow-auto bg-[#f4f7f5] p-5">
+              <div className="overflow-hidden rounded-2xl border border-[#d9dfd6] bg-white p-3">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  alt={`Preview artifact richiesta ${previewModalRequest.requestId}`}
+                  className="h-auto w-full rounded-xl border border-[#d9dfd6] object-contain"
+                  src={previewModalUrl}
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </ProtectedPage>
   );
 }

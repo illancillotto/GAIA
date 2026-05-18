@@ -196,6 +196,50 @@ def create_document(tmp_path) -> tuple[str, str]:
         db.close()
 
 
+def create_not_found_request_with_artifacts(tmp_path) -> tuple[str, str]:
+    artifact_dir = tmp_path / "request-artifacts"
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    preview_path = artifact_dir / "preview-not-found.png"
+    full_path = artifact_dir / "final-not_found.png"
+    preview_path.write_bytes(b"preview-png")
+    full_path.write_bytes(b"full-png")
+
+    db = TestingSessionLocal()
+    try:
+        user = db.query(ApplicationUser).filter(ApplicationUser.username == "elaborazioni-admin").one()
+        batch = CatastoBatch(
+            user_id=user.id,
+            name="Batch not found",
+            status="completed",
+            total_items=1,
+            not_found_items=1,
+            current_operation="Utente senza titolarità catastale riga 1",
+        )
+        db.add(batch)
+        db.flush()
+
+        request = CatastoVisuraRequest(
+            batch_id=batch.id,
+            user_id=user.id,
+            row_index=1,
+            search_mode="soggetto",
+            subject_kind="PF",
+            subject_id="CNCFTN98A02B314E",
+            request_type="ATTUALITA",
+            tipo_visura="Sintetica",
+            status=CatastoVisuraRequestStatus.NOT_FOUND.value,
+            current_operation="Nessuna corrispondenza",
+            error_message="Nessuna corrispondenza catastale per PF 'CNCFTN98A02B314E'",
+            artifact_dir=str(artifact_dir),
+            processed_at=datetime.now(UTC) - timedelta(minutes=1),
+        )
+        db.add(request)
+        db.commit()
+        return str(batch.id), str(request.id)
+    finally:
+        db.close()
+
+
 def create_completed_connection_test() -> str:
     db = TestingSessionLocal()
     try:
@@ -715,6 +759,19 @@ def test_documents_archive_lists_filters_details_and_downloads(tmp_path) -> None
 
     selected_archive = zipfile.ZipFile(BytesIO(selection_download_response.content))
     assert selected_archive.namelist() == ["visura-oristano.pdf"]
+
+
+def test_request_artifact_preview_prefers_dedicated_preview_file(tmp_path) -> None:
+    _, request_id = create_not_found_request_with_artifacts(tmp_path)
+
+    preview_response = client.get(f"/elaborazioni/requests/{request_id}/artifacts/preview", headers=auth_headers())
+    assert preview_response.status_code == 200
+    assert preview_response.content == b"preview-png"
+
+    download_response = client.get(f"/elaborazioni/requests/{request_id}/artifacts/download", headers=auth_headers())
+    assert download_response.status_code == 200
+    archive = zipfile.ZipFile(BytesIO(download_response.content))
+    assert sorted(archive.namelist()) == ["final-not_found.png", "preview-not-found.png"]
 
 
 def test_batch_websocket_emits_progress_and_captcha_notification(tmp_path) -> None:

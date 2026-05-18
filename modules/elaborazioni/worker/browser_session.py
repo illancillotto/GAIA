@@ -396,6 +396,68 @@ class BrowserSession:
             return f"Nessuna corrispondenza catastale per {(subject_kind or 'SOGGETTO').strip()} '{(subject_id or '').strip()}'"
         return None
 
+    async def capture_subject_not_found_preview(self, target_dir: Path, reason: str = "preview-not-found") -> str | None:
+        target_dir.mkdir(parents=True, exist_ok=True)
+        preview_path = target_dir / f"{reason}.png"
+
+        top_box = await self._first_visible_bounding_box(
+            [
+                "text=Ufficio provinciale di:",
+                "text=Dati della ricerca",
+            ]
+        )
+        bottom_box = await self._first_visible_bounding_box(
+            [
+                "text=NESSUNA CORRISPONDENZA TROVATA",
+                "text=Elenco Omonimi",
+            ]
+        )
+        if top_box is None or bottom_box is None:
+            return None
+
+        try:
+            page_size = await self.page.evaluate(
+                """() => ({
+                    width: Math.max(
+                        document.documentElement.scrollWidth,
+                        document.body ? document.body.scrollWidth : 0,
+                        window.innerWidth
+                    ),
+                    height: Math.max(
+                        document.documentElement.scrollHeight,
+                        document.body ? document.body.scrollHeight : 0,
+                        window.innerHeight
+                    )
+                })"""
+            )
+            width = float(page_size.get("width") or 0)
+            height = float(page_size.get("height") or 0)
+            clip_x = max(min(float(top_box["x"]), float(bottom_box["x"])) - 24, 0)
+            clip_y = max(min(float(top_box["y"]), float(bottom_box["y"])) - 24, 0)
+            clip_right = min(
+                max(
+                    float(top_box["x"]) + float(top_box["width"]),
+                    float(bottom_box["x"]) + float(bottom_box["width"]),
+                ) + 24,
+                width,
+            )
+            clip_bottom = min(float(bottom_box["y"]) + float(bottom_box["height"]) + 72, height)
+            clip_width = max(clip_right - clip_x, 1)
+            clip_height = max(clip_bottom - clip_y, 1)
+            await self.page.screenshot(
+                path=str(preview_path),
+                clip={
+                    "x": clip_x,
+                    "y": clip_y,
+                    "width": clip_width,
+                    "height": clip_height,
+                },
+            )
+            return str(preview_path)
+        except Exception:
+            logger.exception("Impossibile salvare preview not-found SISTER")
+            return None
+
     async def _read_immobile_status_payload(self) -> dict[str, object]:
         url, title, body_excerpt = await self._read_page_state()
         try:
@@ -1026,6 +1088,19 @@ class BrowserSession:
         timestamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
         target_dir = self.config.debug_artifacts_path / "connection-tests" / timestamp
         return await self._write_artifacts_to_dir(target_dir, reason)
+
+    async def _first_visible_bounding_box(self, selectors: list[str]) -> dict[str, float] | None:
+        for selector in selectors:
+            locator = self.page.locator(selector).first
+            try:
+                if await locator.count() == 0 or not await locator.is_visible():
+                    continue
+                box = await locator.bounding_box()
+            except Exception:
+                continue
+            if box is not None:
+                return box
+        return None
 
     async def _write_artifacts_to_dir(self, target_dir: Path, reason: str) -> list[str]:
         target_dir.mkdir(parents=True, exist_ok=True)

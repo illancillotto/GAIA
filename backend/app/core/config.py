@@ -35,6 +35,10 @@ class Settings(BaseSettings):
         default=2,
         validation_alias=AliasChoices("ELABORAZIONI_WEBSOCKET_POLL_SECONDS", "CATASTO_WEBSOCKET_POLL_SECONDS"),
     )
+    elaborazioni_pending_start_timeout_minutes: int = Field(
+        default=25,
+        alias="ELABORAZIONI_PENDING_START_TIMEOUT_MINUTES",
+    )
     catasto_sister_probe_timeout_seconds: int = Field(
         default=15,
         validation_alias=AliasChoices("ELABORAZIONI_SISTER_PROBE_TIMEOUT_SECONDS", "CATASTO_SISTER_PROBE_TIMEOUT_SECONDS"),
