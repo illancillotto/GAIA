@@ -340,7 +340,7 @@ def run_ade_status_scan(
         result = create_ade_status_scan_batch(
                 db,
                 user_id=current_user.id,
-                limit=max(1, min(payload.limit, 500)),
+                limit=payload.limit if payload.limit is None else max(1, payload.limit),
                 match_reasons=payload.match_reasons or None,
             )
     except ElaborazioneCredentialNotFoundError as exc:

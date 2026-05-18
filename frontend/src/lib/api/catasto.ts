@@ -674,7 +674,7 @@ export async function catastoGetAdeStatusScanCandidates(
 
 export async function catastoRunAdeStatusScan(
   token: string,
-  payload: { limit: number },
+  payload: { limit?: number | null; match_reasons?: string[] | null },
 ): Promise<CatAdeStatusScanRunResponse> {
   return request<CatAdeStatusScanRunResponse>("/catasto/anomalie/ade-scan/run", {
     method: "POST",

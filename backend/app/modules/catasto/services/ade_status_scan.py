@@ -65,7 +65,7 @@ def resolve_ade_section(comune_codice: str | None, partita_comune_nome: str | No
 def list_ade_status_scan_candidates(
     db: Session,
     *,
-    limit: int = 200,
+    limit: int | None = 200,
     match_reasons: list[str] | None = None,
 ) -> list[AdeStatusScanCandidate]:
     query = (
@@ -98,7 +98,9 @@ def list_ade_status_scan_candidates(
         RuoloParticella.ade_scan_checked_at.asc().nullsfirst(),
         RuoloParticella.anno_tributario.desc(),
         RuoloParticella.id.asc(),
-    ).limit(limit)
+    )
+    if limit is not None:
+        query = query.limit(limit)
     rows = db.execute(query).all()
 
     candidates: list[AdeStatusScanCandidate] = []
@@ -159,7 +161,7 @@ def create_ade_status_scan_batch(
     db: Session,
     *,
     user_id: int,
-    limit: int = 50,
+    limit: int | None = None,
     match_reasons: list[str] | None = None,
 ) -> dict[str, object]:
     require_credentials_for_user(db, user_id)

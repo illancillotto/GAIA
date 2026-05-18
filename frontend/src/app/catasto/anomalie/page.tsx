@@ -50,6 +50,7 @@ type CfDraftState = Record<string, string>;
 type ComuneDraftState = Record<string, string>;
 type ParticellaDraftState = Record<string, string>;
 type ParticellaFilterMode = "all" | "without_candidates";
+type WorkspaceMode = "cf" | "comune" | "particella" | null;
 type WorkQueueCard = {
   id: "cf" | "comune" | "particella" | "manual";
   title: string;
@@ -113,7 +114,7 @@ export default function CatastoAnomaliePage() {
   const [summaryTotal, setSummaryTotal] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [wizardMode, setWizardMode] = useState<"cf" | "comune" | "particella" | null>("cf");
+  const [wizardMode, setWizardMode] = useState<WorkspaceMode>("cf");
   const [cfItems, setCfItems] = useState<CatAnomaliaCfWizardItem[]>([]);
   const [cfTotal, setCfTotal] = useState(0);
   const [cfBusy, setCfBusy] = useState(false);
@@ -516,7 +517,7 @@ export default function CatastoAnomaliePage() {
     }
   }
 
-  async function handleRunAdeScan(limit: number): Promise<void> {
+  async function handleRunAdeScan(): Promise<void> {
     const token = getStoredAccessToken();
     if (!token) {
       return;
@@ -526,10 +527,10 @@ export default function CatastoAnomaliePage() {
     setAdeScanError(null);
     setAdeScanMessage(null);
     try {
-      const response = await catastoRunAdeStatusScan(token, { limit });
+      const response = await catastoRunAdeStatusScan(token, {});
       setAdeScanMessage(
         response.created > 0
-          ? `Batch scansione AdE creato: ${response.created} richieste in coda${response.skipped ? `, ${response.skipped} saltate` : ""}.`
+          ? `Batch scansione AdE creato: ${response.created} richieste messe in coda${response.skipped ? `, ${response.skipped} saltate` : ""}.`
           : "Nessuna nuova particella da mettere in coda.",
       );
       await loadAdeScan();
@@ -731,6 +732,19 @@ export default function CatastoAnomaliePage() {
     ];
   }, [summaryBuckets, summaryTotal]);
 
+  const activeQueue = useMemo(
+    () => workQueues.find((queue) => queue.mode === wizardMode) ?? workQueues.find((queue) => queue.id === "manual") ?? null,
+    [wizardMode, workQueues],
+  );
+  const manualQueueCount = workQueues.find((queue) => queue.id === "manual")?.count ?? 0;
+  const activeWorkspaceCount = wizardMode === "cf"
+    ? cfTotal
+    : wizardMode === "comune"
+      ? comuneTotal
+      : wizardMode === "particella"
+        ? particellaTotal
+        : manualQueueCount;
+
   return (
     <CatastoPage
       title="Anomalie"
@@ -865,6 +879,18 @@ export default function CatastoAnomaliePage() {
           </div>
         </article>
 
+        <AlertBanner
+          variant="info"
+          title="Percorso rapido"
+          action={activeQueue ? <span className="rounded-full bg-white/70 px-3 py-1 text-xs font-semibold text-blue-800">Workspace attivo: {activeQueue.title}</span> : undefined}
+        >
+          <div className="space-y-2">
+            <p>1. Scegli una coda di lavoro dalla panoramica o dalle card qui sopra.</p>
+            <p>2. Correggi le righe del workspace attivo oppure passa al registro manuale se non esiste un wizard dedicato.</p>
+            <p>3. Usa il registro completo solo per audit, chiusura e casi fuori workflow guidato.</p>
+          </div>
+        </AlertBanner>
+
         <article className="panel-card border-emerald-100 bg-gradient-to-br from-white via-[#f7fbf7] to-[#eef8f2]">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div>
@@ -877,11 +903,14 @@ export default function CatastoAnomaliePage() {
               <button className="btn-secondary" type="button" disabled={adeScanBusy} onClick={() => void loadAdeScan()}>
                 Aggiorna
               </button>
-              <button className="btn-primary" type="button" disabled={adeScanBusy} onClick={() => void handleRunAdeScan(50)}>
-                {adeScanBusy ? "Preparazione..." : "Scarica 50 visure storiche"}
+              <button className="btn-primary" type="button" disabled={adeScanBusy} onClick={() => void handleRunAdeScan()}>
+                {adeScanBusy ? "Preparazione..." : "Metti in coda tutte le visure"}
               </button>
             </div>
           </div>
+          <p className="mt-3 text-sm text-gray-600">
+            Il batch crea tutte le richieste eleggibili e il worker le elabora progressivamente dalla coda SISTER.
+          </p>
 
           {adeScanError ? (
             <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{adeScanError}</div>
@@ -948,9 +977,9 @@ export default function CatastoAnomaliePage() {
         <article className="panel-card">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="text-sm font-medium text-gray-900">Filtri</p>
+              <p className="text-sm font-medium text-gray-900">Filtri e contesto</p>
               <p className="mt-1 text-sm text-gray-500">
-                I risultati tabellari restano limitati a max 200 righe; i workspace dedicati leggono solo la famiglia di anomalie che sanno correggere.
+                Mantieni il focus su anno, distretto e stato. Il workspace attivo usa questi filtri; il registro completo mostra comunque solo le prime 200 righe.
               </p>
             </div>
             <button
@@ -1044,20 +1073,45 @@ export default function CatastoAnomaliePage() {
             >
               {cfBusy || comuneBusy || particellaBusy ? "Aggiornamento workspace..." : "Aggiorna workspace"}
             </button>
+            <button
+              className="btn-secondary"
+              type="button"
+              onClick={() => setFilters((current) => ({ ...current, status: "aperta" }))}
+            >
+              Solo aperte
+            </button>
+            <button
+              className="btn-secondary"
+              type="button"
+              onClick={() => {
+                setFilters((current) => ({ ...current, tipo: "" }));
+                setWizardMode(null);
+              }}
+            >
+              Vai al manuale
+            </button>
+            <span className="text-sm text-gray-500">
+              Focus attuale: <span className="font-medium text-gray-900">{activeQueue?.title ?? "Registro manuale"}</span> · {activeWorkspaceCount} righe nel workspace
+            </span>
           </div>
         </article>
 
+        {wizardMode === "cf" ? (
         <article className="panel-card">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="section-title">Wizard codice fiscale</p>
               <p className="section-copy mt-1">
-                Primo workspace reale della console anomalie. Copre `VAL-02-cf_invalido` e `VAL-03-cf_mancante`: corregge il dato sull&apos;utenza e chiude le anomalie CF aperte collegate.
+                Correggi `VAL-02-cf_invalido` e `VAL-03-cf_mancante` senza uscire dal flusso: inserisci il dato corretto e chiudi automaticamente le anomalie CF collegate.
               </p>
             </div>
             <div className="rounded-full bg-[#eef5ef] px-3 py-1 text-sm font-medium text-[#1D4E35]">
               {cfBusy ? "Sincronizzazione..." : `${cfItems.length} righe su ${cfTotal}`}
             </div>
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-[#d9dfd6] bg-[#f6faf6] px-4 py-3 text-sm text-gray-700">
+            <span className="font-medium text-gray-900">Come usarlo:</span> controlla il CF attuale, usa il suggerimento se presente oppure digita il valore corretto, poi conferma con `Applica correzione`.
           </div>
 
           {cfError ? (
@@ -1067,11 +1121,7 @@ export default function CatastoAnomaliePage() {
             <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{cfMessage}</div>
           ) : null}
 
-          {wizardMode !== "cf" ? (
-            <div className="mt-4 rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-sm text-gray-500">
-              Nessun wizard attivo per il filtro selezionato. Seleziona una card `VAL-02` o `VAL-03` per aprire il workspace CF.
-            </div>
-          ) : cfBusy && cfItems.length === 0 ? (
+          {cfBusy && cfItems.length === 0 ? (
             <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 px-4 py-5 text-sm text-gray-500">Caricamento workspace CF...</div>
           ) : cfItems.length === 0 ? (
             <div className="mt-4">
@@ -1153,18 +1203,24 @@ export default function CatastoAnomaliePage() {
             </div>
           )}
         </article>
+        ) : null}
 
+        {wizardMode === "comune" ? (
         <article className="panel-card">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="section-title">Wizard comune invalido</p>
               <p className="section-copy mt-1">
-                Workspace dedicato a `VAL-04-comune_invalido`: propone i comuni di riferimento `CatComune` usando codice Capacitas e nome comune importato, poi riallinea l&apos;utenza e chiude le anomalie collegate.
+                Scegli il comune corretto tra le candidate proposte, verifica l&apos;anteprima prima/dopo e applica la correzione singola o batch.
               </p>
             </div>
             <div className="rounded-full bg-[#eef5ef] px-3 py-1 text-sm font-medium text-[#1D4E35]">
               {comuneBusy ? "Sincronizzazione..." : `${comuneItems.length} righe su ${comuneTotal}`}
             </div>
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-[#d9dfd6] bg-[#f6faf6] px-4 py-3 text-sm text-gray-700">
+            <span className="font-medium text-gray-900">Come usarlo:</span> lascia selezionata la candidata migliore, controlla l&apos;anteprima e usa `Applica batch` solo dopo aver rivisto le righe selezionate.
           </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -1206,11 +1262,7 @@ export default function CatastoAnomaliePage() {
             <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{comuneMessage}</div>
           ) : null}
 
-          {wizardMode !== "comune" ? (
-            <div className="mt-4 rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-sm text-gray-500">
-              Nessun wizard comune attivo. Seleziona una card `VAL-04-comune_invalido` per aprire questo workspace.
-            </div>
-          ) : comuneBusy && comuneItems.length === 0 ? (
+          {comuneBusy && comuneItems.length === 0 ? (
             <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 px-4 py-5 text-sm text-gray-500">Caricamento workspace comuni...</div>
           ) : comuneItems.length === 0 ? (
             <div className="mt-4">
@@ -1325,18 +1377,24 @@ export default function CatastoAnomaliePage() {
             </div>
           )}
         </article>
+        ) : null}
 
+        {wizardMode === "particella" ? (
         <article className="panel-card">
           <div className="flex items-start justify-between gap-4">
             <div>
               <p className="section-title">Wizard particella assente</p>
               <p className="section-copy mt-1">
-                Workspace dedicato a `VAL-05-particella_assente`: propone le particelle correnti candidate in base a comune, sezione, foglio, particella e subalterno presenti sull&apos;utenza importata.
+                Collega rapidamente `VAL-05-particella_assente` alla particella corretta partendo dalle candidate già ordinate per affinità.
               </p>
             </div>
             <div className="rounded-full bg-[#eef5ef] px-3 py-1 text-sm font-medium text-[#1D4E35]">
               {particellaBusy ? "Sincronizzazione..." : `${particellaItems.length} righe su ${particellaTotal}`}
             </div>
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-[#d9dfd6] bg-[#f6faf6] px-4 py-3 text-sm text-gray-700">
+            <span className="font-medium text-gray-900">Come usarlo:</span> se la prima candidata è corretta usa `Seleziona top candidate`, altrimenti filtra le righe senza match e gestiscile nel registro manuale.
           </div>
 
           <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -1389,11 +1447,7 @@ export default function CatastoAnomaliePage() {
             <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{particellaMessage}</div>
           ) : null}
 
-          {wizardMode !== "particella" ? (
-            <div className="mt-4 rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-sm text-gray-500">
-              Nessun wizard particella attivo. Seleziona una card `VAL-05-particella_assente` per aprire questo workspace.
-            </div>
-          ) : particellaBusy && particellaItems.length === 0 ? (
+          {particellaBusy && particellaItems.length === 0 ? (
             <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 px-4 py-5 text-sm text-gray-500">Caricamento workspace particelle...</div>
           ) : visibleParticellaItems.length === 0 ? (
             <div className="mt-4">
@@ -1519,13 +1573,35 @@ export default function CatastoAnomaliePage() {
             </div>
           )}
         </article>
+        ) : null}
+
+        {wizardMode === null ? (
+          <article className="panel-card">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="section-title">Triage manuale attivo</p>
+                <p className="section-copy mt-1">
+                  Sei fuori dai wizard guidati. Qui l&apos;operatore chiude, ignora o riapre le anomalie che non hanno ancora un flusso assistito.
+                </p>
+              </div>
+              <div className="rounded-full bg-[#f4f1e8] px-3 py-1 text-sm font-medium text-[#7a5b1f]">
+                {manualQueueCount} righe fuori wizard
+              </div>
+            </div>
+          </article>
+        ) : null}
 
         <article className="panel-card">
-          <div className="mb-4">
+          <div className="mb-4 flex items-start justify-between gap-4">
+            <div>
             <p className="section-title">Registro completo anomalie</p>
             <p className="section-copy mt-1">
-              Audit e fallback manuale. Le famiglie senza wizard dedicato continuano a essere gestite da qui.
+              Audit e fallback manuale. Usa questa tabella per i casi fuori workflow guidato o per chiudere rapidamente le anomalie già verificate.
             </p>
+            </div>
+            <div className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">
+              Prime 200 righe
+            </div>
           </div>
           {busy && items.length === 0 ? (
             <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 text-sm text-gray-500">Caricamento...</div>
