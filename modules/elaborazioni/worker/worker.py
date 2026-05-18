@@ -404,14 +404,7 @@ class CatastoWorker:
             password = self.vault.decrypt(credential.sister_password_encrypted)
             logger.info("Batch %s preso in carico per utente %s", batch_id, batch.user_id)
 
-        browser = BrowserSession(
-            BrowserSessionConfig(
-                headless=HEADLESS,
-                session_timeout_sec=SESSION_TIMEOUT_SEC,
-                debug_pause=DEBUG_BROWSER,
-                debug_artifacts_path=DEBUG_ARTIFACTS_PATH,
-            )
-        )
+        browser = self._build_browser_session()
         await browser.start()
         try:
             self._set_batch_operation(batch_id, "Autenticazione SISTER in corso")
@@ -454,6 +447,22 @@ class CatastoWorker:
                     await asyncio.sleep(60)
                     await browser.ensure_authenticated(credential.sister_username, password)
                     continue
+                except Exception as exc:
+                    logger.exception(
+                        "Batch %s richiesta %s fallita, isolamento errore e prosecuzione batch",
+                        batch_id,
+                        next_request,
+                    )
+                    self._fail_request(batch_id, next_request, str(exc))
+                    with contextlib.suppress(Exception):
+                        await browser.logout()
+                    with contextlib.suppress(Exception):
+                        await browser.stop()
+                    browser = self._build_browser_session()
+                    await browser.start()
+                    self._set_batch_operation(batch_id, "Ripristino sessione SISTER dopo errore richiesta")
+                    await browser.ensure_authenticated(credential.sister_username, password)
+                    continue
                 if self.state.stop_requested:
                     return
                 await asyncio.sleep(BETWEEN_VISURE_DELAY_SEC)
@@ -464,6 +473,16 @@ class CatastoWorker:
             with contextlib.suppress(Exception):
                 await browser.logout()
             await browser.stop()
+
+    def _build_browser_session(self) -> BrowserSession:
+        return BrowserSession(
+            BrowserSessionConfig(
+                headless=HEADLESS,
+                session_timeout_sec=SESSION_TIMEOUT_SEC,
+                debug_pause=DEBUG_BROWSER,
+                debug_artifacts_path=DEBUG_ARTIFACTS_PATH,
+            )
+        )
 
     def _fail_batch(self, batch_id, message: str) -> None:
         user_message = self._to_user_message(message)
@@ -502,6 +521,36 @@ class CatastoWorker:
             batch.status = CatastoBatchStatus.FAILED.value
             batch.current_operation = user_message
             batch.completed_at = datetime.now(timezone.utc)
+            self._refresh_batch_counts(db, batch)
+            db.commit()
+
+    def _fail_request(self, batch_id, request_id, message: str) -> None:
+        user_message = self._to_user_message(message)
+        with SessionLocal() as db:
+            batch = db.get(CatastoBatch, batch_id)
+            request = db.get(CatastoVisuraRequest, request_id)
+            if batch is None or request is None:
+                return
+
+            if request.purpose == ADE_SCAN_PURPOSE and request.target_ruolo_particella_id is not None:
+                persist_ade_status_scan_result(
+                    db,
+                    ruolo_particella_id=request.target_ruolo_particella_id,
+                    request_id=request.id,
+                    status="failed",
+                    classification="blocked",
+                    payload={"classification": "blocked", "message": user_message},
+                    error=user_message,
+                )
+
+            request.status = CatastoVisuraRequestStatus.FAILED.value
+            request.current_operation = "Richiesta fallita, batch in prosecuzione"
+            request.error_message = user_message
+            request.processed_at = datetime.now(timezone.utc)
+            request.captcha_manual_solution = None
+            request.captcha_skip_requested = False
+
+            batch.current_operation = f"Errore riga {request.row_index}, prosecuzione batch"
             self._refresh_batch_counts(db, batch)
             db.commit()
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from urllib.parse import quote
 
@@ -158,22 +159,34 @@ class InVoltureClient:
     ) -> CapacitasTerrenoCertificato:
         http = self._manager.get_http_client()
         token = self._manager.get_token()
-        response = await http.get(
-            CERTIFICATO_URL,
-            params={
-                "CCO": cco,
-                "COM": com,
-                "PVC": pvc,
-                "FRA": fra,
-                "CCS": ccs,
-                "BC": bc,
-                "token": token,
-                "app": "involture",
-                "tenant": "",
-            },
-        )
-        response.raise_for_status()
-        return parse_certificato_html(response.text)
+        params = {
+            "CCO": cco,
+            "COM": com,
+            "PVC": pvc,
+            "FRA": fra,
+            "CCS": ccs,
+            "BC": bc,
+            "token": token,
+            "app": "involture",
+            "tenant": "",
+        }
+        last_error: RuntimeError | None = None
+        for attempt in range(1, 4):
+            response = await http.get(CERTIFICATO_URL, params=params)
+            response.raise_for_status()
+            certificato = parse_certificato_html(response.text)
+            if _is_retryable_invalid_certificato(certificato):
+                last_error = RuntimeError(
+                    f"Capacitas certificato transient error: cco={cco} com={com} fra={fra} attempt={attempt}"
+                )
+                logger.warning(str(last_error))
+                if attempt < 3:
+                    await self.relogin()
+                    await asyncio.sleep(min(attempt, 2))
+                    continue
+                break
+            return certificato
+        raise last_error or RuntimeError(f"Capacitas certificato non valido: cco={cco} com={com} fra={fra}")
 
     async def fetch_terreno_detail(self, *, external_row_id: str, bc: str = "HomRicTer") -> CapacitasTerrenoDetail:
         http = self._manager.get_http_client()
@@ -281,3 +294,17 @@ def _parse_search_result(data: dict | list | str) -> CapacitasSearchResult:
             logger.warning("Parse row Capacitas fallito: %s row=%s", exc, row)
 
     return CapacitasSearchResult(total=total, rows=rows)
+
+
+def _is_retryable_invalid_certificato(certificato: CapacitasTerrenoCertificato) -> bool:
+    raw_text = (certificato.raw_text or "").casefold()
+    if "deadlock" in raw_text or "ripetere la transazione" in raw_text:
+        return True
+    has_core_content = bool(certificato.partita_code or certificato.utenza_code or certificato.terreni or certificato.intestatari)
+    if has_core_content:
+        return False
+    if "errore" in raw_text and "transazione" in raw_text:
+        return True
+    # Alcune risposte HTTP 200 riportano una shell generica inVOLTURE senza il blocco certificato.
+    # In questi casi non abbiamo nessun contenuto semantico utile e conviene ritentare.
+    return True

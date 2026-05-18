@@ -1,16 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 
 import { ProtectedPage } from "@/components/app/protected-page";
+import { EmptyState } from "@/components/ui/empty-state";
 import { ElaborazioneHero, ElaborazioneMiniStat, ElaborazioneNoticeCard, ElaborazionePanelHeader } from "@/components/elaborazioni/module-chrome";
 import { ElaborazioneStatusBadge } from "@/components/elaborazioni/status-badge";
 import { DocumentIcon, FolderIcon, LockIcon, RefreshIcon, SearchIcon } from "@/components/ui/icons";
-import { ApiError, createElaborazioneBatch, createElaborazioneRichiesta, getCatastoComuni, startElaborazioneBatch } from "@/lib/api";
+import { ApiError, createElaborazioneBatch, createElaborazioneRichiesta, getCatastoComuni, getElaborazioneBatches, startElaborazioneBatch } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
-import type { ElaborazioneBatchDetail, CatastoComune, ElaborazioneRichiestaCreateInput } from "@/types/api";
+import { formatDateTime } from "@/lib/presentation";
+import type { CatastoBatch, ElaborazioneBatchDetail, CatastoComune, ElaborazioneRichiestaCreateInput } from "@/types/api";
 
 type ValidationRowError = {
   row_index: number;
@@ -65,6 +67,9 @@ export function ElaborazioneRequestWorkspace({
   const [comuni, setComuni] = useState<CatastoComune[]>([]);
   const [singleError, setSingleError] = useState<string | null>(null);
   const [singleBusy, setSingleBusy] = useState(false);
+  const [activeBatches, setActiveBatches] = useState<CatastoBatch[]>([]);
+  const [activeBatchesBusy, setActiveBatchesBusy] = useState(false);
+  const [activeBatchesError, setActiveBatchesError] = useState<string | null>(null);
 
   const [batchName, setBatchName] = useState("");
   const [file, setFile] = useState<File | null>(null);
@@ -103,6 +108,68 @@ export function ElaborazioneRequestWorkspace({
 
     void loadComuni();
   }, [reset]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadActiveBatches(): Promise<void> {
+      const token = getStoredAccessToken();
+      if (!token) {
+        if (!cancelled) {
+          setActiveBatches([]);
+        }
+        return;
+      }
+
+      if (!cancelled) {
+        setActiveBatchesBusy(true);
+      }
+
+      try {
+        const [pendingBatches, processingBatches] = await Promise.all([
+          getElaborazioneBatches(token, "pending"),
+          getElaborazioneBatches(token, "processing"),
+        ]);
+        if (cancelled) {
+          return;
+        }
+        const merged = [...processingBatches, ...pendingBatches]
+          .sort((left, right) => {
+            const leftTime = new Date(left.started_at ?? left.created_at).getTime();
+            const rightTime = new Date(right.started_at ?? right.created_at).getTime();
+            return rightTime - leftTime;
+          })
+          .slice(0, 6);
+        setActiveBatches(merged);
+        setActiveBatchesError(null);
+      } catch (loadError) {
+        if (cancelled) {
+          return;
+        }
+        setActiveBatchesError(loadError instanceof Error ? loadError.message : "Errore caricamento elaborazioni in corso");
+      } finally {
+        if (!cancelled) {
+          setActiveBatchesBusy(false);
+        }
+      }
+    }
+
+    void loadActiveBatches();
+    const intervalId = window.setInterval(() => {
+      void loadActiveBatches();
+    }, 10000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+    };
+  }, []);
+
+  const activeBatchesSummary = useMemo(() => {
+    const pending = activeBatches.filter((batch) => batch.status === "pending").length;
+    const processing = activeBatches.filter((batch) => batch.status === "processing").length;
+    return { pending, processing, total: activeBatches.length };
+  }, [activeBatches]);
 
   async function onSubmitSingle(values: ElaborazioneRichiestaCreateInput): Promise<void> {
     const token = getStoredAccessToken();
@@ -245,7 +312,7 @@ export function ElaborazioneRequestWorkspace({
         <div className="grid gap-3 sm:grid-cols-4">
           <ElaborazioneMiniStat compact={embedded} eyebrow="Modalità attiva" value={mode === "single" ? "Singola" : "Batch"} description="Puoi cambiare modalità in qualsiasi momento senza uscire dalla pagina." tone="success" />
           <ElaborazioneMiniStat compact={embedded} eyebrow="Comuni" value={comuni.length} description="Archivio comuni disponibile per richieste puntuali." />
-          <ElaborazioneMiniStat compact={embedded} eyebrow="File batch" value={file ? file.name : "Nessun file"} description="CSV e XLSX supportati per l'import massivo." />
+          <ElaborazioneMiniStat compact={embedded} eyebrow="Elaborazioni attive" value={activeBatchesSummary.total} description={activeBatchesSummary.total > 0 ? `${activeBatchesSummary.processing} in lavorazione · ${activeBatchesSummary.pending} in attesa` : "Nessuna elaborazione aperta per l'utente corrente."} />
           <ElaborazioneMiniStat compact={embedded} eyebrow="Validazione" value={validationErrors.length} description="Righe batch con errori bloccanti rilevate." tone={validationErrors.length > 0 ? "warning" : "default"} />
         </div>
       </ElaborazioneHero>
@@ -296,172 +363,231 @@ export function ElaborazioneRequestWorkspace({
       </article>
 
       {mode === "single" ? (
-        <form
-          className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel"
-          onSubmit={(event) => void handleSubmit(onSubmitSingle)(event)}
-        >
-          <ElaborazionePanelHeader
-            badge={
-              <>
-                <LockIcon className="h-3.5 w-3.5" />
-                Dati richiesta
-              </>
-            }
-            title="Parametri catastali della visura singola"
-            description="Puoi avviare una visura per immobile oppure una ricerca per soggetto PF/PNF. Il form mostra solo i campi utili al flusso selezionato."
-          />
-          <div className="p-6">
-            <div className="mb-6 grid gap-4 md:grid-cols-2">
-              <button
-                className={`rounded-[20px] border px-4 py-4 text-left transition ${singleSearchMode === "immobile" ? "border-[#1D4E35] bg-[#eef6f0]" : "border-gray-200 bg-white hover:border-gray-300"}`}
-                onClick={() => reset({ ...watch(), search_mode: "immobile", comune: comuni[0]?.nome ?? watch("comune") ?? "" })}
-                type="button"
-              >
-                <p className="text-sm font-semibold text-gray-900">Ricerca per immobile</p>
-                <p className="mt-1 text-sm text-gray-600">Comune, foglio, particella e subalterno opzionale.</p>
-              </button>
-              <button
-                className={`rounded-[20px] border px-4 py-4 text-left transition ${singleSearchMode === "soggetto" ? "border-[#1D4E35] bg-[#eef6f0]" : "border-gray-200 bg-white hover:border-gray-300"}`}
-                onClick={() => reset({ ...watch(), search_mode: "soggetto" })}
-                type="button"
-              >
-                <p className="text-sm font-semibold text-gray-900">Ricerca per soggetto</p>
-                <p className="mt-1 text-sm text-gray-600">Persona fisica o giuridica con CF/P.IVA e richiesta attualità/storica.</p>
-              </button>
-            </div>
-
-            <input type="hidden" {...register("search_mode")} />
-
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {singleSearchMode === "immobile" ? (
+        <>
+          <form
+            className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel"
+            onSubmit={(event) => void handleSubmit(onSubmitSingle)(event)}
+          >
+            <ElaborazionePanelHeader
+              badge={
                 <>
-                  <label className="space-y-2 xl:col-span-2">
-                    <span className="label-caption">Comune</span>
-                    <select className="form-control" {...register("comune", { required: "Seleziona un comune" })}>
-                      <option value="">Seleziona comune</option>
-                      {comuni.map((comune) => (
-                        <option key={comune.id} value={comune.nome}>
-                          {comune.nome}
-                        </option>
-                      ))}
-                    </select>
-                    {errors.comune ? <p className="text-xs text-red-600">{errors.comune.message}</p> : null}
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="label-caption">Catasto</span>
-                    <select className="form-control" {...register("catasto", { required: true })}>
-                      <option value="Terreni">Terreni</option>
-                      <option value="Terreni e Fabbricati">Terreni e Fabbricati</option>
-                    </select>
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="label-caption">Foglio</span>
-                    <input
-                      className="form-control"
-                      inputMode="numeric"
-                      placeholder="Es. 5"
-                      {...register("foglio", {
-                        required: "Foglio obbligatorio",
-                        pattern: { value: /^\d+$/, message: "Inserisci un valore numerico" },
-                      })}
-                    />
-                    {errors.foglio ? <p className="text-xs text-red-600">{errors.foglio.message}</p> : null}
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="label-caption">Particella</span>
-                    <input
-                      className="form-control"
-                      inputMode="numeric"
-                      placeholder="Es. 120"
-                      {...register("particella", {
-                        required: "Particella obbligatoria",
-                        pattern: { value: /^\d+$/, message: "Inserisci un valore numerico" },
-                      })}
-                    />
-                    {errors.particella ? <p className="text-xs text-red-600">{errors.particella.message}</p> : null}
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="label-caption">Subalterno</span>
-                    <input
-                      className="form-control"
-                      inputMode="numeric"
-                      placeholder="Opzionale"
-                      {...register("subalterno", {
-                        pattern: { value: /^\d*$/, message: "Solo valori numerici" },
-                      })}
-                    />
-                    {errors.subalterno ? <p className="text-xs text-red-600">{errors.subalterno.message}</p> : null}
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="label-caption">Sezione</span>
-                    <input className="form-control" placeholder="Opzionale" {...register("sezione")} />
-                  </label>
+                  <LockIcon className="h-3.5 w-3.5" />
+                  Dati richiesta
                 </>
+              }
+              title="Parametri catastali della visura singola"
+              description="Puoi avviare una visura per immobile oppure una ricerca per soggetto PF/PNF. Il form mostra solo i campi utili al flusso selezionato."
+            />
+            <div className="p-6">
+              <div className="mb-6 grid gap-4 md:grid-cols-2">
+                <button
+                  className={`rounded-[20px] border px-4 py-4 text-left transition ${singleSearchMode === "immobile" ? "border-[#1D4E35] bg-[#eef6f0]" : "border-gray-200 bg-white hover:border-gray-300"}`}
+                  onClick={() => reset({ ...watch(), search_mode: "immobile", comune: comuni[0]?.nome ?? watch("comune") ?? "" })}
+                  type="button"
+                >
+                  <p className="text-sm font-semibold text-gray-900">Ricerca per immobile</p>
+                  <p className="mt-1 text-sm text-gray-600">Comune, foglio, particella e subalterno opzionale.</p>
+                </button>
+                <button
+                  className={`rounded-[20px] border px-4 py-4 text-left transition ${singleSearchMode === "soggetto" ? "border-[#1D4E35] bg-[#eef6f0]" : "border-gray-200 bg-white hover:border-gray-300"}`}
+                  onClick={() => reset({ ...watch(), search_mode: "soggetto" })}
+                  type="button"
+                >
+                  <p className="text-sm font-semibold text-gray-900">Ricerca per soggetto</p>
+                  <p className="mt-1 text-sm text-gray-600">Persona fisica o giuridica con CF/P.IVA e richiesta attualità/storica.</p>
+                </button>
+              </div>
+
+              <input type="hidden" {...register("search_mode")} />
+
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {singleSearchMode === "immobile" ? (
+                  <>
+                    <label className="space-y-2 xl:col-span-2">
+                      <span className="label-caption">Comune</span>
+                      <select className="form-control" {...register("comune", { required: "Seleziona un comune" })}>
+                        <option value="">Seleziona comune</option>
+                        {comuni.map((comune) => (
+                          <option key={comune.id} value={comune.nome}>
+                            {comune.nome}
+                          </option>
+                        ))}
+                      </select>
+                      {errors.comune ? <p className="text-xs text-red-600">{errors.comune.message}</p> : null}
+                    </label>
+
+                    <label className="space-y-2">
+                      <span className="label-caption">Catasto</span>
+                      <select className="form-control" {...register("catasto", { required: true })}>
+                        <option value="Terreni">Terreni</option>
+                        <option value="Terreni e Fabbricati">Terreni e Fabbricati</option>
+                      </select>
+                    </label>
+
+                    <label className="space-y-2">
+                      <span className="label-caption">Foglio</span>
+                      <input
+                        className="form-control"
+                        inputMode="numeric"
+                        placeholder="Es. 5"
+                        {...register("foglio", {
+                          required: "Foglio obbligatorio",
+                          pattern: { value: /^\d+$/, message: "Inserisci un valore numerico" },
+                        })}
+                      />
+                      {errors.foglio ? <p className="text-xs text-red-600">{errors.foglio.message}</p> : null}
+                    </label>
+
+                    <label className="space-y-2">
+                      <span className="label-caption">Particella</span>
+                      <input
+                        className="form-control"
+                        inputMode="numeric"
+                        placeholder="Es. 120"
+                        {...register("particella", {
+                          required: "Particella obbligatoria",
+                          pattern: { value: /^\d+$/, message: "Inserisci un valore numerico" },
+                        })}
+                      />
+                      {errors.particella ? <p className="text-xs text-red-600">{errors.particella.message}</p> : null}
+                    </label>
+
+                    <label className="space-y-2">
+                      <span className="label-caption">Subalterno</span>
+                      <input
+                        className="form-control"
+                        inputMode="numeric"
+                        placeholder="Opzionale"
+                        {...register("subalterno", {
+                          pattern: { value: /^\d*$/, message: "Solo valori numerici" },
+                        })}
+                      />
+                      {errors.subalterno ? <p className="text-xs text-red-600">{errors.subalterno.message}</p> : null}
+                    </label>
+
+                    <label className="space-y-2">
+                      <span className="label-caption">Sezione</span>
+                      <input className="form-control" placeholder="Opzionale" {...register("sezione")} />
+                    </label>
+                  </>
+                ) : (
+                  <>
+                    <label className="space-y-2">
+                      <span className="label-caption">Tipo soggetto</span>
+                      <select className="form-control" {...register("subject_kind")}>
+                        <option value="PF">Persona fisica</option>
+                        <option value="PNF">Persona giuridica</option>
+                      </select>
+                    </label>
+
+                    <label className="space-y-2 xl:col-span-2">
+                      <span className="label-caption">Codice fiscale / Partita IVA</span>
+                      <input
+                        className="form-control"
+                        placeholder="RSSMRA80A01H501U oppure 01234567890"
+                        {...register("subject_id", {
+                          required: "Identificativo soggetto obbligatorio",
+                        })}
+                      />
+                      {errors.subject_id ? <p className="text-xs text-red-600">{errors.subject_id.message}</p> : null}
+                    </label>
+
+                    <label className="space-y-2">
+                      <span className="label-caption">Tipo richiesta</span>
+                      <select className="form-control" {...register("request_type")}>
+                        <option value="ATTUALITA">Attualità</option>
+                        <option value="STORICA">Storica</option>
+                      </select>
+                    </label>
+
+                    <label className="space-y-2 xl:col-span-2">
+                      <span className="label-caption">Intestazione</span>
+                      <input
+                        className="form-control"
+                        placeholder="Opzionale, utile per identificazione e naming documento"
+                        {...register("intestazione")}
+                      />
+                    </label>
+                  </>
+                )}
+
+                <label className="space-y-2">
+                  <span className="label-caption">Tipo visura</span>
+                  <select className="form-control" {...register("tipo_visura", { required: true })}>
+                    <option value="Sintetica">Sintetica</option>
+                    <option value="Completa">Completa</option>
+                  </select>
+                </label>
+              </div>
+
+              <div className="mt-6 flex flex-wrap items-center gap-3">
+                <button className="btn-primary" disabled={singleBusy || (singleSearchMode === "immobile" && comuni.length === 0)} type="submit">
+                  {singleBusy ? "Avvio in corso..." : singleSearchMode === "soggetto" ? "Avvia ricerca soggetto" : "Avvia visura singola"}
+                </button>
+                <p className="text-xs text-gray-400">
+                  La richiesta crea un batch da una sola riga e parte subito se le credenziali runtime sono presenti.
+                </p>
+              </div>
+            </div>
+          </form>
+
+          <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
+            <ElaborazionePanelHeader
+              badge={
+                <>
+                  <RefreshIcon className="h-3.5 w-3.5" />
+                  In corso
+                </>
+              }
+              title="Elaborazioni attive dell'utente corrente"
+              description="Qui trovi i batch ancora in attesa o in lavorazione senza uscire dalla pagina della visura singola."
+            />
+            <div className="p-6">
+              {activeBatchesError ? (
+                <ElaborazioneNoticeCard compact={embedded} title="Errore caricamento stato" description={activeBatchesError} tone="danger" />
+              ) : activeBatchesBusy && activeBatches.length === 0 ? (
+                <p className="text-sm text-gray-500">Caricamento elaborazioni in corso.</p>
+              ) : activeBatches.length === 0 ? (
+                <EmptyState icon={RefreshIcon} title="Nessuna elaborazione in corso" description="Non risultano batch pending o processing per l'utente corrente." />
               ) : (
-                <>
-                  <label className="space-y-2">
-                    <span className="label-caption">Tipo soggetto</span>
-                    <select className="form-control" {...register("subject_kind")}>
-                      <option value="PF">Persona fisica</option>
-                      <option value="PNF">Persona giuridica</option>
-                    </select>
-                  </label>
-
-                  <label className="space-y-2 xl:col-span-2">
-                    <span className="label-caption">Codice fiscale / Partita IVA</span>
-                    <input
-                      className="form-control"
-                      placeholder="RSSMRA80A01H501U oppure 01234567890"
-                      {...register("subject_id", {
-                        required: "Identificativo soggetto obbligatorio",
-                      })}
-                    />
-                    {errors.subject_id ? <p className="text-xs text-red-600">{errors.subject_id.message}</p> : null}
-                  </label>
-
-                  <label className="space-y-2">
-                    <span className="label-caption">Tipo richiesta</span>
-                    <select className="form-control" {...register("request_type")}>
-                      <option value="ATTUALITA">Attualità</option>
-                      <option value="STORICA">Storica</option>
-                    </select>
-                  </label>
-
-                  <label className="space-y-2 xl:col-span-2">
-                    <span className="label-caption">Intestazione</span>
-                    <input
-                      className="form-control"
-                      placeholder="Opzionale, utile per identificazione e naming documento"
-                      {...register("intestazione")}
-                    />
-                  </label>
-                </>
+                <div className="grid gap-3 xl:grid-cols-2">
+                  {activeBatches.map((batch) => {
+                    const processedItems = batch.completed_items + batch.failed_items + batch.skipped_items + batch.not_found_items;
+                    return (
+                      <article key={batch.id} className="rounded-[24px] border border-gray-100 bg-gray-50 p-4">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-gray-900">{batch.name ?? `Batch ${batch.id.slice(0, 8)}`}</p>
+                            <p className="mt-1 text-xs text-gray-500">
+                              Creato {formatDateTime(batch.created_at)}
+                              {batch.started_at ? ` · Avviato ${formatDateTime(batch.started_at)}` : ""}
+                            </p>
+                          </div>
+                          <ElaborazioneStatusBadge status={batch.status} />
+                        </div>
+                        <p className="mt-3 text-sm text-gray-600">{batch.current_operation ?? "In attesa del worker elaborazioni"}</p>
+                        <div className="mt-4 flex flex-wrap items-center gap-3 text-xs text-gray-500">
+                          <span>{processedItems}/{batch.total_items} righe gestite</span>
+                          <span>completate {batch.completed_items}</span>
+                          <span>senza risultato {batch.not_found_items}</span>
+                        </div>
+                        <div className="mt-4">
+                          <button
+                            className="btn-secondary"
+                            onClick={() => router.push(`/elaborazioni/batches/${batch.id}`)}
+                            type="button"
+                          >
+                            Apri batch
+                          </button>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
               )}
-
-              <label className="space-y-2">
-                <span className="label-caption">Tipo visura</span>
-                <select className="form-control" {...register("tipo_visura", { required: true })}>
-                  <option value="Sintetica">Sintetica</option>
-                  <option value="Completa">Completa</option>
-                </select>
-              </label>
             </div>
-
-            <div className="mt-6 flex flex-wrap items-center gap-3">
-              <button className="btn-primary" disabled={singleBusy || (singleSearchMode === "immobile" && comuni.length === 0)} type="submit">
-                {singleBusy ? "Avvio in corso..." : singleSearchMode === "soggetto" ? "Avvia ricerca soggetto" : "Avvia visura singola"}
-              </button>
-              <p className="text-xs text-gray-400">
-                La richiesta crea un batch da una sola riga e parte subito se le credenziali runtime sono presenti.
-              </p>
-            </div>
-          </div>
-        </form>
+          </article>
+        </>
       ) : (
         <>
           <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">

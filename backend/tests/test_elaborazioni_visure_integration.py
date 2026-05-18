@@ -168,6 +168,58 @@ def test_retry_failed_batch_does_not_retry_not_found_requests() -> None:
         db.close()
 
 
+def test_retry_failed_batch_requeues_old_failed_batches_without_stale_expiration() -> None:
+    db = TestingSessionLocal()
+    try:
+        user = db.query(ApplicationUser).filter(ApplicationUser.username == "worker").one()
+        original_started_at = datetime.now(UTC) - timedelta(hours=3)
+        batch = CatastoBatch(
+            user_id=user.id,
+            name="Batch retry stale guard",
+            status="failed",
+            total_items=1,
+            failed_items=1,
+            created_at=datetime.now(UTC) - timedelta(hours=4),
+            started_at=original_started_at,
+            completed_at=datetime.now(UTC) - timedelta(hours=2),
+        )
+        db.add(batch)
+        db.flush()
+        db.add(
+            CatastoVisuraRequest(
+                batch_id=batch.id,
+                user_id=user.id,
+                row_index=1,
+                search_mode="soggetto",
+                subject_kind="PF",
+                subject_id="RSSMRA80A01H501U",
+                request_type="ATTUALITA",
+                tipo_visura="Sintetica",
+                status=CatastoVisuraRequestStatus.FAILED.value,
+                current_operation="Errore precedente",
+                error_message="Errore test",
+            )
+        )
+        db.commit()
+
+        retry_failed_batch(db, user.id, batch.id)
+        expired = expire_stale_pending_batches(db, user.id)
+
+        db.refresh(batch)
+        request = db.query(CatastoVisuraRequest).filter(CatastoVisuraRequest.batch_id == batch.id).one()
+        assert expired == 0
+        assert batch.status == "pending"
+        assert batch.current_operation == "Retry queued"
+        assert batch.started_at is not None
+        assert batch.started_at > original_started_at
+        assert batch.completed_at is None
+        assert request.status == CatastoVisuraRequestStatus.PENDING.value
+        assert request.current_operation == "Queued for retry"
+        assert request.error_message is None
+    finally:
+        db.close()
+
+
 def test_persist_flow_result_uses_subject_specific_message_for_not_found() -> None:
     db = TestingSessionLocal()
     try:
@@ -340,6 +392,97 @@ def test_create_ade_status_scan_batch_queues_unmatched_ruolo_particelle() -> Non
         assert request.tipo_visura == "Sintetica"
         assert ruolo_particella.ade_scan_status == "pending"
         assert ruolo_particella.ade_scan_request_id == request.id
+    finally:
+        db.close()
+
+
+def test_create_ade_status_scan_batch_without_limit_queues_all_unmatched_ruolo_particelle() -> None:
+    db = TestingSessionLocal()
+    try:
+        user = db.query(ApplicationUser).filter(ApplicationUser.username == "worker").one()
+        db.add(
+            ElaborazioneCredential(
+                user_id=user.id,
+                label="SISTER test",
+                sister_username="test-user",
+                sister_password_encrypted=get_credential_fernet().encrypt(b"test-password"),
+                ufficio_provinciale="ORISTANO Territorio",
+                active=True,
+                is_default=True,
+            )
+        )
+        import_job = RuoloImportJob(anno_tributario=2025, filename="R2025.dmp", status="completed")
+        db.add(import_job)
+        db.flush()
+        avviso = RuoloAvviso(import_job_id=import_job.id, codice_cnc="CNC1", anno_tributario=2025)
+        db.add(avviso)
+        db.flush()
+        partita = RuoloPartita(
+            avviso_id=avviso.id,
+            codice_partita="0000000",
+            comune_nome="ARBOREA",
+            comune_codice="A357",
+        )
+        db.add(partita)
+        parcel_one = CatastoParcel(
+            comune_codice="A357",
+            comune_nome="ARBOREA",
+            foglio="25",
+            particella="215",
+            subalterno=None,
+            valid_from=2025,
+            source="ruolo_import",
+        )
+        parcel_two = CatastoParcel(
+            comune_codice="A357",
+            comune_nome="ARBOREA",
+            foglio="25",
+            particella="216",
+            subalterno=None,
+            valid_from=2025,
+            source="ruolo_import",
+        )
+        db.add_all([parcel_one, parcel_two])
+        db.flush()
+        ruolo_particella_one = RuoloParticella(
+            partita_id=partita.id,
+            anno_tributario=2025,
+            foglio="25",
+            particella="215",
+            subalterno=None,
+            catasto_parcel_id=parcel_one.id,
+            cat_particella_match_status="unmatched",
+            cat_particella_match_reason="no_cat_particella_match",
+        )
+        ruolo_particella_two = RuoloParticella(
+            partita_id=partita.id,
+            anno_tributario=2025,
+            foglio="25",
+            particella="216",
+            subalterno=None,
+            catasto_parcel_id=parcel_two.id,
+            cat_particella_match_status="unmatched",
+            cat_particella_match_reason="no_cat_particella_match",
+        )
+        db.add_all([ruolo_particella_one, ruolo_particella_two])
+        db.commit()
+
+        result = create_ade_status_scan_batch(db, user_id=user.id)
+        requests = (
+            db.query(CatastoVisuraRequest)
+            .filter(CatastoVisuraRequest.purpose == ADE_SCAN_PURPOSE)
+            .order_by(CatastoVisuraRequest.row_index.asc())
+            .all()
+        )
+        db.refresh(ruolo_particella_one)
+        db.refresh(ruolo_particella_two)
+
+        assert result["created"] == 2
+        assert len(requests) == 2
+        assert requests[0].target_ruolo_particella_id == ruolo_particella_one.id
+        assert requests[1].target_ruolo_particella_id == ruolo_particella_two.id
+        assert ruolo_particella_one.ade_scan_status == "pending"
+        assert ruolo_particella_two.ade_scan_status == "pending"
     finally:
         db.close()
 
