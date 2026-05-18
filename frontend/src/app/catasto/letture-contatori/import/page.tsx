@@ -12,6 +12,7 @@ export default function CatastoMeterReadingsImportPage() {
       description="Validazione e import dei file Excel distrettuali delle letture contatori irrigui."
       breadcrumb="Catasto / Contatori irrigui / Import"
       requiredModule="catasto"
+      requiredRoles={["admin", "super_admin"]}
     >
       <div className="page-stack">
         <div className="flex justify-end">

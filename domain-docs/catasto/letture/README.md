@@ -19,9 +19,11 @@ domain-docs/catasto/docs/
 
 La funzionalità prevede:
 
-- import Excel dei file distrettuali;
+- import Excel dei file distrettuali, anche multiplo;
 - normalizzazione e validazione dati;
 - aggancio alle utenze tramite codice fiscale;
 - visualizzazione nel dettaglio utente;
-- dashboard e tabella nel modulo Catasto;
+- dashboard e tabella nel modulo Catasto, con filtro anno a dropdown inizializzato sull'anno corrente solo se contiene dati, altrimenti sull'ultimo anno caricato;
+- deduzione automatica del distretto dal nome file nel flusso di import frontend;
+- pagina `catasto/letture-contatori/import` riservata ad `admin` e `super_admin`;
 - predisposizione futura per GAIA Mobile.

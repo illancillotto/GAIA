@@ -32,7 +32,7 @@ Portare in `GAIA Catasto` una gestione completa delle letture contatori irrigui 
 5. Esporre API:
    validate, import, lista import, dettaglio import, lista letture, dettaglio lettura, letture per soggetto.
 6. Integrare frontend Catasto:
-   pagina registro, pagina import, tabella, drawer dettaglio, report validazione.
+   pagina registro, pagina import con upload multiplo e deduzione distretto dal filename, tabella, drawer dettaglio, report validazione.
 7. Integrare sezione `Letture contatori` in `frontend/src/app/utenze/[id]/page.tsx`.
 8. Coprire parser/import/API con test backend e allineare la documentazione di dominio.
 

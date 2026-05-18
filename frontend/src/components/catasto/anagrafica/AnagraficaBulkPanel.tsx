@@ -12,6 +12,8 @@ import { capacitasGetRptCertificatoLink, catastoBulkSearchAnagrafica, catastoDel
 import { getStoredAccessToken } from "@/lib/auth";
 import type { CatAnagraficaBulkJobItem, CatAnagraficaBulkRowInput, CatAnagraficaBulkRowResult, CatAnagraficaMatch, CatIntestatario } from "@/types/catasto";
 
+import { CatastoFilePicker } from "../file-picker";
+
 function triggerDownload(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const anchor = window.document.createElement("a");
@@ -901,30 +903,19 @@ export function AnagraficaBulkPanel() {
 
         <div className="mt-4 rounded-xl border border-dashed border-gray-200 bg-gray-50/70 p-4">
           <div className="flex flex-wrap items-center gap-3">
-            <input
+            <CatastoFilePicker
               id="catasto-bulk-file"
-              type="file"
+              label="File ricerca anagrafica"
               accept=".xlsx,.csv"
-              className="sr-only"
-              aria-label="File ricerca anagrafica"
+              file={sourceFile}
               disabled={busy}
-              onChange={(e) => {
-                const file = e.target.files?.[0] ?? null;
+              onChange={(file) => {
                 if (!file) return;
                 setSourceFile(file);
                 void parseSelectedFile(file);
               }}
+              hint="Carica un file .xlsx o .csv dopo aver scaricato il template corretto."
             />
-            <label
-              htmlFor="catasto-bulk-file"
-              className={[
-                "inline-flex cursor-pointer items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm font-medium text-gray-800 shadow-sm transition hover:bg-gray-50",
-                busy ? "pointer-events-none opacity-60" : "",
-              ].join(" ")}
-            >
-              <DocumentIcon className="h-4 w-4" />
-              Scegli file
-            </label>
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-medium text-gray-900">
                 {sourceFile ? sourceFile.name : "Nessun file selezionato"}
@@ -937,7 +928,7 @@ export function AnagraficaBulkPanel() {
                     {inferredKind ? ` · ${inferredKind === "CF_PIVA_PARTICELLE" ? "CF/P.IVA → Particelle" : "Particelle → Intestatari"}` : ""}
                   </>
                 ) : (
-                  "Carica un file .xlsx o .csv dopo aver scaricato il template corretto."
+                  "Seleziona il file per vedere l’anteprima del caricamento."
                 )}
               </p>
             </div>

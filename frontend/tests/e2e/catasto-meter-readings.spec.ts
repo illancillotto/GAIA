@@ -234,7 +234,8 @@ test("catasto meter readings import page validates and imports workbook", async 
   await page.getByRole("button", { name: "Valida file" }).click();
   await expect(page.getByText("Report validazione")).toBeVisible();
   await expect(page.getByText("D01-Sinis 2025.xlsx")).toBeVisible();
-  await expect(page.getByText("PC-001")).toBeVisible();
+  await expect(page.locator("div.rounded-xl.bg-emerald-50").getByText("Valide")).toBeVisible();
+  await expect(page.locator("div.rounded-xl.bg-emerald-50").getByText("1")).toBeVisible();
 
   await page.getByRole("button", { name: "Importa letture" }).click();
   await expect(page.getByText("Import completato: 1 righe salvate, 0 con warning, 0 scartate.")).toBeVisible();

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { CatastoPage } from "@/components/catasto/catasto-page";
+import { CatastoFilePicker } from "@/components/catasto/file-picker";
 import { ImportStatusBadge } from "@/components/catasto/ImportStatusBadge";
 import { AnomaliaStatusBadge } from "@/components/catasto/AnomaliaStatusBadge";
 import { AlertBanner } from "@/components/ui/alert-banner";
@@ -70,47 +71,6 @@ function batchTipoLabel(batchTipo: string | null | undefined): string {
   if (batchTipo === "shapefile_distretti") return "Distretti";
   if (batchTipo === "shapefile") return "Particelle";
   return "Import";
-}
-
-function FilePicker({
-  id,
-  label,
-  accept,
-  file,
-  onChange,
-  hint,
-}: {
-  id: string;
-  label: string;
-  accept: string;
-  file: File | null;
-  onChange: (file: File | null) => void;
-  hint?: string;
-}) {
-  return (
-    <div className="text-sm font-medium text-gray-700">
-      <p>{label}</p>
-      <label
-        htmlFor={id}
-        className="mt-1 flex cursor-pointer items-center gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 transition hover:border-[#1D4E35]/40 hover:bg-[#f7fbf8]"
-      >
-        <span className="inline-flex shrink-0 rounded-lg border border-[#1D4E35]/20 bg-[#eef6f0] px-3 py-1.5 text-sm font-semibold text-[#1D4E35]">
-          Scegli file
-        </span>
-        <span className={`min-w-0 truncate text-sm ${file ? "text-gray-800" : "text-gray-400"}`}>
-          {file?.name ?? "Nessun file selezionato"}
-        </span>
-      </label>
-      <input
-        id={id}
-        className="sr-only"
-        type="file"
-        accept={accept}
-        onChange={(e) => onChange(e.target.files?.[0] ?? null)}
-      />
-      {hint ? <p className="mt-1 text-xs text-gray-400">{hint}</p> : null}
-    </div>
-  );
 }
 
 export default function CatastoImportPage() {
@@ -478,12 +438,13 @@ export default function CatastoImportPage() {
 
             {importType === "capacitas" ? (
               <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <FilePicker
+                <CatastoFilePicker
                   id="catasto-import-capacitas-file"
                   label="File Excel"
                   accept=".xlsx,.xls"
                   file={file}
                   onChange={setFile}
+                  disabled={busy}
                   hint="Workbook Capacitas con foglio Ruoli ANNO."
                 />
                 <label className="flex items-center gap-2 rounded-xl border border-gray-100 bg-white px-4 py-3 text-sm text-gray-700">
@@ -493,12 +454,13 @@ export default function CatastoImportPage() {
               </div>
             ) : importType === "shapefile_particelle" ? (
               <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <FilePicker
+                <CatastoFilePicker
                   id="catasto-import-particelle-file"
                   label="Archivio ZIP particelle"
                   accept=".zip"
                   file={file}
                   onChange={setFile}
+                  disabled={busy}
                   hint="ZIP del layer particelle contenente .shp, .dbf e .shx."
                 />
                 <label className="text-sm font-medium text-gray-700">
@@ -518,12 +480,13 @@ export default function CatastoImportPage() {
               </div>
             ) : (
               <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <FilePicker
+                <CatastoFilePicker
                   id="catasto-import-distretti-file"
                   label="File Excel distretti"
                   accept=".xlsx,.xls"
                   file={file}
                   onChange={setFile}
+                  disabled={busy}
                   hint="Tracciato atteso: ANNO, N_DISTRETTO, DISTRETTO, COMUNE, SEZIONE, FOGLIO, PARTIC, SUB. Il match su cat_particelle ignora SUB."
                 />
                 <div className="rounded-xl border border-gray-100 bg-white px-4 py-3 text-sm text-gray-600">

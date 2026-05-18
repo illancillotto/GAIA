@@ -54,13 +54,14 @@ La funzionalità risulta implementata nel runtime Catasto per il perimetro fase 
 |---|---|---|
 | API client Catasto letture | completato | integrato nel client Catasto esistente |
 | Pagina `Contatori irrigui` | completato | route Catasto dedicata |
-| Pannello import Excel | completato | upload + validazione + import |
-| Report anomalie import | completato | report sintetico preview |
+| Pannello import Excel | completato | upload multiplo, deduzione distretto da filename, validazione + import sequenziale |
+| Report anomalie import | completato | report sintetico preview per-file |
 | Tabella letture | completato | filtri base e apertura dettaglio |
 | Drawer dettaglio lettura | completato | dati completi e validazione |
 | Sidebar Catasto | completato | voce `Contatori irrigui` aggiunta |
 | Sezione dettaglio utente | completato | consume API Catasto per soggetto |
-| Test frontend | parziale | integrazione UI implementata, test e2e dedicati da estendere |
+| Test frontend | parziale | Playwright `catasto-meter-readings.spec.ts` eseguito con esito positivo nel runtime locale |
+| Test backend | parziale nel runtime locale | suite `pytest -k meter_readings` bloccata in collection per dependency mancante `shapely`, non per errore funzionale del flusso letture |
 
 ### GAIA Mobile
 

@@ -71,8 +71,8 @@ utenza.codice_fiscale_normalizzato
 
 ### Incluso
 
-- Upload file Excel da interfaccia GAIA.
-- Scelta o riconoscimento del distretto.
+- Upload singolo o multiplo di file Excel da interfaccia GAIA.
+- Riconoscimento automatico del distretto dal nome file.
 - Scelta anno campagna.
 - Validazione preventiva del file.
 - Import delle righe valide.
@@ -153,13 +153,13 @@ Modalità previste:
 
 ### RF-01 — Import Excel
 
-Il sistema deve consentire il caricamento di un file `.xlsx` contenente le letture di un distretto.
+Il sistema deve consentire il caricamento di uno o più file `.xlsx`, ciascuno contenente le letture di un distretto.
 
 Input richiesti:
 
 - file Excel;
-- anno;
-- distretto, manuale o dedotto dal nome file;
+- anno opzionale come override comune ai file caricati;
+- distretto dedotto dal nome file;
 - modalità import.
 
 ### RF-02 — Validazione preventiva

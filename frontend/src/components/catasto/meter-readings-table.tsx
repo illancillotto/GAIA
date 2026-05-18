@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { AlertBanner } from "@/components/ui/alert-banner";
-import { catastoGetMeterReading, catastoListMeterReadings } from "@/lib/api/catasto";
+import { catastoGetMeterReading, catastoListMeterReadingImports, catastoListMeterReadings } from "@/lib/api/catasto";
 import { getStoredAccessToken } from "@/lib/auth";
 import type { CatMeterReading, CatMeterReadingListResponse } from "@/types/catasto";
 
@@ -11,16 +11,55 @@ import { MeterReadingDetailDrawer } from "./meter-reading-detail-drawer";
 
 export function MeterReadingsTable({ subjectId }: { subjectId?: string }) {
   const [data, setData] = useState<CatMeterReadingListResponse | null>(null);
-  const [anno, setAnno] = useState(String(new Date().getFullYear()));
+  const [anno, setAnno] = useState("");
+  const [annoOptions, setAnnoOptions] = useState<number[]>([]);
   const [puntoConsegna, setPuntoConsegna] = useState("");
   const [codiceFiscale, setCodiceFiscale] = useState("");
   const [loading, setLoading] = useState(true);
+  const [isInitializingAnno, setIsInitializingAnno] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [detail, setDetail] = useState<CatMeterReading | null>(null);
 
+  useEffect(() => {
+    async function initializeAnno() {
+      const token = getStoredAccessToken();
+      if (!token) return;
+
+      try {
+        setIsInitializingAnno(true);
+        setError(null);
+
+        const currentYear = new Date().getFullYear();
+        const [imports, currentYearResult] = await Promise.all([
+          catastoListMeterReadingImports(token),
+          catastoListMeterReadings(token, { anno: currentYear, pageSize: 1 }),
+        ]);
+
+        const importedYears = Array.from(new Set(imports.map((item) => item.anno))).sort((left, right) => right - left);
+        const selectedYear =
+          currentYearResult.total > 0 ? currentYear : importedYears[0] ?? currentYear;
+        const nextOptions = importedYears.includes(selectedYear)
+          ? importedYears
+          : [selectedYear, ...importedYears].sort((left, right) => right - left);
+
+        setAnnoOptions(nextOptions);
+        setAnno(String(selectedYear));
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Caricamento anni disponibile fallito");
+        const fallbackYear = new Date().getFullYear();
+        setAnnoOptions([fallbackYear]);
+        setAnno(String(fallbackYear));
+      } finally {
+        setIsInitializingAnno(false);
+      }
+    }
+
+    void initializeAnno();
+  }, []);
+
   async function load() {
     const token = getStoredAccessToken();
-    if (!token) return;
+    if (!token || !anno) return;
     try {
       setLoading(true);
       setError(null);
@@ -40,6 +79,9 @@ export function MeterReadingsTable({ subjectId }: { subjectId?: string }) {
   }
 
   useEffect(() => {
+    if (!anno) {
+      return;
+    }
     void load();
   }, [anno, puntoConsegna, codiceFiscale, subjectId]);
 
@@ -64,7 +106,18 @@ export function MeterReadingsTable({ subjectId }: { subjectId?: string }) {
           <div className="grid gap-4 md:grid-cols-3">
             <label className="block text-sm font-medium text-slate-700">
               Anno
-              <input className="form-control mt-1" value={anno} onChange={(event) => setAnno(event.target.value)} />
+              <select
+                className="form-control mt-1"
+                value={anno}
+                onChange={(event) => setAnno(event.target.value)}
+                disabled={isInitializingAnno}
+              >
+                {annoOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
             </label>
             <label className="block text-sm font-medium text-slate-700">
               Punto consegna
@@ -88,7 +141,7 @@ export function MeterReadingsTable({ subjectId }: { subjectId?: string }) {
         <div className="border-b border-slate-200 px-5 py-4">
           <p className="section-title">{subjectId ? "Letture collegate al soggetto" : "Registro letture contatori"}</p>
           <p className="section-copy">
-            {loading ? "Caricamento..." : `${data?.total ?? 0} letture disponibili`}
+            {isInitializingAnno || loading ? "Caricamento..." : `${data?.total ?? 0} letture disponibili`}
           </p>
         </div>
         <div className="overflow-x-auto">

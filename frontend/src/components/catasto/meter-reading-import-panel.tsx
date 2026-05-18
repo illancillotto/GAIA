@@ -1,72 +1,79 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { AlertBanner } from "@/components/ui/alert-banner";
-import { catastoImportMeterReadings, catastoListDistretti, catastoValidateMeterReadingsImport } from "@/lib/api/catasto";
+import { catastoImportMeterReadings, catastoValidateMeterReadingsImport } from "@/lib/api/catasto";
 import { getStoredAccessToken } from "@/lib/auth";
-import type { CatDistretto, CatMeterReadingImportPreview } from "@/types/catasto";
-
-import { MeterReadingImportReport } from "./meter-reading-import-report";
+import { CatastoFilePicker } from "./file-picker";
+import { MeterReadingImportReport, type MeterReadingImportReportItem } from "./meter-reading-import-report";
 
 export function MeterReadingImportPanel() {
-  const [distretti, setDistretti] = useState<CatDistretto[]>([]);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [selectedDistrettoId, setSelectedDistrettoId] = useState("");
-  const [anno, setAnno] = useState(String(new Date().getFullYear()));
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [anno, setAnno] = useState("");
   const [mode, setMode] = useState<"upsert" | "import" | "replace">("upsert");
-  const [preview, setPreview] = useState<CatMeterReadingImportPreview | null>(null);
+  const [previews, setPreviews] = useState<MeterReadingImportReportItem[]>([]);
   const [busy, setBusy] = useState<"validate" | "import" | null>(null);
-  const [message, setMessage] = useState<string | null>(null);
+  const [messages, setMessages] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [progressMessage, setProgressMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function load() {
-      const token = getStoredAccessToken();
-      if (!token) return;
-      try {
-        setDistretti(await catastoListDistretti(token));
-      } catch {
-        setDistretti([]);
-      }
-    }
-    void load();
-  }, []);
+  async function validateSingleFile(token: string, file: File): Promise<MeterReadingImportReportItem> {
+    const preview = await catastoValidateMeterReadingsImport(token, file, {
+      anno: anno ? Number(anno) : undefined,
+    });
+    return { filename: file.name, preview };
+  }
 
-  async function handleValidate() {
+  async function handleValidateAll() {
     const token = getStoredAccessToken();
-    if (!token || !selectedFile) return;
+    if (!token || selectedFiles.length === 0) return;
     try {
       setBusy("validate");
       setError(null);
-      setMessage(null);
-      const result = await catastoValidateMeterReadingsImport(token, selectedFile, {
-        anno: anno ? Number(anno) : undefined,
-        distrettoId: selectedDistrettoId || undefined,
-      });
-      setPreview(result);
+      setMessages([]);
+      setProgressMessage("Validazione file in corso...");
+      const results: MeterReadingImportReportItem[] = [];
+      for (const file of selectedFiles) {
+        setProgressMessage(`Validazione ${file.name}...`);
+        results.push(await validateSingleFile(token, file));
+      }
+      setPreviews(results);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Validazione fallita");
     } finally {
+      setProgressMessage(null);
       setBusy(null);
     }
   }
 
-  async function handleImport() {
+  async function handleImportAll() {
     const token = getStoredAccessToken();
-    if (!token || !selectedFile) return;
+    if (!token || selectedFiles.length === 0) return;
     try {
       setBusy("import");
       setError(null);
-      const result = await catastoImportMeterReadings(token, selectedFile, {
-        anno: anno ? Number(anno) : undefined,
-        distrettoId: selectedDistrettoId || undefined,
-        mode,
-      });
-      setMessage(`Import completato: ${result.righe_importate} righe salvate, ${result.righe_con_warning} con warning, ${result.righe_scartate} scartate.`);
+      setMessages([]);
+      setProgressMessage("Import file in corso...");
+      const importMessages: string[] = [];
+      const nextPreviews: MeterReadingImportReportItem[] = [];
+      for (const file of selectedFiles) {
+        setProgressMessage(`Import ${file.name}...`);
+        const result = await catastoImportMeterReadings(token, file, {
+          anno: anno ? Number(anno) : undefined,
+          mode,
+        });
+        importMessages.push(
+          `${file.name}: ${result.righe_importate} righe salvate, ${result.righe_con_warning} con warning, ${result.righe_scartate} scartate.`,
+        );
+        nextPreviews.push(await validateSingleFile(token, file));
+      }
+      setMessages(importMessages);
+      setPreviews(nextPreviews);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Import fallito");
     } finally {
+      setProgressMessage(null);
       setBusy(null);
     }
   }
@@ -76,28 +83,25 @@ export function MeterReadingImportPanel() {
       <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="mb-4">
           <p className="section-title">Import Excel letture</p>
-          <p className="section-copy">Carica il file distrettuale, valida il tracciato e poi salva le letture in Catasto.</p>
+          <p className="section-copy">Carica uno o piu file Excel distrettuali: il sistema deduce automaticamente il distretto dal nome file e importa ogni file in sequenza.</p>
         </div>
 
-        <div className="grid gap-4 lg:grid-cols-4">
+        <div className="grid gap-4 lg:grid-cols-3">
+          <CatastoFilePicker
+            id="catasto-meter-readings-file"
+            label="File Excel"
+            accept=".xlsx,.xls"
+            files={selectedFiles}
+            multiple
+            disabled={busy !== null}
+            onChange={() => undefined}
+            onChangeFiles={(files) => setSelectedFiles(files)}
+            hint="Nomi attesi nel formato tipo `D01-Sinis 2025.xlsx`, cosi distretto e anno restano deducibili dal backend."
+          />
           <label className="block text-sm font-medium text-slate-700">
-            File Excel
-            <input className="form-control mt-1" type="file" accept=".xlsx,.xls" onChange={(event) => setSelectedFile(event.target.files?.[0] ?? null)} />
-          </label>
-          <label className="block text-sm font-medium text-slate-700">
-            Distretto
-            <select className="form-control mt-1" value={selectedDistrettoId} onChange={(event) => setSelectedDistrettoId(event.target.value)}>
-              <option value="">Deduzione da file</option>
-              {distretti.map((item) => (
-                <option key={item.id} value={item.id}>
-                  D{item.num_distretto} {item.nome_distretto ?? ""}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="block text-sm font-medium text-slate-700">
-            Anno
+            Anno override
             <input className="form-control mt-1" value={anno} onChange={(event) => setAnno(event.target.value)} />
+            <span className="mt-1 block text-xs font-normal text-slate-400">Lascia il valore corretto per forzarlo su tutti i file, oppure svuota il campo per dedurlo dal nome file.</span>
           </label>
           <label className="block text-sm font-medium text-slate-700">
             Modalità import
@@ -110,12 +114,13 @@ export function MeterReadingImportPanel() {
         </div>
 
         <div className="mt-5 flex flex-wrap gap-3">
-          <button className="btn-secondary" onClick={() => void handleValidate()} disabled={!selectedFile || busy !== null} type="button">
+          <button className="btn-secondary" onClick={() => void handleValidateAll()} disabled={selectedFiles.length === 0 || busy !== null} type="button">
             {busy === "validate" ? "Validazione..." : "Valida file"}
           </button>
-          <button className="btn-primary" onClick={() => void handleImport()} disabled={!selectedFile || busy !== null} type="button">
+          <button className="btn-primary" onClick={() => void handleImportAll()} disabled={selectedFiles.length === 0 || busy !== null} type="button">
             {busy === "import" ? "Import in corso..." : "Importa letture"}
           </button>
+          {progressMessage ? <span className="text-sm text-slate-500">{progressMessage}</span> : null}
         </div>
       </div>
 
@@ -125,13 +130,17 @@ export function MeterReadingImportPanel() {
         </AlertBanner>
       ) : null}
 
-      {message ? (
+      {messages.length > 0 ? (
         <AlertBanner variant="info" title="Esito import">
-          {message}
+          <div className="space-y-1">
+            {messages.map((message) => (
+              <p key={message}>{message}</p>
+            ))}
+          </div>
         </AlertBanner>
       ) : null}
 
-      <MeterReadingImportReport preview={preview} />
+      <MeterReadingImportReport previews={previews} />
     </div>
   );
 }

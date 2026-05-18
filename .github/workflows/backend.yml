@@ -3,11 +3,13 @@ name: backend-ci
 on:
   push:
     paths:
-      - "modules/accessi/backend/**"
+      - "backend/**"
+      - "scripts/check_changed_backend_coverage.py"
       - ".github/workflows/backend.yml"
   pull_request:
     paths:
-      - "modules/accessi/backend/**"
+      - "backend/**"
+      - "scripts/check_changed_backend_coverage.py"
       - ".github/workflows/backend.yml"
 
 jobs:
@@ -16,19 +18,45 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
 
       - name: Install dependencies
-        working-directory: modules/accessi/backend
-        run: pip install -r requirements.txt
+        run: pip install -r backend/requirements.txt
 
       - name: Syntax check
-        working-directory: modules/accessi/backend
+        working-directory: backend
         run: python -m compileall app tests
 
-      - name: Test suite
-        working-directory: modules/accessi/backend
-        run: pytest -q
+      - name: Test suite with coverage
+        working-directory: backend
+        run: |
+          pytest -q \
+            --cov=app \
+            --cov-report=term-missing \
+            --cov-report=json:coverage.json \
+            --cov-report=xml:coverage.xml
+
+      - name: Upload backend coverage artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-coverage
+          path: |
+            backend/coverage.json
+            backend/coverage.xml
+          if-no-files-found: error
+
+      - name: Enforce changed-file backend coverage
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          python scripts/check_changed_backend_coverage.py \
+            --coverage-json backend/coverage.json \
+            --base-sha "$BASE_SHA" \
+            --head-sha "$HEAD_SHA" \
+            --min-coverage 80
