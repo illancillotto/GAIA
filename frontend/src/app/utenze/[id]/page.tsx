@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useRef, useState } from "react";
 
 import { AnprStatusCard } from "@/components/anagrafica/AnprStatusCard";
 import { MeterReadingsTable } from "@/components/catasto/meter-readings-table";
@@ -56,6 +56,7 @@ type SubjectVisuraRequestState = {
 const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg"]);
 const SPREADSHEET_EXTENSIONS = new Set([".xls", ".xlsx"]);
 const TEXT_EXTENSIONS = new Set([".txt", ".csv", ".log", ".md", ".json", ".xml"]);
+const SUBJECT_DOCUMENTS_COLLAPSED_LIMIT = 5;
 const DOCUMENT_TYPE_OPTIONS = [
   { value: "ingiunzione", label: "Ingiunzione" },
   { value: "notifica", label: "Notifica" },
@@ -119,6 +120,8 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
   const [isRequestingSubjectVisura, setIsRequestingSubjectVisura] = useState(false);
   const [subjectVisuraError, setSubjectVisuraError] = useState<string | null>(null);
   const [subjectVisuraResult, setSubjectVisuraResult] = useState<ElaborazioneBatchDetail | null>(null);
+  const [documentSearch, setDocumentSearch] = useState("");
+  const [isDocumentsExpanded, setIsDocumentsExpanded] = useState(false);
 
   const [sourceNameRaw, setSourceNameRaw] = useState("");
   const [requiresReview, setRequiresReview] = useState(false);
@@ -145,6 +148,7 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
     telefono: "",
     note: "",
   });
+  const deferredDocumentSearch = useDeferredValue(documentSearch);
 
   useEffect(() => {
     async function loadSubject() {
@@ -207,6 +211,11 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
       setManualUploadItems([]);
     }
   }, [isManualUploadModalOpen]);
+
+  useEffect(() => {
+    setDocumentSearch("");
+    setIsDocumentsExpanded(false);
+  }, [subject?.id]);
 
   async function reloadSubject() {
     const response = await getUtenzeSubject(token, subjectId);
@@ -682,6 +691,21 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
     nasImportStatus?.can_import_from_nas &&
     (nasImportStatus.pending_files_in_nas ?? 0) > 0,
   );
+  const normalizedDocumentSearch = deferredDocumentSearch.trim().toLowerCase();
+  const filteredDocuments = subject.documents.filter((document) => {
+    if (!normalizedDocumentSearch) {
+      return true;
+    }
+    const searchableFields = [document.filename, document.nas_path, document.doc_type, document.classification_source];
+    return searchableFields.some((field) => field.toLowerCase().includes(normalizedDocumentSearch));
+  });
+  const hasActiveDocumentSearch = normalizedDocumentSearch.length > 0;
+  const hiddenDocumentsCount = Math.max(filteredDocuments.length - SUBJECT_DOCUMENTS_COLLAPSED_LIMIT, 0);
+  const shouldCollapseDocuments = !hasActiveDocumentSearch && filteredDocuments.length > SUBJECT_DOCUMENTS_COLLAPSED_LIMIT;
+  const visibleDocuments =
+    shouldCollapseDocuments && !isDocumentsExpanded
+      ? filteredDocuments.slice(0, SUBJECT_DOCUMENTS_COLLAPSED_LIMIT)
+      : filteredDocuments;
 
   return (
     <div className="page-stack">
@@ -1335,8 +1359,8 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
       <article className="panel-card">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
-          <p className="section-title">Documenti associati</p>
-          <p className="section-copy">Classificazione manuale e upload dal catalogo GAIA.</p>
+            <p className="section-title">Documenti associati</p>
+            <p className="section-copy">Classificazione manuale e upload dal catalogo GAIA.</p>
           </div>
           {isEditMode ? (
             <button className="btn-secondary" type="button" onClick={() => setIsManualUploadModalOpen(true)}>
@@ -1348,7 +1372,33 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
           <p className="text-sm text-gray-500">Nessun documento associato.</p>
         ) : (
           <div className="space-y-3">
-            {subject.documents.map((document) => (
+            <div className="flex flex-col gap-3 rounded-lg border border-gray-200 bg-gray-50/70 p-3 md:flex-row md:items-center md:justify-between">
+              <div>
+                <p className="text-sm font-medium text-gray-900">
+                  {filteredDocuments.length} documenti
+                  {filteredDocuments.length !== subject.documents.length ? ` su ${subject.documents.length}` : ""}
+                </p>
+                {shouldCollapseDocuments && !isDocumentsExpanded ? (
+                  <p className="text-xs text-amber-700">
+                    Sono presenti altri {hiddenDocumentsCount} documenti oltre ai primi {SUBJECT_DOCUMENTS_COLLAPSED_LIMIT}.
+                  </p>
+                ) : hasActiveDocumentSearch ? (
+                  <p className="text-xs text-gray-500">Filtro attivo su nome file, percorso, tipo e origine classificazione.</p>
+                ) : null}
+              </div>
+              <label className="block md:max-w-sm md:flex-1">
+                <span className="sr-only">Cerca documenti associati</span>
+                <input
+                  className="form-control"
+                  type="search"
+                  value={documentSearch}
+                  onChange={(event) => setDocumentSearch(event.target.value)}
+                  placeholder="Cerca documenti per nome, percorso o tipo"
+                />
+              </label>
+            </div>
+            {filteredDocuments.length === 0 ? <p className="text-sm text-gray-500">Nessun documento corrisponde al filtro impostato.</p> : null}
+            {visibleDocuments.map((document) => (
               <div
                 key={document.id || document.nas_path}
                 className="cursor-pointer rounded-lg border border-gray-100 px-4 py-3 transition hover:bg-gray-50"
@@ -1418,6 +1468,22 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
                 </div>
               </div>
             ))}
+            {shouldCollapseDocuments ? (
+              <div className="flex flex-col gap-2 rounded-lg border border-dashed border-[#1D4E35]/25 bg-[#1D4E35]/[0.03] px-4 py-3 md:flex-row md:items-center md:justify-between">
+                <p className="text-sm text-gray-700">
+                  {isDocumentsExpanded
+                    ? `Stai visualizzando tutti i ${filteredDocuments.length} documenti associati.`
+                    : `Visualizzati ${SUBJECT_DOCUMENTS_COLLAPSED_LIMIT} documenti su ${filteredDocuments.length}.`}
+                </p>
+                <button
+                  className="text-sm font-medium text-[#1D4E35] transition hover:text-[#163a29]"
+                  type="button"
+                  onClick={() => setIsDocumentsExpanded((current) => !current)}
+                >
+                  {isDocumentsExpanded ? "Mostra meno" : `Mostra altri ${hiddenDocumentsCount} documenti`}
+                </button>
+              </div>
+            ) : null}
           </div>
         )}
       </article>

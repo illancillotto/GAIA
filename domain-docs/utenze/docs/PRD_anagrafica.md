@@ -132,7 +132,9 @@ Il nucleo del modulo è il registro dei soggetti. Ogni soggetto ha una scheda co
 | RF-DOC-04 | MUST | Visualizzazione metadati: nome file, dimensione, data modifica, tipo |
 | RF-DOC-05 | SHOULD | Upload di nuovi documenti associati al soggetto (solo storage locale GAIA, mai NAS) |
 | RF-DOC-06 | SHOULD | Preview PDF inline per file già importati |
-| RF-DOC-07 | COULD | Download singolo o ZIP di tutti i documenti del soggetto |
+| RF-DOC-07 | SHOULD | Ricerca testuale locale nella lista documenti del dettaglio soggetto per nome file, percorso, tipo e origine classificazione |
+| RF-DOC-08 | SHOULD | Lista documenti del dettaglio soggetto collassata a 5 elementi con indicazione esplicita dei documenti rimanenti ed espansione on demand |
+| RF-DOC-09 | COULD | Download singolo o ZIP di tutti i documenti del soggetto |
 
 ### 2.5 Classificazione tipi documento
 
@@ -342,7 +344,7 @@ Note architetturali operative:
 | `/anagrafica` | Dashboard: totali soggetti, documenti non classificati, ultimi importati, link rapidi |
 | `/anagrafica?search=...` | Lista soggetti con ricerca, filtri tipo/status/lettera, ordinamento, paginazione |
 | `/anagrafica/new` | Form creazione manuale: tab Persona Fisica / Persona Giuridica |
-| `/anagrafica/[id]` | Scheda soggetto: dati anagrafici, lista documenti con tipo/preview/link NAS, audit log e storico snapshot persona |
+| `/anagrafica/[id]` | Scheda soggetto: dati anagrafici, lista documenti con tipo/preview/link NAS, filtro ricerca locale, collasso automatico oltre 5 documenti, audit log e storico snapshot persona |
 | `/anagrafica/[id]/edit` | Modifica dati anagrafici |
 | `/anagrafica/import` | Wizard import NAS: selezione lettera → preview → conferma → esecuzione |
 | `/anagrafica/import/[jobId]` | Log dettagliato job: errori, soggetti importati, documenti catalogati |
