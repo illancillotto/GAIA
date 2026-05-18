@@ -876,6 +876,7 @@ export default function ElaborazioniPage() {
                   <th>Nome</th>
                   <th>Stato</th>
                   <th>Totale</th>
+                  <th>Esito</th>
                   <th>Operazione</th>
                   <th>Creato</th>
                   <th>Azioni</th>
@@ -901,6 +902,14 @@ export default function ElaborazioniPage() {
                     </td>
                     <td><ElaborazioneStatusBadge status={batch.status} /></td>
                     <td>{batch.total_items}</td>
+                    <td>
+                      <div className="flex flex-wrap gap-2 text-xs text-gray-600">
+                        <span>ok {batch.completed_items}</span>
+                        <span>ko {batch.failed_items}</span>
+                        {batch.not_found_items > 0 ? <span>n.d. {batch.not_found_items}</span> : null}
+                        {batch.skipped_items > 0 ? <span>skip {batch.skipped_items}</span> : null}
+                      </div>
+                    </td>
                     <td><ElaborazioneOperationMessage value={batch.current_operation} /></td>
                     <td>{formatDateTime(batch.created_at)}</td>
                     <td>

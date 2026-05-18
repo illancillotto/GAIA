@@ -588,6 +588,7 @@ def retry_failed_batch(db: Session, user_id: int, batch_id: UUID) -> Elaborazion
 
     requests = get_batch_requests(db, batch.id)
     retried = False
+    retry_queued_at = datetime.now(UTC)
     for request in requests:
         if request.status == ElaborazioneRichiestaStatus.FAILED.value:
             request.status = ElaborazioneRichiestaStatus.PENDING.value
@@ -606,6 +607,8 @@ def retry_failed_batch(db: Session, user_id: int, batch_id: UUID) -> Elaborazion
         raise BatchConflictError("No failed requests available for retry")
 
     batch.status = ElaborazioneBatchStatus.PENDING.value
+    # Re-queued batches must not be expired immediately using the original creation timestamp.
+    batch.started_at = retry_queued_at
     batch.completed_at = None
     batch.current_operation = "Retry queued"
     batch.report_json_path = None

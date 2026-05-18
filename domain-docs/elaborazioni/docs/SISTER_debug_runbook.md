@@ -52,6 +52,7 @@ Il worker oggi:
 - nel test credenziali di `/elaborazioni/settings`, considera riuscita la prova solo se dopo l'autenticazione viene eseguito anche il logout applicativo SISTER
 - a fine batch/richiesta operativa, prima di chiudere Playwright, tenta il logout applicativo SISTER per ridurre il rischio di sessioni server-side appese
 - isola il pool credenziali SISTER per utente GAIA: il DB accetta lo stesso `sister_username` su utenti diversi, ma lo rende univoco dentro il singolo pool tramite `UNIQUE (user_id, sister_username)`
+- quando un batch fallito viene rilanciato, il backend aggiorna il riferimento temporale della rimessa in coda per evitare che la routine di expiry dei `pending` lo consideri subito orfano
 - prova a chiudere una sessione SISTER già attiva
 - aspetta alcuni secondi dopo `CloseSessionsSis` prima di ritentare il login
 - usa OCR locale Tesseract per i CAPTCHA testuali
