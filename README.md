@@ -205,6 +205,14 @@ Credenziali bootstrap locali:
 - username: valore di `BOOTSTRAP_ADMIN_USERNAME` in `.env`
 - password: valore di `BOOTSTRAP_ADMIN_PASSWORD` in `.env`
 
+### Policy coverage
+
+- Per codice nuovo o modificato, usare come baseline una coverage minima `>= 80%` sul file/classe toccato, non solo una media globale di repository.
+- Per parser, validatori, normalizzatori e servizi puri, il target raccomandato e `>= 90%`.
+- La coverage globale resta un indicatore secondario: il gate principale deve proteggere soprattutto il codice introdotto o modificato nella change corrente.
+- La CI backend pubblica `coverage.json` e `coverage.xml` come artifact del job, cosi il report resta consultabile anche quando il gate coverage fallisce.
+- La CI frontend esegue unit test Vitest con report `coverage-final.json`, `cobertura-coverage.xml` e report HTML, li pubblica come artifact e applica lo stesso gate `>= 80%` sui file runtime cambiati sotto `frontend/src/` (esclusi `src/types/` e `*.d.ts`).
+
 ### Cancellazione documenti Anagrafica (protetta da password)
 
 Per riabilitare la rimozione dei documenti dal frontend (modulo Anagrafica) con controllo lato server, imposta in `.env` (backend):

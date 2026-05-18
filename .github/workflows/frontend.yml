@@ -4,12 +4,14 @@ on:
   push:
     paths:
       - "frontend/**"
+      - "scripts/check_changed_frontend_coverage.py"
       - "tsconfig.json"
       - ".vscode/settings.json"
       - ".github/workflows/frontend.yml"
   pull_request:
     paths:
       - "frontend/**"
+      - "scripts/check_changed_frontend_coverage.py"
       - "tsconfig.json"
       - ".vscode/settings.json"
       - ".github/workflows/frontend.yml"
@@ -20,6 +22,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -40,6 +44,40 @@ jobs:
       - name: Smoke tests
         working-directory: .
         run: npm --prefix frontend run test
+
+      - name: Unit tests with coverage
+        working-directory: frontend
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        shell: bash
+        run: |
+          changed_files="$(git diff --name-only "$BASE_SHA...$HEAD_SHA" | grep -E '^frontend/src/.*\.(ts|tsx|js|jsx)$' | grep -Ev '^frontend/src/types/' | grep -Ev '\.d\.ts$' | paste -sd, - || true)"
+          if [ -n "$changed_files" ]; then
+            export VITEST_COVERAGE_INCLUDE="$changed_files"
+          fi
+          npm run test:coverage
+
+      - name: Upload frontend coverage artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: |
+            frontend/coverage/coverage-final.json
+            frontend/coverage/cobertura-coverage.xml
+            frontend/coverage/index.html
+          if-no-files-found: error
+
+      - name: Enforce changed-file frontend coverage
+        env:
+          BASE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          python3 scripts/check_changed_frontend_coverage.py \
+            --coverage-json frontend/coverage/coverage-final.json \
+            --base-sha "$BASE_SHA" \
+            --head-sha "$HEAD_SHA" \
+            --min-coverage 80
 
       - name: Build application
         working-directory: frontend
