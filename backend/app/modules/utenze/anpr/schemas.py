@@ -68,6 +68,8 @@ class AnprSubjectStatus(BaseModel):
     luogo_decesso_comune: str | None
     last_anpr_check_at: datetime | None
     last_c030_check_at: datetime | None
+    capacitas_deceduto: bool | None = None
+    capacitas_last_check_at: datetime | None = None
 
 
 class AnprPreviewLookupRequest(BaseModel):
@@ -98,3 +100,21 @@ class AnprJobTriggerResult(BaseModel):
     errors: int
     calls_used: int
     message: str
+
+
+class AnprCapacitasRefreshItemResult(BaseModel):
+    subject_id: str
+    codice_fiscale: str
+    age_years: int | None = None
+    stato_anpr_before: str | None = None
+    capacitas_deceduto: bool | None = None
+    status: str
+    message: str | None = None
+
+
+class AnprCapacitasRefreshResponse(BaseModel):
+    processed: int
+    marked_deceased: int
+    unchanged: int
+    failed: int
+    items: list[AnprCapacitasRefreshItemResult]

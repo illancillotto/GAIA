@@ -16,6 +16,7 @@ from app.modules.utenze.anpr.auth import PdndConfigurationError
 from app.modules.utenze.anpr.client import AnprClient
 from app.modules.utenze.anpr.models import AnprCheckLog
 from app.modules.utenze.anpr.schemas import (
+    AnprCapacitasRefreshResponse,
     AnprCheckLogItem,
     AnprJobTriggerResult,
     AnprPreviewLookupRequest,
@@ -29,6 +30,7 @@ from app.modules.utenze.anpr.service import (
     AnprJobSummary,
     get_config,
     lookup_anpr_by_codice_fiscale,
+    refresh_capacitas_deceased_flags,
     run_daily_job,
     sync_single_subject,
     update_config,
@@ -166,6 +168,8 @@ async def get_subject_status(
         luogo_decesso_comune=person.luogo_decesso_comune,
         last_anpr_check_at=person.last_anpr_check_at,
         last_c030_check_at=person.last_c030_check_at,
+        capacitas_deceduto=person.capacitas_deceduto,
+        capacitas_last_check_at=person.capacitas_last_check_at,
     )
 
 
@@ -277,3 +281,28 @@ async def get_job_status(
     if _job_runtime_state["last_error"]:
         return _serialize_job_summary(_job_runtime_state["last_summary"], message=_job_runtime_state["last_error"])
     return _serialize_job_summary(_job_runtime_state["last_summary"], message="job idle")
+
+
+@router.post("/capacitas/refresh-deceased", response_model=AnprCapacitasRefreshResponse)
+async def post_refresh_capacitas_deceased(
+    _: Annotated[ApplicationUser, Depends(require_active_user)],
+    __: Annotated[ApplicationUser, RequireUtenzeModule],
+    ___: Annotated[ApplicationUser, Depends(require_role("super_admin", "admin"))],
+    db: Annotated[Session, Depends(get_db)],
+    credential_id: int | None = Query(default=None),
+    min_age_years: int = Query(default=100, ge=0, le=130),
+    limit: int = Query(default=100, ge=1, le=500),
+    force: bool = Query(default=False),
+) -> AnprCapacitasRefreshResponse:
+    try:
+        return await refresh_capacitas_deceased_flags(
+            db,
+            credential_id=credential_id,
+            min_age_years=min_age_years,
+            limit=limit,
+            force=force,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc

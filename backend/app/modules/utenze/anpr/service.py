@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
+import re
 import uuid
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta, timezone
@@ -14,19 +15,27 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
+from app.core.database import engine
+from app.modules.elaborazioni.capacitas.client import InVoltureClient
+from app.modules.elaborazioni.capacitas.models import CapacitasAnagrafica
+from app.modules.elaborazioni.capacitas.session import CapacitasSessionManager
 from app.modules.ruolo.models import RuoloAvviso
 from app.modules.utenze.anpr.client import AnprClient
 from app.modules.utenze.anpr.models import AnprCheckLog, AnprJobRun, AnprSyncConfig
 from app.modules.utenze.anpr.schemas import (
+    AnprCapacitasRefreshItemResult,
+    AnprCapacitasRefreshResponse,
     AnprPreviewLookupResponse,
     AnprSyncConfigUpdate,
     AnprSyncResult,
 )
 from app.modules.utenze.models import AnagraficaPerson, AnagraficaSubject, AnagraficaSubjectType
+from app.services.elaborazioni_capacitas import mark_credential_error, mark_credential_used, pick_credential
 
 logger = logging.getLogger(__name__)
 
 UTC = timezone.utc
+ANPR_DAILY_JOB_LOCK_KEY = 2026051801
 
 
 @dataclass(slots=True)
@@ -43,6 +52,14 @@ class AnprJobSummary:
 class AnprQueueItem:
     subject_id: str
     estimated_calls: int
+
+
+@dataclass(slots=True)
+class AnprCapacitasCandidate:
+    subject_id: str
+    codice_fiscale: str
+    age_years: int | None
+    stato_anpr: str | None
 
 
 async def get_config(db: AsyncSession) -> AnprSyncConfig:
@@ -64,6 +81,24 @@ async def update_config(db: AsyncSession, update: AnprSyncConfigUpdate, user_id:
     await _maybe_await(db.commit())
     await _maybe_await(db.refresh(config))
     return config
+
+
+def _normalize_cf(value: str | None) -> str | None:
+    if not value:
+        return None
+    normalized = re.sub(r"\s+", "", value).upper().strip()
+    return normalized or None
+
+
+def _is_capacitas_deceduto_value(value: str | None) -> bool:
+    if value is None:
+        return False
+    normalized = str(value).strip().casefold()
+    if not normalized:
+        return False
+    if "decedut" in normalized:
+        return True
+    return normalized in {"v", "vero", "true", "1", "si", "s", "yes", "y"}
 
 
 async def build_check_queue(db: AsyncSession, config: AnprSyncConfig, *, limit: int | None = None) -> list[AnprQueueItem]:
@@ -90,6 +125,13 @@ async def build_check_queue(db: AsyncSession, config: AnprSyncConfig, *, limit: 
         .where(AnagraficaSubject.subject_type == AnagraficaSubjectType.PERSON.value)
         .where(AnagraficaPerson.codice_fiscale.is_not(None))
         .where(or_(AnagraficaPerson.stato_anpr.is_(None), AnagraficaPerson.stato_anpr != "deceased"))
+        .where(
+            or_(
+                AnagraficaPerson.capacitas_deceduto.is_(None),
+                AnagraficaPerson.capacitas_deceduto.is_(False),
+                AnagraficaPerson.stato_anpr == "alive",
+            )
+        )
         .where(
             or_(
                 AnagraficaPerson.stato_anpr != "not_found_anpr",
@@ -119,6 +161,162 @@ async def build_check_queue(db: AsyncSession, config: AnprSyncConfig, *, limit: 
         AnprQueueItem(subject_id=str(subject_id), estimated_calls=1 if anpr_id else 2)
         for subject_id, anpr_id in result.all()
     ]
+
+
+def build_capacitas_candidate_query(*, min_age_years: int, limit: int, force: bool):
+    age_years = func.extract("year", func.age(func.current_date(), AnagraficaPerson.data_nascita))
+    latest_ruolo_year = select(func.max(RuoloAvviso.anno_tributario)).where(RuoloAvviso.subject_id.is_not(None)).scalar_subquery()
+    ruolo_subjects = (
+        select(RuoloAvviso.subject_id)
+        .where(
+            RuoloAvviso.anno_tributario == latest_ruolo_year,
+            RuoloAvviso.subject_id.is_not(None),
+        )
+        .distinct()
+        .subquery()
+    )
+    stmt = (
+        select(
+            AnagraficaSubject.id,
+            AnagraficaPerson.codice_fiscale,
+            age_years.label("age_years"),
+            AnagraficaPerson.stato_anpr,
+        )
+        .join(AnagraficaPerson, AnagraficaPerson.subject_id == AnagraficaSubject.id)
+        .join(ruolo_subjects, ruolo_subjects.c.subject_id == AnagraficaSubject.id)
+        .where(AnagraficaSubject.subject_type == AnagraficaSubjectType.PERSON.value)
+        .where(AnagraficaPerson.codice_fiscale.is_not(None))
+        .where(AnagraficaPerson.data_nascita.is_not(None))
+        .where(age_years >= min_age_years)
+        .where(or_(AnagraficaPerson.stato_anpr.is_(None), AnagraficaPerson.stato_anpr != "deceased"))
+        .where(or_(AnagraficaPerson.capacitas_deceduto.is_(None), AnagraficaPerson.capacitas_deceduto.is_(False)))
+    )
+    if not force:
+        stmt = stmt.where(AnagraficaPerson.capacitas_last_check_at.is_(None))
+    return stmt.order_by(AnagraficaPerson.data_nascita.asc(), AnagraficaSubject.created_at.asc()).limit(limit)
+
+
+async def build_capacitas_candidates(
+    db: AsyncSession,
+    *,
+    min_age_years: int,
+    limit: int,
+    force: bool = False,
+) -> list[AnprCapacitasCandidate]:
+    result = await _maybe_await(db.execute(build_capacitas_candidate_query(min_age_years=min_age_years, limit=limit, force=force)))
+    return [
+        AnprCapacitasCandidate(
+            subject_id=str(subject_id),
+            codice_fiscale=str(codice_fiscale),
+            age_years=int(age_years_value) if age_years_value is not None else None,
+            stato_anpr=stato_anpr,
+        )
+        for subject_id, codice_fiscale, age_years_value, stato_anpr in result.all()
+    ]
+
+
+async def refresh_capacitas_deceased_flags(
+    db: AsyncSession,
+    *,
+    credential_id: int | None = None,
+    min_age_years: int = 100,
+    limit: int = 100,
+    force: bool = False,
+) -> AnprCapacitasRefreshResponse:
+    candidates = await build_capacitas_candidates(
+        db,
+        min_age_years=min_age_years,
+        limit=limit,
+        force=force,
+    )
+    if not candidates:
+        return AnprCapacitasRefreshResponse(processed=0, marked_deceased=0, unchanged=0, failed=0, items=[])
+
+    try:
+        credential, password = pick_credential(db, credential_id)
+    except RuntimeError as exc:
+        raise ValueError(str(exc)) from exc
+
+    manager = CapacitasSessionManager(credential.username, password)
+    items: list[AnprCapacitasRefreshItemResult] = []
+    marked_deceased = 0
+    unchanged = 0
+    failed = 0
+    checked_at = datetime.now(UTC)
+    try:
+        await manager.login()
+        await manager.activate_app("involture")
+        client = InVoltureClient(manager)
+        for candidate in candidates:
+            person = await _maybe_await(db.get(AnagraficaPerson, candidate.subject_id))
+            if person is None:
+                failed += 1
+                items.append(
+                    AnprCapacitasRefreshItemResult(
+                        subject_id=candidate.subject_id,
+                        codice_fiscale=candidate.codice_fiscale,
+                        age_years=candidate.age_years,
+                        stato_anpr_before=candidate.stato_anpr,
+                        capacitas_deceduto=None,
+                        status="missing_subject",
+                        message="Soggetto non trovato in anagrafica locale.",
+                    )
+                )
+                continue
+
+            try:
+                result = await client.search_by_cf(candidate.codice_fiscale)
+                matching_rows = [
+                    row for row in result.rows if _normalize_cf(row.codice_fiscale) == _normalize_cf(candidate.codice_fiscale)
+                ]
+                capacitas_deceduto = any(_is_capacitas_deceduto_value(row.deceduto) for row in matching_rows)
+                person.capacitas_deceduto = capacitas_deceduto
+                person.capacitas_last_check_at = checked_at
+                await _maybe_await(db.flush())
+                if capacitas_deceduto:
+                    marked_deceased += 1
+                else:
+                    unchanged += 1
+                items.append(
+                    AnprCapacitasRefreshItemResult(
+                        subject_id=candidate.subject_id,
+                        codice_fiscale=candidate.codice_fiscale,
+                        age_years=candidate.age_years,
+                        stato_anpr_before=candidate.stato_anpr,
+                        capacitas_deceduto=capacitas_deceduto,
+                        status="checked",
+                        message=f"Capacitas rows matched: {len(matching_rows)}",
+                    )
+                )
+            except Exception as exc:
+                failed += 1
+                items.append(
+                    AnprCapacitasRefreshItemResult(
+                        subject_id=candidate.subject_id,
+                        codice_fiscale=candidate.codice_fiscale,
+                        age_years=candidate.age_years,
+                        stato_anpr_before=candidate.stato_anpr,
+                        capacitas_deceduto=None,
+                        status="failed",
+                        message=str(exc),
+                    )
+                )
+        await _maybe_await(db.commit())
+        mark_credential_used(db, credential.id)
+    except Exception as exc:
+        await _maybe_await(db.rollback())
+        mark_credential_error(db, credential.id, str(exc))
+        raise
+    finally:
+        await manager.close()
+
+    return AnprCapacitasRefreshResponse(
+        processed=len(candidates),
+        marked_deceased=marked_deceased,
+        unchanged=unchanged,
+        failed=failed,
+        items=items,
+    )
 
 
 async def sync_single_subject(
@@ -172,6 +370,7 @@ async def sync_single_subject(
                 error_detail=c030_result.error_detail,
                 data_decesso_anpr=None,
                 triggered_by=triggered_by,
+                created_at=now,
             )
         )
 
@@ -201,6 +400,7 @@ async def sync_single_subject(
             error_detail=c004_result.error_detail,
             data_decesso_anpr=c004_result.data_decesso,
             triggered_by=triggered_by,
+            created_at=now,
         )
     )
 
@@ -290,8 +490,29 @@ async def lookup_anpr_by_codice_fiscale(
 
 async def run_daily_job(db_factory: Callable[[], Any]) -> AnprJobSummary:
     started_at = datetime.now(UTC)
+    lock_connection = None
     db = await db_factory()
     try:
+        lock_acquired = True
+        if engine.dialect.name == "postgresql":
+            lock_connection = engine.raw_connection()
+            cursor = lock_connection.cursor()
+            try:
+                cursor.execute("SELECT pg_try_advisory_lock(%s)", (ANPR_DAILY_JOB_LOCK_KEY,))
+                lock_acquired = bool(cursor.fetchone()[0])
+            finally:
+                cursor.close()
+        if not lock_acquired:
+            logger.info("ANPR daily job skipped because another worker already holds the execution lock")
+            return AnprJobSummary(
+                started_at=started_at,
+                subjects_processed=0,
+                deceased_found=0,
+                errors=0,
+                calls_used=0,
+                message="job already running on another worker",
+            )
+
         config = await get_config(db)
         if not config.job_enabled:
             return AnprJobSummary(
@@ -428,6 +649,8 @@ async def run_daily_job(db_factory: Callable[[], Any]) -> AnprJobSummary:
             message="job completed",
         )
     finally:
+        if lock_connection is not None:
+            lock_connection.close()
         generator = getattr(db, "_anpr_generator", None)
         close = getattr(db, "close", None)
         if close is not None:

@@ -18,6 +18,7 @@ from app.modules.utenze.anpr.schemas import AnprSyncConfigUpdate
 from app.modules.utenze.anpr.service import (
     AnprJobSummary,
     _build_result_message,
+    _is_capacitas_deceduto_value,
     _map_person_status,
     build_check_queue,
     lookup_anpr_by_codice_fiscale,
@@ -58,6 +59,7 @@ def _create_person_subject(
     anpr_id: str | None = None,
     stato_anpr: str | None = None,
     last_anpr_check_at: datetime | None = None,
+    capacitas_deceduto: bool | None = None,
 ) -> AnagraficaSubject:
     subject = AnagraficaSubject(
         subject_type="person",
@@ -78,6 +80,7 @@ def _create_person_subject(
             anpr_id=anpr_id,
             stato_anpr=stato_anpr,
             last_anpr_check_at=last_anpr_check_at,
+            capacitas_deceduto=capacitas_deceduto,
         )
     )
     db_session.commit()
@@ -204,6 +207,41 @@ async def test_build_check_queue_uses_latest_ruolo_year_when_env_not_set(db_sess
     queue = await build_check_queue(db_session, config)
 
     assert [item.subject_id for item in queue] == [str(latest_role_subject.id)]
+
+
+@pytest.mark.anyio
+async def test_build_check_queue_excludes_subjects_marked_deceased_by_capacitas(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import app.modules.utenze.anpr.service as service_module
+
+    frozen_now = datetime(2026, 5, 15, 10, 0, tzinfo=UTC)
+
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return frozen_now if tz is None else frozen_now.astimezone(tz)
+
+    monkeypatch.setattr(service_module, "datetime", FrozenDateTime)
+    monkeypatch.setattr(service_module.settings, "anpr_job_ruolo_year", 2025)
+    monkeypatch.setattr(service_module.settings, "anpr_job_batch_size", 10)
+    monkeypatch.setattr(service_module.settings, "anpr_job_timezone", "Europe/Rome")
+
+    config = AnprSyncConfig(id=1, max_calls_per_day=10, job_enabled=True, job_cron="0 8-17 * * *", lookback_years=1, retry_not_found_days=90)
+    excluded = _create_person_subject(
+        db_session,
+        "CAPDEC000000001",
+        data_nascita=date(1935, 1, 1),
+        capacitas_deceduto=True,
+    )
+    included = _create_person_subject(db_session, "CAPALV000000001", data_nascita=date(1940, 1, 1))
+    ruolo_2025 = _create_ruolo_job(db_session, anno_tributario=2025)
+    _add_ruolo_row(db_session, batch_id=ruolo_2025.id, anno_tributario=2025, subject_id=excluded.id)
+    _add_ruolo_row(db_session, batch_id=ruolo_2025.id, anno_tributario=2025, subject_id=included.id)
+
+    queue = await build_check_queue(db_session, config)
+
+    assert [item.subject_id for item in queue] == [str(included.id)]
 
 
 @pytest.mark.anyio
@@ -418,6 +456,15 @@ def test_status_mapping_and_messages_cover_expected_values() -> None:
     assert _map_person_status("anpr_id_found") == "unknown"
     assert _build_result_message("deceased", None) == "Soggetto risultato deceduto in ANPR"
     assert "Errore" in _build_result_message("error", "timeout")
+
+
+def test_capacitas_deceduto_value_parser_is_conservative() -> None:
+    assert _is_capacitas_deceduto_value("V") is True
+    assert _is_capacitas_deceduto_value("deceduto") is True
+    assert _is_capacitas_deceduto_value("true") is True
+    assert _is_capacitas_deceduto_value("X") is False
+    assert _is_capacitas_deceduto_value("") is False
+    assert _is_capacitas_deceduto_value(None) is False
 
 
 @pytest.mark.anyio

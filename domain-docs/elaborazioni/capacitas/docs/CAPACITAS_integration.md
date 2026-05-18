@@ -179,8 +179,8 @@ GET  <tile.data-url>?token=<UUID>&codConsApp=<tile.data-codcons>&idRun=<tile.dat
   → redirect a involture1/.../pages/main.aspx?token=<UUID>&app=involture&tenant=
   → imposta cookie/sessione validi per l'app
 
-POST involture1.servizicapacitas.com/pages/ajax/ajaxRicerca.aspx
-  body: q=<CF_urlenc>&tipo=ricanag&soloConBeni=false&opz=2
+GET involture1.servizicapacitas.com/pages/ajax/ajaxRicerca.aspx
+  query: q=<CF_urlenc>&tipo=ricanag&soloConBeni=false&opz=2
   headers: X-Requested-With: XMLHttpRequest
   → risposta Base64+compress
 

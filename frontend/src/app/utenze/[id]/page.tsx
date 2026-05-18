@@ -138,6 +138,9 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
     email: "",
     telefono: "",
     note: "",
+    stato_anpr: "" as "" | "deceased",
+    data_decesso: "",
+    luogo_decesso_comune: "",
   });
   const [companyDetails, setCompanyDetails] = useState({
     codice_fiscale: "",
@@ -189,6 +192,9 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
         email: subject.person.email || "",
         telefono: subject.person.telefono || "",
         note: subject.person.note || "",
+        stato_anpr: subject.person.stato_anpr === "deceased" ? "deceased" : "",
+        data_decesso: subject.person.data_decesso || "",
+        luogo_decesso_comune: subject.person.luogo_decesso_comune || "",
       });
     } else if (subject.company) {
       setDisplayOne(subject.company.ragione_sociale);
@@ -340,6 +346,9 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
         email: personDetails.email || null,
         telefono: personDetails.telefono || null,
         note: personDetails.note || null,
+        stato_anpr: personDetails.stato_anpr === "deceased" ? "deceased" : null,
+        data_decesso: personDetails.stato_anpr === "deceased" ? personDetails.data_decesso || null : null,
+        luogo_decesso_comune: personDetails.stato_anpr === "deceased" ? personDetails.luogo_decesso_comune || null : null,
       };
     } else if (subject.company) {
       payload.company = {
@@ -1268,6 +1277,57 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
                     readOnly={!isEditMode}
                   />
                 </label>
+                <div className="rounded-2xl border border-[#d8e2d8] bg-[#f8fbf7] p-4 md:col-span-2">
+                  <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                    <div>
+                      <p className="text-sm font-semibold text-[#1D4E35]">Decesso manuale</p>
+                      <p className="mt-1 text-sm text-gray-600">
+                        Usa questo blocco per marcare manualmente il soggetto come deceduto dopo la verifica su Capacitas o altre fonti interne.
+                      </p>
+                    </div>
+                    <label className="flex items-center gap-3 text-sm font-medium text-gray-700">
+                      <input
+                        checked={personDetails.stato_anpr === "deceased"}
+                        onChange={(event) =>
+                          setPersonDetails((current) => ({
+                            ...current,
+                            stato_anpr: event.target.checked ? "deceased" : "",
+                            data_decesso: event.target.checked ? current.data_decesso : "",
+                            luogo_decesso_comune: event.target.checked ? current.luogo_decesso_comune : "",
+                          }))
+                        }
+                        type="checkbox"
+                        disabled={!isEditMode}
+                      />
+                      Soggetto deceduto
+                    </label>
+                  </div>
+                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Data decesso
+                      <input
+                        className={cn("form-control mt-1", readOnlyControlClassName)}
+                        type="date"
+                        value={personDetails.data_decesso}
+                        onChange={(event) => setPersonDetails((current) => ({ ...current, data_decesso: event.target.value }))}
+                        readOnly={!isEditMode}
+                        disabled={!isEditMode || personDetails.stato_anpr !== "deceased"}
+                      />
+                    </label>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Luogo decesso
+                      <input
+                        className={cn("form-control mt-1", readOnlyControlClassName)}
+                        value={personDetails.luogo_decesso_comune}
+                        onChange={(event) =>
+                          setPersonDetails((current) => ({ ...current, luogo_decesso_comune: event.target.value }))
+                        }
+                        readOnly={!isEditMode}
+                        disabled={!isEditMode || personDetails.stato_anpr !== "deceased"}
+                      />
+                    </label>
+                  </div>
+                </div>
                 <label className="block text-sm font-medium text-gray-700 md:col-span-2">
                   Note
                   <textarea

@@ -41,6 +41,12 @@
 - aggiunta tabella `anpr_job_runs` per tracciare ogni esecuzione batch giorno per giorno con budget prima/dopo, soggetti selezionati/processati, errori e deceduti rilevati
 - esteso endpoint `GET /utenze/stats` e dashboard `frontend/src/app/utenze/page.tsx` con i KPI `deceased_updates_last_24h`, `deceased_updates_current_month`, `deceased_updates_current_year`
 - aggiunto monitor dedicato nel modulo `elaborazioni`: endpoint `GET /elaborazioni/utenze-anpr/summary`, route frontend `/elaborazioni/anpr` e collegamento da dashboard/sidebar per consultare consumo chiamate e storico `anpr_job_runs`
+- introdotto prefiltro live Capacitas per i candidati batch ANPR più anziani: endpoint admin `POST /utenze/anpr/capacitas/refresh-deceased`
+- aggiunte colonne `capacitas_deceduto` e `capacitas_last_check_at` su `ana_persons` per distinguere l'evidenza Capacitas dal vero stato ANPR
+- la coda `build_check_queue()` ora esclude i soggetti marcati `capacitas_deceduto = true`, riducendo le chiamate ANPR su anagrafiche storiche non più presenti
+- corretto il client inVOLTURE: la ricerca anagrafica `ajaxRicerca.aspx` usa `GET` come nel browser Capacitas; la precedente chiamata `POST` restituiva `Nessun criterio di ricerca impostato` e impediva il refresh massivo dei flag di decesso
+- reso il prefiltro Capacitas più conservativo: un flag `capacitas_deceduto = true` non esclude dalla coda soggetti già confermati `alive` da ANPR
+- esteso il dettaglio soggetto `frontend/src/app/utenze/[id]/page.tsx` con campi manuali `Soggetto deceduto`, `Data decesso`, `Luogo decesso`, persistiti tramite `PUT /utenze/subjects/{id}`
 
 ## Verifiche Eseguite
 
@@ -51,6 +57,7 @@
 - `pytest tests/test_anpr_routes.py` ✅ (include `preview-lookup` e ruoli)
 - `pytest tests/test_anpr_scheduler.py` ✅ (`4 passed`)
 - `pytest backend/tests/test_anpr_service.py backend/tests/test_anpr_scheduler.py backend/tests/test_config.py -q` ✅ (`33 passed`)
+- `pytest backend/tests/test_anpr_service.py -q` dopo il prefiltro Capacitas
 - `npx tsc --noEmit` in `frontend` ✅
 - `npm run build` in `frontend` ✅
 
@@ -59,6 +66,7 @@
 - il mapping definitivo della risposta C004 resta marcato come non validato via `_RESPONSE_MAP_VALIDATED = False` finché non viene confermato su ambiente ANPR di test
 - restano da eseguire i test di integrazione end-to-end con credenziali PDND reali e soggetti di test ANPR/SOGEI
 - il tracciamento giornaliero `anpr_job_runs` è persistito lato backend ma non è ancora esposto in una vista dedicata del workspace `elaborazioni`
+- l'evidenza Capacitas viene usata solo come esclusione preventiva della coda ANPR e non promuove automaticamente `stato_anpr = deceased`
 
 ## Prossimo Step
 

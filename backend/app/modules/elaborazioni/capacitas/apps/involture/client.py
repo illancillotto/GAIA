@@ -77,17 +77,18 @@ class InVoltureClient:
     ) -> CapacitasSearchResult:
         http = self._manager.get_http_client()
         token = self._manager.get_token()
-        payload = {
+        params = {
             "q": quote(q, safe=""),
             "tipo": "ricanag",
             "soloConBeni": "true" if solo_con_beni else "false",
             "opz": str(tipo),
         }
-        referer = INVOLTURE_APP.main_url(token)
+        referer = f"{INVOLTURE_APP.base_url}/pages/ricercaAnagrafica.aspx?token={token}&app=involture&tenant="
 
-        response = await http.post(
+        # The live page uses the generic Ajax() helper, which calls $.get() for ajaxRicerca.aspx.
+        response = await http.get(
             AJAX_RICERCA_URL,
-            data=payload,
+            params=params,
             headers={**_AJAX_HEADERS, "Referer": referer},
         )
         response.raise_for_status()

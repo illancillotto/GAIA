@@ -433,6 +433,8 @@ export type AnagraficaPerson = {
   luogo_decesso_comune: string | null;
   last_anpr_check_at: string | null;
   last_c030_check_at: string | null;
+  capacitas_deceduto?: boolean | null;
+  capacitas_last_check_at?: string | null;
   data_nascita: string | null;
   comune_nascita: string | null;
   indirizzo: string | null;
@@ -543,6 +545,8 @@ export type AnprSubjectStatus = {
   luogo_decesso_comune: string | null;
   last_anpr_check_at: string | null;
   last_c030_check_at: string | null;
+  capacitas_deceduto?: boolean | null;
+  capacitas_last_check_at?: string | null;
 };
 
 export type AnprSyncResult = {

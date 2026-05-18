@@ -120,6 +120,8 @@ class AnagraficaPerson(Base):
     luogo_decesso_comune: Mapped[str | None] = mapped_column(String(100), nullable=True)
     last_anpr_check_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_c030_check_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    capacitas_deceduto: Mapped[bool | None] = mapped_column(Boolean, nullable=True, index=True)
+    capacitas_last_check_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(

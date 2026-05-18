@@ -44,7 +44,14 @@ data_decesso = Column(Date, nullable=True)
 luogo_decesso_comune = Column(String(100), nullable=True)
 last_anpr_check_at = Column(DateTime(timezone=True), nullable=True)
 last_c030_check_at = Column(DateTime(timezone=True), nullable=True)
+capacitas_deceduto = Column(Boolean, nullable=True)
+capacitas_last_check_at = Column(DateTime(timezone=True), nullable=True)
 ```
+
+Note implementative:
+- `capacitas_deceduto` non sostituisce `stato_anpr`
+- il flag viene usato come evidenza locale per escludere soggetti dalla coda batch ANPR quando Capacitas li mostra come deceduti
+- `stato_anpr = deceased` continua a significare esclusivamente decesso confermato via ANPR/PDND
 
 ### 2.2 AnprCheckLog
 
@@ -211,6 +218,26 @@ Comportamento applicativo:
 ### 4.1 Chiamata C030 — Accertamento idANPR
 
 **Endpoint**: `POST {base_url}/C030-servizioAccertamentoIdUnicoNazionale/v1/anpr-service-e002`
+
+---
+
+## 4.bis Prefiltro Capacitas
+
+Per ridurre le chiamate ANPR su anagrafiche storiche non più reperibili in ANPR, il modulo esegue un recupero batch opzionale da Capacitas:
+
+- endpoint admin: `POST /utenze/anpr/capacitas/refresh-deceased`
+- input operativi: `credential_id`, `min_age_years`, `limit`, `force`
+- sorgente live: ricerca inVOLTURE per codice fiscale (`search_by_cf`)
+- nota tecnica: la ricerca anagrafica inVOLTURE passa da `ajaxRicerca.aspx`
+  via helper browser `Ajax(...)`, quindi usa `GET` con query `q`,
+  `tipo=ricanag`, `soloConBeni`, `opz`; una chiamata `POST` restituisce
+  `Nessun criterio di ricerca impostato`
+- regola conservativa: il soggetto viene escluso dalla coda ANPR solo se Capacitas espone un flag positivo di decesso
+- assenza del flag Capacitas non implica che il soggetto sia vivo
+
+Effetto sulla coda:
+- `build_check_queue()` esclude i soggetti con `ana_persons.capacitas_deceduto = true`, ma non lascia che Capacitas soppianti un precedente esito ANPR positivo `alive`
+- il job ANPR continua a governare solo gli stati ANPR (`alive`, `deceased`, `not_found_anpr`, ...)
 
 **Request body**:
 ```json
