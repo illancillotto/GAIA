@@ -51,6 +51,7 @@ from app.modules.catasto.services.import_capacitas import CapacitasImportDuplica
 from app.modules.catasto.services.comuni_reference import load_comuni_reference
 from app.modules.catasto.services.import_distretti_excel import import_distretti_excel
 from app.modules.catasto.services import import_distretti_excel as import_distretti_excel_module
+from app.modules.catasto.services.anagrafica_live import CapacitasLiveAuthoritativeSanitizer
 from app.modules.catasto.services.meter_reading_import_service import prepare_meter_readings_import
 from app.modules.catasto.services.meter_reading_linker import normalize_tax_code
 from app.modules.catasto.services.ade_wfs import (
@@ -64,7 +65,7 @@ from app.modules.catasto.services.ade_wfs import (
 )
 from app.modules.elaborazioni.capacitas.models import CapacitasAnagraficaDetail, CapacitasIntestatario, CapacitasTerrenoCertificato
 from app.modules.elaborazioni.capacitas.models import CapacitasLookupOption, CapacitasTerreniSearchResult
-from app.schemas.catasto_phase1 import CatIntestatarioResponse
+from app.schemas.catasto_phase1 import CatAnagraficaMatch, CatAnagraficaUtenzaSummary, CatIntestatarioResponse
 from app.modules.catasto.services.validation import (
     validate_codice_fiscale,
     validate_comune,
@@ -3542,6 +3543,149 @@ def test_bulk_search_anagrafica_live_authoritative_does_not_fallback_to_latest_u
     assert payload["intestatari"] == []
     assert payload["stato_ruolo"] is None
     assert payload["stato_cnc"] is None
+
+
+def test_capacitas_live_authoritative_sanitizer_clears_capacitas_owner_without_cert_context() -> None:
+    sanitizer = CapacitasLiveAuthoritativeSanitizer()
+    match = CatAnagraficaMatch(
+        particella_id=uuid4(),
+        unit_id=None,
+        comune_id=uuid4(),
+        comune="Uras",
+        cod_comune_capacitas=289,
+        codice_catastale="L496",
+        foglio="14",
+        particella="1079",
+        subalterno=None,
+        num_distretto=None,
+        nome_distretto=None,
+        superficie_mq=None,
+        superficie_grafica_mq=None,
+        presente_in_catasto_consorzio=True,
+        utenza_latest=CatAnagraficaUtenzaSummary(
+            id=uuid4(),
+            cco="000000033",
+            anno_campagna=2025,
+            stato="capacitas_live",
+            num_distretto=None,
+            nome_distretto=None,
+            sup_irrigabile_mq=None,
+            denominazione="Comune Di Marrubiu",
+            codice_fiscale="80001090952",
+            ha_anomalie=None,
+        ),
+        cert_com=None,
+        cert_pvc=None,
+        cert_fra=None,
+        cert_ccs=None,
+        stato_ruolo="Iscrivibile a ruolo",
+        stato_cnc="Lista 1",
+        intestatari=[
+            CatIntestatarioResponse(
+                id=uuid4(),
+                codice_fiscale="80001090952",
+                denominazione="Comune Di Marrubiu",
+                tipo="PF",
+                cognome="Comune",
+                nome="Di Marrubiu",
+                data_nascita=None,
+                luogo_nascita=None,
+                indirizzo="PIAZZA Roma 7",
+                comune_residenza="MARRUBIU",
+                cap="09094",
+                email=None,
+                telefono=None,
+                ragione_sociale=None,
+                source="capacitas",
+                last_verified_at=None,
+                deceduto=None,
+            )
+        ],
+        anomalie_count=0,
+        anomalie_top=[],
+        note=None,
+    )
+
+    sanitized = sanitizer.sanitize(match)
+
+    assert sanitized.intestatari == []
+    assert sanitized.stato_ruolo is None
+    assert sanitized.stato_cnc is None
+    assert sanitized.cert_com is None
+    assert sanitized.cert_pvc is None
+    assert sanitized.cert_fra is None
+    assert sanitized.cert_ccs is None
+
+
+def test_capacitas_live_authoritative_sanitizer_keeps_match_when_cert_context_is_complete() -> None:
+    sanitizer = CapacitasLiveAuthoritativeSanitizer()
+    owner = CatIntestatarioResponse(
+        id=uuid4(),
+        codice_fiscale="MCCNNN46C69F272K",
+        denominazione="Maccioni Antonina",
+        tipo="PF",
+        cognome="Maccioni",
+        nome="Antonina",
+        data_nascita="1946-03-29",
+        luogo_nascita="MOGORO",
+        indirizzo="VIA Domenico Cimarosa 129",
+        comune_residenza="CAGLIARI (CA)",
+        cap="09128",
+        email=None,
+        telefono=None,
+        ragione_sociale=None,
+        source="capacitas",
+        last_verified_at=None,
+        deceduto=None,
+    )
+    match = CatAnagraficaMatch(
+        particella_id=uuid4(),
+        unit_id=None,
+        comune_id=uuid4(),
+        comune="Mogoro",
+        cod_comune_capacitas=50,
+        codice_catastale="F272",
+        foglio="12",
+        particella="1079",
+        subalterno=None,
+        num_distretto=None,
+        nome_distretto=None,
+        superficie_mq=None,
+        superficie_grafica_mq=None,
+        presente_in_catasto_consorzio=True,
+        utenza_latest=CatAnagraficaUtenzaSummary(
+            id=uuid4(),
+            cco="RF3000525",
+            anno_campagna=2025,
+            stato="capacitas_live",
+            num_distretto=None,
+            nome_distretto=None,
+            sup_irrigabile_mq=None,
+            denominazione="Maccioni Antonina",
+            codice_fiscale="MCCNNN46C69F272K",
+            ha_anomalie=None,
+        ),
+        cert_com="050",
+        cert_pvc="097",
+        cert_fra="33",
+        cert_ccs="00000",
+        stato_ruolo="Iscrivibile a ruolo",
+        stato_cnc="Lista 1",
+        intestatari=[owner],
+        anomalie_count=0,
+        anomalie_top=[],
+        note=None,
+    )
+
+    sanitized = sanitizer.sanitize(match)
+
+    assert sanitized.intestatari == [owner]
+    assert sanitized.stato_ruolo == "Iscrivibile a ruolo"
+    assert sanitized.stato_cnc == "Lista 1"
+    assert sanitized.cert_com == "050"
+    assert sanitized.cert_pvc == "097"
+    assert sanitized.cert_fra == "33"
+    assert sanitized.cert_ccs == "00000"
 
 
 def test_bulk_search_anagrafica_does_not_reuse_foreign_cert_context_when_latest_utenza_context_has_no_match() -> None:

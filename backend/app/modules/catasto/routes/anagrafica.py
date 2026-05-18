@@ -27,6 +27,7 @@ from app.models.catasto_phase1 import (
     CatUtenzaIntestatario,
     CatUtenzaIrrigua,
 )
+from app.modules.catasto.services.anagrafica_live import CapacitasLiveAuthoritativeSanitizer
 from app.modules.elaborazioni.capacitas.client import InVoltureClient
 from app.modules.elaborazioni.capacitas.models import CapacitasAnagraficaDetail, CapacitasIntestatario, CapacitasTerrenoCertificato
 from app.modules.elaborazioni.capacitas.session import CapacitasSessionManager
@@ -594,9 +595,9 @@ class _CapacitasLiveResolver:
                 select(CatComune).where(CatComune.codice_catastale == row.belfiore).limit(1)
             ).scalars().first()
 
-        cert_com = _norm_str(row.com)
-        cert_pvc = _norm_str(row.pvc)
-        cert_fra = _norm_str(row.fra)
+        cert_com = _normalize_com(row.com)
+        cert_pvc = _normalize_pvc(row.pvc)
+        cert_fra = _normalize_fra(row.fra)
         cert_ccs = _normalize_ccs(row.ccs)
         intestatari = _load_intestatari_from_cert_context(
             self._db,
@@ -858,6 +859,41 @@ class _CapacitasLiveResolver:
                         )
 
         return self._upsert_live_intestatario(intestatario, detail)
+
+
+class _CapacitasAuthoritativeResolver(_CapacitasLiveResolver):
+    """Dedicated resolver for the cadastral bulk flow.
+
+    The only valid output path is:
+    ricerca terreni -> context COM/PVC/FRA/CCS -> certificato -> final match
+
+    If the context is missing, the final match must not leak any owner or status,
+    even if stale/local/cached data happened to be attached earlier in the flow.
+    """
+
+    def __init__(self, db: Session) -> None:
+        super().__init__(db)
+        self._sanitizer = CapacitasLiveAuthoritativeSanitizer()
+
+    async def enrich_match(self, p: CatParticella, match: CatAnagraficaMatch) -> CatAnagraficaMatch:
+        enriched = await super().enrich_match(p, match)
+        return self._sanitizer.sanitize(enriched)
+
+    async def find_live_only_matches(
+        self,
+        *,
+        comune: str,
+        foglio: str,
+        particella: str,
+        sub: str | None = None,
+    ) -> list[CatAnagraficaMatch]:
+        matches = await super().find_live_only_matches(
+            comune=comune,
+            foglio=foglio,
+            particella=particella,
+            sub=sub,
+        )
+        return [self._sanitizer.sanitize(match) for match in matches]
 
     def _find_local_intestatario(self, intestatario: CapacitasIntestatario) -> CatIntestatarioResponse | None:
         normalized_cf = _normalize_cf(intestatario.codice_fiscale)
@@ -2119,7 +2155,11 @@ async def bulk_search_anagrafica(
 ) -> CatAnagraficaBulkSearchResponse:
     payload = _normalize_bulk_payload(payload)
     results: list[CatAnagraficaBulkSearchRowResult] = []
-    live_resolver = _CapacitasLiveResolver(db) if payload.include_capacitas_live else None
+    live_resolver = (
+        (_CapacitasAuthoritativeResolver(db) if _infer_bulk_kind(payload) == "COMUNE_FOGLIO_PARTICELLA_INTESTATARI" else _CapacitasLiveResolver(db))
+        if payload.include_capacitas_live
+        else None
+    )
 
     def infer_kind() -> Literal["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"]:
         if payload.kind in ("CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"):
