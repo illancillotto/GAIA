@@ -1,12 +1,21 @@
 import importlib.util
+import sys
+import types
 from pathlib import Path
 from uuid import uuid4
 
 from app.schemas.catasto_phase1 import CatAnagraficaMatch, CatAnagraficaUtenzaSummary, CatIntestatarioResponse
 
+if "shapely" not in sys.modules:
+    shapely_module = types.ModuleType("shapely")
+    shapely_geometry = types.ModuleType("shapely.geometry")
+    shapely_geometry.shape = lambda value: value
+    shapely_module.geometry = shapely_geometry
+    sys.modules["shapely"] = shapely_module
+    sys.modules["shapely.geometry"] = shapely_geometry
 
-_MODULE_PATH = Path("/app/app/modules/catasto/services/anagrafica_live.py")
-_SPEC = importlib.util.spec_from_file_location("anagrafica_live_under_test", _MODULE_PATH)
+_MODULE_PATH = Path(__file__).resolve().parents[1] / "app/modules/catasto/routes/anagrafica.py"
+_SPEC = importlib.util.spec_from_file_location("catasto_anagrafica_route_under_test", _MODULE_PATH)
 assert _SPEC is not None and _SPEC.loader is not None
 _MODULE = importlib.util.module_from_spec(_SPEC)
 _SPEC.loader.exec_module(_MODULE)

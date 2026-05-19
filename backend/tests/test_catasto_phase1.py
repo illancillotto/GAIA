@@ -1,3 +1,6 @@
+import importlib.util
+import sys
+import types
 from collections.abc import Generator
 from datetime import date, datetime, timezone
 from decimal import Decimal
@@ -15,6 +18,14 @@ import pytest
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
+
+if "shapely" not in sys.modules:
+    shapely_module = types.ModuleType("shapely")
+    shapely_geometry = types.ModuleType("shapely.geometry")
+    shapely_geometry.shape = lambda value: value
+    shapely_module.geometry = shapely_geometry
+    sys.modules["shapely"] = shapely_module
+    sys.modules["shapely.geometry"] = shapely_geometry
 
 from app.core.database import get_db
 from app.core.security import hash_password
@@ -51,7 +62,6 @@ from app.modules.catasto.services.import_capacitas import CapacitasImportDuplica
 from app.modules.catasto.services.comuni_reference import load_comuni_reference
 from app.modules.catasto.services.import_distretti_excel import import_distretti_excel
 from app.modules.catasto.services import import_distretti_excel as import_distretti_excel_module
-from app.modules.catasto.services.anagrafica_live import CapacitasLiveAuthoritativeSanitizer
 from app.modules.catasto.services.meter_reading_import_service import prepare_meter_readings_import
 from app.modules.catasto.services.meter_reading_linker import normalize_tax_code
 from app.modules.catasto.services.meter_reading_parser import parse_meter_readings_excel
@@ -80,6 +90,16 @@ from tests.catasto_fixtures import (
     build_oristanese_territorial_capacitas_dataframe,
     build_oristanese_territorial_capacitas_workbook_bytes,
 )
+
+_ANAGRAFICA_ROUTE_PATH = Path(__file__).resolve().parents[1] / "app/modules/catasto/routes/anagrafica.py"
+_ANAGRAFICA_ROUTE_SPEC = importlib.util.spec_from_file_location(
+    "catasto_anagrafica_route_under_test",
+    _ANAGRAFICA_ROUTE_PATH,
+)
+assert _ANAGRAFICA_ROUTE_SPEC is not None and _ANAGRAFICA_ROUTE_SPEC.loader is not None
+_ANAGRAFICA_ROUTE_MODULE = importlib.util.module_from_spec(_ANAGRAFICA_ROUTE_SPEC)
+_ANAGRAFICA_ROUTE_SPEC.loader.exec_module(_ANAGRAFICA_ROUTE_MODULE)
+CapacitasLiveAuthoritativeSanitizer = _ANAGRAFICA_ROUTE_MODULE.CapacitasLiveAuthoritativeSanitizer
 
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
