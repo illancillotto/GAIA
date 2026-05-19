@@ -1,20 +1,25 @@
 from __future__ import annotations
 
+import csv
+from io import BytesIO, StringIO
 import logging
 from collections import defaultdict
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Awaitable, Callable, Literal
 from uuid import UUID, uuid4
 
-from fastapi import APIRouter, Body, Depends
+from fastapi import APIRouter, Body, Depends, File, UploadFile
 from fastapi import HTTPException, Query, status
+from fastapi.responses import StreamingResponse
+from openpyxl import Workbook
+from openpyxl import load_workbook
 from sqlalchemy import and_, desc, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
-from app.models.catasto import CatastoElaborazioniMassiveJob
+from app.models.catasto import CatastoElaborazioniMassiveJob, CatastoElaborazioniMassiveJobStatus
 from app.models.catasto_phase1 import (
     CatAnomalia,
     CatCapacitasCertificato,
@@ -42,6 +47,7 @@ from app.schemas.catasto_phase1 import (
     CatAnagraficaBulkJobListResponse,
     CatAnagraficaBulkJobSaveRequest,
     CatAnagraficaBulkJobSummary,
+    CatAnagraficaBulkSearchRow,
     CatAnagraficaBulkSearchRowResult,
     CatAnagraficaMatch,
     CatAnagraficaUtenzaSummary,
@@ -293,6 +299,730 @@ def _build_summary(results: list[CatAnagraficaBulkSearchRowResult]) -> dict[str,
         elif r.esito == "ERROR":
             s["error"] += 1
     return s
+
+
+def _empty_bulk_summary(total: int = 0) -> dict[str, int]:
+    return {"total": total, "found": 0, "notFound": 0, "multiple": 0, "invalid": 0, "error": 0}
+
+
+def _bulk_job_row_label(
+    kind: Literal["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"],
+    row: CatAnagraficaBulkSearchRow,
+) -> str:
+    if kind == "CF_PIVA_PARTICELLE":
+        return row.codice_fiscale or row.partita_iva or f"Riga {row.row_index}"
+    parts = [
+        row.comune or "Comune n/d",
+        f"Fg. {row.foglio}" if row.foglio else None,
+        f"Part. {row.particella}" if row.particella else None,
+        f"Sub. {row.sub}" if row.sub else None,
+    ]
+    return " · ".join(part for part in parts if part)
+
+
+def _intestatario_display_name(intestatario: CatIntestatarioResponse) -> str:
+    return (
+        intestatario.denominazione
+        or intestatario.ragione_sociale
+        or " ".join(part for part in [intestatario.cognome, intestatario.nome] if part)
+    )
+
+
+def _format_esito_for_export(esito: str) -> str:
+    if esito == "FOUND":
+        return "Presente in Catasto"
+    if esito == "NOT_FOUND":
+        return "Non trovata in Catasto"
+    return esito
+
+
+def _format_consorzio_esito_for_export(presente_in_consorzio: bool) -> str:
+    return (
+        "Particella presente in Catasto Consorzio"
+        if presente_in_consorzio
+        else "Particella non presente in Catasto Consorzio"
+    )
+
+
+def _has_rpt_certificato_context(match: CatAnagraficaMatch) -> bool:
+    return bool(
+        _norm_str(match.utenza_latest.cco if match.utenza_latest is not None else None)
+        and _norm_str(match.cert_com)
+        and _norm_str(match.cert_pvc)
+        and _norm_str(match.cert_fra)
+    )
+
+
+def _build_rpt_certificato_url(match: CatAnagraficaMatch) -> str:
+    if not _has_rpt_certificato_context(match):
+        return ""
+    return (
+        "https://involture1.servizicapacitas.com/pages/rptCertificato.aspx"
+        f"?CCO={_norm_str(match.utenza_latest.cco if match.utenza_latest is not None else None) or ''}"
+        f"&COM={_norm_str(match.cert_com) or ''}"
+        f"&PVC={_norm_str(match.cert_pvc) or ''}"
+        f"&FRA={_norm_str(match.cert_fra) or ''}"
+        f"&CCS={_norm_str(match.cert_ccs) or '00000'}"
+    )
+
+
+def _export_basename(kind: Literal["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"]) -> str:
+    return "catasto-intestatari-da-cf" if kind == "CF_PIVA_PARTICELLE" else "catasto-intestatari"
+
+
+def _build_bulk_export_rows(
+    kind: Literal["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"],
+    export_results: list[CatAnagraficaBulkSearchRowResult],
+) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for result in export_results:
+        matches = result.matches or ([result.match] if result.match is not None else [])
+
+        def build_base(match: CatAnagraficaMatch | None = None) -> dict[str, object]:
+            link_value = _build_rpt_certificato_url(match) if match is not None else ""
+            if kind == "CF_PIVA_PARTICELLE":
+                return {
+                    "cf_input": result.codice_fiscale_input or "",
+                    "piva_input": result.partita_iva_input or "",
+                    "comune": match.comune if match is not None and match.comune is not None else "",
+                    "foglio": match.foglio if match is not None else "",
+                    "particella": match.particella if match is not None else "",
+                    "sub": match.subalterno if match is not None and match.subalterno is not None else "",
+                    "esito": _format_esito_for_export(result.esito),
+                    "trovato in esito consorzio": _format_consorzio_esito_for_export(
+                        bool(match.presente_in_catasto_consorzio) if match is not None else False
+                    ),
+                    "cco": match.utenza_latest.cco if match is not None and match.utenza_latest is not None and match.utenza_latest.cco is not None else "",
+                    "link_involture": link_value,
+                    "apri_involture": "",
+                    "stato_ruolo": match.stato_ruolo if match is not None and match.stato_ruolo is not None else "",
+                    "stato_cnc": match.stato_cnc if match is not None and match.stato_cnc is not None else "",
+                }
+            return {
+                "comune": match.comune if match is not None and match.comune is not None else (result.comune_input or ""),
+                "sezione": result.sezione_input or "",
+                "foglio": match.foglio if match is not None else (result.foglio_input or ""),
+                "particella": match.particella if match is not None else (result.particella_input or ""),
+                "sub": match.subalterno if match is not None and match.subalterno is not None else (result.sub_input or ""),
+                "esito": _format_esito_for_export(result.esito),
+                "trovato in esito consorzio": _format_consorzio_esito_for_export(
+                    bool(match.presente_in_catasto_consorzio) if match is not None else False
+                ),
+                "cco": match.utenza_latest.cco if match is not None and match.utenza_latest is not None and match.utenza_latest.cco is not None else "",
+                "link_involture": link_value,
+                "apri_involture": "",
+                "stato_ruolo": match.stato_ruolo if match is not None and match.stato_ruolo is not None else "",
+                "stato_cnc": match.stato_cnc if match is not None and match.stato_cnc is not None else "",
+            }
+
+        empty_intestatario = {
+            "n_intestatari": 0,
+            "rank": "",
+            "cf": "",
+            "tipo": "",
+            "cognome": "",
+            "nome": "",
+            "denominazione": "",
+            "ragione_sociale": "",
+            "data_nascita": "",
+            "luogo_nascita": "",
+            "comune_residenza": "",
+            "indirizzo": "",
+            "cap": "",
+            "telefono": "",
+            "email": "",
+            "deceduto": "",
+            "note": "",
+        }
+
+        if not matches:
+            rows.append({**build_base(), **empty_intestatario})
+            continue
+
+        for match in matches:
+            intestatari = match.intestatari or []
+            n_intestatari = len(intestatari)
+            base = build_base(match)
+            if not intestatari:
+                rows.append({**base, **empty_intestatario, "note": match.note or ""})
+                continue
+            for index, intestatario in enumerate(intestatari, start=1):
+                rows.append(
+                    {
+                        **base,
+                        "n_intestatari": n_intestatari,
+                        "rank": f"{index}/{n_intestatari}",
+                        "cf": intestatario.codice_fiscale or "",
+                        "tipo": intestatario.tipo or "",
+                        "cognome": intestatario.cognome or "",
+                        "nome": intestatario.nome or "",
+                        "denominazione": _intestatario_display_name(intestatario),
+                        "ragione_sociale": intestatario.ragione_sociale or "",
+                        "data_nascita": intestatario.data_nascita.isoformat() if intestatario.data_nascita is not None else "",
+                        "luogo_nascita": intestatario.luogo_nascita or "",
+                        "comune_residenza": intestatario.comune_residenza or "",
+                        "indirizzo": intestatario.indirizzo or "",
+                        "cap": intestatario.cap or "",
+                        "telefono": intestatario.telefono or "",
+                        "email": intestatario.email or "",
+                        "deceduto": "si" if intestatario.deceduto else "",
+                        "note": match.note or "",
+                    }
+                )
+    return rows
+
+
+def _stream_bulk_export_csv(filename: str, rows: list[dict[str, object]]) -> StreamingResponse:
+    headers = list(rows[0].keys()) if rows else []
+    buffer = StringIO()
+    writer = csv.DictWriter(buffer, fieldnames=headers)
+    if headers:
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row)
+    return StreamingResponse(
+        iter([buffer.getvalue().encode("utf-8")]),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+def _stream_bulk_export_xlsx(filename: str, rows: list[dict[str, object]]) -> StreamingResponse:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "intestatari"
+    headers = list(rows[0].keys()) if rows else []
+    if headers:
+        sheet.append(headers)
+        link_col = headers.index("link_involture") + 1 if "link_involture" in headers else None
+        apri_col = headers.index("apri_involture") + 1 if "apri_involture" in headers else None
+        for row_idx, row in enumerate(rows, start=2):
+            sheet.append([row.get(header, "") for header in headers])
+            if link_col is not None and apri_col is not None:
+                link_value = sheet.cell(row=row_idx, column=link_col).value
+                if link_value:
+                    link_cell = sheet.cell(row=row_idx, column=link_col).coordinate
+                    sheet.cell(row=row_idx, column=apri_col).value = f'=HYPERLINK({link_cell},"Clicca qui")'
+    buffer = BytesIO()
+    workbook.save(buffer)
+    buffer.seek(0)
+    return StreamingResponse(
+        buffer,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+def _norm_bulk_header(value: object) -> str:
+    raw = str(value or "").strip().lower()
+    return "_".join(part for part in raw.replace("-", " ").replace("/", " ").split() if part)
+
+
+def _pick_bulk_column(headers: list[str], aliases: list[str]) -> str | None:
+    header_set = set(headers)
+    for alias in aliases:
+        if alias in header_set:
+            return alias
+    return None
+
+
+def _infer_bulk_kind_from_headers(headers: list[str]) -> Literal["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"]:
+    comune_key = _pick_bulk_column(headers, ["comune", "codice_comune", "nome_comune"])
+    foglio_key = _pick_bulk_column(headers, ["foglio"])
+    particella_key = _pick_bulk_column(headers, ["particella", "mappale"])
+    cf_key = _pick_bulk_column(headers, ["codice_fiscale", "cf"])
+    piva_key = _pick_bulk_column(headers, ["partita_iva", "piva", "iva"])
+    has_cadastral = bool(comune_key and foglio_key and particella_key)
+    has_tax = bool(cf_key or piva_key)
+    if has_tax and not has_cadastral:
+        return "CF_PIVA_PARTICELLE"
+    return "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"
+
+
+def _normalize_foglio_sezione_input(foglio: str, sezione: str) -> tuple[str, str]:
+    foglio_trimmed = foglio.strip()
+    sezione_trimmed = sezione.strip()
+    if sezione_trimmed.lower().startswith("sez"):
+        sezione_trimmed = sezione_trimmed[3:].lstrip(" .:-").strip()
+    match = re.match(_FOGLIO_WITH_SEZIONE_RE, foglio_trimmed, re.IGNORECASE)
+    if not match:
+        return foglio_trimmed, sezione_trimmed
+    extracted_sezione = (match.group("sezione") or "").strip()
+    if extracted_sezione.lower().startswith("sez"):
+        extracted_sezione = extracted_sezione[3:].lstrip(" .:-").strip()
+    return (match.group("foglio") or foglio_trimmed).strip(), sezione_trimmed or extracted_sezione
+
+
+def _parse_bulk_upload_file(
+    file_bytes: bytes,
+    filename: str,
+) -> tuple[Literal["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"], list[CatAnagraficaBulkSearchRow], int]:
+    ext = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
+    records: list[dict[str, object]] = []
+    if ext == "csv":
+        text = file_bytes.decode("utf-8-sig")
+        reader = csv.DictReader(StringIO(text))
+        records = [dict(row) for row in reader]
+    elif ext in {"xlsx", "xlsm"}:
+        workbook = load_workbook(BytesIO(file_bytes), read_only=True, data_only=True)
+        if not workbook.sheetnames:
+            return "COMUNE_FOGLIO_PARTICELLA_INTESTATARI", [], 0
+        sheet = workbook[workbook.sheetnames[0]]
+        iter_rows = sheet.iter_rows(values_only=True)
+        raw_headers = next(iter_rows, None)
+        if not raw_headers:
+            return "COMUNE_FOGLIO_PARTICELLA_INTESTATARI", [], 0
+        headers = [str(value or "") for value in raw_headers]
+        for row_values in iter_rows:
+            record: dict[str, object] = {}
+            for index, header in enumerate(headers):
+                record[header] = row_values[index] if row_values and index < len(row_values) else None
+            records.append(record)
+    else:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Formato file non supportato. Usa .xlsx o .csv.")
+
+    if not records:
+        return "COMUNE_FOGLIO_PARTICELLA_INTESTATARI", [], 0
+
+    raw_headers = list(records[0].keys())
+    normalized_headers = [_norm_bulk_header(header) for header in raw_headers]
+    header_map = {_norm_bulk_header(header): header for header in raw_headers}
+    kind = _infer_bulk_kind_from_headers(normalized_headers)
+
+    comune_key = _pick_bulk_column(normalized_headers, ["comune", "codice_comune", "nome_comune"])
+    sezione_key = _pick_bulk_column(normalized_headers, ["sezione", "sez", "sezione_catastale"])
+    foglio_key = _pick_bulk_column(normalized_headers, ["foglio"])
+    particella_key = _pick_bulk_column(normalized_headers, ["particella", "mappale"])
+    sub_key = _pick_bulk_column(normalized_headers, ["sub", "subalterno"])
+    cf_key = _pick_bulk_column(normalized_headers, ["codice_fiscale", "cf"])
+    piva_key = _pick_bulk_column(normalized_headers, ["partita_iva", "piva", "iva"])
+
+    if kind == "CF_PIVA_PARTICELLE":
+        if not cf_key and not piva_key:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Colonne minime mancanti. Richieste: codice_fiscale oppure partita_iva.")
+    else:
+        if not comune_key or not foglio_key or not particella_key:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Colonne minime mancanti. Richieste: comune, foglio, particella (opzionali: sezione, sub). Nel campo comune puoi usare nome comune, codice Capacitas numerico o codice catastale/Belfiore.",
+            )
+
+    skipped = 0
+    rows: list[CatAnagraficaBulkSearchRow] = []
+    for index, record in enumerate(records, start=2):
+        if kind == "CF_PIVA_PARTICELLE":
+            cf_raw = record.get(header_map[cf_key]) if cf_key else None
+            piva_raw = record.get(header_map[piva_key]) if piva_key else None
+            cf = str(cf_raw).strip() if cf_raw is not None else ""
+            piva = str(piva_raw).strip() if piva_raw is not None else ""
+            if not cf and not piva:
+                skipped += 1
+                continue
+            rows.append(CatAnagraficaBulkSearchRow(row_index=index, codice_fiscale=cf or None, partita_iva=piva or None))
+            continue
+
+        comune_raw = record.get(header_map[comune_key]) if comune_key else None
+        sezione_raw = record.get(header_map[sezione_key]) if sezione_key else None
+        foglio_raw = record.get(header_map[foglio_key]) if foglio_key else None
+        particella_raw = record.get(header_map[particella_key]) if particella_key else None
+        sub_raw = record.get(header_map[sub_key]) if sub_key else None
+        comune = str(comune_raw).strip() if comune_raw is not None else ""
+        sezione = str(sezione_raw).strip() if sezione_raw is not None else ""
+        foglio = str(foglio_raw).strip() if foglio_raw is not None else ""
+        particella = str(particella_raw).strip() if particella_raw is not None else ""
+        sub = str(sub_raw).strip() if sub_raw is not None else ""
+        normalized_foglio, normalized_sezione = _normalize_foglio_sezione_input(foglio, sezione)
+        if not comune and not normalized_foglio and not particella and not sub and not normalized_sezione:
+            skipped += 1
+            continue
+        rows.append(
+            CatAnagraficaBulkSearchRow(
+                row_index=index,
+                comune=comune or None,
+                sezione=normalized_sezione or None,
+                foglio=normalized_foglio or None,
+                particella=particella or None,
+                sub=sub or None,
+            )
+        )
+
+    return kind, rows, skipped
+
+
+def _bulk_job_detail_from_model(
+    job: CatastoElaborazioniMassiveJob,
+    *,
+    results: list[CatAnagraficaBulkSearchRowResult] | None = None,
+) -> CatAnagraficaBulkJobDetail:
+    raw_results = job.results_json.get("results") if isinstance(job.results_json, dict) else None
+    resolved_results = results if results is not None else [
+        CatAnagraficaBulkSearchRowResult.model_validate(r) for r in (raw_results or [])
+    ]
+    return CatAnagraficaBulkJobDetail(
+        id=job.id,
+        created_at=job.created_at,
+        started_at=job.started_at,
+        completed_at=job.completed_at,
+        source_filename=job.source_filename,
+        kind=job.kind,  # type: ignore[arg-type]
+        status=job.status,  # type: ignore[arg-type]
+        skipped_rows=job.skipped_rows,
+        total_rows=job.total_rows,
+        processed_rows=job.processed_rows,
+        current_label=job.current_label,
+        error_message=job.error_message,
+        summary=CatAnagraficaBulkJobSummary(**job.summary_json),
+        results=resolved_results,
+    )
+
+
+async def _update_bulk_job_progress(
+    db: Session,
+    job_id: UUID,
+    *,
+    processed_rows: int,
+    total_rows: int,
+    current_label: str | None,
+    results: list[CatAnagraficaBulkSearchRowResult],
+) -> None:
+    job = db.get(CatastoElaborazioniMassiveJob, job_id)
+    if job is None:
+        return
+    job.processed_rows = processed_rows
+    job.total_rows = total_rows
+    job.current_label = current_label
+    job.results_json = {"results": [item.model_dump(mode="json") for item in results]}
+    job.summary_json = _build_summary(results)
+    db.commit()
+
+
+async def execute_bulk_search_payload(
+    payload: CatAnagraficaBulkSearchRequest,
+    db: Session,
+    *,
+    on_row_processed: Callable[[int, int, CatAnagraficaBulkSearchRow, list[CatAnagraficaBulkSearchRowResult]], Awaitable[None]] | None = None,
+) -> CatAnagraficaBulkSearchResponse:
+    payload = _normalize_bulk_payload(payload)
+    kind = _infer_bulk_kind(payload)
+    total_rows = len(payload.rows)
+    results: list[CatAnagraficaBulkSearchRowResult] = []
+    live_resolver = (
+        (_CapacitasAuthoritativeResolver(db) if kind == "COMUNE_FOGLIO_PARTICELLA_INTESTATARI" else _CapacitasLiveResolver(db))
+        if payload.include_capacitas_live
+        else None
+    )
+    live_authoritative = kind == "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"
+
+    try:
+        for row in payload.rows:
+            try:
+                if kind == "CF_PIVA_PARTICELLE":
+                    cf_norm = _norm_str(row.codice_fiscale)
+                    piva_norm = _norm_str(row.partita_iva)
+                    tax_key = (cf_norm or piva_norm or "").upper()
+
+                    if not tax_key:
+                        results.append(
+                            CatAnagraficaBulkSearchRowResult(
+                                row_index=row.row_index,
+                                codice_fiscale_input=row.codice_fiscale,
+                                partita_iva_input=row.partita_iva,
+                                esito="INVALID_ROW",
+                                message="Campo obbligatorio mancante (codice_fiscale o partita_iva).",
+                            )
+                        )
+                    else:
+                        utenze = (
+                            db.execute(
+                                select(CatUtenzaIrrigua.particella_id)
+                                .where(
+                                    CatUtenzaIrrigua.particella_id.is_not(None),
+                                    func.upper(func.coalesce(CatUtenzaIrrigua.codice_fiscale, "")) == tax_key,
+                                )
+                                .order_by(desc(CatUtenzaIrrigua.anno_campagna))
+                                .limit(200)
+                            )
+                            .scalars()
+                            .all()
+                        )
+                        particella_ids = list(dict.fromkeys([pid for pid in utenze if pid is not None]))
+                        if not particella_ids:
+                            results.append(
+                                CatAnagraficaBulkSearchRowResult(
+                                    row_index=row.row_index,
+                                    codice_fiscale_input=row.codice_fiscale,
+                                    partita_iva_input=row.partita_iva,
+                                    esito="NOT_FOUND",
+                                    message="Nessuna particella associata trovata.",
+                                    matches_count=0,
+                                    matches=[],
+                                )
+                            )
+                        else:
+                            particelle = (
+                                db.execute(
+                                    select(CatParticella)
+                                    .where(CatParticella.id.in_(particella_ids), CatParticella.is_current.is_(True))
+                                    .limit(200)
+                                )
+                                .scalars()
+                                .all()
+                            )
+                            consorzio_present_ids = _load_consorzio_presence_by_particella_ids(
+                                db, {p.id for p in particelle if p.id is not None}
+                            )
+                            matches: list[CatAnagraficaMatch] = []
+                            for p in particelle:
+                                match = _build_match(db, p, presente_in_catasto_consorzio=(p.id in consorzio_present_ids))
+                                if live_resolver is not None:
+                                    match = await live_resolver.enrich_match(p, match)
+                                matches.append(match)
+
+                            results.append(
+                                CatAnagraficaBulkSearchRowResult(
+                                    row_index=row.row_index,
+                                    codice_fiscale_input=row.codice_fiscale,
+                                    partita_iva_input=row.partita_iva,
+                                    esito="FOUND" if matches else "NOT_FOUND",
+                                    message="OK" if matches else "Nessuna particella associata trovata.",
+                                    matches_count=len(matches),
+                                    matches=matches,
+                                    match=matches[0] if matches else None,
+                                    particella_id=matches[0].particella_id if matches else None,
+                                )
+                            )
+                    if live_resolver is not None and live_resolver.dirty:
+                        db.commit()
+                        live_resolver.dirty = False
+                else:
+                    comune_norm, sezione_norm, foglio_norm = _normalize_bulk_particella_inputs(
+                        row.comune,
+                        row.sezione,
+                        row.foglio,
+                    )
+                    particella_norm = _norm_str(row.particella)
+                    sub_norm = _norm_str(row.sub)
+
+                    if not comune_norm or not foglio_norm or not particella_norm:
+                        results.append(
+                            CatAnagraficaBulkSearchRowResult(
+                                row_index=row.row_index,
+                                comune_input=row.comune,
+                                sezione_input=row.sezione,
+                                foglio_input=row.foglio,
+                                particella_input=row.particella,
+                                sub_input=row.sub,
+                                esito="INVALID_ROW",
+                                message="Campi obbligatori mancanti (comune/foglio/particella).",
+                            )
+                        )
+                    else:
+                        items = _query_particelle_candidates(
+                            db,
+                            comune_norm=comune_norm,
+                            sezione_norm=sezione_norm,
+                            foglio_norm=foglio_norm,
+                            particella_norm=particella_norm,
+                            sub_norm=sub_norm,
+                        )
+                        if len(items) == 0:
+                            sub_match: CatAnagraficaMatch | None = None
+                            if sub_norm and foglio_norm and particella_norm and comune_norm:
+                                sub_match = _find_consorzio_sub_match(
+                                    db,
+                                    foglio_norm,
+                                    particella_norm,
+                                    sub_norm,
+                                    comune_norm,
+                                    live_authoritative=live_authoritative,
+                                )
+                            if sub_match is not None and live_resolver is not None:
+                                particella_ref = db.get(CatParticella, sub_match.particella_id)
+                                if particella_ref is not None:
+                                    sub_match = await live_resolver.enrich_match(particella_ref, sub_match)
+                            if sub_match is not None:
+                                results.append(
+                                    CatAnagraficaBulkSearchRowResult(
+                                        row_index=row.row_index,
+                                        comune_input=row.comune,
+                                        sezione_input=row.sezione,
+                                        foglio_input=row.foglio,
+                                        particella_input=row.particella,
+                                        sub_input=row.sub,
+                                        esito="FOUND",
+                                        message="OK",
+                                        particella_id=sub_match.particella_id,
+                                        match=sub_match,
+                                        matches_count=1,
+                                    )
+                                )
+                            elif live_resolver is not None:
+                                live_matches = await live_resolver.find_live_only_matches(
+                                    comune=comune_norm,
+                                    foglio=foglio_norm,
+                                    particella=particella_norm,
+                                    sub=sub_norm,
+                                )
+                                if len(live_matches) == 1:
+                                    live_match = live_matches[0]
+                                    results.append(
+                                        CatAnagraficaBulkSearchRowResult(
+                                            row_index=row.row_index,
+                                            comune_input=row.comune,
+                                            sezione_input=row.sezione,
+                                            foglio_input=row.foglio,
+                                            particella_input=row.particella,
+                                            sub_input=row.sub,
+                                            esito="FOUND",
+                                            message="OK",
+                                            particella_id=live_match.particella_id,
+                                            match=live_match,
+                                            matches_count=1,
+                                        )
+                                    )
+                                elif len(live_matches) > 1:
+                                    results.append(
+                                        CatAnagraficaBulkSearchRowResult(
+                                            row_index=row.row_index,
+                                            comune_input=row.comune,
+                                            sezione_input=row.sezione,
+                                            foglio_input=row.foglio,
+                                            particella_input=row.particella,
+                                            sub_input=row.sub,
+                                            esito="MULTIPLE_MATCHES",
+                                            message=f"Trovati {len(live_matches)} esiti live Capacitas. Verifica il comune/frazione corretti.",
+                                            matches_count=len(live_matches),
+                                            matches=live_matches,
+                                        )
+                                    )
+                                else:
+                                    results.append(
+                                        CatAnagraficaBulkSearchRowResult(
+                                            row_index=row.row_index,
+                                            comune_input=row.comune,
+                                            sezione_input=row.sezione,
+                                            foglio_input=row.foglio,
+                                            particella_input=row.particella,
+                                            sub_input=row.sub,
+                                            esito="NOT_FOUND",
+                                            message="Nessuna particella trovata.",
+                                        )
+                                    )
+                                if live_resolver.dirty:
+                                    db.commit()
+                                    live_resolver.dirty = False
+                            else:
+                                results.append(
+                                    CatAnagraficaBulkSearchRowResult(
+                                        row_index=row.row_index,
+                                        comune_input=row.comune,
+                                        sezione_input=row.sezione,
+                                        foglio_input=row.foglio,
+                                        particella_input=row.particella,
+                                        sub_input=row.sub,
+                                        esito="NOT_FOUND",
+                                        message="Nessuna particella trovata.",
+                                    )
+                                )
+                        elif len(items) > 1:
+                            consorzio_present_ids = _load_consorzio_presence_by_particella_ids(
+                                db, {p.id for p in items if p.id is not None}
+                            )
+                            matches = []
+                            for item in items:
+                                candidate = _build_match(
+                                    db,
+                                    item,
+                                    presente_in_catasto_consorzio=(item.id in consorzio_present_ids),
+                                    live_authoritative=live_authoritative,
+                                )
+                                if live_resolver is not None:
+                                    candidate = await live_resolver.enrich_match(item, candidate)
+                                matches.append(candidate)
+                            results.append(
+                                CatAnagraficaBulkSearchRowResult(
+                                    row_index=row.row_index,
+                                    comune_input=row.comune,
+                                    sezione_input=row.sezione,
+                                    foglio_input=row.foglio,
+                                    particella_input=row.particella,
+                                    sub_input=row.sub,
+                                    esito="MULTIPLE_MATCHES",
+                                    message=f"Trovate {len(items)} particelle. Specifica meglio comune/sezione/sub.",
+                                    matches_count=len(items),
+                                    matches=matches,
+                                )
+                            )
+                            if live_resolver is not None and live_resolver.dirty:
+                                db.commit()
+                                live_resolver.dirty = False
+                        else:
+                            consorzio_present_ids = _load_consorzio_presence_by_particella_ids(
+                                db, {items[0].id} if items[0].id is not None else set()
+                            )
+                            match = _build_match(
+                                db,
+                                items[0],
+                                presente_in_catasto_consorzio=(items[0].id in consorzio_present_ids),
+                                live_authoritative=live_authoritative,
+                            )
+                            if live_resolver is not None:
+                                match = await live_resolver.enrich_match(items[0], match)
+
+                            sub_matches: list[CatAnagraficaMatch] | None = None
+                            if not sub_norm:
+                                sub_matches = _build_consorzio_sub_matches(
+                                    db,
+                                    items[0],
+                                    live_authoritative=live_authoritative,
+                                ) or None
+                                if sub_matches and live_resolver is not None:
+                                    sub_matches = [await live_resolver.enrich_match(items[0], sub_match) for sub_match in sub_matches]
+
+                            results.append(
+                                CatAnagraficaBulkSearchRowResult(
+                                    row_index=row.row_index,
+                                    comune_input=row.comune,
+                                    sezione_input=row.sezione,
+                                    foglio_input=row.foglio,
+                                    particella_input=row.particella,
+                                    sub_input=row.sub,
+                                    esito="FOUND",
+                                    message="OK",
+                                    particella_id=match.particella_id,
+                                    match=match,
+                                    matches=sub_matches,
+                                    matches_count=(len(sub_matches) if sub_matches else 1),
+                                )
+                            )
+                            if live_resolver is not None and live_resolver.dirty:
+                                db.commit()
+                                live_resolver.dirty = False
+            except Exception as exc:
+                if live_resolver is not None and live_resolver.dirty:
+                    db.rollback()
+                    live_resolver.dirty = False
+                results.append(
+                    CatAnagraficaBulkSearchRowResult(
+                        row_index=row.row_index,
+                        comune_input=row.comune,
+                        sezione_input=row.sezione,
+                        foglio_input=row.foglio,
+                        particella_input=row.particella,
+                        sub_input=row.sub,
+                        codice_fiscale_input=row.codice_fiscale,
+                        partita_iva_input=row.partita_iva,
+                        esito="ERROR",
+                        message=str(exc),
+                    )
+                )
+            if on_row_processed is not None:
+                await on_row_processed(len(results), total_rows, row, results)
+    finally:
+        if live_resolver is not None:
+            await live_resolver.close()
+
+    return CatAnagraficaBulkSearchResponse(results=results)
 
 
 def _split_denominazione(value: str | None, *, fallback_cognome: str | None = None, fallback_nome: str | None = None) -> tuple[str, str]:
@@ -2189,347 +2919,33 @@ async def bulk_search_anagrafica(
     db: Session = Depends(get_db),
     _: ApplicationUser = Depends(require_active_user),
 ) -> CatAnagraficaBulkSearchResponse:
-    payload = _normalize_bulk_payload(payload)
-    results: list[CatAnagraficaBulkSearchRowResult] = []
-    live_resolver = (
-        (_CapacitasAuthoritativeResolver(db) if _infer_bulk_kind(payload) == "COMUNE_FOGLIO_PARTICELLA_INTESTATARI" else _CapacitasLiveResolver(db))
-        if payload.include_capacitas_live
-        else None
+    return await execute_bulk_search_payload(payload, db)
+
+
+@router.post("/jobs/upload", response_model=CatAnagraficaBulkJobDetail)
+async def upload_bulk_search_job(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    user: ApplicationUser = Depends(require_active_user),
+) -> CatAnagraficaBulkJobDetail:
+    filename = file.filename or "catasto-bulk-upload.xlsx"
+    file_bytes = await file.read()
+    kind, rows, skipped = _parse_bulk_upload_file(file_bytes, filename)
+    if not rows:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="File vuoto o senza righe valide.")
+    payload = _normalize_bulk_payload(
+        CatAnagraficaBulkSearchRequest(
+            kind=kind,
+            include_capacitas_live=True,
+            rows=rows,
+        )
     )
-
-    def infer_kind() -> Literal["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"]:
-        if payload.kind in ("CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"):
-            return payload.kind
-        has_particella_keys = any((r.comune or r.foglio or r.particella or r.sub or r.sezione) for r in payload.rows)
-        has_tax_keys = any((r.codice_fiscale or r.partita_iva) for r in payload.rows)
-        if has_particella_keys and not has_tax_keys:
-            return "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"
-        if has_tax_keys and not has_particella_keys:
-            return "CF_PIVA_PARTICELLE"
-        if has_tax_keys and has_particella_keys:
-            # Prefer the cadastral flow; rows that contain only CF/P.IVA will be marked invalid.
-            return "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"
-        return "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"
-
-    kind: Literal["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"] = infer_kind()
-    live_authoritative = kind == "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"
-
-    try:
-        for row in payload.rows:
-            try:
-                if kind == "CF_PIVA_PARTICELLE":
-                    cf_norm = _norm_str(row.codice_fiscale)
-                    piva_norm = _norm_str(row.partita_iva)
-                    tax_key = (cf_norm or piva_norm or "").upper()
-
-                    if not tax_key:
-                        results.append(
-                            CatAnagraficaBulkSearchRowResult(
-                                row_index=row.row_index,
-                                codice_fiscale_input=row.codice_fiscale,
-                                partita_iva_input=row.partita_iva,
-                                esito="INVALID_ROW",
-                                message="Campo obbligatorio mancante (codice_fiscale o partita_iva).",
-                            )
-                        )
-                        continue
-
-                    utenze = (
-                        db.execute(
-                            select(CatUtenzaIrrigua.particella_id)
-                            .where(
-                                CatUtenzaIrrigua.particella_id.is_not(None),
-                                func.upper(func.coalesce(CatUtenzaIrrigua.codice_fiscale, "")) == tax_key,
-                            )
-                            .order_by(desc(CatUtenzaIrrigua.anno_campagna))
-                            .limit(200)
-                        )
-                        .scalars()
-                        .all()
-                    )
-                    particella_ids = list(dict.fromkeys([pid for pid in utenze if pid is not None]))
-                    if not particella_ids:
-                        results.append(
-                            CatAnagraficaBulkSearchRowResult(
-                                row_index=row.row_index,
-                                codice_fiscale_input=row.codice_fiscale,
-                                partita_iva_input=row.partita_iva,
-                                esito="NOT_FOUND",
-                                message="Nessuna particella associata trovata.",
-                                matches_count=0,
-                                matches=[],
-                            )
-                        )
-                        continue
-
-                    particelle = (
-                        db.execute(
-                            select(CatParticella)
-                            .where(CatParticella.id.in_(particella_ids), CatParticella.is_current.is_(True))
-                            .limit(200)
-                        )
-                        .scalars()
-                        .all()
-                    )
-                    consorzio_present_ids = _load_consorzio_presence_by_particella_ids(
-                        db, {p.id for p in particelle if p.id is not None}
-                    )
-                    matches: list[CatAnagraficaMatch] = []
-                    for p in particelle:
-                        match = _build_match(db, p, presente_in_catasto_consorzio=(p.id in consorzio_present_ids))
-                        if live_resolver is not None:
-                            match = await live_resolver.enrich_match(p, match)
-                        matches.append(match)
-
-                    results.append(
-                        CatAnagraficaBulkSearchRowResult(
-                            row_index=row.row_index,
-                            codice_fiscale_input=row.codice_fiscale,
-                            partita_iva_input=row.partita_iva,
-                            esito="FOUND" if matches else "NOT_FOUND",
-                            message="OK" if matches else "Nessuna particella associata trovata.",
-                            matches_count=len(matches),
-                            matches=matches,
-                            match=matches[0] if matches else None,
-                            particella_id=matches[0].particella_id if matches else None,
-                        )
-                    )
-                    if live_resolver is not None and live_resolver.dirty:
-                        db.commit()
-                        live_resolver.dirty = False
-                    continue
-
-                comune_norm, sezione_norm, foglio_norm = _normalize_bulk_particella_inputs(
-                    row.comune,
-                    row.sezione,
-                    row.foglio,
-                )
-                particella_norm = _norm_str(row.particella)
-                sub_norm = _norm_str(row.sub)
-
-                if not comune_norm or not foglio_norm or not particella_norm:
-                    results.append(
-                        CatAnagraficaBulkSearchRowResult(
-                            row_index=row.row_index,
-                            comune_input=row.comune,
-                            sezione_input=row.sezione,
-                            foglio_input=row.foglio,
-                            particella_input=row.particella,
-                            sub_input=row.sub,
-                            esito="INVALID_ROW",
-                            message="Campi obbligatori mancanti (comune/foglio/particella).",
-                        )
-                    )
-                    continue
-
-                items = _query_particelle_candidates(
-                    db,
-                    comune_norm=comune_norm,
-                    sezione_norm=sezione_norm,
-                    foglio_norm=foglio_norm,
-                    particella_norm=particella_norm,
-                    sub_norm=sub_norm,
-                )
-                if len(items) == 0:
-                    # Fallback: sub explicitly given but not in CatParticella — try CatConsorzioUnit directly
-                    sub_match: CatAnagraficaMatch | None = None
-                    if sub_norm and foglio_norm and particella_norm and comune_norm:
-                        sub_match = _find_consorzio_sub_match(
-                            db,
-                            foglio_norm,
-                            particella_norm,
-                            sub_norm,
-                            comune_norm,
-                            live_authoritative=live_authoritative,
-                        )
-                    if sub_match is not None and live_resolver is not None:
-                        particella_ref = db.get(CatParticella, sub_match.particella_id)
-                        if particella_ref is not None:
-                            sub_match = await live_resolver.enrich_match(particella_ref, sub_match)
-                    if sub_match is not None:
-                        results.append(
-                            CatAnagraficaBulkSearchRowResult(
-                                row_index=row.row_index,
-                                comune_input=row.comune,
-                                sezione_input=row.sezione,
-                                foglio_input=row.foglio,
-                                particella_input=row.particella,
-                                sub_input=row.sub,
-                                esito="FOUND",
-                                message="OK",
-                                particella_id=sub_match.particella_id,
-                                match=sub_match,
-                                matches_count=1,
-                            )
-                        )
-                    elif live_resolver is not None:
-                        live_matches = await live_resolver.find_live_only_matches(
-                            comune=comune_norm,
-                            foglio=foglio_norm,
-                            particella=particella_norm,
-                            sub=sub_norm,
-                        )
-                        if len(live_matches) == 1:
-                            live_match = live_matches[0]
-                            results.append(
-                                CatAnagraficaBulkSearchRowResult(
-                                    row_index=row.row_index,
-                                    comune_input=row.comune,
-                                    sezione_input=row.sezione,
-                                    foglio_input=row.foglio,
-                                    particella_input=row.particella,
-                                    sub_input=row.sub,
-                                    esito="FOUND",
-                                    message="OK",
-                                    particella_id=live_match.particella_id,
-                                    match=live_match,
-                                    matches_count=1,
-                                )
-                            )
-                        elif len(live_matches) > 1:
-                            results.append(
-                                CatAnagraficaBulkSearchRowResult(
-                                    row_index=row.row_index,
-                                    comune_input=row.comune,
-                                    sezione_input=row.sezione,
-                                    foglio_input=row.foglio,
-                                    particella_input=row.particella,
-                                    sub_input=row.sub,
-                                    esito="MULTIPLE_MATCHES",
-                                    message=f"Trovati {len(live_matches)} esiti live Capacitas. Verifica il comune/frazione corretti.",
-                                    matches_count=len(live_matches),
-                                    matches=live_matches,
-                                )
-                            )
-                        else:
-                            results.append(
-                                CatAnagraficaBulkSearchRowResult(
-                                    row_index=row.row_index,
-                                    comune_input=row.comune,
-                                    sezione_input=row.sezione,
-                                    foglio_input=row.foglio,
-                                    particella_input=row.particella,
-                                    sub_input=row.sub,
-                                    esito="NOT_FOUND",
-                                    message="Nessuna particella trovata.",
-                                )
-                            )
-                        if live_resolver.dirty:
-                            db.commit()
-                            live_resolver.dirty = False
-                    else:
-                        results.append(
-                            CatAnagraficaBulkSearchRowResult(
-                                row_index=row.row_index,
-                                comune_input=row.comune,
-                                sezione_input=row.sezione,
-                                foglio_input=row.foglio,
-                                particella_input=row.particella,
-                                sub_input=row.sub,
-                                esito="NOT_FOUND",
-                                message="Nessuna particella trovata.",
-                            )
-                        )
-                    continue
-
-                if len(items) > 1:
-                    consorzio_present_ids = _load_consorzio_presence_by_particella_ids(
-                        db, {p.id for p in items if p.id is not None}
-                    )
-                    matches: list[CatAnagraficaMatch] = []
-                    for item in items:
-                        candidate = _build_match(
-                            db,
-                            item,
-                            presente_in_catasto_consorzio=(item.id in consorzio_present_ids),
-                            live_authoritative=live_authoritative,
-                        )
-                        if live_resolver is not None:
-                            candidate = await live_resolver.enrich_match(item, candidate)
-                        matches.append(candidate)
-                    results.append(
-                        CatAnagraficaBulkSearchRowResult(
-                            row_index=row.row_index,
-                            comune_input=row.comune,
-                            sezione_input=row.sezione,
-                            foglio_input=row.foglio,
-                            particella_input=row.particella,
-                            sub_input=row.sub,
-                            esito="MULTIPLE_MATCHES",
-                            message=f"Trovate {len(items)} particelle. Specifica meglio comune/sezione/sub.",
-                            matches_count=len(items),
-                            matches=matches,
-                        )
-                    )
-                    if live_resolver is not None and live_resolver.dirty:
-                        db.commit()
-                        live_resolver.dirty = False
-                    continue
-
-                consorzio_present_ids = _load_consorzio_presence_by_particella_ids(
-                    db, {items[0].id} if items[0].id is not None else set()
-                )
-                match = _build_match(
-                    db,
-                    items[0],
-                    presente_in_catasto_consorzio=(items[0].id in consorzio_present_ids),
-                    live_authoritative=live_authoritative,
-                )
-                if live_resolver is not None:
-                    match = await live_resolver.enrich_match(items[0], match)
-
-                sub_matches: list[CatAnagraficaMatch] | None = None
-                if not sub_norm:
-                    sub_matches = _build_consorzio_sub_matches(
-                        db,
-                        items[0],
-                        live_authoritative=live_authoritative,
-                    ) or None
-                    if sub_matches and live_resolver is not None:
-                        sub_matches = [await live_resolver.enrich_match(items[0], sub_match) for sub_match in sub_matches]
-
-                results.append(
-                    CatAnagraficaBulkSearchRowResult(
-                        row_index=row.row_index,
-                        comune_input=row.comune,
-                        sezione_input=row.sezione,
-                        foglio_input=row.foglio,
-                        particella_input=row.particella,
-                        sub_input=row.sub,
-                        esito="FOUND",
-                        message="OK",
-                        particella_id=match.particella_id,
-                        match=match,
-                        matches=sub_matches,
-                        matches_count=(len(sub_matches) if sub_matches else 1),
-                    )
-                )
-                if live_resolver is not None and live_resolver.dirty:
-                    db.commit()
-                    live_resolver.dirty = False
-            except Exception as exc:
-                if live_resolver is not None and live_resolver.dirty:
-                    db.rollback()
-                    live_resolver.dirty = False
-                results.append(
-                    CatAnagraficaBulkSearchRowResult(
-                        row_index=row.row_index,
-                        comune_input=row.comune,
-                        sezione_input=row.sezione,
-                        foglio_input=row.foglio,
-                        particella_input=row.particella,
-                        sub_input=row.sub,
-                        codice_fiscale_input=row.codice_fiscale,
-                        partita_iva_input=row.partita_iva,
-                        esito="ERROR",
-                        message=str(exc),
-                    )
-                )
-    finally:
-        if live_resolver is not None:
-            await live_resolver.close()
-
-    return CatAnagraficaBulkSearchResponse(results=results)
+    request = CatAnagraficaBulkJobCreateRequest(
+        source_filename=filename,
+        skipped_rows=skipped,
+        payload=payload,
+    )
+    return await create_bulk_search_job(request=request, db=db, user=user)
 
 
 @router.post("/jobs", response_model=CatAnagraficaBulkJobDetail)
@@ -2540,32 +2956,23 @@ async def create_bulk_search_job(
 ) -> CatAnagraficaBulkJobDetail:
     payload = _normalize_bulk_payload(request.payload)
     kind: Literal["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"] = _infer_bulk_kind(payload)
-
-    response = await bulk_search_anagrafica(payload=payload, db=db, _=user)
-
-    summary = _build_summary(response.results)
     job = CatastoElaborazioniMassiveJob(
         user_id=user.id,
         kind=str(kind),
+        status=CatastoElaborazioniMassiveJobStatus.PENDING.value,
         source_filename=_norm_str(request.source_filename),
         skipped_rows=max(int(request.skipped_rows or 0), 0),
+        total_rows=len(payload.rows),
+        processed_rows=0,
+        current_label="Queued for worker",
         payload_json=payload.model_dump(mode="json"),
-        results_json={"results": [r.model_dump(mode="json") for r in response.results]},
-        summary_json=summary,
+        results_json={"results": []},
+        summary_json=_empty_bulk_summary(len(payload.rows)),
     )
     db.add(job)
     db.commit()
     db.refresh(job)
-
-    return CatAnagraficaBulkJobDetail(
-        id=job.id,
-        created_at=job.created_at,
-        source_filename=job.source_filename,
-        kind=job.kind,  # type: ignore[arg-type]
-        skipped_rows=job.skipped_rows,
-        summary=CatAnagraficaBulkJobSummary(**job.summary_json),
-        results=response.results,
-    )
+    return _bulk_job_detail_from_model(job, results=[])
 
 
 @router.post("/jobs/save", response_model=CatAnagraficaBulkJobDetail)
@@ -2580,25 +2987,22 @@ async def save_bulk_search_job(
     job = CatastoElaborazioniMassiveJob(
         user_id=user.id,
         kind=str(kind),
+        status=CatastoElaborazioniMassiveJobStatus.COMPLETED.value,
         source_filename=_norm_str(request.source_filename),
         skipped_rows=max(int(request.skipped_rows or 0), 0),
+        total_rows=len(payload.rows),
+        processed_rows=len(request.results),
+        current_label="Elaborazione completata.",
         payload_json=payload.model_dump(mode="json"),
         results_json={"results": [r.model_dump(mode="json") for r in request.results]},
         summary_json=summary,
+        started_at=datetime.now(timezone.utc),
+        completed_at=datetime.now(timezone.utc),
     )
     db.add(job)
     db.commit()
     db.refresh(job)
-
-    return CatAnagraficaBulkJobDetail(
-        id=job.id,
-        created_at=job.created_at,
-        source_filename=job.source_filename,
-        kind=job.kind,  # type: ignore[arg-type]
-        skipped_rows=job.skipped_rows,
-        summary=CatAnagraficaBulkJobSummary(**job.summary_json),
-        results=request.results,
-    )
+    return _bulk_job_detail_from_model(job, results=request.results)
 
 
 @router.get("/jobs", response_model=CatAnagraficaBulkJobListResponse)
@@ -2624,9 +3028,16 @@ async def list_bulk_search_jobs(
             CatAnagraficaBulkJobItem(
                 id=job.id,
                 created_at=job.created_at,
+                started_at=job.started_at,
+                completed_at=job.completed_at,
                 source_filename=job.source_filename,
                 kind=job.kind,  # type: ignore[arg-type]
+                status=job.status,  # type: ignore[arg-type]
                 skipped_rows=job.skipped_rows,
+                total_rows=job.total_rows,
+                processed_rows=job.processed_rows,
+                current_label=job.current_label,
+                error_message=job.error_message,
                 summary=CatAnagraficaBulkJobSummary(**job.summary_json),
             )
         )
@@ -2680,24 +3091,115 @@ async def get_bulk_search_job(
         and bool(job.payload_json.get("include_capacitas_live"))
     )
     should_refresh_live_results = (
-        job.kind == "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"
+        job.status == CatastoElaborazioniMassiveJobStatus.COMPLETED.value
+        and job.processed_rows >= job.total_rows
+        and job.kind == "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"
         and (not payload_has_live_results or _results_need_live_refresh(results))
     )
     if should_refresh_live_results:
         payload = _normalize_bulk_payload(CatAnagraficaBulkSearchRequest.model_validate(job.payload_json))
-        results = (await bulk_search_anagrafica(payload=payload, db=db, _=user)).results
+        results = (await execute_bulk_search_payload(payload, db)).results
         job.payload_json = payload.model_dump(mode="json")
         job.results_json = {"results": [r.model_dump(mode="json") for r in results]}
         job.summary_json = _build_summary(results)
         db.commit()
         db.refresh(job)
+    return _bulk_job_detail_from_model(job, results=results)
 
-    return CatAnagraficaBulkJobDetail(
-        id=job.id,
-        created_at=job.created_at,
-        source_filename=job.source_filename,
-        kind=job.kind,  # type: ignore[arg-type]
-        skipped_rows=job.skipped_rows,
-        summary=CatAnagraficaBulkJobSummary(**job.summary_json),
-        results=results,
+
+def prepare_bulk_search_jobs_for_recovery(db: Session) -> int:
+    rows = (
+        db.execute(
+            select(CatastoElaborazioniMassiveJob).where(
+                CatastoElaborazioniMassiveJob.status == CatastoElaborazioniMassiveJobStatus.PROCESSING.value
+            )
+        )
+        .scalars()
+        .all()
     )
+    for job in rows:
+        job.status = CatastoElaborazioniMassiveJobStatus.PENDING.value
+        job.processed_rows = 0
+        job.current_label = "Recuperato dopo riavvio worker"
+        job.error_message = None
+        job.started_at = None
+        job.completed_at = None
+        job.results_json = {"results": []}
+        job.summary_json = _empty_bulk_summary(job.total_rows)
+    return len(rows)
+
+
+async def run_bulk_search_job_by_id(job_id: UUID) -> None:
+    from app.core.database import SessionLocal
+
+    with SessionLocal() as db:
+        job = db.get(CatastoElaborazioniMassiveJob, job_id)
+        if job is None:
+            return
+        payload = _normalize_bulk_payload(CatAnagraficaBulkSearchRequest.model_validate(job.payload_json))
+        kind = _infer_bulk_kind(payload)
+        job.status = CatastoElaborazioniMassiveJobStatus.PROCESSING.value
+        job.started_at = datetime.now(timezone.utc)
+        job.completed_at = None
+        job.error_message = None
+        job.total_rows = len(payload.rows)
+        job.processed_rows = 0
+        job.current_label = "Avvio elaborazione..."
+        job.results_json = {"results": []}
+        job.summary_json = _empty_bulk_summary(len(payload.rows))
+        db.commit()
+
+        async def persist_progress(
+            processed_rows: int,
+            total_rows: int,
+            row: CatAnagraficaBulkSearchRow,
+            current_results: list[CatAnagraficaBulkSearchRowResult],
+        ) -> None:
+            await _update_bulk_job_progress(
+                db,
+                job_id,
+                processed_rows=processed_rows,
+                total_rows=total_rows,
+                current_label=_bulk_job_row_label(kind, row),
+                results=current_results,
+            )
+
+        try:
+            response = await execute_bulk_search_payload(payload, db, on_row_processed=persist_progress)
+            job = db.get(CatastoElaborazioniMassiveJob, job_id)
+            if job is None:
+                return
+            job.status = CatastoElaborazioniMassiveJobStatus.COMPLETED.value
+            job.processed_rows = len(response.results)
+            job.current_label = "Elaborazione completata."
+            job.results_json = {"results": [item.model_dump(mode="json") for item in response.results]}
+            job.summary_json = _build_summary(response.results)
+            job.completed_at = datetime.now(timezone.utc)
+            db.commit()
+        except Exception as exc:
+            logger.exception("Job catasto elaborazione massiva %s fallito", job_id)
+            job = db.get(CatastoElaborazioniMassiveJob, job_id)
+            if job is None:
+                return
+            job.status = CatastoElaborazioniMassiveJobStatus.FAILED.value
+            job.error_message = str(exc)
+            job.current_label = "Elaborazione fallita."
+            job.completed_at = datetime.now(timezone.utc)
+            db.commit()
+
+
+@router.get("/jobs/{job_id}/export")
+async def download_bulk_search_job_export(
+    job_id: UUID,
+    format: Literal["csv", "xlsx"] = Query(...),
+    db: Session = Depends(get_db),
+    user: ApplicationUser = Depends(require_active_user),
+) -> StreamingResponse:
+    detail = await get_bulk_search_job(job_id=job_id, db=db, user=user)
+    if detail.status != CatastoElaborazioniMassiveJobStatus.COMPLETED.value:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Il job non e ancora completato")
+    rows = _build_bulk_export_rows(detail.kind, detail.results)
+    basename = _export_basename(detail.kind)
+    if format == "xlsx":
+        return _stream_bulk_export_xlsx(f"{basename}.xlsx", rows)
+    return _stream_bulk_export_csv(f"{basename}.csv", rows)

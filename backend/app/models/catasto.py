@@ -41,6 +41,13 @@ class CatastoConnectionTestStatus(StrEnum):
     FAILED = "failed"
 
 
+class CatastoElaborazioniMassiveJobStatus(StrEnum):
+    PENDING = "pending"
+    PROCESSING = "processing"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
 class CatastoCredential(Base):
     __tablename__ = "catasto_credentials"
     __table_args__ = (UniqueConstraint("user_id", "sister_username", name="uq_catasto_credentials_user_username"),)
@@ -277,12 +284,24 @@ class CatastoElaborazioniMassiveJob(Base):
         index=True,
     )
     kind: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(
+        String(32),
+        default=CatastoElaborazioniMassiveJobStatus.PENDING.value,
+        nullable=False,
+        index=True,
+    )
     source_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
     skipped_rows: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    total_rows: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    processed_rows: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    current_label: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     payload_json: Mapped[dict] = mapped_column(JSON, nullable=False)
     results_json: Mapped[dict] = mapped_column(JSON, nullable=False)
     summary_json: Mapped[dict] = mapped_column(JSON, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class CatastoComune(Base):

@@ -259,7 +259,10 @@ Nota UI obbligatoria per `Distretti Excel`:
 
 Note:
 
-- la funzionalità è solo in modalità massiva: accetta file `.xlsx` o `.csv` lato frontend e normalizza il payload verso il backend
+- la funzionalità è solo in modalità massiva: accetta file `.xlsx` o `.csv` lato frontend, normalizza il payload e crea un job persistito
+- il browser non chunka più le richieste né salva lo storico localmente: il progresso vive in `catasto_elaborazioni_massive_jobs` e l'esecuzione viene prelevata dal worker `gaia-elaborazioni-worker`
+- anche l'export dei risultati è backend-driven: il frontend richiama un endpoint download del job e non costruisce più il file `.csv/.xlsx` con logica locale
+- il frontend può fare solo una pre-validazione delle intestazioni per UX; il parsing reale del file e la costruzione delle righe input avvengono su `POST /catasto/elaborazioni-massive/particelle/jobs/upload`
 
 ### UX AdE
 

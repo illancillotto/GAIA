@@ -294,7 +294,7 @@ Nota operativa Docker:
 I test E2E correnti coprono:
 
 - login admin e wizard import Catasto Fase 1 fino al report finale
-- ricerca anagrafica Catasto singola e massiva
+- ricerca anagrafica Catasto singola e massiva, inclusa la massiva persistita su job worker con polling UI
 
 Credenziali bootstrap locali:
 

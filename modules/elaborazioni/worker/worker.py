@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import signal
+from uuid import UUID
 
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -23,6 +24,8 @@ from app.models.catasto import (
     CatastoBatchStatus,
     CatastoCaptchaLog,
     CatastoCredential,
+    CatastoElaborazioniMassiveJob,
+    CatastoElaborazioniMassiveJobStatus,
     CatastoConnectionTest,
     CatastoConnectionTestStatus,
     CatastoDocument,
@@ -53,6 +56,7 @@ from app.services.elaborazioni_capacitas_terreni import (
 from app.modules.catasto.services.ade_status_scan import ADE_SCAN_PURPOSE, persist_ade_status_scan_result
 from app.modules.catasto.services.ade_wfs import execute_ade_sync_run, prepare_ade_sync_runs_for_recovery
 from app.modules.catasto.services.ade_historical_visura_parser import parse_historical_visura_pdf
+from app.modules.catasto.routes.anagrafica import prepare_bulk_search_jobs_for_recovery, run_bulk_search_job_by_id
 from anti_captcha_client import AntiCaptchaClient
 from browser_session import BrowserSession, BrowserSessionConfig
 from sister_exceptions import SisterServerError
@@ -150,6 +154,12 @@ class CatastoWorker:
                 await self._process_ade_sync_run(ade_sync_run_id)
                 continue
 
+            bulk_job_id = self._next_bulk_search_job_id()
+            if bulk_job_id is not None:
+                logger.info("Job catasto elaborazione massiva %s prelevato dalla coda", bulk_job_id)
+                await self._process_bulk_search_job(bulk_job_id)
+                continue
+
             batch_id = self._next_batch_id()
             if batch_id is None:
                 await asyncio.sleep(POLL_INTERVAL_SEC)
@@ -188,6 +198,7 @@ class CatastoWorker:
             history_ids = prepare_anagrafica_history_jobs_for_recovery(db)
             terreni_ids = prepare_terreni_sync_jobs_for_recovery(db)
             particelle_ids = prepare_particelle_sync_jobs_for_recovery(db)
+            bulk_jobs = prepare_bulk_search_jobs_for_recovery(db)
             registry_ids = prepare_registry_import_jobs_for_recovery(db)
             ade_sync_runs = prepare_ade_sync_runs_for_recovery(db)
             if history_ids:
@@ -196,6 +207,8 @@ class CatastoWorker:
                 logger.info("Recuperati %d job Capacitas terreni", len(terreni_ids))
             if particelle_ids:
                 logger.info("Recuperati %d job Capacitas particelle", len(particelle_ids))
+            if bulk_jobs:
+                logger.info("Recuperati %d job catasto elaborazione massiva", bulk_jobs)
             if registry_ids:
                 logger.info("Recuperati %d job REGISTRY utenze", len(registry_ids))
             if ade_sync_runs:
@@ -292,6 +305,28 @@ class CatastoWorker:
                 execute_ade_sync_run(db, run_id)
         except Exception:
             logger.exception("Run AdE worker %s fallito", run_id)
+
+    def _next_bulk_search_job_id(self) -> str | None:
+        with SessionLocal() as db:
+            job = db.scalar(
+                select(CatastoElaborazioniMassiveJob)
+                .where(CatastoElaborazioniMassiveJob.status == CatastoElaborazioniMassiveJobStatus.PENDING.value)
+                .order_by(CatastoElaborazioniMassiveJob.created_at.asc())
+                .with_for_update(skip_locked=True)
+            )
+            if job is None:
+                return None
+            job.status = CatastoElaborazioniMassiveJobStatus.PROCESSING.value
+            job.started_at = datetime.now(timezone.utc)
+            job.error_message = None
+            db.commit()
+            return str(job.id)
+
+    async def _process_bulk_search_job(self, job_id: str) -> None:
+        try:
+            await run_bulk_search_job_by_id(UUID(job_id))
+        except Exception:
+            logger.exception("Job catasto elaborazione massiva %s fallito", job_id)
 
     async def _process_connection_test(self, connection_test_id) -> None:
         browser = BrowserSession(

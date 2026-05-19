@@ -8,9 +8,9 @@ import { DataTable } from "@/components/table/data-table";
 import { EmptyState } from "@/components/ui/empty-state";
 import { AlertBanner } from "@/components/ui/alert-banner";
 import { DocumentIcon, RefreshIcon } from "@/components/ui/icons";
-import { capacitasGetRptCertificatoLink, catastoBulkSearchAnagrafica, catastoDeleteElaborazioniMassiveJobs, catastoGetElaborazioneMassivaJob, catastoListElaborazioniMassiveJobs, catastoSaveElaborazioneMassivaJob } from "@/lib/api/catasto";
+import { catastoDeleteElaborazioniMassiveJobs, catastoDownloadElaborazioneMassivaJobExport, catastoGetElaborazioneMassivaJob, catastoListElaborazioniMassiveJobs, catastoUploadElaborazioneMassivaJob } from "@/lib/api/catasto";
 import { getStoredAccessToken } from "@/lib/auth";
-import type { CatAnagraficaBulkJobItem, CatAnagraficaBulkRowInput, CatAnagraficaBulkRowResult, CatAnagraficaMatch, CatIntestatario } from "@/types/catasto";
+import type { CatAnagraficaBulkJobItem, CatAnagraficaBulkRowResult, CatIntestatario } from "@/types/catasto";
 
 import { CatastoFilePicker } from "../file-picker";
 
@@ -54,92 +54,11 @@ function intestatarioDisplayName(intestatario: CatIntestatario): string {
   );
 }
 
-function formatEsitoForExport(esito: string): string {
-  if (esito === "FOUND") return "Presente in Catasto";
-  if (esito === "NOT_FOUND") return "Non trovata in Catasto";
-  return esito;
-}
-
-function formatConsorzioEsitoForExport(presenteInConsorzio: boolean): string {
-  return presenteInConsorzio ? "Particella presente in Catasto Consorzio" : "Particella non presente in Catasto Consorzio";
-}
-
-function hasRptCertificatoContext(match: CatAnagraficaMatch): boolean {
-  return Boolean(
-    match.utenza_latest?.cco?.trim()
-    && match.cert_com?.trim()
-    && match.cert_pvc?.trim()
-    && match.cert_fra?.trim(),
-  );
-}
-
-function buildRptCertificatoUrl(match: CatAnagraficaMatch): string {
-  if (!hasRptCertificatoContext(match)) return "";
-  const params = new URLSearchParams({
-    CCO: match.utenza_latest?.cco?.trim() ?? "",
-    COM: match.cert_com?.trim() ?? "",
-    PVC: match.cert_pvc?.trim() ?? "",
-    FRA: match.cert_fra?.trim() ?? "",
-    CCS: match.cert_ccs?.trim() || "00000",
-  });
-  return `https://involture1.servizicapacitas.com/pages/rptCertificato.aspx?${params.toString()}`;
-}
-
-async function resolveCapacitasRptCertificatoUrls(
-  token: string,
-  matches: CatAnagraficaMatch[],
-): Promise<Map<string, string>> {
-  const out = new Map<string, string>();
-  const unique = Array.from(
-    new Map(
-      matches
-        .filter(hasRptCertificatoContext)
-        .map((match) => {
-          const cco = match.utenza_latest?.cco?.trim() ?? "";
-          const key = [cco, match.cert_com ?? "", match.cert_pvc ?? "", match.cert_fra ?? "", match.cert_ccs ?? ""].join("|");
-          return [key, match] as const;
-        }),
-    ).values(),
-  );
-  // Capacitas/InVolture può rate-limitare o essere instabile: preferiamo meno concorrenza e un retry leggero.
-  const concurrency = 3;
-  let idx = 0;
-
-  async function worker(): Promise<void> {
-    for (;;) {
-      const current = unique[idx];
-      idx += 1;
-      if (!current) return;
-      let resolved = "";
-      for (let attempt = 0; attempt < 2; attempt += 1) {
-        try {
-          const cco = current.utenza_latest?.cco?.trim() ?? "";
-          const { url } = await capacitasGetRptCertificatoLink(token, cco, {
-            com: current.cert_com,
-            pvc: current.cert_pvc,
-            fra: current.cert_fra,
-            ccs: current.cert_ccs,
-          });
-          resolved = url || buildRptCertificatoUrl(current);
-          break;
-        } catch {
-          // backoff minimo prima del retry
-          await new Promise((r) => window.setTimeout(r, 250 + attempt * 300));
-        }
-      }
-      const key = [
-        current.utenza_latest?.cco?.trim() ?? "",
-        current.cert_com ?? "",
-        current.cert_pvc ?? "",
-        current.cert_fra ?? "",
-        current.cert_ccs ?? "",
-      ].join("|");
-      out.set(key, resolved);
-    }
-  }
-
-  await Promise.all(Array.from({ length: Math.min(concurrency, unique.length) }, () => worker()));
-  return out;
+function formatJobStatus(status: BulkOperationHistoryItem["status"]): string {
+  if (status === "pending") return "IN CODA";
+  if (status === "processing") return "IN ELABORAZIONE";
+  if (status === "completed") return "COMPLETATO";
+  return "FALLITO";
 }
 
 type BulkSummary = {
@@ -151,32 +70,8 @@ type BulkSummary = {
   error: number;
 };
 
-const FOGLIO_WITH_SEZIONE_RE = /^\s*([^\s]+)\s+sez\.?\s*([A-Za-z0-9]+)(?:\s+.*)?$/i;
-
-function normalizeSezioneValue(value: string): string {
-  const trimmed = value.trim();
-  if (!trimmed) return "";
-  const lowered = trimmed.toLowerCase();
-  if (lowered.startsWith("sez")) {
-    return trimmed.slice(3).replace(/^[\s.:-]+/, "").trim();
-  }
-  return trimmed;
-}
-
-function normalizeFoglioSezioneInput(foglio: string, sezione: string): { foglio: string; sezione: string } {
-  const foglioTrimmed = foglio.trim();
-  const sezioneTrimmed = normalizeSezioneValue(sezione);
-  const match = foglioTrimmed.match(FOGLIO_WITH_SEZIONE_RE);
-  if (!match) {
-    return { foglio: foglioTrimmed, sezione: sezioneTrimmed };
-  }
-  return {
-    foglio: match[1]?.trim() ?? foglioTrimmed,
-    sezione: sezioneTrimmed || normalizeSezioneValue(match[2] ?? ""),
-  };
-}
-
 type BulkOperationHistoryItem = CatAnagraficaBulkJobItem;
+const BULK_JOB_POLL_INTERVAL_MS = 1500;
 
 type BulkProgressState = {
   open: boolean;
@@ -218,13 +113,13 @@ function inferKindFromHeaders(headers: string[]): "CF_PIVA_PARTICELLE" | "COMUNE
   return "COMUNE_FOGLIO_PARTICELLA_INTESTATARI";
 }
 
-async function readFileToRows(
+async function readFileHeadersOnly(
   file: File,
-): Promise<{ kind: "CF_PIVA_PARTICELLE" | "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"; rows: CatAnagraficaBulkRowInput[]; skipped: number }> {
+): Promise<{ kind: "CF_PIVA_PARTICELLE" | "COMUNE_FOGLIO_PARTICELLA_INTESTATARI" }> {
   const ext = file.name.toLowerCase().split(".").pop() ?? "";
 
-  const toJsonRows = (worksheet: XLSX.WorkSheet): Record<string, unknown>[] => {
-    return XLSX.utils.sheet_to_json<Record<string, unknown>>(worksheet, { defval: null, raw: false });
+  const toHeaderRow = (worksheet: XLSX.WorkSheet): unknown[] => {
+    return XLSX.utils.sheet_to_json<unknown[]>(worksheet, { header: 1, defval: null, raw: false })[0] ?? [];
   };
 
   let workbook: XLSX.WorkBook;
@@ -238,26 +133,20 @@ async function readFileToRows(
 
   const firstSheetName = workbook.SheetNames[0];
   if (!firstSheetName) {
-    return { kind: "COMUNE_FOGLIO_PARTICELLA_INTESTATARI", rows: [], skipped: 0 };
+    throw new Error("File vuoto o senza fogli leggibili.");
   }
   const sheet = workbook.Sheets[firstSheetName];
-  const data = toJsonRows(sheet);
-  if (data.length === 0) {
-    return { kind: "COMUNE_FOGLIO_PARTICELLA_INTESTATARI", rows: [], skipped: 0 };
+  const headerRow = toHeaderRow(sheet);
+  if (headerRow.length === 0) {
+    throw new Error("File vuoto o senza intestazioni.");
   }
 
-  const headers = Object.keys(data[0] ?? {}).map(normHeader);
+  const headers = headerRow.map(normHeader).filter(Boolean);
   const kind = inferKindFromHeaders(headers);
-  const headerMap = new Map<string, string>();
-  for (const rawKey of Object.keys(data[0] ?? {})) {
-    headerMap.set(normHeader(rawKey), rawKey);
-  }
 
   const comuneKey = pickColumn(headers, ["comune", "codice_comune", "nome_comune"]);
-  const sezioneKey = pickColumn(headers, ["sezione", "sez", "sezione_catastale"]);
   const foglioKey = pickColumn(headers, ["foglio"]);
   const particellaKey = pickColumn(headers, ["particella", "mappale"]);
-  const subKey = pickColumn(headers, ["sub", "subalterno"]);
   const cfKey = pickColumn(headers, ["codice_fiscale", "cf"]);
   const pivaKey = pickColumn(headers, ["partita_iva", "piva", "iva"]);
 
@@ -270,57 +159,7 @@ async function readFileToRows(
       throw new Error("Colonne minime mancanti. Richieste: comune, foglio, particella (opzionali: sezione, sub). Nel campo comune puoi usare nome comune, codice Capacitas numerico o codice catastale/Belfiore.");
     }
   }
-
-  let skipped = 0;
-  const rows: CatAnagraficaBulkRowInput[] = [];
-  for (let i = 0; i < data.length; i += 1) {
-    const record = data[i] ?? {};
-    if (kind === "CF_PIVA_PARTICELLE") {
-      const cfRaw = cfKey ? record[headerMap.get(cfKey) ?? cfKey] : null;
-      const pivaRaw = pivaKey ? record[headerMap.get(pivaKey) ?? pivaKey] : null;
-      const cf = cfRaw != null ? String(cfRaw).trim() : "";
-      const piva = pivaRaw != null ? String(pivaRaw).trim() : "";
-
-      if (!cf && !piva) {
-        skipped += 1;
-        continue;
-      }
-
-      rows.push({
-        row_index: i + 2,
-        codice_fiscale: cf || null,
-        partita_iva: piva || null,
-      });
-    } else {
-      const comuneRaw = comuneKey ? record[headerMap.get(comuneKey) ?? comuneKey] : null;
-      const sezioneRaw = sezioneKey ? record[headerMap.get(sezioneKey) ?? sezioneKey] : null;
-      const foglioRaw = foglioKey ? record[headerMap.get(foglioKey) ?? foglioKey] : null;
-      const particellaRaw = particellaKey ? record[headerMap.get(particellaKey) ?? particellaKey] : null;
-      const subRaw = subKey ? record[headerMap.get(subKey) ?? subKey] : null;
-
-      const comune = comuneRaw != null ? String(comuneRaw).trim() : "";
-      const sezione = sezioneRaw != null ? String(sezioneRaw).trim() : "";
-      const foglio = foglioRaw != null ? String(foglioRaw).trim() : "";
-      const particella = particellaRaw != null ? String(particellaRaw).trim() : "";
-      const sub = subRaw != null ? String(subRaw).trim() : "";
-      const normalized = normalizeFoglioSezioneInput(foglio, sezione);
-
-      if (!comune && !normalized.foglio && !particella && !sub && !normalized.sezione) {
-        skipped += 1;
-        continue;
-      }
-
-      rows.push({
-        row_index: i + 2,
-        comune: comune || null,
-        sezione: normalized.sezione || null,
-        foglio: normalized.foglio || null,
-        particella: particella || null,
-        sub: sub || null,
-      });
-    }
-  }
-  return { kind, rows, skipped };
+  return { kind };
 }
 
 export function AnagraficaBulkPanel() {
@@ -328,11 +167,11 @@ export function AnagraficaBulkPanel() {
     null,
   );
   const [sourceFile, setSourceFile] = useState<File | null>(null);
-  const [parsedRows, setParsedRows] = useState<CatAnagraficaBulkRowInput[]>([]);
-  const [skippedRows, setSkippedRows] = useState(0);
+  const [isFileValidated, setIsFileValidated] = useState(false);
   const [results, setResults] = useState<CatAnagraficaBulkRowResult[]>([]);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [operationHistory, setOperationHistory] = useState<BulkOperationHistoryItem[]>([]);
   const [showDeleteHistoryConfirm, setShowDeleteHistoryConfirm] = useState(false);
@@ -345,6 +184,7 @@ export function AnagraficaBulkPanel() {
   });
 
   const summary = useMemo(() => buildSummary(results), [results]);
+  const busy = isProcessing || isExporting;
 
   useEffect(() => {
     const token = getStoredAccessToken();
@@ -362,7 +202,7 @@ export function AnagraficaBulkPanel() {
   async function deleteOperationHistory(): Promise<void> {
     const token = getStoredAccessToken();
     if (!token) return;
-    setBusy(true);
+    setIsProcessing(true);
     try {
       await catastoDeleteElaborazioniMassiveJobs(token);
       setOperationHistory([]);
@@ -372,22 +212,8 @@ export function AnagraficaBulkPanel() {
     } catch (e) {
       setError(e instanceof Error ? e.message : "Errore cancellazione storico");
     } finally {
-      setBusy(false);
+      setIsProcessing(false);
     }
-  }
-
-  function progressRowLabel(row: CatAnagraficaBulkRowInput): string {
-    if (inferredKind === "CF_PIVA_PARTICELLE") {
-      return row.codice_fiscale ?? row.partita_iva ?? `Riga ${row.row_index}`;
-    }
-    return [
-      row.comune ?? "Comune n/d",
-      row.foglio ? `Fg. ${row.foglio}` : null,
-      row.particella ? `Part. ${row.particella}` : null,
-      row.sub ? `Sub. ${row.sub}` : null,
-    ]
-      .filter(Boolean)
-      .join(" · ");
   }
 
   const columns = useMemo<ColumnDef<CatAnagraficaBulkRowResult>[]>(
@@ -473,96 +299,80 @@ export function AnagraficaBulkPanel() {
     [inferredKind],
   );
 
-  async function parseSelectedFile(file: File): Promise<void> {
+  async function validateSelectedFile(file: File): Promise<void> {
     setError(null);
-    setBusy(true);
+    setIsProcessing(true);
     try {
-      const parsed = await readFileToRows(file);
-      if (parsed.rows.length === 0) {
-        throw new Error("File vuoto o senza righe valide.");
-      }
+      const parsed = await readFileHeadersOnly(file);
       setInferredKind(parsed.kind);
-      setParsedRows(parsed.rows);
-      setSkippedRows(parsed.skipped);
+      setIsFileValidated(true);
       setResults([]);
       setActiveJobId(null);
       setBulkProgress((prev) => ({ ...prev, open: false }));
     } catch (e) {
       setInferredKind(null);
-      setParsedRows([]);
-      setSkippedRows(0);
+      setIsFileValidated(false);
       setResults([]);
       setActiveJobId(null);
       setBulkProgress((prev) => ({ ...prev, open: false }));
       setError(e instanceof Error ? e.message : "Errore parsing file");
     } finally {
-      setBusy(false);
+      setIsProcessing(false);
     }
   }
 
   async function runBulkSearch(): Promise<void> {
     const token = getStoredAccessToken();
     if (!token) return;
-    if (parsedRows.length === 0) {
+    if (!sourceFile || !isFileValidated) {
       setError("Carica un file e verifica che contenga righe valide.");
       return;
     }
-    setBusy(true);
+    setIsProcessing(true);
     setResults([]);
     setActiveJobId(null);
     setBulkProgress({
       open: true,
       processed: 0,
-      total: parsedRows.length,
-      currentLabel: "Preparazione elaborazione...",
+      total: 0,
+      currentLabel: "Upload e parsing file in corso...",
       phase: "processing",
     });
     try {
-      const includeCapacitasLive = true;
-      const chunkSize = 5;
-      const collectedResults: CatAnagraficaBulkRowResult[] = [];
-
-      for (let start = 0; start < parsedRows.length; start += chunkSize) {
-        const chunk = parsedRows.slice(start, start + chunkSize);
-        const firstRow = chunk[0];
-        setBulkProgress((prev) => ({
-          ...prev,
-          currentLabel: firstRow ? progressRowLabel(firstRow) : "Preparazione...",
-          phase: "processing",
-        }));
-        const response = await catastoBulkSearchAnagrafica(token, {
-          kind: inferredKind ?? undefined,
-          include_capacitas_live: includeCapacitasLive,
-          rows: chunk,
+      const job = await catastoUploadElaborazioneMassivaJob(token, sourceFile);
+      setActiveJobId(job.id);
+      setInferredKind(job.kind);
+      setOperationHistory((prev) => [job, ...prev].slice(0, 5));
+      let currentJob = job;
+      let completed = currentJob.status === "completed" || currentJob.status === "failed";
+      while (!completed) {
+        setBulkProgress({
+          open: true,
+          processed: currentJob.processed_rows,
+          total: currentJob.total_rows,
+          currentLabel: currentJob.current_label ?? "Elaborazione in coda...",
+          phase: currentJob.status === "failed" ? "error" : currentJob.status === "completed" ? "completed" : "processing",
         });
-        collectedResults.push(...response.results);
-        setResults([...collectedResults]);
-        setBulkProgress((prev) => ({
-          ...prev,
-          processed: Math.min(start + chunk.length, parsedRows.length),
-        }));
+        setResults(currentJob.results);
+        await new Promise((resolve) => window.setTimeout(resolve, BULK_JOB_POLL_INTERVAL_MS));
+        currentJob = await catastoGetElaborazioneMassivaJob(token, job.id);
+        setOperationHistory((prev) => [currentJob, ...prev.filter((item) => item.id !== currentJob.id)].slice(0, 5));
+        completed = currentJob.status === "completed" || currentJob.status === "failed";
       }
 
-      setBulkProgress((prev) => ({
-        ...prev,
-        currentLabel: "Salvataggio nello storico...",
-        phase: "saving",
-      }));
-      const job = await catastoSaveElaborazioneMassivaJob(token, {
-        source_filename: sourceFile?.name ?? null,
-        skipped_rows: skippedRows,
-        payload: { kind: inferredKind ?? undefined, include_capacitas_live: includeCapacitasLive, rows: parsedRows },
-        results: collectedResults,
+      setResults(currentJob.results);
+      setInferredKind(currentJob.kind);
+      setOperationHistory((prev) => [currentJob, ...prev.filter((item) => item.id !== currentJob.id)].slice(0, 5));
+      setBulkProgress({
+        open: true,
+        processed: currentJob.processed_rows,
+        total: currentJob.total_rows,
+        currentLabel: currentJob.current_label ?? (currentJob.status === "completed" ? "Elaborazione completata." : currentJob.error_message ?? "Elaborazione fallita."),
+        phase: currentJob.status === "completed" ? "completed" : "error",
       });
-      setResults(job.results);
-      setActiveJobId(job.id);
-      setOperationHistory((prev) => [job, ...prev].slice(0, 5));
-      setBulkProgress((prev) => ({
-        ...prev,
-        processed: parsedRows.length,
-        currentLabel: "Elaborazione completata.",
-        phase: "completed",
-      }));
+      if (currentJob.status === "failed") {
+        throw new Error(currentJob.error_message ?? "Errore elaborazione massiva");
+      }
       setError(null);
     } catch (e) {
       setBulkProgress((prev) => ({
@@ -572,173 +382,24 @@ export function AnagraficaBulkPanel() {
       }));
       setError(e instanceof Error ? e.message : "Errore elaborazione massiva");
     } finally {
-      setBusy(false);
+      setIsProcessing(false);
     }
-  }
-
-  async function exportVeloceFrom(
-    token: string,
-    kind: "CF_PIVA_PARTICELLE" | "COMUNE_FOGLIO_PARTICELLA_INTESTATARI",
-    exportResults: CatAnagraficaBulkRowResult[],
-    format: "csv" | "xlsx",
-  ): Promise<void> {
-    const matchesForLinks = exportResults.flatMap((r) => r.matches ?? (r.match ? [r.match] : []));
-    const urlByMatchKey = matchesForLinks.length ? await resolveCapacitasRptCertificatoUrls(token, matchesForLinks) : new Map<string, string>();
-    const rows: Record<string, unknown>[] = [];
-    for (const r of exportResults) {
-      const matches = r.matches ?? (r.match ? [r.match] : []);
-      const buildMatchLinkKey = (match?: (typeof matches)[0]): string =>
-        [
-          match?.utenza_latest?.cco?.trim() ?? "",
-          match?.cert_com ?? "",
-          match?.cert_pvc ?? "",
-          match?.cert_fra ?? "",
-          match?.cert_ccs ?? "",
-        ].join("|");
-      const buildLinkValue = (match?: (typeof matches)[0]): string => (
-        match && hasRptCertificatoContext(match)
-          ? urlByMatchKey.get(buildMatchLinkKey(match)) ?? buildRptCertificatoUrl(match)
-          : ""
-      );
-      const buildBase = (m?: (typeof matches)[0]) =>
-        kind === "CF_PIVA_PARTICELLE"
-          ? {
-              cf_input: r.codice_fiscale_input ?? "",
-              piva_input: r.partita_iva_input ?? "",
-              comune: m?.comune ?? "",
-              foglio: m?.foglio ?? "",
-              particella: m?.particella ?? "",
-              sub: m?.subalterno ?? "",
-              esito: formatEsitoForExport(r.esito),
-              "trovato in esito consorzio": formatConsorzioEsitoForExport(Boolean(m?.presente_in_catasto_consorzio)),
-              cco: m?.utenza_latest?.cco ?? "",
-              link_involture: buildLinkValue(m),
-              apri_involture: "",
-              stato_ruolo: m?.stato_ruolo ?? "",
-              stato_cnc: m?.stato_cnc ?? "",
-            }
-          : {
-              comune: m?.comune ?? r.comune_input ?? "",
-              sezione: r.sezione_input ?? "",
-              foglio: m?.foglio ?? r.foglio_input ?? "",
-              particella: m?.particella ?? r.particella_input ?? "",
-              sub: m?.subalterno ?? r.sub_input ?? "",
-              esito: formatEsitoForExport(r.esito),
-              "trovato in esito consorzio": formatConsorzioEsitoForExport(Boolean(m?.presente_in_catasto_consorzio)),
-              cco: m?.utenza_latest?.cco ?? "",
-              link_involture: buildLinkValue(m),
-              apri_involture: "",
-              stato_ruolo: m?.stato_ruolo ?? "",
-              stato_cnc: m?.stato_cnc ?? "",
-            };
-
-      const emptyInt = {
-        n_intestatari: 0,
-        rank: "",
-        cf: "",
-        tipo: "",
-        cognome: "",
-        nome: "",
-        denominazione: "",
-        ragione_sociale: "",
-        data_nascita: "",
-        luogo_nascita: "",
-        comune_residenza: "",
-        indirizzo: "",
-        cap: "",
-        telefono: "",
-        email: "",
-        deceduto: "",
-        note: "",
-      };
-
-      if (matches.length === 0) {
-        rows.push({ ...buildBase(), ...emptyInt });
-        continue;
-      }
-
-      for (const m of matches) {
-        const intestatari = m.intestatari ?? [];
-        const n = intestatari.length;
-        const base = buildBase(m);
-        if (n === 0) {
-          rows.push({ ...base, ...emptyInt, note: m?.note ?? "" });
-          continue;
-        }
-        intestatari.forEach((intestatario, index) => {
-          rows.push({
-            ...base,
-            n_intestatari: n,
-            rank: `${index + 1}/${n}`,
-            cf: intestatario.codice_fiscale ?? "",
-            tipo: intestatario.tipo ?? "",
-            cognome: intestatario.cognome ?? "",
-            nome: intestatario.nome ?? "",
-            denominazione: intestatarioDisplayName(intestatario),
-            ragione_sociale: intestatario.ragione_sociale ?? "",
-            data_nascita: intestatario.data_nascita ?? "",
-            luogo_nascita: intestatario.luogo_nascita ?? "",
-            comune_residenza: intestatario.comune_residenza ?? "",
-            indirizzo: intestatario.indirizzo ?? "",
-            cap: intestatario.cap ?? "",
-            telefono: intestatario.telefono ?? "",
-            email: intestatario.email ?? "",
-            deceduto: intestatario.deceduto ? "si" : "",
-            note: m?.note ?? "",
-          });
-        });
-      }
-    }
-
-    const basename = kind === "CF_PIVA_PARTICELLE" ? "catasto-intestatari-da-cf" : "catasto-intestatari";
-    if (format === "csv") {
-      const csv = XLSX.utils.sheet_to_csv(XLSX.utils.json_to_sheet(rows));
-      triggerDownload(new Blob([csv], { type: "text/csv;charset=utf-8" }), `${basename}.csv`);
-      return;
-    }
-
-    const ws = XLSX.utils.json_to_sheet(rows);
-    if (rows.length > 0) {
-      const headers = Object.keys(rows[0] ?? {});
-      const linkCol = headers.indexOf("link_involture");
-      const apriCol = headers.indexOf("apri_involture");
-      const ref = ws["!ref"];
-      if (linkCol >= 0 && apriCol >= 0 && ref) {
-        const range = XLSX.utils.decode_range(ref);
-        for (let r = range.s.r + 1; r <= range.e.r; r += 1) {
-          const linkA1 = XLSX.utils.encode_cell({ r, c: linkCol });
-          const apriA1 = XLSX.utils.encode_cell({ r, c: apriCol });
-          // Formula per riga: funziona in Excel; in Fogli Google resta valida dopo import xlsx.
-          // (ARRAYFORMULA è solo Fogli e non è supportata da Excel nello stesso modo.)
-          ws[apriA1] = { f: `IF(${linkA1}="","",HYPERLINK(${linkA1},"Clicca qui"))` };
-        }
-      }
-    }
-
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "intestatari");
-    const out = XLSX.write(wb, { type: "array", bookType: "xlsx" });
-    triggerDownload(new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }), `${basename}.xlsx`);
   }
 
   async function exportVeloce(format: "csv" | "xlsx"): Promise<void> {
     if (results.length === 0 || !inferredKind) return;
     const token = getStoredAccessToken();
-    if (!token) return;
-    setBusy(true);
+    if (!token || !activeJobId) return;
+    setIsExporting(true);
     try {
-      let exportResults = results;
-      let exportKind = inferredKind;
-      if (activeJobId) {
-        const refreshedJob = await catastoGetElaborazioneMassivaJob(token, activeJobId);
-        exportResults = refreshedJob.results;
-        exportKind = refreshedJob.kind;
-        setResults(refreshedJob.results);
-        setInferredKind(refreshedJob.kind);
-      }
-      await exportVeloceFrom(token, exportKind, exportResults, format);
+      const refreshedJob = await catastoGetElaborazioneMassivaJob(token, activeJobId);
+      setResults(refreshedJob.results);
+      setInferredKind(refreshedJob.kind);
+      const blob = await catastoDownloadElaborazioneMassivaJobExport(token, activeJobId, format);
+      triggerDownload(blob, `${refreshedJob.kind === "CF_PIVA_PARTICELLE" ? "catasto-intestatari-da-cf" : "catasto-intestatari"}.${format}`);
+      setError(null);
     } finally {
-      setBusy(false);
+      setIsExporting(false);
     }
   }
 
@@ -841,15 +502,15 @@ export function AnagraficaBulkPanel() {
             <button
               type="button"
               className="btn-secondary"
-              disabled={busy || parsedRows.length === 0}
+              disabled={isProcessing || !sourceFile}
               onClick={() => {
                 setSourceFile(null);
-                setParsedRows([]);
-                setSkippedRows(0);
+                setIsFileValidated(false);
                 setResults([]);
                 setActiveJobId(null);
                 setBulkProgress((prev) => ({ ...prev, open: false }));
                 setError(null);
+                setInferredKind(null);
               }}
             >
               Reset
@@ -934,11 +595,11 @@ export function AnagraficaBulkPanel() {
               label="File ricerca anagrafica"
               accept=".xlsx,.csv"
               file={sourceFile}
-              disabled={busy}
+              disabled={isProcessing}
               onChange={(file) => {
                 if (!file) return;
                 setSourceFile(file);
-                void parseSelectedFile(file);
+                void validateSelectedFile(file);
               }}
               hint="Carica un file .xlsx o .csv dopo aver scaricato il template corretto."
             />
@@ -949,12 +610,12 @@ export function AnagraficaBulkPanel() {
               <p className="mt-1 text-xs text-gray-500">
                 {sourceFile ? (
                   <>
-                    {parsedRows.length} righe pronte
-                    {skippedRows ? ` · ${skippedRows} vuote saltate` : ""}
+                    Intestazioni verificate lato browser
                     {inferredKind ? ` · ${inferredKind === "CF_PIVA_PARTICELLE" ? "CF/P.IVA → Particelle" : "Particelle → Intestatari"}` : ""}
+                    {isFileValidated ? " · pronto per upload backend" : ""}
                   </>
                 ) : (
-                  "Seleziona il file per vedere l’anteprima del caricamento."
+                  "Seleziona il file per validare le colonne; il parsing righe avverrà sul backend."
                 )}
               </p>
             </div>
@@ -974,20 +635,20 @@ export function AnagraficaBulkPanel() {
             <div className="mt-4 flex flex-wrap gap-2">
               <button className="btn-secondary" type="button" disabled={busy || results.length === 0} onClick={() => void exportVeloce("csv")}>
                 <DocumentIcon className="h-4 w-4" />
-                Export CSV
+                {isExporting ? "Export CSV..." : "Export CSV"}
               </button>
               <button className="btn-secondary" type="button" disabled={busy || results.length === 0} onClick={() => void exportVeloce("xlsx")}>
                 <DocumentIcon className="h-4 w-4" />
-                Export Excel
+                {isExporting ? "Export Excel..." : "Export Excel"}
               </button>
             </div>
           </div>
         ) : null}
 
         <div className="mt-4 flex flex-wrap items-center gap-3">
-          <button className="btn-primary" type="button" disabled={busy || parsedRows.length === 0} onClick={() => void runBulkSearch()}>
+          <button className="btn-primary" type="button" disabled={isProcessing || !sourceFile || !isFileValidated} onClick={() => void runBulkSearch()}>
             <RefreshIcon className="h-4 w-4" />
-            {busy ? "Elaborazione…" : "Elabora righe"}
+            {isProcessing ? "Elaborazione…" : "Elabora righe"}
           </button>
         </div>
       </article>
@@ -996,13 +657,13 @@ export function AnagraficaBulkPanel() {
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-sm font-medium text-gray-900">Ultime operazioni</p>
-            <p className="mt-1 text-sm text-gray-500">Storico locale delle ultime 5 elaborazioni eseguite da questo browser.</p>
+            <p className="mt-1 text-sm text-gray-500">Ultimi 5 job persistiti per il tuo utente, con stato e risultati ricaricabili.</p>
           </div>
           {operationHistory.length > 0 ? (
             <button
               type="button"
               className="btn-secondary"
-              disabled={busy}
+              disabled={isProcessing}
               onClick={() => setShowDeleteHistoryConfirm(true)}
             >
               Cancella storico
@@ -1026,9 +687,23 @@ export function AnagraficaBulkPanel() {
                       · {formatOperationKind(item.kind)}
                       {item.skipped_rows ? ` · ${item.skipped_rows} righe vuote saltate` : ""}
                     </p>
+                    {item.current_label ? <p className="mt-1 text-xs text-gray-500">{item.current_label}</p> : null}
                   </div>
                   <div className="flex flex-wrap gap-2 text-xs text-gray-700">
+                    <span
+                      className={[
+                        "rounded-full px-2.5 py-1",
+                        item.status === "completed"
+                          ? "bg-emerald-50 text-emerald-700"
+                          : item.status === "failed"
+                            ? "bg-red-50 text-red-700"
+                            : "bg-blue-50 text-blue-700",
+                      ].join(" ")}
+                    >
+                      {formatJobStatus(item.status)}
+                    </span>
                     <span className="rounded-full bg-white px-2.5 py-1">Totale: {item.summary.total}</span>
+                    <span className="rounded-full bg-white px-2.5 py-1">Progresso: {item.processed_rows}/{item.total_rows}</span>
                     <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">FOUND: {item.summary.found}</span>
                     <span className="rounded-full bg-white px-2.5 py-1">NOT_FOUND: {item.summary.notFound}</span>
                     <span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700">MULTIPLE: {item.summary.multiple}</span>
@@ -1039,7 +714,7 @@ export function AnagraficaBulkPanel() {
                   <button
                     type="button"
                     className="btn-secondary"
-                    disabled={busy}
+                    disabled={isProcessing || isExporting}
                     onClick={() => {
                       const token = getStoredAccessToken();
                       if (!token) return;
@@ -1061,40 +736,48 @@ export function AnagraficaBulkPanel() {
                   <button
                     type="button"
                     className="btn-secondary"
-                    disabled={busy}
+                    disabled={isProcessing || isExporting}
                     onClick={() => {
                       const token = getStoredAccessToken();
                       if (!token) return;
                       void (async () => {
+                        setIsExporting(true);
                         try {
                           const job = await catastoGetElaborazioneMassivaJob(token, item.id);
-                          await exportVeloceFrom(token, job.kind, job.results, "csv");
+                          const blob = await catastoDownloadElaborazioneMassivaJobExport(token, item.id, "csv");
+                          triggerDownload(blob, `${job.kind === "CF_PIVA_PARTICELLE" ? "catasto-intestatari-da-cf" : "catasto-intestatari"}.csv`);
                         } catch (e) {
                           setError(e instanceof Error ? e.message : "Errore export job");
+                        } finally {
+                          setIsExporting(false);
                         }
                       })();
                     }}
                   >
-                    Riesporta CSV
+                    {isExporting ? "Export CSV..." : "Riesporta CSV"}
                   </button>
                   <button
                     type="button"
                     className="btn-secondary"
-                    disabled={busy}
+                    disabled={isProcessing || isExporting}
                     onClick={() => {
                       const token = getStoredAccessToken();
                       if (!token) return;
                       void (async () => {
+                        setIsExporting(true);
                         try {
                           const job = await catastoGetElaborazioneMassivaJob(token, item.id);
-                          await exportVeloceFrom(token, job.kind, job.results, "xlsx");
+                          const blob = await catastoDownloadElaborazioneMassivaJobExport(token, item.id, "xlsx");
+                          triggerDownload(blob, `${job.kind === "CF_PIVA_PARTICELLE" ? "catasto-intestatari-da-cf" : "catasto-intestatari"}.xlsx`);
                         } catch (e) {
                           setError(e instanceof Error ? e.message : "Errore export job");
+                        } finally {
+                          setIsExporting(false);
                         }
                       })();
                     }}
                   >
-                    Riesporta Excel
+                    {isExporting ? "Export Excel..." : "Riesporta Excel"}
                   </button>
                 </div>
               </div>

@@ -1,3 +1,4 @@
+import asyncio
 import importlib.util
 import sys
 import types
@@ -74,6 +75,7 @@ from app.modules.catasto.services.ade_wfs import (
     prepare_ade_sync_runs_for_recovery,
     split_bbox,
 )
+from app.modules.catasto.routes.anagrafica import run_bulk_search_job_by_id
 from app.modules.elaborazioni.capacitas.models import CapacitasAnagraficaDetail, CapacitasIntestatario, CapacitasTerrenoCertificato
 from app.modules.elaborazioni.capacitas.models import CapacitasLookupOption, CapacitasTerreniSearchResult
 from app.schemas.catasto_phase1 import CatAnagraficaMatch, CatAnagraficaUtenzaSummary, CatIntestatarioResponse
@@ -4430,6 +4432,208 @@ def test_bulk_search_job_detail_rehydrates_live_first_context_for_saved_results(
         assert refreshed["cert_ccs"] == "00000"
     finally:
         db.close()
+
+
+def test_bulk_search_job_create_and_worker_complete_cf_flow(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db = TestingSessionLocal()
+    try:
+        batch = CatImportBatch(filename="test.xlsx", tipo="test", status="completed")
+        db.add(batch)
+        db.flush()
+        comune = CatComune(
+            nome_comune="Santa Giusta",
+            codice_catastale="I205",
+            cod_comune_capacitas=239,
+            codice_comune_formato_numerico=115048,
+            codice_comune_numerico_2017_2025=95048,
+            nome_comune_legacy="Santa Giusta",
+            cod_provincia=115,
+            sigla_provincia="OR",
+            regione="Sardegna",
+        )
+        db.add(comune)
+        db.flush()
+        particella = CatParticella(
+            comune_id=comune.id,
+            cod_comune_capacitas=239,
+            codice_catastale="I205",
+            nome_comune="Santa Giusta",
+            foglio="22",
+            particella="143",
+            subalterno=None,
+            is_current=True,
+        )
+        db.add(particella)
+        db.flush()
+        db.add(
+            CatUtenzaIrrigua(
+                import_batch_id=batch.id,
+                anno_campagna=2025,
+                cco="014000294",
+                comune_id=comune.id,
+                cod_comune_capacitas=239,
+                cod_frazione=14,
+                nome_comune="Santa Giusta",
+                foglio="22",
+                particella="143",
+                particella_id=particella.id,
+                denominazione="GARAU SALVATORE",
+                codice_fiscale="GRASVT44R03G113S",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    create_response = client.post(
+        "/catasto/elaborazioni-massive/particelle/jobs",
+        headers=auth_headers(),
+        json={
+            "source_filename": "bulk.xlsx",
+            "payload": {
+                "kind": "CF_PIVA_PARTICELLE",
+                "rows": [{"row_index": 1, "codice_fiscale": "GRASVT44R03G113S"}],
+            },
+        },
+    )
+
+    assert create_response.status_code == 200
+    created_payload = create_response.json()
+    assert created_payload["status"] == "pending"
+    assert created_payload["processed_rows"] == 0
+    assert created_payload["total_rows"] == 1
+    assert created_payload["results"] == []
+
+    job_id = UUID(created_payload["id"])
+    monkeypatch.setattr("app.core.database.SessionLocal", TestingSessionLocal)
+    asyncio.run(run_bulk_search_job_by_id(job_id))
+
+    detail_response = client.get(
+        f"/catasto/elaborazioni-massive/particelle/jobs/{job_id}",
+        headers=auth_headers(),
+    )
+
+    assert detail_response.status_code == 200
+    payload = detail_response.json()
+    assert payload["status"] == "completed"
+    assert payload["processed_rows"] == 1
+    assert payload["total_rows"] == 1
+    assert payload["summary"]["found"] == 1
+    assert payload["results"][0]["esito"] == "FOUND"
+    assert payload["results"][0]["match"]["utenza_latest"]["cco"] == "014000294"
+
+
+def test_bulk_search_job_export_csv_download() -> None:
+    save_response = client.post(
+        "/catasto/elaborazioni-massive/particelle/jobs/save",
+        headers=auth_headers(),
+        json={
+            "source_filename": "saved.xlsx",
+            "payload": {
+                "kind": "COMUNE_FOGLIO_PARTICELLA_INTESTATARI",
+                "rows": [{"row_index": 1, "comune": "Santa Giusta", "foglio": "22", "particella": "143"}],
+            },
+            "results": [
+                {
+                    "row_index": 1,
+                    "comune_input": "Santa Giusta",
+                    "foglio_input": "22",
+                    "particella_input": "143",
+                    "esito": "FOUND",
+                    "message": "OK",
+                    "match": {
+                        "particella_id": str(uuid4()),
+                        "comune": "Santa Giusta",
+                        "cod_comune_capacitas": 239,
+                        "foglio": "22",
+                        "particella": "143",
+                        "subalterno": None,
+                        "presente_in_catasto_consorzio": True,
+                        "utenza_latest": {
+                            "id": str(uuid4()),
+                            "cco": "014000294",
+                            "anno_campagna": 2025,
+                            "stato": None,
+                            "num_distretto": None,
+                            "nome_distretto": None,
+                            "sup_irrigabile_mq": None,
+                            "denominazione": "GARAU SALVATORE",
+                            "codice_fiscale": "GRASVT44R03G113S",
+                            "ha_anomalie": False,
+                        },
+                        "cert_com": "239",
+                        "cert_pvc": "097",
+                        "cert_fra": "14",
+                        "cert_ccs": "00000",
+                        "stato_ruolo": "Iscrivibile a ruolo",
+                        "stato_cnc": "Lista 1",
+                        "intestatari": [
+                            {
+                                "id": str(uuid4()),
+                                "codice_fiscale": "GRASVT44R03G113S",
+                                "denominazione": "GARAU SALVATORE",
+                                "tipo": "PF",
+                                "cognome": "GARAU",
+                                "nome": "SALVATORE",
+                                "data_nascita": None,
+                                "luogo_nascita": None,
+                                "indirizzo": None,
+                                "comune_residenza": None,
+                                "cap": None,
+                                "email": None,
+                                "telefono": None,
+                                "ragione_sociale": None,
+                                "source": "capacitas",
+                                "last_verified_at": None,
+                                "deceduto": None,
+                            }
+                        ],
+                        "anomalie_count": 0,
+                        "anomalie_top": [],
+                        "note": None,
+                    },
+                    "matches": None,
+                    "matches_count": 1,
+                }
+            ],
+        },
+    )
+
+    assert save_response.status_code == 200
+    job_id = save_response.json()["id"]
+
+    export_response = client.get(
+        f"/catasto/elaborazioni-massive/particelle/jobs/{job_id}/export?format=csv",
+        headers=auth_headers(),
+    )
+
+    assert export_response.status_code == 200
+    assert export_response.headers["content-type"].startswith("text/csv")
+    csv_text = export_response.content.decode("utf-8")
+    assert "link_involture" in csv_text
+    assert "GARAU SALVATORE" in csv_text
+    assert "https://involture1.servizicapacitas.com/pages/rptCertificato.aspx" in csv_text
+
+
+def test_bulk_search_job_upload_csv_creates_pending_job() -> None:
+    csv_content = "codice_fiscale\nGRASVT44R03G113S\n\n"
+
+    response = client.post(
+        "/catasto/elaborazioni-massive/particelle/jobs/upload",
+        headers=auth_headers(),
+        files={"file": ("bulk.csv", csv_content.encode("utf-8"), "text/csv")},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "pending"
+    assert payload["kind"] == "CF_PIVA_PARTICELLE"
+    assert payload["source_filename"] == "bulk.csv"
+    assert payload["total_rows"] == 1
+    assert payload["skipped_rows"] == 0
+    assert payload["results"] == []
 
 
 def test_bulk_search_anagrafica_sub_matches_preserve_case_variants() -> None:

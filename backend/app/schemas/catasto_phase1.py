@@ -909,9 +909,16 @@ class CatAnagraficaBulkJobSummary(BaseModel):
 class CatAnagraficaBulkJobItem(BaseModel):
     id: UUID
     created_at: datetime
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
     source_filename: str | None = None
     kind: Literal["CF_PIVA_PARTICELLE", "COMUNE_FOGLIO_PARTICELLA_INTESTATARI"]
+    status: Literal["pending", "processing", "completed", "failed"]
     skipped_rows: int = 0
+    total_rows: int = 0
+    processed_rows: int = 0
+    current_label: str | None = None
+    error_message: str | None = None
     summary: CatAnagraficaBulkJobSummary
 
 

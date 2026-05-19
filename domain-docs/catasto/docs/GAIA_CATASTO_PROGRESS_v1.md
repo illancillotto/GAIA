@@ -86,7 +86,7 @@ Legend: 🔴 Non iniziato · 🟡 In corso · 🟢 Completato · ⚫ Bloccato
 | F7 | Scheda Particella `/catasto/particelle/[id]` | 🟢 | `frontend/src/app/catasto/particelle/[id]/page.tsx` | Sezioni utenze+anomalie collegate |
 | F8 | Console Anomalie `/catasto/anomalie` | 🟢 | `frontend/src/app/catasto/anomalie/page.tsx` | Summary per famiglia, sezione `Code di lavoro`, triage tabellare, wizard attivi per `VAL-02/03`, `VAL-04` e `VAL-05`, e pannello `Scansione AdE particelle non collegate` per avviare/monitorare batch SISTER dedicati |
 | F9 | Layout + navigazione catasto | 🟢 | `frontend/src/app/catasto/layout.tsx` + sidebar | |
-| F10 | Elaborazioni massive `/catasto/elaborazioni-massive` | 🟢 | `frontend/src/components/catasto/anagrafica/AnagraficaBulkPanel.tsx` | Storico locale ultime 5 operazioni; `MULTIPLE_MATCHES` esporta tutte le particelle candidate con `match_rank` |
+| F10 | Elaborazioni massive `/catasto/elaborazioni-massive` | 🟢 | `frontend/src/components/catasto/anagrafica/AnagraficaBulkPanel.tsx` + `modules/elaborazioni/worker/worker.py` | Job persistiti su backend con polling stato/progresso; il worker esegue la massiva, il backend parsea i file caricati e l'export CSV/XLSX viene scaricato da endpoint dedicato, mantenendo il dettaglio completo dei `MULTIPLE_MATCHES` |
 
 ---
 

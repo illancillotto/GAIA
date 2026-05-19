@@ -829,6 +829,21 @@ export async function catastoCreateElaborazioneMassivaJob(
   });
 }
 
+export async function catastoUploadElaborazioneMassivaJob(
+  token: string,
+  file: File,
+  onProgress?: (percent: number) => void,
+): Promise<CatAnagraficaBulkJobDetail> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return requestFormDataWithUploadProgress<CatAnagraficaBulkJobDetail>(
+    "/catasto/elaborazioni-massive/particelle/jobs/upload",
+    formData,
+    token,
+    onProgress,
+  );
+}
+
 export async function catastoSaveElaborazioneMassivaJob(
   token: string,
   payload: { source_filename?: string | null; skipped_rows?: number; payload: CatAnagraficaBulkSearchRequest; results: CatAnagraficaBulkSearchResponse["results"] },
@@ -852,6 +867,16 @@ export async function catastoListElaborazioniMassiveJobs(
 
 export async function catastoGetElaborazioneMassivaJob(token: string, jobId: UUID): Promise<CatAnagraficaBulkJobDetail> {
   return request<CatAnagraficaBulkJobDetail>(`/catasto/elaborazioni-massive/particelle/jobs/${jobId}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function catastoDownloadElaborazioneMassivaJobExport(
+  token: string,
+  jobId: UUID,
+  format: "csv" | "xlsx",
+): Promise<Blob> {
+  return requestBlob(`/catasto/elaborazioni-massive/particelle/jobs/${jobId}/export?format=${format}`, {
     headers: authHeaders(token),
   });
 }

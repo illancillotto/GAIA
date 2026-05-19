@@ -839,9 +839,16 @@ export type CatAnagraficaBulkJobSummary = {
 export type CatAnagraficaBulkJobItem = {
   id: UUID;
   created_at: string;
+  started_at: string | null;
+  completed_at: string | null;
   source_filename: string | null;
   kind: "CF_PIVA_PARTICELLE" | "COMUNE_FOGLIO_PARTICELLA_INTESTATARI";
+  status: "pending" | "processing" | "completed" | "failed";
   skipped_rows: number;
+  total_rows: number;
+  processed_rows: number;
+  current_label: string | null;
+  error_message: string | null;
   summary: CatAnagraficaBulkJobSummary;
 };
 
