@@ -18,6 +18,7 @@ La documentazione del progetto e distribuita principalmente in due aree:
 - `PROMPT_FRONTEND.md`: prompt e istruzioni frontend.
 - `PROMPT_DEVOPS.md`: prompt e istruzioni DevOps.
 - `PROMPT_CODEX_permissions.md`: note operative sui permessi per Codex.
+- `docker-compose.local-gateway.yml`: stack Docker dedicato al reverse proxy locale condiviso tra progetti.
 - `.github/workflows/`: pipeline CI/CD GitHub Actions.
 - `backend/app/MONOLITH_MODULAR.md`: note architetturali sul backend monolite modulare.
 - `backend/app/modules/inventory/`: modulo backend Inventory con router, modelli, schemi e servizi applicativi.
@@ -217,13 +218,18 @@ GAIA/
 │   └── elaborazioni/
 │       └── worker/
 ├── nginx/
+│   ├── nginx.conf
+│   └── local-dev-gateway.conf
 ├── progress/
 ├── secrets/
 │   └── pdnd/
 │       └── .gitkeep
 ├── scripts/
+│   ├── setup-local-domain.sh
+│   └── setup-local-dev-gateway.sh
 ├── AGENTS.md
 ├── ARCHITECTURE.md
+├── docker-compose.local-gateway.yml
 ├── IMPLEMENTATION_PLAN.md
 ├── PRD.md
 ├── PROMPT_BACKEND.md

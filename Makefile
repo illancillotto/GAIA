@@ -1,6 +1,6 @@
 COMPOSE = docker compose
 
-.PHONY: up down logs rebuild backend-shell frontend-shell migrate bootstrap-admin bootstrap-domain bootstrap-sections purge-seed live-sync scheduled-live-sync
+.PHONY: up down logs rebuild backend-shell frontend-shell migrate bootstrap-admin bootstrap-domain bootstrap-sections purge-seed live-sync scheduled-live-sync local-gateway-up local-gateway-down
 
 up:
 	$(COMPOSE) up -d
@@ -40,3 +40,9 @@ live-sync:
 
 scheduled-live-sync:
 	$(COMPOSE) exec backend python scripts/scheduled_live_sync.py
+
+local-gateway-up:
+	LOCAL_DEV_GATEWAY_PORT=$${LOCAL_DEV_GATEWAY_PORT:-80} docker compose -f docker-compose.local-gateway.yml up -d
+
+local-gateway-down:
+	docker compose -f docker-compose.local-gateway.yml down

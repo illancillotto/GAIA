@@ -180,6 +180,102 @@ Quando il frontend mostra comportamenti incoerenti o il build Next fallisce su c
 
 Il comando Docker ferma temporaneamente il servizio `frontend`, esegue un build pulito in un container effimero e poi rialza il servizio.
 
+### Trasferimento immagini Docker verso server CED
+
+Per copiare una o piu immagini Docker locali dal PC di sviluppo al server CED senza passare da un registry, usare:
+
+- `./scripts/copy-docker-image-to-ced.sh --ssh serverCed --service backend --service frontend`
+- `./scripts/copy-docker-image-to-ced.sh --ssh serverCed --image gaia-backend:latest`
+- `./scripts/copy-docker-image-to-ced.sh --ssh serverCed --service backend --copy-env --remote-env-path /opt/gaia/.env`
+
+Lo script:
+
+- risolve i servizi Compose come immagini `<project>-<service>:latest` con project name default `gaia`
+- esporta l'immagine con `docker image save`
+- comprime l'archivio in `tar.gz`
+- lo trasferisce via `scp`
+- sul server esegue `docker load` e rimuove il file temporaneo
+- opzionalmente copia anche il file `.env` del repository sul path remoto desiderato
+
+Prerequisiti:
+
+- accesso SSH gia configurato verso il server CED, ad esempio tramite alias `serverCed`
+- Docker disponibile sia sulla macchina locale sia sul server remoto
+- immagine gia presente localmente, ad esempio dopo `docker compose build`
+- se usi `--copy-env`, verifica che il file `.env` locale sia quello corretto per il server CED
+
+### Dominio locale `gaia.local`
+
+Per allineare l'accesso locale a un hostname stabile invece di usare solo `localhost`, usare:
+
+- `./scripts/setup-local-domain.sh`
+
+Lo script:
+
+- registra `gaia.local` in `/etc/hosts` verso `127.0.0.1`
+- crea `.env` da `.env.example` se manca
+- aggiorna `BACKEND_CORS_ORIGINS` nel file ambiente locale includendo `http://gaia.local` e `http://gaia.local:8080`
+
+Con la configurazione default del repository l'app resta raggiungibile su:
+
+- `http://gaia.local:8080`
+
+Se sullo stesso host convivono anche altri stack locali, ad esempio `teti.local` e `gaia-mobile.local`, la logica corretta e mantenere porte host distinte per ogni progetto:
+
+- `GAIA`: `http://gaia.local:8080`
+- `TETI`: `http://teti.local:8085`
+- `GAIA-mobile`: `http://gaia-mobile.local:5173`
+
+Con stack Docker separati non e possibile pubblicare tutti direttamente sulla stessa porta host `80`. Il dominio dedicato aiuta a rendere stabile l'accesso, ma la distinzione resta fatta dalla porta.
+
+Usare `http://gaia.local` senza porta ha senso solo in uno di questi casi:
+
+- GAIA e l'unico servizio esposto su quel server
+- esiste un reverse proxy condiviso davanti a tutti gli stack, con routing per `Host` verso porte/container interni diversi
+
+### Gateway locale condiviso per `gaia.local`, `teti.local`, `gaia-mobile.local`
+
+Nel contesto locale in cui i tre stack convivono sullo stesso host, il repository include uno stack dedicato di reverse proxy:
+
+- [docker-compose.local-gateway.yml](/home/cbo/CursorProjects/GAIA/docker-compose.local-gateway.yml:1)
+- [nginx/local-dev-gateway.conf](/home/cbo/CursorProjects/GAIA/nginx/local-dev-gateway.conf:1)
+
+Routing previsto:
+
+- `gaia.local` -> `127.0.0.1:8080`
+- `teti.local` -> `127.0.0.1:8085`
+- `gaia-mobile.local` -> `127.0.0.1:5173`
+
+Bootstrap rapido:
+
+- `./scripts/setup-local-dev-gateway.sh`
+- `./scripts/setup-local-dev-gateway.sh --skip-hosts`
+
+Il comando:
+
+- aggiunge i tre hostname a `/etc/hosts`
+- avvia il reverse proxy condiviso su porta host `80`
+- lascia invariati gli stack applicativi esistenti e le loro porte interne/esterne
+
+La variante `--skip-hosts` avvia solo il gateway Docker e va usata quando i mapping dei domini sono gia presenti oppure quando vuoi gestire `/etc/hosts` manualmente.
+
+In alternativa:
+
+- `make local-gateway-up`
+- `make local-gateway-down`
+
+Prerequisiti operativi:
+
+- `GAIA` attivo su `:8080`
+- `TETI` attivo su `:8085`
+- `GAIA-mobile` attivo su `:5173`
+
+Con il gateway attivo, gli URL diventano:
+
+- `http://gaia.local`
+- `http://teti.local`
+- `http://gaia-mobile.local`
+
 Nota operativa Docker:
 - lo stack Compose forza temporaneamente `build.network: host` per il solo servizio `frontend`, per aggirare timeout DNS intermittenti del builder Docker verso `registry.npmjs.org`
 - il workaround e intenzionale ma non definitivo; l'obiettivo a regime e spostare la correzione sul daemon Docker host con DNS espliciti e rimuovere la dipendenza da `build.network: host`
