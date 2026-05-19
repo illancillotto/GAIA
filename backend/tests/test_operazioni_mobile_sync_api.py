@@ -1,0 +1,396 @@
+from __future__ import annotations
+
+import sys
+import types
+import os
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from uuid import uuid4
+from uuid import UUID
+
+if "shapely" not in sys.modules:
+    shapely_module = types.ModuleType("shapely")
+    shapely_geometry = types.ModuleType("shapely.geometry")
+    shapely_geometry.shape = lambda value: value
+    shapely_module.geometry = shapely_geometry
+    sys.modules["shapely"] = shapely_module
+    sys.modules["shapely.geometry"] = shapely_geometry
+
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
+
+from app.core.database import Base, get_db
+from app.core.config import settings
+from app.core.security import hash_password
+from app.main import app
+from app.models.application_user import ApplicationUser, ApplicationUserRole
+from app.models.catasto_phase1 import CatMeterReading
+from app.modules.operazioni.models.activities import ActivityCatalog, OperatorActivity
+from app.modules.operazioni.models.attachments import Attachment
+from app.modules.operazioni.models.mobile_sync import MobileSyncEvent
+from app.modules.operazioni.models.organizational import OperatorProfile, Team, TeamMembership
+from app.modules.operazioni.models.reports import (
+    FieldReport,
+    FieldReportAttachment,
+    FieldReportCategory,
+    FieldReportSeverity,
+    InternalCaseAttachment,
+)
+from app.modules.operazioni.models.vehicles import Vehicle, VehicleAssignment
+from app.modules.operazioni.models.wc_operator import WCOperator
+
+
+SQLALCHEMY_DATABASE_URL = "sqlite://"
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
+TestingSessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+client = TestClient(app)
+
+
+def override_get_db():
+    db = TestingSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+
+def setup_function() -> None:
+    app.dependency_overrides[get_db] = override_get_db
+    Base.metadata.drop_all(bind=engine)
+    Base.metadata.create_all(bind=engine)
+
+
+def teardown_function() -> None:
+    app.dependency_overrides.clear()
+    Base.metadata.drop_all(bind=engine)
+
+
+def _seed_admin() -> dict[str, str]:
+    db = TestingSessionLocal()
+    user = ApplicationUser(
+        username="mobile-sync-admin",
+        email="mobile-sync-admin@example.local",
+        password_hash=hash_password("secret123"),
+        role=ApplicationUserRole.ADMIN.value,
+        is_active=True,
+        module_operazioni=True,
+    )
+    db.add(user)
+    db.commit()
+    db.close()
+
+    response = client.post("/auth/login", json={"username": "mobile-sync-admin", "password": "secret123"})
+    token = response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _connector_headers() -> dict[str, str]:
+    return {settings.mobile_connector_header_name: settings.mobile_connector_token}
+
+
+def _seed_mobile_operator(db: Session) -> tuple[WCOperator, ApplicationUser]:
+    gaia_user = ApplicationUser(
+        username="field.operator",
+        email="field.operator@example.local",
+        password_hash=hash_password("operator123"),
+        role=ApplicationUserRole.OPERATOR.value,
+        is_active=True,
+        module_operazioni=True,
+    )
+    db.add(gaia_user)
+    db.flush()
+
+    db.add(
+        OperatorProfile(
+            user_id=gaia_user.id,
+            phone="+39000000001",
+            can_drive_vehicles=True,
+            is_active=True,
+        )
+    )
+
+    operator = WCOperator(
+        wc_id=101,
+        username="field.operator",
+        email="field.operator@example.local",
+        first_name="Mario",
+        last_name="Rossi",
+        enabled=True,
+        gaia_user_id=gaia_user.id,
+        wc_synced_at=datetime.now(UTC),
+    )
+    db.add(operator)
+    db.flush()
+    return operator, gaia_user
+
+
+def test_mobile_sync_exports_operators_catalogs_and_worksets() -> None:
+    headers = _connector_headers()
+    db = TestingSessionLocal()
+    operator, gaia_user = _seed_mobile_operator(db)
+    operator_id = str(operator.id)
+    gaia_user_id = gaia_user.id
+
+    team = Team(code="TEAM-NORD", name="Squadra Nord", is_active=True)
+    db.add(team)
+    db.flush()
+    db.add(
+        TeamMembership(
+            team_id=team.id,
+            user_id=gaia_user.id,
+            valid_from=datetime.now(UTC) - timedelta(days=1),
+            is_primary=True,
+        )
+    )
+
+    catalog = ActivityCatalog(code="SOPR", name="Sopralluogo", category="rete", is_active=True)
+    category = FieldReportCategory(code="LOSS", name="Perdita", wc_id=3, is_active=True)
+    severity = FieldReportSeverity(code="MED", name="Media", rank_order=1, is_active=True)
+    vehicle = Vehicle(
+        code="VH-001",
+        name="Pickup Nord",
+        plate_number="AB123CD",
+        vehicle_type="pickup",
+        current_status="available",
+        is_active=True,
+    )
+    db.add_all([catalog, category, severity, vehicle])
+    db.flush()
+
+    db.add(
+        VehicleAssignment(
+            vehicle_id=vehicle.id,
+            assignment_target_type="team",
+            team_id=team.id,
+            assigned_by_user_id=gaia_user.id,
+            start_at=datetime.now(UTC) - timedelta(days=1),
+        )
+    )
+    db.add(
+        OperatorActivity(
+            activity_catalog_id=catalog.id,
+            operator_user_id=gaia_user.id,
+            team_id=team.id,
+            vehicle_id=vehicle.id,
+            status="in_progress",
+            started_at=datetime.now(UTC) - timedelta(hours=1),
+            text_note="Attivita assegnata",
+        )
+    )
+    db.add(
+        CatMeterReading(
+            anno=2026,
+            punto_consegna="CNT-001",
+            matricola="MTR-001",
+            record_kind="meter_reading",
+            source="mobile",
+            mobile_operator_id=str(operator.id),
+        )
+    )
+    db.commit()
+    db.close()
+
+    operators_response = client.get("/api/mobile-sync/mobile-operators", headers=headers)
+    assert operators_response.status_code == 200
+    operators_payload = operators_response.json()
+    assert operators_payload["operators"][0]["operator_id"] == operator_id
+    assert operators_payload["operators"][0]["status"] == "ACTIVE"
+    assert operators_payload["operators"][0]["gaia_user_id"] == str(gaia_user_id)
+
+    catalogs_response = client.get("/api/mobile-sync/catalogs", headers=headers)
+    assert catalogs_response.status_code == 200
+    catalog_types = {item["catalog_type"] for item in catalogs_response.json()["catalogs"]}
+    assert {"activity_types", "report_types", "report_severities", "vehicles", "meters"} <= catalog_types
+    report_types = next(item for item in catalogs_response.json()["catalogs"] if item["catalog_type"] == "report_types")
+    assert report_types["payload"]["items"][0]["id"] == "3"
+
+    worksets_response = client.get("/api/mobile-sync/worksets", headers=headers, params={"operator_id": operator_id})
+    assert worksets_response.status_code == 200
+    worksets = {item["workset_type"]: item for item in worksets_response.json()["worksets"]}
+    assert worksets["assigned_activities"]["items"][0]["payload"]["team_label"] == "Squadra Nord"
+    assert worksets["available_vehicles"]["items"][0]["payload"]["plate"] == "AB123CD"
+    assert worksets["assigned_meters"]["items"][0]["payload"]["punto_consegna"] == "CNT-001"
+
+
+def test_mobile_sync_requires_connector_token() -> None:
+    response = client.get("/api/mobile-sync/mobile-operators")
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid connector token"
+
+
+def test_mobile_sync_connector_handshake_returns_capabilities() -> None:
+    response = client.get("/api/mobile-sync/connector/handshake", headers=_connector_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["service"] == "gaia-mobile-sync"
+    assert payload["authenticated"] is True
+    assert payload["auth_scheme"] == "header_token"
+    assert "catalogs.read" in payload["capabilities"]
+    assert payload["connector_header"] == settings.mobile_connector_header_name
+
+
+def test_mobile_sync_field_reports_are_idempotent_and_conflict_on_hash_mismatch(tmp_path: Path) -> None:
+    headers = _connector_headers()
+    db = TestingSessionLocal()
+    operator, _ = _seed_mobile_operator(db)
+    operator_id = str(operator.id)
+    category = FieldReportCategory(code="LOSS", name="Perdita", wc_id=3, is_active=True)
+    severity = FieldReportSeverity(code="MED", name="Media", rank_order=1, is_active=True)
+    db.add_all([category, severity])
+    db.commit()
+    db.close()
+    os.environ["OPERAZIONI_STORAGE_PATH"] = str(tmp_path / "operazioni-storage")
+
+    attachment_upload = client.post(
+        "/api/mobile-sync/attachments/upload",
+        headers=headers,
+        data={
+            "operator_id": operator_id,
+            "device_id": str(uuid4()),
+            "client_attachment_id": str(uuid4()),
+        },
+        files={"file": ("foto.jpg", b"fake-image-content", "image/jpeg")},
+    )
+    assert attachment_upload.status_code == 201
+    attachment_payload = attachment_upload.json()
+    attachment_path = tmp_path / "operazioni-storage"
+    assert attachment_path.exists()
+
+    client_event_id = str(uuid4())
+    payload = {
+        "client_event_id": client_event_id,
+        "operator_id": operator_id,
+        "device_id": str(uuid4()),
+        "payload_version": 1,
+        "payload_hash": "a" * 64,
+        "payload": {
+            "title": "Perdita su condotta",
+            "description": "Descrizione operatore",
+            "category_id": "3",
+            "occurred_at_device": "2026-05-18T08:00:00Z",
+            "gps_position": {"lat": 45.0, "lng": 9.0, "accuracy_m": 8},
+        },
+        "attachments": [
+            {
+                "client_attachment_id": attachment_payload["client_attachment_id"],
+                "filename": "foto.jpg",
+                "mime_type": "image/jpeg",
+                "size_bytes": len(b"fake-image-content"),
+                "sha256": attachment_payload["checksum_sha256"],
+            }
+        ],
+    }
+
+    first = client.post("/api/mobile-sync/field-reports", headers=headers, json=payload)
+    assert first.status_code == 201
+    first_id = first.json()["gaia_entity_id"]
+
+    second = client.post("/api/mobile-sync/field-reports", headers=headers, json=payload)
+    assert second.status_code == 201
+    assert second.json()["gaia_entity_id"] == first_id
+
+    conflict_payload = payload | {"payload_hash": "b" * 64}
+    conflict = client.post("/api/mobile-sync/field-reports", headers=headers, json=conflict_payload)
+    assert conflict.status_code == 409
+    assert conflict.json()["error_code"] == "GAIA_CONFLICT_ERROR"
+    assert conflict.json()["retryable"] is False
+
+    db = TestingSessionLocal()
+    assert db.query(FieldReport).count() == 1
+    assert db.query(MobileSyncEvent).count() == 1
+    assert db.query(Attachment).count() == 1
+    assert db.query(FieldReportAttachment).count() == 1
+    assert db.query(InternalCaseAttachment).count() == 1
+    stored_attachment = db.query(Attachment).first()
+    assert stored_attachment is not None
+    assert Path(stored_attachment.storage_path).exists()
+    db.close()
+
+
+def test_mobile_sync_activity_start_and_stop_are_idempotent() -> None:
+    headers = _connector_headers()
+    db = TestingSessionLocal()
+    operator, gaia_user = _seed_mobile_operator(db)
+    operator_id = str(operator.id)
+    catalog = ActivityCatalog(code="SOPR", name="Sopralluogo", category="rete", is_active=True)
+    team = Team(code="TEAM-SUD", name="Squadra Sud", is_active=True)
+    vehicle = Vehicle(code="VH-002", name="Jeep Sud", vehicle_type="jeep", current_status="available", is_active=True)
+    db.add_all([catalog, team, vehicle])
+    db.flush()
+    catalog_id = str(catalog.id)
+    team_id = str(team.id)
+    vehicle_id = str(vehicle.id)
+    db.add(
+        TeamMembership(
+            team_id=team.id,
+            user_id=gaia_user.id,
+            valid_from=datetime.now(UTC) - timedelta(days=1),
+            is_primary=True,
+        )
+    )
+    db.commit()
+    db.close()
+
+    start_payload = {
+        "client_event_id": str(uuid4()),
+        "operator_id": operator_id,
+        "device_id": str(uuid4()),
+        "payload_version": 1,
+        "payload_hash": "c" * 64,
+        "payload": {
+            "activity_catalog_id": catalog_id,
+            "team_id": team_id,
+            "vehicle_id": vehicle_id,
+            "notes": "Avvio mobile",
+            "started_at_device": "2026-05-18T08:00:00Z",
+            "gps_start": {"lat": 45.0, "lng": 9.0, "accuracy_m": 5},
+        },
+        "attachments": [],
+    }
+
+    start_response = client.post("/api/mobile-sync/activity-starts", headers=headers, json=start_payload)
+    assert start_response.status_code == 201
+    activity_id = start_response.json()["gaia_entity_id"]
+
+    start_retry = client.post("/api/mobile-sync/activity-starts", headers=headers, json=start_payload)
+    assert start_retry.status_code == 201
+    assert start_retry.json()["gaia_entity_id"] == activity_id
+
+    stop_payload = {
+        "client_event_id": str(uuid4()),
+        "operator_id": operator_id,
+        "device_id": str(uuid4()),
+        "payload_version": 1,
+        "payload_hash": "d" * 64,
+        "payload": {
+            "client_started_event_id": start_payload["client_event_id"],
+            "stopped_at_device": "2026-05-18T09:15:00Z",
+            "notes": "Chiusura mobile",
+            "gps_end": {"lat": 45.1, "lng": 9.1, "accuracy_m": 7},
+        },
+        "attachments": [],
+    }
+
+    stop_response = client.post("/api/mobile-sync/activity-stops", headers=headers, json=stop_payload)
+    assert stop_response.status_code == 201
+    assert stop_response.json()["gaia_entity_id"] == activity_id
+
+    stop_retry = client.post("/api/mobile-sync/activity-stops", headers=headers, json=stop_payload)
+    assert stop_retry.status_code == 201
+    assert stop_retry.json()["gaia_entity_id"] == activity_id
+
+    db = TestingSessionLocal()
+    activity = db.get(OperatorActivity, UUID(start_response.json()["gaia_entity_id"]))
+    assert activity is not None
+    assert activity.status == "submitted"
+    assert activity.duration_minutes_calculated == 75
+    assert db.query(MobileSyncEvent).count() == 2
+    db.close()

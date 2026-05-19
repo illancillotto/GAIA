@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     backend_host: str = Field(default="0.0.0.0", alias="BACKEND_HOST")
     backend_port: int = Field(default=8000, alias="BACKEND_PORT")
     backend_cors_origins: str = Field(
-        default="http://localhost:3000,http://localhost:8080",
+        default="http://localhost:3000,http://localhost:8080,http://gaia.local,http://gaia.local:8080",
         alias="BACKEND_CORS_ORIGINS",
     )
     credential_master_key: str | None = Field(default=None, alias="CREDENTIAL_MASTER_KEY")
@@ -90,6 +90,8 @@ class Settings(BaseSettings):
     jwt_secret_key: str = Field(alias="JWT_SECRET_KEY")
     jwt_expire_minutes: int = Field(default=90, alias="JWT_EXPIRE_MINUTES")
     jwt_algorithm: str = "HS256"
+    mobile_connector_token: str = Field(default="", alias="MOBILE_CONNECTOR_TOKEN")
+    mobile_connector_header_name: str = Field(default="X-GAIA-Connector-Token", alias="MOBILE_CONNECTOR_HEADER_NAME")
     pdnd_client_id: str = Field(default="", alias="PDND_CLIENT_ID")
     pdnd_kid: str = Field(default="", alias="PDND_KID")
     pdnd_private_key_path: str = Field(default="", alias="PDND_PRIVATE_KEY_PATH")

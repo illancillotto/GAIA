@@ -329,6 +329,24 @@ Responsabile aggiornamento: Codex
 - Il progetto `gaia-mobile` dovrà includere PWA cloud, gateway API, sync queue e connector locale outbound-only verso GAIA.
 - Preparati i documenti di avvio: PRD, architettura, execution plan, protocollo sync, prompt Codex e strategia di riuso della mini-app esistente.
 - Il codice della mini-app GAIA non va portato via copia/incolla: si riusano flussi, IndexedDB e stati concettuali, adattandoli al modello asincrono cloud -> connector -> GAIA.
+- Implementato lato GAIA il primo layer backend dedicato al connector su `/api/mobile-sync/*`, con contratti reali per:
+  - `GET /api/mobile-sync/connector/handshake`
+  - `POST /api/mobile-sync/attachments/upload`
+  - `GET /api/mobile-sync/mobile-operators`
+  - `GET /api/mobile-sync/catalogs`
+  - `GET /api/mobile-sync/worksets`
+  - `POST /api/mobile-sync/field-reports`
+  - `POST /api/mobile-sync/activity-starts`
+  - `POST /api/mobile-sync/activity-stops`
+- Aggiunta persistenza `mobile_sync_event` per idempotenza nativa su `client_event_id` e mapping stabile verso `gaia_entity_type` / `gaia_entity_id`.
+- Il layer riusa i modelli `operazioni` e `catasto` già presenti:
+  - operatori mobile da `wc_operator` + `application_users` + `operator_profile`
+  - cataloghi da `activity_catalog`, `field_report_category`, `field_report_severity`, `vehicle`, `catasto_meter_readings`
+  - workset da `operator_activity`, `team_membership`, `vehicle_assignment`, `catasto_meter_readings`
+- Errori lato GAIA ora restituiti in formato strutturato `{error_code, message, retryable, details}` sugli endpoint `mobile-sync`.
+- Protezione endpoint `mobile-sync` separata dagli utenti GAIA tramite token tecnico configurato con `MOBILE_CONNECTOR_TOKEN`.
+- Upload allegati mobile disponibile: il connector carica il binario prima dell'evento e GAIA collega gli attachment a `field_report` e `internal_case` tramite `client_attachment_id`.
+- Test backend dedicati aggiunti: `backend/tests/test_operazioni_mobile_sync_api.py`.
 
 ### 2026-04-22
 

@@ -1365,3 +1365,64 @@ Questo documento API è pensato per essere base diretta per:
 - service layer
 - autorizzazioni per ruolo
 - mini-app PWA e dashboard admin
+
+---
+
+# 25. GAIA Mobile Sync API
+
+Base path dedicato connector:
+
+```text
+/api/mobile-sync
+```
+
+Autenticazione connector:
+
+```text
+X-GAIA-Connector-Token: <MOBILE_CONNECTOR_TOKEN>
+```
+
+Endpoint disponibili lato GAIA:
+- `GET /api/mobile-sync/connector/handshake`
+- `POST /api/mobile-sync/attachments/upload`
+- `GET /api/mobile-sync/mobile-operators`
+- `GET /api/mobile-sync/catalogs`
+- `GET /api/mobile-sync/worksets`
+- `POST /api/mobile-sync/field-reports`
+- `POST /api/mobile-sync/activity-starts`
+- `POST /api/mobile-sync/activity-stops`
+
+Regole implementate:
+- autenticazione tecnica separata dagli utenti GAIA tramite header `X-GAIA-Connector-Token`;
+- idempotenza persistita su `client_event_id` tramite tabella `mobile_sync_event`;
+- conflitto `409` se lo stesso `client_event_id` arriva con `payload_hash` diverso;
+- risposta di successo uniforme:
+
+```json
+{
+  "gaia_entity_type": "field_report",
+  "gaia_entity_id": "uuid"
+}
+```
+
+- risposta errore uniforme:
+
+```json
+{
+  "error_code": "GAIA_VALIDATION_ERROR",
+  "message": "Attivita non valida per l'operatore",
+  "retryable": false,
+  "details": {
+    "field": "gaia_activity_id"
+  }
+}
+```
+
+Note implementative:
+- `connector/handshake` verifica autenticazione connector, reachability e capabilities esposte dal backend GAIA;
+- `attachments/upload` salva il binario nello storage `operazioni`, valida MIME/checksum e rende disponibile il link successivo via `client_attachment_id`;
+- `mobile-operators` esporta operatori collegati a utenti GAIA con email disponibile;
+- `catalogs` espone attivita, categorie segnalazione, severita, mezzi e contatori;
+- `worksets` aggrega attivita operatore, squadre, mezzi disponibili e contatori assegnati;
+- `field-reports` crea `field_report` + `internal_case` in singola transazione e collega gli allegati gia caricati;
+- `activity-starts` e `activity-stops` mappano su `operator_activity`.

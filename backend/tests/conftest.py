@@ -13,6 +13,7 @@ TEST_ENV_DEFAULTS = {
     "APP_ENV": "test",
     "DATABASE_URL": "sqlite:///./.pytest-gaia.db",
     "JWT_SECRET_KEY": "pytest-jwt-secret-key",
+    "MOBILE_CONNECTOR_TOKEN": "pytest-mobile-connector-token",
     "BOOTSTRAP_ADMIN_PASSWORD": "pytest-bootstrap-admin",
     "CREDENTIAL_MASTER_KEY": "WnCjZ2L63B1kIh_2mDkk8j5M6Bf0dzxN3Qv8QbQwB0A=",
 }

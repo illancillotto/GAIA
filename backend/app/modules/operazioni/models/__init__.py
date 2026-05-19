@@ -7,6 +7,7 @@ from app.modules.operazioni.models.activities import (
     OperatorActivityAttachment,
     OperatorActivityEvent,
 )
+from app.modules.operazioni.models.mobile_sync import MobileSyncEvent
 from app.modules.operazioni.models.attachments import (
     Attachment,
     StorageQuotaAlert,
@@ -58,6 +59,7 @@ __all__ = [
     "InternalCaseAssignmentHistory",
     "InternalCaseAttachment",
     "InternalCaseEvent",
+    "MobileSyncEvent",
     "OperatorActivity",
     "OperatorActivityAttachment",
     "OperatorActivityEvent",

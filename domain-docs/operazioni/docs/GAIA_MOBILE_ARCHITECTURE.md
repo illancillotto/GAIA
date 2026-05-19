@@ -287,7 +287,15 @@ Nel repo GAIA servira esporre o stabilizzare endpoint interni per:
 - idempotency lookup per `client_event_id`.
 
 Se endpoint esistenti sono gia sufficienti, il connector li usa direttamente.
-Se mancano garanzie di idempotenza o payload mobile, creare endpoint interni dedicati sotto `/api/operazioni/mobile-sync/*`.
+Se mancano garanzie di idempotenza o payload mobile, usare endpoint interni dedicati sotto `/api/mobile-sync/*`.
+
+Stato GAIA al 2026-05-19:
+- disponibile `GET /api/mobile-sync/connector/handshake` per bootstrap e verifica auth del connector;
+- disponibile `POST /api/mobile-sync/attachments/upload` per upload binario allegati da connector;
+- disponibili `GET /api/mobile-sync/mobile-operators`, `GET /api/mobile-sync/catalogs`, `GET /api/mobile-sync/worksets`;
+- disponibili `POST /api/mobile-sync/field-reports`, `POST /api/mobile-sync/activity-starts`, `POST /api/mobile-sync/activity-stops`;
+- idempotenza persistita lato GAIA con tabella `mobile_sync_event`;
+- autenticazione connector dedicata tramite header `X-GAIA-Connector-Token` valorizzato con la variabile backend `MOBILE_CONNECTOR_TOKEN`.
 
 ---
 

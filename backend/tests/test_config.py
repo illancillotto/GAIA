@@ -19,6 +19,8 @@ def test_settings_use_expected_defaults(monkeypatch) -> None:
         "NAS_ACL_COMMAND_TEMPLATE",
         "JWT_SECRET_KEY",
         "JWT_EXPIRE_MINUTES",
+        "MOBILE_CONNECTOR_TOKEN",
+        "MOBILE_CONNECTOR_HEADER_NAME",
         "PDND_CLIENT_ID",
         "PDND_KID",
         "PDND_PRIVATE_KEY_PATH",
@@ -63,10 +65,12 @@ def test_settings_use_expected_defaults(monkeypatch) -> None:
     assert settings.app_env == "development"
     assert settings.backend_host == "0.0.0.0"
     assert settings.backend_port == 8000
-    assert settings.backend_cors_origins == "http://localhost:3000,http://localhost:8080"
+    assert settings.backend_cors_origins == "http://localhost:3000,http://localhost:8080,http://gaia.local,http://gaia.local:8080"
     assert settings.jwt_secret_key == "config-defaults-secret"
     assert settings.jwt_expire_minutes == 90
     assert settings.jwt_algorithm == "HS256"
+    assert settings.mobile_connector_token == ""
+    assert settings.mobile_connector_header_name == "X-GAIA-Connector-Token"
     assert settings.pdnd_client_id == ""
     assert settings.pdnd_kid == ""
     assert settings.pdnd_private_key_path == ""
@@ -118,6 +122,8 @@ def test_settings_allow_environment_override(monkeypatch) -> None:
     monkeypatch.setenv("BACKEND_PORT", "9010")
     monkeypatch.setenv("BACKEND_CORS_ORIGINS", "http://localhost:8080,https://gaia.internal")
     monkeypatch.setenv("DATABASE_URL", "sqlite:///./test.db")
+    monkeypatch.setenv("MOBILE_CONNECTOR_TOKEN", "connector-secret")
+    monkeypatch.setenv("MOBILE_CONNECTOR_HEADER_NAME", "X-Test-Connector")
     monkeypatch.setenv("PDND_CLIENT_ID", "client-123")
     monkeypatch.setenv("PDND_KID", "kid-456")
     monkeypatch.setenv("PDND_PRIVATE_KEY_PATH", "/tmp/pdnd.pem")
@@ -159,6 +165,8 @@ def test_settings_allow_environment_override(monkeypatch) -> None:
     assert settings.backend_port == 9010
     assert settings.backend_cors_origins == "http://localhost:8080,https://gaia.internal"
     assert settings.database_url == "sqlite:///./test.db"
+    assert settings.mobile_connector_token == "connector-secret"
+    assert settings.mobile_connector_header_name == "X-Test-Connector"
     assert settings.pdnd_client_id == "client-123"
     assert settings.pdnd_kid == "kid-456"
     assert settings.pdnd_private_key_path == "/tmp/pdnd.pem"

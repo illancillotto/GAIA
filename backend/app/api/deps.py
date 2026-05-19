@@ -1,15 +1,18 @@
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
+from fastapi.security import APIKeyHeader
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
 from app.services.auth import get_current_user_from_token
 from app.services.permission_resolver import can_access_section
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/auth/login")
+mobile_connector_header = APIKeyHeader(name=settings.mobile_connector_header_name, auto_error=False)
 
 
 def get_current_user(
@@ -87,3 +90,20 @@ def require_not_operator(
 
 
 RequireNotOperator = Depends(require_not_operator)
+
+
+def require_mobile_connector(
+    connector_token: Annotated[str | None, Depends(mobile_connector_header)],
+) -> str:
+    expected_token = settings.mobile_connector_token.strip()
+    if not expected_token:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Mobile connector auth not configured",
+        )
+    if connector_token != expected_token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid connector token",
+        )
+    return connector_token
