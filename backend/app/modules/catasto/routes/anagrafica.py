@@ -876,6 +876,12 @@ class _CapacitasAuthoritativeResolver(_CapacitasLiveResolver):
         self._sanitizer = CapacitasLiveAuthoritativeSanitizer()
 
     async def enrich_match(self, p: CatParticella, match: CatAnagraficaMatch) -> CatAnagraficaMatch:
+        # Strip any DB-cached owners/status before handing off to the live path.
+        # The only valid output is: ricerca terreni → cert context → certificato.
+        # If the live path cannot complete that chain, sanitize() will blank the match.
+        match.intestatari = []
+        match.stato_ruolo = None
+        match.stato_cnc = None
         enriched = await super().enrich_match(p, match)
         return self._sanitizer.sanitize(enriched)
 

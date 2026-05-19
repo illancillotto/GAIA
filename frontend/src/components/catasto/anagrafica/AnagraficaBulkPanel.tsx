@@ -518,8 +518,8 @@ export function AnagraficaBulkPanel() {
       phase: "processing",
     });
     try {
-      const includeCapacitasLive = inferredKind === "COMUNE_FOGLIO_PARTICELLA_INTESTATARI";
-      const chunkSize = includeCapacitasLive ? 5 : 25;
+      const includeCapacitasLive = true;
+      const chunkSize = 5;
       const collectedResults: CatAnagraficaBulkRowResult[] = [];
 
       for (let start = 0; start < parsedRows.length; start += chunkSize) {
