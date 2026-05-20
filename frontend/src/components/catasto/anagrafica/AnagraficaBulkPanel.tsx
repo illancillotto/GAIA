@@ -392,11 +392,8 @@ export function AnagraficaBulkPanel() {
     if (!token || !activeJobId) return;
     setIsExporting(true);
     try {
-      const refreshedJob = await catastoGetElaborazioneMassivaJob(token, activeJobId);
-      setResults(refreshedJob.results);
-      setInferredKind(refreshedJob.kind);
       const blob = await catastoDownloadElaborazioneMassivaJobExport(token, activeJobId, format);
-      triggerDownload(blob, `${refreshedJob.kind === "CF_PIVA_PARTICELLE" ? "catasto-intestatari-da-cf" : "catasto-intestatari"}.${format}`);
+      triggerDownload(blob, `${inferredKind === "CF_PIVA_PARTICELLE" ? "catasto-intestatari-da-cf" : "catasto-intestatari"}.${format}`);
       setError(null);
     } finally {
       setIsExporting(false);
@@ -743,9 +740,8 @@ export function AnagraficaBulkPanel() {
                       void (async () => {
                         setIsExporting(true);
                         try {
-                          const job = await catastoGetElaborazioneMassivaJob(token, item.id);
                           const blob = await catastoDownloadElaborazioneMassivaJobExport(token, item.id, "csv");
-                          triggerDownload(blob, `${job.kind === "CF_PIVA_PARTICELLE" ? "catasto-intestatari-da-cf" : "catasto-intestatari"}.csv`);
+                          triggerDownload(blob, `${item.kind === "CF_PIVA_PARTICELLE" ? "catasto-intestatari-da-cf" : "catasto-intestatari"}.csv`);
                         } catch (e) {
                           setError(e instanceof Error ? e.message : "Errore export job");
                         } finally {
@@ -766,9 +762,8 @@ export function AnagraficaBulkPanel() {
                       void (async () => {
                         setIsExporting(true);
                         try {
-                          const job = await catastoGetElaborazioneMassivaJob(token, item.id);
                           const blob = await catastoDownloadElaborazioneMassivaJobExport(token, item.id, "xlsx");
-                          triggerDownload(blob, `${job.kind === "CF_PIVA_PARTICELLE" ? "catasto-intestatari-da-cf" : "catasto-intestatari"}.xlsx`);
+                          triggerDownload(blob, `${item.kind === "CF_PIVA_PARTICELLE" ? "catasto-intestatari-da-cf" : "catasto-intestatari"}.xlsx`);
                         } catch (e) {
                           setError(e instanceof Error ? e.message : "Errore export job");
                         } finally {

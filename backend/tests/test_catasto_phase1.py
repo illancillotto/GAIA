@@ -4616,6 +4616,17 @@ def test_bulk_search_job_export_csv_download() -> None:
     assert "GARAU SALVATORE" in csv_text
     assert "https://involture1.servizicapacitas.com/pages/rptCertificato.aspx" in csv_text
 
+    xlsx_response = client.get(
+        f"/catasto/elaborazioni-massive/particelle/jobs/{job_id}/export?format=xlsx",
+        headers=auth_headers(),
+    )
+
+    assert xlsx_response.status_code == 200
+    assert xlsx_response.headers["content-type"].startswith(
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+    assert int(xlsx_response.headers["content-length"]) > 0
+
 
 def test_bulk_search_job_upload_csv_creates_pending_job() -> None:
     csv_content = "codice_fiscale\nGRASVT44R03G113S\n\n"

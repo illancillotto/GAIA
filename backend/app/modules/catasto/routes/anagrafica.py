@@ -11,7 +11,7 @@ from uuid import UUID, uuid4
 
 from fastapi import APIRouter, Body, Depends, File, UploadFile
 from fastapi import HTTPException, Query, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 from openpyxl import Workbook
 from openpyxl import load_workbook
 from sqlalchemy import and_, desc, func, or_, select
@@ -488,7 +488,7 @@ def _stream_bulk_export_csv(filename: str, rows: list[dict[str, object]]) -> Str
     )
 
 
-def _stream_bulk_export_xlsx(filename: str, rows: list[dict[str, object]]) -> StreamingResponse:
+def _stream_bulk_export_xlsx(filename: str, rows: list[dict[str, object]]) -> Response:
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = "intestatari"
@@ -506,11 +506,15 @@ def _stream_bulk_export_xlsx(filename: str, rows: list[dict[str, object]]) -> St
                     sheet.cell(row=row_idx, column=apri_col).value = f'=HYPERLINK({link_cell},"Clicca qui")'
     buffer = BytesIO()
     workbook.save(buffer)
-    buffer.seek(0)
-    return StreamingResponse(
-        buffer,
+    content = buffer.getvalue()
+    workbook.close()
+    return Response(
+        content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Content-Length": str(len(content)),
+        },
     )
 
 
@@ -3196,11 +3200,24 @@ async def download_bulk_search_job_export(
     db: Session = Depends(get_db),
     user: ApplicationUser = Depends(require_active_user),
 ) -> StreamingResponse:
-    detail = await get_bulk_search_job(job_id=job_id, db=db, user=user)
-    if detail.status != CatastoElaborazioniMassiveJobStatus.COMPLETED.value:
+    job = (
+        db.execute(
+            select(CatastoElaborazioniMassiveJob)
+            .where(CatastoElaborazioniMassiveJob.id == job_id)
+            .where(CatastoElaborazioniMassiveJob.user_id == user.id)
+            .limit(1)
+        )
+        .scalars()
+        .one_or_none()
+    )
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job non trovato")
+    if job.status != CatastoElaborazioniMassiveJobStatus.COMPLETED.value:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Il job non e ancora completato")
-    rows = _build_bulk_export_rows(detail.kind, detail.results)
-    basename = _export_basename(detail.kind)
+    raw_results = job.results_json.get("results") if isinstance(job.results_json, dict) else None
+    results = [CatAnagraficaBulkSearchRowResult.model_validate(r) for r in (raw_results or [])]
+    rows = _build_bulk_export_rows(job.kind, results)
+    basename = _export_basename(job.kind)
     if format == "xlsx":
         return _stream_bulk_export_xlsx(f"{basename}.xlsx", rows)
     return _stream_bulk_export_csv(f"{basename}.csv", rows)
