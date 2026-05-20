@@ -20,12 +20,6 @@ Nella root del repository resta solo `README.md` (entry point del progetto).
 - `docs/PROMPT_DEVOPS.md`: prompt e istruzioni DevOps.
 - `docs/PROMPT_CODEX_permissions.md`: note operative sui permessi per Codex.
 - `docs/SECURITY.md`: note di sicurezza.
-
-### Wiki Agent (Milestone 9)
-
-- `docs/wiki/PRD_wiki.md`: PRD del Wiki Agent.
-- `docs/wiki/IMPLEMENTATION_PLAN_wiki.md`: piano di implementazione Wiki Agent.
-- `docs/wiki/PROMPT_CODEX_wiki.md`: prompt Codex per completare il Wiki Agent.
 - `docker-compose.local-gateway.yml`: stack Docker dedicato al reverse proxy locale condiviso tra progetti.
 - `.github/workflows/`: pipeline CI/CD GitHub Actions.
 - `backend/app/MONOLITH_MODULAR.md`: note architetturali sul backend monolite modulare.
@@ -135,6 +129,12 @@ Nella root del repository resta solo `README.md` (entry point del progetto).
 - `domain-docs/ruolo/docs/EXECUTION_PLAN_ruolo.md`
 - `domain-docs/ruolo/docs/PROGRESS_ruolo.md`
 - `domain-docs/ruolo/docs/PROMPT_CODEX_ruolo.md`
+
+### Wiki Agent (Milestone 9)
+
+- `domain-docs/wiki/docs/PRD_wiki.md`
+- `domain-docs/wiki/docs/IMPLEMENTATION_PLAN_wiki.md`
+- `domain-docs/wiki/docs/PROMPT_CODEX_wiki.md`
 
 ## Struttura sintetica del repository
 
