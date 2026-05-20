@@ -21,6 +21,7 @@ __all__ = [
     "ElaborazioneBatchDetailResponse",
     "ElaborazioneBatchResponse",
     "ElaborazioneAnprErrorSubjectItemResponse",
+    "ElaborazioneAnprRunRecordItemResponse",
     "ElaborazioneCaptchaSolveRequest",
     "ElaborazioneCaptchaSummaryResponse",
     "ElaborazioneCredentialCreateRequest",
@@ -50,6 +51,19 @@ class ElaborazioneAnprErrorSubjectItemResponse(BaseModel):
     capacitas_last_check_at: datetime | None = None
 
 
+class ElaborazioneAnprRunRecordItemResponse(BaseModel):
+    id: str
+    subject_id: str
+    display_name: str
+    codice_fiscale: str
+    data_nascita: date | None = None
+    last_event_at: datetime
+    final_esito: str
+    error_detail: str | None = None
+    calls_made: int
+    call_types: list[str] = Field(default_factory=list)
+
+
 class ElaborazioneAnprRunItemResponse(BaseModel):
     id: str
     run_date: date
@@ -64,6 +78,7 @@ class ElaborazioneAnprRunItemResponse(BaseModel):
     calls_used: int
     started_at: datetime
     completed_at: datetime | None = None
+    records: list[ElaborazioneAnprRunRecordItemResponse] = Field(default_factory=list)
 
 
 class ElaborazioneAnprSummaryResponse(BaseModel):

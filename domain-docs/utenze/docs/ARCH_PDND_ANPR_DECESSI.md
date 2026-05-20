@@ -243,6 +243,7 @@ Monitor operativo:
 - il batch ANPR non interrompe più l'esecuzione sull'intera coda quando un singolo soggetto genera un'eccezione inattesa
 - in questi casi il soggetto viene marcato `stato_anpr = error` e viene registrato un log tecnico `JOBERR`
 - il monitor `GET /elaborazioni/utenze-anpr/summary` espone anche la lista dei soggetti del ruolo corrente ancora in errore, con ultimo dettaglio disponibile e apertura diretta della scheda soggetto per verifica manuale
+- lo stesso endpoint espone per ogni elemento di `recent_runs` anche il dettaglio `records`: soggetti effettivamente toccati nel batch, ricostruiti dai `AnprCheckLog` prodotti tra `started_at` e `completed_at`, con esito finale, tipi di chiamata effettuati e dettaglio errore se disponibile
 
 **Request body**:
 ```json

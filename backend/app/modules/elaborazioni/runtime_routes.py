@@ -36,6 +36,7 @@ from app.schemas.elaborazioni import (
     ElaborazioneBatchResponse,
     ElaborazioneAnprErrorSubjectItemResponse,
     ElaborazioneAnprRunItemResponse,
+    ElaborazioneAnprRunRecordItemResponse,
     ElaborazioneAnprSummaryResponse,
     ElaborazioneCaptchaSolveRequest,
     ElaborazioneCaptchaSummaryResponse,
@@ -92,6 +93,58 @@ from app.services.catasto_documents import list_documents_for_batch
 router = APIRouter(prefix="/elaborazioni", tags=["elaborazioni"])
 
 
+def _build_anpr_run_records(db: Session, run: AnprJobRun) -> list[ElaborazioneAnprRunRecordItemResponse]:
+    completed_at = run.completed_at or run.started_at
+    if completed_at < run.started_at:
+        completed_at = run.started_at
+
+    rows = db.execute(
+        select(
+            AnprCheckLog.subject_id,
+            AnagraficaPerson.cognome,
+            AnagraficaPerson.nome,
+            AnagraficaPerson.codice_fiscale,
+            AnagraficaPerson.data_nascita,
+            AnprCheckLog.call_type,
+            AnprCheckLog.esito,
+            AnprCheckLog.error_detail,
+            AnprCheckLog.created_at,
+        )
+        .join(AnagraficaSubject, AnagraficaSubject.id == AnprCheckLog.subject_id)
+        .join(AnagraficaPerson, AnagraficaPerson.subject_id == AnagraficaSubject.id)
+        .where(AnagraficaSubject.subject_type == "person")
+        .where(AnprCheckLog.triggered_by == run.triggered_by)
+        .where(AnprCheckLog.created_at >= run.started_at)
+        .where(AnprCheckLog.created_at <= completed_at)
+        .order_by(AnprCheckLog.created_at.desc(), AnprCheckLog.subject_id.asc())
+    ).all()
+
+    aggregated: dict[str, ElaborazioneAnprRunRecordItemResponse] = {}
+    for subject_id, cognome, nome, codice_fiscale, data_nascita, call_type, esito, error_detail, created_at in rows:
+        key = str(subject_id)
+        item = aggregated.get(key)
+        if item is None:
+            aggregated[key] = ElaborazioneAnprRunRecordItemResponse(
+                id=f"{run.id}:{key}",
+                subject_id=key,
+                display_name=f"{(cognome or '').strip()} {(nome or '').strip()}".strip() or codice_fiscale,
+                codice_fiscale=codice_fiscale,
+                data_nascita=data_nascita,
+                last_event_at=created_at,
+                final_esito=esito,
+                error_detail=error_detail,
+                calls_made=1,
+                call_types=[call_type],
+            )
+            continue
+
+        item.calls_made += 1
+        if call_type not in item.call_types:
+            item.call_types.append(call_type)
+
+    return list(aggregated.values())
+
+
 def _resolve_request_artifact_preview_path(artifact_dir: Path) -> Path | None:
     candidates = [
         artifact_dir / "preview-not-found.png",
@@ -129,6 +182,7 @@ def get_utenze_anpr_summary(
         select(func.coalesce(func.sum(AnprJobRun.calls_used), 0)).where(AnprJobRun.run_date == local_today)
     ).scalar_one()
     recent_runs = db.execute(select(AnprJobRun).order_by(AnprJobRun.started_at.desc()).limit(10)).scalars().all()
+    recent_run_records = {str(item.id): _build_anpr_run_records(db, item) for item in recent_runs}
     error_subjects: list[ElaborazioneAnprErrorSubjectItemResponse] = []
     total_error_subjects = 0
 
@@ -243,6 +297,7 @@ def get_utenze_anpr_summary(
                 calls_used=item.calls_used,
                 started_at=item.started_at,
                 completed_at=item.completed_at,
+                records=recent_run_records.get(str(item.id), []),
             )
             for item in recent_runs
         ],

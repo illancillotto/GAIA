@@ -1634,6 +1634,20 @@ export type ElaborazioneAnprRunItem = {
   calls_used: number;
   started_at: string;
   completed_at: string | null;
+  records: ElaborazioneAnprRunRecordItem[];
+};
+
+export type ElaborazioneAnprRunRecordItem = {
+  id: string;
+  subject_id: string;
+  display_name: string;
+  codice_fiscale: string;
+  data_nascita: string | null;
+  last_event_at: string;
+  final_esito: string;
+  error_detail: string | null;
+  calls_made: number;
+  call_types: string[];
 };
 
 export type ElaborazioneAnprErrorSubjectItem = {

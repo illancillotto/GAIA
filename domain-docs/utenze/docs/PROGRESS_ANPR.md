@@ -49,6 +49,7 @@
 - esteso il dettaglio soggetto `frontend/src/app/utenze/[id]/page.tsx` con campi manuali `Soggetto deceduto`, `Data decesso`, `Luogo decesso`, persistiti tramite `PUT /utenze/subjects/{id}`
 - il batch ANPR continua con i soggetti successivi anche quando un singolo item genera un'eccezione inattesa; il soggetto viene marcato `error` e registrato con log tecnico `JOBERR`
 - il monitor `frontend/src/components/elaborazioni/anpr-workspace.tsx` ora include la sezione `Utenze ANPR in errore` con ultimo dettaglio errore e link diretto alla scheda soggetto per verifica manuale
+- il monitor `Ultime esecuzioni ANPR` in `frontend/src/components/elaborazioni/anpr-workspace.tsx` è ora espandibile per batch: ogni run mostra i record elaborati ricostruiti dai log ANPR della finestra del job, con esito finale, tipi chiamata (`C030`/`C004`/`JOBERR`), numero chiamate e dettaglio errore quando presente
 
 ## Verifiche Eseguite
 
