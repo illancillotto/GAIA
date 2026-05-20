@@ -89,6 +89,13 @@ function getArtifactActionClassName(disabled = false): string {
   ].join(" ");
 }
 
+function isArtifactPreviewEligible(request: ElaborazioneBatchDetail["requests"][number]): boolean {
+  return (
+    Boolean(request.artifact_dir && ["not_found", "failed"].includes(request.status)) ||
+    Boolean(request.document_id && request.status === "completed")
+  );
+}
+
 export function ElaborazioneArchiveWorkspace({ initialView }: { initialView: ArchiveView }) {
   return <ElaborazioneArchiveWorkspaceContent initialView={initialView} embedded={false} />;
 }
@@ -189,10 +196,7 @@ export function ElaborazioneArchiveWorkspaceContent({
 
     const eligibleRequests = Object.values(batchDetails)
       .flatMap((batch) => batch.requests)
-      .filter(
-        (request) =>
-          (request.artifact_dir && request.status === "not_found") || (request.document_id && request.status === "completed"),
-      );
+      .filter((request) => isArtifactPreviewEligible(request));
     const eligibleRequestIds = new Set(eligibleRequests.map((request) => request.id));
 
     setArtifactPreviewUrls((current) => {
@@ -398,10 +402,10 @@ export function ElaborazioneArchiveWorkspaceContent({
     const token = getStoredAccessToken();
     if (!token) return;
 
-    if (!artifactPreviewUrls[request.id]) {
-      if (!request.document_id || request.status !== "completed") {
-        return;
-      }
+      if (!artifactPreviewUrls[request.id]) {
+        if (!request.document_id || request.status !== "completed") {
+          return;
+        }
 
       setArtifactPreviewLoadingIds((current) => ({ ...current, [request.id]: true }));
       try {
@@ -763,7 +767,7 @@ export function ElaborazioneArchiveWorkspaceContent({
                                     onClick={() => void handleOpenPreviewModal(request)}
                                     type="button"
                                   >
-                                    {request.status === "completed" ? "Preview PDF" : "Preview screen"}
+                                    {request.status === "completed" ? "Preview PDF" : "Preview screenshot"}
                                   </button>
                                 ) : null}
                                 {request.status === "completed" && request.document_id && !artifactPreviewUrls[request.id] ? (

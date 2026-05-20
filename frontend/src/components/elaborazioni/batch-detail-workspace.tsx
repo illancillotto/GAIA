@@ -58,6 +58,13 @@ export function ElaborazioneBatchDetailWorkspace({
   const [previewModalRequestId, setPreviewModalRequestId] = useState<string | null>(null);
   const artifactPreviewUrlsRef = useRef<Record<string, string>>({});
 
+  const isArtifactPreviewEligible = useCallback((request: ElaborazioneBatchDetail["requests"][number]): boolean => {
+    return (
+      Boolean(request.artifact_dir && ["not_found", "failed"].includes(request.status)) ||
+      Boolean(request.document_id && request.status === "completed")
+    );
+  }, []);
+
   const loadBatch = useCallback(async (): Promise<void> => {
     const token = getStoredAccessToken();
     if (!token || !batchId) return;
@@ -164,10 +171,7 @@ export function ElaborazioneBatchDetailWorkspace({
     const requests = batch?.requests ?? [];
     const eligibleRequestIds = new Set(
       requests
-        .filter(
-          (request) =>
-            (request.artifact_dir && request.status === "not_found") || (request.document_id && request.status === "completed"),
-        )
+        .filter((request) => isArtifactPreviewEligible(request))
         .map((request) => request.id),
     );
 
@@ -211,7 +215,7 @@ export function ElaborazioneBatchDetailWorkspace({
     }
 
     requests
-      .filter((request) => request.artifact_dir && request.status === "not_found")
+      .filter((request) => request.artifact_dir && ["not_found", "failed"].includes(request.status))
       .forEach((request) => {
         if (artifactPreviewUrls[request.id] || artifactPreviewLoadingIds[request.id] || artifactPreviewFailedIds[request.id]) {
           return;
@@ -248,7 +252,7 @@ export function ElaborazioneBatchDetailWorkspace({
             });
           });
       });
-  }, [artifactPreviewFailedIds, artifactPreviewLoadingIds, artifactPreviewUrls, batch?.requests]);
+  }, [artifactPreviewFailedIds, artifactPreviewLoadingIds, artifactPreviewUrls, batch?.requests, isArtifactPreviewEligible]);
 
   useEffect(() => {
     return () => {
@@ -627,7 +631,7 @@ export function ElaborazioneBatchDetailWorkspace({
                                   onClick={() => void handleOpenPreviewModal(request)}
                                   type="button"
                                 >
-                                  {request.status === "completed" ? "Preview PDF" : "Preview screen"}
+                                  {request.status === "completed" ? "Preview PDF" : "Preview screenshot"}
                                 </button>
                               ) : null}
                               {request.status === "completed" && request.document_id && !artifactPreviewUrls[request.id] ? (

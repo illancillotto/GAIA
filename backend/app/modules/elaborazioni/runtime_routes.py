@@ -163,6 +163,23 @@ def _resolve_request_artifact_preview_path(artifact_dir: Path) -> Path | None:
     return None
 
 
+def _build_missing_artifact_archive(request) -> BytesIO:
+    archive_buffer = BytesIO()
+    diagnostic_lines = [
+        "Artifact directory missing.",
+        f"request_id={request.id}",
+        f"status={request.status}",
+        f"artifact_dir={request.artifact_dir or '-'}",
+        f"current_operation={request.current_operation or '-'}",
+        f"error_message={request.error_message or '-'}",
+        f"processed_at={request.processed_at.isoformat() if request.processed_at else '-'}",
+    ]
+    with zipfile.ZipFile(archive_buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr("error.txt", "\n".join(diagnostic_lines) + "\n")
+    archive_buffer.seek(0)
+    return archive_buffer
+
+
 @router.get("/utenze-anpr/summary", response_model=ElaborazioneAnprSummaryResponse)
 def get_utenze_anpr_summary(
     _: Annotated[ApplicationUser, Depends(require_active_user)],
@@ -620,7 +637,13 @@ def download_request_artifacts(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No artifact directory stored for request")
     artifact_dir = Path(request.artifact_dir)
     if not artifact_dir.exists():
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stored request artifacts are missing")
+        archive_buffer = _build_missing_artifact_archive(request)
+        filename = f"request-{request.id}-artifacts-missing.zip"
+        return StreamingResponse(
+            archive_buffer,
+            media_type="application/zip",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        )
 
     archive_buffer = BytesIO()
     with zipfile.ZipFile(archive_buffer, mode="w", compression=zipfile.ZIP_DEFLATED) as archive:

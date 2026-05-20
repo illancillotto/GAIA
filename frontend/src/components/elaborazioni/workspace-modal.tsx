@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { CatastoArchiveWorkspaceContent } from "@/components/catasto/archive-workspace";
 import { CatastoDocumentDetailWorkspace } from "@/components/catasto/document-detail-workspace";
@@ -31,6 +31,11 @@ export function ElaborazioneWorkspaceModal({
 }: ElaborazioneWorkspaceModalProps) {
   const [isFrameLoading, setIsFrameLoading] = useState(true);
   const [currentHref, setCurrentHref] = useState<string | null>(href);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   useEffect(() => {
     if (!open) {
@@ -39,10 +44,16 @@ export function ElaborazioneWorkspaceModal({
 
     setCurrentHref(href);
     setIsFrameLoading(true);
+  }, [open, href]);
+
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
 
     function handleKeyDown(event: KeyboardEvent): void {
       if (event.key === "Escape") {
-        onClose();
+        onCloseRef.current();
       }
     }
 
@@ -54,7 +65,11 @@ export function ElaborazioneWorkspaceModal({
       document.body.style.overflow = previousOverflow;
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [open, href, onClose]);
+  }, [open]);
+
+  const handleRendered = useCallback(() => {
+    setIsFrameLoading(false);
+  }, []);
 
   if (!open || !currentHref) {
     return null;
@@ -83,7 +98,7 @@ export function ElaborazioneWorkspaceModal({
           <NativeWorkspaceRenderer
             href={currentHref}
             onNavigate={setCurrentHref}
-            onRendered={() => setIsFrameLoading(false)}
+            onRendered={handleRendered}
           />
           {isFrameLoading ? (
             <div className="absolute inset-0 flex items-center justify-center bg-[#f4f7f5]">

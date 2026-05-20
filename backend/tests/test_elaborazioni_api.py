@@ -240,6 +240,46 @@ def create_not_found_request_with_artifacts(tmp_path) -> tuple[str, str]:
         db.close()
 
 
+def create_failed_request_with_missing_artifacts(tmp_path) -> tuple[str, str]:
+    artifact_dir = tmp_path / "missing-request-artifacts"
+
+    db = TestingSessionLocal()
+    try:
+        user = db.query(ApplicationUser).filter(ApplicationUser.username == "elaborazioni-admin").one()
+        batch = CatastoBatch(
+            user_id=user.id,
+            name="Batch failed artifact missing",
+            status="failed",
+            total_items=1,
+            failed_items=1,
+            current_operation="Fallita riga 1",
+        )
+        db.add(batch)
+        db.flush()
+
+        request = CatastoVisuraRequest(
+            batch_id=batch.id,
+            user_id=user.id,
+            row_index=1,
+            comune="Oristano",
+            comune_codice="G113#ORISTANO#5#5",
+            catasto="Terreni e Fabbricati",
+            foglio="5",
+            particella="120",
+            tipo_visura="Completa",
+            status=CatastoVisuraRequestStatus.FAILED.value,
+            current_operation="Fallita",
+            error_message="Timeout 60000ms exceeded.",
+            artifact_dir=str(artifact_dir),
+            processed_at=datetime.now(UTC) - timedelta(minutes=1),
+        )
+        db.add(request)
+        db.commit()
+        return str(batch.id), str(request.id)
+    finally:
+        db.close()
+
+
 def create_completed_connection_test() -> str:
     db = TestingSessionLocal()
     try:
@@ -772,6 +812,21 @@ def test_request_artifact_preview_prefers_dedicated_preview_file(tmp_path) -> No
     assert download_response.status_code == 200
     archive = zipfile.ZipFile(BytesIO(download_response.content))
     assert sorted(archive.namelist()) == ["final-not_found.png", "preview-not-found.png"]
+
+
+def test_request_artifact_download_returns_diagnostic_zip_when_directory_is_missing(tmp_path) -> None:
+    _, request_id = create_failed_request_with_missing_artifacts(tmp_path)
+
+    download_response = client.get(f"/elaborazioni/requests/{request_id}/artifacts/download", headers=auth_headers())
+
+    assert download_response.status_code == 200
+    assert download_response.headers["content-type"] == "application/zip"
+    archive = zipfile.ZipFile(BytesIO(download_response.content))
+    assert archive.namelist() == ["error.txt"]
+    diagnostic = archive.read("error.txt").decode("utf-8")
+    assert f"request_id={request_id}" in diagnostic
+    assert "Artifact directory missing." in diagnostic
+    assert "status=failed" in diagnostic
 
 
 def test_batch_websocket_emits_progress_and_captcha_notification(tmp_path) -> None:

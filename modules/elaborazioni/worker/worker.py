@@ -9,6 +9,7 @@ import os
 from pathlib import Path
 import re
 import signal
+import traceback
 from uuid import UUID
 
 from sqlalchemy import create_engine, select
@@ -488,6 +489,13 @@ class CatastoWorker:
                         batch_id,
                         next_request,
                     )
+                    with SessionLocal() as db:
+                        request = db.get(CatastoVisuraRequest, next_request)
+                        if request is not None and request.artifact_dir:
+                            artifact_dir = Path(request.artifact_dir)
+                            self._write_request_error_artifact(artifact_dir, exc)
+                            with contextlib.suppress(Exception):
+                                await browser.capture_debug_snapshot(artifact_dir, "final-failed")
                     self._fail_request(batch_id, next_request, str(exc))
                     with contextlib.suppress(Exception):
                         await browser.logout()
@@ -685,7 +693,9 @@ class CatastoWorker:
                 batch.current_operation = (
                     f"Lavorazione {request.subject_kind or 'SOGGETTO'} {request.subject_id or '-'}"
                 )
-            request.artifact_dir = str(self._build_request_artifact_dir(batch_id, request))
+            artifact_dir = self._build_request_artifact_dir(batch_id, request)
+            artifact_dir.mkdir(parents=True, exist_ok=True)
+            request.artifact_dir = str(artifact_dir)
             db.commit()
             db.refresh(request)
             db.expunge(request)
@@ -1037,6 +1047,18 @@ class CatastoWorker:
 
     def _build_request_artifact_dir(self, batch_id, request: CatastoVisuraRequest) -> Path:
         return DEBUG_ARTIFACTS_PATH / "requests" / str(batch_id) / str(request.id)
+
+    def _write_request_error_artifact(self, artifact_dir: Path, error: Exception) -> None:
+        artifact_dir.mkdir(parents=True, exist_ok=True)
+        error_path = artifact_dir / "error.txt"
+        details = [
+            f"timestamp={datetime.now(timezone.utc).isoformat()}",
+            f"error_type={type(error).__name__}",
+            f"message={str(error)}",
+            "",
+            traceback.format_exc(),
+        ]
+        error_path.write_text("\n".join(details), encoding="utf-8")
 
     def _build_batch_report_dir(self, batch: CatastoBatch) -> Path:
         return REPORT_STORAGE_PATH / str(batch.user_id) / str(batch.id)
