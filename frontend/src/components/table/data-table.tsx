@@ -23,6 +23,15 @@ type DataTableProps<TData> = {
   initialPageSize?: number;
   onRowClick?: (row: TData) => void;
   initialSorting?: SortingState;
+  pagination?: {
+    pageIndex: number;
+    pageCount: number;
+    canPreviousPage: boolean;
+    canNextPage: boolean;
+    onPreviousPage: () => void;
+    onNextPage: () => void;
+  };
+  disableSorting?: boolean;
 };
 
 export function DataTable<TData extends object>({
@@ -33,8 +42,11 @@ export function DataTable<TData extends object>({
   initialPageSize = 10,
   onRowClick,
   initialSorting = [],
+  pagination,
+  disableSorting = false,
 }: DataTableProps<TData>) {
   const [sorting, setSorting] = useState<SortingState>(initialSorting);
+  const usesExternalPagination = Boolean(pagination);
 
   const table = useReactTable({
     data,
@@ -51,10 +63,18 @@ export function DataTable<TData extends object>({
     },
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
+    ...(usesExternalPagination ? {} : { getPaginationRowModel: getPaginationRowModel() }),
   });
 
   const rows = table.getRowModel().rows;
+  const paginationProps = pagination ?? {
+    pageIndex: table.getState().pagination.pageIndex,
+    pageCount: table.getPageCount(),
+    canPreviousPage: table.getCanPreviousPage(),
+    canNextPage: table.getCanNextPage(),
+    onPreviousPage: () => table.previousPage(),
+    onNextPage: () => table.nextPage(),
+  };
 
   return (
     <div className="overflow-hidden rounded-xl border border-gray-100 bg-white">
@@ -80,11 +100,11 @@ export function DataTable<TData extends object>({
                           : (
                             <button
                               type="button"
-                              onClick={header.column.getToggleSortingHandler()}
-                              className={header.column.getCanSort() ? "flex items-center gap-2 text-left" : "text-left"}
+                              onClick={disableSorting ? undefined : header.column.getToggleSortingHandler()}
+                              className={!disableSorting && header.column.getCanSort() ? "flex items-center gap-2 text-left" : "text-left"}
                             >
                               <span>{flexRender(header.column.columnDef.header, header.getContext())}</span>
-                              {header.column.getCanSort() ? (
+                              {!disableSorting && header.column.getCanSort() ? (
                                 <span className="text-xs text-gray-400">
                                   {header.column.getIsSorted() === "asc"
                                     ? "↑"
@@ -117,14 +137,7 @@ export function DataTable<TData extends object>({
               </tbody>
             </table>
           </div>
-          <Pagination
-            pageIndex={table.getState().pagination.pageIndex}
-            pageCount={table.getPageCount()}
-            canPreviousPage={table.getCanPreviousPage()}
-            canNextPage={table.getCanNextPage()}
-            onPreviousPage={() => table.previousPage()}
-            onNextPage={() => table.nextPage()}
-          />
+          <Pagination {...paginationProps} />
         </>
       )}
     </div>

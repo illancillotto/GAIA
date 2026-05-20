@@ -179,6 +179,14 @@ export type CatAnomaliaListResponse = {
   page_size: number;
 };
 
+export type CatAnomaliaSortField =
+  | "created_at"
+  | "updated_at"
+  | "tipo"
+  | "status"
+  | "severita"
+  | "anno_campagna";
+
 export type CatAnomaliaSummaryBucket = {
   tipo: string;
   label: string;
@@ -257,6 +265,8 @@ export type CatAnomaliaCfWizardItem = {
 export type CatAnomaliaCfWizardListResponse = {
   items: CatAnomaliaCfWizardItem[];
   total: number;
+  page: number;
+  page_size: number;
 };
 
 export type CatAnomaliaCfWizardApplyResponse = {
@@ -301,6 +311,8 @@ export type CatAnomaliaComuneWizardItem = {
 export type CatAnomaliaComuneWizardListResponse = {
   items: CatAnomaliaComuneWizardItem[];
   total: number;
+  page: number;
+  page_size: number;
 };
 
 export type CatAnomaliaComuneWizardApplyResponse = {
@@ -347,6 +359,8 @@ export type CatAnomaliaParticellaWizardItem = {
 export type CatAnomaliaParticellaWizardListResponse = {
   items: CatAnomaliaParticellaWizardItem[];
   total: number;
+  page: number;
+  page_size: number;
 };
 
 export type CatAnomaliaParticellaWizardApplyResponse = {

@@ -607,6 +607,9 @@ export async function catastoListAnomalie(
     severita?: string;
     anno?: number;
     distretto?: string;
+    q?: string;
+    sortBy?: string;
+    sortDir?: "asc" | "desc";
     page?: number;
     pageSize?: number;
   },
@@ -617,6 +620,9 @@ export async function catastoListAnomalie(
   if (params?.severita) query.set("severita", params.severita);
   if (params?.anno != null) query.set("anno", String(params.anno));
   if (params?.distretto) query.set("distretto", params.distretto);
+  if (params?.q) query.set("q", params.q);
+  if (params?.sortBy) query.set("sort_by", params.sortBy);
+  if (params?.sortDir) query.set("sort_dir", params.sortDir);
   if (params?.page != null) query.set("page", String(params.page));
   if (params?.pageSize != null) query.set("page_size", String(params.pageSize));
   const suffix = query.toString() ? `?${query.toString()}` : "";
@@ -629,7 +635,7 @@ export async function catastoListAnomalie(
 export async function catastoUpdateAnomalia(
   token: string,
   id: UUID,
-  payload: { status?: string; note_operatore?: string; assigned_to?: number },
+  payload: { status?: string; note_operatore?: string | null; assigned_to?: number; segnalazione_id?: UUID },
 ): Promise<CatAnomalia> {
   return request<CatAnomalia>(`/catasto/anomalie/${id}`, {
     method: "PATCH",
@@ -685,13 +691,14 @@ export async function catastoRunAdeStatusScan(
 
 export async function catastoGetCfWizardItems(
   token: string,
-  params?: { status?: string; anno?: number; distretto?: string; limit?: number },
+  params?: { status?: string; anno?: number; distretto?: string; page?: number; pageSize?: number },
 ): Promise<CatAnomaliaCfWizardListResponse> {
   const query = new URLSearchParams();
   if (params?.status) query.set("status", params.status);
   if (params?.anno != null) query.set("anno", String(params.anno));
   if (params?.distretto) query.set("distretto", params.distretto);
-  if (params?.limit != null) query.set("limit", String(params.limit));
+  if (params?.page != null) query.set("page", String(params.page));
+  if (params?.pageSize != null) query.set("page_size", String(params.pageSize));
   const suffix = query.toString() ? `?${query.toString()}` : "";
 
   return request<CatAnomaliaCfWizardListResponse>(`/catasto/anomalie/wizard/cf/items${suffix}`, {
@@ -712,13 +719,14 @@ export async function catastoApplyCfWizard(
 
 export async function catastoGetComuneWizardItems(
   token: string,
-  params?: { status?: string; anno?: number; distretto?: string; limit?: number },
+  params?: { status?: string; anno?: number; distretto?: string; page?: number; pageSize?: number },
 ): Promise<CatAnomaliaComuneWizardListResponse> {
   const query = new URLSearchParams();
   if (params?.status) query.set("status", params.status);
   if (params?.anno != null) query.set("anno", String(params.anno));
   if (params?.distretto) query.set("distretto", params.distretto);
-  if (params?.limit != null) query.set("limit", String(params.limit));
+  if (params?.page != null) query.set("page", String(params.page));
+  if (params?.pageSize != null) query.set("page_size", String(params.pageSize));
   const suffix = query.toString() ? `?${query.toString()}` : "";
 
   return request<CatAnomaliaComuneWizardListResponse>(`/catasto/anomalie/wizard/comune/items${suffix}`, {
@@ -739,13 +747,14 @@ export async function catastoApplyComuneWizard(
 
 export async function catastoGetParticellaWizardItems(
   token: string,
-  params?: { status?: string; anno?: number; distretto?: string; limit?: number },
+  params?: { status?: string; anno?: number; distretto?: string; page?: number; pageSize?: number },
 ): Promise<CatAnomaliaParticellaWizardListResponse> {
   const query = new URLSearchParams();
   if (params?.status) query.set("status", params.status);
   if (params?.anno != null) query.set("anno", String(params.anno));
   if (params?.distretto) query.set("distretto", params.distretto);
-  if (params?.limit != null) query.set("limit", String(params.limit));
+  if (params?.page != null) query.set("page", String(params.page));
+  if (params?.pageSize != null) query.set("page_size", String(params.pageSize));
   const suffix = query.toString() ? `?${query.toString()}` : "";
 
   return request<CatAnomaliaParticellaWizardListResponse>(`/catasto/anomalie/wizard/particella/items${suffix}`, {

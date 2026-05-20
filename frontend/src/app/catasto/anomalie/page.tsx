@@ -1,13 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 
 import { CatastoPage } from "@/components/catasto/catasto-page";
 import { AnomaliaStatusBadge } from "@/components/catasto/AnomaliaStatusBadge";
 import { AnomaliaStatusPill } from "@/components/catasto/AnomaliaStatusPill";
+import { CatastoWorkspaceModal } from "@/components/catasto/workspace-modal";
+import { ElaborazioneWorkspaceModal } from "@/components/elaborazioni/workspace-modal";
+import { ElaborazioneOperationMessage } from "@/components/elaborazioni/operation-message";
+import { ElaborazioneStatusBadge } from "@/components/elaborazioni/status-badge";
 import { DataTable } from "@/components/table/data-table";
+import { Pagination } from "@/components/table/pagination";
 import { TableFilters } from "@/components/table/table-filters";
 import { AlertBanner } from "@/components/ui/alert-banner";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -26,8 +32,11 @@ import {
   catastoRunAdeStatusScan,
   catastoUpdateAnomalia,
 } from "@/lib/api/catasto";
+import { createReport, getReportCategories, getReportSeverities } from "@/features/operazioni/api/client";
+import { getElaborazioneBatches, listApplicationUsers } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import { formatDateTime } from "@/lib/presentation";
+import type { ApplicationUser, ElaborazioneBatch } from "@/types/api";
 import type {
   CatAnomalia,
   CatAdeStatusScanCandidate,
@@ -35,6 +44,7 @@ import type {
   CatAnomaliaComuneWizardItem,
   CatAnomaliaCfWizardItem,
   CatAnomaliaParticellaWizardItem,
+  CatAnomaliaSortField,
   CatAnomaliaSummaryBucket,
 } from "@/types/catasto";
 
@@ -50,7 +60,20 @@ type CfDraftState = Record<string, string>;
 type ComuneDraftState = Record<string, string>;
 type ParticellaDraftState = Record<string, string>;
 type ParticellaFilterMode = "all" | "without_candidates";
+type ManualQueueFilterMode = "all" | "without_wizard" | "unworked";
+type SortDirection = "asc" | "desc";
 type WorkspaceMode = "cf" | "comune" | "particella" | null;
+type BatchWorkspaceState = {
+  href: string;
+  title: string;
+  description?: string | null;
+};
+type ManualAnomaliaWorkspaceState = {
+  href: string;
+  title: string;
+  description?: string | null;
+};
+type LookupItem = { id: string; code?: string; name?: string };
 type WorkQueueCard = {
   id: "cf" | "comune" | "particella" | "manual";
   title: string;
@@ -66,6 +89,9 @@ type WorkQueueCard = {
 const CF_WIZARD_TYPES = new Set(["VAL-02-cf_invalido", "VAL-03-cf_mancante"]);
 const COMUNE_WIZARD_TYPES = new Set(["VAL-04-comune_invalido"]);
 const PARTICELLA_WIZARD_TYPES = new Set(["VAL-05-particella_assente"]);
+const ADE_SCAN_BATCH_NAME_PREFIX = "Visure storiche AdE particelle non collegate";
+const OVERVIEW_PAGE_SIZE = 50;
+const WIZARD_PAGE_SIZE = 25;
 
 function currentYear(): number {
   return new Date().getFullYear();
@@ -106,17 +132,96 @@ function resolveWizardMode(tipo: string): "cf" | "comune" | "particella" | null 
   return null;
 }
 
+function parseWorkspaceMode(value: string | null): WorkspaceMode {
+  if (value === "cf" || value === "comune" || value === "particella") {
+    return value;
+  }
+  return null;
+}
+
+function parseManualFilterMode(value: string | null): ManualQueueFilterMode {
+  if (value === "without_wizard" || value === "unworked") {
+    return value;
+  }
+  return "all";
+}
+
+function parseSortField(value: string | null): CatAnomaliaSortField {
+  if (
+    value === "created_at"
+    || value === "updated_at"
+    || value === "tipo"
+    || value === "status"
+    || value === "severita"
+    || value === "anno_campagna"
+  ) {
+    return value;
+  }
+  return "created_at";
+}
+
+function getPageCount(total: number, pageSize: number): number {
+  if (total <= 0) {
+    return 0;
+  }
+  return Math.ceil(total / pageSize);
+}
+
 export default function CatastoAnomaliePage() {
-  const [filters, setFilters] = useState<FiltersState>(buildDefaultFilters());
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-gray-500">Caricamento anomalie...</div>}>
+      <CatastoAnomaliePageContent />
+    </Suspense>
+  );
+}
+
+function CatastoAnomaliePageContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const [filters, setFilters] = useState<FiltersState>(() => {
+    const defaults = buildDefaultFilters();
+    return {
+      tipo: searchParams.get("tipo") ?? defaults.tipo,
+      severita: searchParams.get("severita") ?? defaults.severita,
+      status: searchParams.get("status") ?? defaults.status,
+      anno: searchParams.get("anno") ?? defaults.anno,
+      distretto: searchParams.get("distretto") ?? defaults.distretto,
+    };
+  });
   const [items, setItems] = useState<CatAnomalia[]>([]);
   const [total, setTotal] = useState(0);
+  const [overviewPage, setOverviewPage] = useState(() => {
+    const raw = Number(searchParams.get("page") ?? "1");
+    return Number.isFinite(raw) && raw >= 1 ? raw : 1;
+  });
+  const [selectedManualAnomaliaId, setSelectedManualAnomaliaId] = useState<string | null>(null);
+  const [manualSearch, setManualSearch] = useState(() => searchParams.get("q") ?? "");
+  const [manualFilterMode, setManualFilterMode] = useState<ManualQueueFilterMode>(() => parseManualFilterMode(searchParams.get("manual")));
+  const [manualSortBy, setManualSortBy] = useState<CatAnomaliaSortField>(() => parseSortField(searchParams.get("sort_by")));
+  const [manualSortDir, setManualSortDir] = useState<SortDirection>(() => searchParams.get("sort_dir") === "asc" ? "asc" : "desc");
+  const [manualNoteDraft, setManualNoteDraft] = useState("");
+  const [manualAssignedToDraft, setManualAssignedToDraft] = useState<string>("");
+  const [manualNoteBusy, setManualNoteBusy] = useState(false);
+  const [manualNoteMessage, setManualNoteMessage] = useState<string | null>(null);
+  const [assignableUsers, setAssignableUsers] = useState<ApplicationUser[]>([]);
+  const [reportCategories, setReportCategories] = useState<LookupItem[]>([]);
+  const [reportSeverities, setReportSeverities] = useState<LookupItem[]>([]);
+  const [reportCategoryId, setReportCategoryId] = useState("");
+  const [reportSeverityId, setReportSeverityId] = useState("");
+  const [reportTitleDraft, setReportTitleDraft] = useState("");
+  const [reportDescriptionDraft, setReportDescriptionDraft] = useState("");
+  const [reportCreateBusy, setReportCreateBusy] = useState(false);
   const [summaryBuckets, setSummaryBuckets] = useState<CatAnomaliaSummaryBucket[]>([]);
   const [summaryTotal, setSummaryTotal] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [wizardMode, setWizardMode] = useState<WorkspaceMode>("cf");
+  const [wizardMode, setWizardMode] = useState<WorkspaceMode>(() => {
+    const parsed = parseWorkspaceMode(searchParams.get("workspace"));
+    return parsed ?? "cf";
+  });
   const [cfItems, setCfItems] = useState<CatAnomaliaCfWizardItem[]>([]);
   const [cfTotal, setCfTotal] = useState(0);
+  const [cfPage, setCfPage] = useState(1);
   const [cfBusy, setCfBusy] = useState(false);
   const [cfDrafts, setCfDrafts] = useState<CfDraftState>({});
   const [cfError, setCfError] = useState<string | null>(null);
@@ -124,6 +229,7 @@ export default function CatastoAnomaliePage() {
   const [applyingAnomaliaId, setApplyingAnomaliaId] = useState<string | null>(null);
   const [comuneItems, setComuneItems] = useState<CatAnomaliaComuneWizardItem[]>([]);
   const [comuneTotal, setComuneTotal] = useState(0);
+  const [comunePage, setComunePage] = useState(1);
   const [comuneBusy, setComuneBusy] = useState(false);
   const [comuneError, setComuneError] = useState<string | null>(null);
   const [comuneMessage, setComuneMessage] = useState<string | null>(null);
@@ -132,6 +238,7 @@ export default function CatastoAnomaliePage() {
   const [comuneBatchNote, setComuneBatchNote] = useState("Correzione comune batch da console anomalie");
   const [particellaItems, setParticellaItems] = useState<CatAnomaliaParticellaWizardItem[]>([]);
   const [particellaTotal, setParticellaTotal] = useState(0);
+  const [particellaPage, setParticellaPage] = useState(1);
   const [particellaBusy, setParticellaBusy] = useState(false);
   const [particellaError, setParticellaError] = useState<string | null>(null);
   const [particellaMessage, setParticellaMessage] = useState<string | null>(null);
@@ -144,6 +251,9 @@ export default function CatastoAnomaliePage() {
   const [adeScanBusy, setAdeScanBusy] = useState(false);
   const [adeScanMessage, setAdeScanMessage] = useState<string | null>(null);
   const [adeScanError, setAdeScanError] = useState<string | null>(null);
+  const [adeScanBatches, setAdeScanBatches] = useState<ElaborazioneBatch[]>([]);
+  const [adeScanWorkspace, setAdeScanWorkspace] = useState<BatchWorkspaceState | null>(null);
+  const [manualAnomaliaWorkspace, setManualAnomaliaWorkspace] = useState<ManualAnomaliaWorkspaceState | null>(null);
 
   const loadOverview = useCallback(async (): Promise<void> => {
     const token = getStoredAccessToken();
@@ -160,8 +270,11 @@ export default function CatastoAnomaliePage() {
           status: filters.status || undefined,
           anno: filters.anno ? Number(filters.anno) : undefined,
           distretto: filters.distretto || undefined,
-          page: 1,
-          pageSize: 200,
+          q: manualSearch.trim() || undefined,
+          sortBy: manualSortBy,
+          sortDir: manualSortDir,
+          page: overviewPage,
+          pageSize: OVERVIEW_PAGE_SIZE,
         }),
         catastoGetAnomalieSummary(token, {
           status: filters.status || undefined,
@@ -170,6 +283,10 @@ export default function CatastoAnomaliePage() {
           distretto: filters.distretto || undefined,
         }),
       ]);
+      if (listData.items.length === 0 && listData.total > 0 && overviewPage > 1) {
+        setOverviewPage(1);
+        return;
+      }
       setItems(listData.items);
       setTotal(listData.total);
       setSummaryBuckets(summaryData.buckets);
@@ -180,7 +297,17 @@ export default function CatastoAnomaliePage() {
     } finally {
       setBusy(false);
     }
-  }, [filters.anno, filters.distretto, filters.severita, filters.status, filters.tipo]);
+  }, [
+    filters.anno,
+    filters.distretto,
+    filters.severita,
+    filters.status,
+    filters.tipo,
+    manualSearch,
+    manualSortBy,
+    manualSortDir,
+    overviewPage,
+  ]);
 
   const loadCfWizard = useCallback(async (): Promise<void> => {
     if (wizardMode !== "cf") {
@@ -198,8 +325,13 @@ export default function CatastoAnomaliePage() {
         status: "aperta",
         anno: filters.anno ? Number(filters.anno) : undefined,
         distretto: filters.distretto || undefined,
-        limit: 50,
+        page: cfPage,
+        pageSize: WIZARD_PAGE_SIZE,
       });
+      if (data.items.length === 0 && data.total > 0 && cfPage > 1) {
+        setCfPage(1);
+        return;
+      }
       setCfItems(data.items);
       setCfTotal(data.total);
       setCfDrafts((current) => {
@@ -217,7 +349,7 @@ export default function CatastoAnomaliePage() {
     } finally {
       setCfBusy(false);
     }
-  }, [filters.anno, filters.distretto, wizardMode]);
+  }, [cfPage, filters.anno, filters.distretto, wizardMode]);
 
   const loadComuneWizard = useCallback(async (): Promise<void> => {
     if (wizardMode !== "comune") {
@@ -235,8 +367,13 @@ export default function CatastoAnomaliePage() {
         status: "aperta",
         anno: filters.anno ? Number(filters.anno) : undefined,
         distretto: filters.distretto || undefined,
-        limit: 50,
+        page: comunePage,
+        pageSize: WIZARD_PAGE_SIZE,
       });
+      if (data.items.length === 0 && data.total > 0 && comunePage > 1) {
+        setComunePage(1);
+        return;
+      }
       setComuneItems(data.items);
       setComuneTotal(data.total);
       setComuneDrafts((current) => {
@@ -254,7 +391,7 @@ export default function CatastoAnomaliePage() {
     } finally {
       setComuneBusy(false);
     }
-  }, [filters.anno, filters.distretto, wizardMode]);
+  }, [comunePage, filters.anno, filters.distretto, wizardMode]);
 
   const loadParticellaWizard = useCallback(async (): Promise<void> => {
     if (wizardMode !== "particella") {
@@ -272,8 +409,13 @@ export default function CatastoAnomaliePage() {
         status: "aperta",
         anno: filters.anno ? Number(filters.anno) : undefined,
         distretto: filters.distretto || undefined,
-        limit: 50,
+        page: particellaPage,
+        pageSize: WIZARD_PAGE_SIZE,
       });
+      if (data.items.length === 0 && data.total > 0 && particellaPage > 1) {
+        setParticellaPage(1);
+        return;
+      }
       setParticellaItems(data.items);
       setParticellaTotal(data.total);
       setParticellaDrafts((current) => {
@@ -291,7 +433,7 @@ export default function CatastoAnomaliePage() {
     } finally {
       setParticellaBusy(false);
     }
-  }, [filters.anno, filters.distretto, wizardMode]);
+  }, [filters.anno, filters.distretto, particellaPage, wizardMode]);
 
   const loadAdeScan = useCallback(async (): Promise<void> => {
     const token = getStoredAccessToken();
@@ -301,17 +443,54 @@ export default function CatastoAnomaliePage() {
 
     setAdeScanBusy(true);
     try {
-      const [summaryData, candidateData] = await Promise.all([
+      const [summaryData, candidateData, batchData] = await Promise.all([
         catastoGetAdeStatusScanSummary(token),
         catastoGetAdeStatusScanCandidates(token, { limit: 8 }),
+        getElaborazioneBatches(token),
       ]);
       setAdeScanSummary(summaryData);
       setAdeScanCandidates(candidateData.items);
+      setAdeScanBatches(
+        batchData
+          .filter((batch) => (batch.name ?? "").startsWith(ADE_SCAN_BATCH_NAME_PREFIX))
+          .sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at))
+          .slice(0, 6),
+      );
       setAdeScanError(null);
     } catch (loadError) {
       setAdeScanError(loadError instanceof Error ? loadError.message : "Errore caricamento scansione AdE");
     } finally {
       setAdeScanBusy(false);
+    }
+  }, []);
+
+  const loadAssignableUsers = useCallback(async (): Promise<void> => {
+    const token = getStoredAccessToken();
+    if (!token) {
+      return;
+    }
+
+    try {
+      const response = await listApplicationUsers(token);
+      setAssignableUsers(
+        response.items.filter((user) => user.is_active && user.module_catasto),
+      );
+    } catch {
+      setAssignableUsers([]);
+    }
+  }, []);
+
+  const loadReportLookups = useCallback(async (): Promise<void> => {
+    try {
+      const [categoryData, severityData] = await Promise.all([
+        getReportCategories(),
+        getReportSeverities(),
+      ]);
+      setReportCategories(Array.isArray(categoryData) ? (categoryData as LookupItem[]) : []);
+      setReportSeverities(Array.isArray(severityData) ? (severityData as LookupItem[]) : []);
+    } catch {
+      setReportCategories([]);
+      setReportSeverities([]);
     }
   }, []);
 
@@ -334,6 +513,14 @@ export default function CatastoAnomaliePage() {
   useEffect(() => {
     void loadAdeScan();
   }, [loadAdeScan]);
+
+  useEffect(() => {
+    void loadAssignableUsers();
+  }, [loadAssignableUsers]);
+
+  useEffect(() => {
+    void loadReportLookups();
+  }, [loadReportLookups]);
 
   const handleUpdateStatus = useCallback(async (id: string, status: string): Promise<void> => {
     const token = getStoredAccessToken();
@@ -577,6 +764,10 @@ export default function CatastoAnomaliePage() {
     () => particellaItems.filter((item) => item.candidates.length === 0).length,
     [particellaItems],
   );
+  const runningAdeScanBatch = useMemo(
+    () => adeScanBatches.find((batch) => batch.status === "pending" || batch.status === "processing") ?? null,
+    [adeScanBatches],
+  );
 
   function handleSelectTopCandidates(): void {
     setParticellaDrafts((current) => {
@@ -592,6 +783,106 @@ export default function CatastoAnomaliePage() {
 
   function handleClearParticellaSelections(): void {
     setParticellaDrafts({});
+  }
+
+  function handleOpenAdeScanBatch(batch: ElaborazioneBatch): void {
+    setAdeScanWorkspace({
+      href: `/elaborazioni/batches/${batch.id}`,
+      title: batch.name ?? "Dettaglio batch",
+      description: "Dettaglio operativo del batch visure AdE con stato richieste, errori e CAPTCHA manuali.",
+    });
+  }
+
+  function handleOpenManualParticellaWorkspace(anomalia: CatAnomalia): void {
+    if (!anomalia.particella_id) {
+      return;
+    }
+    setManualAnomaliaWorkspace({
+      href: `/catasto/particelle/${anomalia.particella_id}`,
+      title: `Particella collegata a ${anomalia.tipo}`,
+      description: "Scheda particella aperta dal triage manuale per verifiche e correzioni senza perdere il contesto della console anomalie.",
+    });
+  }
+
+  async function handleSaveManualNote(anomalia: CatAnomalia): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) {
+      return;
+    }
+
+    setManualNoteBusy(true);
+    setManualNoteMessage(null);
+    try {
+      await catastoUpdateAnomalia(token, anomalia.id, {
+        note_operatore: manualNoteDraft.trim() || null,
+      });
+      setManualNoteMessage("Nota operatore salvata.");
+      await loadOverview();
+    } catch (saveError) {
+      setManualNoteMessage(saveError instanceof Error ? saveError.message : "Errore salvataggio nota");
+    } finally {
+      setManualNoteBusy(false);
+    }
+  }
+
+  async function handleSaveManualAssignment(anomalia: CatAnomalia): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) {
+      return;
+    }
+
+    setManualNoteBusy(true);
+    setManualNoteMessage(null);
+    try {
+      await catastoUpdateAnomalia(token, anomalia.id, {
+        assigned_to: manualAssignedToDraft ? Number(manualAssignedToDraft) : undefined,
+      });
+      setManualNoteMessage("Assegnazione aggiornata.");
+      await loadOverview();
+    } catch (saveError) {
+      setManualNoteMessage(saveError instanceof Error ? saveError.message : "Errore aggiornamento assegnazione");
+    } finally {
+      setManualNoteBusy(false);
+    }
+  }
+
+  async function handleCreateManualReport(anomalia: CatAnomalia): Promise<void> {
+    if (!reportCategoryId || !reportSeverityId || !reportTitleDraft.trim()) {
+      setManualNoteMessage("Compila categoria, gravità e titolo della segnalazione.");
+      return;
+    }
+
+    const token = getStoredAccessToken();
+    if (!token) {
+      return;
+    }
+
+    setReportCreateBusy(true);
+    setManualNoteMessage(null);
+    try {
+      const response = await createReport({
+        category_id: reportCategoryId,
+        severity_id: reportSeverityId,
+        title: reportTitleDraft.trim(),
+        description: reportDescriptionDraft.trim() || null,
+      });
+      const reportId = String((response as { report?: { id?: string } }).report?.id ?? "");
+      const reportNumber = String((response as { report?: { report_number?: string } }).report?.report_number ?? "");
+      if (!reportId) {
+        throw new Error("Segnalazione creata senza ID report");
+      }
+      await catastoUpdateAnomalia(token, anomalia.id, {
+        segnalazione_id: reportId,
+      });
+      setManualNoteMessage(
+        reportNumber ? `Segnalazione operativa creata: ${reportNumber}.` : "Segnalazione operativa creata.",
+      );
+      await loadOverview();
+    } catch (createError) {
+      setManualNoteMessage(createError instanceof Error ? createError.message : "Errore creazione segnalazione");
+    } finally {
+      setReportCreateBusy(false);
+    }
   }
 
   const columns = useMemo<ColumnDef<CatAnomalia>[]>(
@@ -635,7 +926,10 @@ export default function CatastoAnomaliePage() {
               type="button"
               className="btn-secondary !px-2 !py-1 text-xs"
               disabled={busy}
-              onClick={() => void handleUpdateStatus(row.original.id, "chiusa")}
+              onClick={(event) => {
+                event.stopPropagation();
+                void handleUpdateStatus(row.original.id, "chiusa");
+              }}
             >
               Chiudi
             </button>
@@ -643,7 +937,10 @@ export default function CatastoAnomaliePage() {
               type="button"
               className="btn-secondary !px-2 !py-1 text-xs"
               disabled={busy}
-              onClick={() => void handleUpdateStatus(row.original.id, "ignora")}
+              onClick={(event) => {
+                event.stopPropagation();
+                void handleUpdateStatus(row.original.id, "ignora");
+              }}
             >
               Ignora
             </button>
@@ -651,7 +948,10 @@ export default function CatastoAnomaliePage() {
               type="button"
               className="btn-secondary !px-2 !py-1 text-xs"
               disabled={busy}
-              onClick={() => void handleUpdateStatus(row.original.id, "aperta")}
+              onClick={(event) => {
+                event.stopPropagation();
+                void handleUpdateStatus(row.original.id, "aperta");
+              }}
             >
               Riapri
             </button>
@@ -744,6 +1044,93 @@ export default function CatastoAnomaliePage() {
       : wizardMode === "particella"
         ? particellaTotal
         : manualQueueCount;
+  const overviewPageCount = getPageCount(total, OVERVIEW_PAGE_SIZE);
+  const cfPageCount = getPageCount(cfTotal, WIZARD_PAGE_SIZE);
+  const comunePageCount = getPageCount(comuneTotal, WIZARD_PAGE_SIZE);
+  const particellaPageCount = getPageCount(particellaTotal, WIZARD_PAGE_SIZE);
+  const manualTableItems = useMemo(() => {
+    return items.filter((item) => {
+      if (manualFilterMode === "without_wizard" && resolveWizardMode(item.tipo) !== null) {
+        return false;
+      }
+      if (
+        manualFilterMode === "unworked"
+        && (item.note_operatore?.trim() || item.assigned_to != null || item.status !== "aperta")
+      ) {
+        return false;
+      }
+      return true;
+    });
+  }, [items, manualFilterMode]);
+  const selectedManualAnomalia = useMemo(
+    () => manualTableItems.find((item) => item.id === selectedManualAnomaliaId) ?? manualTableItems[0] ?? null,
+    [manualTableItems, selectedManualAnomaliaId],
+  );
+  const selectedAssignedUser = useMemo(
+    () => assignableUsers.find((user) => selectedManualAnomalia?.assigned_to === user.id) ?? null,
+    [assignableUsers, selectedManualAnomalia],
+  );
+
+  useEffect(() => {
+    if (selectedManualAnomaliaId && !manualTableItems.some((item) => item.id === selectedManualAnomaliaId)) {
+      setSelectedManualAnomaliaId(manualTableItems[0]?.id ?? null);
+    }
+  }, [manualTableItems, selectedManualAnomaliaId]);
+
+  useEffect(() => {
+    setManualNoteDraft(selectedManualAnomalia?.note_operatore ?? "");
+    setManualAssignedToDraft(selectedManualAnomalia?.assigned_to != null ? String(selectedManualAnomalia.assigned_to) : "");
+    setReportTitleDraft(
+      selectedManualAnomalia
+        ? `${selectedManualAnomalia.tipo} · ${selectedManualAnomalia.descrizione?.trim() || "Anomalia Catasto"}`
+        : "",
+    );
+    setReportDescriptionDraft(
+      selectedManualAnomalia
+        ? [
+          `Anomalia Catasto ${selectedManualAnomalia.id}`,
+          selectedManualAnomalia.descrizione?.trim() ? `Descrizione: ${selectedManualAnomalia.descrizione.trim()}` : null,
+          selectedManualAnomalia.anno_campagna != null ? `Anno campagna: ${selectedManualAnomalia.anno_campagna}` : null,
+          selectedManualAnomalia.utenza_id ? `Utenza collegata: ${selectedManualAnomalia.utenza_id}` : null,
+          selectedManualAnomalia.particella_id ? `Particella collegata: ${selectedManualAnomalia.particella_id}` : null,
+          selectedManualAnomalia.note_operatore?.trim() ? `Nota operatore: ${selectedManualAnomalia.note_operatore.trim()}` : null,
+        ].filter(Boolean).join("\n")
+        : "",
+    );
+    setReportCategoryId("");
+    setReportSeverityId("");
+    setManualNoteMessage(null);
+  }, [selectedManualAnomalia]);
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (filters.tipo) params.set("tipo", filters.tipo);
+    if (filters.severita) params.set("severita", filters.severita);
+    if (filters.status) params.set("status", filters.status);
+    if (filters.anno) params.set("anno", filters.anno);
+    if (filters.distretto) params.set("distretto", filters.distretto);
+    if (overviewPage > 1) params.set("page", String(overviewPage));
+    if (wizardMode) params.set("workspace", wizardMode);
+    if (manualSearch.trim()) params.set("q", manualSearch.trim());
+    if (manualFilterMode !== "all") params.set("manual", manualFilterMode);
+    if (manualSortBy !== "created_at") params.set("sort_by", manualSortBy);
+    if (manualSortDir !== "desc") params.set("sort_dir", manualSortDir);
+    const next = params.toString();
+    const current = searchParams.toString();
+    if (next !== current) {
+      router.replace(next ? `/catasto/anomalie?${next}` : "/catasto/anomalie");
+    }
+  }, [
+    filters,
+    manualFilterMode,
+    manualSearch,
+    manualSortBy,
+    manualSortDir,
+    overviewPage,
+    router,
+    searchParams,
+    wizardMode,
+  ]);
 
   return (
     <CatastoPage
@@ -786,6 +1173,10 @@ export default function CatastoAnomaliePage() {
                   onClick={() => {
                     setFilters((current) => ({ ...current, tipo: bucket.tipo }));
                     setWizardMode(resolveWizardMode(bucket.tipo));
+                    setOverviewPage(1);
+                    setCfPage(1);
+                    setComunePage(1);
+                    setParticellaPage(1);
                     setCfMessage(null);
                     setCfError(null);
                     setComuneMessage(null);
@@ -863,6 +1254,10 @@ export default function CatastoAnomaliePage() {
                     onClick={() => {
                       setFilters((current) => ({ ...current, tipo: queue.tipo ?? "" }));
                       setWizardMode(queue.mode);
+                      setOverviewPage(1);
+                      setCfPage(1);
+                      setComunePage(1);
+                      setParticellaPage(1);
                       setCfMessage(null);
                       setCfError(null);
                       setComuneMessage(null);
@@ -972,6 +1367,76 @@ export default function CatastoAnomaliePage() {
               </div>
             </div>
           </div>
+
+          <div className="mt-4 rounded-2xl border border-white bg-white/80 p-4 shadow-sm">
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-gray-900">Batch recenti scansione AdE</p>
+                <p className="mt-1 text-sm text-gray-500">
+                  Ha senso usare lo stesso workspace di elaborazioni: qui apri direttamente il dettaglio del lotto senza cambiare pattern operativo.
+                </p>
+              </div>
+              {runningAdeScanBatch ? (
+                <button className="btn-secondary" type="button" onClick={() => handleOpenAdeScanBatch(runningAdeScanBatch)}>
+                  Apri batch attivo
+                </button>
+              ) : null}
+            </div>
+
+            {adeScanBatches.length === 0 ? (
+              <p className="mt-3 text-sm text-gray-500">Nessun batch scansione AdE trovato per l&apos;utente corrente.</p>
+            ) : (
+              <div className="mt-4 overflow-x-auto">
+                <table className="data-table">
+                  <thead>
+                    <tr>
+                      <th>Nome</th>
+                      <th>Stato</th>
+                      <th>Esito</th>
+                      <th>Operazione</th>
+                      <th>Creato</th>
+                      <th>Azioni</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {adeScanBatches.map((batch) => (
+                      <tr key={batch.id}>
+                        <td>
+                          <button
+                            className="font-medium text-[#1D4E35] transition hover:text-[#143726]"
+                            onClick={() => handleOpenAdeScanBatch(batch)}
+                            type="button"
+                          >
+                            {batch.name ?? batch.id}
+                          </button>
+                        </td>
+                        <td><ElaborazioneStatusBadge status={batch.status} /></td>
+                        <td>
+                          <div className="flex flex-wrap gap-2 text-xs text-gray-600">
+                            <span>ok {batch.completed_items}</span>
+                            <span>ko {batch.failed_items}</span>
+                            {batch.not_found_items > 0 ? <span>n.d. {batch.not_found_items}</span> : null}
+                            {batch.skipped_items > 0 ? <span>skip {batch.skipped_items}</span> : null}
+                          </div>
+                        </td>
+                        <td><ElaborazioneOperationMessage value={batch.current_operation} /></td>
+                        <td>{formatDateTime(batch.created_at)}</td>
+                        <td>
+                          <button
+                            className="text-sm text-[#1D4E35] transition hover:text-[#143726]"
+                            onClick={() => handleOpenAdeScanBatch(batch)}
+                            type="button"
+                          >
+                            Apri batch
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
         </article>
 
         <article className="panel-card">
@@ -979,7 +1444,7 @@ export default function CatastoAnomaliePage() {
             <div>
               <p className="text-sm font-medium text-gray-900">Filtri e contesto</p>
               <p className="mt-1 text-sm text-gray-500">
-                Mantieni il focus su anno, distretto e stato. Il workspace attivo usa questi filtri; il registro completo mostra comunque solo le prime 200 righe.
+                Mantieni il focus su anno, distretto e stato. Il workspace attivo usa questi filtri e il registro completo scorre su pagine backend reali.
               </p>
             </div>
             <button
@@ -990,6 +1455,10 @@ export default function CatastoAnomaliePage() {
                 const next = buildDefaultFilters();
                 setFilters(next);
                 setWizardMode("cf");
+                setOverviewPage(1);
+                setCfPage(1);
+                setComunePage(1);
+                setParticellaPage(1);
                 setCfMessage(null);
                 setCfError(null);
                 setComuneMessage(null);
@@ -1009,7 +1478,10 @@ export default function CatastoAnomaliePage() {
                 <input
                   className="form-control mt-1"
                   value={filters.tipo}
-                  onChange={(event) => setFilters((current) => ({ ...current, tipo: event.target.value }))}
+                  onChange={(event) => {
+                    setOverviewPage(1);
+                    setFilters((current) => ({ ...current, tipo: event.target.value }));
+                  }}
                   placeholder="Es. VAL-02-cf_invalido"
                 />
               </label>
@@ -1018,7 +1490,10 @@ export default function CatastoAnomaliePage() {
                 <select
                   className="form-control mt-1"
                   value={filters.severita}
-                  onChange={(event) => setFilters((current) => ({ ...current, severita: event.target.value }))}
+                  onChange={(event) => {
+                    setOverviewPage(1);
+                    setFilters((current) => ({ ...current, severita: event.target.value }));
+                  }}
                 >
                   <option value="">Tutte</option>
                   <option value="error">Error</option>
@@ -1031,7 +1506,10 @@ export default function CatastoAnomaliePage() {
                 <select
                   className="form-control mt-1"
                   value={filters.status}
-                  onChange={(event) => setFilters((current) => ({ ...current, status: event.target.value }))}
+                  onChange={(event) => {
+                    setOverviewPage(1);
+                    setFilters((current) => ({ ...current, status: event.target.value }));
+                  }}
                 >
                   <option value="">Tutti</option>
                   <option value="aperta">Aperta</option>
@@ -1045,7 +1523,10 @@ export default function CatastoAnomaliePage() {
                   className="form-control mt-1"
                   inputMode="numeric"
                   value={filters.distretto}
-                  onChange={(event) => setFilters((current) => ({ ...current, distretto: event.target.value }))}
+                  onChange={(event) => {
+                    setOverviewPage(1);
+                    setFilters((current) => ({ ...current, distretto: event.target.value }));
+                  }}
                   placeholder="Es. 10"
                 />
               </label>
@@ -1055,7 +1536,10 @@ export default function CatastoAnomaliePage() {
                   className="form-control mt-1"
                   inputMode="numeric"
                   value={filters.anno}
-                  onChange={(event) => setFilters((current) => ({ ...current, anno: event.target.value }))}
+                  onChange={(event) => {
+                    setOverviewPage(1);
+                    setFilters((current) => ({ ...current, anno: event.target.value }));
+                  }}
                 />
               </label>
             </TableFilters>
@@ -1076,7 +1560,13 @@ export default function CatastoAnomaliePage() {
             <button
               className="btn-secondary"
               type="button"
-              onClick={() => setFilters((current) => ({ ...current, status: "aperta" }))}
+              onClick={() => {
+                setOverviewPage(1);
+                setCfPage(1);
+                setComunePage(1);
+                setParticellaPage(1);
+                setFilters((current) => ({ ...current, status: "aperta" }));
+              }}
             >
               Solo aperte
             </button>
@@ -1084,6 +1574,7 @@ export default function CatastoAnomaliePage() {
               className="btn-secondary"
               type="button"
               onClick={() => {
+                setOverviewPage(1);
                 setFilters((current) => ({ ...current, tipo: "" }));
                 setWizardMode(null);
               }}
@@ -1200,6 +1691,14 @@ export default function CatastoAnomaliePage() {
                   </div>
                 </div>
               ))}
+              <Pagination
+                pageIndex={cfPage - 1}
+                pageCount={cfPageCount}
+                canPreviousPage={cfPage > 1}
+                canNextPage={cfPage < cfPageCount}
+                onPreviousPage={() => setCfPage((current) => Math.max(1, current - 1))}
+                onNextPage={() => setCfPage((current) => (current < cfPageCount ? current + 1 : current))}
+              />
             </div>
           )}
         </article>
@@ -1374,6 +1873,14 @@ export default function CatastoAnomaliePage() {
                   </div>
                 </div>
               ))}
+              <Pagination
+                pageIndex={comunePage - 1}
+                pageCount={comunePageCount}
+                canPreviousPage={comunePage > 1}
+                canNextPage={comunePage < comunePageCount}
+                onPreviousPage={() => setComunePage((current) => Math.max(1, current - 1))}
+                onNextPage={() => setComunePage((current) => (current < comunePageCount ? current + 1 : current))}
+              />
             </div>
           )}
         </article>
@@ -1570,6 +2077,14 @@ export default function CatastoAnomaliePage() {
                   </div>
                 </div>
               ))}
+              <Pagination
+                pageIndex={particellaPage - 1}
+                pageCount={particellaPageCount}
+                canPreviousPage={particellaPage > 1}
+                canNextPage={particellaPage < particellaPageCount}
+                onPreviousPage={() => setParticellaPage((current) => Math.max(1, current - 1))}
+                onNextPage={() => setParticellaPage((current) => (current < particellaPageCount ? current + 1 : current))}
+              />
             </div>
           )}
         </article>
@@ -1591,6 +2106,245 @@ export default function CatastoAnomaliePage() {
           </article>
         ) : null}
 
+        {selectedManualAnomalia ? (
+          <article className="panel-card border-[#d9dfd6] bg-[#fbfdfb]">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+              <div>
+                <p className="section-title">Dettaglio anomalia selezionata</p>
+                <p className="section-copy mt-1">
+                  Click su una riga del registro per mantenere qui il contesto operativo: stato, note, payload tecnico e accesso rapido alla particella collegata.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <AnomaliaStatusBadge severita={selectedManualAnomalia.severita} />
+                <AnomaliaStatusPill status={selectedManualAnomalia.status} />
+                <span className="rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">{selectedManualAnomalia.tipo}</span>
+              </div>
+            </div>
+
+            <div className="mt-5 grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,1fr)]">
+              <div className="space-y-4">
+                <div className="grid gap-3 text-sm text-gray-600 md:grid-cols-2 xl:grid-cols-3">
+                  <p>ID anomalia: <span className="font-medium text-gray-900">{selectedManualAnomalia.id}</span></p>
+                  <p>Anno: <span className="font-medium text-gray-900">{selectedManualAnomalia.anno_campagna ?? "—"}</span></p>
+                  <p>Utente assegnato: <span className="font-medium text-gray-900">{selectedManualAnomalia.assigned_to ?? "—"}</span></p>
+                  <p>Utenza collegata: <span className="font-medium text-gray-900">{selectedManualAnomalia.utenza_id ?? "—"}</span></p>
+                  <p>Particella collegata: <span className="font-medium text-gray-900">{selectedManualAnomalia.particella_id ?? "—"}</span></p>
+                  <p>Segnalazione: <span className="font-medium text-gray-900">{selectedManualAnomalia.segnalazione_id ?? "—"}</span></p>
+                  <p>Creata il: <span className="font-medium text-gray-900">{formatDateTime(selectedManualAnomalia.created_at)}</span></p>
+                  <p>Aggiornata il: <span className="font-medium text-gray-900">{formatDateTime(selectedManualAnomalia.updated_at)}</span></p>
+                </div>
+
+                <div className="rounded-2xl border border-gray-100 bg-white p-4">
+                  <p className="text-sm font-semibold text-gray-900">Descrizione e note operatore</p>
+                  <p className="mt-3 text-sm text-gray-700">{selectedManualAnomalia.descrizione ?? "Nessuna descrizione disponibile."}</p>
+                  <div className="mt-4 space-y-3 rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+                    <label className="block text-sm font-medium text-gray-700">
+                      Nota operatore
+                      <textarea
+                        className="form-control mt-1 min-h-28"
+                        value={manualNoteDraft}
+                        onChange={(event) => setManualNoteDraft(event.target.value)}
+                        placeholder="Annotazioni operative, verifiche fatte, motivo chiusura o passaggi successivi"
+                      />
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        className="btn-secondary"
+                        type="button"
+                        disabled={manualNoteBusy}
+                        onClick={() => void handleSaveManualNote(selectedManualAnomalia)}
+                      >
+                        {manualNoteBusy ? "Salvataggio..." : "Salva nota"}
+                      </button>
+                      <button
+                        className="btn-secondary"
+                        type="button"
+                        disabled={manualNoteBusy}
+                        onClick={() => void handleUpdateStatus(selectedManualAnomalia.id, "chiusa")}
+                      >
+                        Chiudi da pannello
+                      </button>
+                      <button
+                        className="btn-secondary"
+                        type="button"
+                        disabled={manualNoteBusy}
+                        onClick={() => void handleUpdateStatus(selectedManualAnomalia.id, "ignora")}
+                      >
+                        Ignora da pannello
+                      </button>
+                      <button
+                        className="btn-secondary"
+                        type="button"
+                        disabled={manualNoteBusy}
+                        onClick={() => void handleUpdateStatus(selectedManualAnomalia.id, "aperta")}
+                      >
+                        Riapri da pannello
+                      </button>
+                    </div>
+                    {manualNoteMessage ? (
+                      <p className="text-sm text-[#1D4E35]">{manualNoteMessage}</p>
+                    ) : (
+                      <p>
+                        Ultima nota salvata: {selectedManualAnomalia.note_operatore?.trim() ? selectedManualAnomalia.note_operatore : "nessuna"}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="rounded-2xl border border-gray-100 bg-white p-4">
+                  <p className="text-sm font-semibold text-gray-900">Azioni rapide</p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {selectedManualAnomalia.particella_id ? (
+                      <>
+                        <Link
+                          className="btn-secondary"
+                          href={`/catasto/particelle/${selectedManualAnomalia.particella_id}`}
+                        >
+                          Apri pagina particella
+                        </Link>
+                        <button
+                          className="btn-secondary"
+                          type="button"
+                          onClick={() => handleOpenManualParticellaWorkspace(selectedManualAnomalia)}
+                        >
+                          Apri in modale
+                        </button>
+                      </>
+                    ) : (
+                      <span className="text-sm text-gray-500">Nessuna particella collegata per questa anomalia.</span>
+                    )}
+                    {selectedManualAnomalia.segnalazione_id ? (
+                      <Link
+                        className="btn-secondary"
+                        href={`/operazioni/segnalazioni/${selectedManualAnomalia.segnalazione_id}`}
+                      >
+                        Apri segnalazione
+                      </Link>
+                    ) : null}
+                  </div>
+                </div>
+
+                {!selectedManualAnomalia.segnalazione_id ? (
+                  <div className="rounded-2xl border border-[#d9dfd6] bg-[#f8fbf7] p-4">
+                    <p className="text-sm font-semibold text-gray-900">Crea segnalazione operativa</p>
+                    <p className="mt-1 text-sm text-gray-600">
+                      Genera una segnalazione Operazioni e collegala subito a questa anomalia per tracciarne il follow-up.
+                    </p>
+                    <div className="mt-4 grid gap-3">
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <label className="text-sm font-medium text-gray-700">
+                          Categoria
+                          <select
+                            className="form-control mt-1"
+                            value={reportCategoryId}
+                            onChange={(event) => setReportCategoryId(event.target.value)}
+                          >
+                            <option value="">Seleziona categoria</option>
+                            {reportCategories.map((item) => (
+                              <option key={item.id} value={item.id}>
+                                {item.name ?? item.code ?? item.id}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <label className="text-sm font-medium text-gray-700">
+                          Gravità
+                          <select
+                            className="form-control mt-1"
+                            value={reportSeverityId}
+                            onChange={(event) => setReportSeverityId(event.target.value)}
+                          >
+                            <option value="">Seleziona gravità</option>
+                            {reportSeverities.map((item) => (
+                              <option key={item.id} value={item.id}>
+                                {item.name ?? item.code ?? item.id}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                      </div>
+                      <label className="text-sm font-medium text-gray-700">
+                        Titolo
+                        <input
+                          className="form-control mt-1"
+                          value={reportTitleDraft}
+                          onChange={(event) => setReportTitleDraft(event.target.value)}
+                          placeholder="Titolo segnalazione"
+                        />
+                      </label>
+                      <label className="text-sm font-medium text-gray-700">
+                        Descrizione
+                        <textarea
+                          className="form-control mt-1 min-h-28"
+                          value={reportDescriptionDraft}
+                          onChange={(event) => setReportDescriptionDraft(event.target.value)}
+                          placeholder="Contesto operativo e azioni richieste"
+                        />
+                      </label>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          className="btn-secondary"
+                          type="button"
+                          disabled={reportCreateBusy}
+                          onClick={() => void handleCreateManualReport(selectedManualAnomalia)}
+                        >
+                          {reportCreateBusy ? "Creazione..." : "Crea segnalazione"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+
+                <div className="rounded-2xl border border-gray-100 bg-white p-4">
+                  <p className="text-sm font-semibold text-gray-900">Assegnazione</p>
+                  <div className="mt-3 grid gap-3 md:grid-cols-[minmax(0,1fr)_auto]">
+                    <label className="text-sm font-medium text-gray-700">
+                      Assegna a
+                      <select
+                        className="form-control mt-1"
+                        value={manualAssignedToDraft}
+                        onChange={(event) => setManualAssignedToDraft(event.target.value)}
+                      >
+                        <option value="">Non assegnata</option>
+                        {assignableUsers.map((user) => (
+                          <option key={user.id} value={String(user.id)}>
+                            {user.username} · {user.role}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <div className="flex items-end">
+                      <button
+                        className="btn-secondary"
+                        type="button"
+                        disabled={manualNoteBusy}
+                        onClick={() => void handleSaveManualAssignment(selectedManualAnomalia)}
+                      >
+                        {manualNoteBusy ? "Salvataggio..." : "Salva assegnazione"}
+                      </button>
+                    </div>
+                  </div>
+                  <p className="mt-3 text-sm text-gray-500">
+                    {selectedManualAnomalia.assigned_to != null
+                      ? `Assegnazione corrente: ${selectedAssignedUser ? `${selectedAssignedUser.username} · ${selectedAssignedUser.role}` : `ID ${selectedManualAnomalia.assigned_to}`}`
+                      : "Anomalia non ancora assegnata."}
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-gray-100 bg-white p-4">
+                  <p className="text-sm font-semibold text-gray-900">Payload tecnico</p>
+                  <pre className="mt-3 overflow-x-auto rounded-xl bg-[#0f172a] px-4 py-3 text-xs leading-6 text-slate-100">
+                    {JSON.stringify(selectedManualAnomalia.dati_json ?? {}, null, 2)}
+                  </pre>
+                </div>
+              </div>
+            </div>
+          </article>
+        ) : null}
+
         <article className="panel-card">
           <div className="mb-4 flex items-start justify-between gap-4">
             <div>
@@ -1600,18 +2354,126 @@ export default function CatastoAnomaliePage() {
             </p>
             </div>
             <div className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">
-              Prime 200 righe
+              Pagina {overviewPageCount === 0 ? 0 : overviewPage} di {overviewPageCount}
+            </div>
+          </div>
+          <div className="mb-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_240px_auto]">
+            <label className="text-sm font-medium text-gray-700">
+              Ricerca backend
+              <input
+                className="form-control mt-1"
+                value={manualSearch}
+                onChange={(event) => {
+                  setOverviewPage(1);
+                  setManualSearch(event.target.value);
+                }}
+                placeholder="ID, tipo, descrizione, note, utenza, particella"
+              />
+            </label>
+            <label className="text-sm font-medium text-gray-700">
+              Vista manuale
+              <select
+                className="form-control mt-1"
+                value={manualFilterMode}
+                onChange={(event) => setManualFilterMode(event.target.value as ManualQueueFilterMode)}
+              >
+                <option value="all">Tutte le righe</option>
+                <option value="without_wizard">Solo senza wizard</option>
+                <option value="unworked">Solo non lavorate</option>
+              </select>
+            </label>
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="text-sm font-medium text-gray-700">
+                Ordina per
+                <select
+                  className="form-control mt-1"
+                  value={manualSortBy}
+                  onChange={(event) => {
+                    setOverviewPage(1);
+                    setManualSortBy(event.target.value as CatAnomaliaSortField);
+                  }}
+                >
+                  <option value="created_at">Creazione</option>
+                  <option value="updated_at">Aggiornamento</option>
+                  <option value="tipo">Tipo</option>
+                  <option value="status">Stato</option>
+                  <option value="severita">Severita</option>
+                  <option value="anno_campagna">Anno</option>
+                </select>
+              </label>
+              <label className="text-sm font-medium text-gray-700">
+                Direzione
+                <select
+                  className="form-control mt-1"
+                  value={manualSortDir}
+                  onChange={(event) => {
+                    setOverviewPage(1);
+                    setManualSortDir(event.target.value as SortDirection);
+                  }}
+                >
+                  <option value="desc">Decrescente</option>
+                  <option value="asc">Crescente</option>
+                </select>
+              </label>
+            </div>
+          </div>
+          <div className="mb-4 flex flex-wrap items-center gap-3 text-sm text-gray-500">
+            <span>{manualTableItems.length} righe visibili nella pagina corrente</span>
+            <span>{total} righe totali dopo ricerca e ordinamento backend</span>
+            {manualSearch.trim() ? <span>Ricerca attiva: {manualSearch.trim()}</span> : null}
+            {manualFilterMode !== "all" ? <span>Filtro locale: {manualFilterMode}</span> : null}
+            <div className="flex items-end">
+              <button
+                className="btn-secondary"
+                type="button"
+                onClick={() => {
+                  setOverviewPage(1);
+                  setManualSearch("");
+                  setManualFilterMode("all");
+                  setManualSortBy("created_at");
+                  setManualSortDir("desc");
+                }}
+              >
+                Reset registro
+              </button>
             </div>
           </div>
           {busy && items.length === 0 ? (
             <div className="rounded-xl border border-gray-100 bg-gray-50 p-4 text-sm text-gray-500">Caricamento...</div>
-          ) : items.length === 0 ? (
+          ) : manualTableItems.length === 0 ? (
             <EmptyState icon={SearchIcon} title="Nessuna anomalia" description="Non ci sono anomalie che corrispondono ai filtri correnti." />
           ) : (
-            <DataTable data={items} columns={columns} initialPageSize={12} />
+            <DataTable
+              data={manualTableItems}
+              columns={columns}
+              onRowClick={(row) => setSelectedManualAnomaliaId(row.id)}
+              disableSorting
+              pagination={{
+                pageIndex: overviewPage - 1,
+                pageCount: overviewPageCount,
+                canPreviousPage: overviewPage > 1,
+                canNextPage: overviewPage < overviewPageCount,
+                onPreviousPage: () => setOverviewPage((current) => Math.max(1, current - 1)),
+                onNextPage: () => setOverviewPage((current) => (current < overviewPageCount ? current + 1 : current)),
+              }}
+            />
           )}
         </article>
       </div>
+      <ElaborazioneWorkspaceModal
+        open={Boolean(adeScanWorkspace)}
+        href={adeScanWorkspace?.href ?? null}
+        title={adeScanWorkspace?.title ?? "Dettaglio batch"}
+        description={adeScanWorkspace?.description ?? null}
+        onClose={() => setAdeScanWorkspace(null)}
+      />
+      <CatastoWorkspaceModal
+        open={Boolean(manualAnomaliaWorkspace)}
+        href={manualAnomaliaWorkspace?.href ?? null}
+        title={manualAnomaliaWorkspace?.title ?? "Workspace particella"}
+        description={manualAnomaliaWorkspace?.description ?? null}
+        onClose={() => setManualAnomaliaWorkspace(null)}
+      />
     </CatastoPage>
   );
 }
