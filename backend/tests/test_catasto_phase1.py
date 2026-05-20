@@ -3,6 +3,7 @@ import importlib.util
 import sys
 import types
 from collections.abc import Generator
+from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from decimal import Decimal
 from io import BytesIO
@@ -59,6 +60,7 @@ from app.modules.utenze.models import AnagraficaCompany, AnagraficaPerson, Anagr
 from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob, RuoloParticella, RuoloPartita
 from app.modules.catasto.routes import import_routes as import_routes_module
 from app.modules.catasto.routes import gis as gis_routes_module
+from app.modules.catasto.routes import anomalie as anomalie_routes_module
 from app.modules.catasto.services.import_capacitas import CapacitasImportDuplicateError, import_capacitas_excel
 from app.modules.catasto.services.comuni_reference import load_comuni_reference
 from app.modules.catasto.services.import_distretti_excel import import_distretti_excel
@@ -84,6 +86,7 @@ from app.modules.catasto.services.validation import (
     validate_comune,
     validate_superficie,
 )
+from app.services.elaborazioni_credentials import ElaborazioneCredentialNotFoundError
 from tests.catasto_fixtures import (
     build_capacitas_dataframe,
     build_capacitas_workbook_bytes,
@@ -1685,6 +1688,43 @@ def test_anomalie_endpoint_supports_combined_filters_and_pagination() -> None:
     assert second_page.json()["items"] == []
 
 
+def test_anomalie_endpoint_supports_search_and_backend_sorting() -> None:
+    db = TestingSessionLocal()
+    try:
+        seed_anomalie_workflow_data(db)
+    finally:
+        db.close()
+
+    response = client.get(
+        "/catasto/anomalie/?q=imponibile&sort_by=updated_at&sort_dir=asc&page=1&page_size=10",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] >= 1
+    assert all("imponibile" in (item["descrizione"] or "").lower() for item in payload["items"])
+    updated_values = [item["updated_at"] for item in payload["items"]]
+    assert updated_values == sorted(updated_values)
+
+
+def test_anomalie_endpoint_handles_invalid_distretto_and_blank_search() -> None:
+    db = TestingSessionLocal()
+    try:
+        seed_anomalie_workflow_data(db)
+    finally:
+        db.close()
+
+    invalid_distretto = client.get("/catasto/anomalie/?distretto=distretto-x", headers=auth_headers())
+    blank_search = client.get("/catasto/anomalie/?q=%20%20%20", headers=auth_headers())
+
+    assert invalid_distretto.status_code == 200
+    assert invalid_distretto.json()["total"] == 0
+
+    assert blank_search.status_code == 200
+    assert blank_search.json()["total"] >= 1
+
+
 def test_anomalie_summary_endpoint_groups_by_tipo() -> None:
     db = TestingSessionLocal()
     try:
@@ -1698,6 +1738,158 @@ def test_anomalie_summary_endpoint_groups_by_tipo() -> None:
     payload = response.json()
     assert payload["total"] >= 1
     assert any(item["tipo"] == "VAL-06-imponibile" for item in payload["buckets"])
+
+
+def test_anomalie_summary_endpoint_merges_same_tipo_and_keeps_highest_severity() -> None:
+    db = TestingSessionLocal()
+    try:
+        batch_id = db.query(CatImportBatch).filter(CatImportBatch.hash_file == "seed-hash").one().id
+        particella = db.query(CatParticella).filter(CatParticella.foglio == "5").one()
+        utenza = CatUtenzaIrrigua(
+            import_batch_id=batch_id,
+            anno_campagna=2025,
+            cco="UT-SUMMARY-MERGE-2025",
+            cod_comune_capacitas=165,
+            num_distretto=10,
+            nome_comune="Arborea",
+            foglio="5",
+            particella="120",
+            particella_id=particella.id,
+            denominazione="Summary merge",
+        )
+        db.add(utenza)
+        db.flush()
+        db.add_all(
+            [
+                CatAnomalia(
+                    utenza_id=utenza.id,
+                    particella_id=particella.id,
+                    anno_campagna=2025,
+                    tipo="VAL-SUMMARY-MERGE",
+                    severita="warning",
+                    status="aperta",
+                    descrizione="Prima descrizione",
+                ),
+                CatAnomalia(
+                    utenza_id=utenza.id,
+                    particella_id=particella.id,
+                    anno_campagna=2025,
+                    tipo="VAL-SUMMARY-MERGE",
+                    severita="error",
+                    status="aperta",
+                    descrizione=None,
+                ),
+            ]
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get("/catasto/anomalie/summary?status=aperta&anno=2025", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    bucket = next(item for item in payload["buckets"] if item["tipo"] == "VAL-SUMMARY-MERGE")
+    assert bucket["count"] == 2
+    assert bucket["severita"] == "error"
+    assert bucket["label"] == "VAL-SUMMARY-MERGE"
+
+
+@pytest.mark.parametrize(
+    ("path", "method"),
+    [
+        ("/catasto/anomalie/", "get"),
+        ("/catasto/anomalie/summary", "get"),
+        ("/catasto/anomalie/wizard/cf/items", "get"),
+        ("/catasto/anomalie/wizard/comune/items", "get"),
+        ("/catasto/anomalie/wizard/particella/items", "get"),
+        ("/catasto/anomalie/ade-scan/summary", "get"),
+        ("/catasto/anomalie/ade-scan/candidates", "get"),
+        ("/catasto/anomalie/ade-scan/run", "post"),
+    ],
+)
+def test_anomalie_console_read_and_scan_endpoints_require_admin_role(path: str, method: str) -> None:
+    request = getattr(client, method)
+    kwargs: dict[str, object] = {"headers": auth_headers_for("catasto-reviewer")}
+    if method == "post":
+        kwargs["json"] = {}
+
+    response = request(path, **kwargs)
+
+    assert response.status_code == 403
+
+
+def test_anomalie_ade_scan_summary_and_candidates_success_paths(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        anomalie_routes_module,
+        "get_ade_status_scan_summary",
+        lambda db: {
+            "total_unmatched": 4,
+            "pending": 2,
+            "last_checked_at": None,
+            "buckets": [
+                {"status": "queued", "classification": "pending", "count": 1},
+                {"status": "processing", "classification": "pending", "count": 1},
+                {"status": "completed", "classification": "ok", "count": 2},
+            ],
+        },
+    )
+
+    @dataclass
+    class FakeAdeCandidate:
+        ruolo_particella_id: UUID
+        anno_tributario: int
+        comune_nome: str
+        comune_codice: str | None
+        sezione: str | None
+        foglio: str
+        particella: str
+        subalterno: str | None
+        match_reason: str | None
+        ade_scan_status: str | None
+        ade_scan_classification: str | None
+        ade_scan_checked_at: datetime | None
+        ade_scan_document_id: UUID | None
+
+    candidate = FakeAdeCandidate(
+        ruolo_particella_id=uuid4(),
+        anno_tributario=2025,
+        comune_nome="Arborea",
+        comune_codice="A357",
+        sezione="A",
+        foglio="5",
+        particella="120",
+        subalterno="1",
+        match_reason="missing_particella",
+        ade_scan_status="queued",
+        ade_scan_classification="pending",
+        ade_scan_checked_at=None,
+        ade_scan_document_id=None,
+    )
+    monkeypatch.setattr(anomalie_routes_module, "list_ade_status_scan_candidates", lambda db, limit: [candidate])
+
+    summary_response = client.get("/catasto/anomalie/ade-scan/summary", headers=auth_headers())
+    candidates_response = client.get("/catasto/anomalie/ade-scan/candidates?limit=1", headers=auth_headers())
+
+    assert summary_response.status_code == 200
+    assert summary_response.json()["total_unmatched"] == 4
+
+    assert candidates_response.status_code == 200
+    candidates_payload = candidates_response.json()
+    assert candidates_payload["total"] == 1
+    assert candidates_payload["items"][0]["comune_nome"] == "Arborea"
+
+
+def test_anomalie_ade_scan_run_returns_conflict_when_credentials_are_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_create_batch(*args, **kwargs):
+        raise ElaborazioneCredentialNotFoundError("Credenziali non configurate")
+
+    monkeypatch.setattr(anomalie_routes_module, "create_ade_status_scan_batch", fake_create_batch)
+
+    response = client.post("/catasto/anomalie/ade-scan/run", headers=auth_headers(), json={"limit": 3})
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Credenziali non configurate"
 
 
 def test_anomalie_cf_wizard_lists_open_cf_items_with_context() -> None:
@@ -1743,6 +1935,92 @@ def test_anomalie_cf_wizard_lists_open_cf_items_with_context() -> None:
     payload = response.json()
     assert payload["total"] >= 1
     assert any(item["tipo"] == "VAL-02-cf_invalido" and item["denominazione"] == "Mario Rossi" for item in payload["items"])
+
+
+def test_anomalie_cf_wizard_supports_pagination_metadata() -> None:
+    db = TestingSessionLocal()
+    try:
+        batch_id = db.query(CatImportBatch).filter(CatImportBatch.hash_file == "seed-hash").one().id
+        particella = db.query(CatParticella).filter(CatParticella.foglio == "5").one()
+        utenza_1 = CatUtenzaIrrigua(
+            import_batch_id=batch_id,
+            anno_campagna=2025,
+            cco="UT-CF-PAGE-001",
+            cod_comune_capacitas=165,
+            num_distretto=10,
+            nome_comune="Arborea",
+            foglio="5",
+            particella="120",
+            particella_id=particella.id,
+            denominazione="Wizard CF pagina 1",
+            codice_fiscale="INVALIDPAGE001",
+            codice_fiscale_raw="INVALIDPAGE001",
+            anomalia_cf_invalido=True,
+        )
+        utenza_2 = CatUtenzaIrrigua(
+            import_batch_id=batch_id,
+            anno_campagna=2025,
+            cco="UT-CF-PAGE-002",
+            cod_comune_capacitas=165,
+            num_distretto=10,
+            nome_comune="Arborea",
+            foglio="5",
+            particella="120",
+            particella_id=particella.id,
+            denominazione="Wizard CF pagina 2",
+            codice_fiscale="INVALIDPAGE002",
+            codice_fiscale_raw="INVALIDPAGE002",
+            anomalia_cf_invalido=True,
+        )
+        db.add_all([utenza_1, utenza_2])
+        db.flush()
+        db.add_all(
+            [
+                CatAnomalia(
+                    utenza_id=utenza_1.id,
+                    particella_id=particella.id,
+                    anno_campagna=2025,
+                    tipo="VAL-02-cf_invalido",
+                    severita="error",
+                    status="aperta",
+                    descrizione="CF pagina 1",
+                ),
+                CatAnomalia(
+                    utenza_id=utenza_2.id,
+                    particella_id=particella.id,
+                    anno_campagna=2025,
+                    tipo="VAL-02-cf_invalido",
+                    severita="error",
+                    status="aperta",
+                    descrizione="CF pagina 2",
+                ),
+            ]
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    page_1 = client.get(
+        "/catasto/anomalie/wizard/cf/items?status=aperta&anno=2025&page=1&page_size=1",
+        headers=auth_headers(),
+    )
+    page_2 = client.get(
+        "/catasto/anomalie/wizard/cf/items?status=aperta&anno=2025&page=2&page_size=1",
+        headers=auth_headers(),
+    )
+
+    assert page_1.status_code == 200
+    assert page_2.status_code == 200
+    payload_1 = page_1.json()
+    payload_2 = page_2.json()
+    assert payload_1["total"] >= 2
+    assert payload_1["page"] == 1
+    assert payload_1["page_size"] == 1
+    assert len(payload_1["items"]) == 1
+    assert payload_2["page"] == 2
+    assert payload_2["page_size"] == 1
+    assert len(payload_2["items"]) == 1
+    assert payload_1["items"][0]["anomalia_id"] != payload_2["items"][0]["anomalia_id"]
 
 
 def test_anomalie_cf_wizard_apply_updates_utenza_and_closes_related_anomalies() -> None:
@@ -1833,6 +2111,110 @@ def test_anomalie_cf_wizard_apply_updates_utenza_and_closes_related_anomalies() 
         db.close()
 
 
+def test_anomalie_cf_wizard_apply_rejects_empty_payload() -> None:
+    response = client.post(
+        "/catasto/anomalie/wizard/cf/apply",
+        headers=auth_headers(),
+        json={"items": []},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "No wizard items provided"
+
+
+def test_anomalie_cf_wizard_apply_rejects_duplicate_ids() -> None:
+    db = TestingSessionLocal()
+    try:
+        batch_id = db.query(CatImportBatch).filter(CatImportBatch.hash_file == "seed-hash").one().id
+        particella = db.query(CatParticella).filter(CatParticella.foglio == "5").one()
+        utenza = CatUtenzaIrrigua(
+            import_batch_id=batch_id,
+            anno_campagna=2025,
+            cco="UT-CF-DUP-2025",
+            cod_comune_capacitas=165,
+            num_distretto=10,
+            nome_comune="Arborea",
+            foglio="5",
+            particella="120",
+            particella_id=particella.id,
+            denominazione="Wizard CF dup",
+            anomalia_cf_invalido=True,
+        )
+        db.add(utenza)
+        db.flush()
+        anomalia = CatAnomalia(
+            utenza_id=utenza.id,
+            particella_id=particella.id,
+            anno_campagna=2025,
+            tipo="VAL-02-cf_invalido",
+            severita="error",
+            status="aperta",
+        )
+        db.add(anomalia)
+        db.commit()
+        anomalia_id = str(anomalia.id)
+    finally:
+        db.close()
+
+    response = client.post(
+        "/catasto/anomalie/wizard/cf/apply",
+        headers=auth_headers(),
+        json={
+            "items": [
+                {"anomalia_id": anomalia_id, "codice_fiscale": "RSSMRA80A01H501U"},
+                {"anomalia_id": anomalia_id, "codice_fiscale": "RSSMRA80A01H501U"},
+            ]
+        },
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Duplicate anomaly ids are not allowed in wizard apply"
+
+
+def test_anomalie_cf_wizard_apply_rejects_invalid_codice_fiscale() -> None:
+    db = TestingSessionLocal()
+    try:
+        batch_id = db.query(CatImportBatch).filter(CatImportBatch.hash_file == "seed-hash").one().id
+        particella = db.query(CatParticella).filter(CatParticella.foglio == "5").one()
+        utenza = CatUtenzaIrrigua(
+            import_batch_id=batch_id,
+            anno_campagna=2025,
+            cco="UT-CF-INVALID-2025",
+            cod_comune_capacitas=165,
+            num_distretto=10,
+            nome_comune="Arborea",
+            foglio="5",
+            particella="120",
+            particella_id=particella.id,
+            denominazione="Wizard CF invalido",
+            anomalia_cf_invalido=True,
+        )
+        db.add(utenza)
+        db.flush()
+        anomalia = CatAnomalia(
+            utenza_id=utenza.id,
+            particella_id=particella.id,
+            anno_campagna=2025,
+            tipo="VAL-02-cf_invalido",
+            severita="error",
+            status="aperta",
+        )
+        db.add(anomalia)
+        db.commit()
+        anomalia_id = str(anomalia.id)
+    finally:
+        db.close()
+
+    response = client.post(
+        "/catasto/anomalie/wizard/cf/apply",
+        headers=auth_headers(),
+        json={"items": [{"anomalia_id": anomalia_id, "codice_fiscale": "INVALID"}]},
+    )
+
+    assert response.status_code == 422
+    assert "Codice fiscale non valido" in response.json()["detail"]
+
+
 def test_anomalie_comune_wizard_lists_candidates() -> None:
     db = TestingSessionLocal()
     try:
@@ -1875,6 +2257,48 @@ def test_anomalie_comune_wizard_lists_candidates() -> None:
     assert matched["source_cod_comune_capacitas"] == 999999
     assert len(matched["candidates"]) >= 1
     assert matched["candidates"][0]["nome_comune"] == "Cabras"
+
+
+def test_anomalie_comune_wizard_lists_candidates_with_invalid_source_code_fallback() -> None:
+    db = TestingSessionLocal()
+    try:
+        batch_id = db.query(CatImportBatch).filter(CatImportBatch.hash_file == "seed-hash").one().id
+        utenza = CatUtenzaIrrigua(
+            import_batch_id=batch_id,
+            anno_campagna=2025,
+            cco="UT-COMUNE-FALLBACK-2025",
+            cod_comune_capacitas=212,
+            num_distretto=10,
+            nome_comune="Cabras Storico",
+            foglio="5",
+            particella="120",
+            denominazione="Utenza comune fallback",
+            anomalia_comune_invalido=True,
+        )
+        db.add(utenza)
+        db.flush()
+        db.add(
+            CatAnomalia(
+                utenza_id=utenza.id,
+                anno_campagna=2025,
+                tipo="VAL-04-comune_invalido",
+                severita="error",
+                status="aperta",
+                descrizione="Comune legacy da correggere",
+                dati_json={"cod_istat": "not-a-number"},
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get("/catasto/anomalie/wizard/comune/items?status=aperta&anno=2025", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    matched = next(item for item in payload["items"] if item["denominazione"] == "Utenza comune fallback")
+    assert matched["source_cod_comune_capacitas"] == 212
+    assert any(candidate["nome_comune"] == "Cabras" for candidate in matched["candidates"])
 
 
 def test_anomalie_comune_wizard_apply_updates_utenza_and_closes_related_anomalies() -> None:
@@ -1971,6 +2395,51 @@ def test_anomalie_comune_wizard_apply_updates_utenza_and_closes_related_anomalie
         db.close()
 
 
+def test_anomalie_comune_wizard_apply_rejects_invalid_candidate() -> None:
+    db = TestingSessionLocal()
+    try:
+        batch_id = db.query(CatImportBatch).filter(CatImportBatch.hash_file == "seed-hash").one().id
+        target_comune = db.query(CatComune).filter(CatComune.nome_comune == "Arborea").one()
+        source_comune = db.query(CatComune).filter(CatComune.nome_comune == "Cabras").one()
+        utenza = CatUtenzaIrrigua(
+            import_batch_id=batch_id,
+            anno_campagna=2025,
+            cco="UT-COMUNE-INVALID-CAND-2025",
+            cod_comune_capacitas=source_comune.cod_comune_capacitas,
+            num_distretto=10,
+            nome_comune=source_comune.nome_comune,
+            foglio="5",
+            particella="120",
+            denominazione="Utenza comune candidate reject",
+            anomalia_comune_invalido=True,
+        )
+        db.add(utenza)
+        db.flush()
+        anomalia = CatAnomalia(
+            utenza_id=utenza.id,
+            anno_campagna=2025,
+            tipo="VAL-04-comune_invalido",
+            severita="error",
+            status="aperta",
+            dati_json={"cod_istat": source_comune.cod_comune_capacitas},
+        )
+        db.add(anomalia)
+        db.commit()
+        anomalia_id = str(anomalia.id)
+        comune_id = str(target_comune.id)
+    finally:
+        db.close()
+
+    response = client.post(
+        "/catasto/anomalie/wizard/comune/apply",
+        headers=auth_headers(),
+        json={"items": [{"anomalia_id": anomalia_id, "comune_id": comune_id}]},
+    )
+
+    assert response.status_code == 409
+    assert "is not a valid candidate" in response.json()["detail"]
+
+
 def test_anomalie_particella_wizard_lists_candidates() -> None:
     db = TestingSessionLocal()
     try:
@@ -2017,6 +2486,45 @@ def test_anomalie_particella_wizard_lists_candidates() -> None:
     assert matched["tipo"] == "VAL-05-particella_assente"
     assert len(matched["candidates"]) >= 1
     assert matched["candidates"][0]["foglio"] == "5"
+
+
+def test_anomalie_particella_wizard_lists_no_candidates_without_foglio_particella() -> None:
+    db = TestingSessionLocal()
+    try:
+        batch_id = db.query(CatImportBatch).filter(CatImportBatch.hash_file == "seed-hash").one().id
+        utenza = CatUtenzaIrrigua(
+            import_batch_id=batch_id,
+            anno_campagna=2025,
+            cco="UT-PART-NO-REF-2025",
+            cod_comune_capacitas=165,
+            num_distretto=10,
+            nome_comune="Arborea",
+            particella_id=None,
+            denominazione="Utenza senza riferimenti particella",
+            anomalia_particella_assente=True,
+        )
+        db.add(utenza)
+        db.flush()
+        db.add(
+            CatAnomalia(
+                utenza_id=utenza.id,
+                particella_id=None,
+                anno_campagna=2025,
+                tipo="VAL-05-particella_assente",
+                severita="warning",
+                status="aperta",
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get("/catasto/anomalie/wizard/particella/items?status=aperta&anno=2025", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    matched = next(item for item in payload["items"] if item["denominazione"] == "Utenza senza riferimenti particella")
+    assert matched["candidates"] == []
 
 
 def test_anomalie_particella_wizard_apply_links_particella_and_closes_related_anomalies() -> None:
@@ -2094,6 +2602,68 @@ def test_anomalie_particella_wizard_apply_links_particella_and_closes_related_an
         db.close()
 
 
+def test_anomalie_particella_wizard_apply_rejects_non_current_particella() -> None:
+    db = TestingSessionLocal()
+    try:
+        batch_id = db.query(CatImportBatch).filter(CatImportBatch.hash_file == "seed-hash").one().id
+        current_particella = db.query(CatParticella).filter(CatParticella.foglio == "5", CatParticella.particella == "120").one()
+        stale_particella = CatParticella(
+            cod_comune_capacitas=current_particella.cod_comune_capacitas,
+            codice_catastale=current_particella.codice_catastale,
+            nome_comune=current_particella.nome_comune,
+            sezione_catastale=current_particella.sezione_catastale,
+            foglio=current_particella.foglio,
+            particella=current_particella.particella,
+            subalterno=current_particella.subalterno,
+            num_distretto=current_particella.num_distretto,
+            nome_distretto=current_particella.nome_distretto,
+            is_current=False,
+            superficie_mq=current_particella.superficie_mq,
+        )
+        db.add(stale_particella)
+        db.flush()
+        utenza = CatUtenzaIrrigua(
+            import_batch_id=batch_id,
+            anno_campagna=2025,
+            cco="UT-PART-STALE-2025",
+            cod_comune_capacitas=current_particella.cod_comune_capacitas,
+            num_distretto=10,
+            nome_comune=current_particella.nome_comune,
+            sezione_catastale=current_particella.sezione_catastale,
+            foglio=current_particella.foglio,
+            particella=current_particella.particella,
+            subalterno=current_particella.subalterno,
+            particella_id=None,
+            denominazione="Utenza particella non current",
+            anomalia_particella_assente=True,
+        )
+        db.add(utenza)
+        db.flush()
+        anomalia = CatAnomalia(
+            utenza_id=utenza.id,
+            particella_id=None,
+            anno_campagna=2025,
+            tipo="VAL-05-particella_assente",
+            severita="warning",
+            status="aperta",
+        )
+        db.add(anomalia)
+        db.commit()
+        anomalia_id = str(anomalia.id)
+        stale_particella_id = str(stale_particella.id)
+    finally:
+        db.close()
+
+    response = client.post(
+        "/catasto/anomalie/wizard/particella/apply",
+        headers=auth_headers(),
+        json={"items": [{"anomalia_id": anomalia_id, "particella_id": stale_particella_id}]},
+    )
+
+    assert response.status_code == 409
+    assert "is not current" in response.json()["detail"]
+
+
 def test_anomalie_endpoint_patch_updates_workflow_fields() -> None:
     db = TestingSessionLocal()
     try:
@@ -2140,6 +2710,42 @@ def test_anomalie_endpoint_patch_requires_admin_role() -> None:
     )
 
     assert response.status_code == 403
+
+
+def test_anomalie_endpoint_patch_updates_segnalazione_id() -> None:
+    db = TestingSessionLocal()
+    try:
+        seed_anomalie_workflow_data(db)
+        anomalia_id = (
+            db.query(CatAnomalia)
+            .filter(CatAnomalia.tipo == "VAL-06-imponibile", CatAnomalia.status == "aperta")
+            .one()
+            .id
+        )
+        segnalazione_id = uuid4()
+    finally:
+        db.close()
+
+    response = client.patch(
+        f"/catasto/anomalie/{anomalia_id}",
+        headers=auth_headers(),
+        json={"segnalazione_id": str(segnalazione_id)},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["segnalazione_id"] == str(segnalazione_id)
+
+
+def test_anomalie_endpoint_patch_returns_404_for_missing_anomalia() -> None:
+    response = client.patch(
+        f"/catasto/anomalie/{uuid4()}",
+        headers=auth_headers(),
+        json={"status": "chiusa"},
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Anomalia not found"
 
 
 def test_import_capacitas_requires_authentication() -> None:
@@ -6942,6 +7548,64 @@ def test_meter_reading_prepare_import_detects_header_aliases_and_links_subject()
         db.close()
 
 
+def test_meter_reading_prepare_import_marks_shared_meter_with_multiple_tax_codes() -> None:
+    db = TestingSessionLocal()
+    try:
+        first_subject = AnagraficaSubject(subject_type="person", status="active", source_system="gaia", source_name_raw="Peppe Vacca")
+        second_subject = AnagraficaSubject(subject_type="person", status="active", source_system="gaia", source_name_raw="Franco Cicu")
+        db.add_all([first_subject, second_subject])
+        db.flush()
+        db.add_all(
+            [
+                AnagraficaPerson(
+                    subject_id=first_subject.id,
+                    cognome="Vacca",
+                    nome="Peppe",
+                    codice_fiscale="VCCGPP46E11L122G",
+                ),
+                AnagraficaPerson(
+                    subject_id=second_subject.id,
+                    cognome="Cicu",
+                    nome="Franco",
+                    codice_fiscale="CCIFNC39P25L122B",
+                ),
+            ]
+        )
+        db.commit()
+
+        prepared = prepare_meter_readings_import(
+            db,
+            file_bytes=_build_meter_readings_workbook(
+                rows=[
+                    [
+                        1,
+                        "C_A-38.1",
+                        "MTR-SHARED-01",
+                        100,
+                        135,
+                        35,
+                        "DUI001",
+                        "VCCGPP46E11L122G / CCIFNC39P25L122B",
+                        "3331234567",
+                        "contatore condiviso",
+                    ]
+                ]
+            ),
+            filename="D01-Sinis 2025.xlsx",
+        )
+
+        item = prepared.items[0]
+        codes = {message.code for message in item.validation_messages}
+        assert item.validation_status == "warning"
+        assert item.payload["subject_id"] is None
+        assert item.payload["codice_fiscale_normalizzato"] is None
+        assert item.payload["tax_code_candidates"] == ["VCCGPP46E11L122G", "CCIFNC39P25L122B"]
+        assert len(item.payload["shared_meter_subject_ids"]) == 2
+        assert "CONTATORE_CONDIVISO" in codes
+    finally:
+        db.close()
+
+
 def test_meter_reading_parser_supports_2024_headers_without_tipo() -> None:
     workbook = Workbook()
     sheet = workbook.active
@@ -7245,6 +7909,79 @@ def test_meter_reading_import_endpoint_upserts_rows() -> None:
         assert len(readings) == 2
         assert readings[0].subject_id is not None
         assert readings[1].validation_status == "warning"
+    finally:
+        db.close()
+
+
+def test_meter_reading_import_endpoint_keeps_shared_meter_unassigned() -> None:
+    db = TestingSessionLocal()
+    try:
+        first_subject = AnagraficaSubject(subject_type="person", status="active", source_system="gaia", source_name_raw="Peppe Vacca")
+        second_subject = AnagraficaSubject(subject_type="person", status="active", source_system="gaia", source_name_raw="Franco Cicu")
+        db.add_all([first_subject, second_subject])
+        db.flush()
+        db.add_all(
+            [
+                AnagraficaPerson(
+                    subject_id=first_subject.id,
+                    cognome="Vacca",
+                    nome="Peppe",
+                    codice_fiscale="VCCGPP46E11L122G",
+                ),
+                AnagraficaPerson(
+                    subject_id=second_subject.id,
+                    cognome="Cicu",
+                    nome="Franco",
+                    codice_fiscale="CCIFNC39P25L122B",
+                ),
+            ]
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.post(
+        "/catasto/meter-readings/import?mode=upsert&anno=2025",
+        headers=auth_headers(),
+        files={
+            "file": (
+                "D01-Sinis 2025.xlsx",
+                _build_meter_readings_workbook(
+                    rows=[
+                        [
+                            1,
+                            "C_A-38.1",
+                            "MTR-SHARED-01",
+                            100,
+                            135,
+                            35,
+                            "DUI001",
+                            "VCCGPP46E11L122G CCIFNC39P25L122B",
+                            "3331234567",
+                            "contatore condiviso",
+                        ]
+                    ]
+                ),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["righe_importate"] == 1
+    assert payload["righe_con_warning"] == 1
+
+    db = TestingSessionLocal()
+    try:
+        reading = db.execute(select(CatMeterReading).where(CatMeterReading.punto_consegna == "C_A-38.1")).scalar_one()
+        codes = {message["code"] for message in reading.validation_messages}
+        assert reading.subject_id is None
+        assert reading.lettura_finale == 135
+        assert reading.codice_fiscale == "VCCGPP46E11L122G CCIFNC39P25L122B"
+        assert reading.codice_fiscale_normalizzato is None
+        assert reading.validation_status == "warning"
+        assert "CONTATORE_CONDIVISO" in codes
     finally:
         db.close()
 
