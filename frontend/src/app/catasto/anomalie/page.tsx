@@ -93,16 +93,12 @@ const ADE_SCAN_BATCH_NAME_PREFIX = "Visure storiche AdE particelle non collegate
 const OVERVIEW_PAGE_SIZE = 50;
 const WIZARD_PAGE_SIZE = 25;
 
-function currentYear(): number {
-  return new Date().getFullYear();
-}
-
 function buildDefaultFilters(): FiltersState {
   return {
     tipo: "",
     severita: "",
     status: "aperta",
-    anno: String(currentYear()),
+    anno: "",
     distretto: "",
   };
 }
