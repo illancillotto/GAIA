@@ -200,6 +200,9 @@ def prepare_meter_readings_import(
             "operational_state": resolved["operational_state"],
             "codice_fiscale_normalizzato": resolved["codice_fiscale_normalizzato"],
             "subject_id": resolved["subject_id"],
+            "tax_code_candidates": resolved.get("tax_code_candidates", []),
+            "shared_meter_subject_ids": resolved.get("shared_meter_subject_ids", []),
+            "shared_meter_subject_labels": resolved.get("shared_meter_subject_labels", []),
             "source": "excel",
         }
         items.append(

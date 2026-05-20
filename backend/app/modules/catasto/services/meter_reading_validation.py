@@ -7,7 +7,12 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.modules.catasto.services.meter_reading_linker import link_subject_by_tax_code, normalize_tax_code
+from app.modules.catasto.services.meter_reading_linker import (
+    extract_tax_code_candidates,
+    link_subject_by_tax_code,
+    link_subjects_by_tax_codes,
+    normalize_tax_code,
+)
 from app.modules.catasto.services.validation import validate_codice_fiscale
 
 METER_READING_TYPES = {"CONT_TESSER", "CONT_NO_TES"}
@@ -121,10 +126,39 @@ def validate_meter_reading_row(
         messages.append(ValidationMessage(level="error", code="DUPLICATO_FILE", message="Duplicato nel file sulla chiave tecnica.", field="punto_consegna"))
 
     cf_raw = row_data.get("codice_fiscale")
-    cf_validation = validate_codice_fiscale(cf_raw)
+    tax_code_candidates = extract_tax_code_candidates(str(cf_raw) if cf_raw else None)
+    has_multiple_tax_codes = len(tax_code_candidates) > 1
+    candidate_links = []
+    matched_labels: list[str] = []
+    cf_validation = validate_codice_fiscale(cf_raw) if not has_multiple_tax_codes else {"cf_normalizzato": None, "is_valid": False}
     cf_normalizzato = normalize_tax_code(str(cf_validation.get("cf_normalizzato")) if cf_validation.get("cf_normalizzato") else None)
     if is_meter_reading:
-        if not cf_normalizzato:
+        if has_multiple_tax_codes:
+            candidate_links = link_subjects_by_tax_codes(db, tax_code_candidates)
+            matched_labels = [item.subject_display_name for item in candidate_links]
+            messages.append(
+                ValidationMessage(
+                    level="warning",
+                    code="CONTATORE_CONDIVISO",
+                    message=(
+                        "Rilevati più codici fiscali o partite IVA sulla stessa riga; "
+                        "il contatore viene mantenuto ma la lettura non viene assegnata automaticamente a un singolo soggetto."
+                    ),
+                    field="codice_fiscale",
+                )
+            )
+            if not candidate_links:
+                messages.append(
+                    ValidationMessage(
+                        level="warning",
+                        code="UTENZE_NON_TROVATE",
+                        message="Nessuno dei codici fiscali o partita IVA rilevati risulta associato a un soggetto noto.",
+                        field="codice_fiscale",
+                    )
+                )
+            cf_normalizzato = None
+            link = link_subject_by_tax_code(db, None)
+        elif not cf_normalizzato:
             if normalized_record_type == "CONT_TESSER":
                 messages.append(ValidationMessage(
                     level="info" if is_dismissed_or_inactive else "warning",
@@ -139,8 +173,12 @@ def validate_meter_reading_row(
                     message="Contatore non tessera senza codice fiscale utenza.",
                     field="codice_fiscale",
                 ))
+            link = link_subject_by_tax_code(db, None)
         elif not bool(cf_validation.get("is_valid")):
             messages.append(ValidationMessage(level="warning", code="CF_ANOMALO", message="Codice fiscale anomalo.", field="codice_fiscale"))
+            link = link_subject_by_tax_code(db, cf_normalizzato)
+        else:
+            link = link_subject_by_tax_code(db, cf_normalizzato)
     else:
         messages.append(
             ValidationMessage(
@@ -150,6 +188,7 @@ def validate_meter_reading_row(
                 field="record_type",
             )
         )
+        link = link_subject_by_tax_code(db, None)
 
     if operational_state == "inactive":
         messages.append(
@@ -170,10 +209,9 @@ def validate_meter_reading_row(
             )
         )
 
-    link = link_subject_by_tax_code(db, cf_normalizzato) if is_meter_reading else link_subject_by_tax_code(db, None)
-    if is_meter_reading and cf_normalizzato and link.match_count == 0:
+    if is_meter_reading and not has_multiple_tax_codes and cf_normalizzato and link.match_count == 0:
         messages.append(ValidationMessage(level="warning", code="UTENZA_NON_TROVATA", message="Soggetto non trovato per codice fiscale.", field="codice_fiscale"))
-    elif is_meter_reading and cf_normalizzato and link.match_count > 1:
+    elif is_meter_reading and not has_multiple_tax_codes and cf_normalizzato and link.match_count > 1:
         messages.append(ValidationMessage(level="warning", code="UTENZE_MULTIPLE", message="Più soggetti trovati per lo stesso codice fiscale.", field="codice_fiscale"))
 
     if _phone_is_anomalous(row_data.get("telefono")):
@@ -209,7 +247,14 @@ def validate_meter_reading_row(
         "normalized_record_type": normalized_record_type,
         "operational_state": operational_state,
         "codice_fiscale_normalizzato": cf_normalizzato,
-        "subject_id": link.subject_id,
-        "subject_display_name": link.subject_display_name,
+        "subject_id": None if has_multiple_tax_codes else link.subject_id,
+        "subject_display_name": (
+            ", ".join(matched_labels[:3]) + ("..." if len(matched_labels) > 3 else "")
+            if has_multiple_tax_codes and matched_labels
+            else link.subject_display_name
+        ),
+        "tax_code_candidates": tax_code_candidates,
+        "shared_meter_subject_ids": [str(item.subject_id) for item in candidate_links] if has_multiple_tax_codes else [],
+        "shared_meter_subject_labels": matched_labels if has_multiple_tax_codes else [],
     }
     return status, messages, resolved

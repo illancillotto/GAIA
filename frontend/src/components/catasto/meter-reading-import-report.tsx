@@ -9,6 +9,13 @@ export type MeterReadingImportReportItem = {
   preview: CatMeterReadingImportPreview;
 };
 
+function readStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((item): item is string => typeof item === "string" && item.trim().length > 0);
+}
+
 function ValidationStatusBadge({ status }: { status: string }) {
   const tone =
     status === "error"
@@ -65,6 +72,12 @@ function MeterReadingImportIssuesModal({
             <div className="space-y-3">
               {issueRows.map((row) => (
                 <div key={`${item.filename}-${row.row_number}`} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                  {(() => {
+                    const sharedSubjects = readStringArray(row.data?.shared_meter_subject_labels);
+                    const taxCodes = readStringArray(row.data?.tax_code_candidates);
+
+                    return (
+                      <>
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                       <p className="text-sm font-semibold text-slate-900">
@@ -77,6 +90,13 @@ function MeterReadingImportIssuesModal({
                     </div>
                     <ValidationStatusBadge status={row.validation_status} />
                   </div>
+                  {sharedSubjects.length > 0 ? (
+                    <div className="mt-3 rounded-xl border border-sky-200 bg-sky-50 px-3 py-3 text-sm text-sky-900">
+                      <p className="font-semibold">Soggetti candidati</p>
+                      <p className="mt-1">{sharedSubjects.join(", ")}</p>
+                      {taxCodes.length > 0 ? <p className="mt-1 text-xs text-sky-800">CF/P.IVA rilevati: {taxCodes.join(" · ")}</p> : null}
+                    </div>
+                  ) : null}
                   <div className="mt-3 space-y-2">
                     {row.validation_messages.map((message, index) => (
                       <div
@@ -95,6 +115,9 @@ function MeterReadingImportIssuesModal({
                       </div>
                     ))}
                   </div>
+                      </>
+                    );
+                  })()}
                 </div>
               ))}
             </div>
