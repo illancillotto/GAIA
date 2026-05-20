@@ -28,7 +28,8 @@ type ModuleSidebarProps = {
     | "gaia"
     | "operazioni"
     | "riordino"
-    | "ruolo";
+    | "ruolo"
+    | "wiki";
   reviewBadge?: number;
   userBadge?: number;
   grantedSectionKeys?: string[];
@@ -207,6 +208,15 @@ export function ModuleSidebar({
 
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Gestione</p>
         <NavItem href="/ruolo/import" icon={RefreshIcon} label="Import Ruolo" match="prefix" />
+      </div>
+    );
+  }
+
+  if (currentModuleKey === "wiki") {
+    return (
+      <div className="space-y-0.5 px-2 pb-3">
+        <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Panoramica</p>
+        <NavItem href="/wiki" icon={DocumentIcon} label="Wiki" match="prefix" />
       </div>
     );
   }
