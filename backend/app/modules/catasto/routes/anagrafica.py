@@ -5,6 +5,7 @@ from io import BytesIO, StringIO
 import logging
 from collections import defaultdict
 from datetime import datetime, timezone
+import re
 from typing import Awaitable, Callable, Literal
 from uuid import UUID, uuid4
 

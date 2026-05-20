@@ -1,7 +1,7 @@
 """add runtime fields to catasto bulk jobs
 
-Revision ID: 20260519_0069
-Revises: 20260429_0068
+Revision ID: 20260519_0088
+Revises: 20260519_0087
 Create Date: 2026-05-19
 """
 
@@ -12,8 +12,8 @@ from alembic import op
 
 
 # revision identifiers, used by Alembic.
-revision = "20260519_0069"
-down_revision = "20260429_0068"
+revision = "20260519_0088"
+down_revision = "20260519_0087"
 branch_labels = None
 depends_on = None
 
