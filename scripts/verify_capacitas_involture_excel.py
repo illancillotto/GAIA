@@ -41,6 +41,20 @@ VERIFY_COLUMNS = [
     "verify_note",
 ]
 
+HEADER_ALIASES: dict[str, list[str]] = {
+    "comune": ["comune", "comune_input"],
+    "foglio": ["foglio", "foglio_input", "foglio_live"],
+    "particella": ["particella", "particella_input", "particella_live"],
+    "sub": ["sub", "sub_input", "sub_live"],
+    "link_involture": ["link_involture"],
+    "cf": ["cf"],
+    "denominazione": ["denominazione"],
+    "ragione_sociale": ["ragione_sociale"],
+    "cognome": ["cognome"],
+    "nome": ["nome"],
+    "deceduto": ["deceduto"],
+}
+
 
 @dataclass
 class LinkFetchResult:
@@ -233,8 +247,15 @@ def _describe_intestatario(intestatario: CapacitasIntestatario) -> str:
 
 def _ensure_headers(sheet) -> tuple[dict[str, int], dict[str, int]]:
     headers = [cell.value for cell in next(sheet.iter_rows(min_row=1, max_row=1))]
-    row_map = {_normalize_optional_token(value).lower(): index for index, value in enumerate(headers) if value is not None}
-    required = {"foglio", "particella", "sub", "link_involture"}
+    normalized_headers = {_normalize_optional_token(value).lower(): index for index, value in enumerate(headers) if value is not None}
+    row_map: dict[str, int] = {}
+    for canonical_name, aliases in HEADER_ALIASES.items():
+        for alias in aliases:
+            if alias in normalized_headers:
+                row_map[canonical_name] = normalized_headers[alias]
+                break
+
+    required = {"foglio", "particella", "link_involture"}
     missing = sorted(name for name in required if name not in row_map)
     if missing:
         raise RuntimeError(f"Colonne obbligatorie mancanti nel file Excel: {', '.join(missing)}")
