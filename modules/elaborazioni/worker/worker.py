@@ -85,6 +85,11 @@ CAPTCHA_LLM_ATTEMPTS = int(os.getenv("CAPTCHA_LLM_ATTEMPTS", "3"))
 CAPTCHA_EXTERNAL_ATTEMPTS = int(os.getenv("CAPTCHA_EXTERNAL_ATTEMPTS", "3"))
 BETWEEN_VISURE_DELAY_SEC = int(os.getenv("BETWEEN_VISURE_DELAY_SEC", "5"))
 SESSION_TIMEOUT_SEC = int(os.getenv("SESSION_TIMEOUT_SEC", "1680"))
+CREDENTIAL_LOCK_COOLDOWN_SEC = int(os.getenv("ELABORAZIONI_CREDENTIAL_LOCK_COOLDOWN_SEC", "300"))
+REQUEST_RETRY_DEFER_SEC = int(os.getenv("ELABORAZIONI_REQUEST_RETRY_DEFER_SEC", "45"))
+SISTER_SERVER_ERROR_BASE_COOLDOWN_SEC = int(os.getenv("ELABORAZIONI_SISTER_500_COOLDOWN_SEC", "90"))
+SISTER_SERVER_ERROR_MAX_COOLDOWN_SEC = int(os.getenv("ELABORAZIONI_SISTER_500_MAX_COOLDOWN_SEC", "300"))
+SISTER_SERVER_ERROR_GLOBAL_PAUSE_SEC = int(os.getenv("ELABORAZIONI_SISTER_500_GLOBAL_PAUSE_SEC", "45"))
 DOCUMENT_STORAGE_PATH = Path(env_value("ELABORAZIONI_DOCUMENT_STORAGE_PATH", "CATASTO_DOCUMENT_STORAGE_PATH", "/data/catasto/documents"))
 CAPTCHA_STORAGE_PATH = Path(env_value("ELABORAZIONI_CAPTCHA_STORAGE_PATH", "CATASTO_CAPTCHA_STORAGE_PATH", "/data/catasto/captcha"))
 DEBUG_ARTIFACTS_PATH = Path(env_value("ELABORAZIONI_DEBUG_ARTIFACTS_PATH", "CATASTO_DEBUG_ARTIFACTS_PATH", "/data/catasto/debug"))
@@ -105,6 +110,12 @@ SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 @dataclass(slots=True)
 class WorkerState:
     stop_requested: bool = False
+
+
+@dataclass(slots=True)
+class ClaimedRequestSelection:
+    request_id: UUID | None
+    wait_reason: str | None = None
 
 
 class CatastoWorker:
@@ -432,90 +443,241 @@ class CatastoWorker:
                 batch.current_operation = "Credenziali SISTER attive mancanti"
                 db.commit()
                 return
-            credential = next(
-                (c for c in active_credentials if c.is_default),
-                active_credentials[0],
-            )
-            credential_idx = active_credentials.index(credential)
-            password = self.vault.decrypt(credential.sister_password_encrypted)
             logger.info("Batch %s preso in carico per utente %s", batch_id, batch.user_id)
 
-        browser = self._build_browser_session()
-        await browser.start()
-        try:
-            self._set_batch_operation(batch_id, "Autenticazione SISTER in corso")
-            logger.info("Batch %s autenticazione SISTER in corso", batch_id)
-            await browser.ensure_authenticated(credential.sister_username, password)
-            self._set_batch_operation(batch_id, "Autenticazione SISTER completata")
-            logger.info("Batch %s autenticato su SISTER", batch_id)
-            while not self.state.stop_requested:
-                next_request = self._next_request_id(batch_id)
-                if next_request == "WAIT":
-                    self._set_batch_operation(batch_id, "In attesa di input CAPTCHA manuale")
-                    logger.info("Batch %s in attesa di input CAPTCHA manuale", batch_id)
-                    await asyncio.sleep(2)
-                    continue
-                if next_request is None:
-                    self._finalize_batch(batch_id)
-                    return
-                try:
-                    await self._process_request(browser, credential, batch_id, next_request)
-                except SisterServerError as exc:
-                    logger.warning(
-                        "Batch %s SisterServerError su richiesta %s: %s — rotazione credenziale",
-                        batch_id, next_request, exc,
-                    )
-                    self._reset_request_for_retry(next_request, "Errore SISTER 500, in coda per nuovo tentativo")
-                    with contextlib.suppress(Exception):
-                        await browser.logout()
-                    if len(active_credentials) > 1:
-                        credential_idx = (credential_idx + 1) % len(active_credentials)
-                        credential = active_credentials[credential_idx]
-                        password = self.vault.decrypt(credential.sister_password_encrypted)
-                        logger.info("Rotazione credenziale verso %s dopo errore 500", credential.sister_username)
+        claim_lock = asyncio.Lock()
+        shared_state_lock = asyncio.Lock()
+        deferred_requests: dict[UUID, datetime] = {}
+        claimed_request_ids: set[UUID] = set()
+        credential_cooldowns: dict[UUID, datetime] = {}
+        credential_server_error_counts: dict[UUID, int] = {}
+        global_server_error_pause_until: datetime | None = None
+
+        async def _restart_browser(browser: BrowserSession) -> BrowserSession:
+            with contextlib.suppress(Exception):
+                await browser.logout()
+            with contextlib.suppress(Exception):
+                await browser.stop()
+            browser = self._build_browser_session()
+            await browser.start()
+            return browser
+
+        async def _release_claim(request_id: UUID | None) -> None:
+            if request_id is None:
+                return
+            async with shared_state_lock:
+                claimed_request_ids.discard(request_id)
+
+        async def _defer_request(request_id: UUID, seconds: int, operation: str) -> None:
+            async with shared_state_lock:
+                deferred_requests[request_id] = datetime.now(timezone.utc) + timedelta(seconds=seconds)
+            self._reset_request_for_retry(request_id, operation)
+
+        async def _next_wait_seconds() -> int:
+            now = datetime.now(timezone.utc)
+            async with shared_state_lock:
+                deferred_times = [value for value in deferred_requests.values() if value > now]
+                cooldown_times = [value for value in credential_cooldowns.values() if value > now]
+            candidates = deferred_times + cooldown_times
+            if not candidates:
+                return 2
+            retry_at = min(candidates)
+            return max(int((retry_at - now).total_seconds()), 1)
+
+        async def _register_sister_server_error(credential: CatastoCredential, request_id: UUID, exc: SisterServerError) -> tuple[int, bool]:
+            nonlocal global_server_error_pause_until
+
+            now = datetime.now(timezone.utc)
+            async with shared_state_lock:
+                consecutive_errors = credential_server_error_counts.get(credential.id, 0) + 1
+                credential_server_error_counts[credential.id] = consecutive_errors
+                cooldown_seconds = self._compute_sister_server_error_cooldown(consecutive_errors)
+                credential_cooldowns[credential.id] = now + timedelta(seconds=cooldown_seconds)
+                all_credentials_in_cooldown = all(
+                    (credential_cooldowns.get(active_credential.id) or now) > now
+                    for active_credential in active_credentials
+                )
+                opened_global_pause = False
+                if all_credentials_in_cooldown:
+                    global_server_error_pause_until = now + timedelta(seconds=SISTER_SERVER_ERROR_GLOBAL_PAUSE_SEC)
+                    opened_global_pause = True
+
+            logger.warning(
+                "Batch %s richiesta %s differita per errore 500 SISTER con %s: consecutive_errors=%s cooldown=%ss global_pause=%s detail=%s",
+                batch_id,
+                request_id,
+                credential.sister_username,
+                consecutive_errors,
+                cooldown_seconds,
+                opened_global_pause,
+                exc,
+            )
+            return cooldown_seconds, opened_global_pause
+
+        async def _claim_next_request() -> ClaimedRequestSelection:
+            async with claim_lock:
+                async with shared_state_lock:
+                    deferred_snapshot = dict(deferred_requests)
+                    claimed_snapshot = set(claimed_request_ids)
+                selection = self._next_request_id(batch_id, deferred_snapshot, claimed_snapshot)
+                if selection.request_id is not None:
+                    async with shared_state_lock:
+                        claimed_request_ids.add(selection.request_id)
+                        deferred_requests.pop(selection.request_id, None)
+                return selection
+
+        async def _credential_runner(credential: CatastoCredential) -> None:
+            nonlocal global_server_error_pause_until
+            browser = self._build_browser_session()
+            password = self.vault.decrypt(credential.sister_password_encrypted)
+            await browser.start()
+            try:
+                while not self.state.stop_requested:
+                    now = datetime.now(timezone.utc)
+                    async with shared_state_lock:
+                        cooldown_until = credential_cooldowns.get(credential.id)
+                        global_pause_until = global_server_error_pause_until
+                    if global_pause_until is not None and global_pause_until > now:
+                        wait_seconds = max(int((global_pause_until - now).total_seconds()), 1)
                         self._set_batch_operation(
                             batch_id,
-                            f"Errore 500 SISTER, switch a {credential.sister_username}, attesa 60s",
+                            f"Portale SISTER instabile, pausa globale {wait_seconds}s prima della ripresa",
                         )
+                        await asyncio.sleep(wait_seconds)
+                        continue
+                    if cooldown_until is not None and cooldown_until > now:
+                        wait_seconds = max(int((cooldown_until - now).total_seconds()), 1)
+                        self._set_batch_operation(
+                            batch_id,
+                            f"Credenziale {credential.sister_username} in cooldown, attesa {wait_seconds}s",
+                        )
+                        await asyncio.sleep(wait_seconds)
+                        continue
+
+                    selection = await _claim_next_request()
+                    request_id = selection.request_id
+                    if request_id is None:
+                        if not self._batch_has_open_requests(batch_id):
+                            return
+                        if selection.wait_reason == "WAIT":
+                            self._set_batch_operation(batch_id, "In attesa di input CAPTCHA manuale")
+                        elif selection.wait_reason == "RETRY_LATER":
+                            wait_seconds = await _next_wait_seconds()
+                            self._set_batch_operation(batch_id, f"Richieste differite, attesa {wait_seconds}s")
+                            await asyncio.sleep(wait_seconds)
+                            continue
+                        await asyncio.sleep(2)
+                        continue
+
+                    try:
+                        await self._process_request(browser, credential, batch_id, request_id)
+                    except SisterServerError as exc:
+                        cooldown_seconds, opened_global_pause = await _register_sister_server_error(
+                            credential,
+                            request_id,
+                            exc,
+                        )
+                        await _defer_request(
+                            request_id,
+                            max(REQUEST_RETRY_DEFER_SEC, cooldown_seconds),
+                            (
+                                "Portale SISTER temporaneamente non disponibile, richiesta rimessa in coda"
+                                if opened_global_pause
+                                else f"Errore SISTER 500 su {credential.sister_username}, retry differito"
+                            ),
+                        )
+                        browser = await _restart_browser(browser)
+                        await asyncio.sleep(5)
+                    except Exception as exc:
+                        if self._is_recoverable_credential_error(exc):
+                            async with shared_state_lock:
+                                credential_server_error_counts[credential.id] = 0
+                                global_server_error_pause_until = None
+                                credential_cooldowns[credential.id] = datetime.now(timezone.utc) + timedelta(
+                                    seconds=CREDENTIAL_LOCK_COOLDOWN_SEC
+                                )
+                            logger.warning(
+                                "Batch %s richiesta %s differita per errore recuperabile con %s: %s",
+                                batch_id,
+                                request_id,
+                                credential.sister_username,
+                                exc,
+                            )
+                            await _defer_request(
+                                request_id,
+                                REQUEST_RETRY_DEFER_SEC,
+                                f"Sessione/timeout su {credential.sister_username}, retry differito",
+                            )
+                            browser = await _restart_browser(browser)
+                        else:
+                            async with shared_state_lock:
+                                credential_server_error_counts[credential.id] = 0
+                            logger.exception(
+                                "Batch %s richiesta %s fallita su %s, isolamento errore e prosecuzione batch",
+                                batch_id,
+                                request_id,
+                                credential.sister_username,
+                            )
+                            with SessionLocal() as db:
+                                request = db.get(CatastoVisuraRequest, request_id)
+                                if request is not None and request.artifact_dir:
+                                    artifact_dir = Path(request.artifact_dir)
+                                    self._write_request_error_artifact(artifact_dir, exc)
+                                    with contextlib.suppress(Exception):
+                                        await browser.capture_debug_snapshot(artifact_dir, "final-failed")
+                            self._fail_request(batch_id, request_id, str(exc))
+                            browser = await _restart_browser(browser)
                     else:
-                        self._set_batch_operation(batch_id, "Errore 500 SISTER, nessuna credenziale alternativa, attesa 60s")
-                        logger.warning("Errore 500 SISTER, unica credenziale disponibile")
-                    await asyncio.sleep(60)
-                    await browser.ensure_authenticated(credential.sister_username, password)
-                    continue
-                except Exception as exc:
-                    logger.exception(
-                        "Batch %s richiesta %s fallita, isolamento errore e prosecuzione batch",
-                        batch_id,
-                        next_request,
-                    )
-                    with SessionLocal() as db:
-                        request = db.get(CatastoVisuraRequest, next_request)
-                        if request is not None and request.artifact_dir:
-                            artifact_dir = Path(request.artifact_dir)
-                            self._write_request_error_artifact(artifact_dir, exc)
-                            with contextlib.suppress(Exception):
-                                await browser.capture_debug_snapshot(artifact_dir, "final-failed")
-                    self._fail_request(batch_id, next_request, str(exc))
-                    with contextlib.suppress(Exception):
-                        await browser.logout()
-                    with contextlib.suppress(Exception):
-                        await browser.stop()
-                    browser = self._build_browser_session()
-                    await browser.start()
-                    self._set_batch_operation(batch_id, "Ripristino sessione SISTER dopo errore richiesta")
-                    await browser.ensure_authenticated(credential.sister_username, password)
-                    continue
-                if self.state.stop_requested:
-                    return
-                await asyncio.sleep(BETWEEN_VISURE_DELAY_SEC)
+                        async with shared_state_lock:
+                            credential_server_error_counts[credential.id] = 0
+                    finally:
+                        await _release_claim(request_id)
+
+                    if self.state.stop_requested:
+                        return
+                    await asyncio.sleep(BETWEEN_VISURE_DELAY_SEC)
+            finally:
+                with contextlib.suppress(Exception):
+                    await browser.logout()
+                await browser.stop()
+
+        self._set_batch_operation(batch_id, f"Avvio pool visure con {len(active_credentials)} credenziali")
+        try:
+            await asyncio.gather(*[_credential_runner(active_credential) for active_credential in active_credentials])
+            self._finalize_batch(batch_id)
         except Exception as exc:
             logger.exception("Batch %s fallito prima del completamento", batch_id)
             self._fail_batch(batch_id, str(exc))
-        finally:
-            with contextlib.suppress(Exception):
-                await browser.logout()
-            await browser.stop()
+
+    @staticmethod
+    def _is_recoverable_credential_error(exc: Exception) -> bool:
+        message = str(exc).lower()
+        markers = [
+            "sister_session_locked",
+            "gia' in sessione",
+            "già in sessione",
+            "utente sister bloccato",
+            "error_locked.jsp",
+            "login timeout",
+            "timeout 60000ms exceeded",
+        ]
+        return any(marker in message for marker in markers)
+
+    @staticmethod
+    def _compute_sister_server_error_cooldown(consecutive_errors: int) -> int:
+        if consecutive_errors <= 1:
+            return SISTER_SERVER_ERROR_BASE_COOLDOWN_SEC
+        cooldown = SISTER_SERVER_ERROR_BASE_COOLDOWN_SEC * consecutive_errors
+        return min(cooldown, SISTER_SERVER_ERROR_MAX_COOLDOWN_SEC)
+
+    @staticmethod
+    def _is_expired(deadline: datetime | None) -> bool:
+        if deadline is None:
+            return False
+        now = datetime.now(timezone.utc)
+        if deadline.tzinfo is None:
+            return deadline <= now.replace(tzinfo=None)
+        return deadline <= now
 
     def _build_browser_session(self) -> BrowserSession:
         return BrowserSession(
@@ -606,10 +768,63 @@ class CatastoWorker:
             request.current_operation = operation
             db.commit()
 
-    def _next_request_id(self, batch_id):
+    def _next_request_id(
+        self,
+        batch_id,
+        deferred_requests: dict[UUID, datetime] | None = None,
+        claimed_request_ids: set[UUID] | None = None,
+    ) -> ClaimedRequestSelection:
+        deferred_requests = deferred_requests or {}
+        claimed_request_ids = claimed_request_ids or set()
         with SessionLocal() as db:
             requests = db.scalars(
                 select(CatastoVisuraRequest)
+                .where(
+                    CatastoVisuraRequest.batch_id == batch_id,
+                    CatastoVisuraRequest.status.in_(
+                        [
+                            CatastoVisuraRequestStatus.PENDING.value,
+                            CatastoVisuraRequestStatus.AWAITING_CAPTCHA.value,
+                        ]
+                    ),
+                )
+                .order_by(CatastoVisuraRequest.row_index.asc())
+                .with_for_update(skip_locked=True)
+            ).all()
+
+            now = datetime.now(timezone.utc)
+            has_deferred_requests = False
+            has_waiting_captcha = False
+            for request in requests:
+                if request.id in claimed_request_ids:
+                    continue
+                deferred_until = deferred_requests.get(request.id)
+                if deferred_until is not None and deferred_until > now:
+                    has_deferred_requests = True
+                    continue
+                if request.status == CatastoVisuraRequestStatus.PENDING.value:
+                    request.status = CatastoVisuraRequestStatus.PROCESSING.value
+                    request.current_operation = "Presa in carico dal worker"
+                    request.attempts += 1
+                    db.commit()
+                    return ClaimedRequestSelection(request_id=request.id)
+                if request.status == CatastoVisuraRequestStatus.AWAITING_CAPTCHA.value:
+                    if request.captcha_skip_requested or request.captcha_manual_solution:
+                        return ClaimedRequestSelection(request_id=request.id)
+                    if self._is_expired(request.captcha_expires_at):
+                        return ClaimedRequestSelection(request_id=request.id)
+                    has_waiting_captcha = True
+
+            if has_waiting_captcha:
+                return ClaimedRequestSelection(request_id=None, wait_reason="WAIT")
+            if has_deferred_requests:
+                return ClaimedRequestSelection(request_id=None, wait_reason="RETRY_LATER")
+            return ClaimedRequestSelection(request_id=None)
+
+    def _batch_has_open_requests(self, batch_id) -> bool:
+        with SessionLocal() as db:
+            open_request = db.scalar(
+                select(CatastoVisuraRequest.id)
                 .where(
                     CatastoVisuraRequest.batch_id == batch_id,
                     CatastoVisuraRequest.status.in_(
@@ -620,27 +835,13 @@ class CatastoWorker:
                         ]
                     ),
                 )
-                .order_by(CatastoVisuraRequest.row_index.asc())
-            ).all()
-
-            for request in requests:
-                if request.status in {
-                    CatastoVisuraRequestStatus.PENDING.value,
-                    CatastoVisuraRequestStatus.PROCESSING.value,
-                }:
-                    return request.id
-                if request.status == CatastoVisuraRequestStatus.AWAITING_CAPTCHA.value:
-                    if request.captcha_skip_requested or request.captcha_manual_solution:
-                        return request.id
-                    if request.captcha_expires_at and request.captcha_expires_at <= datetime.now(timezone.utc):
-                        return request.id
-
-            if any(request.status == CatastoVisuraRequestStatus.AWAITING_CAPTCHA.value for request in requests):
-                return "WAIT"
-            return None
+                .limit(1)
+            )
+            return open_request is not None
 
     async def _process_request(self, browser: BrowserSession, credential: CatastoCredential, batch_id, request_id) -> None:
         request_snapshot: CatastoVisuraRequest | None = None
+        artifact_dir: Path | None = None
         with SessionLocal() as db:
             request = db.get(CatastoVisuraRequest, request_id)
             batch = db.get(CatastoBatch, batch_id)
@@ -663,8 +864,7 @@ class CatastoWorker:
                 request.current_operation = "Ripresa con CAPTCHA manuale"
             elif (
                 request.status == CatastoVisuraRequestStatus.AWAITING_CAPTCHA.value
-                and request.captcha_expires_at
-                and request.captcha_expires_at <= datetime.now(timezone.utc)
+                and self._is_expired(request.captcha_expires_at)
             ):
                 request.status = CatastoVisuraRequestStatus.FAILED.value
                 request.current_operation = "Timeout CAPTCHA manuale"
