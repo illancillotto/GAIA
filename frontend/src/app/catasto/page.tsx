@@ -46,6 +46,27 @@ function formatDateTime(value: string | null | undefined): string {
   });
 }
 
+function describeDashboardAnomalyType(tipo: string): string {
+  switch (tipo) {
+    case "VAL-01-sup_eccede":
+      return "La superficie irrigabile risulta superiore alla superficie catastale.";
+    case "VAL-02-cf_invalido":
+      return "Il codice fiscale o la partita IVA non supera i controlli formali.";
+    case "VAL-03-cf_mancante":
+      return "Manca il codice fiscale o la partita IVA sulla riga importata.";
+    case "VAL-04-comune_invalido":
+      return "Il comune della riga ruolo non coincide con un comune valido del riferimento GAIA.";
+    case "VAL-05-particella_assente":
+      return "La particella indicata non trova un match nell'anagrafica catastale corrente.";
+    case "VAL-06-imponibile":
+      return "L'imponibile non torna rispetto a superficie irrigabile e indice spese fisse.";
+    case "VAL-07-importi":
+      return "Gli importi del ruolo non coincidono con i calcoli attesi.";
+    default:
+      return "Anomalia dati da verificare nel workflow Catasto.";
+  }
+}
+
 function percent(part: number, total: number): number {
   if (!Number.isFinite(part) || !Number.isFinite(total) || total <= 0) return 0;
   return Math.round((part / total) * 100);
@@ -299,7 +320,10 @@ export default function CatastoDashboardPage() {
             <div className="mt-5 space-y-2">
               {(summary?.anomalie.by_tipo ?? []).slice(0, 5).map((item) => (
                 <div key={item.key} className="flex items-center justify-between rounded-2xl border border-slate-100 bg-white px-4 py-3 text-sm">
-                  <span className="font-medium text-slate-700">{item.label}</span>
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">{item.key}</p>
+                    <p className="mt-1 font-medium text-slate-700">{describeDashboardAnomalyType(item.key)}</p>
+                  </div>
                   <span className="rounded-full bg-rose-50 px-2.5 py-1 text-xs font-semibold text-rose-700">{formatNumber(item.count)}</span>
                 </div>
               ))}
