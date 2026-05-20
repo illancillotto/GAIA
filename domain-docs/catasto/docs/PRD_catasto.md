@@ -345,12 +345,17 @@ Comportamento attuale:
 - `/catasto/particelle` e `/catasto/particelle/[id]` coprono lookup e dettaglio con utenze/anomalie
 - nella scheda `/catasto/particelle/[id]`, la tabella `Utilizzatore / pagatore annualita` deve esporre la `partita` Capacitas `CCO/FRA/CCS` e usare il contesto completo `COM/PVC/FRA/CCS` per il link `Visualizza su Capacitas`
 - la stessa tabella puo rendere cliccabili codice fiscale e nominativo verso la quick view utenze solo quando il backend restituisce un `subject_id` univoco; in caso di match ambiguo il link va omesso
-- `/catasto/anomalie` espone la console operativa anomalie con summary per famiglia, sezione `Code di lavoro`, lista generale e wizard dedicati per `VAL-02-cf_invalido`, `VAL-03-cf_mancante`, `VAL-04-comune_invalido` e `VAL-05-particella_assente`
+- `/catasto/anomalie` espone la console operativa anomalie con summary per famiglia, sezione `Code di lavoro`, lista generale paginata su backend e wizard dedicati paginati per `VAL-02-cf_invalido`, `VAL-03-cf_mancante`, `VAL-04-comune_invalido` e `VAL-05-particella_assente`
+- nel registro manuale di `/catasto/anomalie`, il click su una riga apre un dettaglio persistente della singola anomalia con metadati, note operatore, payload tecnico e accesso rapido alla particella collegata
+- lo stesso registro manuale supporta quick filter locali sulla pagina corrente e aggiornamento diretto della `nota operatore` dal dettaglio selezionato
+- filtri, workspace e stato del registro manuale devono riflettersi nella querystring della pagina; ricerca testuale e ordinamento del registro devono essere eseguiti lato backend
+- il pannello dettaglio del registro manuale consente anche l'assegnazione inline dell'anomalia e, quando presente, il salto diretto alla segnalazione operativa collegata
+- se `segnalazione_id` manca, lo stesso pannello crea inline una segnalazione Operazioni (`field_report`) con categoria, gravita, titolo e descrizione, poi salva il collegamento sulla `cat_anomalia` senza cambiare pagina
 - `/catasto/ricerca-anagrafica` espone ricerca singola e bulk da riferimenti catastali con preview dei match
 - nelle liste e nei dettagli particella il frontend distingue esplicitamente `Sup. catastale` e `Sup. grafica` per evitare di sovraccaricare l'unico dato storico `superficie_mq`
 - il dettaglio distretto embedded espone export diretti `CSV`, `XLS`, `PDF` sulla vista corrente e usa righe particella cliccabili per il drill-down
 - `/catasto/ricerca-anagrafica` include export CSV/XLSX dell'elaborazione massiva
-- il workflow mutativo sulle anomalie (`PATCH` + `wizard/cf/apply` + `wizard/comune/apply` + `wizard/particella/apply`) è riservato ad admin/super_admin, mentre summary e consultazione restano disponibili agli utenti Catasto attivi
+- l'intera console `/catasto/anomalie` è riservata ad admin/super_admin anche lato API: lista, summary, workspace wizard, `ade-scan/*` e workflow mutativi (`PATCH` + `wizard/cf/apply` + `wizard/comune/apply` + `wizard/particella/apply`)
 - il flusso anagrafica e coperto anche da E2E browser dedicato oltre che da test backend e smoke frontend
 
 ## Stato fasi
