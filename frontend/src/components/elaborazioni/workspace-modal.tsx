@@ -111,7 +111,7 @@ function NativeWorkspaceRenderer({
     onRendered();
   }, [href, onRendered]);
 
-  if (href === "/elaborazioni/new-single") {
+  if (href === "/elaborazioni/new-single" || href === "/elaborazioni/visure") {
     return <ElaborazioneRequestWorkspace embedded initialMode="single" onOpenBatch={(batchId) => onNavigate(`/elaborazioni/batches/${batchId}`)} />;
   }
 

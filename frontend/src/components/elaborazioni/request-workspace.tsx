@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form";
 import { ProtectedPage } from "@/components/app/protected-page";
 import { EmptyState } from "@/components/ui/empty-state";
 import { ElaborazioneHero, ElaborazioneMiniStat, ElaborazioneNoticeCard, ElaborazionePanelHeader } from "@/components/elaborazioni/module-chrome";
+import { RecentBatchesPanel } from "@/components/elaborazioni/recent-batches-panel";
 import { ElaborazioneStatusBadge } from "@/components/elaborazioni/status-badge";
 import { DocumentIcon, FolderIcon, LockIcon, RefreshIcon, SearchIcon } from "@/components/ui/icons";
 import { ApiError, createElaborazioneBatch, createElaborazioneRichiesta, getCatastoComuni, getElaborazioneBatches, startElaborazioneBatch } from "@/lib/api";
@@ -19,7 +20,7 @@ type ValidationRowError = {
   errors: string[];
 };
 
-type WorkspaceMode = "single" | "batch";
+type WorkspaceMode = "single" | "batch" | "recent";
 
 type ElaborazioneRequestWorkspaceProps = {
   initialMode?: WorkspaceMode;
@@ -328,7 +329,7 @@ export function ElaborazioneRequestWorkspace({
           title="Scegli come vuoi lavorare"
           description="La modalità singola è pensata per una richiesta veloce. La modalità batch è pensata per import, controllo e avvio massivo."
         />
-        <div className="grid gap-4 p-6 md:grid-cols-2">
+        <div className="grid gap-4 p-6 md:grid-cols-3">
           <button
             className={`rounded-[24px] border p-5 text-left transition ${mode === "single" ? "border-[#1D4E35] bg-[#eef6f0] shadow-sm" : "border-gray-200 bg-white hover:border-gray-300"}`}
             onClick={() => setMode("single")}
@@ -356,6 +357,21 @@ export function ElaborazioneRequestWorkspace({
               <div>
                 <p className="text-base font-semibold text-gray-900">Import batch</p>
                 <p className="mt-1 text-sm leading-6 text-gray-600">Più righe da file, validazione e preview prima del run.</p>
+              </div>
+            </div>
+          </button>
+          <button
+            className={`rounded-[24px] border p-5 text-left transition ${mode === "recent" ? "border-[#1D4E35] bg-[#eef6f0] shadow-sm" : "border-gray-200 bg-white hover:border-gray-300"}`}
+            onClick={() => setMode("recent")}
+            type="button"
+          >
+            <div className="flex items-center gap-3">
+              <div className={`rounded-2xl p-3 ${mode === "recent" ? "bg-[#1D4E35] text-white" : "bg-gray-100 text-gray-700"}`}>
+                <FolderIcon className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-base font-semibold text-gray-900">Batch recenti</p>
+                <p className="mt-1 text-sm leading-6 text-gray-600">Ultimi lotti creati dall'utente corrente delle visure.</p>
               </div>
             </div>
           </button>
@@ -588,7 +604,7 @@ export function ElaborazioneRequestWorkspace({
             </div>
           </article>
         </>
-      ) : (
+      ) : mode === "batch" ? (
         <>
           <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
             <ElaborazionePanelHeader
@@ -715,6 +731,8 @@ export function ElaborazioneRequestWorkspace({
             </article>
           ) : null}
         </>
+      ) : (
+        <RecentBatchesPanel />
       )}
     </>
   );

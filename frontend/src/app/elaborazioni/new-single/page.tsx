@@ -1,5 +1,5 @@
-import { ElaborazioneRequestWorkspace } from "@/components/elaborazioni/request-workspace";
+import { redirect } from "next/navigation";
 
 export default function ElaborazioniNewSinglePage() {
-  return <ElaborazioneRequestWorkspace initialMode="single" />;
+  redirect("/elaborazioni/visure");
 }

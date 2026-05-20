@@ -62,7 +62,7 @@ const menuSearchRoutes: SearchRoute[] = [
   // Elaborazioni
   { label: "Elaborazioni · Dashboard", href: "/elaborazioni", moduleKey: "elaborazioni", keywords: ["batch"] },
   { label: "Elaborazioni · WhiteCompany Sync", href: "/elaborazioni/bonifica", moduleKey: "elaborazioni", keywords: ["white", "bonifica", "sync"] },
-  { label: "Elaborazioni · Visure", href: "/elaborazioni/new-single", moduleKey: "elaborazioni", keywords: ["visure"] },
+  { label: "Elaborazioni · Visure", href: "/elaborazioni/visure", moduleKey: "elaborazioni", keywords: ["visure"] },
   { label: "Elaborazioni · Capacitas", href: "/elaborazioni/capacitas", moduleKey: "elaborazioni", keywords: ["capacitas"] },
   { label: "Elaborazioni · Credenziali", href: "/elaborazioni/settings", moduleKey: "elaborazioni", keywords: ["credenziali", "settings"] },
 

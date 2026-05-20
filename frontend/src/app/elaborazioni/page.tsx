@@ -56,7 +56,7 @@ const QUICK_ACTIONS = [
     icon: RefreshIcon,
   },
   {
-    href: "/elaborazioni/new-single",
+    href: "/elaborazioni/visure",
     title: "Visure",
     description: "Ingresso unico per visura singola e import batch.",
     icon: SearchIcon,
