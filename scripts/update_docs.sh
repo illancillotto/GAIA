@@ -27,7 +27,7 @@ echo "$STAGED_FILES"
 ONLY_DOCS="true"
 while IFS= read -r file; do
   case "$file" in
-    *.md|domain-docs/*/docs/*|DOCS_STRUCTURE.md)
+    *.md|docs/*.md|domain-docs/*/docs/*)
       ;;
     *)
       ONLY_DOCS="false"
@@ -40,15 +40,6 @@ if [ "$ONLY_DOCS" = "true" ]; then
   echo "Commit solo documentazione. Nessun aggiornamento automatico."
   exit 0
 fi
-
-# Root docs
-ROOT_DOC_FILES=(
-  "README.md"
-  "ARCHITECTURE.md"
-  "PRD.md"
-  "IMPLEMENTATION_PLAN.md"
-  "DOCS_STRUCTURE.md"
-)
 
 # Whitelist docs per dominio
 ACCESSI_DOC_FILES=(
@@ -79,11 +70,6 @@ UTENZE_DOC_FILES=(
   "domain-docs/utenze/docs/EXECUTION_PLAN.md"
   "domain-docs/utenze/docs/PROGRESS.md"
 )
-
-# Crea solo i file root mancanti
-for f in "${ROOT_DOC_FILES[@]}"; do
-  [ -f "$f" ] || touch "$f"
-done
 
 # Flag di routing
 NEEDS_ROOT_DOCS="false"
@@ -148,7 +134,7 @@ while IFS= read -r file; do
   esac
 done <<< "$STAGED_FILES"
 
-# Se cambiano struttura o percorsi, aggiorna anche DOCS_STRUCTURE
+# Se cambiano struttura o percorsi, aggiorna anche docs/DOCS_STRUCTURE.md
 while IFS= read -r file; do
   [ -z "$file" ] && continue
   case "$file" in
@@ -171,11 +157,11 @@ fi
 ALLOWED_FILES=()
 
 if [ "$NEEDS_ROOT_DOCS" = "true" ]; then
-  ALLOWED_FILES+=("README.md" "ARCHITECTURE.md" "PRD.md" "IMPLEMENTATION_PLAN.md")
+  ALLOWED_FILES+=("README.md" "docs/ARCHITECTURE.md" "docs/PRD.md" "docs/IMPLEMENTATION_PLAN.md")
 fi
 
 if [ "$NEEDS_STRUCTURE_DOCS" = "true" ]; then
-  ALLOWED_FILES+=("DOCS_STRUCTURE.md")
+  ALLOWED_FILES+=("docs/DOCS_STRUCTURE.md")
 fi
 
 if [ "$NEEDS_ACCESSI" = "true" ]; then
@@ -235,7 +221,7 @@ PROMPT_FILE="$(mktemp)"
   echo
   echo "Se una modifica è locale a un dominio, concentra l'aggiornamento sui file docs del dominio."
   echo "Se una modifica è trasversale, aggiorna i documenti root consentiti."
-  echo "Aggiorna DOCS_STRUCTURE.md solo se percorsi, struttura o organizzazione del repository risultano impattati."
+  echo "Aggiorna docs/DOCS_STRUCTURE.md solo se percorsi, struttura o organizzazione del repository risultano impattati."
   echo
   echo "Ecco il diff staged:"
   echo
