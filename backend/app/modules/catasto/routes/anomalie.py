@@ -6,7 +6,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
 from fastapi import HTTPException
-from sqlalchemy import desc, func, select
+from sqlalchemy import String, asc, cast, desc, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user, require_admin_user
@@ -81,6 +81,42 @@ def _apply_anomalie_filters(
         else:
             query = query.where(False)
     return query
+
+
+def _apply_anomalie_search(query, *, search: str | None):
+    if not search:
+        return query
+
+    search_value = f"%{search.strip()}%"
+    if not search_value.strip("%"):
+        return query
+
+    return query.where(
+        or_(
+            CatAnomalia.tipo.ilike(search_value),
+            CatAnomalia.status.ilike(search_value),
+            CatAnomalia.severita.ilike(search_value),
+            CatAnomalia.descrizione.ilike(search_value),
+            CatAnomalia.note_operatore.ilike(search_value),
+            cast(CatAnomalia.id, String).ilike(search_value),
+            cast(CatAnomalia.utenza_id, String).ilike(search_value),
+            cast(CatAnomalia.particella_id, String).ilike(search_value),
+        )
+    )
+
+
+def _apply_anomalie_sort(query, *, sort_by: str, sort_dir: str):
+    sort_columns = {
+        "created_at": CatAnomalia.created_at,
+        "updated_at": CatAnomalia.updated_at,
+        "tipo": CatAnomalia.tipo,
+        "status": CatAnomalia.status,
+        "severita": CatAnomalia.severita,
+        "anno_campagna": CatAnomalia.anno_campagna,
+    }
+    column = sort_columns.get(sort_by, CatAnomalia.created_at)
+    direction = asc if sort_dir == "asc" else desc
+    return query.order_by(direction(column), desc(CatAnomalia.created_at))
 
 
 def _normalize_lookup_text(value: str | None) -> str:
@@ -217,12 +253,15 @@ def list_anomalie(
     severita: str | None = Query(None),
     anno: int | None = Query(None),
     distretto: str | None = Query(None),
+    search: str | None = Query(None, alias="q"),
+    sort_by: str = Query("created_at"),
+    sort_dir: str = Query("desc", pattern="^(asc|desc)$"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
-    _: ApplicationUser = Depends(require_active_user),
+    _: ApplicationUser = Depends(require_admin_user),
 ) -> CatAnomaliaListResponse:
-    query = select(CatAnomalia).order_by(desc(CatAnomalia.created_at))
+    query = select(CatAnomalia)
     count_query = select(func.count()).select_from(CatAnomalia)
     query = _apply_anomalie_filters(
         query,
@@ -232,6 +271,7 @@ def list_anomalie(
         anno=anno,
         distretto=distretto,
     )
+    query = _apply_anomalie_search(query, search=search)
     count_query = _apply_anomalie_filters(
         count_query,
         tipo=tipo,
@@ -240,6 +280,8 @@ def list_anomalie(
         anno=anno,
         distretto=distretto,
     )
+    count_query = _apply_anomalie_search(count_query, search=search)
+    query = _apply_anomalie_sort(query, sort_by=sort_by, sort_dir=sort_dir)
 
     total = db.execute(count_query).scalar_one()
     items = db.execute(query.offset((page - 1) * page_size).limit(page_size)).scalars().all()
@@ -258,7 +300,7 @@ def anomalie_summary(
     anno: int | None = Query(None),
     distretto: str | None = Query(None),
     db: Session = Depends(get_db),
-    _: ApplicationUser = Depends(require_active_user),
+    _: ApplicationUser = Depends(require_admin_user),
 ) -> CatAnomaliaSummaryResponse:
     summary_query = (
         select(
@@ -312,7 +354,7 @@ def anomalie_summary(
 @router.get("/ade-scan/summary", response_model=CatAdeStatusScanSummaryResponse)
 def ade_status_scan_summary(
     db: Session = Depends(get_db),
-    _: ApplicationUser = Depends(require_active_user),
+    _: ApplicationUser = Depends(require_admin_user),
 ) -> CatAdeStatusScanSummaryResponse:
     return CatAdeStatusScanSummaryResponse(**get_ade_status_scan_summary(db))
 
@@ -321,7 +363,7 @@ def ade_status_scan_summary(
 def ade_status_scan_candidates(
     limit: int = Query(100, ge=1, le=500),
     db: Session = Depends(get_db),
-    _: ApplicationUser = Depends(require_active_user),
+    _: ApplicationUser = Depends(require_admin_user),
 ) -> CatAdeStatusScanCandidateListResponse:
     items = list_ade_status_scan_candidates(db, limit=limit)
     return CatAdeStatusScanCandidateListResponse(
@@ -334,7 +376,7 @@ def ade_status_scan_candidates(
 def run_ade_status_scan(
     payload: CatAdeStatusScanRunInput,
     db: Session = Depends(get_db),
-    current_user: ApplicationUser = Depends(require_active_user),
+    current_user: ApplicationUser = Depends(require_admin_user),
 ) -> CatAdeStatusScanRunResponse:
     try:
         result = create_ade_status_scan_batch(
@@ -353,9 +395,10 @@ def list_cf_wizard_items(
     status_filter: str = Query("aperta", alias="status"),
     anno: int | None = Query(None),
     distretto: str | None = Query(None),
-    limit: int = Query(50, ge=1, le=200),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25, ge=1, le=200),
     db: Session = Depends(get_db),
-    _: ApplicationUser = Depends(require_active_user),
+    _: ApplicationUser = Depends(require_admin_user),
 ) -> CatAnomaliaCfWizardListResponse:
     query = (
         select(CatAnomalia, CatUtenzaIrrigua)
@@ -386,7 +429,7 @@ def list_cf_wizard_items(
         distretto=distretto,
     )
 
-    rows = db.execute(query.limit(limit)).all()
+    rows = db.execute(query.offset((page - 1) * page_size).limit(page_size)).all()
     total = db.execute(count_query).scalar_one()
     items: list[CatAnomaliaCfWizardItemResponse] = []
     for anomalia, utenza in rows:
@@ -418,7 +461,7 @@ def list_cf_wizard_items(
             )
         )
 
-    return CatAnomaliaCfWizardListResponse(items=items, total=int(total or 0))
+    return CatAnomaliaCfWizardListResponse(items=items, total=int(total or 0), page=page, page_size=page_size)
 
 
 @router.get("/wizard/comune/items", response_model=CatAnomaliaComuneWizardListResponse)
@@ -426,9 +469,10 @@ def list_comune_wizard_items(
     status_filter: str = Query("aperta", alias="status"),
     anno: int | None = Query(None),
     distretto: str | None = Query(None),
-    limit: int = Query(50, ge=1, le=200),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25, ge=1, le=200),
     db: Session = Depends(get_db),
-    _: ApplicationUser = Depends(require_active_user),
+    _: ApplicationUser = Depends(require_admin_user),
 ) -> CatAnomaliaComuneWizardListResponse:
     query = (
         select(CatAnomalia, CatUtenzaIrrigua)
@@ -459,7 +503,7 @@ def list_comune_wizard_items(
         distretto=distretto,
     )
 
-    rows = db.execute(query.limit(limit)).all()
+    rows = db.execute(query.offset((page - 1) * page_size).limit(page_size)).all()
     total = db.execute(count_query).scalar_one()
     items: list[CatAnomaliaComuneWizardItemResponse] = []
     for anomalia, utenza in rows:
@@ -486,7 +530,7 @@ def list_comune_wizard_items(
             )
         )
 
-    return CatAnomaliaComuneWizardListResponse(items=items, total=int(total or 0))
+    return CatAnomaliaComuneWizardListResponse(items=items, total=int(total or 0), page=page, page_size=page_size)
 
 
 @router.get("/wizard/particella/items", response_model=CatAnomaliaParticellaWizardListResponse)
@@ -494,9 +538,10 @@ def list_particella_wizard_items(
     status_filter: str = Query("aperta", alias="status"),
     anno: int | None = Query(None),
     distretto: str | None = Query(None),
-    limit: int = Query(50, ge=1, le=200),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(25, ge=1, le=200),
     db: Session = Depends(get_db),
-    _: ApplicationUser = Depends(require_active_user),
+    _: ApplicationUser = Depends(require_admin_user),
 ) -> CatAnomaliaParticellaWizardListResponse:
     query = (
         select(CatAnomalia, CatUtenzaIrrigua)
@@ -527,7 +572,7 @@ def list_particella_wizard_items(
         distretto=distretto,
     )
 
-    rows = db.execute(query.limit(limit)).all()
+    rows = db.execute(query.offset((page - 1) * page_size).limit(page_size)).all()
     total = db.execute(count_query).scalar_one()
     items: list[CatAnomaliaParticellaWizardItemResponse] = []
     for anomalia, utenza in rows:
@@ -553,7 +598,7 @@ def list_particella_wizard_items(
             )
         )
 
-    return CatAnomaliaParticellaWizardListResponse(items=items, total=int(total or 0))
+    return CatAnomaliaParticellaWizardListResponse(items=items, total=int(total or 0), page=page, page_size=page_size)
 
 
 @router.post("/wizard/cf/apply", response_model=CatAnomaliaCfWizardApplyResponse)
@@ -782,6 +827,8 @@ def update_anomalia(
         item.note_operatore = payload.note_operatore
     if payload.assigned_to is not None:
         item.assigned_to = payload.assigned_to
+    if payload.segnalazione_id is not None:
+        item.segnalazione_id = payload.segnalazione_id
 
     db.add(item)
     db.commit()

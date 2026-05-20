@@ -279,6 +279,8 @@ class CatAnomaliaCfWizardItemResponse(BaseModel):
 class CatAnomaliaCfWizardListResponse(BaseModel):
     items: list[CatAnomaliaCfWizardItemResponse]
     total: int
+    page: int
+    page_size: int
 
 
 class CatAnomaliaCfWizardApplyItemInput(BaseModel):
@@ -335,6 +337,8 @@ class CatAnomaliaParticellaWizardItemResponse(BaseModel):
 class CatAnomaliaParticellaWizardListResponse(BaseModel):
     items: list[CatAnomaliaParticellaWizardItemResponse]
     total: int
+    page: int
+    page_size: int
 
 
 class CatAnomaliaParticellaWizardApplyItemInput(BaseModel):
@@ -389,6 +393,8 @@ class CatAnomaliaComuneWizardItemResponse(BaseModel):
 class CatAnomaliaComuneWizardListResponse(BaseModel):
     items: list[CatAnomaliaComuneWizardItemResponse]
     total: int
+    page: int
+    page_size: int
 
 
 class CatAnomaliaComuneWizardApplyItemInput(BaseModel):
@@ -438,6 +444,7 @@ class CatAnomaliaUpdateInput(BaseModel):
     status: str | None = None
     note_operatore: str | None = None
     assigned_to: int | None = None
+    segnalazione_id: UUID | None = None
 
 
 class CatParticellaSwappedCapacitasResponse(BaseModel):
