@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { usePathname } from "next/navigation";
 
 import { cn } from "@/lib/cn";
 import type { WikiChatMessage, WikiRequestCreate } from "./types";
@@ -81,13 +83,19 @@ function messages_ref_hack(_msg: WikiChatMessage): string {
 }
 
 export function WikiWidget() {
+  const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [savedRequest, setSavedRequest] = useState(false);
+  const [mounted, setMounted] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const { messages, loading, sendMessage, clearMessages } = useWikiChat();
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (open) {
@@ -95,6 +103,10 @@ export function WikiWidget() {
       inputRef.current?.focus();
     }
   }, [open, messages]);
+
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -115,7 +127,13 @@ export function WikiWidget() {
     setSavedRequest(true);
   }
 
-  return (
+  const shouldHideWidget = pathname === "/wiki" || pathname.startsWith("/wiki/") || pathname === "/login";
+
+  if (!mounted || shouldHideWidget) {
+    return null;
+  }
+
+  return createPortal(
     <>
       {/* Floating button */}
       <button
@@ -214,5 +232,7 @@ export function WikiWidget() {
         </div>
       )}
     </>
+    ,
+    document.body
   );
 }

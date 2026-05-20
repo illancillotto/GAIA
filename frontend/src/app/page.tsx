@@ -16,6 +16,7 @@ import {
 import { clearStoredAccessToken, getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 import { hasSectionAccess } from "@/lib/section-access";
+import { WikiWidget } from "@/features/wiki/WikiWidget";
 import type {
   AnagraficaStats,
   CatastoDocument,
@@ -25,7 +26,7 @@ import type {
 } from "@/types/api";
 
 type ModuleStatus = "active" | "warming" | "coming";
-type ModuleId = "accessi" | "rete" | "inventario" | "catasto" | "elaborazioni" | "utenze" | "operazioni" | "riordino" | "ruolo";
+type ModuleId = "accessi" | "rete" | "inventario" | "catasto" | "elaborazioni" | "utenze" | "operazioni" | "riordino" | "ruolo" | "wiki";
 
 type HomeModule = {
   id: ModuleId;
@@ -65,6 +66,9 @@ const menuSearchRoutes: SearchRoute[] = [
   { label: "Elaborazioni · Visure", href: "/elaborazioni/visure", moduleKey: "elaborazioni", keywords: ["visure"] },
   { label: "Elaborazioni · Capacitas", href: "/elaborazioni/capacitas", moduleKey: "elaborazioni", keywords: ["capacitas"] },
   { label: "Elaborazioni · Credenziali", href: "/elaborazioni/settings", moduleKey: "elaborazioni", keywords: ["credenziali", "settings"] },
+
+  // Wiki
+  { label: "Wiki · Documentazione e assistente", href: "/wiki", keywords: ["wiki", "documentazione", "assistente"] },
 
   // Catasto
   { label: "Catasto · Dashboard", href: "/catasto", moduleKey: "catasto" },
@@ -239,6 +243,18 @@ const allModules: HomeModule[] = [
     statusLabel: "In sviluppo",
     icon: "sync_alt",
     enabledKeys: ["catasto"],
+  },
+  {
+    id: "wiki",
+    title: "GAIA Wiki",
+    eyebrow: "Documentazione e assistente",
+    description:
+      "Documentazione indicizzata e assistente contestuale per navigare procedure, moduli e flussi GAIA.",
+    href: "/wiki",
+    status: "active",
+    statusLabel: "Operativo",
+    icon: "menu_book",
+    enabledKeys: ["wiki"],
   },
   {
     id: "riordino",
@@ -426,6 +442,7 @@ export default function HomePage() {
 
   const visibleModules = allModules.filter((mod) => {
     if (mod.status === "coming") return true;
+    if (mod.id === "wiki") return true;
     return mod.enabledKeys.some((key) => user.enabled_modules.includes(key));
   });
 
@@ -718,6 +735,7 @@ export default function HomePage() {
         <p>© GAIA platform · Consorzio di Bonifica dell&apos;Oristanese</p>
         <p>Sessione attiva: {currentUser.username} · {currentUser.role}</p>
       </footer>
+      <WikiWidget />
     </div>
   );
 }

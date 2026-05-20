@@ -1,3 +1,4 @@
+import { ProtectedPage } from "@/components/app/protected-page";
 import { WikiPage } from "@/features/wiki/WikiPage";
 
 export const metadata = {
@@ -6,5 +7,13 @@ export const metadata = {
 };
 
 export default function WikiRoute() {
-  return <WikiPage />;
+  return (
+    <ProtectedPage
+      title="Wiki"
+      description="Documentazione indicizzata e assistente contestuale per i flussi GAIA."
+      breadcrumb="GAIA / Wiki"
+    >
+      <WikiPage />
+    </ProtectedPage>
+  );
 }

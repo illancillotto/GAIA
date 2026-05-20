@@ -29,20 +29,27 @@ async function saveWikiRequest(payload: WikiRequestCreate): Promise<void> {
   });
 }
 
+function formatArticleLabel(sourceFile: string): string {
+  const filename = sourceFile.split("/").pop() ?? sourceFile;
+  return filename.replace(/\.(md|txt|rst)$/i, "");
+}
+
 function ArticleContent({ group }: { group: WikiArticleGroup }) {
   return (
     <div className="space-y-6">
-      <h2 className="text-xl font-semibold text-gray-900">{group.source_file}</h2>
+      <div className="space-y-2 border-b border-gray-100 pb-4">
+        <p className="label-caption text-[#1D4E35]">Documento indicizzato</p>
+        <h2 className="text-xl font-semibold text-gray-900">{formatArticleLabel(group.source_file)}</h2>
+        <p className="text-xs text-gray-400">{group.source_file}</p>
+      </div>
       {group.chunks.map((chunk, i) => (
         <div key={i} className="space-y-1">
-          {chunk.section_title && (
-            <h3 className="text-sm font-semibold text-[#1D4E35] uppercase tracking-wide">
+          {chunk.section_title ? (
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-[#1D4E35]">
               {chunk.section_title}
             </h3>
-          )}
-          <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-            {chunk.excerpt}
-          </p>
+          ) : null}
+          <p className="whitespace-pre-wrap text-sm leading-relaxed text-gray-700">{chunk.excerpt}</p>
         </div>
       ))}
     </div>
@@ -53,11 +60,13 @@ function ChatPanel({
   contextArticle,
   messages,
   loading,
+  error,
   onSend,
 }: {
   contextArticle: string | undefined;
   messages: WikiChatMessage[];
   loading: boolean;
+  error: string | null;
   onSend: (q: string) => void;
 }) {
   const [input, setInput] = useState("");
@@ -70,65 +79,75 @@ function ChatPanel({
   }
 
   return (
-    <div className="flex flex-col h-full border-l border-gray-200">
-      <div className="bg-[#1D4E35] px-4 py-3">
-        <p className="text-sm font-semibold text-white">Chat assistente</p>
-        {contextArticle && (
-          <p className="text-xs text-white/70 mt-0.5 truncate">Contesto: {contextArticle}</p>
-        )}
+    <div className="flex min-h-[32rem] flex-col">
+      <div className="border-b border-gray-100 pb-4">
+        <p className="label-caption text-[#1D4E35]">Assistente</p>
+        <p className="mt-1 text-sm font-semibold text-gray-900">Chat documentale</p>
+        {contextArticle ? (
+          <p className="mt-1 truncate text-xs text-gray-500">Contesto: {contextArticle}</p>
+        ) : null}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-3">
-        {messages.length === 0 && (
-          <p className="text-sm text-gray-400 text-center pt-8">
+      <div className="mt-4 flex-1 space-y-3 overflow-y-auto rounded-xl border border-gray-100 bg-[#fafaf7] p-4">
+        {messages.length === 0 ? (
+          <p className="pt-8 text-center text-sm text-gray-400">
             Fai una domanda su questo documento o su GAIA in generale.
           </p>
-        )}
+        ) : null}
         {messages.map((msg) => (
           <div key={msg.id} className={cn("flex flex-col gap-1", msg.role === "user" ? "items-end" : "items-start")}>
             <div
               className={cn(
                 "max-w-[90%] rounded-2xl px-3 py-2 text-sm leading-relaxed",
                 msg.role === "user"
-                  ? "bg-[#1D4E35] text-white rounded-br-sm"
-                  : "bg-gray-100 text-gray-900 rounded-bl-sm"
+                  ? "rounded-br-sm bg-[#1D4E35] text-white"
+                  : "rounded-bl-sm bg-gray-100 text-gray-900"
               )}
             >
               {msg.content}
             </div>
-            {msg.role === "assistant" && msg.sources && msg.sources.length > 0 && (
+            {msg.role === "assistant" && msg.sources && msg.sources.length > 0 ? (
               <div className="flex flex-wrap gap-1 px-1">
                 {msg.sources.map((s, i) => (
-                  <span key={i} className="text-xs bg-green-50 text-green-700 border border-green-200 rounded px-1.5 py-0.5">
+                  <span
+                    key={i}
+                    className="rounded border border-green-200 bg-green-50 px-1.5 py-0.5 text-xs text-green-700"
+                  >
                     {s.source_file.split("/").pop()}
                   </span>
                 ))}
               </div>
-            )}
-            {msg.role === "assistant" && msg.found === false && (
+            ) : null}
+            {msg.role === "assistant" && msg.found === false ? (
               <button
-                onClick={() => saveWikiRequest({
-                  user_question: [...messages].reverse().find((m: WikiChatMessage) => m.role === "user")?.content ?? "",
-                  agent_response: msg.content,
-                  category: "feature_request",
-                })}
+                onClick={() =>
+                  saveWikiRequest({
+                    user_question:
+                      [...messages].reverse().find((m: WikiChatMessage) => m.role === "user")?.content ?? "",
+                    agent_response: msg.content,
+                    category: "feature_request",
+                  })
+                }
                 className="ml-1 text-xs text-[#1D4E35] underline underline-offset-2 hover:opacity-70"
               >
                 Registra richiesta
               </button>
-            )}
+            ) : null}
           </div>
         ))}
-        {loading && (
+        {loading ? (
           <div className="flex items-start">
             <div className="rounded-2xl rounded-bl-sm bg-gray-100 px-3 py-2 text-sm text-gray-500">
               <span className="animate-pulse">...</span>
             </div>
           </div>
-        )}
+        ) : null}
+        {error ? (
+          <div className="rounded-xl border border-red-100 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</div>
+        ) : null}
       </div>
 
-      <form onSubmit={handleSubmit} className="border-t border-gray-200 p-3 flex gap-2">
+      <form onSubmit={handleSubmit} className="mt-4 flex gap-2">
         <input
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -153,75 +172,109 @@ export function WikiPage() {
   const [selected, setSelected] = useState<WikiArticleGroup | null>(null);
   const [loadingArticles, setLoadingArticles] = useState(true);
 
-  const { messages, loading, sendMessage } = useWikiChat(selected?.source_file);
+  const { messages, loading, error, sendMessage } = useWikiChat(selected?.source_file);
 
   useEffect(() => {
     fetchArticles()
       .then((data) => {
         setArticles(data);
-        if (data.length > 0) setSelected(data[0]);
+        if (data.length > 0) {
+          setSelected(data[0]);
+        }
       })
       .finally(() => setLoadingArticles(false));
   }, []);
 
   return (
-    <div className="flex h-screen overflow-hidden">
-      {/* Sidebar articoli */}
-      <aside className="w-64 shrink-0 border-r border-gray-200 overflow-y-auto bg-gray-50">
-        <div className="p-4 border-b border-gray-200">
-          <h1 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-            <span className="material-symbols-outlined text-[#1D4E35] text-base">menu_book</span>
-            Wiki GAIA
-          </h1>
+    <div className="page-stack">
+      <article className="panel-card border-[#e7eee8] bg-gradient-to-r from-white via-[#f9fbf7] to-[#f2f7f1]">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+          <div className="space-y-2">
+            <p className="label-caption text-[#1D4E35]">Knowledge Base</p>
+            <h3 className="font-newsreader text-3xl text-[#173224]">Wiki operativa GAIA</h3>
+            <p className="max-w-3xl text-sm leading-6 text-gray-600">
+              Consulta la documentazione indicizzata e interroga l&apos;assistente sul documento selezionato o sul
+              comportamento generale della piattaforma.
+            </p>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-3 shadow-sm">
+              <p className="label-caption">Documenti</p>
+              <p className="mt-1 text-2xl font-semibold text-gray-900">{articles.length}</p>
+            </div>
+            <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-3 shadow-sm">
+              <p className="label-caption">Chat corrente</p>
+              <p className="mt-1 text-2xl font-semibold text-gray-900">{messages.length}</p>
+            </div>
+          </div>
         </div>
-        {loadingArticles && (
-          <p className="text-xs text-gray-400 p-4">Caricamento...</p>
-        )}
-        {!loadingArticles && articles.length === 0 && (
-          <div className="p-4 text-xs text-gray-500 space-y-2">
-            <p>Nessun articolo indicizzato.</p>
-            <p>Eseguire <code className="bg-gray-100 px-1 rounded">make wiki-index</code> per indicizzare i documenti.</p>
-          </div>
-        )}
-        <nav className="p-2 space-y-0.5">
-          {articles.map((article) => (
-            <button
-              key={article.source_file}
-              onClick={() => setSelected(article)}
-              className={cn(
-                "w-full text-left px-3 py-2 rounded-xl text-xs transition-colors truncate",
-                selected?.source_file === article.source_file
-                  ? "bg-[#1D4E35] text-white"
-                  : "text-gray-700 hover:bg-gray-200"
-              )}
-              title={article.source_file}
-            >
-              {article.source_file.split("/").pop()}
-            </button>
-          ))}
-        </nav>
-      </aside>
+      </article>
 
-      {/* Contenuto articolo */}
-      <main className="flex-1 overflow-y-auto p-8">
-        {selected ? (
-          <ArticleContent group={selected} />
-        ) : (
-          <div className="flex items-center justify-center h-full text-gray-400 text-sm">
-            Seleziona un documento dalla sidebar
+      <div className="grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)_360px]">
+        <article className="panel-card p-0">
+          <div className="border-b border-gray-100 px-5 py-4">
+            <p className="label-caption text-[#1D4E35]">Indice</p>
+            <h3 className="mt-1 text-sm font-semibold text-gray-900">Documenti indicizzati</h3>
           </div>
-        )}
-      </main>
+          {loadingArticles ? <p className="p-5 text-sm text-gray-400">Caricamento...</p> : null}
+          {!loadingArticles && articles.length === 0 ? (
+            <div className="space-y-2 px-5 py-5 text-sm text-gray-500">
+              <p>Nessun articolo indicizzato.</p>
+              <p>
+                Esegui <code className="rounded bg-gray-100 px-1.5 py-0.5 text-xs">make wiki-index</code> per
+                popolare la wiki.
+              </p>
+            </div>
+          ) : null}
+          <nav className="max-h-[42rem] space-y-1 overflow-y-auto p-3">
+            {articles.map((article) => (
+              <button
+                key={article.source_file}
+                onClick={() => setSelected(article)}
+                className={cn(
+                  "w-full rounded-xl px-3 py-3 text-left text-sm transition-colors",
+                  selected?.source_file === article.source_file
+                    ? "bg-[#1D4E35] text-white"
+                    : "text-gray-700 hover:bg-gray-50"
+                )}
+                title={article.source_file}
+              >
+                <span className="block truncate font-medium">{formatArticleLabel(article.source_file)}</span>
+                <span
+                  className={cn(
+                    "mt-1 block text-xs",
+                    selected?.source_file === article.source_file ? "text-white/70" : "text-gray-400"
+                  )}
+                >
+                  {article.chunks.length} estratti indicizzati
+                </span>
+              </button>
+            ))}
+          </nav>
+        </article>
 
-      {/* Chat panel */}
-      <aside className="w-80 shrink-0 flex flex-col bg-white">
-        <ChatPanel
-          contextArticle={selected?.source_file}
-          messages={messages}
-          loading={loading}
-          onSend={sendMessage}
-        />
-      </aside>
+        <article className="panel-card min-w-0">
+          {selected ? (
+            <div className="max-h-[42rem] overflow-y-auto pr-1">
+              <ArticleContent group={selected} />
+            </div>
+          ) : (
+            <div className="flex min-h-[32rem] items-center justify-center rounded-xl border border-dashed border-gray-200 bg-[#fafaf7] text-sm text-gray-400">
+              Seleziona un documento dall&apos;indice per vedere il contenuto.
+            </div>
+          )}
+        </article>
+
+        <article className="panel-card">
+          <ChatPanel
+            contextArticle={selected?.source_file}
+            messages={messages}
+            loading={loading}
+            error={error}
+            onSend={sendMessage}
+          />
+        </article>
+      </div>
     </div>
   );
 }
