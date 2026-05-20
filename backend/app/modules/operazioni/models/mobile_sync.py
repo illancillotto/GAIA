@@ -21,6 +21,8 @@ class MobileSyncEvent(Base):
     device_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     payload_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     payload_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    cloud_event_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True, index=True)
+    external_reference: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     gaia_entity_type: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     gaia_entity_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
     source_entity_id: Mapped[uuid.UUID | None] = mapped_column(Uuid, nullable=True, index=True)

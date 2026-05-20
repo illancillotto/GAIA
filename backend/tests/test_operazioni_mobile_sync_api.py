@@ -234,6 +234,7 @@ def test_mobile_sync_connector_handshake_returns_capabilities() -> None:
     assert payload["authenticated"] is True
     assert payload["auth_scheme"] == "header_token"
     assert "catalogs.read" in payload["capabilities"]
+    assert "teti_fault_work_requests.create" in payload["capabilities"]
     assert payload["connector_header"] == settings.mobile_connector_header_name
 
 
@@ -394,3 +395,214 @@ def test_mobile_sync_activity_start_and_stop_are_idempotent() -> None:
     assert activity.duration_minutes_calculated == 75
     assert db.query(MobileSyncEvent).count() == 2
     db.close()
+
+
+def test_mobile_sync_teti_fault_work_request_requires_connector_token() -> None:
+    response = client.post(
+        "/api/mobile-sync/teti/fault-work-requests",
+        json={
+            "cloud_event_id": str(uuid4()),
+            "client_event_id": str(uuid4()),
+            "operator_id": str(uuid4()),
+            "device_id": str(uuid4()),
+            "payload_version": 1,
+            "payload_hash": "e" * 64,
+            "teti_fault_id": "TETI-001",
+            "payload": {
+                "plantId": str(uuid4()),
+                "title": "Guasto",
+                "description": "Test",
+                "severity": "HIGH",
+            },
+            "attachments": [],
+        },
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid connector token"
+
+
+def test_mobile_sync_teti_fault_work_request_creates_case_and_is_idempotent() -> None:
+    headers = _connector_headers()
+    db = TestingSessionLocal()
+    operator, _ = _seed_mobile_operator(db)
+    operator_id = str(operator.id)
+    category = FieldReportCategory(code="TETI_FAULT", name="Fault TETI", is_active=True)
+    low = FieldReportSeverity(code="LOW", name="Bassa", rank_order=1, is_active=True)
+    high = FieldReportSeverity(code="HIGH", name="Alta", rank_order=3, is_active=True)
+    critical = FieldReportSeverity(code="CRITICAL", name="Critica", rank_order=4, is_active=True)
+    db.add_all([category, low, high, critical])
+    db.commit()
+    db.close()
+
+    client_event_id = str(uuid4())
+    payload = {
+        "cloud_event_id": str(uuid4()),
+        "client_event_id": client_event_id,
+        "operator_id": operator_id,
+        "device_id": str(uuid4()),
+        "payload_version": 1,
+        "payload_hash": "f" * 64,
+        "teti_fault_id": "TETI-FAULT-001",
+        "payload": {
+            "plantId": str(uuid4()),
+            "assetId": str(uuid4()),
+            "title": "Guasto gruppo di pompaggio",
+            "description": "Anomalia rilevata su pressione mandata",
+            "severity": "CRITICAL",
+            "latitude": 45.1234,
+            "longitude": 9.4567,
+        },
+        "attachments": [],
+    }
+
+    first = client.post("/api/mobile-sync/teti/fault-work-requests", headers=headers, json=payload)
+    assert first.status_code == 201
+    body = first.json()
+    assert body["gaia_entity_type"] == "gaia_work"
+    assert body["extra"]["status"] == "created"
+    assert body["extra"]["teti_fault_id"] == "TETI-FAULT-001"
+
+    second = client.post("/api/mobile-sync/teti/fault-work-requests", headers=headers, json=payload)
+    assert second.status_code == 201
+    assert second.json()["gaia_entity_id"] == body["gaia_entity_id"]
+    assert second.json()["extra"]["status"] == "already_exists"
+
+    replay_with_new_client_event = client.post(
+        "/api/mobile-sync/teti/fault-work-requests",
+        headers=headers,
+        json=payload | {"client_event_id": str(uuid4())},
+    )
+    assert replay_with_new_client_event.status_code == 201
+    assert replay_with_new_client_event.json()["gaia_entity_id"] == body["gaia_entity_id"]
+    assert replay_with_new_client_event.json()["extra"]["status"] == "already_exists"
+
+    db = TestingSessionLocal()
+    assert db.query(FieldReport).count() == 1
+    assert db.query(MobileSyncEvent).count() == 1
+    event = db.query(MobileSyncEvent).first()
+    assert event is not None
+    assert event.external_reference == "TETI-FAULT-001"
+    assert event.cloud_event_id is not None
+    db.close()
+
+
+def test_mobile_sync_teti_fault_work_request_conflicts_on_hash_mismatch() -> None:
+    headers = _connector_headers()
+    db = TestingSessionLocal()
+    operator, _ = _seed_mobile_operator(db)
+    operator_id = str(operator.id)
+    db.add(FieldReportCategory(code="TETI_FAULT", name="Fault TETI", is_active=True))
+    db.add(FieldReportSeverity(code="HIGH", name="Alta", rank_order=3, is_active=True))
+    db.commit()
+    db.close()
+
+    base_payload = {
+        "cloud_event_id": str(uuid4()),
+        "client_event_id": str(uuid4()),
+        "operator_id": operator_id,
+        "device_id": str(uuid4()),
+        "payload_version": 1,
+        "payload_hash": "1" * 64,
+        "teti_fault_id": "TETI-FAULT-002",
+        "payload": {
+            "plantId": str(uuid4()),
+            "title": "Guasto rete",
+            "description": "Descrizione",
+            "severity": "HIGH",
+        },
+        "attachments": [],
+    }
+
+    first = client.post("/api/mobile-sync/teti/fault-work-requests", headers=headers, json=base_payload)
+    assert first.status_code == 201
+
+    conflict = client.post(
+        "/api/mobile-sync/teti/fault-work-requests",
+        headers=headers,
+        json=base_payload | {"payload_hash": "2" * 64},
+    )
+    assert conflict.status_code == 409
+    assert conflict.json()["error_code"] == "GAIA_CONFLICT"
+    assert conflict.json()["retryable"] is False
+
+    conflict_on_fault = client.post(
+        "/api/mobile-sync/teti/fault-work-requests",
+        headers=headers,
+        json=base_payload | {"client_event_id": str(uuid4()), "payload_hash": "3" * 64},
+    )
+    assert conflict_on_fault.status_code == 409
+    assert conflict_on_fault.json()["error_code"] == "GAIA_CONFLICT"
+
+
+def test_mobile_sync_teti_fault_work_request_rejects_invalid_payload() -> None:
+    headers = _connector_headers()
+    response = client.post(
+        "/api/mobile-sync/teti/fault-work-requests",
+        headers=headers,
+        json={
+            "cloud_event_id": str(uuid4()),
+            "client_event_id": str(uuid4()),
+            "operator_id": str(uuid4()),
+            "device_id": str(uuid4()),
+            "payload_version": 1,
+            "payload_hash": "4" * 64,
+            "teti_fault_id": "TETI-FAULT-003",
+            "payload": {
+                "plantId": str(uuid4()),
+                "title": "Guasto",
+                "description": "Test",
+                "severity": "INVALID",
+            },
+            "attachments": [],
+        },
+    )
+
+    assert response.status_code == 422
+
+
+def test_mobile_sync_teti_fault_work_request_returns_retryable_on_temporary_error(
+    monkeypatch,
+) -> None:
+    headers = _connector_headers()
+    db = TestingSessionLocal()
+    operator, _ = _seed_mobile_operator(db)
+    operator_id = str(operator.id)
+    db.add(FieldReportCategory(code="TETI_FAULT", name="Fault TETI", is_active=True))
+    db.add(FieldReportSeverity(code="HIGH", name="Alta", rank_order=3, is_active=True))
+    db.commit()
+    db.close()
+
+    from app.modules.operazioni.routes import mobile_sync as mobile_sync_module
+
+    original_create_mobile_event = mobile_sync_module._create_mobile_event
+
+    def _boom(*args, **kwargs):
+        raise RuntimeError("temporary db failure")
+
+    monkeypatch.setattr(mobile_sync_module, "_create_mobile_event", _boom)
+    response = client.post(
+        "/api/mobile-sync/teti/fault-work-requests",
+        headers=headers,
+        json={
+            "cloud_event_id": str(uuid4()),
+            "client_event_id": str(uuid4()),
+            "operator_id": operator_id,
+            "device_id": str(uuid4()),
+            "payload_version": 1,
+            "payload_hash": "5" * 64,
+            "teti_fault_id": "TETI-FAULT-004",
+            "payload": {
+                "plantId": str(uuid4()),
+                "title": "Guasto transitorio",
+                "description": "Test",
+                "severity": "HIGH",
+            },
+            "attachments": [],
+        },
+    )
+    monkeypatch.setattr(mobile_sync_module, "_create_mobile_event", original_create_mobile_event)
+
+    assert response.status_code == 500
+    assert response.json()["error_code"] == "GAIA_RETRYABLE_ERROR"
+    assert response.json()["retryable"] is True

@@ -6,11 +6,12 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Annotated, Any
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import String, and_, cast, func, or_, select
 from sqlalchemy.orm import Session
 
@@ -201,6 +202,31 @@ class MobileActivityStopRequest(BaseModel):
 class MobileSyncApplyResponse(BaseModel):
     gaia_entity_type: str
     gaia_entity_id: str
+    extra: dict[str, Any] | None = None
+
+
+class MobileTetiFaultPayload(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    plant_id: UUID = Field(alias="plantId")
+    asset_id: UUID | None = Field(default=None, alias="assetId")
+    title: str = Field(min_length=1, max_length=200)
+    description: str | None = None
+    severity: Literal["LOW", "MEDIUM", "HIGH", "CRITICAL"]
+    latitude: float | None = None
+    longitude: float | None = None
+
+
+class MobileTetiFaultWorkRequest(BaseModel):
+    cloud_event_id: UUID
+    client_event_id: UUID
+    operator_id: UUID
+    device_id: UUID | str
+    payload_version: int = 1
+    payload_hash: str = Field(min_length=8, max_length=128)
+    teti_fault_id: str = Field(min_length=1, max_length=255)
+    payload: MobileTetiFaultPayload
+    attachments: list[MobileSyncAttachmentRef] = []
 
 
 class MobileSyncAttachmentUploadResponse(BaseModel):
@@ -288,6 +314,17 @@ def _serialize_response(event: MobileSyncEvent) -> MobileSyncApplyResponse:
     return MobileSyncApplyResponse(
         gaia_entity_type=event.gaia_entity_type,
         gaia_entity_id=event.gaia_entity_id,
+        extra=event.result_json if isinstance(event.result_json, dict) else None,
+    )
+
+
+def _serialize_response_with_status(event: MobileSyncEvent, *, status_value: str) -> MobileSyncApplyResponse:
+    extra = event.result_json.copy() if isinstance(event.result_json, dict) else {}
+    extra["status"] = status_value
+    return MobileSyncApplyResponse(
+        gaia_entity_type=event.gaia_entity_type,
+        gaia_entity_id=event.gaia_entity_id,
+        extra=extra,
     )
 
 
@@ -332,6 +369,7 @@ def _resolve_mobile_event(
     client_event_id: UUID,
     event_type: str,
     payload_hash: str,
+    conflict_error_code: str = "GAIA_CONFLICT_ERROR",
 ) -> MobileSyncEvent | None:
     event = db.scalar(select(MobileSyncEvent).where(MobileSyncEvent.client_event_id == client_event_id))
     if event is None:
@@ -339,16 +377,41 @@ def _resolve_mobile_event(
     if event.event_type != event_type:
         raise _mobile_error(
             status_code=status.HTTP_409_CONFLICT,
-            error_code="GAIA_CONFLICT_ERROR",
+            error_code=conflict_error_code,
             message="client_event_id gia usato per un tipo evento diverso",
             details={"field": "client_event_id"},
         )
     if event.payload_hash != payload_hash:
         raise _mobile_error(
             status_code=status.HTTP_409_CONFLICT,
-            error_code="GAIA_CONFLICT_ERROR",
+            error_code=conflict_error_code,
             message="client_event_id gia presente con payload diverso",
             details={"field": "client_event_id"},
+        )
+    return event
+
+
+def _resolve_mobile_event_by_external_reference(
+    db: Session,
+    *,
+    event_type: str,
+    external_reference: str,
+    payload_hash: str,
+) -> MobileSyncEvent | None:
+    event = db.scalar(
+        select(MobileSyncEvent).where(
+            MobileSyncEvent.event_type == event_type,
+            MobileSyncEvent.external_reference == external_reference,
+        )
+    )
+    if event is None:
+        return None
+    if event.payload_hash != payload_hash:
+        raise _mobile_error(
+            status_code=status.HTTP_409_CONFLICT,
+            error_code="GAIA_CONFLICT",
+            message="teti_fault_id gia presente con payload diverso",
+            details={"field": "teti_fault_id"},
         )
     return event
 
@@ -362,6 +425,8 @@ def _create_mobile_event(
     device_id: str,
     payload_version: int,
     payload_hash: str,
+    cloud_event_id: UUID | None,
+    external_reference: str | None,
     gaia_entity_type: str,
     gaia_entity_id: str,
     source_entity_id: UUID | None,
@@ -375,6 +440,8 @@ def _create_mobile_event(
         device_id=device_id,
         payload_version=payload_version,
         payload_hash=payload_hash,
+        cloud_event_id=cloud_event_id,
+        external_reference=external_reference,
         gaia_entity_type=gaia_entity_type,
         gaia_entity_id=gaia_entity_id,
         source_entity_id=source_entity_id,
@@ -427,6 +494,64 @@ def _resolve_report_severity(db: Session, severity_ref: str | None) -> FieldRepo
             details={"field": "severity_id"},
         )
     return severity
+
+
+def _resolve_teti_category(db: Session) -> FieldReportCategory:
+    for code in ("TETI_FAULT", "TETI", "FAULT", "GUASTO", "LOSS"):
+        category = db.scalar(
+            select(FieldReportCategory).where(
+                FieldReportCategory.code == code,
+                FieldReportCategory.is_active == True,
+            )
+        )
+        if category is not None:
+            return category
+
+    category = db.scalar(
+        select(FieldReportCategory)
+        .where(FieldReportCategory.is_active == True)
+        .order_by(FieldReportCategory.sort_order.asc(), FieldReportCategory.name.asc())
+    )
+    if category is None:
+        raise _mobile_error(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            error_code="GAIA_VALIDATION_ERROR",
+            message="Categoria segnalazione non configurata per fault TETI",
+            details={"field": "payload"},
+        )
+    return category
+
+
+def _resolve_teti_severity(db: Session, severity_code: str) -> FieldReportSeverity:
+    direct = db.scalar(
+        select(FieldReportSeverity).where(
+            FieldReportSeverity.code == severity_code,
+            FieldReportSeverity.is_active == True,
+        )
+    )
+    if direct is not None:
+        return direct
+
+    severities = db.scalars(
+        select(FieldReportSeverity)
+        .where(FieldReportSeverity.is_active == True)
+        .order_by(FieldReportSeverity.rank_order.asc(), FieldReportSeverity.name.asc())
+    ).all()
+    if not severities:
+        raise _mobile_error(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            error_code="GAIA_VALIDATION_ERROR",
+            message="Severita segnalazione non configurata per fault TETI",
+            details={"field": "payload.severity"},
+        )
+
+    buckets = {
+        "LOW": 0,
+        "MEDIUM": max(0, round((len(severities) - 1) / 3)),
+        "HIGH": max(0, round(((len(severities) - 1) * 2) / 3)),
+        "CRITICAL": len(severities) - 1,
+    }
+    return severities[buckets[severity_code]]
 
 
 def _build_activity_number(prefix: str, db: Session, model: type[FieldReport] | type[InternalCase]) -> str:
@@ -720,7 +845,9 @@ def mobile_connector_handshake() -> MobileConnectorHandshakeResponse:
             "field_reports.create",
             "activity_starts.create",
             "activity_stops.create",
+            "teti_fault_work_requests.create",
             "idempotency.client_event_id",
+            "idempotency.teti_fault_id",
             "errors.structured",
         ],
     )
@@ -1117,6 +1244,8 @@ def create_mobile_field_report(
             device_id=str(data.device_id),
             payload_version=data.payload_version,
             payload_hash=data.payload_hash,
+            cloud_event_id=None,
+            external_reference=None,
             gaia_entity_type="field_report",
             gaia_entity_id=str(report.id),
             source_entity_id=report.id,
@@ -1153,7 +1282,7 @@ def create_mobile_activity_start(
             payload_hash=data.payload_hash,
         )
         if existing is not None:
-            return _serialize_response(existing)
+            return _serialize_response_with_status(existing, status_value="already_exists")
 
         operator, user, _ = _resolve_mobile_operator(db, data.operator_id)
         catalog = db.get(ActivityCatalog, data.payload.activity_catalog_id)
@@ -1218,6 +1347,8 @@ def create_mobile_activity_start(
             device_id=str(data.device_id),
             payload_version=data.payload_version,
             payload_hash=data.payload_hash,
+            cloud_event_id=None,
+            external_reference=None,
             gaia_entity_type="operator_activity",
             gaia_entity_id=str(activity.id),
             source_entity_id=activity.id,
@@ -1325,6 +1456,8 @@ def create_mobile_activity_stop(
             device_id=str(data.device_id),
             payload_version=data.payload_version,
             payload_hash=data.payload_hash,
+            cloud_event_id=None,
+            external_reference=None,
             gaia_entity_type="operator_activity",
             gaia_entity_id=str(activity.id),
             source_entity_id=activity.id,
@@ -1343,5 +1476,159 @@ def create_mobile_activity_stop(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             error_code="GAIA_RETRYABLE_ERROR",
             message="Errore temporaneo durante la chiusura attivita",
+            retryable=True,
+        ).to_response()
+
+
+@router.post(
+    "/teti/fault-work-requests",
+    response_model=MobileSyncApplyResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_mobile_teti_fault_work_request(
+    data: MobileTetiFaultWorkRequest,
+    db: Annotated[Session, Depends(get_db)],
+):
+    try:
+        existing = _resolve_mobile_event(
+            db,
+            client_event_id=data.client_event_id,
+            event_type="TETI_FAULT_WORK_REQUESTED",
+            payload_hash=data.payload_hash,
+            conflict_error_code="GAIA_CONFLICT",
+        )
+        if existing is not None:
+            return _serialize_response_with_status(existing, status_value="already_exists")
+
+        existing_by_fault = _resolve_mobile_event_by_external_reference(
+            db,
+            event_type="TETI_FAULT_WORK_REQUESTED",
+            external_reference=data.teti_fault_id,
+            payload_hash=data.payload_hash,
+        )
+        if existing_by_fault is not None:
+            return _serialize_response_with_status(existing_by_fault, status_value="already_exists")
+
+        operator, user, _ = _resolve_mobile_operator(db, data.operator_id)
+        category = _resolve_teti_category(db)
+        severity = _resolve_teti_severity(db, data.payload.severity)
+        uploaded_attachments = _fetch_mobile_uploaded_attachments(
+            db,
+            operator_id=operator.id,
+            attachments=data.attachments,
+        )
+
+        report = FieldReport(
+            report_number=_build_activity_number("REP", db, FieldReport),
+            external_code=data.teti_fault_id[:50],
+            reporter_user_id=user.id,
+            category_id=category.id,
+            severity_id=severity.id,
+            title=data.payload.title,
+            description=data.payload.description,
+            reporter_name=_operator_display_name(operator, user),
+            area_code=str(data.payload.plant_id),
+            latitude=Decimal(str(data.payload.latitude)) if data.payload.latitude is not None else None,
+            longitude=Decimal(str(data.payload.longitude)) if data.payload.longitude is not None else None,
+            source_system="gaia_mobile_teti",
+            gps_source="mobile_teti" if data.payload.latitude is not None and data.payload.longitude is not None else None,
+            offline_client_uuid=data.client_event_id,
+            server_received_at=_utcnow(),
+            created_by_user_id=user.id,
+            status="submitted",
+        )
+        db.add(report)
+        db.flush()
+
+        metadata_payload = {
+            "source": "teti_fault",
+            "teti_fault_id": data.teti_fault_id,
+            "cloud_event_id": str(data.cloud_event_id),
+            "plant_id": str(data.payload.plant_id),
+            "asset_id": str(data.payload.asset_id) if data.payload.asset_id else None,
+            "severity": data.payload.severity,
+            "attachments": [item.model_dump(mode="json") for item in data.attachments],
+        }
+        case = InternalCase(
+            case_number=_build_activity_number("CAS", db, InternalCase),
+            source_report_id=report.id,
+            title=report.title,
+            description=report.description,
+            category_id=report.category_id,
+            severity_id=report.severity_id,
+            created_by_user_id=user.id,
+            priority_rank=severity.rank_order,
+        )
+        db.add(case)
+        db.flush()
+
+        report.internal_case_id = case.id
+        report.status = "linked"
+
+        db.add(
+            InternalCaseEvent(
+                internal_case_id=case.id,
+                event_type="teti_fault_imported",
+                event_at=_utcnow(),
+                actor_user_id=user.id,
+                note="Pratica creata automaticamente da fault TETI via mobile-sync",
+                payload_json=metadata_payload,
+            )
+        )
+        _link_report_attachments(
+            db,
+            report=report,
+            case=case,
+            attachments=uploaded_attachments,
+            actor_user_id=user.id,
+        )
+
+        result_json = {
+            "status": "created",
+            "teti_fault_id": data.teti_fault_id,
+            "gaia_case_id": str(case.id),
+            "plant_id": str(data.payload.plant_id),
+            "asset_id": str(data.payload.asset_id) if data.payload.asset_id else None,
+        }
+        mobile_event = _create_mobile_event(
+            db,
+            client_event_id=data.client_event_id,
+            event_type="TETI_FAULT_WORK_REQUESTED",
+            operator_id=operator.id,
+            device_id=str(data.device_id),
+            payload_version=data.payload_version,
+            payload_hash=data.payload_hash,
+            cloud_event_id=data.cloud_event_id,
+            external_reference=data.teti_fault_id,
+            gaia_entity_type="gaia_work",
+            gaia_entity_id=str(case.id),
+            source_entity_id=case.id,
+            payload_json=data.model_dump(mode="json", by_alias=True),
+            result_json=result_json,
+        )
+        logger.info(
+            "Created TETI fault work request",
+            extra={
+                "client_event_id": str(data.client_event_id),
+                "cloud_event_id": str(data.cloud_event_id),
+                "teti_fault_id": data.teti_fault_id,
+                "gaia_case_id": str(case.id),
+                "gaia_report_id": str(report.id),
+                "operator_id": str(operator.id),
+            },
+        )
+        db.commit()
+        db.refresh(mobile_event)
+        return _serialize_response(mobile_event)
+    except MobileSyncAPIError as exc:
+        db.rollback()
+        return exc.to_response()
+    except Exception:
+        db.rollback()
+        logger.exception("Unexpected error while creating TETI fault work request")
+        return _mobile_error(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            error_code="GAIA_RETRYABLE_ERROR",
+            message="Errore temporaneo durante la creazione dell'intervento TETI",
             retryable=True,
         ).to_response()

@@ -1391,6 +1391,7 @@ Endpoint disponibili lato GAIA:
 - `POST /api/mobile-sync/field-reports`
 - `POST /api/mobile-sync/activity-starts`
 - `POST /api/mobile-sync/activity-stops`
+- `POST /api/mobile-sync/teti/fault-work-requests`
 
 Regole implementate:
 - autenticazione tecnica separata dagli utenti GAIA tramite header `X-GAIA-Connector-Token`;
@@ -1401,7 +1402,8 @@ Regole implementate:
 ```json
 {
   "gaia_entity_type": "field_report",
-  "gaia_entity_id": "uuid"
+  "gaia_entity_id": "uuid",
+  "extra": {}
 }
 ```
 
@@ -1425,4 +1427,5 @@ Note implementative:
 - `catalogs` espone attivita, categorie segnalazione, severita, mezzi e contatori;
 - `worksets` aggrega attivita operatore, squadre, mezzi disponibili e contatori assegnati;
 - `field-reports` crea `field_report` + `internal_case` in singola transazione e collega gli allegati gia caricati;
-- `activity-starts` e `activity-stops` mappano su `operator_activity`.
+- `activity-starts` e `activity-stops` mappano su `operator_activity`;
+- `teti/fault-work-requests` crea o recupera in modo idempotente un `internal_case` GAIA a partire da un fault TETI, usando `mobile_sync_event` per idempotenza su `client_event_id` e `teti_fault_id`.

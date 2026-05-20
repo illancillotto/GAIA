@@ -338,6 +338,7 @@ Responsabile aggiornamento: Codex
   - `POST /api/mobile-sync/field-reports`
   - `POST /api/mobile-sync/activity-starts`
   - `POST /api/mobile-sync/activity-stops`
+  - `POST /api/mobile-sync/teti/fault-work-requests`
 - Aggiunta persistenza `mobile_sync_event` per idempotenza nativa su `client_event_id` e mapping stabile verso `gaia_entity_type` / `gaia_entity_id`.
 - Il layer riusa i modelli `operazioni` e `catasto` già presenti:
   - operatori mobile da `wc_operator` + `application_users` + `operator_profile`
