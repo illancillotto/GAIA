@@ -1198,6 +1198,15 @@ export async function deleteElaborazioneCredential(
   });
 }
 
+export async function releaseElaborazioneCredentials(token: string): Promise<ElaborazioneOperationResponse> {
+  return request<ElaborazioneOperationResponse>("/elaborazioni/credentials/release", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
 export async function testElaborazioneCredentials(
   token: string,
   payload?: {

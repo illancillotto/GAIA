@@ -22,10 +22,7 @@ export function CatastoOperationMessage({ value, className }: OperationMessagePr
   if (value.includes(SISTER_LOCKED_URL)) {
     return (
       <div className={className}>
-        <span>{SISTER_LOCKED_MESSAGE} </span>
-        <a className="text-[#1D4E35] underline" href={SISTER_LOCKED_URL} rel="noreferrer" target="_blank">
-          Apri pagina di blocco
-        </a>
+        <span>{SISTER_LOCKED_MESSAGE}</span>
         <div className="mt-2">
           <button
             aria-controls={diagnosticsId}

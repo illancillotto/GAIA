@@ -526,6 +526,11 @@ class CatastoWorker:
                         deferred_requests.pop(selection.request_id, None)
                 return selection
 
+        def _batch_release_requested() -> bool:
+            with SessionLocal() as db:
+                batch = db.get(CatastoBatch, batch_id)
+                return batch is None or batch.status == CatastoBatchStatus.CANCELLED.value
+
         async def _credential_runner(credential: CatastoCredential) -> None:
             nonlocal global_server_error_pause_until
             browser = self._build_browser_session()
@@ -533,6 +538,13 @@ class CatastoWorker:
             await browser.start()
             try:
                 while not self.state.stop_requested:
+                    if _batch_release_requested():
+                        logger.info(
+                            "Batch %s rilascio richiesto, chiusura sessione SISTER per %s",
+                            batch_id,
+                            credential.sister_username,
+                        )
+                        return
                     now = datetime.now(timezone.utc)
                     async with shared_state_lock:
                         cooldown_until = credential_cooldowns.get(credential.id)
@@ -634,6 +646,13 @@ class CatastoWorker:
                         await _release_claim(request_id)
 
                     if self.state.stop_requested:
+                        return
+                    if _batch_release_requested():
+                        logger.info(
+                            "Batch %s arrestato dopo completamento checkpoint corrente, logout per %s",
+                            batch_id,
+                            credential.sister_username,
+                        )
                         return
                     await asyncio.sleep(BETWEEN_VISURE_DELAY_SEC)
             finally:
@@ -1273,20 +1292,17 @@ class CatastoWorker:
         if "SISTER_SESSION_LOCKED" in message:
             return (
                 "Utente SISTER bloccato sul portale Agenzia delle Entrate. "
-                "Verificare se esiste gia' una sessione attiva su un'altra postazione o browser. "
-                "indirizzo link: https://sister3.agenziaentrate.gov.it/Servizi/error_locked.jsp"
+                "Verificare se esiste gia' una sessione attiva su un'altra postazione o browser."
             )
         if "Utente SISTER bloccato sul portale Agenzia delle Entrate" in message:
             return (
                 "Utente SISTER bloccato sul portale Agenzia delle Entrate. "
-                "Verificare se esiste gia' una sessione attiva su un'altra postazione o browser. "
-                "indirizzo link: https://sister3.agenziaentrate.gov.it/Servizi/error_locked.jsp"
+                "Verificare se esiste gia' una sessione attiva su un'altra postazione o browser."
             )
         if "gia' in sessione" in message or "già in sessione" in message or "error_locked.jsp" in message:
             return (
                 "Utente SISTER bloccato sul portale Agenzia delle Entrate. "
-                "Verificare se esiste gia' una sessione attiva su un'altra postazione o browser. "
-                "indirizzo link: https://sister3.agenziaentrate.gov.it/Servizi/error_locked.jsp"
+                "Verificare se esiste gia' una sessione attiva su un'altra postazione o browser."
             )
         if "Credenziali SISTER rifiutate" in message:
             return "Le credenziali SISTER sono state rifiutate dal portale."

@@ -240,6 +240,43 @@ def create_not_found_request_with_artifacts(tmp_path) -> tuple[str, str]:
         db.close()
 
 
+def create_processing_batch() -> str:
+    db = TestingSessionLocal()
+    try:
+        user = db.query(ApplicationUser).filter(ApplicationUser.username == "elaborazioni-admin").one()
+        batch = CatastoBatch(
+            user_id=user.id,
+            name="Batch processing",
+            status="processing",
+            total_items=2,
+            current_operation="Batch preso in carico dal worker",
+            started_at=datetime.now(UTC) - timedelta(minutes=1),
+        )
+        db.add(batch)
+        db.flush()
+
+        for row_index in (1, 2):
+            request = CatastoVisuraRequest(
+                batch_id=batch.id,
+                user_id=user.id,
+                row_index=row_index,
+                comune="Oristano",
+                comune_codice="G113#ORISTANO#5#5",
+                catasto="Terreni e Fabbricati",
+                foglio=str(row_index),
+                particella=str(100 + row_index),
+                tipo_visura="Completa",
+                status=CatastoVisuraRequestStatus.PROCESSING.value if row_index == 1 else CatastoVisuraRequestStatus.PENDING.value,
+                current_operation="Presa in carico dal worker",
+            )
+            db.add(request)
+
+        db.commit()
+        return str(batch.id)
+    finally:
+        db.close()
+
+
 def create_failed_request_with_missing_artifacts(tmp_path) -> tuple[str, str]:
     artifact_dir = tmp_path / "missing-request-artifacts"
 
@@ -856,3 +893,28 @@ def test_credentials_test_websocket_emits_terminal_state() -> None:
     assert event["test"]["id"] == test_id
     assert event["test"]["status"] == "completed"
     assert event["test"]["authenticated"] is True
+
+
+def test_release_credentials_stops_processing_batches() -> None:
+    batch_id = create_processing_batch()
+
+    response = client.post("/elaborazioni/credentials/release", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["success"] is True
+    assert "Richiesta di rilascio inviata" in payload["message"]
+    assert batch_id in payload["message"]
+
+    db = TestingSessionLocal()
+    try:
+        batch = db.query(CatastoBatch).filter(CatastoBatch.id == batch_id).one()
+        requests = db.query(CatastoVisuraRequest).filter(CatastoVisuraRequest.batch_id == batch.id).order_by(CatastoVisuraRequest.row_index.asc()).all()
+
+        assert batch.status == "cancelled"
+        assert batch.current_operation == "Release requested by user"
+        assert len(requests) == 2
+        assert all(request.status == CatastoVisuraRequestStatus.SKIPPED.value for request in requests)
+        assert all(request.current_operation == "Release requested by user" for request in requests)
+    finally:
+        db.close()

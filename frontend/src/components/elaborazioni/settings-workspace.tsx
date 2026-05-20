@@ -24,6 +24,7 @@ import {
   getElaborazioneCredentials,
   listBonificaOristaneseCredentials,
   listCapacitasCredentials,
+  releaseElaborazioneCredentials,
   saveElaborazioneCredentials,
   testBonificaOristaneseCredential,
   testCapacitasCredential,
@@ -347,6 +348,7 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [releaseBusy, setReleaseBusy] = useState(false);
   const [testBusy, setTestBusy] = useState(false);
   const [testResult, setTestResult] = useState<ElaborazioneCredentialTestResult | null>(null);
   const testSocketRef = useRef<WebSocket | null>(null);
@@ -409,6 +411,24 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
       active: credential.active,
       is_default: credential.is_default,
     });
+  }
+
+  async function handleReleaseSisterSessions(): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) return;
+
+    setReleaseBusy(true);
+    try {
+      const result = await releaseElaborazioneCredentials(token);
+      setStatusMessage(result.message);
+      setError(null);
+      await loadCredentials();
+    } catch (releaseError) {
+      setError(releaseError instanceof Error ? releaseError.message : "Errore rilascio utenze SISTER");
+      setStatusMessage(null);
+    } finally {
+      setReleaseBusy(false);
+    }
   }
 
   async function loadCredentials(): Promise<void> {
@@ -1213,7 +1233,7 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
 
       <section className="space-y-4">
         {activeTab === "sister" ? (
-          <section className={`grid ${embedded ? "gap-4 xl:grid-cols-1" : "gap-6 xl:grid-cols-[1.3fr,0.7fr]"}`}>
+          <section className={`grid ${embedded ? "gap-4 xl:grid-cols-1" : "gap-6 xl:grid-cols-[minmax(0,1.55fr),minmax(320px,0.45fr)]"}`}>
             <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
               <div className={`border-b border-[#edf1eb] bg-[linear-gradient(135deg,_rgba(29,78,53,0.06),_rgba(255,255,255,0.92))] ${embedded ? "px-4 py-3" : "px-6 py-5"}`}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
@@ -1240,7 +1260,7 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                 </div>
               </div>
 
-              <div className={`grid ${embedded ? "gap-4 p-4 lg:grid-cols-1" : "gap-6 p-6 lg:grid-cols-[1.25fr,0.75fr]"}`}>
+              <div className={`grid ${embedded ? "gap-4 p-4 lg:grid-cols-1" : "gap-6 p-6 xl:grid-cols-[minmax(0,1.5fr),minmax(300px,0.5fr)]"}`}>
                 <div className={embedded ? "space-y-4" : "space-y-5"}>
                   <div
                     className={`grid ${
@@ -1361,10 +1381,22 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
 
                   <div className="overflow-hidden rounded-[24px] border border-[#e1e8df] bg-[#fbfcfa]">
                     <div className={`border-b border-[#edf1eb] ${embedded ? "px-3 py-2.5" : "px-4 py-3"}`}>
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">Pool credenziali SISTER</p>
-                      <p className={`text-sm text-gray-500 ${embedded ? "mt-0.5 leading-5" : "mt-1"}`}>
-                        Gestisci piu profili, scegli il predefinito del worker e modifica quello selezionato nel form.
-                      </p>
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-400">Pool credenziali SISTER</p>
+                          <p className={`text-sm text-gray-500 ${embedded ? "mt-0.5 leading-5" : "mt-1"}`}>
+                            Gestisci piu profili, scegli il predefinito del worker e modifica quello selezionato nel form.
+                          </p>
+                        </div>
+                        <button
+                          className="btn-secondary"
+                          disabled={releaseBusy}
+                          onClick={() => void handleReleaseSisterSessions()}
+                          type="button"
+                        >
+                          {releaseBusy ? "Rilascio..." : "Ferma e libera utenze"}
+                        </button>
+                      </div>
                     </div>
                     {sisterCredentials.length === 0 ? (
                       <div className={`${embedded ? "px-3 py-3" : "px-4 py-4"} text-sm text-gray-500`}>
@@ -1372,7 +1404,7 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                       </div>
                     ) : (
                       <div className="overflow-x-auto">
-                        <table className="data-table">
+                        <table className="data-table min-w-[900px]">
                           <thead>
                             <tr>
                               <th>Label</th>

@@ -63,6 +63,7 @@ from app.services.elaborazioni_batches import (
     get_batch_requests,
     get_request_for_user,
     list_batches_for_user,
+    release_processing_batches_for_user,
     retry_failed_batch,
     start_batch,
 )
@@ -457,6 +458,21 @@ def remove_credential(
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"SISTER credential {credential_id} not found")
     return ElaborazioneOperationResponse(message="Credential deleted")
+
+
+@router.post("/credentials/release", response_model=ElaborazioneOperationResponse)
+def release_sister_credentials(
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> ElaborazioneOperationResponse:
+    released_count, batch_ids = release_processing_batches_for_user(db, current_user.id)
+    if released_count == 0:
+        return ElaborazioneOperationResponse(success=True, message="Nessun batch visure in esecuzione da fermare")
+    batch_list = ", ".join(str(batch_id) for batch_id in batch_ids)
+    return ElaborazioneOperationResponse(
+        success=True,
+        message=f"Richiesta di rilascio inviata per {released_count} batch. Logout SISTER al primo checkpoint utile. Batch: {batch_list}",
+    )
 
 
 @router.post("/batches", response_model=ElaborazioneBatchDetailResponse, status_code=status.HTTP_201_CREATED)

@@ -580,6 +580,43 @@ def cancel_batch(db: Session, user_id: int, batch_id: UUID) -> ElaborazioneBatch
     return batch
 
 
+def release_processing_batches_for_user(db: Session, user_id: int) -> tuple[int, list[UUID]]:
+    expire_stale_pending_batches(db, user_id)
+    batches = list(
+        db.scalars(
+            select(ElaborazioneBatch).where(
+                ElaborazioneBatch.user_id == user_id,
+                ElaborazioneBatch.status == ElaborazioneBatchStatus.PROCESSING.value,
+            )
+        ).all()
+    )
+    if not batches:
+        return 0, []
+
+    released_ids: list[UUID] = []
+    now = datetime.now(UTC)
+    for batch in batches:
+        requests = get_batch_requests(db, batch.id)
+        for request in requests:
+            if request.status in {
+                ElaborazioneRichiestaStatus.PENDING.value,
+                ElaborazioneRichiestaStatus.PROCESSING.value,
+                ElaborazioneRichiestaStatus.AWAITING_CAPTCHA.value,
+            }:
+                request.status = ElaborazioneRichiestaStatus.SKIPPED.value
+                request.current_operation = "Release requested by user"
+                request.error_message = "Credenziale SISTER liberata su richiesta utente"
+                request.processed_at = now
+        batch.status = ElaborazioneBatchStatus.CANCELLED.value
+        batch.completed_at = now
+        batch.current_operation = "Release requested by user"
+        recalculate_batch_counters(batch, requests)
+        released_ids.append(batch.id)
+
+    db.commit()
+    return len(released_ids), released_ids
+
+
 def retry_failed_batch(db: Session, user_id: int, batch_id: UUID) -> ElaborazioneBatch:
     expire_stale_pending_batches(db, user_id)
     batch = get_batch_for_user(db, user_id, batch_id)

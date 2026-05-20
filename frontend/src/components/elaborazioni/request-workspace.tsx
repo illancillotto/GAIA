@@ -371,7 +371,7 @@ export function ElaborazioneRequestWorkspace({
               </div>
               <div>
                 <p className="text-base font-semibold text-gray-900">Batch recenti</p>
-                <p className="mt-1 text-sm leading-6 text-gray-600">Ultimi lotti creati dall'utente corrente delle visure.</p>
+                <p className="mt-1 text-sm leading-6 text-gray-600">Ultimi lotti creati dall&apos;utente corrente delle visure.</p>
               </div>
             </div>
           </button>
