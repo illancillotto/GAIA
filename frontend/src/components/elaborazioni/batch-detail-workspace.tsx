@@ -17,6 +17,7 @@ import { AlertTriangleIcon, FolderIcon, RefreshIcon } from "@/components/ui/icon
 import {
   createElaborazioneBatchWebSocket,
   cancelElaborazioneBatch,
+  downloadCatastoDocumentBlob,
   downloadElaborazioneBatchZipBlob,
   downloadElaborazioneBatchReportJsonBlob,
   downloadElaborazioneBatchReportMarkdownBlob,
@@ -51,6 +52,7 @@ export function ElaborazioneBatchDetailWorkspace({
   const [reportBusy, setReportBusy] = useState<"json" | "md" | null>(null);
   const [artifactBusyRequestId, setArtifactBusyRequestId] = useState<string | null>(null);
   const [artifactPreviewUrls, setArtifactPreviewUrls] = useState<Record<string, string>>({});
+  const [artifactPreviewMimeTypes, setArtifactPreviewMimeTypes] = useState<Record<string, string>>({});
   const [artifactPreviewLoadingIds, setArtifactPreviewLoadingIds] = useState<Record<string, boolean>>({});
   const [artifactPreviewFailedIds, setArtifactPreviewFailedIds] = useState<Record<string, boolean>>({});
   const [previewModalRequestId, setPreviewModalRequestId] = useState<string | null>(null);
@@ -162,7 +164,10 @@ export function ElaborazioneBatchDetailWorkspace({
     const requests = batch?.requests ?? [];
     const eligibleRequestIds = new Set(
       requests
-        .filter((request) => request.artifact_dir && request.status === "not_found")
+        .filter(
+          (request) =>
+            (request.artifact_dir && request.status === "not_found") || (request.document_id && request.status === "completed"),
+        )
         .map((request) => request.id),
     );
 
@@ -178,6 +183,13 @@ export function ElaborazioneBatchDetailWorkspace({
         changed = true;
       });
       return changed ? next : current;
+    });
+    setArtifactPreviewMimeTypes((current) => {
+      const next = Object.fromEntries(Object.entries(current).filter(([requestId]) => eligibleRequestIds.has(requestId)));
+      const sameKeys =
+        Object.keys(next).length === Object.keys(current).length &&
+        Object.keys(next).every((requestId) => current[requestId] === next[requestId]);
+      return sameKeys ? current : next;
     });
     setArtifactPreviewLoadingIds((current) => {
       const next = Object.fromEntries(Object.entries(current).filter(([requestId]) => eligibleRequestIds.has(requestId)));
@@ -216,6 +228,7 @@ export function ElaborazioneBatchDetailWorkspace({
               }
               return { ...current, [request.id]: url };
             });
+            setArtifactPreviewMimeTypes((current) => ({ ...current, [request.id]: blob.type || "image/png" }));
             setArtifactPreviewFailedIds((current) => {
               if (!current[request.id]) return current;
               const next = { ...current };
@@ -387,11 +400,49 @@ export function ElaborazioneBatchDetailWorkspace({
     }
   }
 
-  function handleOpenPreviewModal(requestId: string): void {
-    if (!artifactPreviewUrls[requestId]) {
+  async function handleOpenPreviewModal(request: ElaborazioneBatchDetail["requests"][number]): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) return;
+
+    if (artifactPreviewUrls[request.id]) {
+      setPreviewModalRequestId(request.id);
       return;
     }
-    setPreviewModalRequestId(requestId);
+
+    if (!request.document_id || request.status !== "completed") {
+      return;
+    }
+
+    setArtifactPreviewLoadingIds((current) => ({ ...current, [request.id]: true }));
+    try {
+      const blob = await downloadCatastoDocumentBlob(token, request.document_id);
+      const url = URL.createObjectURL(blob);
+      setArtifactPreviewUrls((current) => {
+        if (current[request.id]) {
+          URL.revokeObjectURL(url);
+          return current;
+        }
+        return { ...current, [request.id]: url };
+      });
+      setArtifactPreviewMimeTypes((current) => ({ ...current, [request.id]: blob.type || "application/pdf" }));
+      setArtifactPreviewFailedIds((current) => {
+        if (!current[request.id]) return current;
+        const next = { ...current };
+        delete next[request.id];
+        return next;
+      });
+      setPreviewModalRequestId(request.id);
+    } catch (previewError) {
+      setError(previewError instanceof Error ? previewError.message : "Errore caricamento preview PDF");
+      setArtifactPreviewFailedIds((current) => ({ ...current, [request.id]: true }));
+    } finally {
+      setArtifactPreviewLoadingIds((current) => {
+        if (!current[request.id]) return current;
+        const next = { ...current };
+        delete next[request.id];
+        return next;
+      });
+    }
   }
 
   function renderRequestLabel(request: ElaborazioneBatchDetail["requests"][number]): string {
@@ -431,6 +482,7 @@ export function ElaborazioneBatchDetailWorkspace({
   const canStartBatch = batch != null && ["pending", "failed", "cancelled"].includes(batch.status);
   const previewModalRequest = batch?.requests.find((request) => request.id === previewModalRequestId) ?? null;
   const previewModalUrl = previewModalRequestId ? artifactPreviewUrls[previewModalRequestId] ?? null : null;
+  const previewModalMimeType = previewModalRequestId ? artifactPreviewMimeTypes[previewModalRequestId] ?? null : null;
 
   const content = (
     <>
@@ -572,13 +624,35 @@ export function ElaborazioneBatchDetailWorkspace({
                               {artifactPreviewUrls[request.id] ? (
                                 <button
                                   className={getArtifactActionClassName()}
-                                  onClick={() => handleOpenPreviewModal(request.id)}
+                                  onClick={() => void handleOpenPreviewModal(request)}
                                   type="button"
                                 >
-                                  Preview screen
+                                  {request.status === "completed" ? "Preview PDF" : "Preview screen"}
+                                </button>
+                              ) : null}
+                              {request.status === "completed" && request.document_id && !artifactPreviewUrls[request.id] ? (
+                                <button
+                                  className={getArtifactActionClassName(artifactPreviewLoadingIds[request.id])}
+                                  disabled={artifactPreviewLoadingIds[request.id]}
+                                  onClick={() => void handleOpenPreviewModal(request)}
+                                  type="button"
+                                >
+                                  {artifactPreviewLoadingIds[request.id] ? "Caricamento PDF..." : "Preview PDF"}
                                 </button>
                               ) : null}
                             </div>
+                          </div>
+                        ) : null}
+                        {request.status === "completed" && request.document_id && !request.artifact_dir ? (
+                          <div className="mt-2">
+                            <button
+                              className={getArtifactActionClassName(artifactPreviewLoadingIds[request.id])}
+                              disabled={artifactPreviewLoadingIds[request.id]}
+                              onClick={() => void handleOpenPreviewModal(request)}
+                              type="button"
+                            >
+                              {artifactPreviewLoadingIds[request.id] ? "Caricamento PDF..." : "Preview PDF"}
+                            </button>
                           </div>
                         ) : null}
                       </td>
@@ -627,10 +701,12 @@ export function ElaborazioneBatchDetailWorkspace({
 
       {previewModalRequest && previewModalUrl ? (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 px-4 py-6 backdrop-blur-sm">
-          <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-[28px] border border-gray-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.24)]">
+          <div className="flex max-h-[96vh] w-full max-w-[96vw] flex-col overflow-hidden rounded-[28px] border border-gray-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.24)]">
             <div className="flex items-center justify-between gap-4 border-b border-gray-100 px-6 py-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1D4E35]">Preview screen</p>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1D4E35]">
+                  {previewModalMimeType === "application/pdf" ? "Preview PDF" : "Preview screen"}
+                </p>
                 <h2 className="mt-1 text-lg font-semibold text-gray-900">{renderRequestLabel(previewModalRequest)}</h2>
                 <p className="mt-1 text-sm text-gray-500">{renderRequestReference(previewModalRequest)}</p>
               </div>
@@ -640,12 +716,22 @@ export function ElaborazioneBatchDetailWorkspace({
             </div>
             <div className="overflow-auto bg-[#f4f7f5] p-5">
               <div className="overflow-hidden rounded-2xl border border-[#d9dfd6] bg-white p-3">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  alt={`Preview artifact richiesta ${previewModalRequest.row_index}`}
-                  className="h-auto w-full rounded-xl border border-[#d9dfd6] object-contain"
-                  src={previewModalUrl}
-                />
+                {previewModalMimeType === "application/pdf" ? (
+                  <iframe
+                    className="h-[84vh] w-full rounded-xl border border-[#d9dfd6] bg-white"
+                    src={previewModalUrl}
+                    title={`PDF visura richiesta ${previewModalRequest.row_index}`}
+                  />
+                ) : (
+                  <>
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      alt={`Preview artifact richiesta ${previewModalRequest.row_index}`}
+                      className="h-auto w-full rounded-xl border border-[#d9dfd6] object-contain"
+                      src={previewModalUrl}
+                    />
+                  </>
+                )}
               </div>
             </div>
           </div>
