@@ -360,9 +360,9 @@ export function ElaborazioniAdeAlignmentWorkspace({ embedded = false }: { embedd
               value={runStatus ? runStatus.run_id.slice(0, 8) : "—"}
               description={runStatus ? `${renderPhaseLabel(runStatus.progress_phase)} · ${runStatus.status}` : "nessun run"}
             />
-            <ElaborazioneMiniStat eyebrow="Tile scaricate" value={runTileProgressLabel} description="avanzamento download" />
-            <ElaborazioneMiniStat eyebrow="Particelle live" value={runStatus?.features ?? 0} description="univoche rilevate finora" />
-            <ElaborazioneMiniStat eyebrow="Geom. live" value={runStatus?.with_geometry ?? 0} description="feature con geometria finora" />
+            <ElaborazioneMiniStat eyebrow="Tile run" value={runTileProgressLabel} description="riquadri geografici del job AdE" />
+            <ElaborazioneMiniStat eyebrow="Particelle run" value={runStatus?.features ?? 0} description="particelle AdE univoche rilevate finora" />
+            <ElaborazioneMiniStat eyebrow="Staging report" value={report?.counters.staged_particelle ?? 0} description="particelle AdE del run completato usato nel report" />
           </ModuleWorkspaceKpiRow>
         </ElaborazioneHero>
 
@@ -373,7 +373,7 @@ export function ElaborazioniAdeAlignmentWorkspace({ embedded = false }: { embedd
           <ElaborazionePanelHeader
             badge="Comprensorio"
             title="Avvio e monitoraggio run"
-            description="Il comprensorio AdE viene avviato come job asincrono persistito. Il polling ricarica stato e report senza lasciare la console operativa."
+            description="Il comprensorio AdE viene avviato come job asincrono persistito. I contatori qui sotto descrivono tile e avanzamento del run, non il totale globale delle particelle GAIA."
             actions={(
               <button className="btn-primary" disabled={busy} onClick={() => void handleStartComprensorioRun()} type="button">
                 {busy && runStatus && ["queued", "processing"].includes(runStatus.status) ? "Run in corso..." : "Allinea comprensorio"}
@@ -416,9 +416,9 @@ export function ElaborazioniAdeAlignmentWorkspace({ embedded = false }: { embedd
                     </div>
                   </div>
                   <p>Run: <span className="font-medium text-gray-900">{runStatus.run_id}</span></p>
-                  <p>Tile completate: <span className="font-medium text-gray-900">{runStatus.tiles_completed} / {runStatus.tiles}</span></p>
-                  <p>Particelle rilevate: <span className="font-medium text-gray-900">{runStatus.features}</span></p>
-                  <p>Con geometria: <span className="font-medium text-gray-900">{runStatus.with_geometry}</span></p>
+                  <p>Tile del run: <span className="font-medium text-gray-900">{runStatus.tiles_completed} / {runStatus.tiles}</span></p>
+                  <p>Particelle AdE rilevate nel run: <span className="font-medium text-gray-900">{runStatus.features}</span></p>
+                  <p>Particelle con geometria nel run: <span className="font-medium text-gray-900">{runStatus.with_geometry}</span></p>
                   <p>Upsert eseguiti: <span className="font-medium text-gray-900">{runStatus.upserted}</span></p>
                   {runStatus.progress_message ? <p className="rounded-xl bg-slate-50 px-3 py-2 text-sm text-slate-700">{runStatus.progress_message}</p> : null}
                   <p>Avviato: <span className="font-medium text-gray-900">{formatDateTime(runStatus.started_at ?? null)}</span></p>
@@ -443,7 +443,7 @@ export function ElaborazioniAdeAlignmentWorkspace({ embedded = false }: { embedd
           <ElaborazionePanelHeader
             badge="Report"
             title="Differenze AdE / GAIA"
-            description="Lettura operativa del run completato: contatori, preview apply e conferma scrittura fuori dal GIS."
+            description="Lettura operativa dell'ultimo run AdE completato: il report confronta solo le particelle AdE presenti nello staging di quel run, non l'intero patrimonio GAIA in modo indiscriminato."
             actions={report ? (
               <button className="btn-secondary" disabled={busy} onClick={() => void handlePreviewApply()} type="button">
                 Preview applicazione
@@ -456,7 +456,16 @@ export function ElaborazioniAdeAlignmentWorkspace({ embedded = false }: { embedd
             </div>
           ) : (
             <div className="space-y-5 px-6 py-6">
+              <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-700">
+                <span className="font-medium text-slate-900">Run report:</span> {report.run_id} ·
+                <span className="ml-1 font-medium text-slate-900">staging AdE:</span> {report.counters.staged_particelle} particelle ·
+                <span className="ml-1 font-medium text-slate-900">soglia geometria:</span> {report.geometry_threshold_m} m
+              </div>
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-2xl bg-sky-50 p-4">
+                  <p className="text-xs uppercase tracking-[0.18em] text-sky-700">Staging run</p>
+                  <p className="mt-2 text-2xl font-semibold text-sky-900">{report.counters.staged_particelle}</p>
+                </div>
                 <div className="rounded-2xl bg-emerald-50 p-4">
                   <p className="text-xs uppercase tracking-[0.18em] text-emerald-700">Allineate</p>
                   <p className="mt-2 text-2xl font-semibold text-emerald-900">{report.counters.allineate}</p>
@@ -469,7 +478,7 @@ export function ElaborazioniAdeAlignmentWorkspace({ embedded = false }: { embedd
                   <p className="text-xs uppercase tracking-[0.18em] text-rose-700">Geom. variate</p>
                   <p className="mt-2 text-2xl font-semibold text-rose-900">{report.counters.geometrie_variate}</p>
                 </div>
-                <div className="rounded-2xl bg-slate-100 p-4">
+                <div className="rounded-2xl bg-slate-100 p-4 md:col-span-2 xl:col-span-1">
                   <p className="text-xs uppercase tracking-[0.18em] text-slate-600">Match ambigui</p>
                   <p className="mt-2 text-2xl font-semibold text-slate-900">{report.counters.match_ambiguo}</p>
                 </div>
