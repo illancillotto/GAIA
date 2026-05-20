@@ -5,10 +5,16 @@ services:
 
   backend:
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 4
+    environment:
+      CODEX_LB_URL: http://host.docker.internal:2455/v1
+      WIKI_DOCS_ROOT: /app/docs
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./backend:/app
       - ./secrets/pdnd:/app/secrets/pdnd:ro
       - catasto-data:/data/catasto
+      - .:/app/docs:ro
     ports:
       - "${BACKEND_PORT:-8000}:8000"
 

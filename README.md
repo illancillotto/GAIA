@@ -73,7 +73,12 @@ Il frontend condiviso della piattaforma vive in `frontend/`.
 ## Struttura repository
 ```text
 GAIA/
-├── domain-docs/
+├── docs/                    ← documentazione generale di piattaforma
+│   ├── wiki/                ← Wiki Agent (Milestone 9)
+│   ├── ARCHITECTURE.md
+│   ├── PRD.md
+│   └── ...
+├── domain-docs/             ← documentazione funzionale per dominio
 │   ├── accessi/docs/
 │   ├── ced/docs/
 │   ├── catasto/docs/
@@ -319,6 +324,10 @@ Se la variabile e vuota/non impostata, la password non viene richiesta.
 
 ## Documentazione
 
+- Architettura piattaforma: `docs/ARCHITECTURE.md`
+- PRD piattaforma: `docs/PRD.md`
+- Piano implementazione: `docs/IMPLEMENTATION_PLAN.md`
+- Wiki Agent (Milestone 9): `docs/wiki/`
 - GAIA Accessi: `domain-docs/accessi/docs/`
 - GAIA CED PRD: `domain-docs/ced/docs/PRD.md`
 - GAIA CED Plan: `domain-docs/ced/docs/IMPLEMENTATION_PLAN.md`

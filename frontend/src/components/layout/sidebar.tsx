@@ -49,6 +49,8 @@ export function Sidebar({
                         ? "riordino"
                         : pathname.startsWith("/ruolo")
                           ? "ruolo"
+                          : pathname.startsWith("/wiki")
+                            ? "wiki"
                         : "nas_control";
 
   const currentModuleLabel =
@@ -72,6 +74,8 @@ export function Sidebar({
                         ? "Riordino"
                         : currentModuleKey === "ruolo"
                           ? "Ruolo"
+                          : currentModuleKey === "wiki"
+                            ? "Wiki"
                         : "NAS Control";
   const canManageGaiaUsers =
     (currentUser.role === "admin" || currentUser.role === "super_admin")

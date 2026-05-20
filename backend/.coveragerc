@@ -1,0 +1,18 @@
+[run]
+source = app/modules/wiki
+omit =
+    */__pycache__/*
+    */tests/*
+    */.venv/*
+
+[report]
+show_missing = true
+skip_covered = false
+fail_under = 60
+
+[html]
+directory = htmlcov/wiki
+
+[paths]
+source =
+    app/modules/wiki

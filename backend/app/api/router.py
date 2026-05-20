@@ -14,6 +14,7 @@ from app.modules.operazioni.routes.operator_invitations import public_router as 
 from app.modules.riordino.bootstrap import router as riordino_router
 from app.modules.ruolo.router import router as ruolo_router
 from app.modules.ruolo.routes.query_routes import catasto_router as catasto_parcels_router
+from app.modules.wiki.router import router as wiki_router
 
 api_router = APIRouter()
 api_router.include_router(core_router)
@@ -30,3 +31,4 @@ api_router.include_router(mobile_sync_router)
 api_router.include_router(operator_invitations_public_router)
 api_router.include_router(riordino_router, prefix="/api/riordino")
 api_router.include_router(ruolo_router, prefix="/ruolo")
+api_router.include_router(wiki_router, prefix="/wiki")

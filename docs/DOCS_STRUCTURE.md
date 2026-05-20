@@ -4,20 +4,28 @@
 
 La documentazione del progetto e distribuita principalmente in due aree:
 
-1. Root del repository: documentazione generale di piattaforma, architettura e piani.
+1. `docs/`: documentazione generale di piattaforma, architettura e piani.
 2. `domain-docs/`: documentazione funzionale per dominio/modulo.
 
-## Documentazione generale in root
+Nella root del repository resta solo `README.md` (entry point del progetto).
 
-- `README.md`: overview del progetto, stack, quick start e riferimenti principali.
-- `ARCHITECTURE.md`: architettura generale.
-- `PRD.md`: product requirements di livello progetto.
-- `IMPLEMENTATION_PLAN.md`: piano di implementazione generale.
-- `AGENTS.md`: linee guida operative per agenti/tooling.
-- `PROMPT_BACKEND.md`: prompt e istruzioni backend.
-- `PROMPT_FRONTEND.md`: prompt e istruzioni frontend.
-- `PROMPT_DEVOPS.md`: prompt e istruzioni DevOps.
-- `PROMPT_CODEX_permissions.md`: note operative sui permessi per Codex.
+## Documentazione generale in docs/
+
+- `docs/ARCHITECTURE.md`: architettura generale.
+- `docs/PRD.md`: product requirements di livello progetto.
+- `docs/IMPLEMENTATION_PLAN.md`: piano di implementazione generale.
+- `docs/AGENTS.md`: linee guida operative per agenti/tooling.
+- `docs/PROMPT_BACKEND.md`: prompt e istruzioni backend.
+- `docs/PROMPT_FRONTEND.md`: prompt e istruzioni frontend.
+- `docs/PROMPT_DEVOPS.md`: prompt e istruzioni DevOps.
+- `docs/PROMPT_CODEX_permissions.md`: note operative sui permessi per Codex.
+- `docs/SECURITY.md`: note di sicurezza.
+
+### Wiki Agent (Milestone 9)
+
+- `docs/wiki/PRD_wiki.md`: PRD del Wiki Agent.
+- `docs/wiki/IMPLEMENTATION_PLAN_wiki.md`: piano di implementazione Wiki Agent.
+- `docs/wiki/PROMPT_CODEX_wiki.md`: prompt Codex per completare il Wiki Agent.
 - `docker-compose.local-gateway.yml`: stack Docker dedicato al reverse proxy locale condiviso tra progetti.
 - `.github/workflows/`: pipeline CI/CD GitHub Actions.
 - `backend/app/MONOLITH_MODULAR.md`: note architetturali sul backend monolite modulare.
