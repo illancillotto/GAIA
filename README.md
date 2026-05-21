@@ -209,6 +209,56 @@ Prerequisiti:
 - immagine gia presente localmente, ad esempio dopo `docker compose build`
 - se usi `--copy-env`, verifica che il file `.env` locale sia quello corretto per il server CED
 
+### Deploy CED verso `gaia.cbo`
+
+Per deployare lo stack GAIA su server CED con virtual host dedicato `gaia.cbo`, usare:
+
+- `./scripts/deploy-ced-gaia.sh`
+
+Azioni supportate:
+
+- `DEPLOY_ACTION=deploy`: build locale immagini GAIA, copia progetto + immagini + `.env`, `docker compose up -d`, configurazione nginx host se disponibile, smoke test finale
+- `DEPLOY_ACTION=nginx`: configura solo il virtual host host-level `gaia.cbo -> 127.0.0.1:$GAIA_PROD_NGINX_PORT`
+- `DEPLOY_ACTION=smoke`: verifica container e endpoint remoti senza rilanciare il deploy
+
+Esempi:
+
+- `./scripts/deploy-ced-gaia.sh`
+- `DEPLOY_ACTION=smoke CED_SSH_HOST=serverCed GAIA_DOMAIN=gaia.cbo ./scripts/deploy-ced-gaia.sh`
+- `DEPLOY_ACTION=nginx CONFIGURE_HOST_NGINX=yes ./scripts/deploy-ced-gaia.sh`
+
+Variabili operative principali:
+
+- `CED_SSH_HOST`: alias SSH del server, default `serverCed`
+- `CED_PROJECT_DIR`: directory remota progetto, default `/opt/gaia`
+- `ENV_FILE`: file env locale da trasferire, default `.env`
+- `GAIA_DOMAIN`: hostname pubblico, default `gaia.cbo`
+- `GAIA_PROD_NGINX_PORT`: porta host usata dallo stack Docker GAIA, default `8080`
+- `CONFIGURE_HOST_NGINX`: `auto|yes|no`
+
+Il deploy normalizza automaticamente alcune variabili nel `.env` remoto:
+
+- `NGINX_PORT=$GAIA_PROD_NGINX_PORT`
+- `NEXT_PUBLIC_API_BASE_URL=/api`
+- `BACKEND_CORS_ORIGINS` include `http://gaia.cbo` se assente
+
+Checklist minima del `.env` di produzione prima del deploy:
+
+- `POSTGRES_PASSWORD`
+- `DATABASE_URL`
+- `JWT_SECRET_KEY`
+- `BOOTSTRAP_ADMIN_USERNAME`
+- `BOOTSTRAP_ADMIN_EMAIL`
+- `BOOTSTRAP_ADMIN_PASSWORD`
+- `CREDENTIAL_MASTER_KEY`
+- eventuali credenziali NAS/PDND/ANPR realmente richieste dall'ambiente
+
+Note operative:
+
+- `gaia.local` resta un dominio di sviluppo locale; per il server CED il target operativo e `gaia.cbo`
+- lo script non modifica DNS o router: `gaia.cbo` deve gia risolvere verso il server corretto
+- se nginx host non e installato o `sudo` richiede password, lo script stampa i passaggi manuali da eseguire sul server
+
 ### Dominio locale `gaia.local`
 
 Per allineare l'accesso locale a un hostname stabile invece di usare solo `localhost`, usare:

@@ -5,7 +5,7 @@
 
 ## 1. Scopo
 
-Questa guida descrive il deployment iniziale della piattaforma in ambiente locale o interno usando Docker Compose.
+Questa guida descrive il deployment iniziale della piattaforma in ambiente locale o interno usando Docker Compose, e il deploy operativo sul server CED per l'hostname `gaia.cbo`.
 
 ## 2. Prerequisiti
 
@@ -29,6 +29,49 @@ Questa guida descrive il deployment iniziale della piattaforma in ambiente local
 4. `make bootstrap-admin`
 5. `make bootstrap-domain`
 6. verificare `http://localhost:8080`
+
+## 4.1 Deploy CED `gaia.cbo`
+
+Script dedicato:
+
+- `./scripts/deploy-ced-gaia.sh`
+
+Modalita supportate:
+
+- `DEPLOY_ACTION=deploy`: build locale immagini, trasferimento progetto + `.env` + immagini, avvio stack remoto, configurazione nginx host se disponibile, smoke test
+- `DEPLOY_ACTION=nginx`: configura solo il virtual host host-level per `gaia.cbo`
+- `DEPLOY_ACTION=smoke`: verifica solo stack e endpoint remoti
+
+Variabili principali:
+
+- `CED_SSH_HOST=serverCed`
+- `CED_PROJECT_DIR=/opt/gaia`
+- `GAIA_DOMAIN=gaia.cbo`
+- `GAIA_PROD_NGINX_PORT=8080`
+- `ENV_FILE=.env`
+- `CONFIGURE_HOST_NGINX=auto`
+
+Esempi:
+
+1. deploy completo:
+   `./scripts/deploy-ced-gaia.sh`
+2. smoke test remoto:
+   `DEPLOY_ACTION=smoke ./scripts/deploy-ced-gaia.sh`
+3. sola configurazione virtual host:
+   `DEPLOY_ACTION=nginx CONFIGURE_HOST_NGINX=yes ./scripts/deploy-ced-gaia.sh`
+
+Comportamento env lato server:
+
+- imposta o riallinea `NGINX_PORT=$GAIA_PROD_NGINX_PORT`
+- forza `NEXT_PUBLIC_API_BASE_URL=/api`
+- aggiunge `http://gaia.cbo` a `BACKEND_CORS_ORIGINS` se assente
+
+Prerequisiti operativi:
+
+- alias SSH funzionante verso il server CED
+- Docker disponibile sul server remoto
+- file `.env` locale gia valorizzato per produzione
+- DNS o risoluzione interna di `gaia.cbo` gia puntata al server corretto
 
 ## 5. Accessi di Default
 
@@ -111,6 +154,9 @@ Le credenziali vanno cambiate tramite variabili ambiente in ambienti non locali.
 - usare secret manager o variabili ambiente protette
 - configurare backup regolari del volume PostgreSQL
 - introdurre TLS terminato su proxy o load balancer interno
+- distinguere chiaramente gli hostname:
+  - `gaia.local` per sviluppo locale
+  - `gaia.cbo` per ambiente CED/interno
 
 ## 9. Backup Dati
 
