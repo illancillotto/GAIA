@@ -15,6 +15,8 @@ Variabili opzionali:
   GAIA_DOMAIN=gaia.cbo             Dominio virtual host da configurare
   GAIA_PROD_NGINX_PORT=8080        Porta host interna usata dal container nginx di GAIA
   COMPOSE_PROJECT_NAME=gaia        Nome progetto compose
+  RELEASE_ID=<auto>                Identificativo release, default timestamp + git sha
+  ALLOW_NON_PRODUCTION_ENV=no      yes|no. Se no, APP_ENV deve essere production
   CONFIGURE_HOST_NGINX=auto        auto|yes|no. In auto configura nginx solo se sudo non richiede password
   SSH_OPTS="-p 22"                 Opzioni extra per ssh/scp
 
@@ -37,6 +39,30 @@ require_cmd() {
   fi
 }
 
+read_env_value() {
+  local env_file="$1"
+  local key="$2"
+  local line
+  line="$(grep -E "^${key}=" "$env_file" | tail -n1 || true)"
+  if [[ -z "$line" ]]; then
+    return 1
+  fi
+  printf '%s' "${line#*=}"
+}
+
+require_nonempty_env() {
+  local env_file="$1"
+  local key="$2"
+  local value
+  value="$(read_env_value "$env_file" "$key" || true)"
+  value="${value%%#*}"
+  value="$(printf '%s' "$value" | sed 's/[[:space:]]*$//')"
+  if [[ -z "$value" ]]; then
+    echo "Errore: variabile obbligatoria assente o vuota in $env_file: $key" >&2
+    exit 1
+  fi
+}
+
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   usage
   exit 0
@@ -50,6 +76,8 @@ ENV_FILE="${ENV_FILE:-.env}"
 GAIA_DOMAIN="${GAIA_DOMAIN:-gaia.cbo}"
 GAIA_PROD_NGINX_PORT="${GAIA_PROD_NGINX_PORT:-8080}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-gaia}"
+RELEASE_ID="${RELEASE_ID:-}"
+ALLOW_NON_PRODUCTION_ENV="${ALLOW_NON_PRODUCTION_ENV:-no}"
 CONFIGURE_HOST_NGINX="${CONFIGURE_HOST_NGINX:-auto}"
 SSH_OPTS="${SSH_OPTS:-}"
 
@@ -60,6 +88,11 @@ fi
 
 if [[ "$CONFIGURE_HOST_NGINX" != "auto" && "$CONFIGURE_HOST_NGINX" != "yes" && "$CONFIGURE_HOST_NGINX" != "no" ]]; then
   echo "Errore: CONFIGURE_HOST_NGINX deve essere auto, yes o no." >&2
+  exit 1
+fi
+
+if [[ "$ALLOW_NON_PRODUCTION_ENV" != "yes" && "$ALLOW_NON_PRODUCTION_ENV" != "no" ]]; then
+  echo "Errore: ALLOW_NON_PRODUCTION_ENV deve essere yes o no." >&2
   exit 1
 fi
 
@@ -84,8 +117,11 @@ fi
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TMP_DIR="$(mktemp -d)"
-IMAGES_ARCHIVE="$TMP_DIR/gaia-images.tar.gz"
-PROJECT_ARCHIVE="$TMP_DIR/gaia-project.tar.gz"
+LOCAL_GIT_SHA="$(git -C "$ROOT_DIR" rev-parse --short HEAD 2>/dev/null || echo "unknown")"
+RELEASE_ID="${RELEASE_ID:-$(date +%Y%m%d-%H%M%S)-$LOCAL_GIT_SHA}"
+IMAGES_ARCHIVE="$TMP_DIR/gaia-images-${RELEASE_ID}.tar.gz"
+PROJECT_ARCHIVE="$TMP_DIR/gaia-project-${RELEASE_ID}.tar.gz"
+RELEASE_MANIFEST="$TMP_DIR/gaia-release-${RELEASE_ID}.txt"
 
 cleanup() {
   rm -rf "$TMP_DIR"
@@ -96,9 +132,39 @@ cd "$ROOT_DIR"
 
 echo "==> Target CED: $CED_SSH_HOST ($CED_SERVER_IP), dominio $GAIA_DOMAIN"
 echo "==> Azione: $DEPLOY_ACTION"
+echo "==> Release ID: $RELEASE_ID"
 echo "==> Porta interna GAIA nginx: $GAIA_PROD_NGINX_PORT"
 
 if [[ "$DEPLOY_ACTION" == "deploy" ]]; then
+  require_nonempty_env "$ENV_FILE" "POSTGRES_PASSWORD"
+  require_nonempty_env "$ENV_FILE" "DATABASE_URL"
+  require_nonempty_env "$ENV_FILE" "JWT_SECRET_KEY"
+  require_nonempty_env "$ENV_FILE" "BOOTSTRAP_ADMIN_USERNAME"
+  require_nonempty_env "$ENV_FILE" "BOOTSTRAP_ADMIN_EMAIL"
+  require_nonempty_env "$ENV_FILE" "BOOTSTRAP_ADMIN_PASSWORD"
+  require_nonempty_env "$ENV_FILE" "CREDENTIAL_MASTER_KEY"
+
+  app_env_value="$(read_env_value "$ENV_FILE" "APP_ENV" || true)"
+  if [[ "$ALLOW_NON_PRODUCTION_ENV" != "yes" && "$app_env_value" != "production" ]]; then
+    echo "Errore: per deploy CED APP_ENV deve essere production in $ENV_FILE. Usa ALLOW_NON_PRODUCTION_ENV=yes solo se davvero necessario." >&2
+    exit 1
+  fi
+
+  if [[ "$GAIA_DOMAIN" == *.local ]]; then
+    echo "Errore: GAIA_DOMAIN non puo puntare a un dominio locale in deploy CED: $GAIA_DOMAIN" >&2
+    exit 1
+  fi
+
+  cat > "$RELEASE_MANIFEST" <<EOF
+release_id=$RELEASE_ID
+git_sha=$LOCAL_GIT_SHA
+deployed_from_host=$(hostname)
+deployed_at_utc=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+gaia_domain=$GAIA_DOMAIN
+gaia_prod_nginx_port=$GAIA_PROD_NGINX_PORT
+env_file=$ENV_FILE
+EOF
+
   echo "==> Build immagini Docker produzione GAIA"
   COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT_NAME" docker compose --env-file "$ENV_FILE" build \
     backend frontend elaborazioni-worker scanner arp-helper
@@ -143,14 +209,15 @@ fi
 REMOTE_MKDIR
 
   echo "==> Copia archivio progetto, immagini e .env sul server"
-  scp $SSH_OPTS "$PROJECT_ARCHIVE" "$CED_SSH_HOST:$CED_PROJECT_DIR/releases/gaia-project.tar.gz"
-  scp $SSH_OPTS "$IMAGES_ARCHIVE" "$CED_SSH_HOST:$CED_PROJECT_DIR/releases/gaia-images.tar.gz"
+  scp $SSH_OPTS "$PROJECT_ARCHIVE" "$CED_SSH_HOST:$CED_PROJECT_DIR/releases/gaia-project-${RELEASE_ID}.tar.gz"
+  scp $SSH_OPTS "$IMAGES_ARCHIVE" "$CED_SSH_HOST:$CED_PROJECT_DIR/releases/gaia-images-${RELEASE_ID}.tar.gz"
+  scp $SSH_OPTS "$RELEASE_MANIFEST" "$CED_SSH_HOST:$CED_PROJECT_DIR/releases/gaia-release-${RELEASE_ID}.txt"
   scp $SSH_OPTS "$ENV_FILE" "$CED_SSH_HOST:$CED_PROJECT_DIR/.env"
 fi
 
 echo "==> Deploy remoto"
 ssh $SSH_OPTS "$CED_SSH_HOST" \
-  "DEPLOY_ACTION='$DEPLOY_ACTION' CED_PROJECT_DIR='$CED_PROJECT_DIR' GAIA_DOMAIN='$GAIA_DOMAIN' GAIA_PROD_NGINX_PORT='$GAIA_PROD_NGINX_PORT' COMPOSE_PROJECT_NAME='$COMPOSE_PROJECT_NAME' CONFIGURE_HOST_NGINX='$CONFIGURE_HOST_NGINX' bash -s" <<'REMOTE'
+  "DEPLOY_ACTION='$DEPLOY_ACTION' CED_PROJECT_DIR='$CED_PROJECT_DIR' GAIA_DOMAIN='$GAIA_DOMAIN' GAIA_PROD_NGINX_PORT='$GAIA_PROD_NGINX_PORT' COMPOSE_PROJECT_NAME='$COMPOSE_PROJECT_NAME' CONFIGURE_HOST_NGINX='$CONFIGURE_HOST_NGINX' RELEASE_ID='$RELEASE_ID' bash -s" <<'REMOTE'
 set -Eeuo pipefail
 
 NGINX_BASENAME="${GAIA_DOMAIN}.conf"
@@ -285,7 +352,7 @@ if [[ "$DEPLOY_ACTION" == "deploy" ]]; then
   cd "$CED_PROJECT_DIR"
 
   echo "==> Estrazione progetto"
-  tar -xzf releases/gaia-project.tar.gz -C "$CED_PROJECT_DIR"
+  tar -xzf "releases/gaia-project-${RELEASE_ID}.tar.gz" -C "$CED_PROJECT_DIR"
 
   echo "==> Normalizzazione .env produzione"
   if grep -q '^NGINX_PORT=' .env; then
@@ -309,14 +376,25 @@ if [[ "$DEPLOY_ACTION" == "deploy" ]]; then
     printf 'BACKEND_CORS_ORIGINS=http://%s\n' "$GAIA_DOMAIN" >> .env
   fi
 
+  echo "==> Verifica APP_ENV remoto"
+  remote_app_env="$(grep -E '^APP_ENV=' .env | tail -n1 | cut -d= -f2- || true)"
+  if [[ "$remote_app_env" != "production" ]]; then
+    echo "Errore: APP_ENV remoto deve essere production, trovato: ${remote_app_env:-<vuoto>}" >&2
+    exit 1
+  fi
+
   echo "==> Caricamento immagini Docker"
-  gzip -dc releases/gaia-images.tar.gz | docker load
+  gzip -dc "releases/gaia-images-${RELEASE_ID}.tar.gz" | docker load
 
   echo "==> Pull immagini registry dipendenti"
   COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT_NAME" docker compose --env-file .env pull postgres martin nginx || true
 
   echo "==> Avvio stack GAIA produzione"
   COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT_NAME" docker compose --env-file .env up -d --no-build --remove-orphans
+
+  if [[ -f "releases/gaia-release-${RELEASE_ID}.txt" ]]; then
+    cp "releases/gaia-release-${RELEASE_ID}.txt" "$CED_PROJECT_DIR/current-release.txt"
+  fi
 fi
 
 if [[ "$DEPLOY_ACTION" == "nginx" || "$DEPLOY_ACTION" == "deploy" ]]; then

@@ -234,7 +234,16 @@ Variabili operative principali:
 - `ENV_FILE`: file env locale da trasferire, default `.env`
 - `GAIA_DOMAIN`: hostname pubblico, default `gaia.cbo`
 - `GAIA_PROD_NGINX_PORT`: porta host usata dallo stack Docker GAIA, default `8080`
+- `RELEASE_ID`: release identifier, default `YYYYmmdd-HHMMSS-<gitsha>`
+- `ALLOW_NON_PRODUCTION_ENV`: default `no`; se `no`, il deploy rifiuta `.env` con `APP_ENV` diverso da `production`
 - `CONFIGURE_HOST_NGINX`: `auto|yes|no`
+
+Modello operativo:
+
+- il server CED viene trattato come ambiente runtime di produzione
+- la build delle immagini avviene localmente sulla macchina da cui lanci lo script
+- il server remoto riceve artefatti gia buildati e li avvia con `docker compose up -d --no-build`
+- ogni deploy salva un manifest minimale di release in `releases/gaia-release-<release_id>.txt` e aggiorna `current-release.txt`
 
 Il deploy normalizza automaticamente alcune variabili nel `.env` remoto:
 
@@ -244,6 +253,7 @@ Il deploy normalizza automaticamente alcune variabili nel `.env` remoto:
 
 Checklist minima del `.env` di produzione prima del deploy:
 
+- `APP_ENV=production`
 - `POSTGRES_PASSWORD`
 - `DATABASE_URL`
 - `JWT_SECRET_KEY`
@@ -258,6 +268,7 @@ Note operative:
 - `gaia.local` resta un dominio di sviluppo locale; per il server CED il target operativo e `gaia.cbo`
 - lo script non modifica DNS o router: `gaia.cbo` deve gia risolvere verso il server corretto
 - se nginx host non e installato o `sudo` richiede password, lo script stampa i passaggi manuali da eseguire sul server
+- il deploy fallisce se mancano env critiche o se `GAIA_DOMAIN` punta a un hostname `.local`
 
 ### Dominio locale `gaia.local`
 

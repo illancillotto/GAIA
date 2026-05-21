@@ -49,6 +49,8 @@ Variabili principali:
 - `GAIA_DOMAIN=gaia.cbo`
 - `GAIA_PROD_NGINX_PORT=8080`
 - `ENV_FILE=.env`
+- `RELEASE_ID=<auto>`
+- `ALLOW_NON_PRODUCTION_ENV=no`
 - `CONFIGURE_HOST_NGINX=auto`
 
 Esempi:
@@ -65,6 +67,14 @@ Comportamento env lato server:
 - imposta o riallinea `NGINX_PORT=$GAIA_PROD_NGINX_PORT`
 - forza `NEXT_PUBLIC_API_BASE_URL=/api`
 - aggiunge `http://gaia.cbo` a `BACKEND_CORS_ORIGINS` se assente
+- richiede `APP_ENV=production` salvo override esplicito `ALLOW_NON_PRODUCTION_ENV=yes`
+
+Guardrail produzione:
+
+- verifica locale di env obbligatorie: `POSTGRES_PASSWORD`, `DATABASE_URL`, `JWT_SECRET_KEY`, `BOOTSTRAP_ADMIN_*`, `CREDENTIAL_MASTER_KEY`
+- rifiuta domini `*.local` come target CED
+- produce un `RELEASE_ID` e archivia manifest release sotto `releases/`
+- il server remoto esegue solo runtime deploy con `docker compose up -d --no-build`
 
 Prerequisiti operativi:
 
