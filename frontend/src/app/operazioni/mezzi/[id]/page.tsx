@@ -21,6 +21,7 @@ interface VehicleDetail {
   name: string;
   vehicle_type: string;
   plate_number: string | null;
+  asset_tag: string | null;
   brand: string | null;
   model: string | null;
   fuel_type: string | null;
@@ -28,6 +29,13 @@ interface VehicleDetail {
   has_gps_device: boolean;
   gps_provider_code: string | null;
   is_active: boolean;
+  current_assignment: {
+    assignment_target_type?: string | null;
+    operator_user_id?: number | null;
+    team_id?: string | null;
+    start_at?: string | null;
+  } | null;
+  last_odometer_km: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -55,6 +63,11 @@ function fmtDate(iso: string) {
 function fmtNum(val: string | null, decimals = 2) {
   if (val === null || val === undefined) return "—";
   return Number(val).toLocaleString("it-IT", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+}
+
+function fmtNullable(value: string | null | undefined) {
+  if (!value || !String(value).trim()) return "—";
+  return value;
 }
 
 function isStorno(log: VehicleFuelLogItem) {
@@ -216,6 +229,13 @@ function MezzoDetailContent({ vehicleId }: { vehicleId: string }) {
 
   return (
     <div className="page-stack">
+      <div className="flex items-center justify-start">
+        <Link href="/operazioni/mezzi" className="btn-secondary">
+          <span className="material-symbols-outlined text-base">arrow_back</span>
+          Torna ai mezzi
+        </Link>
+      </div>
+
       <OperazioniBreadcrumb
         items={[
           { label: "Operazioni", href: "/operazioni" },
@@ -239,16 +259,33 @@ function MezzoDetailContent({ vehicleId }: { vehicleId: string }) {
 
       <OperazioniCollectionPanel
         title="Scheda mezzo"
-        description="Dati anagrafici essenziali del veicolo per consultazione rapida."
-        count={5}
+        description="Dati anagrafici e operativi del veicolo recuperati dal catalogo mezzi."
+        count={11}
       >
         <OperazioniInfoGrid
           items={[
+            { label: "Codice", value: vehicle.code },
+            { label: "Targa", value: fmtNullable(vehicle.plate_number) },
+            { label: "Asset tag", value: fmtNullable(vehicle.asset_tag) },
             { label: "Tipo", value: vehicle.vehicle_type },
             { label: "Marca / Modello", value: [vehicle.brand, vehicle.model].filter(Boolean).join(" ") || "—" },
-            { label: "Carburante", value: vehicle.fuel_type || "—" },
+            { label: "Carburante", value: fmtNullable(vehicle.fuel_type) },
+            { label: "Stato", value: statusLabels[vehicle.current_status] || vehicle.current_status },
+            { label: "Attivo", value: vehicle.is_active ? "Si" : "No" },
             { label: "GPS", value: vehicle.has_gps_device ? "Si" : "No" },
-            { label: "Ultimo aggiornamento", value: new Date(vehicle.updated_at).toLocaleDateString("it-IT") },
+            { label: "Codice GPS", value: fmtNullable(vehicle.gps_provider_code) },
+            {
+              label: "Ultimo contachilometri",
+              value: vehicle.last_odometer_km != null ? `${fmtNum(String(vehicle.last_odometer_km), 0)} km` : "—",
+            },
+            {
+              label: "Assegnazione corrente",
+              value: vehicle.current_assignment
+                ? `${vehicle.current_assignment.assignment_target_type === "team" ? "Team" : "Operatore"} · dal ${vehicle.current_assignment.start_at ? fmtDate(vehicle.current_assignment.start_at) : "—"}`
+                : "Nessuna",
+            },
+            { label: "Creato il", value: fmtDate(vehicle.created_at) },
+            { label: "Ultimo aggiornamento", value: fmtDate(vehicle.updated_at) },
           ]}
         />
       </OperazioniCollectionPanel>
@@ -266,9 +303,6 @@ function MezzoDetailContent({ vehicleId }: { vehicleId: string }) {
         <FuelLogsPanel vehicleId={vehicleId} />
       </div>
 
-      <Link href="/operazioni/mezzi" className="btn-secondary">
-        Torna alla lista mezzi
-      </Link>
     </div>
   );
 }
