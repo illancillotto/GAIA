@@ -64,6 +64,7 @@ postgres_data.tar.gz
 *.code-workspace
 .env.*
 !.env.example
+!.env.production.example
 *.pyc
 venv/
 target/

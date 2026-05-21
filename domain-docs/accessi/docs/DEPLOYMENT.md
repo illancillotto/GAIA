@@ -11,6 +11,7 @@ Questa guida descrive il deployment iniziale della piattaforma in ambiente local
 
 - Docker Engine e Docker Compose plugin
 - file root `.env` derivato da `.env.example`
+- per deploy CED: file locale `.env.production` derivato da `.env.production.example`
 - porte locali disponibili per frontend, backend e nginx
 
 ## 3. Servizi
@@ -47,8 +48,9 @@ Variabili principali:
 - `CED_SSH_HOST=serverCed`
 - `CED_PROJECT_DIR=/opt/gaia`
 - `GAIA_DOMAIN=gaia.cbo`
+- `GAIA_MOBILE_DOMAIN=gaia-mobile.cbo`
 - `GAIA_PROD_NGINX_PORT=8080`
-- `ENV_FILE=.env`
+- `ENV_FILE=.env.production`
 - `RELEASE_ID=<auto>`
 - `ALLOW_NON_PRODUCTION_ENV=no`
 - `CONFIGURE_HOST_NGINX=auto`
@@ -64,10 +66,13 @@ Esempi:
 
 Comportamento env lato server:
 
+- copia il file locale production sia in `/opt/gaia/.env` sia in `/opt/gaia/.env.production`
 - imposta o riallinea `NGINX_PORT=$GAIA_PROD_NGINX_PORT`
 - forza `NEXT_PUBLIC_API_BASE_URL=/api`
-- aggiunge `http://gaia.cbo` a `BACKEND_CORS_ORIGINS` se assente
+- aggiunge a `BACKEND_CORS_ORIGINS` gli origin `http(s)://gaia.cbo` e, se configurato, `http(s)://gaia-mobile.cbo`
 - richiede `APP_ENV=production` salvo override esplicito `ALLOW_NON_PRODUCTION_ENV=yes`
+- dopo le normalizzazioni, riallinea `.env.production` a `.env`
+- prova ad applicare permessi restrittivi `chmod 600 .env .env.production`
 
 Guardrail produzione:
 
@@ -80,7 +85,7 @@ Prerequisiti operativi:
 
 - alias SSH funzionante verso il server CED
 - Docker disponibile sul server remoto
-- file `.env` locale gia valorizzato per produzione
+- file `.env.production` locale gia valorizzato per produzione
 - DNS o risoluzione interna di `gaia.cbo` gia puntata al server corretto
 
 ## 5. Accessi di Default

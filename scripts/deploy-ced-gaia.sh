@@ -11,8 +11,9 @@ Variabili opzionali:
   CED_SSH_HOST=serverCed           Host SSH o alias SSH del server CED
   CED_SERVER_IP=192.168.1.110      IP server CED, solo per log/verifica operativa
   CED_PROJECT_DIR=/opt/gaia        Directory progetto sul server
-  ENV_FILE=.env                    File env locale da copiare sul server
+  ENV_FILE=.env.production         File env locale di produzione da copiare sul server
   GAIA_DOMAIN=gaia.cbo             Dominio virtual host da configurare
+  GAIA_MOBILE_DOMAIN=gaia-mobile.cbo Dominio frontend mobile opzionale da includere nei CORS
   GAIA_PROD_NGINX_PORT=8080        Porta host interna usata dal container nginx di GAIA
   COMPOSE_PROJECT_NAME=gaia        Nome progetto compose
   RELEASE_ID=<auto>                Identificativo release, default timestamp + git sha
@@ -21,7 +22,7 @@ Variabili opzionali:
   SSH_OPTS="-p 22"                 Opzioni extra per ssh/scp
 
 Lo script:
-  - DEPLOY_ACTION=deploy: builda, copia immagini/progetto/.env, avvia lo stack e configura nginx host se possibile
+  - DEPLOY_ACTION=deploy: builda, copia immagini/progetto/.env.production, avvia lo stack e configura nginx host se possibile
   - DEPLOY_ACTION=nginx: configura solo il virtual host host nginx per gaia.cbo
   - DEPLOY_ACTION=smoke: verifica soltanto container e health endpoint remoti
 
@@ -72,8 +73,9 @@ DEPLOY_ACTION="${DEPLOY_ACTION:-deploy}"
 CED_SSH_HOST="${CED_SSH_HOST:-serverCed}"
 CED_SERVER_IP="${CED_SERVER_IP:-192.168.1.110}"
 CED_PROJECT_DIR="${CED_PROJECT_DIR:-/opt/gaia}"
-ENV_FILE="${ENV_FILE:-.env}"
+ENV_FILE="${ENV_FILE:-.env.production}"
 GAIA_DOMAIN="${GAIA_DOMAIN:-gaia.cbo}"
+GAIA_MOBILE_DOMAIN="${GAIA_MOBILE_DOMAIN:-gaia-mobile.cbo}"
 GAIA_PROD_NGINX_PORT="${GAIA_PROD_NGINX_PORT:-8080}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-gaia}"
 RELEASE_ID="${RELEASE_ID:-}"
@@ -154,6 +156,10 @@ if [[ "$DEPLOY_ACTION" == "deploy" ]]; then
     echo "Errore: GAIA_DOMAIN non puo puntare a un dominio locale in deploy CED: $GAIA_DOMAIN" >&2
     exit 1
   fi
+  if [[ -n "$GAIA_MOBILE_DOMAIN" && "$GAIA_MOBILE_DOMAIN" == *.local ]]; then
+    echo "Errore: GAIA_MOBILE_DOMAIN non puo puntare a un dominio locale in deploy CED: $GAIA_MOBILE_DOMAIN" >&2
+    exit 1
+  fi
 
   cat > "$RELEASE_MANIFEST" <<EOF
 release_id=$RELEASE_ID
@@ -161,8 +167,11 @@ git_sha=$LOCAL_GIT_SHA
 deployed_from_host=$(hostname)
 deployed_at_utc=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
 gaia_domain=$GAIA_DOMAIN
+gaia_mobile_domain=$GAIA_MOBILE_DOMAIN
 gaia_prod_nginx_port=$GAIA_PROD_NGINX_PORT
 env_file=$ENV_FILE
+remote_env_file=.env
+remote_production_env_file=.env.production
 EOF
 
   echo "==> Build immagini Docker produzione GAIA"
@@ -208,16 +217,17 @@ if ! mkdir -p "$CED_PROJECT_DIR/releases" 2>/dev/null; then
 fi
 REMOTE_MKDIR
 
-  echo "==> Copia archivio progetto, immagini e .env sul server"
+  echo "==> Copia archivio progetto, immagini e env sul server"
   scp $SSH_OPTS "$PROJECT_ARCHIVE" "$CED_SSH_HOST:$CED_PROJECT_DIR/releases/gaia-project-${RELEASE_ID}.tar.gz"
   scp $SSH_OPTS "$IMAGES_ARCHIVE" "$CED_SSH_HOST:$CED_PROJECT_DIR/releases/gaia-images-${RELEASE_ID}.tar.gz"
   scp $SSH_OPTS "$RELEASE_MANIFEST" "$CED_SSH_HOST:$CED_PROJECT_DIR/releases/gaia-release-${RELEASE_ID}.txt"
   scp $SSH_OPTS "$ENV_FILE" "$CED_SSH_HOST:$CED_PROJECT_DIR/.env"
+  scp $SSH_OPTS "$ENV_FILE" "$CED_SSH_HOST:$CED_PROJECT_DIR/.env.production"
 fi
 
 echo "==> Deploy remoto"
 ssh $SSH_OPTS "$CED_SSH_HOST" \
-  "DEPLOY_ACTION='$DEPLOY_ACTION' CED_PROJECT_DIR='$CED_PROJECT_DIR' GAIA_DOMAIN='$GAIA_DOMAIN' GAIA_PROD_NGINX_PORT='$GAIA_PROD_NGINX_PORT' COMPOSE_PROJECT_NAME='$COMPOSE_PROJECT_NAME' CONFIGURE_HOST_NGINX='$CONFIGURE_HOST_NGINX' RELEASE_ID='$RELEASE_ID' bash -s" <<'REMOTE'
+  "DEPLOY_ACTION='$DEPLOY_ACTION' CED_PROJECT_DIR='$CED_PROJECT_DIR' GAIA_DOMAIN='$GAIA_DOMAIN' GAIA_MOBILE_DOMAIN='$GAIA_MOBILE_DOMAIN' GAIA_PROD_NGINX_PORT='$GAIA_PROD_NGINX_PORT' COMPOSE_PROJECT_NAME='$COMPOSE_PROJECT_NAME' CONFIGURE_HOST_NGINX='$CONFIGURE_HOST_NGINX' RELEASE_ID='$RELEASE_ID' bash -s" <<'REMOTE'
 set -Eeuo pipefail
 
 NGINX_BASENAME="${GAIA_DOMAIN}.conf"
@@ -351,6 +361,10 @@ run_smoke_tests() {
 if [[ "$DEPLOY_ACTION" == "deploy" ]]; then
   cd "$CED_PROJECT_DIR"
 
+  if [[ ! -f .env.production && -f .env ]]; then
+    cp .env .env.production
+  fi
+
   echo "==> Estrazione progetto"
   tar -xzf "releases/gaia-project-${RELEASE_ID}.tar.gz" -C "$CED_PROJECT_DIR"
 
@@ -369,12 +383,30 @@ if [[ "$DEPLOY_ACTION" == "deploy" ]]; then
 
   if grep -q '^BACKEND_CORS_ORIGINS=' .env; then
     current_cors="$(grep '^BACKEND_CORS_ORIGINS=' .env | cut -d= -f2-)"
-    if [[ "$current_cors" != *"http://$GAIA_DOMAIN"* ]]; then
-      sed -i "s|^BACKEND_CORS_ORIGINS=.*|BACKEND_CORS_ORIGINS=${current_cors},http://$GAIA_DOMAIN|" .env
+    new_cors="$current_cors"
+    for origin in "http://$GAIA_DOMAIN" "https://$GAIA_DOMAIN"; do
+      if [[ "$new_cors" != *"$origin"* ]]; then
+        new_cors="${new_cors},${origin}"
+      fi
+    done
+    if [[ -n "$GAIA_MOBILE_DOMAIN" ]]; then
+      for origin in "http://$GAIA_MOBILE_DOMAIN" "https://$GAIA_MOBILE_DOMAIN"; do
+        if [[ "$new_cors" != *"$origin"* ]]; then
+          new_cors="${new_cors},${origin}"
+        fi
+      done
     fi
+    sed -i "s|^BACKEND_CORS_ORIGINS=.*|BACKEND_CORS_ORIGINS=${new_cors}|" .env
   else
-    printf 'BACKEND_CORS_ORIGINS=http://%s\n' "$GAIA_DOMAIN" >> .env
+    if [[ -n "$GAIA_MOBILE_DOMAIN" ]]; then
+      printf 'BACKEND_CORS_ORIGINS=http://%s,https://%s,http://%s,https://%s\n' "$GAIA_DOMAIN" "$GAIA_DOMAIN" "$GAIA_MOBILE_DOMAIN" "$GAIA_MOBILE_DOMAIN" >> .env
+    else
+      printf 'BACKEND_CORS_ORIGINS=http://%s,https://%s\n' "$GAIA_DOMAIN" "$GAIA_DOMAIN" >> .env
+    fi
   fi
+
+  cp .env .env.production
+  chmod 600 .env .env.production || true
 
   echo "==> Verifica APP_ENV remoto"
   remote_app_env="$(grep -E '^APP_ENV=' .env | tail -n1 | cut -d= -f2- || true)"
