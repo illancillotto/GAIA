@@ -71,3 +71,4 @@ vendor/
 .cache/
 tmp/
 exports/
+.venv-codex/

@@ -34,10 +34,32 @@ function MeterReadingImportIssuesModal({
   item: MeterReadingImportReportItem;
   onClose: () => void;
 }) {
+  const [statusFilter, setStatusFilter] = useState<"all" | "valid" | "warning" | "error">("all");
   const issueRows = useMemo(
     () => item.preview.items.filter((row) => row.validation_status !== "valid" || row.validation_messages.length > 0),
     [item],
   );
+  const filteredRows = useMemo(() => {
+    if (statusFilter === "all") {
+      return issueRows;
+    }
+    return item.preview.items.filter((row) => row.validation_status === statusFilter);
+  }, [item.preview.items, issueRows, statusFilter]);
+  const filterCounts = useMemo(
+    () => ({
+      all: issueRows.length,
+      valid: item.preview.items.filter((row) => row.validation_status === "valid").length,
+      warning: item.preview.items.filter((row) => row.validation_status === "warning").length,
+      error: item.preview.items.filter((row) => row.validation_status === "error").length,
+    }),
+    [item.preview.items, issueRows],
+  );
+  const filterOptions: Array<{ value: "all" | "valid" | "warning" | "error"; label: string }> = [
+    { value: "all", label: "Tutti i problemi" },
+    { value: "valid", label: "Valide" },
+    { value: "warning", label: "Warning" },
+    { value: "error", label: "Errori" },
+  ];
 
   return (
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 px-4 py-6 backdrop-blur-sm">
@@ -58,19 +80,39 @@ function MeterReadingImportIssuesModal({
         </div>
 
         <div className="overflow-y-auto px-6 py-5">
+          <div className="mb-4 flex flex-wrap gap-2">
+            {filterOptions.map((option) => {
+              const active = statusFilter === option.value;
+              return (
+                <button
+                  key={option.value}
+                  className={`rounded-full border px-3 py-1.5 text-sm font-medium transition ${
+                    active
+                      ? "border-[#1D4E35] bg-[#1D4E35] text-white"
+                      : "border-slate-200 bg-white text-slate-700 hover:border-slate-300"
+                  }`}
+                  type="button"
+                  onClick={() => setStatusFilter(option.value)}
+                >
+                  {option.label} ({filterCounts[option.value]})
+                </button>
+              );
+            })}
+          </div>
+
           {!item.preview.distretto_id ? (
             <div className="mb-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
               Il distretto non e stato dedotto dal nome file. Rinomina il file con il codice o con il nome del distretto.
             </div>
           ) : null}
 
-          {issueRows.length === 0 ? (
+          {filteredRows.length === 0 ? (
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-800">
-              Nessun warning o errore su questo file.
+              {statusFilter === "all" ? "Nessun warning o errore su questo file." : "Nessuna riga trovata per il filtro selezionato."}
             </div>
           ) : (
             <div className="space-y-3">
-              {issueRows.map((row) => (
+              {filteredRows.map((row) => (
                 <div key={`${item.filename}-${row.row_number}`} className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
                   {(() => {
                     const sharedSubjects = readStringArray(row.data?.shared_meter_subject_labels);

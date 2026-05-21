@@ -4,6 +4,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { AlertBanner } from "@/components/ui/alert-banner";
+import { WikiWidget } from "@/features/wiki/WikiWidget";
 import { login } from "@/lib/api";
 import { getStoredAccessToken, setStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/cn";
@@ -16,6 +17,7 @@ const modules = [
   { name: "GAIA Riordino", icon: "description", status: "In sviluppo", active: false },
   { name: "GAIA Ruolo", icon: "receipt_long", status: "In sviluppo", active: false },
   { name: "GAIA Elaborazioni", icon: "sync_alt", status: "In sviluppo", active: false },
+  { name: "GAIA Wiki", icon: "menu_book", status: "Operativo", active: true },
   { name: "GAIA Catasto", icon: "account_balance", status: "Non avviato", active: false },
   { name: "GAIA Inventario", icon: "inventory_2", status: "Non avviato", active: false },
 ];
@@ -71,6 +73,9 @@ export default function LoginPage() {
           <nav className="hidden md:flex gap-8 items-center">
             <span className="font-body font-medium text-outline">home GAIA</span>
             <span className="font-body font-medium text-outline">Moduli</span>
+            <a className="font-body font-medium text-outline transition-colors hover:text-primary" href="/wiki">
+              Wiki
+            </a>
             <span className="font-body font-medium text-outline">Supporto</span>
             <span className="font-body font-medium text-outline">Documentazione</span>
             <span className="bg-primary text-on-primary px-6 py-2 rounded-lg font-medium text-sm">
@@ -101,7 +106,8 @@ export default function LoginPage() {
             </h2>
             <p className="text-on-surface-variant text-lg mb-12 max-w-md font-light leading-relaxed">
               GAIA centralizza i moduli del Consorzio in un unico accesso: oggi NAS Control e Rete sono
-              operativi, mentre gli altri domini restano in sviluppo o non ancora avviati.
+              operativi, la Wiki e disponibile con assistente contestuale, mentre gli altri domini restano
+              in sviluppo o non ancora avviati.
             </p>
 
             <div className="space-y-6">
@@ -249,6 +255,7 @@ export default function LoginPage() {
           </div>
         </section>
       </main>
+      <WikiWidget />
     </div>
   );
 }
