@@ -7713,6 +7713,30 @@ def test_meter_reading_parser_supports_2022_headers_without_id_column() -> None:
     assert row["dui"] == "La Casa Dell'Oliva"
 
 
+def test_meter_reading_parser_multiplies_final_reading_for_hydropass_dn_150() -> None:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(
+        [
+            "PUNTO DI CONSEGNA ",
+            "Tipologia idrante",
+            "lettura iniz. 2025",
+            "lettura finale 2025",
+            "tot. M3",
+        ]
+    )
+    sheet.append(["C9A_1", "Hydropass ACMO bi_flangia dn_150", 100, 125, 25])
+    output = BytesIO()
+    workbook.save(output)
+
+    parsed = parse_meter_readings_excel(output.getvalue(), "D09-Test 2025.xlsx")
+
+    row = parsed.rows[0].data
+    assert row["lettura_iniziale"] == Decimal("100")
+    assert row["lettura_finale"] == Decimal("1250")
+    assert row["consumo_mc"] == Decimal("25")
+
+
 def test_meter_reading_parser_supports_2026_shifted_header_row() -> None:
     workbook = Workbook()
     sheet = workbook.active
@@ -7937,6 +7961,60 @@ def test_meter_reading_import_endpoint_keeps_shared_meter_unassigned() -> None:
             ]
         )
         db.commit()
+    finally:
+        db.close()
+
+
+def test_meter_reading_import_endpoint_multiplies_final_reading_for_hydropass_dn_150() -> None:
+    client = TestClient(app)
+
+    response = client.post(
+        "/catasto/meter-readings/import?mode=upsert&anno=2025",
+        headers=auth_headers(),
+        files={
+            "file": (
+                "D01-Sinis 2025.xlsx",
+                _build_meter_readings_workbook(
+                    headers=[
+                        "ID",
+                        "PUNTO_CONS",
+                        "TIPOLOGIA IDRANTE",
+                        "COD_CONT",
+                        "LETTURA FINALE 2024",
+                        "LETTURA FINALE 2025",
+                        "TOTALE m3 2025",
+                        "TITOLARE DUI 2025",
+                        "COD. FISC",
+                        "TELEFONO",
+                    ],
+                    rows=[
+                        [
+                            1,
+                            "C9A_1",
+                            "Hydropass ACMO bi_flangia dn_150",
+                            "9009",
+                            100,
+                            125,
+                            25,
+                            "DUI009",
+                            "RSSMRA80A01H501U",
+                            "3331234567",
+                        ]
+                    ]
+                ),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert response.status_code == 201
+
+    db = TestingSessionLocal()
+    try:
+        reading = db.execute(select(CatMeterReading).where(CatMeterReading.punto_consegna == "C9A_1")).scalar_one()
+        assert reading.lettura_iniziale == 100
+        assert reading.lettura_finale == 1250
+        assert reading.consumo_mc == 25
     finally:
         db.close()
 

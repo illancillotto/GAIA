@@ -183,6 +183,28 @@ def _parse_date(value: Any) -> date | None:
     return None
 
 
+def _normalize_type_token(value: str | None) -> str:
+    if not value:
+        return ""
+    normalized = unicodedata.normalize("NFD", value)
+    normalized = "".join(char for char in normalized if not unicodedata.combining(char))
+    normalized = normalized.upper()
+    normalized = re.sub(r"[^A-Z0-9]+", "_", normalized).strip("_")
+    return normalized
+
+
+def _requires_final_reading_x10(tipologia_idrante: str | None) -> bool:
+    normalized = _normalize_type_token(tipologia_idrante)
+    return normalized == "HYDROPASS_ACMO_BI_FLANGIA_DN_150"
+
+
+def _apply_meter_type_adjustments(item: dict[str, Any]) -> None:
+    if _requires_final_reading_x10(_clean_string(item.get("tipologia_idrante"))):
+        lettura_finale = item.get("lettura_finale")
+        if isinstance(lettura_finale, Decimal):
+            item["lettura_finale"] = lettura_finale * Decimal("10")
+
+
 def _detect_header_row(sheet) -> int:
     best_row = 1
     best_score = -1
@@ -338,6 +360,7 @@ def parse_meter_readings_excel(file_bytes: bytes, filename: str) -> ParsedMeterR
             else:
                 item[field_name] = _clean_string(raw_value)
         item["record_type"] = _infer_record_type(item)
+        _apply_meter_type_adjustments(item)
         if not has_values:
             continue
         parsed_rows.append(ParsedMeterReadingRow(row_number=row_number, data=item))
