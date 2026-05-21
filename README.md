@@ -45,6 +45,9 @@ Automazione delle visure catastali dal portale SISTER: upload batch CSV/XLSX,
 worker Playwright separato, gestione CAPTCHA, archivio PDF e download ZIP.
 Il runtime supporta sia visure per immobile sia visure per soggetto PF/PNF,
 con esiti diagnostici distinti `completed`, `failed`, `skipped`, `not_found`.
+Il worker SISTER usa ora un pool concorrente per credenziale attiva, con
+retry differiti su errori transitori, cooldown per lock/timeout/HTTP 500 e
+metrica runtime aggregata esposta alla dashboard `/elaborazioni`.
 Il dominio include anche una Fase 1 territoriale con import Capacitas,
 distretti, particelle, anomalie, storico import, ricerca anagrafica singola/massiva
 e dettaglio batch su base PostGIS.
@@ -425,6 +428,8 @@ Se la variabile e vuota/non impostata, la password non viene richiesta.
 - Report batch `JSON` e `Markdown` persistiti dal worker
 - Artifact per richiesta con path persistito, download ZIP dal runtime `elaborazioni` e preview immagine autenticata nel dettaglio batch; per i `not_found` su ricerca soggetto il worker salva anche una preview focalizzata sul blocco diagnostico SISTER
 - I batch `pending` mai avviati scadono automaticamente dopo `ELABORAZIONI_PENDING_START_TIMEOUT_MINUTES` e vengono marcati `failed`, evitando code orfane nello storico operativo
+- Metriche runtime visure disponibili via `GET /elaborazioni/metrics` e riusate nella dashboard `/elaborazioni` per throughput, success rate, tempi medi e ultimo processato
+- Finestra operativa opzionale del worker tramite `ELABORAZIONI_OPERATION_WINDOW_ENABLED`, `ELABORAZIONI_OPERATION_START_HOUR`, `ELABORAZIONI_OPERATION_END_HOUR`, `ELABORAZIONI_OPERATION_TIMEZONE`: i batch possono partire anche fuori fascia, ma i runner si mettono in pausa automatica e riprendono al primo orario utile
 
 ## Network MVP
 

@@ -42,6 +42,9 @@ La pagina `/elaborazioni` usa una struttura a sezioni stabili:
 - il workspace `Credenziali` gestisce ora piu credenziali SISTER per utente: ogni profilo puo essere attivo/disattivo, editabile e impostato come `default`; il worker usa il profilo default attivo, oppure il primo profilo attivo disponibile
 - le credenziali SISTER sono isolate per utente GAIA: `GET /elaborazioni/credentials` restituisce solo il pool del `current_user`; il vincolo DB e `UNIQUE (user_id, sister_username)`, quindi lo stesso username SISTER puo esistere su utenti GAIA diversi ma non due volte nello stesso pool utente
 - il retry dei batch falliti rimette in coda solo le richieste `failed` e aggiorna il riferimento temporale del lotto, evitando che un batch rilanciato venga marcato subito come scaduto dalla pulizia dei `pending` orfani
+- il worker visure usa tutte le credenziali SISTER attive dell'utente come pool concorrente: una sessione browser per credenziale, claim atomico delle richieste e prosecuzione del batch anche quando una singola utenza entra in cooldown
+- gli errori transitori `SISTER_SESSION_LOCKED`, timeout login/menu e `HTTP 500` del portale non falliscono subito il lotto: la richiesta viene differita, la credenziale entra in cooldown e il runner passa alla richiesta successiva disponibile
+- la dashboard `/elaborazioni` mostra KPI runtime aggregati letti da `GET /elaborazioni/metrics`: throughput ultime 24h, volumetria 7 giorni, success rate, tempo medio richiesta/batch, ultimo processato e stato finestra operativa
 
 ## Struttura
 
@@ -60,3 +63,33 @@ I tre file `GAIA_VISURE_PROMPT_*` restano volutamente nella root di `domain-docs
 - non devono essere spostati o riscritti finché la relativa implementazione non è chiusa
 
 La documentazione stabile del modulo vive invece in `domain-docs/elaborazioni/docs/`.
+
+## Configurazione operativa
+
+Variabili principali del runtime visure:
+
+- `ELABORAZIONI_PENDING_START_TIMEOUT_MINUTES`: scadenza dei batch `pending` mai avviati
+- `ELABORAZIONI_CREDENTIAL_LOCK_COOLDOWN_SEC`: cooldown base dopo lock/sessione bloccata
+- `ELABORAZIONI_REQUEST_RETRY_DEFER_SEC`: defer della richiesta quando viene rimessa in coda
+- `ELABORAZIONI_SISTER_500_COOLDOWN_SEC`: cooldown base per `HTTP 500` SISTER
+- `ELABORAZIONI_SISTER_500_MAX_COOLDOWN_SEC`: tetto massimo del cooldown progressivo sui `500`
+- `ELABORAZIONI_SISTER_500_GLOBAL_PAUSE_SEC`: pausa globale breve quando tutte le credenziali stanno colpendo `500`
+- `ELABORAZIONI_OPERATION_WINDOW_ENABLED`: abilita la finestra operativa oraria
+- `ELABORAZIONI_OPERATION_START_HOUR`: ora locale di inizio finestra
+- `ELABORAZIONI_OPERATION_END_HOUR`: ora locale di fine finestra
+- `ELABORAZIONI_OPERATION_TIMEZONE`: timezone usata per finestra e KPI giornalieri
+
+Comportamento finestra operativa:
+
+- un batch puo essere creato e avviato anche fuori fascia
+- se il worker trova la finestra chiusa mentre il batch e `processing`, aggiorna `current_operation` con il messaggio di pausa automatica
+- i runner non prendono nuove richieste finche la finestra non riapre
+- alla riapertura la lavorazione riparte senza intervento manuale e senza perdere lo stato persistito del batch
+
+Significato KPI runtime:
+
+- `processed_requests`: richieste arrivate a stato terminale (`completed`, `failed`, `skipped`, `not_found`)
+- `throughput_per_hour`: media `processed_requests / ore_finestra_analizzata`
+- `success_rate`: percentuale `completed / processed_requests`
+- `average_request_duration_seconds`: media tra `created_at` e `processed_at` delle richieste terminali
+- `average_batch_duration_minutes`: media tra `started_at` e `completed_at` dei batch completati nella finestra analizzata
