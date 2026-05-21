@@ -23,6 +23,7 @@ import {
   getElaborazioneAnprSummary,
   getElaborazioneCaptchaSummary,
   getElaborazioneCredentials,
+  getElaborazioneRuntimeMetrics,
   getBonificaSyncStatus,
   listBonificaOristaneseCredentials,
   listCapacitasParticelleSyncJobs,
@@ -30,6 +31,11 @@ import {
   retryFailedElaborazioneBatch,
   startElaborazioneBatch,
 } from "@/lib/api";
+import {
+  getVehicleAutodocSyncStatus,
+  queueVehicleAutodocSync,
+  type VehicleAutodocSyncJob,
+} from "@/features/operazioni/api/client";
 import { getStoredAccessToken } from "@/lib/auth";
 import { formatDateTime } from "@/lib/presentation";
 import type {
@@ -44,6 +50,7 @@ import type {
   ElaborazioneBatchDetail,
   ElaborazioneCaptchaSummary,
   ElaborazioneCredentialStatus,
+  ElaborazioneRuntimeMetrics,
 } from "@/types/api";
 
 const DASHBOARD_REFRESH_INTERVAL_MS = 5000;
@@ -78,6 +85,12 @@ const QUICK_ACTIONS = [
     title: "Allineamento AdE",
     description: "Run comprensorio, monitor e apply fuori dal GIS.",
     icon: GridIcon,
+  },
+  {
+    href: "/operazioni/mezzi",
+    title: "AUTODOC mezzi",
+    description: "Sync massiva dettagli mezzi e accesso rapido al parco mezzi.",
+    icon: RefreshIcon,
   },
 ] as const;
 
@@ -114,6 +127,16 @@ type DashboardRunningOperation = {
     current_label: string | null;
     aggressive_window: boolean | null;
     throttle_ms: number | null;
+  };
+  autodocSync?: {
+    status: string;
+    records_synced: number | null;
+    records_skipped: number | null;
+    records_errors: number | null;
+    finished_at: string | null;
+    error_detail: string | null;
+    only_with_autodoc_url: boolean;
+    force_refresh: boolean;
   };
 };
 
@@ -155,18 +178,59 @@ function getArtifactActionClassName(disabled = false): string {
   ].join(" ");
 }
 
+function isReleasedBatchSummary(batch: ElaborazioneBatch): boolean {
+  return batch.status === "cancelled" && batch.current_operation === "Release requested by user" && batch.skipped_items > 0;
+}
+
+function formatMetricNumber(value: number | null | undefined, maximumFractionDigits = 0): string {
+  if (value == null) return "—";
+  return new Intl.NumberFormat("it-IT", { maximumFractionDigits }).format(value);
+}
+
+function formatMetricSeconds(seconds: number | null | undefined): string {
+  if (seconds == null) return "—";
+  if (seconds < 60) return `${formatMetricNumber(seconds, 0)}s`;
+  if (seconds < 3600) return `${formatMetricNumber(seconds / 60, 1)} min`;
+  return `${formatMetricNumber(seconds / 3600, 1)} h`;
+}
+
+function formatMetricMinutes(minutes: number | null | undefined): string {
+  if (minutes == null) return "—";
+  if (minutes < 60) return `${formatMetricNumber(minutes, 1)} min`;
+  return `${formatMetricNumber(minutes / 60, 1)} h`;
+}
+
+function formatAutodocStatus(status: string | null | undefined): string {
+  switch (status) {
+    case "queued":
+      return "In coda";
+    case "running":
+      return "In esecuzione";
+    case "completed":
+      return "Completato";
+    case "failed":
+      return "Fallito";
+    default:
+      return status ?? "Nessun job";
+  }
+}
+
 export default function ElaborazioniPage() {
   const [batches, setBatches] = useState<ElaborazioneBatch[]>([]);
   const [batchDetails, setBatchDetails] = useState<Record<string, ElaborazioneBatchDetail>>({});
   const [credentialStatus, setCredentialStatus] = useState<ElaborazioneCredentialStatus | null>(null);
   const [captchaSummary, setCaptchaSummary] = useState<ElaborazioneCaptchaSummary | null>(null);
   const [anprSummary, setAnprSummary] = useState<ElaborazioneAnprSummary | null>(null);
+  const [runtimeMetrics, setRuntimeMetrics] = useState<ElaborazioneRuntimeMetrics | null>(null);
   const [capacitasCredentials, setCapacitasCredentials] = useState<CapacitasCredential[]>([]);
   const [particelleSyncJobs, setParticelleSyncJobs] = useState<CapacitasParticelleSyncJob[]>([]);
   const [bonificaCredentials, setBonificaCredentials] = useState<BonificaOristaneseCredential[]>([]);
   const [bonificaSyncStatus, setBonificaSyncStatus] = useState<BonificaSyncStatusResponse | null>(null);
+  const [autodocSyncJob, setAutodocSyncJob] = useState<VehicleAutodocSyncJob | null>(null);
+  const [autodocSyncBusy, setAutodocSyncBusy] = useState<"full" | "cached" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [retryBusyId, setRetryBusyId] = useState<string | null>(null);
+  const [startBusyId, setStartBusyId] = useState<string | null>(null);
   const [artifactBusyRequestId, setArtifactBusyRequestId] = useState<string | null>(null);
   const [downloadingDocumentId, setDownloadingDocumentId] = useState<string | null>(null);
   const [artifactPreviewUrls, setArtifactPreviewUrls] = useState<Record<string, string>>({});
@@ -186,19 +250,23 @@ export default function ElaborazioniPage() {
         batchesResult,
         captchaSummaryResult,
         anprSummaryResult,
+        runtimeMetricsResult,
         capacitasResult,
         particelleSyncResult,
         bonificaResult,
         bonificaSyncResult,
+        autodocSyncResult,
       ] = await Promise.all([
         getElaborazioneCredentials(token),
         getElaborazioneBatches(token),
         getElaborazioneCaptchaSummary(token),
         getElaborazioneAnprSummary(token),
+        getElaborazioneRuntimeMetrics(token),
         listCapacitasCredentials(token),
         listCapacitasParticelleSyncJobs(token),
         listBonificaOristaneseCredentials(token),
         getBonificaSyncStatus(token),
+        getVehicleAutodocSyncStatus(),
       ]);
       setCredentialStatus(credentialsResult);
       setBatches(batchesResult.slice(0, 50));
@@ -213,10 +281,12 @@ export default function ElaborazioniPage() {
       });
       setCaptchaSummary(captchaSummaryResult);
       setAnprSummary(anprSummaryResult);
+      setRuntimeMetrics(runtimeMetricsResult);
       setCapacitasCredentials(capacitasResult);
       setParticelleSyncJobs(particelleSyncResult);
       setBonificaCredentials(bonificaResult);
       setBonificaSyncStatus(bonificaSyncResult);
+      setAutodocSyncJob(autodocSyncResult);
       setError(null);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Errore caricamento dashboard Elaborazioni");
@@ -388,6 +458,22 @@ export default function ElaborazioniPage() {
     }
   }
 
+  async function handleStartBatch(batch: ElaborazioneBatch): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) return;
+
+    setStartBusyId(batch.id);
+    try {
+      await startElaborazioneBatch(token, batch.id);
+      await loadDashboard();
+      setError(null);
+    } catch (startError) {
+      setError(startError instanceof Error ? startError.message : "Errore riavvio batch");
+    } finally {
+      setStartBusyId(null);
+    }
+  }
+
   async function handleDownloadRequestArtifacts(requestId: string): Promise<void> {
     const token = getStoredAccessToken();
     if (!token) return;
@@ -420,6 +506,23 @@ export default function ElaborazioniPage() {
     }
   }
 
+  async function handleQueueAutodocSync(mode: "full" | "cached"): Promise<void> {
+    setAutodocSyncBusy(mode);
+    try {
+      const response = await queueVehicleAutodocSync({
+        only_with_autodoc_url: mode === "cached",
+        force_refresh: mode === "full",
+      });
+      setAutodocSyncJob(response.job);
+      setError(null);
+      await loadDashboard();
+    } catch (queueError) {
+      setError(queueError instanceof Error ? queueError.message : "Errore avvio sync AUTODOC");
+    } finally {
+      setAutodocSyncBusy(null);
+    }
+  }
+
   function handleOpenPreviewModal(request: ElaborazioneBatchDetail["requests"][number]): void {
     if (!artifactPreviewUrls[request.id]) {
       return;
@@ -446,6 +549,20 @@ export default function ElaborazioniPage() {
     .filter((value): value is string => Boolean(value))
     .sort()
     .at(-1);
+  const operatingWindowHint = useMemo(() => {
+    if (!runtimeMetrics) {
+      return "Nessuna finestra operativa configurata";
+    }
+    const windowConfig = runtimeMetrics.operating_window;
+    if (!windowConfig.enabled) {
+      return "Sempre attiva";
+    }
+    const base = `${String(windowConfig.start_hour).padStart(2, "0")}:00-${String(windowConfig.end_hour).padStart(2, "0")}:59 ${windowConfig.timezone}`;
+    if (windowConfig.is_within_window || !windowConfig.next_resume_at) {
+      return base;
+    }
+    return `${base} · ripresa ${formatDateTime(windowConfig.next_resume_at)}`;
+  }, [runtimeMetrics]);
   const quickActions = useMemo(
     () =>
       QUICK_ACTIONS.map((action) => {
@@ -484,6 +601,14 @@ export default function ElaborazioniPage() {
               : "Storico run e consumo chiamate giornaliere ANPR.",
           };
         }
+        if (action.title === "AUTODOC mezzi") {
+          return {
+            ...action,
+            description: autodocSyncJob
+              ? `${formatAutodocStatus(autodocSyncJob.status)} · synced ${autodocSyncJob.records_synced ?? 0} · errori ${autodocSyncJob.records_errors ?? 0}`
+              : "Sync massiva dettagli mezzi e accesso rapido al parco mezzi.",
+          };
+        }
         return action;
       }),
     [
@@ -491,6 +616,7 @@ export default function ElaborazioniPage() {
       activeSisterCredentials.length,
       bonificaSyncStatus,
       anprSummary,
+      autodocSyncJob,
       capacitasCredentials.length,
       capacitasWarningCount,
       credentialStatus,
@@ -570,12 +696,38 @@ export default function ElaborazioniPage() {
       });
     }
 
+    if (autodocSyncJob && ["queued", "running"].includes(autodocSyncJob.status)) {
+      const params = autodocSyncJob.params_json ?? {};
+      items.push({
+        id: `autodoc-sync-${autodocSyncJob.job_id}`,
+        area: "AUTODOC mezzi",
+        title: `Sync massiva #${autodocSyncJob.job_id.slice(0, 8)}`,
+        detail:
+          autodocSyncJob.status === "queued"
+            ? "Job AUTODOC in coda per il parco mezzi"
+            : params.only_with_autodoc_url
+              ? "Aggiornamento mezzi con link AUTODOC già noto"
+              : "Aggiornamento completo dettagli AUTODOC del parco mezzi",
+        startedAt: autodocSyncJob.started_at,
+        tone: "warning",
+        kind: "bonifica",
+        bonifica: {
+          entity: autodocSyncJob.entity,
+          records_synced: autodocSyncJob.records_synced,
+          records_skipped: autodocSyncJob.records_skipped,
+          records_errors: autodocSyncJob.records_errors,
+          error_detail: autodocSyncJob.error_detail,
+          last_finished_at: autodocSyncJob.finished_at,
+        },
+      });
+    }
+
     return items.sort((left, right) => {
       const leftTime = left.startedAt ? Date.parse(left.startedAt) : 0;
       const rightTime = right.startedAt ? Date.parse(right.startedAt) : 0;
       return rightTime - leftTime;
     });
-  }, [batches, bonificaSyncStatus, particelleSyncJobs]);
+  }, [autodocSyncJob, batches, bonificaSyncStatus, particelleSyncJobs]);
 
   function openWorkspaceModal(href: string, title: string, description?: string): void {
     setModalState({ href, title, description });
@@ -644,7 +796,43 @@ export default function ElaborazioniPage() {
             hint={latestCapacitasUsage ? formatDateTime(latestCapacitasUsage) : "mai"}
           />
         </ModuleWorkspaceKpiRow>
-        <div className="mt-4 grid gap-3 lg:grid-cols-[1.1fr,1fr,1fr]">
+        <div className="mt-4 grid gap-3 xl:grid-cols-4">
+          <div className="rounded-2xl border border-gray-100 bg-white/80 px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">Visure 24h</p>
+            <p className="mt-2 text-sm font-semibold text-gray-900">
+              {formatMetricNumber(runtimeMetrics?.last_24_hours.processed_requests ?? null)}
+            </p>
+            <p className="mt-1 text-xs text-gray-500">
+              {formatMetricNumber(runtimeMetrics?.last_24_hours.throughput_per_hour ?? null, 2)} /h · ok{" "}
+              {formatMetricNumber(runtimeMetrics?.last_24_hours.requests_completed ?? null)}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-gray-100 bg-white/80 px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">Visure 7g</p>
+            <p className="mt-2 text-sm font-semibold text-gray-900">
+              {formatMetricNumber(runtimeMetrics?.last_7_days.processed_requests ?? null)}
+            </p>
+            <p className="mt-1 text-xs text-gray-500">
+              successo {formatMetricNumber(runtimeMetrics?.last_7_days.success_rate ?? null, 2)}% · batch{" "}
+              {formatMetricNumber(runtimeMetrics?.last_7_days.batches_total ?? null)}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-gray-100 bg-white/80 px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">Tempo medio</p>
+            <p className="mt-2 text-sm font-semibold text-gray-900">
+              {formatMetricSeconds(runtimeMetrics?.totals.average_request_duration_seconds ?? null)}
+            </p>
+            <p className="mt-1 text-xs text-gray-500">
+              batch {formatMetricMinutes(runtimeMetrics?.totals.average_batch_duration_minutes ?? null)}
+            </p>
+          </div>
+          <div className="rounded-2xl border border-gray-100 bg-white/80 px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">Finestra operativa</p>
+            <p className="mt-2 text-sm font-semibold text-gray-900">{runtimeMetrics?.operating_window.state_label ?? "—"}</p>
+            <p className="mt-1 text-xs text-gray-500">{operatingWindowHint}</p>
+          </div>
+        </div>
+        <div className="mt-3 grid gap-3 lg:grid-cols-[1.1fr,1fr,1fr]">
           <ElaborazioneNoticeCard
             title="ANPR batch a ruolo"
             description={
@@ -659,6 +847,17 @@ export default function ElaborazioniPage() {
             }
             compact
           />
+          <div className="rounded-2xl border border-gray-100 bg-white/80 px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">Ultimo processato</p>
+            <p className="mt-2 text-sm font-semibold text-gray-900">
+              {runtimeMetrics?.totals.latest_processed_at ? formatDateTime(runtimeMetrics.totals.latest_processed_at) : "Nessun dato"}
+            </p>
+            <p className="mt-1 text-xs text-gray-500">
+              totali {formatMetricNumber(runtimeMetrics?.totals.processed_requests ?? null)} · fallite{" "}
+              {formatMetricNumber(runtimeMetrics?.totals.requests_failed ?? null)} · non trovate{" "}
+              {formatMetricNumber(runtimeMetrics?.totals.requests_not_found ?? null)}
+            </p>
+          </div>
           <div className="rounded-2xl border border-gray-100 bg-white/80 px-4 py-3">
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">Ultimo run ANPR</p>
             <p className="mt-2 text-sm font-semibold text-gray-900">
@@ -688,6 +887,99 @@ export default function ElaborazioniPage() {
           </div>
         </div>
       </ElaborazioneHero>
+
+      <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
+        <ElaborazionePanelHeader
+          badge={
+            <>
+              <RefreshIcon className="h-3.5 w-3.5" />
+              AUTODOC mezzi
+            </>
+          }
+          title="Sync massiva dei dettagli AUTODOC"
+          description="Da qui puoi lanciare il job backend che aggiorna il parco mezzi usando AUTODOC e monitorare l'ultimo esito senza restare nel modulo Operazioni."
+        />
+        <div className="grid gap-6 p-6 lg:grid-cols-[1.15fr,0.85fr]">
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">Ultimo stato</p>
+                <p className="mt-2 text-sm font-semibold text-gray-900">{formatAutodocStatus(autodocSyncJob?.status)}</p>
+                <p className="mt-1 text-xs text-gray-500">
+                  {autodocSyncJob?.started_at ? `Avvio ${formatDateTime(autodocSyncJob.started_at)}` : "Nessun job registrato"}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">Record sincronizzati</p>
+                <p className="mt-2 text-sm font-semibold text-emerald-700">{formatMetricNumber(autodocSyncJob?.records_synced ?? null)}</p>
+                <p className="mt-1 text-xs text-gray-500">Skippati {formatMetricNumber(autodocSyncJob?.records_skipped ?? null)}</p>
+              </div>
+              <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">Errori</p>
+                <p className="mt-2 text-sm font-semibold text-red-700">{formatMetricNumber(autodocSyncJob?.records_errors ?? null)}</p>
+                <p className="mt-1 text-xs text-gray-500">
+                  {autodocSyncJob?.finished_at ? `Fine ${formatDateTime(autodocSyncJob.finished_at)}` : "Job non concluso"}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">Modalità</p>
+                <p className="mt-2 text-sm font-semibold text-gray-900">
+                  {autodocSyncJob?.params_json?.only_with_autodoc_url ? "Solo URL noti" : "Parco completo"}
+                </p>
+                <p className="mt-1 text-xs text-gray-500">
+                  {autodocSyncJob?.params_json?.force_refresh ? "refresh forzato" : "riuso dati salvati"}
+                </p>
+              </div>
+            </div>
+            {autodocSyncJob?.error_detail ? (
+              <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700">Ultimo errore</p>
+                <p className="mt-2 break-words text-sm text-amber-900">{autodocSyncJob.error_detail}</p>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-gray-100 bg-[#f7faf8] px-4 py-3 text-sm text-gray-600">
+                Il job AUTODOC usa il worker backend. Se una sync è già in coda o in esecuzione, il backend restituisce il job aperto invece di crearne uno nuovo.
+              </div>
+            )}
+          </div>
+          <div className="rounded-[24px] border border-[#d9dfd6] bg-[#f7faf8] p-5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#1D4E35]">Azioni AUTODOC</p>
+            <h3 className="mt-2 text-lg font-semibold text-gray-900">Avvio e monitoraggio run</h3>
+            <p className="mt-2 text-sm leading-6 text-gray-600">
+              La sync completa forza il refresh dei dettagli AUTODOC su tutto il parco mezzi. La modalità veloce lavora solo sui mezzi che hanno già un link AUTODOC salvato.
+            </p>
+            <div className="mt-5 flex flex-wrap gap-3">
+              <button
+                className="btn-primary"
+                disabled={autodocSyncBusy != null}
+                onClick={() => void handleQueueAutodocSync("full")}
+                type="button"
+              >
+                {autodocSyncBusy === "full" ? "Avvio sync..." : "Sync completa"}
+              </button>
+              <button
+                className="btn-secondary"
+                disabled={autodocSyncBusy != null}
+                onClick={() => void handleQueueAutodocSync("cached")}
+                type="button"
+              >
+                {autodocSyncBusy === "cached" ? "Avvio refresh..." : "Solo URL noti"}
+              </button>
+              <button
+                className="btn-secondary"
+                onClick={() => openWorkspaceModal("/operazioni/mezzi", "Parco mezzi", "Apre il modulo Operazioni per consultare mezzi, schede e sync puntuali AUTODOC.")}
+                type="button"
+              >
+                Apri parco mezzi
+              </button>
+            </div>
+            <div className="mt-5 space-y-2 text-xs text-gray-500">
+              <p>Job id: {autodocSyncJob?.job_id ?? "nessun job"}</p>
+              <p>Entity worker: {autodocSyncJob?.entity ?? "autodoc_vehicle_details"}</p>
+            </div>
+          </div>
+        </div>
+      </article>
 
       <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
         <ElaborazionePanelHeader
@@ -885,21 +1177,7 @@ export default function ElaborazioniPage() {
               <tbody>
                 {batchesForTable.map((batch) => (
                   <tr key={batch.id}>
-                    <td>
-                      <button
-                        className="font-medium text-[#1D4E35] transition hover:text-[#143726]"
-                        onClick={() =>
-                          openWorkspaceModal(
-                            `/elaborazioni/batches/${batch.id}`,
-                            batch.name ?? "Dettaglio batch",
-                            "Dettaglio batch aperto in modale per consultare stato, richieste e CAPTCHA senza lasciare la dashboard.",
-                          )
-                        }
-                        type="button"
-                      >
-                        {batch.name ?? batch.id}
-                      </button>
-                    </td>
+                    <td className="font-medium text-gray-900">{batch.name ?? batch.id}</td>
                     <td><ElaborazioneStatusBadge status={batch.status} /></td>
                     <td>{batch.total_items}</td>
                     <td>
@@ -914,9 +1192,32 @@ export default function ElaborazioniPage() {
                     <td>{formatDateTime(batch.created_at)}</td>
                     <td>
                       <div className="flex flex-wrap items-center gap-3">
+                        <button
+                          className={getArtifactActionClassName()}
+                          onClick={() =>
+                            openWorkspaceModal(
+                              `/elaborazioni/batches/${batch.id}`,
+                              batch.name ?? "Dettaglio batch",
+                              "Dettaglio batch aperto in modale per consultare stato, richieste e CAPTCHA senza lasciare la dashboard.",
+                            )
+                          }
+                          type="button"
+                        >
+                          Apri
+                        </button>
+                        {isReleasedBatchSummary(batch) ? (
+                          <button
+                            className={getArtifactActionClassName(startBusyId === batch.id)}
+                            disabled={startBusyId === batch.id}
+                            onClick={() => void handleStartBatch(batch)}
+                            type="button"
+                          >
+                            {startBusyId === batch.id ? "Ripresa..." : "Riprendi"}
+                          </button>
+                        ) : null}
                         {batch.current_operation === "Retry queued" || (batch.status === "failed" && batch.failed_items > 0) ? (
                           <button
-                            className="text-sm text-[#1D4E35] transition hover:text-[#143726] disabled:cursor-not-allowed disabled:text-gray-300"
+                            className={getArtifactActionClassName(retryBusyId === batch.id)}
                             disabled={retryBusyId === batch.id}
                             onClick={() => void handleRetryBatch(batch)}
                             type="button"

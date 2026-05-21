@@ -57,6 +57,7 @@ Fornire un unico punto di accesso operativo per:
 ### 3.4.1 Elaborazioni (integrazioni operative)
 
 - integrazione Capacitas (inVOLTURE) per workflow di elaborazione e ricerca
+- monitor operativo centralizzato dei job trasversali, inclusa la sync massiva AUTODOC del parco mezzi con stato, contatori ed azioni di rilancio
 
 ### 3.5 Utenze
 
