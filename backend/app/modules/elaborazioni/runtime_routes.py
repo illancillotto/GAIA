@@ -66,6 +66,7 @@ from app.services.elaborazioni_batches import (
     release_processing_batches_for_user,
     retry_failed_batch,
     start_batch,
+    sync_batch_counters,
 )
 from app.services.elaborazioni_captcha import (
     ElaborazioneCaptchaConflictError,
@@ -501,7 +502,10 @@ def list_batches(
     db: Annotated[Session, Depends(get_db)],
     status_filter: Annotated[str | None, Query(alias="status")] = None,
 ) -> list[ElaborazioneBatchResponse]:
-    return [ElaborazioneBatchResponse.model_validate(item) for item in list_batches_for_user(db, current_user.id, status=status_filter)]
+    batches = list_batches_for_user(db, current_user.id, status=status_filter)
+    for batch in batches:
+        sync_batch_counters(db, batch)
+    return [ElaborazioneBatchResponse.model_validate(item) for item in batches]
 
 
 @router.get("/batches/{batch_id}", response_model=ElaborazioneBatchDetailResponse)
@@ -514,7 +518,9 @@ def get_batch(
         batch = get_batch_for_user(db, current_user.id, batch_id)
     except BatchNotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    return build_batch_detail_response(batch, get_batch_requests(db, batch.id))
+    requests = get_batch_requests(db, batch.id)
+    sync_batch_counters(db, batch, requests)
+    return build_batch_detail_response(batch, requests)
 
 
 @router.get("/batches/{batch_id}/download")
@@ -784,6 +790,7 @@ async def batch_updates_websocket(websocket: WebSocket, batch_id: UUID) -> None:
             with websocket_db_session(websocket) as db:
                 batch = get_batch_for_user(db, user_id, batch_id)
                 requests = get_batch_requests(db, batch.id)
+                sync_batch_counters(db, batch, requests)
 
             batch_signature = (
                 batch.status,

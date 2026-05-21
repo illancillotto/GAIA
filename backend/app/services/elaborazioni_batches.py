@@ -451,7 +451,11 @@ def expire_stale_pending_batches(db: Session, user_id: int | None = None) -> int
     expired_count = 0
     for batch in stale_batches:
         reference_at = batch.created_at
-        if reference_at is None or reference_at.timestamp() >= stale_cutoff:
+        if reference_at is None:
+            continue
+        if reference_at.tzinfo is None:
+            reference_at = reference_at.replace(tzinfo=UTC)
+        if reference_at.timestamp() >= stale_cutoff:
             continue
 
         requests = get_batch_requests(db, batch.id)
@@ -662,3 +666,31 @@ def recalculate_batch_counters(batch: ElaborazioneBatch, requests: list[Elaboraz
     batch.failed_items = sum(1 for item in requests if item.status == ElaborazioneRichiestaStatus.FAILED.value)
     batch.skipped_items = sum(1 for item in requests if item.status == ElaborazioneRichiestaStatus.SKIPPED.value)
     batch.not_found_items = sum(1 for item in requests if item.status == ElaborazioneRichiestaStatus.NOT_FOUND.value)
+
+
+def sync_batch_counters(
+    db: Session,
+    batch: ElaborazioneBatch,
+    requests: list[ElaborazioneRichiesta] | None = None,
+) -> bool:
+    requests = requests if requests is not None else get_batch_requests(db, batch.id)
+    previous = (
+        batch.total_items,
+        batch.completed_items,
+        batch.failed_items,
+        batch.skipped_items,
+        batch.not_found_items,
+    )
+    recalculate_batch_counters(batch, requests)
+    current = (
+        batch.total_items,
+        batch.completed_items,
+        batch.failed_items,
+        batch.skipped_items,
+        batch.not_found_items,
+    )
+    if current != previous:
+        db.commit()
+        db.refresh(batch)
+        return True
+    return False

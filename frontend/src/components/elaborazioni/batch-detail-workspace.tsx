@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { ProtectedPage } from "@/components/app/protected-page";
 import { ElaborazioneBatchProgress } from "@/components/elaborazioni/batch-progress";
@@ -34,6 +34,8 @@ import { getStoredAccessToken } from "@/lib/auth";
 import { formatDateTime } from "@/lib/presentation";
 import type { ElaborazioneBatchDetail } from "@/types/api";
 
+type RequestQuickFilter = "all" | "active" | "completed" | "failed" | "not_found" | "awaiting_captcha";
+
 export function ElaborazioneBatchDetailWorkspace({
   batchId,
   embedded = false,
@@ -56,6 +58,7 @@ export function ElaborazioneBatchDetailWorkspace({
   const [artifactPreviewLoadingIds, setArtifactPreviewLoadingIds] = useState<Record<string, boolean>>({});
   const [artifactPreviewFailedIds, setArtifactPreviewFailedIds] = useState<Record<string, boolean>>({});
   const [previewModalRequestId, setPreviewModalRequestId] = useState<string | null>(null);
+  const [requestQuickFilter, setRequestQuickFilter] = useState<RequestQuickFilter>("all");
   const artifactPreviewUrlsRef = useRef<Record<string, string>>({});
 
   const isArtifactPreviewEligible = useCallback((request: ElaborazioneBatchDetail["requests"][number]): boolean => {
@@ -487,6 +490,45 @@ export function ElaborazioneBatchDetailWorkspace({
   const previewModalRequest = batch?.requests.find((request) => request.id === previewModalRequestId) ?? null;
   const previewModalUrl = previewModalRequestId ? artifactPreviewUrls[previewModalRequestId] ?? null : null;
   const previewModalMimeType = previewModalRequestId ? artifactPreviewMimeTypes[previewModalRequestId] ?? null : null;
+  const quickFilterItems = useMemo(
+    () => [
+      { id: "all" as const, label: "Tutte", count: batch?.requests.length ?? 0 },
+      {
+        id: "active" as const,
+        label: "In corso",
+        count:
+          batch?.requests.filter((request) =>
+            ["pending", "processing"].includes(request.status),
+          ).length ?? 0,
+      },
+      { id: "awaiting_captcha" as const, label: "CAPTCHA", count: batch?.requests.filter((request) => request.status === "awaiting_captcha").length ?? 0 },
+      { id: "completed" as const, label: "Completate", count: batch?.requests.filter((request) => request.status === "completed").length ?? 0 },
+      {
+        id: "failed" as const,
+        label: "Fallite",
+        count: batch?.requests.filter((request) => ["failed", "skipped"].includes(request.status)).length ?? 0,
+      },
+      { id: "not_found" as const, label: "Non trovate", count: batch?.requests.filter((request) => request.status === "not_found").length ?? 0 },
+    ],
+    [batch?.requests],
+  );
+  const filteredRequests = useMemo(() => {
+    const requests = batch?.requests ?? [];
+    switch (requestQuickFilter) {
+      case "active":
+        return requests.filter((request) => ["pending", "processing"].includes(request.status));
+      case "completed":
+        return requests.filter((request) => request.status === "completed");
+      case "failed":
+        return requests.filter((request) => ["failed", "skipped"].includes(request.status));
+      case "not_found":
+        return requests.filter((request) => request.status === "not_found");
+      case "awaiting_captcha":
+        return requests.filter((request) => request.status === "awaiting_captcha");
+      default:
+        return requests;
+    }
+  }, [batch?.requests, requestQuickFilter]);
 
   const content = (
     <>
@@ -582,6 +624,24 @@ export function ElaborazioneBatchDetailWorkspace({
                 </div>
               }
             />
+            <div className="border-b border-[#edf1eb] px-5 py-4">
+              <div className="flex flex-wrap items-center gap-2">
+                {quickFilterItems.map((filterItem) => (
+                  <button
+                    key={filterItem.id}
+                    className={`rounded-full border px-3 py-1.5 text-xs font-semibold transition ${
+                      requestQuickFilter === filterItem.id
+                        ? "border-[#1D4E35] bg-[#eef6f0] text-[#1D4E35]"
+                        : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:text-gray-900"
+                    }`}
+                    onClick={() => setRequestQuickFilter(filterItem.id)}
+                    type="button"
+                  >
+                    {filterItem.label} {filterItem.count}
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="overflow-x-auto">
               <table className="data-table">
                 <thead>
@@ -591,11 +651,12 @@ export function ElaborazioneBatchDetailWorkspace({
                     <th>Riferimento</th>
                     <th>Stato</th>
                     <th>Operazione</th>
+                    <th>Eseguita</th>
                     <th>Dettagli</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {batch.requests.map((request) => (
+                  {filteredRequests.map((request) => (
                     <tr key={request.id}>
                       <td>{request.row_index}</td>
                       <td>{renderRequestLabel(request)}</td>
@@ -609,6 +670,15 @@ export function ElaborazioneBatchDetailWorkspace({
                       </td>
                       <td><ElaborazioneStatusBadge status={request.status} /></td>
                       <td><ElaborazioneOperationMessage value={renderRequestOperation(request)} /></td>
+                      <td className="text-xs text-gray-500">
+                        {request.processed_at
+                          ? formatDateTime(request.processed_at)
+                          : request.status === "processing"
+                            ? "In esecuzione"
+                            : request.status === "pending"
+                              ? "In coda"
+                              : "—"}
+                      </td>
                       <td className="text-xs text-gray-500">
                         <ElaborazioneOperationMessage value={request.error_message} />
                         {request.artifact_dir ? (
@@ -662,6 +732,13 @@ export function ElaborazioneBatchDetailWorkspace({
                       </td>
                     </tr>
                   ))}
+                  {filteredRequests.length === 0 ? (
+                    <tr>
+                      <td className="py-6 text-center text-sm text-gray-500" colSpan={7}>
+                        Nessuna richiesta nel filtro selezionato.
+                      </td>
+                    </tr>
+                  ) : null}
                 </tbody>
               </table>
             </div>

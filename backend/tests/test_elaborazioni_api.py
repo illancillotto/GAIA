@@ -1,6 +1,7 @@
 from collections.abc import Generator
 from datetime import UTC, date, datetime, timedelta
 from io import BytesIO
+from uuid import UUID
 import zipfile
 
 from cryptography.fernet import Fernet
@@ -271,6 +272,55 @@ def create_processing_batch() -> str:
             )
             db.add(request)
 
+        db.commit()
+        return str(batch.id)
+    finally:
+        db.close()
+
+
+def create_batch_with_stale_counters() -> str:
+    db = TestingSessionLocal()
+    try:
+        user = db.query(ApplicationUser).filter(ApplicationUser.username == "elaborazioni-admin").one()
+        batch = CatastoBatch(
+            user_id=user.id,
+            name="Batch stale counters",
+            status="processing",
+            total_items=2,
+            completed_items=0,
+            current_operation="Batch preso in carico dal worker",
+        )
+        db.add(batch)
+        db.flush()
+
+        completed_request = CatastoVisuraRequest(
+            batch_id=batch.id,
+            user_id=user.id,
+            row_index=1,
+            comune="Oristano",
+            comune_codice="G113#ORISTANO#5#5",
+            catasto="Terreni e Fabbricati",
+            foglio="1",
+            particella="101",
+            tipo_visura="Completa",
+            status=CatastoVisuraRequestStatus.COMPLETED.value,
+            current_operation="PDF scaricato",
+            processed_at=datetime.now(UTC),
+        )
+        pending_request = CatastoVisuraRequest(
+            batch_id=batch.id,
+            user_id=user.id,
+            row_index=2,
+            comune="Oristano",
+            comune_codice="G113#ORISTANO#5#5",
+            catasto="Terreni e Fabbricati",
+            foglio="2",
+            particella="102",
+            tipo_visura="Completa",
+            status=CatastoVisuraRequestStatus.PENDING.value,
+            current_operation="Pending",
+        )
+        db.add_all([completed_request, pending_request])
         db.commit()
         return str(batch.id)
     finally:
@@ -908,7 +958,7 @@ def test_release_credentials_stops_processing_batches() -> None:
 
     db = TestingSessionLocal()
     try:
-        batch = db.query(CatastoBatch).filter(CatastoBatch.id == batch_id).one()
+        batch = db.query(CatastoBatch).filter(CatastoBatch.id == UUID(batch_id)).one()
         requests = db.query(CatastoVisuraRequest).filter(CatastoVisuraRequest.batch_id == batch.id).order_by(CatastoVisuraRequest.row_index.asc()).all()
 
         assert batch.status == "cancelled"
@@ -916,5 +966,23 @@ def test_release_credentials_stops_processing_batches() -> None:
         assert len(requests) == 2
         assert all(request.status == CatastoVisuraRequestStatus.SKIPPED.value for request in requests)
         assert all(request.current_operation == "Release requested by user" for request in requests)
+    finally:
+        db.close()
+
+
+def test_get_batch_realigns_stale_completed_counter() -> None:
+    batch_id = create_batch_with_stale_counters()
+
+    response = client.get(f"/elaborazioni/batches/{batch_id}", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["completed_items"] == 1
+    assert len(payload["requests"]) == 2
+
+    db = TestingSessionLocal()
+    try:
+        batch = db.query(CatastoBatch).filter(CatastoBatch.id == UUID(batch_id)).one()
+        assert batch.completed_items == 1
     finally:
         db.close()
