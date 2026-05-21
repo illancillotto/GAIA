@@ -56,7 +56,6 @@ require_nonempty_env() {
   local key="$2"
   local value
   value="$(read_env_value "$env_file" "$key" || true)"
-  value="${value%%#*}"
   value="$(printf '%s' "$value" | sed 's/[[:space:]]*$//')"
   if [[ -z "$value" ]]; then
     echo "Errore: variabile obbligatoria assente o vuota in $env_file: $key" >&2

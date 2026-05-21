@@ -15,12 +15,15 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { DocumentIcon, RefreshIcon, ServerIcon, UsersIcon } from "@/components/ui/icons";
 import {
   createCapacitasAnagraficaHistoryJob,
+  createCapacitasInCassSyncJob,
   createCapacitasParticelleSyncJob,
   createCapacitasTerreniJob,
   deleteCapacitasAnagraficaHistoryJob,
+  deleteCapacitasInCassSyncJob,
   deleteCapacitasParticelleSyncJob,
   deleteCapacitasTerreniJob,
   listCapacitasAnagraficaHistoryJobs,
+  listCapacitasInCassSyncJobs,
   listCapacitasParticelleSyncJobs,
   listCapacitasCredentials,
   listCapacitasParticelleAnomalie,
@@ -29,6 +32,7 @@ import {
   refetchCapacitasCertificatiEmpty,
   resolveCapacitasParticellaFrazione,
   rerunCapacitasAnagraficaHistoryJob,
+  rerunCapacitasInCassSyncJob,
   rerunCapacitasParticelleSyncJob,
   rerunCapacitasTerreniJob,
   stopCapacitasParticelleSyncJob,
@@ -41,6 +45,7 @@ import type {
   CapacitasAnagraficaHistoryImportResult,
   CapacitasCredential,
   CapacitasFrazioneCandidate,
+  CapacitasInCassSyncJob,
   CapacitasParticellaAnomalia,
   CapacitasParticelleSyncJob,
   CapacitasRefetchCertificatiResult,
@@ -52,12 +57,13 @@ import type {
 const JOB_POLL_INTERVAL_MS = 5000;
 const PREVIEW_ROWS_LIMIT = 20;
 
-type CapacitasSection = "particelle" | "storico" | "terreni" | "certificati" | "anomalie";
+type CapacitasSection = "particelle" | "storico" | "terreni" | "certificati" | "anomalie" | "incass";
 
 const CAPACITAS_SECTIONS: Array<{ id: CapacitasSection; label: string; description: string }> = [
   { id: "particelle", label: "Sync particelle", description: "Riallinea il catalogo particelle GAIA" },
   { id: "storico", label: "Storico anagrafico", description: "Importa snapshot storici da Capacitas" },
   { id: "terreni", label: "Terreni batch", description: "Carica file e monitora i job Terreni" },
+  { id: "incass", label: "Avvisi pagamenti", description: "Sincronizza gli avvisi di pagamento sugli utenti" },
   { id: "certificati", label: "Certificati", description: "Re-fetch certificati senza intestatari" },
   { id: "anomalie", label: "Anomalie", description: "Particelle con frazione ambigua da risolvere" },
 ];
@@ -462,6 +468,33 @@ function isHistoryImportJobResult(value: unknown): value is CapacitasAnagraficaH
   );
 }
 
+function isIncassSyncJobResult(value: unknown): value is {
+  items: Array<{
+    subject_id: string;
+    identifier: string | null;
+    display_name: string | null;
+    status: string;
+    notices_found: number;
+    notices_synced: number;
+    error: string | null;
+  }>;
+  processed_subjects: number;
+  failed_subjects: number;
+  notices_found: number;
+  notices_synced: number;
+} {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  return (
+    Array.isArray((value as { items?: unknown }).items) &&
+    typeof (value as { processed_subjects?: unknown }).processed_subjects === "number" &&
+    typeof (value as { failed_subjects?: unknown }).failed_subjects === "number" &&
+    typeof (value as { notices_found?: unknown }).notices_found === "number" &&
+    typeof (value as { notices_synced?: unknown }).notices_synced === "number"
+  );
+}
+
 export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?: boolean }) {
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [credentials, setCredentials] = useState<CapacitasCredential[]>([]);
@@ -536,6 +569,23 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
   const [historyError, setHistoryError] = useState<string | null>(null);
   const [historyStatusMessage, setHistoryStatusMessage] = useState<string | null>(null);
   const [historyResult, setHistoryResult] = useState<CapacitasAnagraficaHistoryImportResult | null>(null);
+  const [incassJobs, setIncassJobs] = useState<CapacitasInCassSyncJob[]>([]);
+  const [incassJobsLoading, setIncassJobsLoading] = useState(false);
+  const [incassCreatingJob, setIncassCreatingJob] = useState(false);
+  const [incassJobBusyId, setIncassJobBusyId] = useState<number | null>(null);
+  const [incassDeletingJobId, setIncassDeletingJobId] = useState<number | null>(null);
+  const [incassMonitorSessionExpired, setIncassMonitorSessionExpired] = useState(false);
+  const incassInFlightJobIds = useRef<Set<number>>(new Set());
+  const [incassError, setIncassError] = useState<string | null>(null);
+  const [incassStatusMessage, setIncassStatusMessage] = useState<string | null>(null);
+  const [incassForm, setIncassForm] = useState({
+    credential_id: "",
+    limit: "100",
+    include_details: true,
+    include_partitario: true,
+    continue_on_error: true,
+    throttle_ms: "250",
+  });
 
   const [refetchForm, setRefetchForm] = useState({ credential_id: "", limit: 100, throttle_ms: 300 });
   const [refetchBusy, setRefetchBusy] = useState(false);
@@ -563,6 +613,9 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
   const historyJobsInFlight =
     !historyMonitorSessionExpired &&
     historyJobs.some((job) => job.status === "pending" || job.status === "processing" || job.status === "queued_resume");
+  const incassJobsInFlight =
+    !incassMonitorSessionExpired &&
+    incassJobs.some((job) => job.status === "pending" || job.status === "processing" || job.status === "queued_resume");
   const terreniReportJob = terreniCompletedJobModal
     ? terreniJobs.find((job) => job.id === terreniCompletedJobModal.id) ?? terreniCompletedJobModal
     : null;
@@ -578,6 +631,7 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
     void loadTerreniJobs();
     void loadParticelleJobs();
     void loadHistoryJobs();
+    void loadIncassJobs();
   }, []);
 
   useEffect(() => {
@@ -610,6 +664,16 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
     return () => window.clearInterval(timer);
   }, [historyJobsInFlight]);
 
+  useEffect(() => {
+    if (!incassJobsInFlight) return undefined;
+
+    const timer = window.setInterval(() => {
+      void loadIncassJobs(true);
+    }, JOB_POLL_INTERVAL_MS);
+
+    return () => window.clearInterval(timer);
+  }, [incassJobsInFlight]);
+
   async function loadCredentials(): Promise<void> {
     const token = getStoredAccessToken();
     if (!token) return;
@@ -628,6 +692,11 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
           current.credential_id ? current.credential_id : nextCredentials.length === 1 ? String(nextCredentials[0].id) : "",
       }));
       setHistoryForm((current) => ({
+        ...current,
+        credential_id:
+          current.credential_id ? current.credential_id : nextCredentials.length === 1 ? String(nextCredentials[0].id) : "",
+      }));
+      setIncassForm((current) => ({
         ...current,
         credential_id:
           current.credential_id ? current.credential_id : nextCredentials.length === 1 ? String(nextCredentials[0].id) : "",
@@ -782,6 +851,51 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
     } finally {
       if (!silent) {
         setHistoryJobsLoading(false);
+      }
+    }
+  }
+
+  async function loadIncassJobs(silent = false): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) {
+      setIncassMonitorSessionExpired(true);
+      setIncassError("Sessione GAIA scaduta: il monitor avvisi si ferma, ma i job backend gia avviati possono continuare.");
+      setIncassStatusMessage("Rientra in GAIA per riprendere il polling del monitor avvisi.");
+      return;
+    }
+
+    if (!silent) {
+      setIncassJobsLoading(true);
+    }
+    try {
+      const nextJobs = await listCapacitasInCassSyncJobs(token);
+      setIncassMonitorSessionExpired(false);
+      const prevInFlight = incassInFlightJobIds.current;
+      const terminalStatuses = new Set(["succeeded", "completed_with_errors", "failed"]);
+
+      incassInFlightJobIds.current = new Set(
+        nextJobs.filter((job) => job.status === "pending" || job.status === "processing" || job.status === "queued_resume").map((job) => job.id),
+      );
+      setIncassJobs(nextJobs);
+      if (!silent && prevInFlight.size > 0 && nextJobs.some((job) => prevInFlight.has(job.id) && terminalStatuses.has(job.status))) {
+        setIncassStatusMessage("Sync avvisi aggiornata.");
+      }
+      if (!silent) {
+        setIncassError(null);
+      }
+    } catch (loadError) {
+      if (isAuthError(loadError)) {
+        setIncassMonitorSessionExpired(true);
+        setIncassError("Sessione GAIA scaduta: il monitor avvisi si ferma, ma i job backend gia avviati possono continuare.");
+        setIncassStatusMessage("Rientra in GAIA per riprendere il polling del monitor avvisi.");
+        return;
+      }
+      if (!silent) {
+        setIncassError(loadError instanceof Error ? loadError.message : "Errore caricamento job avvisi");
+      }
+    } finally {
+      if (!silent) {
+        setIncassJobsLoading(false);
       }
     }
   }
@@ -1056,6 +1170,64 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
     }
   }
 
+  async function handleCreateIncassJob(): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) return;
+
+    setIncassCreatingJob(true);
+    try {
+      const job = await createCapacitasInCassSyncJob(token, {
+        credential_id: incassForm.credential_id ? Number.parseInt(incassForm.credential_id, 10) : undefined,
+        limit: incassForm.limit.trim() ? Number.parseInt(incassForm.limit, 10) : undefined,
+        include_details: incassForm.include_details,
+        include_partitario: incassForm.include_partitario,
+        continue_on_error: incassForm.continue_on_error,
+        throttle_ms: incassForm.throttle_ms.trim() ? Number.parseInt(incassForm.throttle_ms, 10) : 250,
+      });
+      setIncassMonitorSessionExpired(false);
+      setIncassStatusMessage(`Job avvisi #${job.id} creato e avviato in background.`);
+      setIncassError(null);
+      await loadIncassJobs();
+    } catch (createError) {
+      setIncassError(createError instanceof Error ? createError.message : "Errore avvio job avvisi");
+    } finally {
+      setIncassCreatingJob(false);
+    }
+  }
+
+  async function handleRerunIncassJob(jobId: number): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) return;
+    setIncassJobBusyId(jobId);
+    try {
+      await rerunCapacitasInCassSyncJob(token, jobId);
+      setIncassMonitorSessionExpired(false);
+      setIncassStatusMessage(`Job avvisi #${jobId} rilanciato.`);
+      setIncassError(null);
+      await loadIncassJobs();
+    } catch (rerunError) {
+      setIncassError(rerunError instanceof Error ? rerunError.message : "Errore rerun job avvisi");
+    } finally {
+      setIncassJobBusyId(null);
+    }
+  }
+
+  async function handleDeleteIncassJob(jobId: number): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) return;
+    setIncassDeletingJobId(jobId);
+    try {
+      await deleteCapacitasInCassSyncJob(token, jobId);
+      setIncassStatusMessage(`Job avvisi #${jobId} eliminato.`);
+      setIncassError(null);
+      setIncassJobs((current) => current.filter((job) => job.id !== jobId));
+    } catch (deleteError) {
+      setIncassError(deleteError instanceof Error ? deleteError.message : "Errore eliminazione job avvisi");
+    } finally {
+      setIncassDeletingJobId(null);
+    }
+  }
+
   const content = (
     <>
       <div className="space-y-6">
@@ -1098,7 +1270,7 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
           </div>
         </ElaborazioneHero>
 
-        <nav className="grid gap-3 md:grid-cols-5" aria-label="Sezioni Capacitas">
+        <nav className="grid gap-3 md:grid-cols-6" aria-label="Sezioni Capacitas">
           {CAPACITAS_SECTIONS.map((section) => {
             const active = activeSection === section.id;
             return (
@@ -2221,6 +2393,255 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+        </article>
+          </>
+        ) : null}
+
+        {activeSection === "incass" ? (
+          <>
+        <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white p-0 shadow-panel">
+          <ElaborazionePanelHeader
+            badge={
+              <>
+                <UsersIcon className="h-3.5 w-3.5" />
+                Avvisi pagamenti
+              </>
+            }
+            title="Sincronizzazione avvisi di pagamento sugli utenti"
+            description="Recupera gli avvisi dal portale pagamenti Capacitas per i soggetti GAIA con codice fiscale o partita IVA e salva stato, dettaglio informativo e link PDF."
+            actions={
+              <button className="btn-secondary" disabled={incassJobsLoading} onClick={() => void loadIncassJobs()} type="button">
+                <RefreshIcon className="mr-2 h-4 w-4" />
+                Aggiorna job
+              </button>
+            }
+          />
+          <div className="space-y-6 p-6">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+              <label className="space-y-2">
+                <span className="label-caption">Credenziale</span>
+                <select
+                  className="form-control"
+                  value={incassForm.credential_id}
+                  onChange={(event) => setIncassForm((current) => ({ ...current, credential_id: event.target.value }))}
+                >
+                  <option value="">Auto-selezione backend</option>
+                  {credentials.map((credential) => (
+                    <option key={credential.id} value={credential.id}>
+                      {credential.label} · {credential.username}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="space-y-2">
+                <span className="label-caption">Limite soggetti</span>
+                <input
+                  className="form-control"
+                  inputMode="numeric"
+                  placeholder="Vuoto = tutti i soggetti eleggibili"
+                  value={incassForm.limit}
+                  onChange={(event) => setIncassForm((current) => ({ ...current, limit: event.target.value.replace(/[^\d]/g, "") }))}
+                />
+              </label>
+              <label className="space-y-2">
+                <span className="label-caption">Pausa richieste (ms)</span>
+                <input
+                  className="form-control"
+                  inputMode="numeric"
+                  min={0}
+                  placeholder="250"
+                  value={incassForm.throttle_ms}
+                  onChange={(event) => setIncassForm((current) => ({ ...current, throttle_ms: event.target.value.replace(/[^\d]/g, "") }))}
+                />
+              </label>
+              <label className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
+                <input
+                  checked={incassForm.include_details}
+                  className="h-4 w-4 accent-[#1D4E35]"
+                  type="checkbox"
+                  onChange={(event) => setIncassForm((current) => ({ ...current, include_details: event.target.checked }))}
+                />
+                <span className="text-sm text-gray-700">Salva dettaglio avviso</span>
+              </label>
+              <label className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
+                <input
+                  checked={incassForm.include_partitario}
+                  className="h-4 w-4 accent-[#1D4E35]"
+                  type="checkbox"
+                  onChange={(event) => setIncassForm((current) => ({ ...current, include_partitario: event.target.checked }))}
+                />
+                <span className="text-sm text-gray-700">Salva dettaglio &quot;I&quot;</span>
+              </label>
+              <label className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
+                <input
+                  checked={incassForm.continue_on_error}
+                  className="h-4 w-4 accent-[#1D4E35]"
+                  type="checkbox"
+                  onChange={(event) => setIncassForm((current) => ({ ...current, continue_on_error: event.target.checked }))}
+                />
+                <span className="text-sm text-gray-700">Continua se un soggetto fallisce</span>
+              </label>
+            </div>
+
+            <div className="rounded-[20px] border border-[#d9dfd6] bg-[#f8fbf8] px-4 py-4 text-sm text-gray-600">
+              La sync cerca gli avvisi per <span className="font-medium text-gray-900">codice fiscale o partita IVA</span>, collega il risultato al soggetto GAIA e persiste anche i link ai PDF dell&apos;avviso quando disponibili.
+            </div>
+
+            {incassError ? (
+              <div className="rounded-2xl border border-rose-100 bg-rose-50/70 px-4 py-3 text-sm text-rose-800">{incassError}</div>
+            ) : null}
+            {incassStatusMessage ? (
+              <div className="rounded-2xl border border-emerald-100 bg-emerald-50/70 px-4 py-3 text-sm text-emerald-800">{incassStatusMessage}</div>
+            ) : null}
+
+            <div className="flex flex-wrap items-center gap-3">
+              <button className="btn-primary" disabled={incassCreatingJob} onClick={() => void handleCreateIncassJob()} type="button">
+                {incassCreatingJob ? "Avvio..." : "Avvia sync avvisi"}
+              </button>
+              <span className="text-xs text-gray-500">
+                Il backend sceglie una credenziale attiva se non ne selezioni una. La pausa serve a non saturare il portale pagamenti durante ricerche e dettagli.
+              </span>
+            </div>
+          </div>
+        </article>
+
+        <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white p-0 shadow-panel">
+          <ElaborazionePanelHeader
+            badge={
+              <>
+                <ServerIcon className="h-3.5 w-3.5" />
+                Job avvisi
+              </>
+            }
+            title="Monitor sync avvisi di pagamento"
+            description="Controlla gli ultimi job, i conteggi aggregati e il dettaglio per soggetto elaborato."
+          />
+          {incassJobsLoading ? (
+            <div className="p-5 text-sm text-gray-500">Caricamento job avvisi...</div>
+          ) : incassJobs.length === 0 ? (
+            <div className="p-5">
+              <EmptyState
+                icon={ServerIcon}
+                title="Nessun job avvisi registrato"
+                description="Avvia la prima sincronizzazione per popolare gli avvisi di pagamento sui soggetti Utenze."
+              />
+            </div>
+          ) : (
+            <div className="space-y-4 p-6">
+              {incassJobs.map((job) => {
+                const result = isIncassSyncJobResult(job.result_json) ? job.result_json : null;
+                const tone = renderJobStatus(job.status);
+                const totalSubjects = result?.items.length ?? 0;
+                const progress = totalSubjects > 0 ? Math.min(100, Math.round((result!.processed_subjects / totalSubjects) * 100)) : job.status === "succeeded" ? 100 : 0;
+                const active = job.status === "pending" || job.status === "processing" || job.status === "queued_resume";
+                return (
+                  <div className={`rounded-[24px] border p-5 ${active ? "border-sky-100 bg-sky-50/40" : "border-gray-100 bg-[#fbfcfb]"}`} key={job.id}>
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="text-sm font-semibold text-gray-900">Job #{job.id}</span>
+                          <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${tone.className}`}>
+                            {tone.label}
+                          </span>
+                          {result ? (
+                            <span className="text-xs text-gray-500">
+                              soggetti {result.processed_subjects}/{totalSubjects || "?"} · avvisi {result.notices_synced}/{result.notices_found}
+                            </span>
+                          ) : null}
+                        </div>
+                        <p className="mt-1 text-xs text-gray-400">
+                          creato {formatDateTime(job.created_at)} · start {formatDateTime(job.started_at)} · end {formatDateTime(job.completed_at)}
+                        </p>
+                        {job.status === "queued_resume" ? (
+                          <p className="mt-2 text-sm text-gray-600">Resume automatico pianificato dopo restart backend.</p>
+                        ) : null}
+                      </div>
+                      <div className="flex flex-wrap items-center gap-2">
+                        {result ? (
+                          <span className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-[#1D4E35] shadow-sm">{progress}%</span>
+                        ) : null}
+                        <button className="btn-secondary" disabled={incassJobBusyId === job.id} onClick={() => void handleRerunIncassJob(job.id)} type="button">
+                          {incassJobBusyId === job.id ? "Rerun..." : "Rilancia"}
+                        </button>
+                        <button
+                          className="btn-secondary"
+                          disabled={
+                            incassDeletingJobId === job.id ||
+                            job.status === "pending" ||
+                            job.status === "processing" ||
+                            job.status === "queued_resume"
+                          }
+                          onClick={() => void handleDeleteIncassJob(job.id)}
+                          type="button"
+                        >
+                          {incassDeletingJobId === job.id ? "Elimina..." : "Elimina"}
+                        </button>
+                      </div>
+                    </div>
+
+                    {result ? (
+                      <>
+                        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                          <ElaborazioneMiniStat eyebrow="Soggetti processati" value={result.processed_subjects} description={`${result.failed_subjects} con errore.`} compact tone={result.failed_subjects > 0 ? "warning" : "success"} />
+                          <ElaborazioneMiniStat eyebrow="Avvisi trovati" value={result.notices_found} description="Record individuati sul portale pagamenti." compact />
+                          <ElaborazioneMiniStat eyebrow="Avvisi sincronizzati" value={result.notices_synced} description="Record persistiti su GAIA." compact tone={result.notices_synced > 0 ? "success" : "default"} />
+                          <ElaborazioneMiniStat eyebrow="Soggetti in input" value={totalSubjects} description="Soggetti pianificati nel job." compact />
+                        </div>
+                        <div className="mt-4 h-2 overflow-hidden rounded-full bg-[#dfe9df]">
+                          <div className="h-full rounded-full bg-[#1D4E35] transition-all duration-500" style={{ width: `${progress}%` }} />
+                        </div>
+                        {result.items.length > 0 ? (
+                          <div className="mt-4 overflow-x-auto">
+                            <table className="data-table">
+                              <thead>
+                                <tr>
+                                  <th>Soggetto</th>
+                                  <th>Identificativo</th>
+                                  <th>Stato</th>
+                                  <th>Avvisi</th>
+                                  <th>Errore</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {result.items.slice(0, 12).map((item) => (
+                                  <tr key={`${job.id}-${item.subject_id}`}>
+                                    <td className="text-sm text-gray-700">
+                                      <div className="font-medium text-gray-900">{item.display_name ?? item.subject_id}</div>
+                                      <div className="text-xs text-gray-500">{item.subject_id}</div>
+                                    </td>
+                                    <td className="text-sm text-gray-700">{item.identifier ?? "—"}</td>
+                                    <td>
+                                      <span
+                                        className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${
+                                          item.status === "synced"
+                                            ? "bg-emerald-50 text-emerald-700 ring-emerald-200"
+                                            : item.status === "failed"
+                                              ? "bg-rose-50 text-rose-700 ring-rose-200"
+                                              : "bg-amber-50 text-amber-700 ring-amber-200"
+                                        }`}
+                                      >
+                                        {item.status}
+                                      </span>
+                                    </td>
+                                    <td className="text-sm text-gray-700">
+                                      {item.notices_synced}/{item.notices_found}
+                                    </td>
+                                    <td className="text-sm text-gray-700">{item.error ?? "—"}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : null}
+                      </>
+                    ) : job.error_detail ? (
+                      <p className="mt-4 text-sm text-rose-700">{job.error_detail}</p>
+                    ) : null}
+                  </div>
+                );
+              })}
             </div>
           )}
         </article>
