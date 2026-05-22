@@ -20,6 +20,7 @@ import {
   deleteBonificaOristaneseCredential,
   deleteElaborazioneCredential,
   deleteCapacitasCredential,
+  getElaborazioneBatches,
   getElaborazioneCredentialTest,
   getElaborazioneCredentials,
   listBonificaOristaneseCredentials,
@@ -29,6 +30,7 @@ import {
   testBonificaOristaneseCredential,
   testCapacitasCredential,
   testElaborazioneCredentials,
+  startElaborazioneBatch,
   updateBonificaOristaneseCredential,
   updateCapacitasCredential,
   updateElaborazioneCredential,
@@ -349,11 +351,13 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [releaseBusy, setReleaseBusy] = useState(false);
+  const [resumeReleasedBusy, setResumeReleasedBusy] = useState(false);
   const [testBusy, setTestBusy] = useState(false);
   const [testResult, setTestResult] = useState<ElaborazioneCredentialTestResult | null>(null);
   const testSocketRef = useRef<WebSocket | null>(null);
   const activeTestId = testResult?.id ?? null;
   const activeTestStatus = testResult?.status ?? null;
+  const [releasedBatches, setReleasedBatches] = useState<{ id: string; name: string | null; created_at: string }[]>([]);
 
   const [capacitasCredentials, setCapacitasCredentials] = useState<CapacitasCredential[]>([]);
   const [capacitasForm, setCapacitasForm] = useState(DEFAULT_CAPACITAS_FORM);
@@ -392,7 +396,7 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
   });
 
   useEffect(() => {
-    void Promise.all([loadCredentials(), loadBonificaCredentials(), loadCapacitasCredentials()]);
+    void Promise.all([loadCredentials(), loadReleasedBatches(), loadBonificaCredentials(), loadCapacitasCredentials()]);
   }, []);
 
   function resetSisterForm(): void {
@@ -422,12 +426,36 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
       const result = await releaseElaborazioneCredentials(token);
       setStatusMessage(result.message);
       setError(null);
-      await loadCredentials();
+      await Promise.all([loadCredentials(), loadReleasedBatches()]);
     } catch (releaseError) {
       setError(releaseError instanceof Error ? releaseError.message : "Errore rilascio utenze SISTER");
       setStatusMessage(null);
     } finally {
       setReleaseBusy(false);
+    }
+  }
+
+  async function handleResumeReleasedBatch(): Promise<void> {
+    const token = getStoredAccessToken();
+    const batchToResume = releasedBatches[0];
+    if (!token || !batchToResume) return;
+
+    setResumeReleasedBusy(true);
+    try {
+      await startElaborazioneBatch(token, batchToResume.id);
+      const remainingCount = Math.max(releasedBatches.length - 1, 0);
+      setStatusMessage(
+        remainingCount > 0
+          ? `Ripreso batch ${batchToResume.name ?? batchToResume.id}. Restano ${remainingCount} batch fermati da riavviare manualmente.`
+          : `Ripreso batch ${batchToResume.name ?? batchToResume.id}.`,
+      );
+      setError(null);
+      await loadReleasedBatches();
+    } catch (resumeError) {
+      setError(resumeError instanceof Error ? resumeError.message : "Errore ripresa batch rilasciato");
+      setStatusMessage(null);
+    } finally {
+      setResumeReleasedBusy(false);
     }
   }
 
@@ -474,6 +502,22 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
       setError(null);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Errore caricamento credenziali");
+    }
+  }
+
+  async function loadReleasedBatches(): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) return;
+
+    try {
+      const result = await getElaborazioneBatches(token);
+      const eligible = result
+        .filter((batch) => batch.status === "cancelled" && batch.current_operation === "Release requested by user" && batch.skipped_items > 0)
+        .sort((left, right) => Date.parse(right.created_at) - Date.parse(left.created_at))
+        .map((batch) => ({ id: batch.id, name: batch.name, created_at: batch.created_at }));
+      setReleasedBatches(eligible);
+    } catch {
+      return;
     }
   }
 
@@ -1387,15 +1431,32 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                           <p className={`text-sm text-gray-500 ${embedded ? "mt-0.5 leading-5" : "mt-1"}`}>
                             Gestisci piu profili, scegli il predefinito del worker e modifica quello selezionato nel form.
                           </p>
+                          {releasedBatches.length > 0 ? (
+                            <p className={`text-sm text-amber-700 ${embedded ? "mt-1 leading-5" : "mt-1.5"}`}>
+                              {releasedBatches.length} batch fermat{releasedBatches.length === 1 ? "o" : "i"} dopo rilascio utenze. Puoi far ripartire il piu recente da qui.
+                            </p>
+                          ) : null}
                         </div>
-                        <button
-                          className="btn-secondary"
-                          disabled={releaseBusy}
-                          onClick={() => void handleReleaseSisterSessions()}
-                          type="button"
-                        >
-                          {releaseBusy ? "Rilascio..." : "Ferma e libera utenze"}
-                        </button>
+                        <div className="flex flex-wrap items-center gap-2">
+                          {releasedBatches.length > 0 ? (
+                            <button
+                              className="btn-secondary"
+                              disabled={resumeReleasedBusy}
+                              onClick={() => void handleResumeReleasedBatch()}
+                              type="button"
+                            >
+                              {resumeReleasedBusy ? "Ripresa..." : `Riprendi batch fermato${releasedBatches.length > 1 ? ` (${releasedBatches.length})` : ""}`}
+                            </button>
+                          ) : null}
+                          <button
+                            className="btn-secondary"
+                            disabled={releaseBusy}
+                            onClick={() => void handleReleaseSisterSessions()}
+                            type="button"
+                          >
+                            {releaseBusy ? "Rilascio..." : "Ferma e libera utenze"}
+                          </button>
+                        </div>
                       </div>
                     </div>
                     {sisterCredentials.length === 0 ? (

@@ -17,6 +17,7 @@ from app.core.security import hash_password
 from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
+from app.models.capacitas import CapacitasInCassSyncJob
 from app.modules.utenze.anpr.models import AnprJobRun, AnprSyncConfig
 from app.models.catasto import (
     CatastoBatch,
@@ -271,6 +272,66 @@ def create_processing_batch() -> str:
                 current_operation="Presa in carico dal worker",
             )
             db.add(request)
+
+        db.commit()
+        return str(batch.id)
+    finally:
+        db.close()
+
+
+def create_cancelled_batch(*, release_requested: bool, include_completed: bool = False) -> str:
+    db = TestingSessionLocal()
+    try:
+        user = db.query(ApplicationUser).filter(ApplicationUser.username == "elaborazioni-admin").one()
+        batch = CatastoBatch(
+            user_id=user.id,
+            name="Batch cancelled",
+            status="cancelled",
+            total_items=2 if include_completed else 1,
+            current_operation="Release requested by user" if release_requested else "Cancelled by user",
+            started_at=datetime.now(UTC) - timedelta(minutes=5),
+            completed_at=datetime.now(UTC) - timedelta(minutes=1),
+        )
+        db.add(batch)
+        db.flush()
+
+        row_index = 1
+        if include_completed:
+            db.add(
+                CatastoVisuraRequest(
+                    batch_id=batch.id,
+                    user_id=user.id,
+                    row_index=row_index,
+                    comune="Oristano",
+                    comune_codice="G113#ORISTANO#5#5",
+                    catasto="Terreni e Fabbricati",
+                    foglio="1",
+                    particella="101",
+                    tipo_visura="Completa",
+                    status=CatastoVisuraRequestStatus.COMPLETED.value,
+                    current_operation="PDF scaricato",
+                    processed_at=datetime.now(UTC) - timedelta(minutes=2),
+                )
+            )
+            row_index += 1
+
+        db.add(
+            CatastoVisuraRequest(
+                batch_id=batch.id,
+                user_id=user.id,
+                row_index=row_index,
+                comune="Oristano",
+                comune_codice="G113#ORISTANO#5#5",
+                catasto="Terreni e Fabbricati",
+                foglio=str(row_index),
+                particella=str(100 + row_index),
+                tipo_visura="Completa",
+                status=CatastoVisuraRequestStatus.SKIPPED.value,
+                current_operation="Release requested by user" if release_requested else "Cancelled",
+                error_message="Credenziale SISTER liberata su richiesta utente" if release_requested else "Batch cancelled by user",
+                processed_at=datetime.now(UTC) - timedelta(minutes=1),
+            )
+        )
 
         db.commit()
         return str(batch.id)
@@ -578,6 +639,89 @@ def test_multiple_sister_credentials_support_default_and_delete() -> None:
     assert get_response.status_code == 200
     assert len(get_response.json()["credentials"]) == 1
     assert get_response.json()["default_credential"]["label"] == "Profilo A"
+
+
+def test_capacitas_incass_jobs_crud_and_rerun() -> None:
+    create_response = client.post(
+        "/elaborazioni/capacitas/incass/avvisi/jobs",
+        headers=auth_headers(),
+        json={
+            "limit": 25,
+            "include_details": True,
+            "include_partitario": True,
+            "continue_on_error": True,
+            "throttle_ms": 300,
+        },
+    )
+
+    assert create_response.status_code == 202
+    payload = create_response.json()
+    assert payload["status"] == "pending"
+    assert payload["mode"] == "subjects_sync"
+    assert payload["payload_json"]["limit"] == 25
+    job_id = payload["id"]
+
+    list_response = client.get("/elaborazioni/capacitas/incass/avvisi/jobs", headers=auth_headers())
+    assert list_response.status_code == 200
+    jobs = list_response.json()
+    assert len(jobs) == 1
+    assert jobs[0]["id"] == job_id
+
+    db = TestingSessionLocal()
+    try:
+      job = db.query(CapacitasInCassSyncJob).filter(CapacitasInCassSyncJob.id == job_id).one()
+      job.status = "succeeded"
+      job.result_json = {
+          "items": [
+              {
+                  "subject_id": "550e8400-e29b-41d4-a716-446655440000",
+                  "identifier": "01154130957",
+                  "display_name": "Acme Srl",
+                  "status": "synced",
+                  "notices_found": 2,
+                  "notices_synced": 2,
+                  "error": None,
+              }
+          ],
+          "processed_subjects": 1,
+          "failed_subjects": 0,
+          "notices_found": 2,
+          "notices_synced": 2,
+      }
+      job.started_at = datetime.now(UTC) - timedelta(minutes=2)
+      job.completed_at = datetime.now(UTC) - timedelta(minutes=1)
+      db.commit()
+    finally:
+      db.close()
+
+    detail_response = client.get(f"/elaborazioni/capacitas/incass/avvisi/jobs/{job_id}", headers=auth_headers())
+    assert detail_response.status_code == 200
+    detail = detail_response.json()
+    assert detail["result_json"]["processed_subjects"] == 1
+    assert detail["result_json"]["items"][0]["display_name"] == "Acme Srl"
+
+    rerun_response = client.post(f"/elaborazioni/capacitas/incass/avvisi/jobs/{job_id}/run", headers=auth_headers())
+    assert rerun_response.status_code == 200
+    rerun_payload = rerun_response.json()
+    assert rerun_payload["status"] == "pending"
+    assert rerun_payload["started_at"] is None
+    assert rerun_payload["completed_at"] is None
+    assert rerun_payload["error_detail"] is None
+
+    db = TestingSessionLocal()
+    try:
+      job = db.query(CapacitasInCassSyncJob).filter(CapacitasInCassSyncJob.id == job_id).one()
+      job.status = "failed"
+      job.error_detail = "timeout"
+      db.commit()
+    finally:
+      db.close()
+
+    delete_response = client.delete(f"/elaborazioni/capacitas/incass/avvisi/jobs/{job_id}", headers=auth_headers())
+    assert delete_response.status_code == 204
+
+    not_found_response = client.get(f"/elaborazioni/capacitas/incass/avvisi/jobs/{job_id}", headers=auth_headers())
+    assert not_found_response.status_code == 404
 
 
 def test_credentials_test_queues_saved_credentials_and_exposes_worker_result() -> None:
@@ -970,6 +1114,91 @@ def test_release_credentials_stops_processing_batches() -> None:
         db.close()
 
 
+def test_start_batch_resumes_requests_released_by_user() -> None:
+    credentials_response = client.post(
+        "/elaborazioni/credentials",
+        headers=auth_headers(),
+        json={"sister_username": "RSSMRA80A01G113X", "sister_password": "sister-secret"},
+    )
+    assert credentials_response.status_code == 200
+
+    batch_id = create_processing_batch()
+
+    release_response = client.post("/elaborazioni/credentials/release", headers=auth_headers())
+    assert release_response.status_code == 200
+
+    start_response = client.post(f"/elaborazioni/batches/{batch_id}/start", headers=auth_headers())
+
+    assert start_response.status_code == 200
+    payload = start_response.json()
+    assert payload["status"] == "processing"
+    assert payload["current_operation"] == "Queued after release"
+
+    db = TestingSessionLocal()
+    try:
+        batch = db.query(CatastoBatch).filter(CatastoBatch.id == UUID(batch_id)).one()
+        requests = db.query(CatastoVisuraRequest).filter(CatastoVisuraRequest.batch_id == batch.id).order_by(CatastoVisuraRequest.row_index.asc()).all()
+
+        assert batch.status == "processing"
+        assert batch.skipped_items == 0
+        assert len(requests) == 2
+        assert all(request.status == CatastoVisuraRequestStatus.PENDING.value for request in requests)
+        assert all(request.current_operation == "Queued after release" for request in requests)
+        assert all(request.error_message is None for request in requests)
+        assert all(request.processed_at is None for request in requests)
+    finally:
+        db.close()
+
+
+def test_start_batch_rejects_cancelled_batch_without_release_marker() -> None:
+    credentials_response = client.post(
+        "/elaborazioni/credentials",
+        headers=auth_headers(),
+        json={"sister_username": "RSSMRA80A01G113X", "sister_password": "sister-secret"},
+    )
+    assert credentials_response.status_code == 200
+
+    batch_id = create_cancelled_batch(release_requested=False)
+
+    start_response = client.post(f"/elaborazioni/batches/{batch_id}/start", headers=auth_headers())
+
+    assert start_response.status_code == 409
+    assert "No released requests available to resume" in start_response.json()["detail"]
+
+
+def test_start_batch_resumes_only_released_requests_and_keeps_completed_items() -> None:
+    credentials_response = client.post(
+        "/elaborazioni/credentials",
+        headers=auth_headers(),
+        json={"sister_username": "RSSMRA80A01G113X", "sister_password": "sister-secret"},
+    )
+    assert credentials_response.status_code == 200
+
+    batch_id = create_cancelled_batch(release_requested=True, include_completed=True)
+
+    start_response = client.post(f"/elaborazioni/batches/{batch_id}/start", headers=auth_headers())
+
+    assert start_response.status_code == 200
+    payload = start_response.json()
+    assert payload["status"] == "processing"
+    assert payload["completed_items"] == 1
+    assert payload["skipped_items"] == 0
+
+    db = TestingSessionLocal()
+    try:
+        batch = db.query(CatastoBatch).filter(CatastoBatch.id == UUID(batch_id)).one()
+        requests = db.query(CatastoVisuraRequest).filter(CatastoVisuraRequest.batch_id == batch.id).order_by(CatastoVisuraRequest.row_index.asc()).all()
+
+        assert batch.completed_items == 1
+        assert batch.skipped_items == 0
+        assert requests[0].status == CatastoVisuraRequestStatus.COMPLETED.value
+        assert requests[1].status == CatastoVisuraRequestStatus.PENDING.value
+        assert requests[1].current_operation == "Queued after release"
+        assert requests[1].processed_at is None
+    finally:
+        db.close()
+
+
 def test_get_batch_realigns_stale_completed_counter() -> None:
     batch_id = create_batch_with_stale_counters()
 
@@ -986,3 +1215,84 @@ def test_get_batch_realigns_stale_completed_counter() -> None:
         assert batch.completed_items == 1
     finally:
         db.close()
+
+
+def test_runtime_metrics_reports_kpis_and_operating_window(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("app.services.elaborazioni_batches.settings.elaborazioni_operation_window_enabled", True)
+    monkeypatch.setattr("app.services.elaborazioni_batches.settings.elaborazioni_operation_start_hour", 9)
+    monkeypatch.setattr("app.services.elaborazioni_batches.settings.elaborazioni_operation_end_hour", 18)
+    monkeypatch.setattr("app.services.elaborazioni_batches.settings.elaborazioni_operation_timezone", "Europe/Rome")
+
+    now = datetime(2026, 5, 21, 5, 0, tzinfo=UTC)
+
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            current = now
+            if tz is not None:
+                return current.astimezone(tz)
+            return current.replace(tzinfo=None)
+
+    monkeypatch.setattr("app.services.elaborazioni_batches.datetime", FrozenDateTime)
+
+    db = TestingSessionLocal()
+    try:
+        user = db.query(ApplicationUser).filter(ApplicationUser.username == "elaborazioni-admin").one()
+        batch = CatastoBatch(
+            user_id=user.id,
+            name="Batch KPI",
+            status="completed",
+            total_items=4,
+            started_at=now - timedelta(hours=2),
+            completed_at=now - timedelta(hours=1),
+        )
+        db.add(batch)
+        db.flush()
+
+        request_specs = [
+            (CatastoVisuraRequestStatus.COMPLETED.value, now - timedelta(hours=1, minutes=20), now - timedelta(hours=1)),
+            (CatastoVisuraRequestStatus.FAILED.value, now - timedelta(hours=1, minutes=10), now - timedelta(minutes=50)),
+            (CatastoVisuraRequestStatus.NOT_FOUND.value, now - timedelta(days=2, minutes=30), now - timedelta(days=2)),
+            (CatastoVisuraRequestStatus.SKIPPED.value, now - timedelta(days=6, minutes=45), now - timedelta(days=6)),
+        ]
+        for index, (status, created_at, processed_at) in enumerate(request_specs, start=1):
+            db.add(
+                CatastoVisuraRequest(
+                    batch_id=batch.id,
+                    user_id=user.id,
+                    row_index=index,
+                    comune="Oristano",
+                    comune_codice="G113#ORISTANO#5#5",
+                    catasto="Terreni",
+                    foglio=str(index),
+                    particella=str(index),
+                    tipo_visura="Sintetica",
+                    status=status,
+                    created_at=created_at,
+                    processed_at=processed_at,
+                )
+            )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get("/elaborazioni/metrics", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["operating_window"]["enabled"] is True
+    assert payload["operating_window"]["is_within_window"] is False
+    assert payload["operating_window"]["state_label"] == "In pausa"
+    assert payload["totals"]["processed_requests"] == 4
+    assert payload["totals"]["requests_completed"] == 1
+    assert payload["totals"]["requests_failed"] == 1
+    assert payload["totals"]["requests_not_found"] == 1
+    assert payload["totals"]["requests_skipped"] == 1
+    assert payload["totals"]["success_rate"] == 25.0
+    assert payload["last_24_hours"]["processed_requests"] == 2
+    assert payload["last_24_hours"]["throughput_per_hour"] == round(2 / 24, 2)
+    assert payload["last_7_days"]["processed_requests"] == 4
+    assert payload["totals"]["average_batch_duration_minutes"] == 60.0
+    assert payload["totals"]["average_request_duration_seconds"] == 1725.0
+    assert payload["recent_daily"][0]["date"] == "2026-05-21"
+    assert payload["recent_daily"][0]["processed_requests"] == 2

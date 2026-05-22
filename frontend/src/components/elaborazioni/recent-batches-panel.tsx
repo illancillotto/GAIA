@@ -8,7 +8,7 @@ import { FolderIcon, SearchIcon } from "@/components/ui/icons";
 import { ElaborazioneOperationMessage } from "@/components/elaborazioni/operation-message";
 import { ElaborazionePanelHeader } from "@/components/elaborazioni/module-chrome";
 import { ElaborazioneStatusBadge } from "@/components/elaborazioni/status-badge";
-import { getElaborazioneBatch, getElaborazioneBatches, retryFailedElaborazioneBatch } from "@/lib/api";
+import { getElaborazioneBatch, getElaborazioneBatches, retryFailedElaborazioneBatch, startElaborazioneBatch } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import { formatDateTime } from "@/lib/presentation";
 import type { ElaborazioneBatch, ElaborazioneBatchDetail } from "@/types/api";
@@ -25,6 +25,20 @@ export function RecentBatchesPanel({ limit = 6 }: RecentBatchesPanelProps) {
   const [batchDetails, setBatchDetails] = useState<Record<string, ElaborazioneBatchDetail>>({});
   const [error, setError] = useState<string | null>(null);
   const [retryBusyId, setRetryBusyId] = useState<string | null>(null);
+  const [startBusyId, setStartBusyId] = useState<string | null>(null);
+
+  function getActionClassName(disabled = false): string {
+    return [
+      "inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-semibold transition",
+      disabled
+        ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400"
+        : "border-[#cfe0d5] bg-[#f3f8f4] text-[#1D4E35] hover:border-[#1D4E35] hover:bg-[#e8f2eb]",
+    ].join(" ");
+  }
+
+  function isReleasedBatch(batch: ElaborazioneBatch): boolean {
+    return batch.status === "cancelled" && batch.current_operation === "Release requested by user" && batch.skipped_items > 0;
+  }
 
   const recentBatches = useMemo(() => {
     const isRunning = (status: ElaborazioneBatch["status"]): boolean => status === "pending" || status === "processing";
@@ -125,6 +139,24 @@ export function RecentBatchesPanel({ limit = 6 }: RecentBatchesPanelProps) {
     }
   }
 
+  async function handleStartBatch(batch: ElaborazioneBatch): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) {
+      return;
+    }
+
+    setStartBusyId(batch.id);
+    try {
+      const updatedBatch = await startElaborazioneBatch(token, batch.id);
+      setBatches((current) => current.map((item) => (item.id === updatedBatch.id ? updatedBatch : item)));
+      setError(null);
+    } catch (startError) {
+      setError(startError instanceof Error ? startError.message : "Errore ripresa batch");
+    } finally {
+      setStartBusyId(null);
+    }
+  }
+
   return (
     <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white p-0 shadow-panel">
       <ElaborazionePanelHeader
@@ -162,15 +194,7 @@ export function RecentBatchesPanel({ limit = 6 }: RecentBatchesPanelProps) {
             <tbody>
               {recentBatches.map((batch) => (
                 <tr key={batch.id}>
-                  <td>
-                    <button
-                      className="font-medium text-[#1D4E35] transition hover:text-[#143726]"
-                      onClick={() => router.push(`/elaborazioni/batches/${batch.id}`)}
-                      type="button"
-                    >
-                      {batch.name ?? batch.id}
-                    </button>
-                  </td>
+                  <td className="font-medium text-gray-900">{batch.name ?? batch.id}</td>
                   <td><ElaborazioneStatusBadge status={batch.status} /></td>
                   <td>{batch.total_items}</td>
                   <td>
@@ -186,15 +210,25 @@ export function RecentBatchesPanel({ limit = 6 }: RecentBatchesPanelProps) {
                   <td>
                     <div className="flex flex-wrap items-center gap-3">
                       <button
-                        className="text-sm text-[#1D4E35] transition hover:text-[#143726]"
+                        className={getActionClassName()}
                         onClick={() => router.push(`/elaborazioni/batches/${batch.id}`)}
                         type="button"
                       >
-                        Apri batch
+                        Apri
                       </button>
+                      {isReleasedBatch(batch) ? (
+                        <button
+                          className={getActionClassName(startBusyId === batch.id)}
+                          disabled={startBusyId === batch.id}
+                          onClick={() => void handleStartBatch(batch)}
+                          type="button"
+                        >
+                          {startBusyId === batch.id ? "Ripresa..." : "Riprendi"}
+                        </button>
+                      ) : null}
                       {batch.current_operation === "Retry queued" || (batch.status === "failed" && batch.failed_items > 0) ? (
                         <button
-                          className="text-sm text-[#1D4E35] transition hover:text-[#143726] disabled:cursor-not-allowed disabled:text-gray-300"
+                          className={getActionClassName(retryBusyId === batch.id)}
                           disabled={retryBusyId === batch.id}
                           onClick={() => void handleRetryBatch(batch)}
                           type="button"

@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from pathlib import Path
 import re
 import unicodedata
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 from pandas.errors import EmptyDataError
@@ -91,6 +93,10 @@ class RequestNotFoundError(Exception):
     pass
 
 
+RELEASE_REQUESTED_OPERATION = "Release requested by user"
+RELEASE_REQUESTED_MESSAGE = "Credenziale SISTER liberata su richiesta utente"
+
+
 @dataclass(slots=True)
 class ValidatedVisuraRow:
     row_index: int
@@ -115,6 +121,73 @@ class ValidatedVisuraRow:
 def normalize_lookup_value(value: str) -> str:
     normalized = unicodedata.normalize("NFKD", value).encode("ascii", "ignore").decode("ascii")
     return re.sub(r"[^a-z0-9]+", " ", normalized.lower()).strip()
+
+
+def _as_utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
+def _get_operation_window_snapshot(now_utc: datetime | None = None) -> dict[str, object]:
+    now_utc = now_utc or datetime.now(UTC)
+    timezone_name = settings.elaborazioni_operation_timezone
+    try:
+        window_tz = ZoneInfo(timezone_name)
+    except Exception:
+        window_tz = ZoneInfo("Europe/Rome")
+        timezone_name = "Europe/Rome"
+
+    start_hour = min(max(settings.elaborazioni_operation_start_hour, 0), 23)
+    end_hour = min(max(settings.elaborazioni_operation_end_hour, 0), 23)
+    enabled = settings.elaborazioni_operation_window_enabled
+
+    if not enabled:
+        return {
+            "enabled": False,
+            "timezone": timezone_name,
+            "start_hour": start_hour,
+            "end_hour": end_hour,
+            "is_within_window": True,
+            "state_label": "Sempre attiva",
+            "next_resume_at": None,
+        }
+
+    local_now = now_utc.astimezone(window_tz)
+    current_hour = local_now.hour
+    if start_hour <= end_hour:
+        is_within_window = start_hour <= current_hour <= end_hour
+    else:
+        is_within_window = current_hour >= start_hour or current_hour <= end_hour
+
+    if is_within_window:
+        return {
+            "enabled": True,
+            "timezone": timezone_name,
+            "start_hour": start_hour,
+            "end_hour": end_hour,
+            "is_within_window": True,
+            "state_label": "Operativa",
+            "next_resume_at": None,
+        }
+
+    next_resume_local = local_now.replace(hour=start_hour, minute=0, second=0, microsecond=0)
+    if local_now.hour > end_hour or (start_hour <= end_hour and current_hour > end_hour):
+        next_resume_local = next_resume_local.replace(day=local_now.day) + timedelta(days=1)
+    elif next_resume_local <= local_now:
+        next_resume_local = next_resume_local + timedelta(days=1)
+
+    return {
+        "enabled": True,
+        "timezone": timezone_name,
+        "start_hour": start_hour,
+        "end_hour": end_hour,
+        "is_within_window": False,
+        "state_label": "In pausa",
+        "next_resume_at": next_resume_local.astimezone(UTC),
+    }
 
 
 def normalize_column_name(value: str) -> str:
@@ -546,12 +619,37 @@ def start_batch(db: Session, user_id: int, batch_id: UUID) -> ElaborazioneBatch:
     }:
         raise BatchConflictError(f"Batch cannot be started from status '{batch.status}'")
 
+    requests = get_batch_requests(db, batch.id)
+    resumed_after_release = False
+    if batch.status == ElaborazioneBatchStatus.CANCELLED.value:
+        for request in requests:
+            if (
+                request.status == ElaborazioneRichiestaStatus.SKIPPED.value
+                and request.current_operation == RELEASE_REQUESTED_OPERATION
+                and request.error_message == RELEASE_REQUESTED_MESSAGE
+            ):
+                request.status = ElaborazioneRichiestaStatus.PENDING.value
+                request.current_operation = "Queued after release"
+                request.error_message = None
+                request.processed_at = None
+                request.document_id = None
+                request.captcha_manual_solution = None
+                request.captcha_skip_requested = False
+                request.captcha_requested_at = None
+                request.captcha_expires_at = None
+                request.captcha_image_path = None
+                resumed_after_release = True
+
+        if not resumed_after_release:
+            raise BatchConflictError("No released requests available to resume")
+
     batch.status = ElaborazioneBatchStatus.PROCESSING.value
     batch.started_at = batch.started_at or datetime.now(UTC)
     batch.completed_at = None
-    batch.current_operation = "Queued for worker"
+    batch.current_operation = "Queued after release" if resumed_after_release else "Queued for worker"
     batch.report_json_path = None
     batch.report_md_path = None
+    recalculate_batch_counters(batch, requests)
     db.commit()
     db.refresh(batch)
     return batch
@@ -608,12 +706,12 @@ def release_processing_batches_for_user(db: Session, user_id: int) -> tuple[int,
                 ElaborazioneRichiestaStatus.AWAITING_CAPTCHA.value,
             }:
                 request.status = ElaborazioneRichiestaStatus.SKIPPED.value
-                request.current_operation = "Release requested by user"
-                request.error_message = "Credenziale SISTER liberata su richiesta utente"
+                request.current_operation = RELEASE_REQUESTED_OPERATION
+                request.error_message = RELEASE_REQUESTED_MESSAGE
                 request.processed_at = now
         batch.status = ElaborazioneBatchStatus.CANCELLED.value
         batch.completed_at = now
-        batch.current_operation = "Release requested by user"
+        batch.current_operation = RELEASE_REQUESTED_OPERATION
         recalculate_batch_counters(batch, requests)
         released_ids.append(batch.id)
 
@@ -694,3 +792,125 @@ def sync_batch_counters(
         db.refresh(batch)
         return True
     return False
+
+
+def get_runtime_metrics_for_user(db: Session, user_id: int) -> dict[str, object]:
+    now = datetime.now(UTC)
+    requests = list(
+        db.scalars(
+            select(ElaborazioneRichiesta).where(ElaborazioneRichiesta.user_id == user_id)
+        ).all()
+    )
+    batches = list_batches_for_user(db, user_id)
+
+    for batch in batches:
+        sync_batch_counters(db, batch)
+
+    terminal_statuses = {
+        ElaborazioneRichiestaStatus.COMPLETED.value,
+        ElaborazioneRichiestaStatus.FAILED.value,
+        ElaborazioneRichiestaStatus.SKIPPED.value,
+        ElaborazioneRichiestaStatus.NOT_FOUND.value,
+    }
+
+    def build_block(lookback_hours: int | None = None) -> dict[str, object]:
+        relevant_requests = requests
+        relevant_batches = batches
+        if lookback_hours is not None:
+            cutoff = now - timedelta(hours=lookback_hours)
+            relevant_requests = [
+                item for item in requests
+                if _as_utc(item.processed_at) is not None and _as_utc(item.processed_at) >= cutoff
+            ]
+            relevant_batches = [
+                item for item in batches
+                if _as_utc(item.completed_at) is not None and _as_utc(item.completed_at) >= cutoff
+            ]
+
+        completed = sum(1 for item in relevant_requests if item.status == ElaborazioneRichiestaStatus.COMPLETED.value)
+        failed = sum(1 for item in relevant_requests if item.status == ElaborazioneRichiestaStatus.FAILED.value)
+        skipped = sum(1 for item in relevant_requests if item.status == ElaborazioneRichiestaStatus.SKIPPED.value)
+        not_found = sum(1 for item in relevant_requests if item.status == ElaborazioneRichiestaStatus.NOT_FOUND.value)
+        processed = sum(1 for item in relevant_requests if item.status in terminal_statuses)
+
+        request_durations: list[float] = []
+        for item in relevant_requests:
+            created_at = _as_utc(item.created_at)
+            processed_at = _as_utc(item.processed_at)
+            if created_at is None or processed_at is None:
+                continue
+            request_durations.append(max((processed_at - created_at).total_seconds(), 0.0))
+
+        batch_durations: list[float] = []
+        for item in relevant_batches:
+            started_at = _as_utc(item.started_at)
+            completed_at = _as_utc(item.completed_at)
+            if started_at is None or completed_at is None:
+                continue
+            batch_durations.append(max((completed_at - started_at).total_seconds() / 60, 0.0))
+
+        throughput = None
+        if lookback_hours:
+            throughput = round(processed / lookback_hours, 2)
+
+        success_rate = None
+        if processed > 0:
+            success_rate = round((completed / processed) * 100, 2)
+
+        latest_processed_at = None
+        processed_times = [_as_utc(item.processed_at) for item in relevant_requests if _as_utc(item.processed_at) is not None]
+        if processed_times:
+            latest_processed_at = max(processed_times)
+
+        return {
+            "batches_total": len(relevant_batches),
+            "requests_total": len(relevant_requests),
+            "requests_completed": completed,
+            "requests_failed": failed,
+            "requests_skipped": skipped,
+            "requests_not_found": not_found,
+            "processed_requests": processed,
+            "success_rate": success_rate,
+            "throughput_per_hour": throughput,
+            "average_batch_duration_minutes": round(sum(batch_durations) / len(batch_durations), 2) if batch_durations else None,
+            "average_request_duration_seconds": round(sum(request_durations) / len(request_durations), 2) if request_durations else None,
+            "latest_processed_at": latest_processed_at,
+        }
+
+    recent_daily: list[dict[str, object]] = []
+    operation_window = _get_operation_window_snapshot(now)
+    try:
+        metrics_tz = ZoneInfo(str(operation_window["timezone"]))
+    except Exception:
+        metrics_tz = ZoneInfo("Europe/Rome")
+
+    daily_rows: dict[str, Counter[str]] = {}
+    for item in requests:
+        processed_at = _as_utc(item.processed_at)
+        if processed_at is None or processed_at < now - timedelta(days=7):
+            continue
+        day_key = processed_at.astimezone(metrics_tz).date().isoformat()
+        counter = daily_rows.setdefault(day_key, Counter())
+        counter["processed_requests"] += 1
+        counter[item.status] += 1
+
+    for day_key in sorted(daily_rows.keys(), reverse=True):
+        counter = daily_rows[day_key]
+        recent_daily.append(
+            {
+                "date": day_key,
+                "processed_requests": counter.get("processed_requests", 0),
+                "completed": counter.get(ElaborazioneRichiestaStatus.COMPLETED.value, 0),
+                "failed": counter.get(ElaborazioneRichiestaStatus.FAILED.value, 0),
+                "skipped": counter.get(ElaborazioneRichiestaStatus.SKIPPED.value, 0),
+                "not_found": counter.get(ElaborazioneRichiestaStatus.NOT_FOUND.value, 0),
+            }
+        )
+
+    return {
+        "operating_window": operation_window,
+        "totals": build_block(),
+        "last_24_hours": build_block(24),
+        "last_7_days": build_block(24 * 7),
+        "recent_daily": recent_daily,
+    }

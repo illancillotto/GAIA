@@ -36,6 +36,19 @@ import type { ElaborazioneBatchDetail } from "@/types/api";
 
 type RequestQuickFilter = "all" | "active" | "completed" | "failed" | "not_found" | "awaiting_captcha";
 
+export function isReleasedBatchDetail(batch: ElaborazioneBatchDetail | null): boolean {
+  return Boolean(
+    batch?.status === "cancelled" &&
+      batch.current_operation === "Release requested by user" &&
+      batch.requests.some(
+        (request) =>
+          request.status === "skipped" &&
+          request.current_operation === "Release requested by user" &&
+          request.error_message === "Credenziale SISTER liberata su richiesta utente",
+      ),
+  );
+}
+
 export function ElaborazioneBatchDetailWorkspace({
   batchId,
   embedded = false,
@@ -487,6 +500,7 @@ export function ElaborazioneBatchDetailWorkspace({
   const canCancelBatch = batch != null && !["completed", "cancelled"].includes(batch.status);
   const canRetryFailedBatch = batch != null && batch.failed_items > 0 && batch.status !== "processing";
   const canStartBatch = batch != null && ["pending", "failed", "cancelled"].includes(batch.status);
+  const isReleasedBatch = isReleasedBatchDetail(batch);
   const previewModalRequest = batch?.requests.find((request) => request.id === previewModalRequestId) ?? null;
   const previewModalUrl = previewModalRequestId ? artifactPreviewUrls[previewModalRequestId] ?? null : null;
   const previewModalMimeType = previewModalRequestId ? artifactPreviewMimeTypes[previewModalRequestId] ?? null : null;
@@ -604,7 +618,7 @@ export function ElaborazioneBatchDetailWorkspace({
               actions={
                 <div className="flex flex-wrap gap-2">
                   <button className="btn-secondary" disabled={startBusy || !canStartBatch} onClick={() => void handleStartBatch()} type="button">
-                    {startBusy ? "Avvio..." : "Avvia batch"}
+                    {startBusy ? (isReleasedBatch ? "Ripresa..." : "Avvio...") : isReleasedBatch ? "Riprendi batch" : "Avvia batch"}
                   </button>
                   <button className="btn-secondary" disabled={downloadBusy || batch.completed_items === 0} onClick={() => void handleDownloadBatch()} type="button">
                     {downloadBusy ? "Preparazione ZIP..." : "Scarica tutti i PDF (ZIP)"}

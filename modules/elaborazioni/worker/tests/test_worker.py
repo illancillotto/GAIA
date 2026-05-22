@@ -52,6 +52,11 @@ sys.modules.setdefault("playwright.async_api", playwright_async_api)
 
 _stub_module("pypdf", PdfReader=object)
 _stub_module("anti_captcha_client", AntiCaptchaClient=object)
+_stub_module(
+    "autodoc_sync",
+    AUTODOC_SYNC_ENTITY="autodoc_vehicle_details",
+    run_autodoc_sync_job_by_id=lambda *_args, **_kwargs: None,
+)
 _stub_module("browser_session", BrowserSession=object, BrowserSessionConfig=object)
 _stub_module("llm_captcha_solver", LLMCaptchaSolver=object)
 _stub_module("credential_vault", WorkerCredentialVault=object)
@@ -112,8 +117,14 @@ _stub_module(
 _stub_module(
     "app.services.elaborazioni_capacitas_runtime",
     run_anagrafica_history_job_by_id=lambda _job_id: None,
+    run_incass_job_by_id=lambda _job_id: None,
     run_particelle_job_by_id=lambda _job_id: None,
     run_terreni_job_by_id=lambda _job_id: None,
+)
+_stub_module(
+    "app.services.elaborazioni_capacitas_incass",
+    expire_stale_incass_sync_jobs=lambda _db: None,
+    prepare_incass_sync_jobs_for_recovery=lambda _db: [],
 )
 _stub_module(
     "app.services.elaborazioni_capacitas_terreni",
@@ -252,6 +263,37 @@ def test_sister_server_error_cooldown_uses_progressive_backoff() -> None:
 
 def test_sister_server_error_cooldown_is_capped() -> None:
     assert CatastoWorker._compute_sister_server_error_cooldown(99) == worker_module.SISTER_SERVER_ERROR_MAX_COOLDOWN_SEC
+
+
+def test_operating_window_allows_processing_when_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(worker_module, "OPERATION_WINDOW_ENABLED", False)
+    assert CatastoWorker._is_within_operating_window(datetime(2026, 5, 21, 2, 0, tzinfo=timezone.utc))
+
+
+def test_operating_window_blocks_processing_outside_daily_window(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(worker_module, "OPERATION_WINDOW_ENABLED", True)
+    monkeypatch.setattr(worker_module, "OPERATION_WINDOW_START_HOUR", 8)
+    monkeypatch.setattr(worker_module, "OPERATION_WINDOW_END_HOUR", 18)
+    monkeypatch.setattr(worker_module, "OPERATION_WINDOW_TIMEZONE", "Europe/Rome")
+
+    early_morning_utc = datetime(2026, 5, 21, 4, 30, tzinfo=timezone.utc)  # 06:30 Europe/Rome
+    assert not CatastoWorker._is_within_operating_window(early_morning_utc)
+
+    resume_at = CatastoWorker._next_operating_resume_at(early_morning_utc)
+    assert resume_at is not None
+    assert resume_at.astimezone(timezone.utc).hour == 6
+
+
+def test_operating_window_supports_overnight_windows(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(worker_module, "OPERATION_WINDOW_ENABLED", True)
+    monkeypatch.setattr(worker_module, "OPERATION_WINDOW_START_HOUR", 22)
+    monkeypatch.setattr(worker_module, "OPERATION_WINDOW_END_HOUR", 5)
+    monkeypatch.setattr(worker_module, "OPERATION_WINDOW_TIMEZONE", "Europe/Rome")
+
+    overnight_utc = datetime(2026, 5, 21, 1, 30, tzinfo=timezone.utc)  # 03:30 Europe/Rome
+    day_utc = datetime(2026, 5, 21, 10, 0, tzinfo=timezone.utc)  # 12:00 Europe/Rome
+    assert CatastoWorker._is_within_operating_window(overnight_utc)
+    assert not CatastoWorker._is_within_operating_window(day_utc)
 
 
 def test_next_request_id_claims_pending_request_and_marks_processing(worker_db) -> None:
