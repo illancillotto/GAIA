@@ -2,6 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 
+import { getStoredAccessToken } from "@/lib/auth";
 import type { WikiChatMessage, WikiChatResponse } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -10,7 +11,7 @@ async function fetchWikiChat(
   question: string,
   context_article?: string
 ): Promise<WikiChatResponse> {
-  const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+  const token = getStoredAccessToken();
   const res = await fetch(`${API_BASE}/api/wiki/chat`, {
     method: "POST",
     headers: {

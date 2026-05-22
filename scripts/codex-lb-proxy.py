@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-HTTP reverse proxy: ascolta su 0.0.0.0:2455 e forwarda a codex-lb su 127.0.0.1:2456.
+HTTP reverse proxy: ascolta su 0.0.0.0:2456 e forwarda a codex-lb su 127.0.0.1:2455.
 Riscrive l'header Host per aggirare il controllo IP di codex-lb.
 
 Avvio: nohup python3 scripts/codex-lb-proxy.py > /tmp/codex-lb-proxy.log 2>&1 &
@@ -13,9 +13,9 @@ import sys
 import logging
 
 LISTEN_HOST = "0.0.0.0"
-LISTEN_PORT = 2455
+LISTEN_PORT = 2456
 TARGET_HOST = "127.0.0.1"
-TARGET_PORT = 2456
+TARGET_PORT = 2455
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 log = logging.getLogger("proxy")

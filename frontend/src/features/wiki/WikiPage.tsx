@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 
+import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 import type { WikiArticleGroup, WikiChatMessage, WikiRequestCreate } from "./types";
 import { useWikiChat } from "./useWikiChat";
@@ -9,7 +10,7 @@ import { useWikiChat } from "./useWikiChat";
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 async function fetchArticles(): Promise<WikiArticleGroup[]> {
-  const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+  const token = getStoredAccessToken();
   const res = await fetch(`${API_BASE}/api/wiki/articles`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
@@ -18,7 +19,7 @@ async function fetchArticles(): Promise<WikiArticleGroup[]> {
 }
 
 async function saveWikiRequest(payload: WikiRequestCreate): Promise<void> {
-  const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+  const token = getStoredAccessToken();
   await fetch(`${API_BASE}/api/wiki/requests`, {
     method: "POST",
     headers: {
@@ -58,12 +59,16 @@ function ArticleContent({ group }: { group: WikiArticleGroup }) {
 
 function ChatPanel({
   contextArticle,
+  scope,
+  onScopeChange,
   messages,
   loading,
   error,
   onSend,
 }: {
   contextArticle: string | undefined;
+  scope: "article" | "codebase";
+  onScopeChange: (scope: "article" | "codebase") => void;
   messages: WikiChatMessage[];
   loading: boolean;
   error: string | null;
@@ -79,12 +84,37 @@ function ChatPanel({
   }
 
   return (
-    <div className="flex min-h-[32rem] flex-col">
+    <div className="flex h-full min-h-[28rem] flex-col">
       <div className="border-b border-gray-100 pb-4">
         <p className="label-caption text-[#1D4E35]">Assistente</p>
         <p className="mt-1 text-sm font-semibold text-gray-900">Chat documentale</p>
-        {contextArticle ? (
+        <div className="mt-3 inline-flex rounded-xl border border-gray-200 bg-[#f7f8f5] p-1">
+          <button
+            type="button"
+            onClick={() => onScopeChange("article")}
+            className={cn(
+              "rounded-lg px-3 py-1.5 text-xs font-medium transition",
+              scope === "article" ? "bg-white text-[#1D4E35] shadow-sm" : "text-gray-500 hover:text-gray-700"
+            )}
+          >
+            Documento selezionato
+          </button>
+          <button
+            type="button"
+            onClick={() => onScopeChange("codebase")}
+            className={cn(
+              "rounded-lg px-3 py-1.5 text-xs font-medium transition",
+              scope === "codebase" ? "bg-white text-[#1D4E35] shadow-sm" : "text-gray-500 hover:text-gray-700"
+            )}
+          >
+            Intera codebase
+          </button>
+        </div>
+        {scope === "article" && contextArticle ? (
           <p className="mt-1 truncate text-xs text-gray-500">Contesto: {contextArticle}</p>
+        ) : null}
+        {scope === "codebase" ? (
+          <p className="mt-1 text-xs text-gray-500">Ricerca su documentazione e codice indicizzati.</p>
         ) : null}
       </div>
 
@@ -171,8 +201,20 @@ export function WikiPage() {
   const [articles, setArticles] = useState<WikiArticleGroup[]>([]);
   const [selected, setSelected] = useState<WikiArticleGroup | null>(null);
   const [loadingArticles, setLoadingArticles] = useState(true);
+  const [articleQuery, setArticleQuery] = useState("");
 
-  const { messages, loading, error, sendMessage } = useWikiChat(selected?.source_file);
+  const [chatScope, setChatScope] = useState<"article" | "codebase">("codebase");
+  const { messages, loading, error, sendMessage } = useWikiChat(chatScope === "article" ? selected?.source_file : undefined);
+  const normalizedQuery = articleQuery.trim().toLowerCase();
+  const filteredArticles = normalizedQuery
+    ? articles.filter((article) => {
+        const label = formatArticleLabel(article.source_file).toLowerCase();
+        return (
+          label.includes(normalizedQuery) ||
+          article.source_file.toLowerCase().includes(normalizedQuery)
+        );
+      })
+    : articles;
 
   useEffect(() => {
     fetchArticles()
@@ -185,36 +227,54 @@ export function WikiPage() {
       .finally(() => setLoadingArticles(false));
   }, []);
 
+  useEffect(() => {
+    if (filteredArticles.length === 0) {
+      return;
+    }
+
+    if (!selected || !filteredArticles.some((article) => article.source_file === selected.source_file)) {
+      setSelected(filteredArticles[0]);
+    }
+  }, [filteredArticles, selected]);
+
   return (
-    <div className="page-stack">
-      <article className="panel-card border-[#e7eee8] bg-gradient-to-r from-white via-[#f9fbf7] to-[#f2f7f1]">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-          <div className="space-y-2">
-            <p className="label-caption text-[#1D4E35]">Knowledge Base</p>
-            <h3 className="font-newsreader text-3xl text-[#173224]">Wiki operativa GAIA</h3>
-            <p className="max-w-3xl text-sm leading-6 text-gray-600">
-              Consulta la documentazione indicizzata e interroga l&apos;assistente sul documento selezionato o sul
-              comportamento generale della piattaforma.
+    <div className="space-y-4">
+      <article className="panel-card border-[#e7eee8] bg-gradient-to-r from-white via-[#fbfcf8] to-[#f3f7f0] px-5 py-4">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-3">
+              <p className="label-caption text-[#1D4E35]">Knowledge Base</p>
+              <span className="rounded-full bg-[#eaf4ec] px-2.5 py-1 text-[11px] font-semibold text-[#1D4E35]">
+                {articles.length} documenti
+              </span>
+              <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-600 ring-1 ring-[#dbe7dc]">
+                {messages.length} messaggi
+              </span>
+            </div>
+            <h3 className="mt-2 font-newsreader text-2xl text-[#173224]">Wiki operativa GAIA</h3>
+            <p className="mt-1 max-w-3xl text-sm text-gray-600">
+              Indice, assistente e documento nello stesso workspace. L&apos;assistente resta subito visibile senza scorrere la pagina.
             </p>
-          </div>
-          <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-3 shadow-sm">
-              <p className="label-caption">Documenti</p>
-              <p className="mt-1 text-2xl font-semibold text-gray-900">{articles.length}</p>
-            </div>
-            <div className="rounded-2xl border border-white/70 bg-white/80 px-4 py-3 shadow-sm">
-              <p className="label-caption">Chat corrente</p>
-              <p className="mt-1 text-2xl font-semibold text-gray-900">{messages.length}</p>
-            </div>
           </div>
         </div>
       </article>
 
-      <div className="grid gap-6 xl:grid-cols-[280px_minmax(0,1fr)_360px]">
-        <article className="panel-card p-0">
+      <div className="grid items-start gap-4 xl:grid-cols-[420px_minmax(0,1fr)]">
+        <article className="panel-card h-[calc(100vh-12rem)] min-h-[32rem] p-0 xl:sticky xl:top-4">
           <div className="border-b border-gray-100 px-5 py-4">
             <p className="label-caption text-[#1D4E35]">Indice</p>
             <h3 className="mt-1 text-sm font-semibold text-gray-900">Documenti indicizzati</h3>
+            <p className="mt-1 text-xs text-gray-400">
+              {filteredArticles.length} di {articles.length} documenti visibili
+            </p>
+            <div className="mt-3">
+              <input
+                value={articleQuery}
+                onChange={(e) => setArticleQuery(e.target.value)}
+                placeholder="Filtra documenti..."
+                className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#1D4E35] focus:ring-2 focus:ring-[#1D4E35]/10"
+              />
+            </div>
           </div>
           {loadingArticles ? <p className="p-5 text-sm text-gray-400">Caricamento...</p> : null}
           {!loadingArticles && articles.length === 0 ? (
@@ -226,54 +286,82 @@ export function WikiPage() {
               </p>
             </div>
           ) : null}
-          <nav className="max-h-[42rem] space-y-1 overflow-y-auto p-3">
-            {articles.map((article) => (
-              <button
-                key={article.source_file}
-                onClick={() => setSelected(article)}
-                className={cn(
-                  "w-full rounded-xl px-3 py-3 text-left text-sm transition-colors",
-                  selected?.source_file === article.source_file
-                    ? "bg-[#1D4E35] text-white"
-                    : "text-gray-700 hover:bg-gray-50"
-                )}
-                title={article.source_file}
-              >
-                <span className="block truncate font-medium">{formatArticleLabel(article.source_file)}</span>
-                <span
+          {!loadingArticles && articles.length > 0 && filteredArticles.length === 0 ? (
+            <div className="px-5 py-5 text-sm text-gray-500">
+              Nessun documento corrisponde al filtro corrente.
+            </div>
+          ) : null}
+          <div className="h-[calc(100%-7.75rem)] overflow-y-auto p-3">
+            <nav className="grid gap-2 sm:grid-cols-2">
+              {filteredArticles.map((article) => (
+                <button
+                  key={article.source_file}
+                  onClick={() => setSelected(article)}
                   className={cn(
-                    "mt-1 block text-xs",
-                    selected?.source_file === article.source_file ? "text-white/70" : "text-gray-400"
+                    "w-full rounded-xl border px-3 py-3 text-left text-sm transition-colors",
+                    selected?.source_file === article.source_file
+                      ? "border-[#1D4E35] bg-[#1D4E35] text-white"
+                      : "border-[#dfe7e1] bg-white text-gray-700 hover:bg-[#f8fbf8]"
                   )}
+                  title={article.source_file}
                 >
-                  {article.chunks.length} estratti indicizzati
-                </span>
-              </button>
-            ))}
-          </nav>
+                  <span className="block truncate font-medium">{formatArticleLabel(article.source_file)}</span>
+                  <span
+                    className={cn(
+                      "mt-1 block text-xs",
+                      selected?.source_file === article.source_file ? "text-white/70" : "text-gray-400"
+                    )}
+                  >
+                    {article.chunks.length} estratti
+                  </span>
+                  <span
+                    className={cn(
+                      "mt-1 block truncate text-[11px]",
+                      selected?.source_file === article.source_file ? "text-white/65" : "text-gray-350"
+                    )}
+                  >
+                    {article.source_file}
+                  </span>
+                </button>
+              ))}
+            </nav>
+          </div>
         </article>
 
-        <article className="panel-card min-w-0">
-          {selected ? (
-            <div className="max-h-[42rem] overflow-y-auto pr-1">
-              <ArticleContent group={selected} />
-            </div>
-          ) : (
-            <div className="flex min-h-[32rem] items-center justify-center rounded-xl border border-dashed border-gray-200 bg-[#fafaf7] text-sm text-gray-400">
-              Seleziona un documento dall&apos;indice per vedere il contenuto.
-            </div>
-          )}
-        </article>
+        <div className="grid gap-4">
+          <article className="panel-card min-w-0">
+            <ChatPanel
+              contextArticle={selected?.source_file}
+              scope={chatScope}
+              onScopeChange={setChatScope}
+              messages={messages}
+              loading={loading}
+              error={error}
+              onSend={sendMessage}
+            />
+          </article>
 
-        <article className="panel-card">
-          <ChatPanel
-            contextArticle={selected?.source_file}
-            messages={messages}
-            loading={loading}
-            error={error}
-            onSend={sendMessage}
-          />
-        </article>
+          <article className="panel-card h-[calc(100vh-28rem)] min-h-[22rem] min-w-0">
+            <div className="border-b border-gray-100 pb-4">
+              <p className="label-caption text-[#1D4E35]">Contenuto</p>
+              <h3 className="mt-1 text-sm font-semibold text-gray-900">
+                {selected ? formatArticleLabel(selected.source_file) : "Documento"}
+              </h3>
+            </div>
+
+            <div className="mt-5 h-[calc(100%-4rem)]">
+              {selected ? (
+                <div className="h-full overflow-y-auto pr-1">
+                  <ArticleContent group={selected} />
+                </div>
+              ) : (
+                <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-gray-200 bg-[#fafaf7] text-sm text-gray-400">
+                  Seleziona un documento dall&apos;indice per vedere il contenuto.
+                </div>
+              )}
+            </div>
+          </article>
+        </div>
       </div>
     </div>
   );

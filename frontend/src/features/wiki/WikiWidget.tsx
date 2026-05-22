@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
 
+import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 import type { WikiChatMessage, WikiRequestCreate } from "./types";
 import { useWikiChat } from "./useWikiChat";
@@ -11,7 +12,7 @@ import { useWikiChat } from "./useWikiChat";
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 async function saveWikiRequest(payload: WikiRequestCreate): Promise<void> {
-  const token = typeof window !== "undefined" ? localStorage.getItem("access_token") : null;
+  const token = getStoredAccessToken();
   await fetch(`${API_BASE}/api/wiki/requests`, {
     method: "POST",
     headers: {

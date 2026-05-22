@@ -13,6 +13,10 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Wiki"])
 
 
+def _is_browsable_article(source_file: str) -> bool:
+    return source_file.lower().endswith(".md")
+
+
 @router.get("/articles", response_model=list[WikiArticleGroup])
 def list_articles(
     db: Session = Depends(get_db),
@@ -21,6 +25,7 @@ def list_articles(
     """Lista degli articoli indicizzati, raggruppati per source_file."""
     chunks = (
         db.query(WikiChunk)
+        .filter(WikiChunk.source_file.like("%.md"))
         .order_by(WikiChunk.source_file, WikiChunk.chunk_index)
         .all()
     )
@@ -59,6 +64,9 @@ def get_article(
         .order_by(WikiChunk.chunk_index)
         .all()
     )
+
+    if not _is_browsable_article(source_file):
+        chunks = []
 
     return WikiArticleGroup(
         source_file=source_file,

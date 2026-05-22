@@ -31,6 +31,11 @@ INCLUDE_PATTERNS = [
     "docs/**/*.md",
     "domain-docs/**/*.md",
     "progress/*.md",
+    "backend/app/**/*.py",
+    "backend/scripts/**/*.py",
+    "frontend/src/**/*.ts",
+    "frontend/src/**/*.tsx",
+    "modules/elaborazioni/worker/**/*.py",
 ]
 
 EXCLUDE_PARTS = {
@@ -57,6 +62,10 @@ def _find_docs(root: Path) -> list[Path]:
     return sorted(set(found))
 
 
+def _is_markdown_file(path: Path) -> bool:
+    return path.suffix.lower() == ".md"
+
+
 def _split_by_heading(content: str) -> list[dict]:
     heading_re = re.compile(r"^(#{1,3})\s+(.+)$", re.MULTILINE)
     chunks: list[dict] = []
@@ -78,6 +87,42 @@ def _split_by_heading(content: str) -> list[dict]:
         if section_content:
             chunks.append({"section_title": section_title, "content": section_content})
 
+    return chunks
+
+
+def _split_code_content(content: str) -> list[dict]:
+    lines = content.splitlines()
+    if not lines:
+        return []
+
+    chunks: list[dict] = []
+    current_lines: list[str] = []
+    current_title: str | None = None
+
+    def flush() -> None:
+        nonlocal current_lines, current_title
+        body = "\n".join(current_lines).strip()
+        if body:
+            chunks.append({"section_title": current_title, "content": body})
+        current_lines = []
+        current_title = None
+
+    symbol_re = re.compile(
+        r"^\s*(def |class |async def |export function |export const |export default function |function |const [A-Z_a-z0-9]+\s*=)"
+    )
+
+    for line in lines:
+        if symbol_re.match(line) and current_lines:
+            flush()
+            current_title = line.strip()[:120]
+        elif current_title is None and symbol_re.match(line):
+            current_title = line.strip()[:120]
+        current_lines.append(line)
+
+        if sum(len(item) + 1 for item in current_lines) >= MAX_CHUNK_CHARS:
+            flush()
+
+    flush()
     return chunks
 
 
@@ -128,7 +173,7 @@ def index_documents(db: Session, force: bool = False) -> dict:
             logger.warning("Impossibile leggere %s: %s", doc_path, exc)
             continue
 
-        raw_chunks = _split_by_heading(content)
+        raw_chunks = _split_by_heading(content) if _is_markdown_file(doc_path) else _split_code_content(content)
         chunks = _sub_chunk(raw_chunks)
 
         if not chunks:

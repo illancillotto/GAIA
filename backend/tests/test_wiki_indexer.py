@@ -14,6 +14,7 @@ from app.modules.wiki.services.indexer import (
     MAX_CHUNK_CHARS,
     OVERLAP_CHARS,
     _find_docs,
+    _split_code_content,
     _split_by_heading,
     _sub_chunk,
 )
@@ -111,20 +112,31 @@ def test_sub_chunk_multiple_inputs_preserved() -> None:
     assert len(result) == 2
 
 
+def test_split_code_content_breaks_on_symbols() -> None:
+    content = "def first():\n    return 1\n\n\ndef second():\n    return 2\n"
+    result = _split_code_content(content)
+    assert len(result) == 2
+    assert result[0]["section_title"] == "def first():"
+    assert "return 1" in result[0]["content"]
+    assert result[1]["section_title"] == "def second():"
+
+
 # ── _find_docs ────────────────────────────────────────────────────────────────
 
 def test_find_docs_finds_md_files() -> None:
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp)
-        (root / "README.md").write_text("# Readme")
-        (root / "NOTES.md").write_text("# Notes")
-        (root / "script.py").write_text("# python")
+        (root / "docs").mkdir(parents=True)
+        (root / "docs" / "README.md").write_text("# Readme")
+        (root / "docs" / "NOTES.md").write_text("# Notes")
+        (root / "backend" / "app").mkdir(parents=True)
+        (root / "backend" / "app" / "script.py").write_text("# python")
 
         docs = _find_docs(root)
-        names = [d.name for d in docs]
-        assert "README.md" in names
-        assert "NOTES.md" in names
-        assert "script.py" not in names
+        names = [str(d.relative_to(root)) for d in docs]
+        assert "docs/README.md" in names
+        assert "docs/NOTES.md" in names
+        assert "backend/app/script.py" in names
 
 
 def test_find_docs_excludes_node_modules() -> None:
@@ -133,12 +145,13 @@ def test_find_docs_excludes_node_modules() -> None:
         nm = root / "node_modules" / "pkg"
         nm.mkdir(parents=True)
         (nm / "README.md").write_text("pkg readme")
-        (root / "TOP.md").write_text("top")
+        (root / "docs").mkdir(parents=True)
+        (root / "docs" / "TOP.md").write_text("top")
 
         docs = _find_docs(root)
-        names = [d.name for d in docs]
+        names = [str(d.relative_to(root)) for d in docs]
         assert "README.md" not in names
-        assert "TOP.md" in names
+        assert "docs/TOP.md" in names
 
 
 def test_find_docs_recurses_domain_docs() -> None:
