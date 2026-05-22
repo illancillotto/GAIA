@@ -2,6 +2,15 @@
 
 import type { CatMeterReading } from "@/types/catasto";
 
+function formatRecordType(value: string | null): string {
+  const normalized = value?.trim().toUpperCase();
+  if (normalized === "CHIUSURA_IDRANTE") return "Chiusura idrante";
+  if (normalized === "PREDISPOSIZIONE") return "Predisposizione";
+  if (normalized === "CONT_NO_TES") return "Lettura contatore";
+  if (normalized === "CONT_TESSER") return "Lettura contatore tessera";
+  return value || "—";
+}
+
 export function MeterReadingDetailDrawer({
   reading,
   onClose,
@@ -31,7 +40,7 @@ export function MeterReadingDetailDrawer({
           {[
             ["Matricola", reading.matricola],
             ["Sigillo", reading.sigillo],
-            ["Tipo record", reading.record_type],
+            ["Tipo record", formatRecordType(reading.record_type)],
             ["Classe record", reading.record_kind],
             ["Stato operativo", reading.operational_state],
             ["Tipologia apparato", reading.tipologia_idrante],

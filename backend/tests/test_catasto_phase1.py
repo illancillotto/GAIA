@@ -7636,7 +7636,7 @@ def test_meter_reading_parser_supports_2024_headers_without_tipo() -> None:
     assert parsed.rows[0].data["record_type"] == "CONT_NO_TES"
     assert parsed.rows[0].data["lettura_iniziale"] == Decimal("389")
     assert parsed.rows[0].data["lettura_finale"] == Decimal("621")
-    assert parsed.rows[1].data["record_type"] == "FLANGIA"
+    assert parsed.rows[1].data["record_type"] == "CHIUSURA_IDRANTE"
 
 
 def test_meter_reading_parser_supports_2023_xmc_headers() -> None:
@@ -7875,6 +7875,72 @@ def test_meter_reading_prepare_import_keeps_tipo_and_tipologia_separate() -> Non
         assert prepared.items[0].payload["tipologia_idrante"] == "colonnina flangiata"
     finally:
         db.close()
+
+
+def test_meter_reading_parser_supports_real_world_aliases_and_dot_dates() -> None:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(
+        [
+            "ID",
+            "punto consegna",
+            "tipologia idrante",
+            "Matr. Cont.",
+            "vers. firmware",
+            "data lettura finale 2025",
+            "operatore lettura finale 2025",
+            "Lettura finale 2025",
+        ]
+    )
+    sheet.append([1, "C_A-2_1", "Hidropass ACMO bi-flangia_dn 100", "460", "3.71", "31.10.2025", "Corona_Tuveri", 2942])
+    output = BytesIO()
+    workbook.save(output)
+
+    parsed = parse_meter_readings_excel(output.getvalue(), "D30-San Giovanni 2025.xlsx")
+
+    row = parsed.rows[0].data
+    assert row["punto_consegna"] == "C_A-2_1"
+    assert row["matricola"] == "460"
+    assert row["firmware_version"] == "3.71"
+    assert row["data_lettura"] == date(2025, 10, 31)
+    assert row["operatore_lettura"] == "Corona_Tuveri"
+    assert row["record_type"] == "CONT_NO_TES"
+
+
+def test_meter_reading_parser_merges_multiple_sheets_when_headers_are_supported() -> None:
+    workbook = Workbook()
+    first_sheet = workbook.active
+    first_sheet.title = "Foglio1"
+    first_sheet.append(["ID", "PUNTO DI CONSEGNA", "TIPOLOGIA IDRANTE", "MATRIC.", "LETTURA FINALE 2025"])
+    first_sheet.append([1, "C1A_1", "colonnina flangiata Ø 100", None, 0])
+    second_sheet = workbook.create_sheet("Foglio2")
+    second_sheet.append(["fid", "id", "Nome", "Tipologia", "Codice", "Sigillo", "Lettura"])
+    second_sheet.append([92, None, "4_31_1N", "HidroPass ACMO bi-flangia_dn 150", "6378", "16857", 311])
+    output = BytesIO()
+    workbook.save(output)
+
+    parsed = parse_meter_readings_excel(output.getvalue(), "D26-Sassu 2025.xlsx")
+
+    assert len(parsed.rows) == 2
+    assert parsed.rows[0].data["record_type"] == "CHIUSURA_IDRANTE"
+    assert parsed.rows[1].data["sheet_name"] == "Foglio2"
+    assert parsed.rows[1].data["punto_consegna"] == "4_31_1N"
+    assert parsed.rows[1].data["matricola"] == "6378"
+    assert parsed.rows[1].data["lettura_finale"] == Decimal("311")
+    assert parsed.rows[1].data["record_type"] == "CONT_NO_TES"
+
+
+def test_meter_reading_parser_classifies_predisposizione_as_operator_activity() -> None:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(["ID", "TIPOLOGIA IDRANTE"])
+    sheet.append([1, "PREDISPOSIZIONE DN150"])
+    output = BytesIO()
+    workbook.save(output)
+
+    parsed = parse_meter_readings_excel(output.getvalue(), "D26-Sassu 2025.xlsx")
+
+    assert parsed.rows[0].data["record_type"] == "PREDISPOSIZIONE"
 
 
 def test_meter_reading_normalize_tax_code_strips_symbols() -> None:

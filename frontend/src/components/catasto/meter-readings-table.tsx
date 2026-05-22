@@ -9,6 +9,15 @@ import type { CatMeterReading, CatMeterReadingListResponse } from "@/types/catas
 
 import { MeterReadingDetailDrawer } from "./meter-reading-detail-drawer";
 
+function formatRecordType(value: string | null, fallback: string | null): string {
+  const normalized = value?.trim().toUpperCase();
+  if (normalized === "CHIUSURA_IDRANTE") return "Chiusura idrante";
+  if (normalized === "PREDISPOSIZIONE") return "Predisposizione";
+  if (normalized === "CONT_NO_TES") return "Lettura contatore";
+  if (normalized === "CONT_TESSER") return "Lettura contatore tessera";
+  return value ?? fallback ?? "—";
+}
+
 export function MeterReadingsTable({ subjectId }: { subjectId?: string }) {
   const [data, setData] = useState<CatMeterReadingListResponse | null>(null);
   const [anno, setAnno] = useState("");
@@ -167,7 +176,7 @@ export function MeterReadingsTable({ subjectId }: { subjectId?: string }) {
                   <td className="px-4 py-3">{item.anno}</td>
                   <td className="px-4 py-3 font-medium text-slate-900">{item.punto_consegna}</td>
                   <td className="px-4 py-3">{item.matricola ?? "—"}</td>
-                  <td className="px-4 py-3">{item.record_type ?? item.tipologia_idrante ?? "—"}</td>
+                  <td className="px-4 py-3">{formatRecordType(item.record_type, item.tipologia_idrante)}</td>
                   <td className="px-4 py-3">{item.subject_display_name ?? item.codice_fiscale_normalizzato ?? "Non collegato"}</td>
                   <td className="px-4 py-3">{item.consumo_mc ?? "—"}</td>
                   <td className="px-4 py-3">

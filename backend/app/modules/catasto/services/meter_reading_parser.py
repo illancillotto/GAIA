@@ -18,9 +18,14 @@ HEADER_ALIASES: dict[str, str] = {
     "ID": "excel_id",
     "PUNTO_CONS": "punto_consegna",
     "PUNTO DI CONSEGNA": "punto_consegna",
+    "PUNTO CONSEGNA": "punto_consegna",
+    "NOME": "punto_consegna",
     "COD_CONT": "matricola",
     "MATRIC.": "matricola",
+    "MATR. CONT.": "matricola",
     "MATRICOLA": "matricola",
+    "MATRICOLA CONTATORE": "matricola",
+    "CODICE": "matricola",
     "CODICE CONTATORE": "matricola",
     "SIGILLO": "sigillo",
     "TIPOLOGIA": "tipologia_idrante",
@@ -29,12 +34,15 @@ HEADER_ALIASES: dict[str, str] = {
     "TIPOLOGIA PUNTO DI CONSEGNA": "tipologia_idrante",
     "TIPO": "record_type",
     "FIRMWARE": "firmware_version",
+    "VERS. FIRMWARE": "firmware_version",
+    "VERSIONE FW": "firmware_version",
     "VERSIONE FIRMWARE": "firmware_version",
     "BATTERIA": "battery_level",
     "LIVELLO BATTERIA": "battery_level",
     "DIS. ALL. VALVOLA": "note",
     "DATA LETTURA": "data_lettura",
     "DATA LETTURA ": "data_lettura",
+    "DATA": "data_lettura",
     "OPERATORE LETTURA": "operatore_lettura",
     "OPERATORE": "operatore_lettura",
     "INTERVENTO DA ESEGUIRE": "intervento_da_eseguire",
@@ -116,6 +124,8 @@ def resolve_header_alias(header: Any, *, target_year: int | None = None) -> str 
         if target_year is not None and header_year is not None and header_year < target_year:
             return "lettura_iniziale"
         return "lettura_finale"
+    if normalized == "LETTURA":
+        return "lettura_finale"
     if "TOT" in normalized and "M3" in normalized:
         return "consumo_mc"
     if normalized.startswith("DATA LETTURA"):
@@ -175,7 +185,7 @@ def _parse_date(value: Any) -> date | None:
     text = str(value).strip()
     if not text:
         return None
-    for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y"):
+    for fmt in ("%d/%m/%Y", "%Y-%m-%d", "%d-%m-%Y", "%d.%m.%Y"):
         try:
             return datetime.strptime(text, fmt).date()
         except ValueError:
@@ -196,6 +206,11 @@ def _normalize_type_token(value: str | None) -> str:
 def _requires_final_reading_x10(tipologia_idrante: str | None) -> bool:
     normalized = _normalize_type_token(tipologia_idrante)
     return normalized == "HYDROPASS_ACMO_BI_FLANGIA_DN_150"
+
+
+def _is_hydrant_closure_type(tipologia_idrante: str | None) -> bool:
+    normalized = _normalize_type_token(tipologia_idrante)
+    return "FLANGIAT" in normalized and "DN_100" in normalized or ("COLONNINA" in normalized and "FLANGIAT" in normalized)
 
 
 def _apply_meter_type_adjustments(item: dict[str, Any]) -> None:
@@ -239,14 +254,18 @@ def _infer_record_type(item: dict[str, Any]) -> str | None:
         return "SFIATO"
     if "SARACIN" in tipologia:
         return "SARACINESCA"
+    if "PREDISPOSIZ" in tipologia:
+        return "PREDISPOSIZIONE"
     if "IDROVALVOLA" in tipologia or "LINEA SOTTERRANEA" in tipologia:
         return "IDROVALVOLA"
     if "DIRAMAT" in tipologia or "VASCA" in tipologia:
         return "DIRAMATORE"
     if "DIRAMAT" in normalize_header(item.get("punto_consegna")):
         return "DIRAMATORE"
+    if _is_hydrant_closure_type(_clean_string(item.get("tipologia_idrante"))):
+        return "CHIUSURA_IDRANTE"
     if "FLANGI" in tipologia and not has_meter_signals:
-        return "FLANGIA"
+        return "CHIUSURA_IDRANTE"
     if has_meter_signals:
         return "CONT_NO_TES"
     return None
@@ -333,41 +352,42 @@ def _load_workbook_with_fallback(file_bytes: bytes):
 
 def parse_meter_readings_excel(file_bytes: bytes, filename: str) -> ParsedMeterReadingsFile:
     workbook = _load_workbook_with_fallback(file_bytes)
-    sheet = workbook[workbook.sheetnames[0]]
-    header_row = _detect_header_row(sheet)
-    header_values = next(sheet.iter_rows(min_row=header_row, max_row=header_row, values_only=True))
     distretto_code, anno = _extract_filename_metadata(filename)
-    if anno is None:
-        anno = _infer_year_from_headers(header_values)
-    mapped_headers: dict[int, str] = {}
-    for index, value in enumerate(header_values):
-        alias = resolve_header_alias(value, target_year=anno)
-        if alias:
-            mapped_headers[index] = alias
-
     parsed_rows: list[ParsedMeterReadingRow] = []
-    for row_number, row in enumerate(sheet.iter_rows(min_row=header_row + 1, values_only=True), start=header_row + 1):
-        item: dict[str, Any] = {}
-        has_values = False
-        for index, field_name in mapped_headers.items():
-            raw_value = row[index] if index < len(row) else None
-            if raw_value not in (None, ""):
-                has_values = True
-            if field_name in {"lettura_iniziale", "lettura_finale", "consumo_mc"}:
-                item[field_name] = _parse_decimal(raw_value)
-            elif field_name in {"data_lettura", "data_intervento"}:
-                item[field_name] = _parse_date(raw_value)
-            else:
-                item[field_name] = _clean_string(raw_value)
-        item["record_type"] = _infer_record_type(item)
-        _apply_meter_type_adjustments(item)
-        if not has_values:
-            continue
-        parsed_rows.append(ParsedMeterReadingRow(row_number=row_number, data=item))
 
-    return ParsedMeterReadingsFile(
-        filename=filename,
-        anno=anno,
-        distretto_code=distretto_code,
-        rows=parsed_rows,
-    )
+    for sheet in workbook.worksheets:
+        header_row = _detect_header_row(sheet)
+        header_values = next(sheet.iter_rows(min_row=header_row, max_row=header_row, values_only=True))
+        if anno is None:
+            anno = _infer_year_from_headers(header_values)
+        mapped_headers: dict[int, str] = {}
+        for index, value in enumerate(header_values):
+            alias = resolve_header_alias(value, target_year=anno)
+            if alias:
+                mapped_headers[index] = alias
+        if len(mapped_headers) < 2:
+            continue
+
+        for row_number, row in enumerate(sheet.iter_rows(min_row=header_row + 1, values_only=True), start=header_row + 1):
+            item: dict[str, Any] = {"sheet_name": sheet.title}
+            has_values = False
+            for index, field_name in mapped_headers.items():
+                raw_value = row[index] if index < len(row) else None
+                if raw_value not in (None, ""):
+                    has_values = True
+                if field_name in {"lettura_iniziale", "lettura_finale", "consumo_mc"}:
+                    parsed_value = _parse_decimal(raw_value)
+                elif field_name in {"data_lettura", "data_intervento"}:
+                    parsed_value = _parse_date(raw_value)
+                else:
+                    parsed_value = _clean_string(raw_value)
+                if parsed_value is None and field_name in item:
+                    continue
+                item[field_name] = parsed_value
+            item["record_type"] = _infer_record_type(item)
+            _apply_meter_type_adjustments(item)
+            if not has_values:
+                continue
+            parsed_rows.append(ParsedMeterReadingRow(row_number=row_number, data=item))
+
+    return ParsedMeterReadingsFile(filename=filename, anno=anno, distretto_code=distretto_code, rows=parsed_rows)
