@@ -54,6 +54,10 @@ def test_settings_use_expected_defaults(monkeypatch) -> None:
         "SYNC_SCHEDULE_MAX_CYCLES",
         "BOOTSTRAP_ADMIN_USERNAME",
         "BOOTSTRAP_ADMIN_EMAIL",
+        "WC_SYNC_DAILY_ENABLED",
+        "WC_SYNC_DAILY_CRON",
+        "WC_SYNC_DAILY_TIMEZONE",
+        "WC_SYNC_DAILY_LOOKBACK_DAYS",
     ]:
         monkeypatch.delenv(env_name, raising=False)
     monkeypatch.setenv("DATABASE_URL", "sqlite:///./config-defaults.db")
@@ -114,6 +118,10 @@ def test_settings_use_expected_defaults(monkeypatch) -> None:
     assert settings.sync_schedule_max_cycles == 0
     assert settings.bootstrap_admin_username == "admin"
     assert settings.bootstrap_admin_email == "admin@example.local"
+    assert settings.wc_sync_daily_enabled is False
+    assert settings.wc_sync_daily_cron == "0 2 * * *"
+    assert settings.wc_sync_daily_timezone == "Europe/Rome"
+    assert settings.wc_sync_daily_lookback_days == 1
     assert settings.database_url == "sqlite:///./config-defaults.db"
 
 
@@ -158,6 +166,10 @@ def test_settings_allow_environment_override(monkeypatch) -> None:
     monkeypatch.setenv("SYNC_SCHEDULE_ENABLED", "true")
     monkeypatch.setenv("SYNC_SCHEDULE_INTERVAL_SECONDS", "60")
     monkeypatch.setenv("BOOTSTRAP_ADMIN_USERNAME", "adminseed")
+    monkeypatch.setenv("WC_SYNC_DAILY_ENABLED", "true")
+    monkeypatch.setenv("WC_SYNC_DAILY_CRON", "30 1 * * *")
+    monkeypatch.setenv("WC_SYNC_DAILY_TIMEZONE", "UTC")
+    monkeypatch.setenv("WC_SYNC_DAILY_LOOKBACK_DAYS", "2")
 
     settings = Settings()
 
@@ -201,3 +213,7 @@ def test_settings_allow_environment_override(monkeypatch) -> None:
     assert settings.sync_schedule_enabled is True
     assert settings.sync_schedule_interval_seconds == 60
     assert settings.bootstrap_admin_username == "adminseed"
+    assert settings.wc_sync_daily_enabled is True
+    assert settings.wc_sync_daily_cron == "30 1 * * *"
+    assert settings.wc_sync_daily_timezone == "UTC"
+    assert settings.wc_sync_daily_lookback_days == 2

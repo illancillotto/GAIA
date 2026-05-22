@@ -1039,6 +1039,60 @@ def test_bonifica_sync_run_imports_org_charts(
         db.close()
 
 
+def test_run_daily_bonifica_sync_job_queues_all_entities(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.services.elaborazioni_bonifica_sync import run_daily_bonifica_sync_job
+
+    monkeypatch.setattr("app.core.config.settings.bootstrap_admin_username", "elaborazioni-admin")
+    monkeypatch.setattr("app.core.config.settings.wc_sync_daily_lookback_days", 1)
+
+    called_requests = []
+
+    async def fake_run_bonifica_sync(db, current_user, request):
+        called_requests.append((current_user.username, request))
+        return {"ok": True}
+
+    monkeypatch.setattr("app.services.elaborazioni_bonifica_sync.run_bonifica_sync", fake_run_bonifica_sync)
+
+    db = TestingSessionLocal()
+    try:
+        result = asyncio.run(run_daily_bonifica_sync_job(db))
+        assert result == {"ok": True}
+        assert len(called_requests) == 1
+        username, request = called_requests[0]
+        assert username == "elaborazioni-admin"
+        assert request.entities == "all"
+        assert request.date_to is not None
+        assert request.date_from is not None
+    finally:
+        db.close()
+
+
+def test_run_daily_bonifica_sync_job_skips_if_jobs_are_already_active(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.services.elaborazioni_bonifica_sync import run_daily_bonifica_sync_job
+
+    monkeypatch.setattr("app.core.config.settings.bootstrap_admin_username", "elaborazioni-admin")
+
+    db = TestingSessionLocal()
+    try:
+        db.add(
+            WCSyncJob(
+                entity="reports",
+                status="queued",
+                params_json={"date_from": None, "date_to": None},
+            )
+        )
+        db.commit()
+
+        result = asyncio.run(run_daily_bonifica_sync_job(db))
+        assert result is None
+    finally:
+        db.close()
+
+
 def test_bonifica_sync_run_imports_consorziati_and_approve_creates_subject(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -103,6 +103,22 @@ class Settings(BaseSettings):
         default="3",
         alias="WC_SYNC_CONSORZIATI_ROLE_ID",
     )
+    wc_sync_daily_enabled: bool = Field(
+        default=False,
+        alias="WC_SYNC_DAILY_ENABLED",
+    )
+    wc_sync_daily_cron: str = Field(
+        default="0 2 * * *",
+        alias="WC_SYNC_DAILY_CRON",
+    )
+    wc_sync_daily_timezone: str = Field(
+        default="Europe/Rome",
+        alias="WC_SYNC_DAILY_TIMEZONE",
+    )
+    wc_sync_daily_lookback_days: int = Field(
+        default=1,
+        alias="WC_SYNC_DAILY_LOOKBACK_DAYS",
+    )
     jwt_secret_key: str = Field(alias="JWT_SECRET_KEY")
     jwt_expire_minutes: int = Field(default=90, alias="JWT_EXPIRE_MINUTES")
     jwt_algorithm: str = "HS256"

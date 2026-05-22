@@ -124,6 +124,21 @@ def _resolve_entities(request: BonificaSyncRunRequest) -> list[str]:
     return [entity for entity in SUPPORTED_SYNC_ENTITIES if entity in requested_entities]
 
 
+def _has_active_jobs(db: Session, entities: list[str]) -> bool:
+    return (
+        db.scalar(
+            select(WCSyncJob.id)
+            .where(
+                WCSyncJob.entity.in_(entities),
+                WCSyncJob.status.in_(("queued", "running")),
+                WCSyncJob.finished_at.is_(None),
+            )
+            .limit(1)
+        )
+        is not None
+    )
+
+
 def _resolve_date_window(request: BonificaSyncRunRequest, entity: str) -> tuple[date | None, date | None]:
     if entity not in DATE_AWARE_SYNC_ENTITIES:
         return None, None
@@ -686,6 +701,44 @@ async def run_bonifica_sync(
             for entity, job in jobs.items()
         }
     )
+
+
+async def run_daily_bonifica_sync_job(db: Session) -> BonificaSyncRunResponse | None:
+    _expire_stale_running_jobs(db)
+
+    current_user = db.scalar(
+        select(ApplicationUser)
+        .where(
+            ApplicationUser.username == settings.bootstrap_admin_username,
+            ApplicationUser.is_active.is_(True),
+            ApplicationUser.module_operazioni.is_(True),
+        )
+        .limit(1)
+    )
+    if current_user is None:
+        current_user = db.scalar(
+            select(ApplicationUser)
+            .where(
+                ApplicationUser.is_active.is_(True),
+                ApplicationUser.module_operazioni.is_(True),
+            )
+            .order_by(ApplicationUser.id.asc())
+            .limit(1)
+        )
+    if current_user is None:
+        raise RuntimeError("Nessun utente attivo abilitato a Operazioni disponibile per il job WhiteCompany")
+
+    request = BonificaSyncRunRequest(
+        entities="all",
+        date_to=date.today(),
+        date_from=date.today() - timedelta(days=max(settings.wc_sync_daily_lookback_days, 1)),
+    )
+    entities = _resolve_entities(request)
+    if _has_active_jobs(db, entities):
+        logger.info("WhiteCompany daily job skipped: pending/running jobs already exist")
+        return None
+
+    return await run_bonifica_sync(db, current_user, request)
 
 
 def get_bonifica_sync_status(db: Session) -> BonificaSyncStatusResponse:
