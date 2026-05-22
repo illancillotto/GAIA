@@ -210,6 +210,33 @@ Dettaglio mezzo.
 ## 4.4 PATCH `/api/operazioni/vehicles/{vehicle_id}`
 Aggiorna mezzo.
 
+Note implementative correnti:
+- il payload e la response includono anche i campi `autodoc_url`, `autodoc_title`, `autodoc_data`, `autodoc_synced_at`, `autodoc_sync_error`
+- `autodoc_url` viene usato dal worker browser AUTODOC per riaprire direttamente la scheda tecnica del mezzo
+
+## 4.4.1 GET `/api/operazioni/vehicles/autodoc-sync/status`
+Restituisce l'ultimo job AUTODOC del parco mezzi, o `null` se non esiste alcuna esecuzione.
+
+## 4.4.2 POST `/api/operazioni/vehicles/autodoc-sync`
+Accoda una sync AUTODOC massiva.
+
+### Request
+```json
+{
+  "vehicle_ids": ["uuid"],
+  "only_with_autodoc_url": false,
+  "force_refresh": true
+}
+```
+
+### Note
+- il job viene persistito in `wc_sync_job` con `entity = autodoc_vehicle_details`
+- se esiste gia un job `queued/running`, l'endpoint restituisce quel job invece di crearne uno nuovo
+- `only_with_autodoc_url=true` limita il perimetro ai mezzi che hanno gia il link salvato
+
+## 4.4.3 POST `/api/operazioni/vehicles/{vehicle_id}/autodoc-sync`
+Accoda la sync AUTODOC di un singolo mezzo, forzando il refresh del dettaglio.
+
 ## 4.5 POST `/api/operazioni/vehicles/{vehicle_id}/deactivate`
 Disattiva mezzo.
 

@@ -15,7 +15,7 @@ Usare stati coerenti:
 - `BLOCKED`
 - `DONE`
 
-Data ultimo aggiornamento: 2026-05-13
+Data ultimo aggiornamento: 2026-05-22
 Responsabile aggiornamento: Codex
 
 ---
@@ -172,6 +172,8 @@ Responsabile aggiornamento: Codex
 - Gli endpoint `get_activity`, `get_report` e `get_case` espongono ora metadati più ricchi, usati dal frontend per sostituire i placeholder con timing, contesto operativo, riferimenti sorgente e stato revisione
 - Sono disponibili anche endpoint di supporto per `activity attachments`, `report attachments`, `case attachments` e `activity gps summary`, già consumati dalle schede dettaglio
 - L'import `Transazioni flotte` restituisce ora anche `matched_white_refuels` per evidenziare quanti rifornimenti White sono stati chiusi dal file Excel
+- I mezzi espongono ora campi `autodoc_*` persistiti su DB, con link AUTODOC editabile dalla scheda mezzo, sync singola accodabile dal dettaglio e sync massiva accodabile da `Operazioni` / `Elaborazioni`
+- Il runtime AUTODOC usa un worker browser Playwright dedicato, perché il fetch server-to-server diretto verso `auto-doc.it` è schermato da Cloudflare; lo stato del job viene serializzato in `wc_sync_job` con entity `autodoc_vehicle_details`
 
 ### Blocchi
 - Nessuno
