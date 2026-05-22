@@ -73,6 +73,7 @@ export function ElaborazioneBatchDetailWorkspace({
   const [previewModalRequestId, setPreviewModalRequestId] = useState<string | null>(null);
   const [requestQuickFilter, setRequestQuickFilter] = useState<RequestQuickFilter>("all");
   const artifactPreviewUrlsRef = useRef<Record<string, string>>({});
+  const websocketRefreshTimeoutRef = useRef<number | null>(null);
 
   const isArtifactPreviewEligible = useCallback((request: ElaborazioneBatchDetail["requests"][number]): boolean => {
     return (
@@ -106,10 +107,20 @@ export function ElaborazioneBatchDetailWorkspace({
     if (!socket) return;
 
     socket.onmessage = () => {
-      void loadBatch();
+      if (websocketRefreshTimeoutRef.current != null) {
+        window.clearTimeout(websocketRefreshTimeoutRef.current);
+      }
+      websocketRefreshTimeoutRef.current = window.setTimeout(() => {
+        websocketRefreshTimeoutRef.current = null;
+        void loadBatch();
+      }, 400);
     };
 
     return () => {
+      if (websocketRefreshTimeoutRef.current != null) {
+        window.clearTimeout(websocketRefreshTimeoutRef.current);
+        websocketRefreshTimeoutRef.current = null;
+      }
       socket.close();
     };
   }, [batchId, loadBatch]);
@@ -501,6 +512,15 @@ export function ElaborazioneBatchDetailWorkspace({
   const canRetryFailedBatch = batch != null && batch.failed_items > 0 && batch.status !== "processing";
   const canStartBatch = batch != null && ["pending", "failed", "cancelled"].includes(batch.status);
   const isReleasedBatch = isReleasedBatchDetail(batch);
+  const startBatchLabel = startBusy
+    ? isReleasedBatch
+      ? "Ripresa..."
+      : "Avvio..."
+    : batch?.status === "processing"
+      ? "Batch in esecuzione"
+      : isReleasedBatch
+        ? "Riprendi batch"
+        : "Avvia batch";
   const previewModalRequest = batch?.requests.find((request) => request.id === previewModalRequestId) ?? null;
   const previewModalUrl = previewModalRequestId ? artifactPreviewUrls[previewModalRequestId] ?? null : null;
   const previewModalMimeType = previewModalRequestId ? artifactPreviewMimeTypes[previewModalRequestId] ?? null : null;
@@ -618,7 +638,7 @@ export function ElaborazioneBatchDetailWorkspace({
               actions={
                 <div className="flex flex-wrap gap-2">
                   <button className="btn-secondary" disabled={startBusy || !canStartBatch} onClick={() => void handleStartBatch()} type="button">
-                    {startBusy ? (isReleasedBatch ? "Ripresa..." : "Avvio...") : isReleasedBatch ? "Riprendi batch" : "Avvia batch"}
+                    {startBatchLabel}
                   </button>
                   <button className="btn-secondary" disabled={downloadBusy || batch.completed_items === 0} onClick={() => void handleDownloadBatch()} type="button">
                     {downloadBusy ? "Preparazione ZIP..." : "Scarica tutti i PDF (ZIP)"}

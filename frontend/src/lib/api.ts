@@ -112,6 +112,14 @@ import type {
 } from "@/types/api";
 
 const DEFAULT_API_BASE_URL = "/api";
+const ELABORAZIONE_BATCH_DETAIL_CACHE_TTL_MS = 1000;
+
+type ElaborazioneBatchDetailCacheEntry = {
+  expiresAt: number;
+  promise: Promise<ElaborazioneBatchDetail>;
+};
+
+const elaborazioneBatchDetailCache = new Map<string, ElaborazioneBatchDetailCacheEntry>();
 
 export class ApiError extends Error {
   status?: number;
@@ -1888,12 +1896,41 @@ export async function getElaborazioneBatches(token: string, status?: string): Pr
   });
 }
 
-export async function getElaborazioneBatch(token: string, batchId: string): Promise<ElaborazioneBatchDetail> {
-  return request<ElaborazioneBatchDetail>(`/elaborazioni/batches/${batchId}`, {
+export async function getElaborazioneBatch(
+  token: string,
+  batchId: string,
+  options?: { bustCache?: boolean },
+): Promise<ElaborazioneBatchDetail> {
+  const cacheKey = `${token}:${batchId}`;
+  const now = Date.now();
+
+  if (options?.bustCache) {
+    elaborazioneBatchDetailCache.delete(cacheKey);
+  } else {
+    const cached = elaborazioneBatchDetailCache.get(cacheKey);
+    if (cached && cached.expiresAt > now) {
+      return cached.promise;
+    }
+  }
+
+  const promise = request<ElaborazioneBatchDetail>(`/elaborazioni/batches/${batchId}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
+  }).finally(() => {
+    globalThis.setTimeout(() => {
+      const current = elaborazioneBatchDetailCache.get(cacheKey);
+      if (current?.promise === promise && current.expiresAt <= Date.now()) {
+        elaborazioneBatchDetailCache.delete(cacheKey);
+      }
+    }, ELABORAZIONE_BATCH_DETAIL_CACHE_TTL_MS);
   });
+
+  elaborazioneBatchDetailCache.set(cacheKey, {
+    expiresAt: now + ELABORAZIONE_BATCH_DETAIL_CACHE_TTL_MS,
+    promise,
+  });
+  return promise;
 }
 
 export async function startElaborazioneBatch(token: string, batchId: string): Promise<ElaborazioneBatch> {

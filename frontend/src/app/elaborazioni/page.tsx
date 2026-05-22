@@ -53,7 +53,7 @@ import type {
   ElaborazioneRuntimeMetrics,
 } from "@/types/api";
 
-const DASHBOARD_REFRESH_INTERVAL_MS = 5000;
+const DASHBOARD_REFRESH_INTERVAL_MS = 15000;
 
 const QUICK_ACTIONS = [
   {
@@ -322,6 +322,14 @@ export default function ElaborazioniPage() {
       .slice(0, 6);
   }, [batches]);
 
+  const hasActivePollingTargets = useMemo(() => {
+    const hasActiveBatches = batches.some((batch) => ["pending", "processing"].includes(batch.status));
+    const hasActiveParticelleJobs = particelleSyncJobs.some((job) => ["pending", "processing", "queued_resume"].includes(job.status));
+    const hasActiveBonificaJobs = Object.values(bonificaSyncStatus?.entities ?? {}).some((item) => item.status === "running");
+    const hasActiveAutodocJob = autodocSyncJob?.status === "queued" || autodocSyncJob?.status === "running";
+    return hasActiveBatches || hasActiveParticelleJobs || hasActiveBonificaJobs || hasActiveAutodocJob;
+  }, [autodocSyncJob?.status, batches, bonificaSyncStatus, particelleSyncJobs]);
+
   useEffect(() => {
     function handleVisibilityChange(): void {
       if (document.visibilityState === "visible") {
@@ -329,19 +337,22 @@ export default function ElaborazioniPage() {
       }
     }
 
-    const intervalId = window.setInterval(() => {
-      if (document.visibilityState === "visible") {
-        void loadDashboard();
-      }
-    }, DASHBOARD_REFRESH_INTERVAL_MS);
-
     document.addEventListener("visibilitychange", handleVisibilityChange);
+    const intervalId = hasActivePollingTargets
+      ? window.setInterval(() => {
+          if (document.visibilityState === "visible") {
+            void loadDashboard();
+          }
+        }, DASHBOARD_REFRESH_INTERVAL_MS)
+      : null;
 
     return () => {
-      window.clearInterval(intervalId);
+      if (intervalId !== null) {
+        window.clearInterval(intervalId);
+      }
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [loadDashboard]);
+  }, [hasActivePollingTargets, loadDashboard]);
 
   useEffect(() => {
     const token = getStoredAccessToken();

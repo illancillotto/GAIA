@@ -13,7 +13,7 @@ import { getStoredAccessToken } from "@/lib/auth";
 import { formatDateTime } from "@/lib/presentation";
 import type { ElaborazioneBatch, ElaborazioneBatchDetail } from "@/types/api";
 
-const RECENT_BATCHES_REFRESH_INTERVAL_MS = 10000;
+const RECENT_BATCHES_REFRESH_INTERVAL_MS = 30000;
 
 type RecentBatchesPanelProps = {
   limit?: number;
@@ -55,6 +55,11 @@ export function RecentBatchesPanel({ limit = 6 }: RecentBatchesPanelProps) {
       .slice(0, limit);
   }, [batches, limit]);
 
+  const hasActiveBatches = useMemo(
+    () => batches.some((batch) => ["pending", "processing"].includes(batch.status)),
+    [batches],
+  );
+
   useEffect(() => {
     let cancelled = false;
 
@@ -91,16 +96,30 @@ export function RecentBatchesPanel({ limit = 6 }: RecentBatchesPanelProps) {
       }
     }
 
+    function handleVisibilityChange(): void {
+      if (document.visibilityState === "visible") {
+        void loadBatches();
+      }
+    }
+
     void loadBatches();
-    const intervalId = window.setInterval(() => {
-      void loadBatches();
-    }, RECENT_BATCHES_REFRESH_INTERVAL_MS);
+    const intervalId = hasActiveBatches
+      ? window.setInterval(() => {
+          if (document.visibilityState === "visible") {
+            void loadBatches();
+          }
+        }, RECENT_BATCHES_REFRESH_INTERVAL_MS)
+      : null;
+    document.addEventListener("visibilitychange", handleVisibilityChange);
 
     return () => {
       cancelled = true;
-      window.clearInterval(intervalId);
+      if (intervalId !== null) {
+        window.clearInterval(intervalId);
+      }
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, []);
+  }, [hasActiveBatches]);
 
   useEffect(() => {
     const token = getStoredAccessToken();

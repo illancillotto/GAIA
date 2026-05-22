@@ -1435,19 +1435,25 @@ export function ElaborazioniSettingsWorkspace({ embedded = false }: { embedded?:
                             <p className={`text-sm text-amber-700 ${embedded ? "mt-1 leading-5" : "mt-1.5"}`}>
                               {releasedBatches.length} batch fermat{releasedBatches.length === 1 ? "o" : "i"} dopo rilascio utenze. Puoi far ripartire il piu recente da qui.
                             </p>
-                          ) : null}
+                          ) : (
+                            <p className={`text-sm text-gray-500 ${embedded ? "mt-1 leading-5" : "mt-1.5"}`}>
+                              Nessun batch fermato da rilascio utenze disponibile per la ripartenza.
+                            </p>
+                          )}
                         </div>
                         <div className="flex flex-wrap items-center gap-2">
-                          {releasedBatches.length > 0 ? (
-                            <button
-                              className="btn-secondary"
-                              disabled={resumeReleasedBusy}
-                              onClick={() => void handleResumeReleasedBatch()}
-                              type="button"
-                            >
-                              {resumeReleasedBusy ? "Ripresa..." : `Riprendi batch fermato${releasedBatches.length > 1 ? ` (${releasedBatches.length})` : ""}`}
-                            </button>
-                          ) : null}
+                          <button
+                            className="btn-secondary"
+                            disabled={resumeReleasedBusy || releasedBatches.length === 0}
+                            onClick={() => void handleResumeReleasedBatch()}
+                            type="button"
+                          >
+                            {resumeReleasedBusy
+                              ? "Ripresa..."
+                              : releasedBatches.length > 0
+                                ? `Riprendi batch fermato${releasedBatches.length > 1 ? ` (${releasedBatches.length})` : ""}`
+                                : "Nessun batch da riprendere"}
+                          </button>
                           <button
                             className="btn-secondary"
                             disabled={releaseBusy}
