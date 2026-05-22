@@ -11,12 +11,14 @@ import re
 import signal
 import traceback
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.models.capacitas import (
     CapacitasAnagraficaHistoryImportJob,
+    CapacitasInCassSyncJob,
     CapacitasParticelleSyncJob,
     CapacitasTerreniSyncJob,
 )
@@ -33,6 +35,7 @@ from app.models.catasto import (
     CatastoVisuraRequest,
     CatastoVisuraRequestStatus,
 )
+from app.models.wc_sync_job import WCSyncJob
 from app.modules.utenze.services.import_service import (
     prepare_registry_import_jobs_for_recovery,
     run_registry_bulk_import_job_by_id,
@@ -47,6 +50,7 @@ from app.services.elaborazioni_capacitas_particelle_sync import (
 )
 from app.services.elaborazioni_capacitas_runtime import (
     run_anagrafica_history_job_by_id,
+    run_incass_job_by_id,
     run_particelle_job_by_id,
     run_terreni_job_by_id,
 )
@@ -54,10 +58,15 @@ from app.services.elaborazioni_capacitas_terreni import (
     expire_stale_terreni_sync_jobs,
     prepare_terreni_sync_jobs_for_recovery,
 )
+from app.services.elaborazioni_capacitas_incass import (
+    expire_stale_incass_sync_jobs,
+    prepare_incass_sync_jobs_for_recovery,
+)
 from app.modules.catasto.services.ade_status_scan import ADE_SCAN_PURPOSE, persist_ade_status_scan_result
 from app.modules.catasto.services.ade_wfs import execute_ade_sync_run, prepare_ade_sync_runs_for_recovery
 from app.modules.catasto.services.ade_historical_visura_parser import parse_historical_visura_pdf
 from app.modules.catasto.routes.anagrafica import prepare_bulk_search_jobs_for_recovery, run_bulk_search_job_by_id
+from autodoc_sync import AUTODOC_SYNC_ENTITY, run_autodoc_sync_job_by_id
 from anti_captcha_client import AntiCaptchaClient
 from browser_session import BrowserSession, BrowserSessionConfig
 from sister_exceptions import SisterServerError
@@ -90,6 +99,10 @@ REQUEST_RETRY_DEFER_SEC = int(os.getenv("ELABORAZIONI_REQUEST_RETRY_DEFER_SEC", 
 SISTER_SERVER_ERROR_BASE_COOLDOWN_SEC = int(os.getenv("ELABORAZIONI_SISTER_500_COOLDOWN_SEC", "90"))
 SISTER_SERVER_ERROR_MAX_COOLDOWN_SEC = int(os.getenv("ELABORAZIONI_SISTER_500_MAX_COOLDOWN_SEC", "300"))
 SISTER_SERVER_ERROR_GLOBAL_PAUSE_SEC = int(os.getenv("ELABORAZIONI_SISTER_500_GLOBAL_PAUSE_SEC", "45"))
+OPERATION_WINDOW_ENABLED = os.getenv("ELABORAZIONI_OPERATION_WINDOW_ENABLED", "false").lower() == "true"
+OPERATION_WINDOW_START_HOUR = int(os.getenv("ELABORAZIONI_OPERATION_START_HOUR", "0"))
+OPERATION_WINDOW_END_HOUR = int(os.getenv("ELABORAZIONI_OPERATION_END_HOUR", "23"))
+OPERATION_WINDOW_TIMEZONE = os.getenv("ELABORAZIONI_OPERATION_TIMEZONE", "Europe/Rome").strip() or "Europe/Rome"
 DOCUMENT_STORAGE_PATH = Path(env_value("ELABORAZIONI_DOCUMENT_STORAGE_PATH", "CATASTO_DOCUMENT_STORAGE_PATH", "/data/catasto/documents"))
 CAPTCHA_STORAGE_PATH = Path(env_value("ELABORAZIONI_CAPTCHA_STORAGE_PATH", "CATASTO_CAPTCHA_STORAGE_PATH", "/data/catasto/captcha"))
 DEBUG_ARTIFACTS_PATH = Path(env_value("ELABORAZIONI_DEBUG_ARTIFACTS_PATH", "CATASTO_DEBUG_ARTIFACTS_PATH", "/data/catasto/debug"))
@@ -172,6 +185,12 @@ class CatastoWorker:
                 await self._process_bulk_search_job(bulk_job_id)
                 continue
 
+            autodoc_job_id = self._next_autodoc_sync_job_id()
+            if autodoc_job_id is not None:
+                logger.info("Job AUTODOC %s prelevato dalla coda", autodoc_job_id)
+                await self._process_autodoc_sync_job(autodoc_job_id)
+                continue
+
             batch_id = self._next_batch_id()
             if batch_id is None:
                 await asyncio.sleep(POLL_INTERVAL_SEC)
@@ -208,6 +227,7 @@ class CatastoWorker:
                 request.current_operation = "Recuperato dopo riavvio worker"
 
             history_ids = prepare_anagrafica_history_jobs_for_recovery(db)
+            incass_ids = prepare_incass_sync_jobs_for_recovery(db)
             terreni_ids = prepare_terreni_sync_jobs_for_recovery(db)
             particelle_ids = prepare_particelle_sync_jobs_for_recovery(db)
             bulk_jobs = prepare_bulk_search_jobs_for_recovery(db)
@@ -215,6 +235,8 @@ class CatastoWorker:
             ade_sync_runs = prepare_ade_sync_runs_for_recovery(db)
             if history_ids:
                 logger.info("Recuperati %d job Capacitas storico anagrafica", len(history_ids))
+            if incass_ids:
+                logger.info("Recuperati %d job Capacitas inCASS", len(incass_ids))
             if terreni_ids:
                 logger.info("Recuperati %d job Capacitas terreni", len(terreni_ids))
             if particelle_ids:
@@ -239,11 +261,13 @@ class CatastoWorker:
     def _next_capacitas_job(self) -> tuple[str, int] | None:
         with SessionLocal() as db:
             expire_stale_anagrafica_history_jobs(db)
+            expire_stale_incass_sync_jobs(db)
             expire_stale_terreni_sync_jobs(db)
             expire_stale_particelle_sync_jobs(db)
 
             for job_kind, model in (
                 ("anagrafica_history", CapacitasAnagraficaHistoryImportJob),
+                ("incass", CapacitasInCassSyncJob),
                 ("terreni", CapacitasTerreniSyncJob),
                 ("particelle", CapacitasParticelleSyncJob),
             ):
@@ -268,6 +292,9 @@ class CatastoWorker:
     async def _process_capacitas_job(self, job_kind: str, job_id: int) -> None:
         if job_kind == "anagrafica_history":
             await run_anagrafica_history_job_by_id(job_id)
+            return
+        if job_kind == "incass":
+            await run_incass_job_by_id(job_id)
             return
         if job_kind == "terreni":
             await run_terreni_job_by_id(job_id)
@@ -339,6 +366,29 @@ class CatastoWorker:
             await run_bulk_search_job_by_id(UUID(job_id))
         except Exception:
             logger.exception("Job catasto elaborazione massiva %s fallito", job_id)
+
+    def _next_autodoc_sync_job_id(self) -> str | None:
+        with SessionLocal() as db:
+            job = db.scalar(
+                select(WCSyncJob)
+                .where(
+                    WCSyncJob.entity == AUTODOC_SYNC_ENTITY,
+                    WCSyncJob.status == "queued",
+                )
+                .order_by(WCSyncJob.started_at.asc())
+                .with_for_update(skip_locked=True)
+            )
+            if job is None:
+                return None
+            job.status = "running"
+            db.commit()
+            return str(job.id)
+
+    async def _process_autodoc_sync_job(self, job_id: str) -> None:
+        try:
+            await run_autodoc_sync_job_by_id(SessionLocal, job_id)
+        except Exception:
+            logger.exception("Job AUTODOC %s fallito", job_id)
 
     async def _process_connection_test(self, connection_test_id) -> None:
         browser = BrowserSession(
@@ -546,6 +596,16 @@ class CatastoWorker:
                         )
                         return
                     now = datetime.now(timezone.utc)
+                    if not self._is_within_operating_window(now):
+                        resume_at = self._next_operating_resume_at(now)
+                        wait_seconds = max(int((resume_at - now).total_seconds()), 1) if resume_at is not None else 60
+                        resume_label = resume_at.astimezone(self._operation_window_zone()).strftime("%H:%M") if resume_at is not None else "n/d"
+                        self._set_batch_operation(
+                            batch_id,
+                            f"Batch in pausa fuori finestra operativa, ripresa automatica alle {resume_label}",
+                        )
+                        await asyncio.sleep(min(wait_seconds, 60))
+                        continue
                     async with shared_state_lock:
                         cooldown_until = credential_cooldowns.get(credential.id)
                         global_pause_until = global_server_error_pause_until
@@ -681,6 +741,39 @@ class CatastoWorker:
             "timeout 60000ms exceeded",
         ]
         return any(marker in message for marker in markers)
+
+    @staticmethod
+    def _operation_window_zone() -> ZoneInfo:
+        try:
+            return ZoneInfo(OPERATION_WINDOW_TIMEZONE)
+        except Exception:
+            return ZoneInfo("Europe/Rome")
+
+    @staticmethod
+    def _is_within_operating_window(now_utc: datetime | None = None) -> bool:
+        if not OPERATION_WINDOW_ENABLED:
+            return True
+        now_utc = now_utc or datetime.now(timezone.utc)
+        local_now = now_utc.astimezone(CatastoWorker._operation_window_zone())
+        current_hour = local_now.hour
+        start_hour = min(max(OPERATION_WINDOW_START_HOUR, 0), 23)
+        end_hour = min(max(OPERATION_WINDOW_END_HOUR, 0), 23)
+        if start_hour <= end_hour:
+            return start_hour <= current_hour <= end_hour
+        return current_hour >= start_hour or current_hour <= end_hour
+
+    @staticmethod
+    def _next_operating_resume_at(now_utc: datetime | None = None) -> datetime | None:
+        if not OPERATION_WINDOW_ENABLED:
+            return None
+        now_utc = now_utc or datetime.now(timezone.utc)
+        zone = CatastoWorker._operation_window_zone()
+        local_now = now_utc.astimezone(zone)
+        start_hour = min(max(OPERATION_WINDOW_START_HOUR, 0), 23)
+        resume_local = local_now.replace(hour=start_hour, minute=0, second=0, microsecond=0)
+        if resume_local <= local_now:
+            resume_local = resume_local + timedelta(days=1)
+        return resume_local.astimezone(timezone.utc)
 
     @staticmethod
     def _compute_sister_server_error_cooldown(consecutive_errors: int) -> int:

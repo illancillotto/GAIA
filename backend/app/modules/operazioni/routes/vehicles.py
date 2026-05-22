@@ -19,6 +19,9 @@ from app.modules.operazioni.models.wc_operator import WCOperator
 from app.modules.operazioni.models.vehicles import Vehicle as VehicleModel
 
 from app.modules.operazioni.schemas.vehicles import (
+    VehicleAutodocSyncRequest,
+    VehicleAutodocSyncTriggerResponse,
+    VehicleAutodocSyncJobResponse,
     WCRefuelEventListResponse,
     WCRefuelEventResponse,
     VehicleAssignmentClose,
@@ -41,6 +44,11 @@ from app.modules.operazioni.schemas.vehicles import (
     VehicleUsageSessionStart,
     VehicleUsageSessionStop,
     VehicleUsageSessionValidate,
+)
+from app.modules.operazioni.services.autodoc_sync import (
+    get_latest_autodoc_sync_job,
+    queue_autodoc_sync_job,
+    serialize_autodoc_sync_job,
 )
 from app.modules.operazioni.services.vehicle_service import (
     close_assignment,
@@ -198,6 +206,52 @@ def list_wc_refuel_events_endpoint(
         page_size=page_size,
         total_pages=math.ceil(total / page_size) if page_size else 0,
     )
+
+
+@router.get("/autodoc-sync/status", response_model=VehicleAutodocSyncJobResponse | None)
+def get_autodoc_sync_status_endpoint(
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    job = get_latest_autodoc_sync_job(db)
+    return serialize_autodoc_sync_job(job) if job is not None else None
+
+
+@router.post("/autodoc-sync", response_model=VehicleAutodocSyncTriggerResponse, status_code=status.HTTP_202_ACCEPTED)
+def queue_autodoc_sync_endpoint(
+    payload: VehicleAutodocSyncRequest,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    job = queue_autodoc_sync_job(
+        db,
+        current_user=current_user,
+        vehicle_ids=payload.vehicle_ids,
+        only_with_autodoc_url=payload.only_with_autodoc_url,
+        force_refresh=payload.force_refresh,
+    )
+    return VehicleAutodocSyncTriggerResponse(job=serialize_autodoc_sync_job(job))
+
+
+@router.post("/{vehicle_id}/autodoc-sync", response_model=VehicleAutodocSyncTriggerResponse, status_code=status.HTTP_202_ACCEPTED)
+def queue_single_vehicle_autodoc_sync_endpoint(
+    vehicle_id: UUID,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+):
+    vehicle = get_vehicle(db, vehicle_id)
+    if not vehicle:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Vehicle not found"
+        )
+    job = queue_autodoc_sync_job(
+        db,
+        current_user=current_user,
+        vehicle_ids=[vehicle_id],
+        only_with_autodoc_url=False,
+        force_refresh=True,
+    )
+    return VehicleAutodocSyncTriggerResponse(job=serialize_autodoc_sync_job(job))
 
 
 @router.get("/{vehicle_id}", response_model=VehicleResponse)

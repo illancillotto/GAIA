@@ -12,6 +12,7 @@ from sqlalchemy import (
     DateTime,
     ForeignKey,
     Integer,
+    JSON,
     Numeric,
     String,
     Text,
@@ -52,6 +53,13 @@ class Vehicle(Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     gps_provider_code: Mapped[str | None] = mapped_column(String(100), nullable=True)
     has_gps_device: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    autodoc_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    autodoc_title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    autodoc_data: Mapped[dict[str, str] | None] = mapped_column(JSON, nullable=True)
+    autodoc_synced_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    autodoc_sync_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     wc_synced_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True

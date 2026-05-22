@@ -93,6 +93,47 @@ export async function getVehicle(id: string) {
   return fetchOperazioni(`/vehicles/${id}`);
 }
 
+export async function updateVehicle(id: string, data: Record<string, unknown>) {
+  return fetchOperazioni(`/vehicles/${id}`, {
+    method: "PATCH",
+    body: JSON.stringify(data),
+  });
+}
+
+export interface VehicleAutodocSyncJob {
+  job_id: string;
+  entity: string;
+  status: string;
+  started_at: string;
+  finished_at: string | null;
+  records_synced: number | null;
+  records_skipped: number | null;
+  records_errors: number | null;
+  error_detail: string | null;
+  params_json: Record<string, unknown> | null;
+}
+
+export async function getVehicleAutodocSyncStatus(): Promise<VehicleAutodocSyncJob | null> {
+  return fetchOperazioni("/vehicles/autodoc-sync/status");
+}
+
+export async function queueVehicleAutodocSync(data?: {
+  vehicle_ids?: string[];
+  only_with_autodoc_url?: boolean;
+  force_refresh?: boolean;
+}): Promise<{ job: VehicleAutodocSyncJob }> {
+  return fetchOperazioni("/vehicles/autodoc-sync", {
+    method: "POST",
+    body: JSON.stringify(data ?? {}),
+  });
+}
+
+export async function queueSingleVehicleAutodocSync(vehicleId: string): Promise<{ job: VehicleAutodocSyncJob }> {
+  return fetchOperazioni(`/vehicles/${vehicleId}/autodoc-sync`, {
+    method: "POST",
+  });
+}
+
 export interface VehicleFuelLogItem {
   id: string;
   vehicle_id: string;

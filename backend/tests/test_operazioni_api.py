@@ -2,6 +2,7 @@ from collections.abc import Generator
 from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
+import uuid
 
 import pytest
 from fastapi.testclient import TestClient
@@ -27,6 +28,7 @@ from app.modules.operazioni.models.reports import (
     InternalCase,
 )
 from app.modules.operazioni.models.vehicles import Vehicle, WCRefuelEvent
+from app.models.wc_sync_job import WCSyncJob
 
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
@@ -353,5 +355,110 @@ def test_list_wc_refuel_events_returns_unmatched_items_with_search() -> None:
     assert payload["items"][0]["wc_id"] == 5561
     assert payload["items"][0]["vehicle_display_name"] == "Escavatore bonifica"
     assert payload["items"][0]["matched_fuel_log_id"] is None
+
+    db.close()
+
+
+def test_update_vehicle_persists_autodoc_link() -> None:
+    db = TestingSessionLocal()
+
+    vehicle = Vehicle(
+        code="VH-AUTODOC-001",
+        name="Fiat Panda servizio",
+        vehicle_type="auto",
+        plate_number="AB123CD",
+        current_status="available",
+    )
+    db.add(vehicle)
+    db.commit()
+    db.refresh(vehicle)
+
+    response = client.patch(
+        f"/operazioni/vehicles/{vehicle.id}",
+        headers=auth_headers(),
+        json={
+            "autodoc_url": "https://www.auto-doc.it/ricambi-auto/fiat/panda/panda-169/19057-1-2",
+            "autodoc_title": "FIAT PANDA (169) 1.2",
+            "autodoc_data": {
+                "Potenza [kW]": "44",
+                "Carburante": "Benzina",
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["autodoc_url"] == "https://www.auto-doc.it/ricambi-auto/fiat/panda/panda-169/19057-1-2"
+    assert payload["autodoc_title"] == "FIAT PANDA (169) 1.2"
+    assert payload["autodoc_data"]["Carburante"] == "Benzina"
+
+    db.expire_all()
+    refreshed = db.get(Vehicle, vehicle.id)
+    assert refreshed is not None
+    assert refreshed.autodoc_url == payload["autodoc_url"]
+    assert refreshed.autodoc_title == payload["autodoc_title"]
+    assert refreshed.autodoc_data == payload["autodoc_data"]
+
+    db.close()
+
+
+def test_queue_vehicle_autodoc_sync_job() -> None:
+    db = TestingSessionLocal()
+    vehicle = Vehicle(
+        code="VH-AUTODOC-002",
+        name="Citroen Saxo test",
+        vehicle_type="auto",
+        plate_number="ZZ999ZZ",
+        autodoc_url="https://www.auto-doc.it/ricambi-auto/citroen/saxo/saxo-s0-s1/5616-1-5-d",
+        current_status="available",
+    )
+    db.add(vehicle)
+    db.commit()
+    db.refresh(vehicle)
+
+    response = client.post(
+        "/operazioni/vehicles/autodoc-sync",
+        headers=auth_headers(),
+        json={"vehicle_ids": [str(vehicle.id)], "only_with_autodoc_url": True, "force_refresh": True},
+    )
+
+    assert response.status_code == 202
+    payload = response.json()["job"]
+    assert payload["entity"] == "autodoc_vehicle_details"
+    assert payload["status"] in {"queued", "running"}
+
+    job = db.get(WCSyncJob, uuid.UUID(payload["job_id"]))
+    assert job is not None
+    assert job.entity == "autodoc_vehicle_details"
+    assert job.params_json["vehicle_ids"] == [str(vehicle.id)]
+
+    db.close()
+
+
+def test_queue_vehicle_autodoc_sync_job_includes_vehicle_without_saved_url() -> None:
+    db = TestingSessionLocal()
+    vehicle = Vehicle(
+        code="VH-AUTODOC-003",
+        name="Fiat Punto discovery",
+        vehicle_type="auto",
+        plate_number="AA111AA",
+        current_status="available",
+    )
+    db.add(vehicle)
+    db.commit()
+    db.refresh(vehicle)
+
+    response = client.post(
+        "/operazioni/vehicles/autodoc-sync",
+        headers=auth_headers(),
+        json={"vehicle_ids": [str(vehicle.id)], "force_refresh": True},
+    )
+
+    assert response.status_code == 202
+    payload = response.json()["job"]
+    job = db.get(WCSyncJob, uuid.UUID(payload["job_id"]))
+    assert job is not None
+    assert job.params_json["vehicle_ids"] == [str(vehicle.id)]
+    assert job.params_json["only_with_autodoc_url"] is False
 
     db.close()

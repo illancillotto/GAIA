@@ -26,6 +26,7 @@ class VehicleCreate(BaseModel):
     ownership_type: str | None = Field(default=None, max_length=50)
     gps_provider_code: str | None = Field(default=None, max_length=100)
     has_gps_device: bool = False
+    autodoc_url: str | None = Field(default=None, max_length=1024)
     notes: str | None = None
 
 
@@ -41,6 +42,11 @@ class VehicleUpdate(BaseModel):
     ownership_type: str | None = None
     gps_provider_code: str | None = None
     has_gps_device: bool | None = None
+    autodoc_url: str | None = Field(default=None, max_length=1024)
+    autodoc_title: str | None = Field(default=None, max_length=255)
+    autodoc_data: dict[str, str] | None = None
+    autodoc_synced_at: datetime | None = None
+    autodoc_sync_error: str | None = None
     notes: str | None = None
     current_status: str | None = None
 
@@ -60,6 +66,11 @@ class VehicleResponse(BaseModel):
     current_status: str
     has_gps_device: bool
     gps_provider_code: str | None
+    autodoc_url: str | None
+    autodoc_title: str | None
+    autodoc_data: dict[str, str] | None
+    autodoc_synced_at: datetime | None
+    autodoc_sync_error: str | None
     is_active: bool
     current_assignment: dict[str, Any] | None = None
     last_odometer_km: float | None = None
@@ -73,6 +84,29 @@ class VehicleListResponse(BaseModel):
     page: int
     page_size: int
     total_pages: int
+
+
+class VehicleAutodocSyncRequest(BaseModel):
+    vehicle_ids: list[UUID] | None = None
+    only_with_autodoc_url: bool = False
+    force_refresh: bool = False
+
+
+class VehicleAutodocSyncJobResponse(BaseModel):
+    job_id: str
+    entity: str
+    status: str
+    started_at: datetime
+    finished_at: datetime | None = None
+    records_synced: int | None = None
+    records_skipped: int | None = None
+    records_errors: int | None = None
+    error_detail: str | None = None
+    params_json: dict[str, Any] | None = None
+
+
+class VehicleAutodocSyncTriggerResponse(BaseModel):
+    job: VehicleAutodocSyncJobResponse
 
 
 # --- Vehicle Assignment ---

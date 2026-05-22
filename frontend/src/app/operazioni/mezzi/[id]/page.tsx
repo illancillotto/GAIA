@@ -12,7 +12,7 @@ import {
   OperazioniInfoGrid,
 } from "@/components/operazioni/collection-layout";
 import { OperazioniModulePage } from "@/components/operazioni/operazioni-module-page";
-import { getVehicle, getVehicleFuelLogs, type VehicleFuelLogItem } from "@/features/operazioni/api/client";
+import { getVehicle, getVehicleFuelLogs, queueSingleVehicleAutodocSync, updateVehicle, type VehicleFuelLogItem } from "@/features/operazioni/api/client";
 import { cn } from "@/lib/cn";
 
 interface VehicleDetail {
@@ -28,6 +28,11 @@ interface VehicleDetail {
   current_status: string;
   has_gps_device: boolean;
   gps_provider_code: string | null;
+  autodoc_url: string | null;
+  autodoc_title: string | null;
+  autodoc_data: Record<string, string> | null;
+  autodoc_synced_at: string | null;
+  autodoc_sync_error: string | null;
   is_active: boolean;
   current_assignment: {
     assignment_target_type?: string | null;
@@ -68,6 +73,19 @@ function fmtNum(val: string | null, decimals = 2) {
 function fmtNullable(value: string | null | undefined) {
   if (!value || !String(value).trim()) return "—";
   return value;
+}
+
+function normalizeAutodocUrl(value: string) {
+  return value.trim();
+}
+
+function isAutodocUrl(value: string) {
+  try {
+    const url = new URL(value);
+    return /(^|\.)auto-doc\.it$/i.test(url.hostname);
+  } catch {
+    return false;
+  }
 }
 
 function isStorno(log: VehicleFuelLogItem) {
@@ -196,6 +214,141 @@ function FuelLogsPanel({ vehicleId }: { vehicleId: string }) {
   );
 }
 
+function AutodocPanel({
+  vehicle,
+  onSaved,
+}: {
+  vehicle: VehicleDetail;
+  onSaved: (vehicle: VehicleDetail) => void;
+}) {
+  const [url, setUrl] = useState(vehicle.autodoc_url ?? "");
+  const [saving, setSaving] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setUrl(vehicle.autodoc_url ?? "");
+  }, [vehicle.autodoc_url]);
+
+  async function handleSave(): Promise<void> {
+    const normalized = normalizeAutodocUrl(url);
+    if (!normalized) {
+      setError("Inserisci un link AUTODOC valido.");
+      setMessage(null);
+      return;
+    }
+    if (!isAutodocUrl(normalized)) {
+      setError("Il link deve puntare a auto-doc.it.");
+      setMessage(null);
+      return;
+    }
+
+    setSaving(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const updated = await updateVehicle(vehicle.id, { autodoc_url: normalized });
+      onSaved(updated as VehicleDetail);
+      setMessage("Link AUTODOC salvato.");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Errore salvataggio link AUTODOC");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSync(): Promise<void> {
+    if (!vehicle.autodoc_url) {
+      setError("Salva prima il link AUTODOC del mezzo.");
+      setMessage(null);
+      return;
+    }
+    setSyncing(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const response = await queueSingleVehicleAutodocSync(vehicle.id);
+      setMessage(`Sync AUTODOC accodata. Job ${response.job.job_id.slice(0, 8)} in stato ${response.job.status}.`);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Errore accodamento sync AUTODOC");
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  return (
+    <OperazioniCollectionPanel
+      title="AUTODOC"
+      description="Collegamento rapido alla scheda tecnica del mezzo su AUTODOC e sync asincrona tramite worker browser dedicato."
+      count={vehicle.autodoc_data ? Object.keys(vehicle.autodoc_data).length : 0}
+    >
+      <div className="space-y-4">
+        <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto_auto]">
+          <input
+            value={url}
+            onChange={(event) => setUrl(event.target.value)}
+            placeholder="https://www.auto-doc.it/ricambi-auto/..."
+            className="min-w-0 rounded-2xl border border-[#d8dfd8] bg-white px-4 py-3 text-sm text-gray-900 outline-none transition focus:border-[#1D4E35]"
+          />
+          <button type="button" className="btn-primary" disabled={saving} onClick={() => void handleSave()}>
+            {saving ? "Salvataggio..." : "Salva link"}
+          </button>
+          {vehicle.autodoc_url ? (
+            <a href={vehicle.autodoc_url} target="_blank" rel="noreferrer" className="btn-secondary text-center">
+              Apri AUTODOC
+            </a>
+          ) : (
+            <button type="button" className="btn-secondary" disabled>
+              Apri AUTODOC
+            </button>
+          )}
+        </div>
+
+        <div className="flex flex-wrap gap-3">
+          <button type="button" className="btn-primary" disabled={syncing || !vehicle.autodoc_url} onClick={() => void handleSync()}>
+            {syncing ? "Accodamento..." : "Sincronizza dettagli automezzo"}
+          </button>
+        </div>
+
+        <div className="rounded-2xl border border-[#e6ebe5] bg-[#f8faf8] p-4 text-sm text-gray-600">
+          <p className="font-medium text-gray-900">Nota tecnica</p>
+          <p className="mt-1">
+            La sincronizzazione passa da un worker browser Playwright dedicato, perché le richieste server-to-server dirette verso AUTODOC vengono bloccate da Cloudflare con pagina
+            {" "}
+            <span className="font-medium">Just a moment…</span>.
+            In questa prima versione il worker sincronizza i mezzi che hanno gia un link AUTODOC salvato.
+          </p>
+          {vehicle.autodoc_synced_at ? (
+            <p className="mt-2 text-xs text-gray-500">Ultimo tentativo sync: {fmtDate(vehicle.autodoc_synced_at)}</p>
+          ) : null}
+          {vehicle.autodoc_sync_error ? <p className="mt-2 text-xs text-amber-700">{vehicle.autodoc_sync_error}</p> : null}
+        </div>
+
+        {vehicle.autodoc_title || vehicle.autodoc_data ? (
+          <div className="rounded-2xl border border-[#e6ebe5] bg-white p-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Dati AUTODOC salvati</p>
+            {vehicle.autodoc_title ? <p className="mt-2 text-sm font-semibold text-gray-900">{vehicle.autodoc_title}</p> : null}
+            {vehicle.autodoc_data && Object.keys(vehicle.autodoc_data).length > 0 ? (
+              <dl className="mt-3 grid gap-3 sm:grid-cols-2">
+                {Object.entries(vehicle.autodoc_data).map(([label, value]) => (
+                  <div key={label} className="rounded-xl border border-[#edf1ec] bg-[#fbfcfa] px-3 py-2">
+                    <dt className="text-[10px] font-semibold uppercase tracking-[0.16em] text-gray-500">{label}</dt>
+                    <dd className="mt-1 text-sm text-gray-900">{value}</dd>
+                  </div>
+                ))}
+              </dl>
+            ) : null}
+          </div>
+        ) : null}
+
+        {message ? <p className="text-sm text-[#1D4E35]">{message}</p> : null}
+        {error ? <p className="text-sm text-red-700">{error}</p> : null}
+      </div>
+    </OperazioniCollectionPanel>
+  );
+}
+
 // ─── Main content ──────────────────────────────────────────────────────────
 
 function MezzoDetailContent({ vehicleId }: { vehicleId: string }) {
@@ -290,6 +443,8 @@ function MezzoDetailContent({ vehicleId }: { vehicleId: string }) {
         />
       </OperazioniCollectionPanel>
 
+      <AutodocPanel vehicle={vehicle} onSaved={setVehicle} />
+
       <div className="grid gap-6 xl:grid-cols-2">
         <OperazioniCollectionPanel title="Assegnazioni" description="Storico assegnazioni del mezzo." count={0}>
           <div className="rounded-2xl border border-dashed border-[#d8dfd8] bg-[#f8faf8] p-6 text-sm text-gray-500">Storico assegnazioni in implementazione.</div>
@@ -302,7 +457,6 @@ function MezzoDetailContent({ vehicleId }: { vehicleId: string }) {
         </OperazioniCollectionPanel>
         <FuelLogsPanel vehicleId={vehicleId} />
       </div>
-
     </div>
   );
 }

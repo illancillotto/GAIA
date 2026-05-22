@@ -10,6 +10,7 @@ import {
 } from "@/components/operazioni/collection-layout";
 import { OperazioniModulePage } from "@/components/operazioni/operazioni-module-page";
 import { OperazioniWorkspaceModal } from "@/components/operazioni/workspace-modal";
+import { SyncButton } from "@/components/ui/sync-button";
 import {
   ModuleWorkspaceHero,
   ModuleWorkspaceKpiRow,
@@ -18,7 +19,7 @@ import {
 } from "@/components/layout/module-workspace-hero";
 import { EmptyState } from "@/components/ui/empty-state";
 import { TruckIcon, RefreshIcon, AlertTriangleIcon, DocumentIcon, SearchIcon } from "@/components/ui/icons";
-import { getVehicles, getActivities, getReports, getCases } from "@/features/operazioni/api/client";
+import { getVehicleAutodocSyncStatus, getVehicles, getActivities, getReports, getCases, queueVehicleAutodocSync, type VehicleAutodocSyncJob } from "@/features/operazioni/api/client";
 
 const vehicleStatusTone: Record<string, string> = {
   available: "bg-emerald-50 text-emerald-700",
@@ -167,6 +168,9 @@ function DashboardContent() {
   const [activitySearch, setActivitySearch] = useState<QuickSearchState>(EMPTY_QUICK_SEARCH_STATE);
   const [reportSearch, setReportSearch] = useState<QuickSearchState>(EMPTY_QUICK_SEARCH_STATE);
   const [caseSearch, setCaseSearch] = useState<QuickSearchState>(EMPTY_QUICK_SEARCH_STATE);
+  const [autodocSyncJob, setAutodocSyncJob] = useState<VehicleAutodocSyncJob | null>(null);
+  const [autodocSyncLoading, setAutodocSyncLoading] = useState(false);
+  const [autodocSyncError, setAutodocSyncError] = useState<string | null>(null);
   const deferredVehicleSearch = useDeferredValue(normalizeSearchTerm(searchTerms.vehicles));
   const deferredActivitySearch = useDeferredValue(normalizeSearchTerm(searchTerms.activities));
   const deferredReportSearch = useDeferredValue(normalizeSearchTerm(searchTerms.reports));
@@ -208,6 +212,33 @@ function DashboardContent() {
   useEffect(() => {
     void loadData();
   }, [loadData]);
+
+  const loadAutodocSyncStatus = useCallback(async () => {
+    try {
+      const payload = await getVehicleAutodocSyncStatus();
+      setAutodocSyncJob(payload);
+      setAutodocSyncError(null);
+    } catch (error) {
+      setAutodocSyncError(error instanceof Error ? error.message : "Errore stato sync AUTODOC");
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadAutodocSyncStatus();
+  }, [loadAutodocSyncStatus]);
+
+  async function handleAutodocSync(): Promise<void> {
+    setAutodocSyncLoading(true);
+    try {
+      const payload = await queueVehicleAutodocSync({ only_with_autodoc_url: false, force_refresh: true });
+      setAutodocSyncJob(payload.job);
+      setAutodocSyncError(null);
+    } catch (error) {
+      setAutodocSyncError(error instanceof Error ? error.message : "Errore accodamento sync AUTODOC");
+    } finally {
+      setAutodocSyncLoading(false);
+    }
+  }
 
   useEffect(() => {
     if (deferredVehicleSearch.length === 0) {
@@ -386,6 +417,17 @@ function DashboardContent() {
                 description="I conteggi riflettono i totali restituiti dalle API; le tabelle sotto mostrano le ultime righe caricate."
               />
             )}
+            <ModuleWorkspaceNoticeCard
+              title="Sync AUTODOC"
+              description={
+                autodocSyncError
+                  ? autodocSyncError
+                  : autodocSyncJob
+                    ? `Ultimo job ${autodocSyncJob.status}. Synced ${autodocSyncJob.records_synced ?? 0}, skip ${autodocSyncJob.records_skipped ?? 0}, errori ${autodocSyncJob.records_errors ?? 0}.`
+                    : "Nessun job AUTODOC eseguito."
+              }
+              tone={autodocSyncError ? "danger" : "neutral"}
+            />
             <div className="flex flex-wrap gap-2">
               <Link className="btn-secondary" href="/operazioni/attivita">
                 <RefreshIcon className="h-4 w-4" />
@@ -395,6 +437,11 @@ function DashboardContent() {
                 <TruckIcon className="h-4 w-4" />
                 Apri mezzi
               </Link>
+              <SyncButton
+                loading={autodocSyncLoading}
+                onClick={() => void handleAutodocSync()}
+                label="Sincronizza dettagli automezzi"
+              />
             </div>
           </>
         }
