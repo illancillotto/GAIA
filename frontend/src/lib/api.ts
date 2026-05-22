@@ -9,6 +9,7 @@ import type {
   AnagraficaImportPreview,
   AnagraficaImportRunResult,
   AnagraficaNasFolderCandidate,
+  AnagraficaPaymentNotice,
   AnagraficaResetResult,
   AnagraficaSearchResult,
   AnagraficaStats,
@@ -38,6 +39,7 @@ import type {
   ElaborazioneCredentialStatus,
   ElaborazioneCredentialTestResult,
   ElaborazioneOperationResponse,
+  ElaborazioneRuntimeMetrics,
   ElaborazioneRichiesta,
   ElaborazioneRichiestaCreateInput,
   CapacitasCredential,
@@ -47,6 +49,8 @@ import type {
   CapacitasAnagraficaHistoryImportInput,
   CapacitasAnagraficaHistoryImportJob,
   CapacitasAnagraficaHistoryImportResult,
+  CapacitasInCassSyncJob,
+  CapacitasInCassSyncJobCreateInput,
   CapacitasLookupOption,
   CapacitasParticellaAnomalia,
   CapacitasParticelleSyncJob,
@@ -692,6 +696,12 @@ export async function getUtenzeXlsxImportBatches(token: string): Promise<XlsxImp
 
 export async function getUtenzeSubjectAuditLog(token: string, subjectId: string): Promise<UtenzeAuditLog[]> {
   return request<UtenzeAuditLog[]>(`/utenze/subjects/${subjectId}/audit-log`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+}
+
+export async function getUtenzeSubjectPaymentNotices(token: string, subjectId: string): Promise<AnagraficaPaymentNotice[]> {
+  return request<AnagraficaPaymentNotice[]>(`/utenze/subjects/${subjectId}/payment-notices`, {
     headers: { Authorization: `Bearer ${token}` },
   });
 }
@@ -1526,6 +1536,45 @@ export async function listCapacitasAnagraficaHistoryJobs(token: string): Promise
   });
 }
 
+export async function createCapacitasInCassSyncJob(
+  token: string,
+  payload: CapacitasInCassSyncJobCreateInput,
+): Promise<CapacitasInCassSyncJob> {
+  return request<CapacitasInCassSyncJob>("/elaborazioni/capacitas/incass/avvisi/jobs", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function listCapacitasInCassSyncJobs(token: string): Promise<CapacitasInCassSyncJob[]> {
+  return request<CapacitasInCassSyncJob[]>("/elaborazioni/capacitas/incass/avvisi/jobs", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function rerunCapacitasInCassSyncJob(token: string, jobId: number): Promise<CapacitasInCassSyncJob> {
+  return request<CapacitasInCassSyncJob>(`/elaborazioni/capacitas/incass/avvisi/jobs/${jobId}/run`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function deleteCapacitasInCassSyncJob(token: string, jobId: number): Promise<void> {
+  await request<null>(`/elaborazioni/capacitas/incass/avvisi/jobs/${jobId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
 export async function rerunCapacitasAnagraficaHistoryJob(
   token: string,
   jobId: number,
@@ -1911,6 +1960,14 @@ export async function getElaborazioneAnprSummary(token: string): Promise<Elabora
   });
 }
 
+export async function getElaborazioneRuntimeMetrics(token: string): Promise<ElaborazioneRuntimeMetrics> {
+  return request<ElaborazioneRuntimeMetrics>("/elaborazioni/metrics", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
 export async function solveElaborazioneCaptcha(
   token: string,
   requestId: string,
@@ -2070,6 +2127,7 @@ export type {
   ElaborazioneCredentialTestResult,
   ElaborazioneCredentialTestWebSocketEvent,
   ElaborazioneOperationResponse,
+  ElaborazioneRuntimeMetrics,
   ElaborazioneRichiesta,
   ElaborazioneRichiestaCreateInput,
 } from "@/types/api";

@@ -8,6 +8,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/table/data-table";
 import { TableFilters } from "@/components/table/table-filters";
 import { RuoloAvvisiSection } from "@/components/ruolo/ruolo-avvisi-section";
+import { UtenzePaymentNoticesSection } from "@/components/utenze/utenze-payment-notices-section";
 import { UtenzeCreateSubjectTrigger } from "@/components/utenze/utenze-create-subject-trigger";
 import { downloadUtenzeDocumentBlob, downloadUtenzeExportBlob, getUtenzeSubject, getUtenzeSubjectAuditLog, getUtenzeSubjects, importUtenzeSubjectsCsv } from "@/lib/api";
 import { formatDateTime } from "@/lib/presentation";
@@ -35,6 +36,8 @@ type SpreadsheetPreviewSheet = {
   name: string;
   rows: string[][];
 };
+
+type SubjectModalTab = "scheda" | "avvisi";
 
 const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg"]);
 const SPREADSHEET_EXTENSIONS = new Set([".xls", ".xlsx"]);
@@ -71,6 +74,7 @@ export function UtenzeSubjectsSection({ token }: { token: string }) {
   const [selectedSubject, setSelectedSubject] = useState<UtenzeSubjectDetail | null>(null);
   const [isSubjectModalLoading, setIsSubjectModalLoading] = useState(false);
   const [subjectModalError, setSubjectModalError] = useState<string | null>(null);
+  const [subjectModalTab, setSubjectModalTab] = useState<SubjectModalTab>("scheda");
   const [previewDocument, setPreviewDocument] = useState<UtenzeDocument | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
@@ -124,6 +128,7 @@ export function UtenzeSubjectsSection({ token }: { token: string }) {
     if (selectedSubjectId == null) {
       setSelectedSubject(null);
       setSubjectModalError(null);
+      setSubjectModalTab("scheda");
       if (previewDocument || previewUrl) {
         if (previewUrl) {
           URL.revokeObjectURL(previewUrl);
@@ -141,6 +146,7 @@ export function UtenzeSubjectsSection({ token }: { token: string }) {
 
     const subjectId = selectedSubjectId;
     let cancelled = false;
+    setSubjectModalTab("scheda");
 
     async function loadSubjectDetail() {
       setIsSubjectModalLoading(true);
@@ -768,6 +774,33 @@ export function UtenzeSubjectsSection({ token }: { token: string }) {
             {subjectModalError ? <p className="text-sm text-red-600">{subjectModalError}</p> : null}
             {selectedSubject ? (
               <div className="space-y-6">
+                <div className="flex flex-wrap gap-2 rounded-2xl border border-[#D9E8DF] bg-white p-2">
+                  <button
+                    className={
+                      subjectModalTab === "scheda"
+                        ? "rounded-xl bg-[#1D4E35] px-4 py-2 text-sm font-semibold text-white"
+                        : "rounded-xl px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-100"
+                    }
+                    type="button"
+                    onClick={() => setSubjectModalTab("scheda")}
+                  >
+                    Scheda soggetto
+                  </button>
+                  <button
+                    className={
+                      subjectModalTab === "avvisi"
+                        ? "rounded-xl bg-[#1D4E35] px-4 py-2 text-sm font-semibold text-white"
+                        : "rounded-xl px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-100"
+                    }
+                    type="button"
+                    onClick={() => setSubjectModalTab("avvisi")}
+                  >
+                    Avvisi di pagamento
+                  </button>
+                </div>
+
+                {subjectModalTab === "scheda" ? (
+                  <>
                 <section className="grid gap-4 md:grid-cols-2">
                   <div className="rounded-2xl border border-[#D9E8DF] bg-white p-4">
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Identita</p>
@@ -863,6 +896,11 @@ export function UtenzeSubjectsSection({ token }: { token: string }) {
 
                 {selectedSubjectId && token ? (
                   <RuoloAvvisiSection subjectId={selectedSubjectId} token={token} />
+                ) : null}
+                  </>
+                ) : null}
+                {subjectModalTab === "avvisi" && selectedSubjectId && token ? (
+                  <UtenzePaymentNoticesSection subjectId={selectedSubjectId} token={token} compact />
                 ) : null}
               </div>
             ) : null}

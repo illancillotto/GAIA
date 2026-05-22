@@ -22,6 +22,10 @@ __all__ = [
     "ElaborazioneBatchResponse",
     "ElaborazioneAnprErrorSubjectItemResponse",
     "ElaborazioneAnprRunRecordItemResponse",
+    "ElaborazioneRuntimeDailyMetricResponse",
+    "ElaborazioneRuntimeKpiBlockResponse",
+    "ElaborazioneRuntimeMetricsResponse",
+    "ElaborazioneRuntimeOperatingWindowResponse",
     "ElaborazioneCaptchaSolveRequest",
     "ElaborazioneCaptchaSummaryResponse",
     "ElaborazioneCredentialCreateRequest",
@@ -91,3 +95,45 @@ class ElaborazioneAnprSummaryResponse(BaseModel):
     total_error_subjects: int = 0
     error_subjects: list[ElaborazioneAnprErrorSubjectItemResponse] = Field(default_factory=list)
     recent_runs: list[ElaborazioneAnprRunItemResponse] = Field(default_factory=list)
+
+
+class ElaborazioneRuntimeOperatingWindowResponse(BaseModel):
+    enabled: bool
+    timezone: str
+    start_hour: int
+    end_hour: int
+    is_within_window: bool
+    state_label: str
+    next_resume_at: datetime | None = None
+
+
+class ElaborazioneRuntimeKpiBlockResponse(BaseModel):
+    batches_total: int
+    requests_total: int
+    requests_completed: int
+    requests_failed: int
+    requests_skipped: int
+    requests_not_found: int
+    processed_requests: int
+    success_rate: float | None = None
+    throughput_per_hour: float | None = None
+    average_batch_duration_minutes: float | None = None
+    average_request_duration_seconds: float | None = None
+    latest_processed_at: datetime | None = None
+
+
+class ElaborazioneRuntimeDailyMetricResponse(BaseModel):
+    date: str
+    processed_requests: int
+    completed: int
+    failed: int
+    skipped: int
+    not_found: int
+
+
+class ElaborazioneRuntimeMetricsResponse(BaseModel):
+    operating_window: ElaborazioneRuntimeOperatingWindowResponse
+    totals: ElaborazioneRuntimeKpiBlockResponse
+    last_24_hours: ElaborazioneRuntimeKpiBlockResponse
+    last_7_days: ElaborazioneRuntimeKpiBlockResponse
+    recent_daily: list[ElaborazioneRuntimeDailyMetricResponse] = Field(default_factory=list)

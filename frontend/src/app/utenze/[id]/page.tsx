@@ -6,6 +6,7 @@ import { useCallback, useDeferredValue, useEffect, useRef, useState } from "reac
 
 import { AnprStatusCard } from "@/components/anagrafica/AnprStatusCard";
 import { MeterReadingsTable } from "@/components/catasto/meter-readings-table";
+import { UtenzePaymentNoticesSection } from "@/components/utenze/utenze-payment-notices-section";
 import { UtenzeModulePage } from "@/components/utenze/utenze-module-page";
 import {
   createElaborazioneRichiesta,
@@ -45,6 +46,8 @@ type ManualUploadItem = {
   docType: string;
   notes: string;
 };
+
+type SubjectDetailTab = "scheda" | "payment_notices";
 
 type SubjectVisuraRequestState = {
   identifier: string;
@@ -122,6 +125,7 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
   const [subjectVisuraResult, setSubjectVisuraResult] = useState<ElaborazioneBatchDetail | null>(null);
   const [documentSearch, setDocumentSearch] = useState("");
   const [isDocumentsExpanded, setIsDocumentsExpanded] = useState(false);
+  const [activeTab, setActiveTab] = useState<SubjectDetailTab>("scheda");
 
   const [sourceNameRaw, setSourceNameRaw] = useState("");
   const [requiresReview, setRequiresReview] = useState(false);
@@ -221,6 +225,10 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
   useEffect(() => {
     setDocumentSearch("");
     setIsDocumentsExpanded(false);
+  }, [subject?.id]);
+
+  useEffect(() => {
+    setActiveTab("scheda");
   }, [subject?.id]);
 
   async function reloadSubject() {
@@ -787,7 +795,32 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
         </div>
       </div>
 
-      {nasImportStatus ? (
+      <div className="flex flex-wrap gap-2 rounded-2xl border border-[#d9e8df] bg-white p-2 shadow-sm">
+        <button
+          className={
+            activeTab === "scheda"
+              ? "rounded-xl bg-[#1D4E35] px-4 py-2 text-sm font-semibold text-white"
+              : "rounded-xl px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-100"
+          }
+          type="button"
+          onClick={() => setActiveTab("scheda")}
+        >
+          Scheda soggetto
+        </button>
+        <button
+          className={
+            activeTab === "payment_notices"
+              ? "rounded-xl bg-[#1D4E35] px-4 py-2 text-sm font-semibold text-white"
+              : "rounded-xl px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-100"
+          }
+          type="button"
+          onClick={() => setActiveTab("payment_notices")}
+        >
+          Avvisi di pagamento
+        </button>
+      </div>
+
+      {activeTab === "scheda" && nasImportStatus ? (
         <article className="panel-card">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -1119,6 +1152,8 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
         </div>
       ) : null}
 
+      {activeTab === "scheda" ? (
+        <>
       <article className="panel-card">
           <div className="mb-4">
             <p className="section-title">Scheda anagrafica</p>
@@ -1608,7 +1643,7 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
               />
             </label>
             <div className="flex justify-end">
-              <button className="btn-primary" type="button" onClick={() => void handleSaveNasPath()} disabled={!isEditMode || isSavingNasPath}>
+          <button className="btn-primary" type="button" onClick={() => void handleSaveNasPath()} disabled={!isEditMode || isSavingNasPath}>
                 {isSavingNasPath ? "Salvataggio..." : "Salva percorso NAS"}
               </button>
             </div>
@@ -1735,6 +1770,10 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
           </dl>
         )}
       </article>
+        </>
+      ) : (
+        <UtenzePaymentNoticesSection subjectId={subjectId} token={token} />
+      )}
     </div>
   );
 }

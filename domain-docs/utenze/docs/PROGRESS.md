@@ -61,6 +61,10 @@
 - introdotta la tabella `ana_person_snapshots` per la storicizzazione interrogabile dei dati persona
 - il dettaglio soggetto ora espone `person_snapshots` oltre ad audit log e documenti
 - gli update manuali e gli import CSV/XLSX/NAS salvano uno snapshot del profilo persona precedente quando cambiano i dati
+- introdotta la persistenza `ana_payment_notices` per gli avvisi di pagamento recuperati da Capacitas `inCASS`
+- aggiunto endpoint soggetto `GET /utenze/subjects/{subject_id}/payment-notices` per mostrare avvisi, stati, dettaglio informativo e PDF associati
+- aggiunto workflow `Elaborazioni > Capacitas > inCASS avvisi` con job backend `capacitas_incass_sync_jobs`, recovery worker e monitor frontend dedicato
+- il dettaglio soggetto `/utenze/{id}` e la modale soggetto ora mostrano la sezione `inCASS` con residuo, stato avviso, link dettaglio e PDF disponibili
 
 ## Verifiche Eseguite
 

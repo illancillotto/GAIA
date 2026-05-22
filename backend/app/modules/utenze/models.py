@@ -295,6 +295,60 @@ class AnagraficaImportJobItem(Base):
     )
 
 
+class AnagraficaPaymentNotice(Base):
+    __tablename__ = "ana_payment_notices"
+    __table_args__ = (
+        UniqueConstraint("source_system", "source_notice_id", name="uq_ana_payment_notices_source_notice"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    subject_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("ana_subjects.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    source_system: Mapped[str] = mapped_column(String(32), default="incass", nullable=False, index=True)
+    source_notice_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    source_internal_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    codice_fiscale: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    partita_iva: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    display_name: Mapped[str | None] = mapped_column(String(512), nullable=True, index=True)
+    anno: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
+    stato_code: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    stato_label: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    data_scadenza: Mapped[date | None] = mapped_column(Date, nullable=True, index=True)
+    data_pagamento: Mapped[date | None] = mapped_column(Date, nullable=True)
+    tipo_anagrafica: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    ultimo_invio: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    lista_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    lista_descrizione: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    indirizzo: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    cap: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    citta: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    provincia: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    importo_carico: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    importo_sgravio: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    importo_riscosso: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    importo_residuo: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    importo_riporto: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    importo_rateizzato: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    importo_annullato: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    detail_url: Mapped[str | None] = mapped_column(String(1024), nullable=True)
+    detail_info_html: Mapped[str | None] = mapped_column(Text, nullable=True)
+    detail_info_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    pdf_links_json: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    raw_row_json: Mapped[dict | list | None] = mapped_column(JSON, nullable=True)
+    raw_detail_json: Mapped[dict | list | None] = mapped_column(JSON, nullable=True)
+    synced_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
 class BonificaUserStaging(Base):
     __tablename__ = "bonifica_user_staging"
 

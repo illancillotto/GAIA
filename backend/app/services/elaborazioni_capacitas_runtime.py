@@ -4,21 +4,68 @@ import logging
 from datetime import datetime, timezone
 
 from app.core.database import SessionLocal
+from app.modules.elaborazioni.capacitas.apps.incass.client import InCassClient
 from app.modules.elaborazioni.capacitas.apps.involture.client import InVoltureClient
 from app.modules.elaborazioni.capacitas.models import (
     CapacitasAnagraficaHistoryImportJobCreateRequest,
+    CapacitasInCassSyncJobCreateRequest,
     CapacitasParticelleSyncJobCreateRequest,
     CapacitasTerreniJobCreateRequest,
 )
 from app.modules.elaborazioni.capacitas.session import CapacitasSessionManager
 from app.services.elaborazioni_capacitas import mark_credential_error, mark_credential_used, pick_credential
 from app.services.elaborazioni_capacitas_anagrafica_history import get_anagrafica_history_job, run_anagrafica_history_job
+from app.services.elaborazioni_capacitas_incass import get_incass_sync_job, run_incass_sync_job
 from app.services.elaborazioni_capacitas_particelle_sync import get_particelle_sync_job, run_particelle_sync_job
 from app.services.elaborazioni_capacitas_terreni import get_terreni_sync_job, run_terreni_sync_job
 
 logger = logging.getLogger(__name__)
 
 TERMINAL_JOB_STATUSES = {"succeeded", "completed_with_errors", "failed"}
+
+
+async def run_incass_job_by_id(job_id: int) -> None:
+    db = SessionLocal()
+    manager: CapacitasSessionManager | None = None
+    credential_id: int | None = None
+    try:
+        job = get_incass_sync_job(db, job_id)
+        if job is None:
+            return
+
+        payload = CapacitasInCassSyncJobCreateRequest.model_validate(job.payload_json or {})
+        try:
+            credential, password = pick_credential(db, payload.credential_id or job.credential_id)
+        except RuntimeError as exc:
+            job.status = "failed"
+            job.error_detail = str(exc)
+            job.completed_at = datetime.now(timezone.utc)
+            db.commit()
+            return
+
+        credential_id = credential.id
+        manager = CapacitasSessionManager(credential.username, password)
+        await manager.login()
+        await manager.activate_app("incass")
+        await manager.start_keepalive("incass")
+        client = InCassClient(manager)
+        await run_incass_sync_job(db, client, job)
+        mark_credential_used(db, credential.id)
+    except Exception as exc:
+        logger.exception("Errore worker job avvisi inCASS Capacitas: job_id=%d err=%s", job_id, exc)
+        db.rollback()
+        if credential_id is not None:
+            mark_credential_error(db, credential_id, str(exc))
+        job = get_incass_sync_job(db, job_id)
+        if job is not None and job.status not in TERMINAL_JOB_STATUSES:
+            job.status = "failed"
+            job.error_detail = str(exc)
+            job.completed_at = datetime.now(timezone.utc)
+            db.commit()
+    finally:
+        if manager is not None:
+            await manager.close()
+        db.close()
 
 
 async def run_terreni_job_by_id(job_id: int) -> None:

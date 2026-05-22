@@ -1,4 +1,5 @@
 from collections.abc import Generator
+from datetime import UTC, date, datetime
 from pathlib import Path
 import uuid
 
@@ -22,6 +23,7 @@ from app.modules.utenze.models import (
     AnagraficaImportJobItem,
     AnagraficaImportJobItemStatus,
     AnagraficaImportJobStatus,
+    AnagraficaPaymentNotice,
     AnagraficaSubject,
 )
 from app.modules.utenze.services.import_service import (
@@ -408,6 +410,82 @@ def test_subjects_crud_search_and_stats() -> None:
     token_search_response = client.get("/utenze/search?q=rossi RSSMRA80A01H501Z", headers=headers)
     assert token_search_response.status_code == 200
     assert token_search_response.json()["total"] >= 1
+
+
+def test_subject_payment_notices_endpoint_returns_sorted_notices() -> None:
+    create_user("payment_reader", module_utenze=True)
+    token = login("payment_reader")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    create_response = client.post(
+        "/utenze/subjects",
+        headers=headers,
+        json={
+            "subject_type": "company",
+            "source_name_raw": "Acme_Srl_01154130957",
+            "nas_folder_letter": "A",
+            "requires_review": False,
+            "company": {
+                "ragione_sociale": "Acme Srl",
+                "partita_iva": "01154130957",
+            },
+        },
+    )
+    assert create_response.status_code == 201
+    subject_id = create_response.json()["id"]
+
+    db = TestingSessionLocal()
+    try:
+        db.add_all(
+            [
+                AnagraficaPaymentNotice(
+                    subject_id=uuid.UUID(subject_id),
+                    source_notice_id="020240000224300",
+                    source_internal_id="15",
+                    codice_fiscale="01154130957",
+                    partita_iva="01154130957",
+                    display_name="Acme Srl",
+                    anno="2025",
+                    stato_code="NP",
+                    stato_label="Non pagato",
+                    data_scadenza=date(2025, 12, 31),
+                    importo_residuo="124,55",
+                    detail_url="https://incass.example.local/dettaglio/1",
+                    detail_info_text="Riga informativa 1",
+                    pdf_links_json=[{"label": "Avviso", "url": "https://incass.example.local/pdf/1"}],
+                    synced_at=datetime(2026, 5, 21, 8, 0, tzinfo=UTC),
+                ),
+                AnagraficaPaymentNotice(
+                    subject_id=uuid.UUID(subject_id),
+                    source_notice_id="020230000111000",
+                    source_internal_id="16",
+                    codice_fiscale="01154130957",
+                    partita_iva="01154130957",
+                    display_name="Acme Srl",
+                    anno="2024",
+                    stato_code="PAG",
+                    stato_label="Pagato",
+                    data_scadenza=date(2024, 6, 30),
+                    importo_residuo="0,00",
+                    detail_info_text="Riga informativa 2",
+                    pdf_links_json=[],
+                    synced_at=datetime(2026, 5, 20, 8, 0, tzinfo=UTC),
+                ),
+            ]
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get(f"/utenze/subjects/{subject_id}/payment-notices", headers=headers)
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 2
+    assert payload[0]["source_notice_id"] == "020240000224300"
+    assert payload[0]["stato_label"] == "Non pagato"
+    assert payload[0]["pdf_links"][0]["label"] == "Avviso"
+    assert payload[1]["source_notice_id"] == "020230000111000"
 
 
 def test_create_subject_rejects_duplicate_codice_fiscale() -> None:

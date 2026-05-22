@@ -38,6 +38,7 @@ from app.schemas.elaborazioni import (
     ElaborazioneAnprRunItemResponse,
     ElaborazioneAnprRunRecordItemResponse,
     ElaborazioneAnprSummaryResponse,
+    ElaborazioneRuntimeMetricsResponse,
     ElaborazioneCaptchaSolveRequest,
     ElaborazioneCaptchaSummaryResponse,
     ElaborazioneCredentialCreateRequest,
@@ -62,6 +63,7 @@ from app.services.elaborazioni_batches import (
     get_batch_for_user,
     get_batch_requests,
     get_request_for_user,
+    get_runtime_metrics_for_user,
     list_batches_for_user,
     release_processing_batches_for_user,
     retry_failed_batch,
@@ -506,6 +508,14 @@ def list_batches(
     for batch in batches:
         sync_batch_counters(db, batch)
     return [ElaborazioneBatchResponse.model_validate(item) for item in batches]
+
+
+@router.get("/metrics", response_model=ElaborazioneRuntimeMetricsResponse)
+def get_runtime_metrics(
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> ElaborazioneRuntimeMetricsResponse:
+    return ElaborazioneRuntimeMetricsResponse(**get_runtime_metrics_for_user(db, current_user.id))
 
 
 @router.get("/batches/{batch_id}", response_model=ElaborazioneBatchDetailResponse)

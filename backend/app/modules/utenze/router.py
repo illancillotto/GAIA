@@ -30,6 +30,7 @@ from app.modules.utenze.models import (
     AnagraficaImportJob,
     AnagraficaImportJobItem,
     AnagraficaImportJobItemStatus,
+    AnagraficaPaymentNotice,
     AnagraficaPerson,
     AnagraficaPersonSnapshot,
     AnagraficaSubject,
@@ -63,6 +64,8 @@ from app.modules.utenze.schemas import (
     AnagraficaSearchResultResponse,
     AnagraficaStatsResponse,
     AnagraficaModuleStatusResponse,
+    AnagraficaPaymentNoticePdfResponse,
+    AnagraficaPaymentNoticeResponse,
     AnagraficaSubjectCreateRequest,
     AnagraficaSubjectDetailResponse,
     AnagraficaSubjectNasImportStatusResponse,
@@ -784,6 +787,75 @@ def get_subject(
     db: Annotated[Session, Depends(get_db)],
 ) -> AnagraficaSubjectDetailResponse:
     return _build_subject_detail(db, subject_id)
+
+
+@router.get("/subjects/{subject_id}/payment-notices", response_model=list[AnagraficaPaymentNoticeResponse])
+def get_subject_payment_notices(
+    subject_id: uuid.UUID,
+    _: Annotated[ApplicationUser, Depends(require_active_user)],
+    __: Annotated[ApplicationUser, RequireUtenzeModule],
+    db: Annotated[Session, Depends(get_db)],
+    limit: int = Query(default=100, ge=1, le=300),
+) -> list[AnagraficaPaymentNoticeResponse]:
+    _require_subject_exists(db, subject_id)
+    notices = db.scalars(
+        select(AnagraficaPaymentNotice)
+        .where(AnagraficaPaymentNotice.subject_id == subject_id)
+        .order_by(
+            AnagraficaPaymentNotice.anno.desc().nullslast(),
+            AnagraficaPaymentNotice.data_scadenza.desc().nullslast(),
+            AnagraficaPaymentNotice.updated_at.desc(),
+        )
+        .limit(limit)
+    ).all()
+    payload: list[AnagraficaPaymentNoticeResponse] = []
+    for notice in notices:
+        pdf_links = [
+            AnagraficaPaymentNoticePdfResponse.model_validate(item)
+            for item in (notice.pdf_links_json or [])
+            if isinstance(item, dict)
+        ]
+        payload.append(
+            AnagraficaPaymentNoticeResponse.model_validate(
+                {
+                    "id": str(notice.id),
+                    "subject_id": str(notice.subject_id) if notice.subject_id else None,
+                    "source_system": notice.source_system,
+                    "source_notice_id": notice.source_notice_id,
+                    "source_internal_id": notice.source_internal_id,
+                    "codice_fiscale": notice.codice_fiscale,
+                    "partita_iva": notice.partita_iva,
+                    "display_name": notice.display_name,
+                    "anno": notice.anno,
+                    "stato_code": notice.stato_code,
+                    "stato_label": notice.stato_label,
+                    "data_scadenza": notice.data_scadenza,
+                    "data_pagamento": notice.data_pagamento,
+                    "tipo_anagrafica": notice.tipo_anagrafica,
+                    "ultimo_invio": notice.ultimo_invio,
+                    "lista_id": notice.lista_id,
+                    "lista_descrizione": notice.lista_descrizione,
+                    "indirizzo": notice.indirizzo,
+                    "cap": notice.cap,
+                    "citta": notice.citta,
+                    "provincia": notice.provincia,
+                    "importo_carico": notice.importo_carico,
+                    "importo_sgravio": notice.importo_sgravio,
+                    "importo_riscosso": notice.importo_riscosso,
+                    "importo_residuo": notice.importo_residuo,
+                    "importo_riporto": notice.importo_riporto,
+                    "importo_rateizzato": notice.importo_rateizzato,
+                    "importo_annullato": notice.importo_annullato,
+                    "detail_url": notice.detail_url,
+                    "detail_info_text": notice.detail_info_text,
+                    "pdf_links": pdf_links,
+                    "synced_at": notice.synced_at,
+                    "created_at": notice.created_at,
+                    "updated_at": notice.updated_at,
+                }
+            )
+        )
+    return payload
 
 
 @router.post("/subjects/{subject_id}/import-from-nas", response_model=AnagraficaSubjectImportResponse)

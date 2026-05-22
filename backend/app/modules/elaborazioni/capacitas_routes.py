@@ -18,6 +18,8 @@ from app.modules.elaborazioni.capacitas.models import (
     CapacitasAnagraficaHistoryImportJobOut,
     CapacitasAnagraficaHistoryImportRequest,
     CapacitasAnagraficaHistoryImportResponse,
+    CapacitasInCassSyncJobCreateRequest,
+    CapacitasInCassSyncJobOut,
     CapacitasLookupOption,
     CapacitasParticelleSyncJobCreateRequest,
     CapacitasParticelleSyncJobOut,
@@ -54,6 +56,14 @@ from app.services.elaborazioni_capacitas_anagrafica_history import (
     list_anagrafica_history_jobs,
     load_anagrafica_history_import_request,
     serialize_anagrafica_history_job,
+)
+from app.services.elaborazioni_capacitas_incass import (
+    create_incass_sync_job,
+    delete_incass_sync_job,
+    expire_stale_incass_sync_jobs,
+    get_incass_sync_job,
+    list_incass_sync_jobs,
+    serialize_incass_sync_job,
 )
 from app.services.elaborazioni_capacitas_particelle_sync import (
     cancel_particelle_sync_job,
@@ -394,6 +404,79 @@ async def run_anagrafica_history_import_job_route(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job non trovato")
     _enqueue_capacitas_job(db, job)
     return serialize_anagrafica_history_job(job)
+
+
+@router.post("/incass/avvisi/jobs", response_model=CapacitasInCassSyncJobOut, status_code=status.HTTP_202_ACCEPTED)
+async def create_incass_job_route(
+    body: CapacitasInCassSyncJobCreateRequest,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> CapacitasInCassSyncJobOut:
+    expire_stale_incass_sync_jobs(db)
+    if body.credential_id is not None:
+        try:
+            pick_credential(db, body.credential_id)
+        except RuntimeError as exc:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+
+    job = create_incass_sync_job(
+        db,
+        requested_by_user_id=current_user.id,
+        credential_id=body.credential_id,
+        payload=body,
+    )
+    return serialize_incass_sync_job(job)
+
+
+@router.get("/incass/avvisi/jobs", response_model=list[CapacitasInCassSyncJobOut])
+def list_incass_jobs_route(
+    _: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[CapacitasInCassSyncJobOut]:
+    expire_stale_incass_sync_jobs(db)
+    return [serialize_incass_sync_job(job) for job in list_incass_sync_jobs(db)]
+
+
+@router.get("/incass/avvisi/jobs/{job_id}", response_model=CapacitasInCassSyncJobOut)
+def get_incass_job_route(
+    job_id: int,
+    _: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> CapacitasInCassSyncJobOut:
+    expire_stale_incass_sync_jobs(db)
+    job = get_incass_sync_job(db, job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job non trovato")
+    return serialize_incass_sync_job(job)
+
+
+@router.delete("/incass/avvisi/jobs/{job_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_incass_job_route(
+    job_id: int,
+    _: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> None:
+    expire_stale_incass_sync_jobs(db)
+    job = get_incass_sync_job(db, job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job non trovato")
+    if job.status not in {"succeeded", "completed_with_errors", "failed", "cancelled"}:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Il job puo essere eliminato solo quando e terminato")
+    delete_incass_sync_job(db, job)
+
+
+@router.post("/incass/avvisi/jobs/{job_id}/run", response_model=CapacitasInCassSyncJobOut)
+async def run_incass_job_route(
+    job_id: int,
+    _: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> CapacitasInCassSyncJobOut:
+    expire_stale_incass_sync_jobs(db)
+    job = get_incass_sync_job(db, job_id)
+    if job is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job non trovato")
+    _enqueue_capacitas_job(db, job)
+    return serialize_incass_sync_job(job)
 
 
 @router.get("/involture/frazioni", response_model=list[CapacitasLookupOption])

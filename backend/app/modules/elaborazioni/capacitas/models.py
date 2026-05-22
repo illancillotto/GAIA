@@ -482,3 +482,112 @@ class AnagraficaSearchRequest(BaseModel):
     tipo_ricerca: int = Field(default=1)
     solo_con_beni: bool = False
     credential_id: int | None = None
+
+
+class CapacitasInCassNoticePdf(BaseModel):
+    label: str | None = None
+    filename: str | None = None
+    url: str
+
+
+class CapacitasInCassNoticeRow(BaseModel):
+    external_row_id: str | None = Field(default=None, alias="ID")
+    avviso: str | None = Field(default=None, alias="Avviso")
+    reso: str | None = Field(default=None, alias="Reso")
+    anno: str | None = Field(default=None, alias="Anno")
+    denominazione: str | None = Field(default=None, alias="Denominaz")
+    codice_fiscale: str | None = Field(default=None, alias="CodFisc")
+    data_pagamento: str | None = Field(default=None, alias="DataPagamento")
+    lista_id: str | None = Field(default=None, alias="IDLista")
+    lista_descrizione: str | None = Field(default=None, alias="DescrizioneLista")
+    indirizzo: str | None = Field(default=None, alias="Indir")
+    civico: str | None = Field(default=None, alias="Civ")
+    sub_civico: str | None = Field(default=None, alias="SubCiv")
+    cap: str | None = Field(default=None, alias="Cap")
+    citta: str | None = Field(default=None, alias="Citta")
+    provincia: str | None = Field(default=None, alias="Prov")
+    carico: str | None = Field(default=None, alias="Carico")
+    sgravio: str | None = Field(default=None, alias="Sgravio")
+    riscosso: str | None = Field(default=None, alias="Riscosso")
+    differenza: str | None = Field(default=None, alias="Differenza")
+    riporto: str | None = Field(default=None, alias="Riporto")
+    rateizzato: str | None = Field(default=None, alias="Rateizzato")
+    annullato: str | None = Field(default=None, alias="Annullato")
+    data_scadenza: str | None = Field(default=None, alias="DataScad")
+    tipo_anagrafica: str | None = Field(default=None, alias="TipAna")
+    ultimo_invio: str | None = Field(default=None, alias="UltimoInvio")
+    rimborsi: str | None = Field(default=None, alias="Rimborsi")
+    stato_reso: str | None = Field(default=None, alias="StatoReso")
+    ico_minuta: str | None = Field(default=None, alias="IcoMinuta")
+    stato_pagamento_code: str | None = Field(default=None, alias="StatoPag")
+    pag_post_chiu: str | None = Field(default=None, alias="PagPostChiu")
+    reg_post_chiu: str | None = Field(default=None, alias="RegPostChiu")
+    stato_pagamento_label: str | None = None
+    detail_url: str | None = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class CapacitasInCassSearchResult(BaseModel):
+    total: int
+    rows: list[CapacitasInCassNoticeRow]
+
+
+class CapacitasInCassNoticeDetail(BaseModel):
+    avviso: str
+    detail_url: str
+    info_html: str | None = None
+    info_text: str | None = None
+    pdf_links: list[CapacitasInCassNoticePdf] = Field(default_factory=list)
+    raw_html: str | None = None
+
+
+class CapacitasInCassSyncItem(BaseModel):
+    subject_id: UUID
+    identifier: str | None = None
+    display_name: str | None = None
+
+
+class CapacitasInCassSyncJobCreateRequest(BaseModel):
+    credential_id: int | None = None
+    subject_ids: list[UUID] = Field(default_factory=list)
+    limit: int | None = Field(default=None, ge=1, le=1000)
+    include_details: bool = True
+    include_partitario: bool = True
+    continue_on_error: bool = True
+    throttle_ms: int = Field(default=250, ge=0, le=5000)
+
+
+class CapacitasInCassSyncItemResult(BaseModel):
+    subject_id: str
+    identifier: str | None = None
+    display_name: str | None = None
+    status: str
+    notices_found: int = 0
+    notices_synced: int = 0
+    error: str | None = None
+
+
+class CapacitasInCassSyncJobResult(BaseModel):
+    items: list[CapacitasInCassSyncItemResult]
+    processed_subjects: int
+    failed_subjects: int
+    notices_found: int
+    notices_synced: int
+
+
+class CapacitasInCassSyncJobOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    credential_id: int | None
+    requested_by_user_id: int | None
+    status: str
+    mode: str
+    payload_json: dict | list | None
+    result_json: dict | list | None
+    error_detail: str | None
+    started_at: datetime | None
+    completed_at: datetime | None
+    created_at: datetime
+    updated_at: datetime

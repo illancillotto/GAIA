@@ -39,6 +39,22 @@ class Settings(BaseSettings):
         default=25,
         alias="ELABORAZIONI_PENDING_START_TIMEOUT_MINUTES",
     )
+    elaborazioni_operation_window_enabled: bool = Field(
+        default=False,
+        alias="ELABORAZIONI_OPERATION_WINDOW_ENABLED",
+    )
+    elaborazioni_operation_start_hour: int = Field(
+        default=0,
+        alias="ELABORAZIONI_OPERATION_START_HOUR",
+    )
+    elaborazioni_operation_end_hour: int = Field(
+        default=23,
+        alias="ELABORAZIONI_OPERATION_END_HOUR",
+    )
+    elaborazioni_operation_timezone: str = Field(
+        default="Europe/Rome",
+        alias="ELABORAZIONI_OPERATION_TIMEZONE",
+    )
     catasto_sister_probe_timeout_seconds: int = Field(
         default=15,
         validation_alias=AliasChoices("ELABORAZIONI_SISTER_PROBE_TIMEOUT_SECONDS", "CATASTO_SISTER_PROBE_TIMEOUT_SECONDS"),

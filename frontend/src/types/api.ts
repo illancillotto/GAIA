@@ -517,6 +517,49 @@ export type AnagraficaSubjectDetail = {
   catasto_documents: AnagraficaCatastoDocument[];
 };
 
+export type AnagraficaPaymentNoticePdf = {
+  filename: string | null;
+  url: string;
+  label: string | null;
+};
+
+export type AnagraficaPaymentNotice = {
+  id: string;
+  subject_id: string | null;
+  source_system: string;
+  source_notice_id: string;
+  source_internal_id: string | null;
+  codice_fiscale: string | null;
+  partita_iva: string | null;
+  display_name: string | null;
+  anno: string | null;
+  stato_code: string | null;
+  stato_label: string | null;
+  data_scadenza: string | null;
+  data_pagamento: string | null;
+  tipo_anagrafica: string | null;
+  ultimo_invio: string | null;
+  lista_id: string | null;
+  lista_descrizione: string | null;
+  indirizzo: string | null;
+  cap: string | null;
+  citta: string | null;
+  provincia: string | null;
+  importo_carico: string | null;
+  importo_sgravio: string | null;
+  importo_riscosso: string | null;
+  importo_residuo: string | null;
+  importo_riporto: string | null;
+  importo_rateizzato: string | null;
+  importo_annullato: string | null;
+  detail_url: string | null;
+  detail_info_text: string | null;
+  pdf_links: AnagraficaPaymentNoticePdf[];
+  synced_at: string | null;
+  created_at: string | null;
+  updated_at: string | null;
+};
+
 export type UtenzeSubjectDetail = AnagraficaSubjectDetail;
 
 export type AnagraficaPersonInput = {
@@ -1446,6 +1489,49 @@ export type CapacitasParticelleSyncJob = {
   updated_at: string;
 };
 
+export type CapacitasInCassSyncJobCreateInput = {
+  credential_id?: number | null;
+  subject_ids?: string[];
+  limit?: number | null;
+  include_details?: boolean;
+  include_partitario?: boolean;
+  continue_on_error?: boolean;
+  throttle_ms?: number;
+};
+
+export type CapacitasInCassSyncItemResult = {
+  subject_id: string;
+  identifier: string | null;
+  display_name: string | null;
+  status: string;
+  notices_found: number;
+  notices_synced: number;
+  error: string | null;
+};
+
+export type CapacitasInCassSyncJobResult = {
+  items: CapacitasInCassSyncItemResult[];
+  processed_subjects: number;
+  failed_subjects: number;
+  notices_found: number;
+  notices_synced: number;
+};
+
+export type CapacitasInCassSyncJob = {
+  id: number;
+  credential_id: number | null;
+  requested_by_user_id: number | null;
+  status: string;
+  mode: string;
+  payload_json: CapacitasInCassSyncJobCreateInput | Record<string, unknown> | unknown[] | null;
+  result_json: CapacitasInCassSyncJobResult | Record<string, unknown> | unknown[] | null;
+  error_detail: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
 export type CatastoSingleVisuraPayload = {
   search_mode?: "immobile" | "soggetto";
   comune?: string;
@@ -1502,6 +1588,7 @@ export type CatastoVisuraRequest = {
   captcha_image_path: string | null;
   captcha_requested_at: string | null;
   captcha_expires_at: string | null;
+  captcha_manual_solution?: string | null;
   captcha_skip_requested: boolean;
   artifact_dir: string | null;
   document_id: string | null;
@@ -1619,6 +1706,48 @@ export type ElaborazioneBatchCaptchaEvent = CatastoBatchCaptchaEvent;
 export type ElaborazioneBatchCompletedEvent = CatastoBatchCompletedEvent;
 export type ElaborazioneRichiestaCompletedEvent = CatastoVisuraCompletedEvent;
 export type ElaborazioneBatchWebSocketEvent = CatastoBatchWebSocketEvent;
+
+export type ElaborazioneRuntimeOperatingWindow = {
+  enabled: boolean;
+  timezone: string;
+  start_hour: number;
+  end_hour: number;
+  is_within_window: boolean;
+  state_label: string;
+  next_resume_at: string | null;
+};
+
+export type ElaborazioneRuntimeKpiBlock = {
+  batches_total: number;
+  requests_total: number;
+  requests_completed: number;
+  requests_failed: number;
+  requests_skipped: number;
+  requests_not_found: number;
+  processed_requests: number;
+  success_rate: number | null;
+  throughput_per_hour: number | null;
+  average_batch_duration_minutes: number | null;
+  average_request_duration_seconds: number | null;
+  latest_processed_at: string | null;
+};
+
+export type ElaborazioneRuntimeDailyMetric = {
+  date: string;
+  processed_requests: number;
+  completed: number;
+  failed: number;
+  skipped: number;
+  not_found: number;
+};
+
+export type ElaborazioneRuntimeMetrics = {
+  operating_window: ElaborazioneRuntimeOperatingWindow;
+  totals: ElaborazioneRuntimeKpiBlock;
+  last_24_hours: ElaborazioneRuntimeKpiBlock;
+  last_7_days: ElaborazioneRuntimeKpiBlock;
+  recent_daily: ElaborazioneRuntimeDailyMetric[];
+};
 
 export type ElaborazioneAnprRunItem = {
   id: string;

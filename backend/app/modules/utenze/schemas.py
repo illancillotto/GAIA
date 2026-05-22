@@ -374,6 +374,51 @@ class AnagraficaSubjectDetailResponse(BaseModel):
     catasto_documents: list[AnagraficaCatastoDocumentResponse] = Field(default_factory=list)
 
 
+class AnagraficaPaymentNoticePdfResponse(BaseModel):
+    filename: str | None = None
+    url: str
+    label: str | None = None
+
+
+class AnagraficaPaymentNoticeResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    subject_id: str | None = None
+    source_system: str
+    source_notice_id: str
+    source_internal_id: str | None = None
+    codice_fiscale: str | None = None
+    partita_iva: str | None = None
+    display_name: str | None = None
+    anno: str | None = None
+    stato_code: str | None = None
+    stato_label: str | None = None
+    data_scadenza: date | None = None
+    data_pagamento: date | None = None
+    tipo_anagrafica: str | None = None
+    ultimo_invio: str | None = None
+    lista_id: str | None = None
+    lista_descrizione: str | None = None
+    indirizzo: str | None = None
+    cap: str | None = None
+    citta: str | None = None
+    provincia: str | None = None
+    importo_carico: str | None = None
+    importo_sgravio: str | None = None
+    importo_riscosso: str | None = None
+    importo_residuo: str | None = None
+    importo_riporto: str | None = None
+    importo_rateizzato: str | None = None
+    importo_annullato: str | None = None
+    detail_url: str | None = None
+    detail_info_text: str | None = None
+    pdf_links: list[AnagraficaPaymentNoticePdfResponse] = Field(default_factory=list)
+    synced_at: datetime | None = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
 class AnagraficaDocumentUpdateRequest(BaseModel):
     doc_type: str | None = None
     notes: str | None = None

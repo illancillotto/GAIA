@@ -5,6 +5,7 @@ from app.models.bonifica_oristanese import BonificaOristaneseCredential
 from app.models.capacitas import (
     CapacitasAnagraficaHistoryImportJob,
     CapacitasCredential,
+    CapacitasInCassSyncJob,
     CapacitasParticelleSyncJob,
     CapacitasTerreniSyncJob,
 )
@@ -52,6 +53,7 @@ from app.modules.utenze.models import (
     AnagraficaDocument,
     AnagraficaImportJob,
     AnagraficaImportJobItem,
+    AnagraficaPaymentNotice,
     AnagraficaPerson,
     AnagraficaPersonSnapshot,
     AnagraficaSubject,
@@ -94,6 +96,7 @@ __all__ = [
     "AnagraficaDocument",
     "AnagraficaImportJob",
     "AnagraficaImportJobItem",
+    "AnagraficaPaymentNotice",
     "AnagraficaPerson",
     "AnagraficaPersonSnapshot",
     "AnagraficaSubject",
@@ -105,6 +108,7 @@ __all__ = [
     "BonificaOristaneseCredential",
     "CapacitasCredential",
     "CapacitasAnagraficaHistoryImportJob",
+    "CapacitasInCassSyncJob",
     "CapacitasParticelleSyncJob",
     "CapacitasTerreniSyncJob",
     "CatAdeParticella",

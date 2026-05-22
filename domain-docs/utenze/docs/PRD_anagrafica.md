@@ -90,6 +90,7 @@ Il nucleo del modulo è il registro dei soggetti. Ogni soggetto ha una scheda co
 | RF-ANA-08 | SHOULD | Collegamento a pratiche e visure GAIA Catasto |
 | RF-ANA-09 | COULD | Deduplicazione soggetti (stesso CF/PIVA con cartelle diverse) |
 | RF-ANA-10 | COULD | Export anagrafica in CSV/XLSX con filtri |
+| RF-ANA-11 | SHOULD | Recupero e storicizzazione avvisi di pagamento Capacitas `inCASS` per soggetto, con stato, importi, dettaglio informativo e link PDF |
 
 ### 2.2 Campi anagrafica — Persona Fisica
 
@@ -194,6 +195,7 @@ Fallback:        Non classificato — richiede revisione manuale
 | `ana_persons` | Dati persona fisica: `subject_id, cognome, nome, codice_fiscale, data_nascita, comune_nascita, indirizzo, comune_residenza, cap, email, telefono, note` |
 | `ana_person_snapshots` | Storico puntuale dei dati persona: `id, subject_id, is_capacitas_history, source_system, source_ref, cognome, nome, codice_fiscale, data_nascita, comune_nascita, indirizzo, comune_residenza, cap, email, telefono, note, valid_from, collected_at` |
 | `ana_companies` | Dati persona giuridica: `subject_id, ragione_sociale, partita_iva, codice_fiscale, forma_giuridica, sede_legale, comune_sede, cap, email_pec, telefono, note` |
+| `ana_payment_notices` | Avvisi di pagamento `inCASS`: `id, subject_id, source_system, source_notice_id, codice_fiscale, partita_iva, display_name, anno, stato_code, stato_label, data_scadenza, data_pagamento, importi, detail_url, detail_info_*, pdf_links_json, raw_*, synced_at` |
 | `ana_documents` | Documenti: `id, subject_id, doc_type, filename, nas_path, file_size_bytes, file_modified_at, classification_source, storage_type, local_path, uploaded_at, notes` |
 | `ana_import_jobs` | Job di import NAS: `id, letter, status, started_at, completed_at, total_folders, imported_ok, imported_errors, log_json` |
 | `ana_audit_log` | Log modifiche anagrafiche: `id, subject_id, action, changed_by, changed_at, diff_json` |
@@ -215,6 +217,7 @@ ImportJobStatus: PENDING | RUNNING | COMPLETED | FAILED
 - `ana_person_snapshots(subject_id, collected_at)`
 - `ana_companies(partita_iva)` — unique
 - `ana_subjects(nas_folder_letter, nas_folder_path)`
+- `ana_payment_notices(subject_id, anno, data_scadenza, synced_at)`
 - `ana_documents(subject_id, doc_type)`
 - Full-text search su `cognome || ' ' || nome` e `ragione_sociale` (PostgreSQL `tsvector`)
 
@@ -255,6 +258,166 @@ Per il dominio Catasto/Capacitas valgono queste regole:
   - report con conteggi `processed`, `imported`, `skipped`, `failed`
   - contatore aggiuntivo `snapshot_records_imported`
   - dettaglio per riga con `resolved_subject_id`, `idxana`, `history_records_total`, `imported_records`, `skipped_records`
+
+### 3.6 Avvisi di pagamento da inCASS
+
+Per il dominio Utenze è disponibile anche il recupero degli avvisi di pagamento tramite l'applicazione Capacitas `inCASS`.
+
+- il flusso batch parte da `Elaborazioni > Capacitas > inCASS avvisi`
+- il backend crea job in `capacitas_incass_sync_jobs`
+- il worker elabora i soggetti GAIA che espongono un identificativo fiscale utile (`codice_fiscale` o `partita_iva`)
+- per ogni soggetto:
+  - apre `Ricerca Avvisi`
+  - cerca per identificativo fiscale
+  - salva gli avvisi trovati in `ana_payment_notices`
+  - opzionalmente persiste il dettaglio informativo della modale `I`
+  - opzionalmente persiste i link ai PDF esposti nel dettaglio avviso
+- il dettaglio soggetto espone gli avvisi sincronizzati tramite `GET /utenze/subjects/{subject_id}/payment-notices`
+
+API operative collegate:
+
+- `POST /elaborazioni/capacitas/incass/avvisi/jobs`
+- `GET /elaborazioni/capacitas/incass/avvisi/jobs`
+- `GET /elaborazioni/capacitas/incass/avvisi/jobs/{job_id}`
+- `POST /elaborazioni/capacitas/incass/avvisi/jobs/{job_id}/run`
+- `DELETE /elaborazioni/capacitas/incass/avvisi/jobs/{job_id}`
+- `GET /utenze/subjects/{subject_id}/payment-notices`
+
+#### 3.6.1 Cosa salva GAIA per ogni avviso
+
+I dati persistiti in `ana_payment_notices` sono separati in tre gruppi:
+
+**Dati obbligatori**
+
+Sono i campi minimi che identificano e collegano l'avviso:
+
+- `subject_id`: soggetto GAIA collegato, se risolto
+- `source_system`: sorgente (`incass`)
+- `source_notice_id`: identificativo avviso esposto dal portale
+- `codice_fiscale` / `partita_iva`: identificativo fiscale usato o restituito
+- `display_name`: intestatario leggibile
+- `stato_code`
+- `stato_label`
+- `synced_at`
+
+**Dati opzionali funzionali**
+
+Sono i campi utili alla consultazione operativa del soggetto:
+
+- `source_internal_id`
+- `anno`
+- `data_scadenza`
+- `data_pagamento`
+- `tipo_anagrafica`
+- `ultimo_invio`
+- `lista_id`
+- `lista_descrizione`
+- `indirizzo`
+- `cap`
+- `citta`
+- `provincia`
+- `importo_carico`
+- `importo_sgravio`
+- `importo_riscosso`
+- `importo_residuo`
+- `importo_riporto`
+- `importo_rateizzato`
+- `importo_annullato`
+- `detail_url`
+- `detail_info_html`
+- `detail_info_text`
+- `pdf_links_json`
+
+**Dati raw / tecnici**
+
+Sono salvati per audit, debug e possibili arricchimenti futuri:
+
+- `raw_row_json`: riga grezza della griglia `Ricerca Avvisi`
+- `raw_detail_json`: payload grezzo del dettaglio avviso
+- `created_at`
+- `updated_at`
+
+#### 3.6.2 Cosa salva GAIA per ogni job di sincronizzazione
+
+Ogni run del workspace `Elaborazioni > Capacitas > inCASS avvisi` viene salvato in `capacitas_incass_sync_jobs`.
+
+**Metadati job**
+
+- `id`
+- `credential_id`
+- `requested_by_user_id`
+- `status`
+- `mode`
+- `started_at`
+- `completed_at`
+- `created_at`
+- `updated_at`
+- `error_detail`
+
+**Payload di ingresso**
+
+Salvato in `payload_json`:
+
+- `credential_id`
+- `subject_ids`
+- `limit`
+- `include_details`
+- `include_partitario`
+- `continue_on_error`
+- `throttle_ms`
+
+**Risultato aggregato**
+
+Salvato in `result_json`:
+
+- `processed_subjects`
+- `failed_subjects`
+- `notices_found`
+- `notices_synced`
+
+**Dettaglio per soggetto**
+
+Dentro `result_json.items[]`:
+
+- `subject_id`
+- `identifier`
+- `display_name`
+- `status`
+- `notices_found`
+- `notices_synced`
+- `error`
+
+#### 3.6.3 Dati esposti al frontend Utenze
+
+Nel dettaglio soggetto GAIA il frontend usa `GET /utenze/subjects/{subject_id}/payment-notices` e mostra:
+
+- codice avviso
+- anno
+- stato avviso
+- scadenza
+- residuo
+- importi principali (`carico`, `riscosso`, `rateizzato`)
+- link al dettaglio avviso sul portale
+- dettaglio informativo testuale
+- elenco PDF disponibili
+- data/ora ultima sincronizzazione
+
+#### 3.6.4 Legenda stati avviso derivati
+
+GAIA normalizza e salva gli stati leggibili usando la logica funzionale del portale `inCASS`. I valori oggi supportati sono:
+
+- `Pagato`
+- `Non pagato`
+- `Parzialmente pagato`
+- `Annullato`
+- `Con esubero`
+- `A riporto`
+- `Totalmente sgravato`
+- `Rateizzato totalmente pagato`
+- `Rateizzato senza pagamenti`
+- `Rateizzato e pagato in parte`
+- `Pagamento tardivo`
+- `Pagamento tardivo registrato post-chiusura`
 
 ---
 

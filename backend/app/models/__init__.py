@@ -9,6 +9,7 @@ from app.modules.utenze.models import (
     AnagraficaImportJobItem,
     AnagraficaImportJobItemStatus,
     AnagraficaImportJobStatus,
+    AnagraficaPaymentNotice,
     AnagraficaPerson,
     AnagraficaStorageType,
     AnagraficaSubject,
@@ -30,6 +31,7 @@ from app.models.catasto import (
 from app.models.capacitas import (
     CapacitasAnagraficaHistoryImportJob,
     CapacitasCredential,
+    CapacitasInCassSyncJob,
     CapacitasParticelleSyncJob,
     CapacitasTerreniSyncJob,
 )
@@ -74,6 +76,7 @@ __all__ = [
     "AnagraficaImportJobItem",
     "AnagraficaImportJobItemStatus",
     "AnagraficaImportJobStatus",
+    "AnagraficaPaymentNotice",
     "AnagraficaPerson",
     "AnagraficaStorageType",
     "AnagraficaSubject",
@@ -99,6 +102,7 @@ __all__ = [
     "CatUtenzaIntestatario",
     "CapacitasCredential",
     "CapacitasAnagraficaHistoryImportJob",
+    "CapacitasInCassSyncJob",
     "CapacitasParticelleSyncJob",
     "CapacitasTerreniSyncJob",
     "EffectivePermission",
