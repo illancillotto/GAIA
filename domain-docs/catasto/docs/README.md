@@ -15,6 +15,12 @@ Usare questo indice per capire rapidamente quali file sono:
 - `PRD_catasto.md`
   Documento di riferimento per perimetro, architettura, API e stato corrente del dominio `catasto`.
   Include anche la Fase 1 territoriale `cat_*`, la ricerca anagrafica fino a Fase 5 e il requisito PostGIS.
+- `CAPACITAS_SYNC_ANALYSIS.md`
+  Analisi tecnica estesa del recupero e della sincronizzazione dati da Capacitas:
+  tabelle scritte, pipeline, matching locale, certificati, intestatari e storico anagrafico.
+- `CAPACITAS_SYNC_FLOW.md`
+  Sintesi operativa del flusso end-to-end Capacitas, utile per orientamento rapido,
+  troubleshooting e allineamento tra backend, prodotto e operations.
 
 ## Documenti storici
 

@@ -34,7 +34,13 @@ from app.models.catasto_phase1 import (
     CatUtenzaIrrigua,
 )
 from app.modules.elaborazioni.capacitas.client import InVoltureClient
-from app.modules.elaborazioni.capacitas.models import CapacitasAnagraficaDetail, CapacitasIntestatario, CapacitasTerrenoCertificato
+from app.modules.elaborazioni.capacitas.models import (
+    CapacitasAnagraficaDetail,
+    CapacitasIntestatario,
+    CapacitasLookupOption,
+    CapacitasTerrenoCertificato,
+    CapacitasTerrenoRow,
+)
 from app.modules.elaborazioni.capacitas.session import CapacitasSessionManager
 from app.modules.elaborazioni.capacitas.models import CapacitasTerreniSearchRequest
 from app.modules.utenze.models import AnagraficaPerson, AnagraficaSubject, AnagraficaSubjectStatus, AnagraficaSubjectType
@@ -56,12 +62,25 @@ from app.schemas.catasto_phase1 import (
 )
 from app.services.elaborazioni_capacitas import mark_credential_error, mark_credential_used, pick_credential
 from app.services.elaborazioni_capacitas_terreni import (
-    _resolve_batch_frazione_candidates,
+    _SECTION_LOOKUP_COMUNE_OVERRIDES,
+    _apply_section_frazione_hints,
+    _extract_lookup_comune,
+    _extract_lookup_frazione,
+    _normalize_lookup_label,
     sync_terreni_for_request,
 )
 
 router = APIRouter(prefix="/catasto/elaborazioni-massive/particelle", tags=["catasto-elaborazioni-massive"])
 logger = logging.getLogger(__name__)
+
+
+class _LiveSearchHit:
+    __slots__ = ("frazione_id", "lookup_label", "row")
+
+    def __init__(self, frazione_id: str, lookup_label: str, row: CapacitasTerrenoRow) -> None:
+        self.frazione_id = frazione_id
+        self.lookup_label = lookup_label
+        self.row = row
 
 
 class CapacitasLiveAuthoritativeSanitizer:
@@ -343,6 +362,160 @@ def _format_consorzio_esito_for_export(presente_in_consorzio: bool) -> str:
         if presente_in_consorzio
         else "Particella non presente in Catasto Consorzio"
     )
+
+
+async def _resolve_live_frazione_options(
+    client: InVoltureClient,
+    comune: str,
+    sezione: str | None,
+    cache: dict[str, list[CapacitasLookupOption]],
+) -> list[CapacitasLookupOption]:
+    sezione_value = (sezione or "").strip()
+    cache_key = f"{_normalize_lookup_label(comune)}|{sezione_value.casefold()}"
+    cached = cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    override = _SECTION_LOOKUP_COMUNE_OVERRIDES.get((_normalize_lookup_label(comune), sezione_value.casefold()))
+    lookup_comune = override[0] if override is not None else comune
+    preferred_ids_override = override[1] if override is not None else None
+
+    options = await client.search_frazioni(lookup_comune)
+    if not options:
+        raise RuntimeError(f"Nessuna frazione Capacitas trovata per comune '{lookup_comune}'.")
+
+    lookup_key = _normalize_lookup_label(lookup_comune)
+    exact_matches = [option for option in options if _normalize_lookup_label(option.display) == lookup_key]
+    comune_matches = [option for option in options if _normalize_lookup_label(_extract_lookup_comune(option.display)) == lookup_key]
+    frazione_matches = [option for option in options if _normalize_lookup_label(_extract_lookup_frazione(option.display)) == lookup_key]
+    ordered = exact_matches or comune_matches or frazione_matches or options
+
+    preferred_ids = _apply_section_frazione_hints(
+        comune,
+        sezione,
+        [option.id for option in ordered],
+        preferred_ids_override=preferred_ids_override,
+    )
+    by_id = {option.id: option for option in ordered}
+    cache[cache_key] = [by_id[option_id] for option_id in preferred_ids if option_id in by_id] or ordered
+    return cache[cache_key]
+
+
+def _live_row_dedupe_key(row: CapacitasTerrenoRow) -> tuple[str, str, str, str, str, str, str, str]:
+    return (
+        (row.cco or "").strip(),
+        (row.com or "").strip(),
+        (row.pvc or "").strip(),
+        (row.fra or "").strip(),
+        (row.ccs or "").strip(),
+        (row.foglio or "").strip(),
+        (row.particella or "").strip(),
+        (row.sub or "").strip(),
+    )
+
+
+def _live_row_rank(row: CapacitasTerrenoRow) -> tuple[int, int, str]:
+    state = (row.row_visual_state or "").strip().casefold()
+    bucket = 2 if "current" in state else 1 if "black" in state else 0
+    return (bucket, _safe_int(row.anno), row.external_row_id or "")
+
+
+async def _search_live_rows_for_fraction(
+    client: InVoltureClient,
+    *,
+    frazione: CapacitasLookupOption,
+    sezione: str | None,
+    foglio: str,
+    particella: str,
+    sub: str | None,
+) -> list[CapacitasTerrenoRow]:
+    request = CapacitasTerreniSearchRequest(
+        frazione_id=frazione.id,
+        sezione=sezione or "",
+        foglio=foglio,
+        particella=particella,
+        sub=sub or "",
+    )
+    result = await client.search_terreni(request)
+    rows = result.rows if result else []
+    if not rows and (sezione or "").strip():
+        retry_request = request.model_copy(update={"sezione": ""})
+        result = await client.search_terreni(retry_request)
+        rows = result.rows if result else []
+
+    filtered: list[CapacitasTerrenoRow] = []
+    for row in rows:
+        if (row.foglio or "").strip() != foglio.strip():
+            continue
+        if (row.particella or "").strip() != particella.strip():
+            continue
+        if (sub or "").strip() and (row.sub or "").strip() != (sub or "").strip():
+            continue
+        filtered.append(row)
+    return filtered
+
+
+async def _collect_live_search_hits(
+    client: InVoltureClient,
+    *,
+    comune: str,
+    sezione: str | None,
+    foglio: str,
+    particella: str,
+    sub: str | None,
+    frazione_cache: dict[str, list[CapacitasLookupOption]],
+) -> list[_LiveSearchHit]:
+    frazioni = await _resolve_live_frazione_options(client, comune, sezione, frazione_cache)
+    hits: list[_LiveSearchHit] = []
+    for frazione in frazioni:
+        try:
+            rows = await _search_live_rows_for_fraction(
+                client,
+                frazione=frazione,
+                sezione=sezione,
+                foglio=foglio,
+                particella=particella,
+                sub=sub,
+            )
+        except Exception as exc:
+            logger.debug(
+                "Ricerca live terreni fallita su frazione=%s (%s) comune=%s sezione=%s foglio=%s particella=%s sub=%s err=%s",
+                frazione.id,
+                frazione.display,
+                comune,
+                sezione,
+                foglio,
+                particella,
+                sub,
+                exc,
+            )
+            continue
+        for row in rows:
+            hits.append(_LiveSearchHit(frazione_id=frazione.id, lookup_label=frazione.display, row=row))
+    return hits
+
+
+def _classify_live_search_hits(hits: list[_LiveSearchHit]) -> tuple[str, str, list[_LiveSearchHit]]:
+    if not hits:
+        return "NOT_FOUND", "Nessuna particella trovata in Capacitas live.", []
+
+    best: dict[tuple[str, str, str, str, str, str, str, str], _LiveSearchHit] = {}
+    for hit in hits:
+        key = _live_row_dedupe_key(hit.row)
+        current = best.get(key)
+        if current is None or _live_row_rank(hit.row) > _live_row_rank(current.row):
+            best[key] = hit
+
+    deduped = list(best.values())
+    fraction_ids = {hit.frazione_id for hit in deduped}
+    if len(fraction_ids) > 1:
+        labels = ", ".join(sorted({f"{hit.frazione_id}:{hit.lookup_label}" for hit in deduped}))
+        return (
+            "MULTIPLE_MATCHES",
+            f"Particella trovata in piu frazioni candidate: {labels}",
+            deduped,
+        )
+    return "FOUND", "OK", deduped
 
 
 def _has_rpt_certificato_context(match: CatAnagraficaMatch) -> bool:
@@ -1119,7 +1292,7 @@ class _CapacitasLiveResolver:
         self._disabled = False
         self._cert_cache: dict[tuple[str, str, str, str, str], CapacitasTerrenoCertificato] = {}
         self._detail_cache: dict[tuple[str, str], CapacitasAnagraficaDetail] = {}
-        self._frazione_cache: dict[str, list[str]] = {}
+        self._frazione_cache: dict[str, list[CapacitasLookupOption]] = {}
         self._sync_attempted_particelle: set[UUID] = set()
         self.dirty = False
 
@@ -1235,63 +1408,37 @@ class _CapacitasLiveResolver:
 
         for lookup_comune in comuni_to_try:
             try:
-                frazione_candidates = await _resolve_batch_frazione_candidates(
+                hits = await _collect_live_search_hits(
                     client,
-                    lookup_comune,
-                    None,
-                    self._frazione_cache,
+                    comune=lookup_comune,
+                    sezione=None,
+                    foglio=foglio,
+                    particella=particella,
+                    sub=sub,
+                    frazione_cache=self._frazione_cache,
                 )
             except Exception:
                 continue
 
-            for frazione_id in frazione_candidates:
-                request = CapacitasTerreniSearchRequest(
-                    frazione_id=frazione_id,
-                    sezione="",
-                    foglio=foglio,
-                    particella=particella,
-                    sub=sub or "",
-                )
-                try:
-                    result = await sync_terreni_for_request(
-                        self._db,
-                        client,
-                        request,
-                        fetch_certificati=True,
-                        fetch_details=False,
-                    )
-                    self.dirty = True
-                except RuntimeError as exc:
-                    self._db.rollback()
-                    normalized = str(exc).casefold()
-                    if "non trov" in normalized or "nessun" in normalized or "no result" in normalized:
-                        continue
-                    return matches
-                except Exception:
-                    self._db.rollback()
-                    return matches
+            status, _, selected_hits = _classify_live_search_hits(hits)
+            if status == "NOT_FOUND":
+                continue
 
-                live_matches = self._build_live_matches_from_search_key(
-                    search_key=result.search_key,
-                    input_comune=comune,
-                    lookup_comune=lookup_comune,
-                    foglio=foglio,
-                    particella=particella,
-                    sub=sub,
+            for hit in selected_hits:
+                match = self._build_live_only_match_from_row(hit.row, input_comune=comune, lookup_comune=lookup_comune)
+                match = await self._hydrate_live_match_from_row(match, hit.row)
+                key = (
+                    match.cert_com,
+                    match.cert_pvc,
+                    match.cert_fra,
+                    match.foglio,
+                    match.particella,
+                    match.subalterno,
                 )
-                for match in live_matches:
-                    key = (
-                        match.cert_com,
-                        match.cert_pvc,
-                        match.cert_fra,
-                        match.foglio,
-                        match.particella,
-                        match.subalterno,
-                    )
-                    if key in seen_keys:
-                        continue
-                    seen_keys.add(key)
-                    matches.append(match)
+                if key in seen_keys:
+                    continue
+                seen_keys.add(key)
+                matches.append(match)
         return matches
 
     def _build_live_matches_from_search_key(
@@ -1339,12 +1486,13 @@ class _CapacitasLiveResolver:
 
     def _build_live_only_match_from_row(
         self,
-        row: CatCapacitasTerrenoRow,
+        row: CatCapacitasTerrenoRow | CapacitasTerrenoRow,
         *,
         input_comune: str,
         lookup_comune: str,
     ) -> CatAnagraficaMatch:
-        unit = self._db.get(CatConsorzioUnit, row.unit_id) if row.unit_id else None
+        unit_id = getattr(row, "unit_id", None)
+        unit = self._db.get(CatConsorzioUnit, unit_id) if unit_id else None
         particella_record = self._db.get(CatParticella, unit.particella_id) if unit and unit.particella_id else None
         comune_record: CatComune | None = None
         if particella_record is not None and particella_record.comune_id is not None:
@@ -1359,6 +1507,13 @@ class _CapacitasLiveResolver:
             comune_record = self._db.execute(
                 select(CatComune).where(CatComune.codice_catastale == row.belfiore).limit(1)
             ).scalars().first()
+
+        superficie_mq = getattr(row, "superficie_mq", None)
+        if superficie_mq is None and getattr(row, "superficie", None) is not None:
+            try:
+                superficie_mq = float(str(getattr(row, "superficie")))
+            except (TypeError, ValueError):
+                superficie_mq = None
 
         cert_com = _normalize_com(row.com)
         cert_pvc = _normalize_pvc(row.pvc)
@@ -1410,7 +1565,7 @@ class _CapacitasLiveResolver:
             subalterno=_norm_str(row.sub),
             num_distretto=particella_record.num_distretto if particella_record is not None else None,
             nome_distretto=particella_record.nome_distretto if particella_record is not None else None,
-            superficie_mq=row.superficie_mq,
+            superficie_mq=superficie_mq,
             superficie_grafica_mq=particella_record.superficie_grafica_mq if particella_record is not None else None,
             presente_in_catasto_consorzio=bool(unit is not None or particella_record is not None),
             utenza_latest=CatAnagraficaUtenzaSummary(
@@ -1420,7 +1575,7 @@ class _CapacitasLiveResolver:
                 stato="capacitas_live",
                 num_distretto=None,
                 nome_distretto=None,
-                sup_irrigabile_mq=row.superficie_mq,
+                sup_irrigabile_mq=superficie_mq,
                 denominazione=None,
                 codice_fiscale=None,
                 ha_anomalie=None,
@@ -1451,11 +1606,14 @@ class _CapacitasLiveResolver:
             return False
 
         try:
-            frazione_candidates = await _resolve_batch_frazione_candidates(
+            hits = await _collect_live_search_hits(
                 client,
-                comune_value,
-                p.sezione_catastale,
-                self._frazione_cache,
+                comune=comune_value,
+                sezione=p.sezione_catastale,
+                foglio=p.foglio,
+                particella=p.particella,
+                sub=p.subalterno,
+                frazione_cache=self._frazione_cache,
             )
         except Exception as exc:
             logger.info(
@@ -1469,10 +1627,36 @@ class _CapacitasLiveResolver:
             )
             return False
 
-        attempted_errors: list[str] = []
-        for frazione_id in frazione_candidates:
+        status, message, selected_hits = _classify_live_search_hits(hits)
+        if status == "NOT_FOUND":
+            logger.info(
+                "Capacitas live terreni nessun risultato: particella_id=%s comune=%s sezione=%s foglio=%s particella=%s",
+                p.id,
+                comune_value,
+                p.sezione_catastale,
+                p.foglio,
+                p.particella,
+            )
+            return False
+        if status == "MULTIPLE_MATCHES":
+            logger.info(
+                "Capacitas live terreni match ambiguo: particella_id=%s comune=%s sezione=%s foglio=%s particella=%s msg=%s",
+                p.id,
+                comune_value,
+                p.sezione_catastale,
+                p.foglio,
+                p.particella,
+                message,
+            )
+            return False
+
+        synced_fraction_ids: set[str] = set()
+        for hit in selected_hits:
+            if hit.frazione_id in synced_fraction_ids:
+                continue
+            synced_fraction_ids.add(hit.frazione_id)
             request = CapacitasTerreniSearchRequest(
-                frazione_id=frazione_id,
+                frazione_id=hit.frazione_id,
                 sezione=p.sezione_catastale or "",
                 foglio=p.foglio,
                 particella=p.particella,
@@ -1487,16 +1671,14 @@ class _CapacitasLiveResolver:
                     fetch_details=False,
                 )
                 self.dirty = True
-                return True
             except RuntimeError as exc:
                 self._db.rollback()
-                attempted_errors.append(str(exc))
                 normalized = str(exc).casefold()
                 if "non trov" not in normalized and "nessun" not in normalized and "no result" not in normalized:
                     logger.info(
                         "Capacitas live terreni sync interrotta: particella_id=%s frazione=%s err=%s",
                         p.id,
-                        frazione_id,
+                        hit.frazione_id,
                         exc,
                     )
                     return False
@@ -1505,22 +1687,55 @@ class _CapacitasLiveResolver:
                 logger.warning(
                     "Capacitas live terreni sync fallita: particella_id=%s frazione=%s err=%s",
                     p.id,
-                    frazione_id,
+                    hit.frazione_id,
                     exc,
                 )
                 return False
+        return bool(synced_fraction_ids)
 
-        if attempted_errors:
-            logger.info(
-                "Capacitas live terreni nessun risultato: particella_id=%s comune=%s sezione=%s foglio=%s particella=%s tentativi=%s",
-                p.id,
-                comune_value,
-                p.sezione_catastale,
-                p.foglio,
-                p.particella,
-                frazione_candidates,
-            )
-        return False
+    async def _hydrate_live_match_from_row(
+        self,
+        match: CatAnagraficaMatch,
+        row: CapacitasTerrenoRow,
+    ) -> CatAnagraficaMatch:
+        cco = _norm_str(row.cco)
+        cert_com = _normalize_com(row.com)
+        cert_pvc = _normalize_pvc(row.pvc)
+        cert_fra = _normalize_fra(row.fra)
+        cert_ccs = _normalize_ccs(row.ccs)
+        if not cco or not cert_com or not cert_pvc or cert_fra is None:
+            return match
+
+        match.cert_com = cert_com
+        match.cert_pvc = cert_pvc
+        match.cert_fra = cert_fra
+        match.cert_ccs = cert_ccs or "00000"
+
+        certificato = await self._fetch_certificato(cco, cert_com, cert_pvc, cert_fra, match.cert_ccs)
+        if certificato is None:
+            return match
+
+        match.stato_ruolo = certificato.ruolo_status or match.stato_ruolo
+        match.stato_cnc = certificato.utenza_status or match.stato_cnc
+        if not certificato.intestatari:
+            return match
+
+        resolved: list[CatIntestatarioResponse] = []
+        seen: set[str] = set()
+        for intestatario in certificato.intestatari:
+            item = await self._resolve_intestatario(intestatario)
+            if item is None:
+                continue
+            key = _normalize_cf(item.codice_fiscale) or str(item.id)
+            if key in seen:
+                continue
+            seen.add(key)
+            resolved.append(item)
+
+        if resolved:
+            match.intestatari = resolved
+            match.presente_in_catasto_consorzio = True
+        return match
 
     def _resolve_cert_params(
         self,
