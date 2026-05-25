@@ -184,14 +184,108 @@ test("catasto gis imports xlsx and manages saved selections", async ({ page }) =
     });
   });
 
+  await page.route("**/api/catasto/gis/search", async (route) => {
+    const payload = route.request().postDataJSON() as { query?: string; mode?: string };
+    const query = payload.query ?? "";
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        query,
+        mode_requested: payload.mode ?? "auto",
+        mode_resolved: query.includes("RSS") ? "codice_fiscale" : "particella",
+        total: 1,
+        results: [
+          {
+            id: "00000000-0000-0000-0000-000000004201",
+            cfm: "CFM-4201",
+            cod_comune_capacitas: 165,
+            cod_comune_istat: 165,
+            codice_catastale: "A123",
+            nome_comune: "Arborea",
+            foglio: "14",
+            particella: "82",
+            subalterno: "A",
+            superficie_mq: 1200,
+            superficie_grafica_mq: 1198,
+            num_distretto: "12",
+            nome_distretto: "Distretto 12",
+            utenza_cf: "RSSMRA80A01H501Z",
+            utenza_denominazione: "Azienda Agricola Rossi",
+            ha_anomalie: false,
+            match_source: query.includes("RSS") ? "codice_fiscale" : "particella",
+            match_value: query,
+          },
+        ],
+        geojson: {
+          type: "FeatureCollection",
+          features: [
+            {
+              type: "Feature",
+              geometry: {
+                type: "Polygon",
+                coordinates: [[[8.55, 39.88], [8.56, 39.88], [8.56, 39.89], [8.55, 39.89], [8.55, 39.88]]],
+              },
+              properties: {
+                id: "00000000-0000-0000-0000-000000004201",
+              },
+            },
+          ],
+        },
+      }),
+    });
+  });
+
+  await page.route("**/api/catasto/gis/particella/*/popup", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        id: "00000000-0000-0000-0000-000000004201",
+        cfm: "CFM-4201",
+        cod_comune_capacitas: 165,
+        cod_comune_istat: 165,
+        codice_catastale: "A123",
+        nome_comune: "Arborea",
+        foglio: "14",
+        particella: "82",
+        subalterno: "A",
+        superficie_mq: 1200,
+        superficie_grafica_mq: 1198,
+        num_distretto: "12",
+        nome_distretto: "Distretto 12",
+        n_anomalie_aperte: 0,
+        titolare: {
+          codice_fiscale: "RSSMRA80A01H501Z",
+          partita_iva: null,
+          denominazione: "Azienda Agricola Rossi",
+          titoli: null,
+          source: "utenza",
+        },
+        ha_ruolo: true,
+        ruolo_summary: null,
+        swapped_capacitas: null,
+        anomalie_aperte: [],
+      }),
+    });
+  });
+
   await page.goto("/catasto/gis");
 
   await expect(page.getByText("Catasto GIS")).toBeVisible();
+  await expect(page.getByText("Ricerca smart GIS")).toBeVisible();
   await expect(page.getByRole("button", { name: "Distretti" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Particelle" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Evidenzia sel." })).toBeVisible();
   await expect(page.getByPlaceholder("es. 03")).toBeVisible();
   await expect(page.getByText("Nessuna selezione salvata.")).toBeVisible();
+
+  await page.getByPlaceholder("Es. Arborea 14 82, RSSMRA80..., Consorzio...").fill("RSSMRA80A01H501Z");
+  await page.getByRole("button", { name: "Cerca" }).click();
+  await expect(page.getByText("Ricerca Codice fiscale: 1 risultati.")).toBeVisible();
+  await expect(page.getByText("Azienda Agricola Rossi")).toBeVisible();
+  await page.getByRole("button", { name: "Centra e apri" }).click();
+  await expect(page.getByText("A ruolo")).toBeVisible();
 
   await page.getByPlaceholder("es. 03").fill("12");
   await expect(page.getByPlaceholder("es. 03")).toHaveValue("12");

@@ -43,6 +43,8 @@ class ParticellaGisSummary(BaseModel):
     superficie_grafica_mq: float | None = None
     num_distretto: str | None = None
     nome_distretto: str | None = None
+    utenza_cf: str | None = None
+    utenza_denominazione: str | None = None
     ha_anomalie: bool = False
 
     model_config = ConfigDict(from_attributes=True)
@@ -217,6 +219,33 @@ class AdeAlignmentApplyResponse(BaseModel):
 class GisExportFormat(str, Enum):
     geojson = "geojson"
     csv = "csv"
+
+
+class GisSearchMode(str, Enum):
+    auto = "auto"
+    particella = "particella"
+    codice_fiscale = "codice_fiscale"
+    denominazione = "denominazione"
+
+
+class GisSearchRequest(BaseModel):
+    query: str = Field(..., min_length=1, max_length=200)
+    mode: GisSearchMode = GisSearchMode.auto
+    limit: int = Field(default=25, ge=1, le=100)
+
+
+class GisSearchResultItem(ParticellaGisSummary):
+    match_source: str
+    match_value: str | None = None
+
+
+class GisSearchResponse(BaseModel):
+    query: str
+    mode_requested: GisSearchMode
+    mode_resolved: GisSearchMode
+    total: int
+    results: list[GisSearchResultItem] = Field(default_factory=list)
+    geojson: dict[str, Any] | None = None
 
 
 class ParticellaPopupRuoloItem(BaseModel):

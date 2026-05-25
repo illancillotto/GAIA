@@ -12,7 +12,7 @@ from typing import Any
 from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
 from shapely.geometry import shape
-from sqlalchemy import and_, desc, func, or_, select, text
+from sqlalchemy import and_, case, desc, func, or_, select, text
 from sqlalchemy.orm import Session
 
 from app.modules.catasto.schemas.gis_schemas import (
@@ -20,6 +20,10 @@ from app.modules.catasto.schemas.gis_schemas import (
     FoglioAggr,
     GisExportFormat,
     GisFilters,
+    GisSearchMode,
+    GisSearchRequest,
+    GisSearchResponse,
+    GisSearchResultItem,
     GisResolveItemResult,
     GisResolveRefsRequest,
     GisResolveRefsResponse,
@@ -59,6 +63,7 @@ PREVIEW_LIMIT = 200
 MAX_EXPORT_IDS = 10000
 ZERO_SHARE_TITLE_RE = re.compile(r"\b0\s*/\s*0\b")
 SWAPPED_ARBOREA_TERRALBA_REASON = "swapped_arborea_terralba"
+GIS_SEARCH_MAX_CANDIDATES = 250
 
 
 def _norm_str(value: Any) -> str | None:
@@ -90,6 +95,63 @@ def _looks_like_int(value: str) -> bool:
 def _looks_like_codice_catastale(value: str) -> bool:
     normalized = value.strip().upper()
     return len(normalized) == 4 and normalized[0].isalpha() and normalized[1:].isdigit()
+
+
+def _normalize_tax_code(value: str | None) -> str | None:
+    normalized = _norm_str(value)
+    if normalized is None:
+        return None
+    return re.sub(r"\s+", "", normalized).upper()
+
+
+def _escape_ilike(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+
+def _resolve_search_mode(query: str, requested_mode: GisSearchMode) -> GisSearchMode:
+    if requested_mode != GisSearchMode.auto:
+        return requested_mode
+
+    normalized_tax = _normalize_tax_code(query)
+    if normalized_tax and len(normalized_tax) in (11, 16) and normalized_tax.isalnum():
+        return GisSearchMode.codice_fiscale
+
+    if any(char.isdigit() for char in query):
+        return GisSearchMode.particella
+
+    return GisSearchMode.denominazione
+
+
+def _parse_particella_search_query(query: str) -> dict[str, str | None]:
+    normalized = " ".join(query.strip().split())
+    if not normalized:
+        return {"comune": None, "foglio": None, "particella": None}
+
+    slash_tokens = re.findall(r"[A-Za-z0-9]+", normalized.replace("-", " "))
+    tokens = slash_tokens if ("/" in normalized or "-" in normalized) else normalized.split()
+
+    comune: str | None = None
+    foglio: str | None = None
+    particella: str | None = None
+
+    if len(tokens) >= 3:
+        prefix_tokens = tokens[:-2]
+        foglio = _norm_catasto_num(tokens[-2])
+        particella = _norm_catasto_num(tokens[-1])
+        if prefix_tokens:
+            comune = " ".join(prefix_tokens)
+    elif len(tokens) == 2:
+        left, right = tokens
+        if (not _looks_like_int(left)) or _looks_like_codice_catastale(left):
+            comune = left
+            particella = _norm_catasto_num(right)
+        else:
+            foglio = _norm_catasto_num(left)
+            particella = _norm_catasto_num(right)
+    else:
+        particella = _norm_catasto_num(tokens[0])
+
+    return {"comune": comune, "foglio": foglio, "particella": particella}
 
 
 def _parse_uuid(value: str, field_name: str = "id") -> uuid.UUID:
@@ -244,6 +306,38 @@ def select_by_geometry(db: Session, geometry: dict[str, Any], filters: GisFilter
     )
 
 
+def search_particelle(db: Session, body: GisSearchRequest) -> GisSearchResponse:
+    query = " ".join(body.query.strip().split())
+    if not query:
+        raise HTTPException(status_code=400, detail="Inserisci un termine di ricerca.")
+
+    resolved_mode = _resolve_search_mode(query, body.mode)
+    if body.mode == GisSearchMode.auto:
+        candidate_ids, effective_mode = _search_particelle_auto(db, query, body.limit, resolved_mode)
+    else:
+        candidate_ids = _search_particelle_by_mode(db, query, body.limit, resolved_mode)
+        effective_mode = resolved_mode
+
+    rows = _load_particelle_search_rows(db, candidate_ids)
+    results = [
+        GisSearchResultItem(
+            **row,
+            match_source=effective_mode.value,
+            match_value=body.query,
+        )
+        for row in rows
+    ]
+    geojson = _build_particelle_feature_collection(db, candidate_ids) if candidate_ids else None
+    return GisSearchResponse(
+        query=query,
+        mode_requested=body.mode,
+        mode_resolved=effective_mode,
+        total=len(results),
+        results=results,
+        geojson=geojson,
+    )
+
+
 def export_particelle(db: Session, id_list: list[str], fmt: GisExportFormat) -> StreamingResponse:
     if not id_list:
         raise HTTPException(status_code=400, detail="Lista ID vuota")
@@ -253,6 +347,300 @@ def export_particelle(db: Session, id_list: list[str], fmt: GisExportFormat) -> 
     if fmt == GisExportFormat.geojson:
         return _export_geojson(db, id_list)
     return _export_csv(db, id_list)
+
+
+def _search_particelle_by_tax_code(db: Session, query: str, limit: int) -> list[str]:
+    normalized = _normalize_tax_code(query)
+    if normalized is None:
+        return []
+
+    candidate_limit = min(max(limit * 4, limit), GIS_SEARCH_MAX_CANDIDATES)
+    ids: list[str] = []
+
+    utenza_rows = (
+        db.execute(
+            select(CatUtenzaIrrigua.particella_id)
+            .where(
+                CatUtenzaIrrigua.particella_id.is_not(None),
+                func.upper(func.replace(func.coalesce(CatUtenzaIrrigua.codice_fiscale, ""), " ", "")) == normalized,
+            )
+            .order_by(desc(CatUtenzaIrrigua.anno_campagna), desc(CatUtenzaIrrigua.created_at))
+            .limit(candidate_limit)
+        )
+        .scalars()
+        .all()
+    )
+    ids.extend(str(particella_id) for particella_id in utenza_rows if particella_id is not None)
+
+    intestatario_rows = (
+        db.execute(
+            select(CatUtenzaIrrigua.particella_id)
+            .join(CatUtenzaIntestatario, CatUtenzaIntestatario.utenza_id == CatUtenzaIrrigua.id)
+            .where(
+                CatUtenzaIrrigua.particella_id.is_not(None),
+                or_(
+                    func.upper(func.replace(func.coalesce(CatUtenzaIntestatario.codice_fiscale, ""), " ", "")) == normalized,
+                    func.upper(func.replace(func.coalesce(CatUtenzaIntestatario.partita_iva, ""), " ", "")) == normalized,
+                ),
+            )
+            .order_by(
+                desc(CatUtenzaIntestatario.anno_riferimento),
+                desc(CatUtenzaIntestatario.collected_at),
+                desc(CatUtenzaIrrigua.anno_campagna),
+            )
+            .limit(candidate_limit)
+        )
+        .scalars()
+        .all()
+    )
+    ids.extend(str(particella_id) for particella_id in intestatario_rows if particella_id is not None)
+
+    return _filter_current_particella_ids(db, ids, limit)
+
+
+def _search_particelle_by_mode(db: Session, query: str, limit: int, mode: GisSearchMode) -> list[str]:
+    if mode == GisSearchMode.codice_fiscale:
+        return _search_particelle_by_tax_code(db, query, limit)
+    if mode == GisSearchMode.denominazione:
+        return _search_particelle_by_denominazione(db, query, limit)
+    return _search_particelle_by_cadastral_ref(db, query, limit)
+
+
+def _search_particelle_auto(
+    db: Session,
+    query: str,
+    limit: int,
+    preferred_mode: GisSearchMode,
+) -> tuple[list[str], GisSearchMode]:
+    mode_order: list[GisSearchMode] = [preferred_mode]
+    for candidate in (GisSearchMode.denominazione, GisSearchMode.codice_fiscale, GisSearchMode.particella):
+        if candidate not in mode_order:
+            mode_order.append(candidate)
+
+    for mode in mode_order:
+        ids = _search_particelle_by_mode(db, query, limit, mode)
+        if ids:
+            return ids, mode
+
+    return [], preferred_mode
+
+
+def _search_particelle_by_denominazione(db: Session, query: str, limit: int) -> list[str]:
+    normalized = _norm_str(query)
+    if normalized is None:
+        return []
+
+    pattern = f"%{_escape_ilike(normalized)}%"
+    starts_pattern = f"{_escape_ilike(normalized)}%"
+    normalized_tax = _normalize_tax_code(query)
+    tax_pattern = f"%{_escape_ilike(normalized_tax)}%" if normalized_tax else None
+    candidate_limit = min(max(limit * 6, limit), GIS_SEARCH_MAX_CANDIDATES)
+    ids: list[str] = []
+
+    utenza_rows = (
+        db.execute(
+            select(CatUtenzaIrrigua.particella_id)
+            .where(
+                CatUtenzaIrrigua.particella_id.is_not(None),
+                or_(
+                    CatUtenzaIrrigua.denominazione.ilike(pattern, escape="\\"),
+                    CatUtenzaIrrigua.nome_comune.ilike(pattern, escape="\\"),
+                    CatUtenzaIrrigua.particella.ilike(pattern, escape="\\"),
+                    CatUtenzaIrrigua.foglio.ilike(pattern, escape="\\"),
+                    func.upper(func.replace(func.coalesce(CatUtenzaIrrigua.codice_fiscale, ""), " ", "")).ilike(
+                        tax_pattern, escape="\\"
+                    ) if tax_pattern else False,
+                ),
+            )
+            .order_by(
+                case((CatUtenzaIrrigua.denominazione.ilike(starts_pattern, escape="\\"), 0), else_=1),
+                desc(CatUtenzaIrrigua.anno_campagna),
+                desc(CatUtenzaIrrigua.created_at),
+            )
+            .limit(candidate_limit)
+        )
+        .scalars()
+        .all()
+    )
+    ids.extend(str(particella_id) for particella_id in utenza_rows if particella_id is not None)
+
+    intestatario_rows = (
+        db.execute(
+            select(CatUtenzaIrrigua.particella_id)
+            .join(CatUtenzaIntestatario, CatUtenzaIntestatario.utenza_id == CatUtenzaIrrigua.id)
+            .where(
+                CatUtenzaIrrigua.particella_id.is_not(None),
+                or_(
+                    CatUtenzaIntestatario.denominazione.ilike(pattern, escape="\\"),
+                    CatUtenzaIntestatario.comune_residenza.ilike(pattern, escape="\\"),
+                    func.upper(func.replace(func.coalesce(CatUtenzaIntestatario.codice_fiscale, ""), " ", "")).ilike(
+                        tax_pattern, escape="\\"
+                    ) if tax_pattern else False,
+                    func.upper(func.replace(func.coalesce(CatUtenzaIntestatario.partita_iva, ""), " ", "")).ilike(
+                        tax_pattern, escape="\\"
+                    ) if tax_pattern else False,
+                ),
+            )
+            .order_by(
+                case((CatUtenzaIntestatario.denominazione.ilike(starts_pattern, escape="\\"), 0), else_=1),
+                desc(CatUtenzaIntestatario.anno_riferimento),
+                desc(CatUtenzaIntestatario.collected_at),
+            )
+            .limit(candidate_limit)
+        )
+        .scalars()
+        .all()
+    )
+    ids.extend(str(particella_id) for particella_id in intestatario_rows if particella_id is not None)
+
+    particella_rows = (
+        db.execute(
+            select(CatParticella.id)
+            .where(
+                CatParticella.is_current.is_(True),
+                CatParticella.suppressed.is_(False),
+                or_(
+                    CatParticella.nome_comune.ilike(pattern, escape="\\"),
+                    func.coalesce(CatParticella.cfm, "").ilike(pattern, escape="\\"),
+                    CatParticella.particella.ilike(pattern, escape="\\"),
+                    CatParticella.foglio.ilike(pattern, escape="\\"),
+                    func.coalesce(CatParticella.codice_catastale, "").ilike(pattern, escape="\\"),
+                ),
+            )
+            .order_by(
+                case((CatParticella.nome_comune.ilike(starts_pattern, escape="\\"), 0), else_=1),
+                CatParticella.nome_comune.asc().nullslast(),
+                CatParticella.foglio.asc(),
+                CatParticella.particella.asc(),
+            )
+            .limit(candidate_limit)
+        )
+        .scalars()
+        .all()
+    )
+    ids.extend(str(particella_id) for particella_id in particella_rows if particella_id is not None)
+
+    return _filter_current_particella_ids(db, ids, limit)
+
+
+def _search_particelle_by_cadastral_ref(db: Session, query: str, limit: int) -> list[str]:
+    parsed = _parse_particella_search_query(query)
+    particella = _norm_catasto_num(parsed.get("particella"))
+    if particella is None:
+        return []
+
+    foglio = _norm_catasto_num(parsed.get("foglio"))
+    comune = _norm_str(parsed.get("comune"))
+
+    search_query = (
+        db.query(CatParticella.id)
+        .outerjoin(CatComune, CatComune.id == CatParticella.comune_id)
+        .filter(
+            CatParticella.is_current.is_(True),
+            CatParticella.suppressed.is_(False),
+            CatParticella.particella == particella,
+        )
+    )
+
+    if foglio is not None:
+        search_query = search_query.filter(CatParticella.foglio == foglio)
+
+    if comune:
+        if _looks_like_int(comune):
+            search_query = search_query.filter(CatParticella.cod_comune_capacitas == int(comune))
+        elif _looks_like_codice_catastale(comune):
+            codice_catastale_norm = comune.strip().upper()
+            search_query = search_query.filter(
+                func.upper(func.coalesce(CatParticella.codice_catastale, CatComune.codice_catastale, "")) == codice_catastale_norm
+            )
+        else:
+            comune_pattern = f"%{_escape_ilike(comune)}%"
+            search_query = search_query.filter(
+                func.coalesce(CatParticella.nome_comune, CatComune.nome_comune, "").ilike(comune_pattern, escape="\\")
+            )
+
+    rows = (
+        search_query
+        .order_by(
+            CatParticella.nome_comune.asc().nullslast(),
+            CatParticella.foglio.asc(),
+            CatParticella.particella.asc(),
+            CatParticella.subalterno.asc().nullslast(),
+        )
+        .limit(limit)
+        .all()
+    )
+    return [str(particella_id) for (particella_id,) in rows]
+
+
+def _filter_current_particella_ids(db: Session, candidate_ids: list[str], limit: int) -> list[str]:
+    deduped: list[str] = []
+    seen: set[str] = set()
+    for particella_id in candidate_ids:
+        if particella_id in seen:
+            continue
+        seen.add(particella_id)
+        deduped.append(particella_id)
+        if len(deduped) >= GIS_SEARCH_MAX_CANDIDATES:
+            break
+
+    if not deduped:
+        return []
+
+    current_ids = {
+        str(particella_id)
+        for particella_id in db.execute(
+            select(CatParticella.id).where(
+                CatParticella.id.in_([_parse_uuid(item, "particella_id") for item in deduped]),
+                CatParticella.is_current.is_(True),
+                CatParticella.suppressed.is_(False),
+            )
+        ).scalars().all()
+    }
+    return [particella_id for particella_id in deduped if particella_id in current_ids][:limit]
+
+
+def _load_particelle_search_rows(db: Session, id_list: list[str]) -> list[dict[str, Any]]:
+    if not id_list:
+        return []
+
+    sql = text(
+        """
+        WITH latest_utenza AS (
+            SELECT DISTINCT ON (u.particella_id)
+                u.particella_id::text AS particella_id,
+                u.codice_fiscale AS utenza_cf,
+                u.denominazione AS utenza_denominazione
+            FROM cat_utenze_irrigue u
+            WHERE u.particella_id IS NOT NULL
+            ORDER BY u.particella_id, u.anno_campagna DESC, u.created_at DESC
+        )
+        SELECT
+            p.id::text AS id,
+            p.cfm,
+            p.cod_comune_capacitas,
+            p.cod_comune_capacitas AS cod_comune_istat,
+            p.codice_catastale,
+            p.nome_comune,
+            p.foglio,
+            p.particella,
+            p.subalterno,
+            p.superficie_mq,
+            p.superficie_grafica_mq,
+            p.num_distretto,
+            p.nome_distretto,
+            COALESCE(f.ha_anomalie, FALSE) AS ha_anomalie,
+            lu.utenza_cf,
+            lu.utenza_denominazione
+        FROM cat_particelle p
+        LEFT JOIN cat_particelle_gis_flags f ON f.particella_id = p.id
+        LEFT JOIN latest_utenza lu ON lu.particella_id = p.id::text
+        WHERE p.id::text = ANY(:ids)
+          AND p.is_current = TRUE
+        ORDER BY array_position(:ids, p.id::text)
+        """
+    )
+    return [dict(row) for row in db.execute(sql, {"ids": id_list}).mappings().all()]
 
 
 def _to_float(value: Decimal | float | int | None, digits: int | None = None) -> float | None:

@@ -54,6 +54,28 @@ export interface GisSelectResult {
   truncated: boolean;
 }
 
+export type GisSearchMode = "auto" | "particella" | "codice_fiscale" | "denominazione";
+
+export interface GisSearchRequest {
+  query: string;
+  mode?: GisSearchMode;
+  limit?: number;
+}
+
+export interface GisSearchResultItem extends ParticellaGisSummary {
+  match_source: GisSearchMode | string;
+  match_value?: string | null;
+}
+
+export interface GisSearchResponse {
+  query: string;
+  mode_requested: GisSearchMode;
+  mode_resolved: GisSearchMode;
+  total: number;
+  results: GisSearchResultItem[];
+  geojson?: GeoJSON.FeatureCollection | null;
+}
+
 export interface AdeWfsSyncBboxRequest {
   min_lon: number;
   min_lat: number;

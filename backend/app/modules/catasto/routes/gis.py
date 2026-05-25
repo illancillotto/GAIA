@@ -20,6 +20,8 @@ from app.modules.catasto.schemas.gis_schemas import (
     GisExportFormat,
     GisResolveRefsRequest,
     GisResolveRefsResponse,
+    GisSearchRequest,
+    GisSearchResponse,
     GisSavedSelectionCreate,
     GisSavedSelectionDetail,
     GisSavedSelectionSummary,
@@ -264,6 +266,23 @@ def apply_ade_wfs_alignment(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return AdeAlignmentApplyResponse(**result)
+
+
+@router.post(
+    "/search",
+    response_model=GisSearchResponse,
+    summary="Ricerca smart particelle GIS",
+    description=(
+        "Ricerca unificata nel GIS per riferimento particella, comune+particella, codice fiscale "
+        "o denominazione. Restituisce risultati sintetici e GeoJSON per focus mappa."
+    ),
+)
+def search_particelle(
+    body: GisSearchRequest,
+    db: Session = Depends(get_db),
+    _: ApplicationUser = Depends(require_active_user),
+) -> GisSearchResponse:
+    return gis_service.search_particelle(db, body)
 
 
 @router.post(

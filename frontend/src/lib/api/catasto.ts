@@ -48,6 +48,8 @@ import type {
   AdeWfsSyncBboxResponse,
   AdeWfsRunStatusResponse,
   GisFilters,
+  GisSearchRequest,
+  GisSearchResponse,
   GisParticellaRef,
   GisResolveRefsResponse,
   GisSavedSelectionCreate,
@@ -71,6 +73,17 @@ export async function catastoGisSelect(
     method: "POST",
     headers: { ...authHeaders(token), "Content-Type": "application/json" },
     body: JSON.stringify({ geometry, filters }),
+  });
+}
+
+export async function catastoGisSearch(
+  token: string,
+  payload: GisSearchRequest,
+): Promise<GisSearchResponse> {
+  return request<GisSearchResponse>("/catasto/gis/search", {
+    method: "POST",
+    headers: { ...authHeaders(token), "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
   });
 }
 

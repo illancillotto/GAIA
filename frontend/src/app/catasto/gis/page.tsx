@@ -15,10 +15,12 @@ import {
   catastoGisGetAdeAlignmentReport,
   catastoGisGetLatestAdeWfsRunStatus,
   catastoGisGetAdeWfsRunStatus,
+  catastoGisGetPopup,
   catastoGisCreateSavedSelection,
   catastoGisDeleteSavedSelection,
   catastoGisExport,
   catastoGisGetSavedSelection,
+  catastoGisSearch,
   catastoGisListSavedSelections,
   catastoGisResolveRefs,
   catastoGisUpdateSavedSelection,
@@ -34,6 +36,9 @@ import type {
   GisBasemap,
   GisFilters,
   GisMapOverlayLayer,
+  GisSearchMode,
+  GisSearchResponse,
+  GisSearchResultItem,
   GisParticellaRef,
   ParticellaPopupData,
   GisSavedSelectionDetail,
@@ -91,6 +96,18 @@ const PARTICELLE_QUICK_FILTERS: Array<{ id: ParticelleQuickFilter; label: string
   { id: "all", label: "Tutte", dot: "bg-indigo-400" },
   { id: "ruolo", label: "A ruolo", dot: "bg-emerald-500" },
 ];
+const GIS_SEARCH_MODE_OPTIONS: Array<{ id: GisSearchMode; label: string }> = [
+  { id: "auto", label: "Auto" },
+  { id: "particella", label: "Particella" },
+  { id: "codice_fiscale", label: "CF" },
+  { id: "denominazione", label: "Denominazione" },
+];
+const GIS_SEARCH_MODE_LABELS: Record<GisSearchMode, string> = {
+  auto: "Auto",
+  particella: "Particella",
+  codice_fiscale: "Codice fiscale",
+  denominazione: "Denominazione",
+};
 const ADE_RUN_STATUS_LABELS: Record<string, string> = {
   queued: "In coda",
   processing: "In esecuzione",
@@ -284,6 +301,10 @@ export default function CatastoGisPage() {
   const [focusSignal, setFocusSignal] = useState(0);
   const [popupParticella, setPopupParticella] = useState<ParticellaPopupData | null>(null);
   const [popupDetailOpen, setPopupDetailOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchMode, setSearchMode] = useState<GisSearchMode>("auto");
+  const [searchBusy, setSearchBusy] = useState(false);
+  const [searchResult, setSearchResult] = useState<GisSearchResponse | null>(null);
   const [adeRunStatus, setAdeRunStatus] = useState<AdeWfsRunStatusResponse | null>(null);
   const [adeReport, setAdeReport] = useState<AdeAlignmentReportResponse | null>(null);
   const layerCounterRef = useRef(0);
@@ -302,7 +323,27 @@ export default function CatastoGisPage() {
       ),
     [overlayLayers],
   );
-  const visibleOverlayLayers = useMemo(() => overlayLayers.filter((layer) => layer.visible), [overlayLayers]);
+  const searchOverlayLayer = useMemo<OverlayLayerState | null>(() => {
+    if (!searchResult?.geojson || searchResult.geojson.features.length === 0) return null;
+    return {
+      layer_key: "gis-search-results",
+      saved_selection_id: null,
+      name: `Ricerca: ${searchResult.query}`,
+      color: "#0F766E",
+      opacity: 0.28,
+      showFill: true,
+      visible: true,
+      source_filename: null,
+      geojson: searchResult.geojson,
+      importStats: null,
+      importedItems: [],
+      isPersisted: false,
+    };
+  }, [searchResult]);
+  const visibleOverlayLayers = useMemo(
+    () => (searchOverlayLayer ? [searchOverlayLayer, ...overlayLayers.filter((layer) => layer.visible)] : overlayLayers.filter((layer) => layer.visible)),
+    [overlayLayers, searchOverlayLayer],
+  );
   const distrettoColorMap = useMemo(
     () =>
       Object.fromEntries(
@@ -449,6 +490,65 @@ export default function CatastoGisPage() {
     setFocusSignal((value) => value + 1);
     setResizeSignal((value) => value + 1);
   }, []);
+
+  const handleClearSearch = useCallback(() => {
+    setSearchResult(null);
+    setSearchQuery("");
+    setGisError(null);
+    setGisInfo(null);
+  }, []);
+
+  const handleRunSearch = useCallback(async () => {
+    if (!token) {
+      setGisError("Sessione non disponibile. Accedi di nuovo.");
+      return;
+    }
+    const query = searchQuery.trim();
+    if (!query) {
+      setGisError("Inserisci un criterio di ricerca.");
+      return;
+    }
+
+    setSearchBusy(true);
+    setGisError(null);
+    setGisInfo(null);
+    try {
+      const response = await catastoGisSearch(token, { query, mode: searchMode, limit: 25 });
+      setSearchResult(response);
+      setShowParticelle(true);
+      setShowParticelleFill(true);
+      if (response.geojson && response.geojson.features.length > 0) {
+        focusLayerGeojson(response.geojson);
+      }
+      setGisInfo(
+        response.total > 0
+          ? `Ricerca ${GIS_SEARCH_MODE_LABELS[response.mode_resolved]}: ${response.total.toLocaleString("it-IT")} risultati.`
+          : `Nessun risultato per “${query}”.`,
+      );
+    } catch (e) {
+      setSearchResult(null);
+      setGisError(e instanceof Error ? e.message : "Ricerca GIS fallita");
+    } finally {
+      setSearchBusy(false);
+    }
+  }, [focusLayerGeojson, searchMode, searchQuery, token]);
+
+  const handleOpenSearchResult = useCallback(async (item: GisSearchResultItem) => {
+    if (!token) return;
+
+    const feature = searchResult?.geojson?.features.find((entry) => String(entry.properties?.id ?? "") === item.id) ?? null;
+    if (feature) {
+      focusLayerGeojson({ type: "FeatureCollection", features: [feature] });
+    }
+    setShowParticelle(true);
+    try {
+      const popup = await catastoGisGetPopup(token, item.id);
+      setPopupParticella(popup);
+      setPopupDetailOpen(false);
+    } catch (e) {
+      setGisError(e instanceof Error ? e.message : "Caricamento dettaglio particella fallito");
+    }
+  }, [focusLayerGeojson, searchResult, token]);
 
   useEffect(() => {
     if (!token || !adeRunStatus || !["queued", "processing"].includes(adeRunStatus.status)) {
@@ -1252,20 +1352,131 @@ export default function CatastoGisPage() {
     >
       <div className="relative -mx-7 -mb-6 -mt-6 flex h-[calc(100vh-72px)] min-h-[760px] flex-col overflow-hidden border-y border-slate-200 bg-[#101b17] shadow-[0_24px_80px_rgba(15,23,42,0.18)]">
         <div className="absolute left-4 top-4 z-20 flex max-w-[calc(100%-2rem)] flex-col gap-3 lg:left-6 lg:right-[452px] lg:max-w-none lg:flex-row lg:items-start lg:justify-between">
-          <div className="flex min-w-0 items-center gap-3 rounded-2xl border border-white/20 bg-white/95 px-3 py-2 shadow-2xl backdrop-blur">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#1D4E35] text-white shadow-sm">
+          <div className="min-w-0 rounded-2xl border border-white/20 bg-white/95 p-3 shadow-2xl backdrop-blur">
+            <div className="flex items-start gap-3">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#1D4E35] text-white shadow-sm">
               <span className="material-symbols-outlined text-[22px]">map</span>
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h2 className="truncate text-sm font-bold uppercase tracking-[0.18em] text-slate-950">GAIA GIS</h2>
-                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-                  Catasto
-                </span>
               </div>
-              <p className="truncate text-xs text-slate-500">
-                Distretti, particelle, selezioni e layer importati nel comprensorio consortile.
-              </p>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <h2 className="truncate text-sm font-bold uppercase tracking-[0.18em] text-slate-950">GAIA GIS</h2>
+                  <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+                    Catasto
+                  </span>
+                </div>
+                <p className="mt-1 text-xs text-slate-500">
+                  Distretti, particelle, selezioni e layer importati nel comprensorio consortile.
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 rounded-2xl border border-sky-100 bg-sky-50/60 p-2.5">
+              <div className="mb-2 flex items-center justify-between gap-3">
+                <p className="text-[10px] font-semibold uppercase tracking-widest text-sky-700">Ricerca smart GIS</p>
+                {searchResult ? (
+                  <button
+                    type="button"
+                    onClick={handleClearSearch}
+                    className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-50"
+                  >
+                    Pulisci
+                  </button>
+                ) : null}
+              </div>
+              <form
+                className="space-y-2"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void handleRunSearch();
+                }}
+              >
+                <div className="flex items-center gap-2 rounded-2xl border border-white bg-white px-3 py-2 shadow-sm">
+                  <span className="material-symbols-outlined text-[18px] text-sky-700">search</span>
+                  <input
+                    type="search"
+                    value={searchQuery}
+                    onChange={(event) => setSearchQuery(event.target.value)}
+                    placeholder="Particella, CF, denominazione, comune..."
+                    className="min-w-0 flex-1 bg-transparent text-sm text-slate-900 outline-none placeholder:text-slate-400"
+                  />
+                  <button
+                    type="submit"
+                    disabled={searchBusy}
+                    className="rounded-xl bg-slate-950 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-slate-800 disabled:opacity-60"
+                  >
+                    {searchBusy ? "Ricerca..." : "Cerca"}
+                  </button>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {GIS_SEARCH_MODE_OPTIONS.map((option) => {
+                    const selected = searchMode === option.id;
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => setSearchMode(option.id)}
+                        className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold transition ${
+                          selected
+                            ? "border-sky-200 bg-sky-50 text-sky-700"
+                            : "border-gray-200 bg-white text-gray-500 hover:border-sky-100 hover:text-sky-700"
+                        }`}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </form>
+              {searchResult ? (
+                <div className="mt-2 space-y-2">
+                  <div className="rounded-xl border border-sky-100 bg-white/85 px-3 py-2 text-[11px] text-slate-600">
+                    <span className="font-semibold text-slate-900">{searchResult.total.toLocaleString("it-IT")}</span> risultati
+                    {searchResult.mode_requested !== searchResult.mode_resolved
+                      ? ` · auto → ${GIS_SEARCH_MODE_LABELS[searchResult.mode_resolved]}`
+                      : ` · ${GIS_SEARCH_MODE_LABELS[searchResult.mode_resolved]}`}
+                  </div>
+                  <div className="max-h-48 space-y-2 overflow-y-auto pr-1">
+                    {searchResult.results.map((item) => (
+                      <div key={item.id} className="rounded-xl border border-white bg-white/90 px-3 py-2 shadow-sm">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <div className="truncate text-xs font-semibold text-slate-900">
+                              {item.utenza_denominazione || item.nome_comune || "Particella"}
+                            </div>
+                            <div className="mt-0.5 text-[11px] text-slate-500">
+                              {item.nome_comune ?? item.codice_catastale ?? "Comune ND"} · Fg. {item.foglio ?? "-"} · Part. {item.particella ?? "-"}
+                              {item.subalterno ? ` · Sub. ${item.subalterno}` : ""}
+                            </div>
+                          </div>
+                          <div className="text-right text-[11px] font-semibold text-emerald-700">
+                            {(item.superficie_mq ?? item.superficie_grafica_mq)?.toLocaleString("it-IT") ?? "-"} mq
+                          </div>
+                        </div>
+                        <div className="mt-2 flex gap-2">
+                          <button
+                            type="button"
+                            onClick={() => void handleOpenSearchResult(item)}
+                            className="rounded-lg bg-slate-950 px-2.5 py-1 text-[11px] font-semibold text-white transition hover:bg-slate-800"
+                          >
+                            Centra e apri
+                          </button>
+                          <a
+                            href={`/catasto/particelle/${item.id}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-600 transition hover:bg-slate-50"
+                          >
+                            Scheda
+                          </a>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <p className="mt-2 text-[10px] leading-4 text-slate-500">
+                  Esempi: `82`, `14/82`, `Arborea 14 82`, `RSSMRA80A01H501Z`, `Azienda Agricola Rossi`.
+                </p>
+              )}
             </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-white/20 bg-white/95 p-2 shadow-2xl backdrop-blur">
@@ -1292,7 +1503,7 @@ export default function CatastoGisPage() {
             {error || exportError || gisError}
           </div>
         ) : gisInfo ? (
-          <div className="absolute left-4 right-4 top-[118px] z-20 rounded-xl border border-amber-200 bg-amber-50/95 px-3 py-2 text-sm font-medium text-amber-700 shadow-xl backdrop-blur lg:right-[452px]">
+          <div className="absolute bottom-4 left-4 right-4 z-20 rounded-xl border border-amber-200 bg-amber-50/95 px-3 py-2 text-sm font-medium text-amber-700 shadow-xl backdrop-blur lg:right-[452px]">
             {gisInfo}
           </div>
         ) : null}
