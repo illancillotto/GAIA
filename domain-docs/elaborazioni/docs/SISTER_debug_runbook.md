@@ -9,7 +9,7 @@ Questo documento raccoglie il comportamento reale osservato del portale SISTER d
 
 Va trattato come riferimento operativo permanente per:
 
-- debug del worker `elaborazioni-worker`
+- debug del worker `elaborazioni-worker-visure`
 - aggiornamento dei selettori o del flusso browser
 - gestione nuovi casi del sito SISTER
 - futura automazione di altri servizi sullo stesso portale
@@ -32,13 +32,13 @@ File principali del flusso:
 Comando utile per rebuild worker:
 
 ```bash
-docker compose up -d --build --force-recreate elaborazioni-worker
+docker compose up -d --build --force-recreate elaborazioni-worker-visure
 ```
 
 Comando utile per i log:
 
 ```bash
-docker compose logs -f elaborazioni-worker
+docker compose logs -f elaborazioni-worker-visure
 ```
 
 ## Stato attuale del debug

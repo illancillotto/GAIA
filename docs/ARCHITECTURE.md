@@ -159,7 +159,9 @@ L’applicazione gira tramite Docker Compose con questi servizi:
 - `backend`
 - `postgres`
 - `nginx`
-- `elaborazioni-worker`
+- `elaborazioni-worker-visure`
+- `elaborazioni-worker-runtime`
+- `elaborazioni-worker-autodoc`
 - `scanner`
 - `arp-helper`
 
@@ -183,9 +185,13 @@ mantiene sempre un utente applicativo iniziale utilizzabile.
 All'avvio riallinea anche il catalogo `sections` e i default per ruolo dei moduli
 quando la tabella `sections` e disponibile, evitando `403` dovuti a nuove aree
 applicative presenti nel codice ma non ancora bootstrapate nel database locale.
-I job Capacitas monitorabili non vengono piu eseguiti nel processo web: le API
-creano o riaccodano record persistenti e il container `elaborazioni-worker`
-li preleva dal database, isolando le elaborazioni massive dai worker Uvicorn.
+I job monitorabili non vengono piu eseguiti nel processo web: le API
+creano o riaccodano record persistenti e i container tecnici dedicati
+li prelevano dal database, isolando le elaborazioni massive dai worker Uvicorn.
+La separazione minima corrente e:
+- `elaborazioni-worker-visure`: test connessione SISTER, run AdE, bulk search catastali e batch visure
+- `elaborazioni-worker-runtime`: job Capacitas e import REGISTRY
+- `elaborazioni-worker-autodoc`: sync massiva AUTODOC mezzi
 
 Moduli logici attuali:
 - `accessi`
@@ -209,6 +215,7 @@ Stato del refactor:
 
 Regola runtime per job monitorabili:
 - tutti i processi lunghi con stato esposto al frontend devono essere implementati preferibilmente tramite coda persistente presa in carico da worker dedicato, o come runtime task tracciati solo quando il carico e compatibile con il processo API
+- ogni nuovo worker deve essere dedicato a una sola famiglia di job coerente; non sono ammessi nuovi worker multi-queue che mischiano domini o runtime eterogenei nello stesso loop di polling
 - evitare `BackgroundTasks` usati come scheduler principale per job di lunga durata e thread daemon non tracciati, perche dopo restart o riciclo del processo possono lasciare job in stato intermedio senza recovery
 - ogni job monitorabile deve prevedere almeno:
   - persistenza progressiva dello stato su DB

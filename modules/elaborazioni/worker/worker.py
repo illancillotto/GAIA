@@ -109,6 +109,24 @@ DEBUG_ARTIFACTS_PATH = Path(env_value("ELABORAZIONI_DEBUG_ARTIFACTS_PATH", "CATA
 REPORT_STORAGE_PATH = Path(env_value("ELABORAZIONI_REPORT_STORAGE_PATH", "CATASTO_REPORT_STORAGE_PATH", "/data/catasto/reports"))
 HEADLESS = env_value("ELABORAZIONI_HEADLESS", "CATASTO_HEADLESS", "true").lower() != "false"
 DEBUG_BROWSER = env_value("ELABORAZIONI_DEBUG_BROWSER", "CATASTO_DEBUG_BROWSER", "false").lower() == "true"
+WORKER_JOB_FAMILIES_ENV = os.getenv("ELABORAZIONI_WORKER_FAMILIES", "all").strip()
+
+ALL_JOB_FAMILIES = {
+    "connection_tests",
+    "visure_batches",
+    "ade_sync",
+    "bulk_search",
+    "autodoc",
+    "capacitas",
+    "registry",
+}
+JOB_FAMILY_ALIASES = {
+    "all": ALL_JOB_FAMILIES,
+    "visure": {"connection_tests", "visure_batches", "ade_sync", "bulk_search"},
+    "catasto": {"connection_tests", "visure_batches", "ade_sync", "bulk_search"},
+    "runtime": {"capacitas", "registry"},
+    "autodoc": {"autodoc"},
+}
 
 logging.basicConfig(
     level=env_value("ELABORAZIONI_LOG_LEVEL", "CATASTO_LOG_LEVEL", "INFO").upper(),
@@ -135,6 +153,7 @@ class CatastoWorker:
     def __init__(self) -> None:
         self.state = WorkerState()
         self.vault = WorkerCredentialVault(CREDENTIAL_MASTER_KEY)
+        self.job_families = self._parse_job_families(WORKER_JOB_FAMILIES_ENV)
         self.anti_captcha_client = (
             AntiCaptchaClient(
                 api_key=ANTI_CAPTCHA_API_KEY,
@@ -151,52 +170,60 @@ class CatastoWorker:
     async def run(self) -> None:
         self._install_signal_handlers()
         self._recover_stuck_requests()
-        logger.info("Worker Elaborazioni avviato")
+        logger.info("Worker Elaborazioni avviato con famiglie job: %s", ", ".join(sorted(self.job_families)))
 
         while not self.state.stop_requested:
-            connection_test_id = self._next_connection_test_id()
-            if connection_test_id is not None:
-                logger.info("Elaborazione test connessione SISTER %s", connection_test_id)
-                await self._process_connection_test(connection_test_id)
-                continue
+            if self._handles_job_family("connection_tests"):
+                connection_test_id = self._next_connection_test_id()
+                if connection_test_id is not None:
+                    logger.info("Elaborazione test connessione SISTER %s", connection_test_id)
+                    await self._process_connection_test(connection_test_id)
+                    continue
 
-            capacitas_job = self._next_capacitas_job()
-            if capacitas_job is not None:
-                job_kind, job_id = capacitas_job
-                logger.info("Job Capacitas %s %s prelevato dalla coda", job_kind, job_id)
-                await self._process_capacitas_job(job_kind, job_id)
-                continue
+            if self._handles_job_family("capacitas"):
+                capacitas_job = self._next_capacitas_job()
+                if capacitas_job is not None:
+                    job_kind, job_id = capacitas_job
+                    logger.info("Job Capacitas %s %s prelevato dalla coda", job_kind, job_id)
+                    await self._process_capacitas_job(job_kind, job_id)
+                    continue
 
-            registry_job_id = self._next_registry_import_job_id()
-            if registry_job_id is not None:
-                logger.info("Job REGISTRY utenze %s prelevato dalla coda", registry_job_id)
-                await self._process_registry_import_job(registry_job_id)
-                continue
+            if self._handles_job_family("registry"):
+                registry_job_id = self._next_registry_import_job_id()
+                if registry_job_id is not None:
+                    logger.info("Job REGISTRY utenze %s prelevato dalla coda", registry_job_id)
+                    await self._process_registry_import_job(registry_job_id)
+                    continue
 
-            ade_sync_run_id = self._next_ade_sync_run_id()
-            if ade_sync_run_id is not None:
-                logger.info("Run AdE %s prelevato dalla coda", ade_sync_run_id)
-                await self._process_ade_sync_run(ade_sync_run_id)
-                continue
+            if self._handles_job_family("ade_sync"):
+                ade_sync_run_id = self._next_ade_sync_run_id()
+                if ade_sync_run_id is not None:
+                    logger.info("Run AdE %s prelevato dalla coda", ade_sync_run_id)
+                    await self._process_ade_sync_run(ade_sync_run_id)
+                    continue
 
-            bulk_job_id = self._next_bulk_search_job_id()
-            if bulk_job_id is not None:
-                logger.info("Job catasto elaborazione massiva %s prelevato dalla coda", bulk_job_id)
-                await self._process_bulk_search_job(bulk_job_id)
-                continue
+            if self._handles_job_family("bulk_search"):
+                bulk_job_id = self._next_bulk_search_job_id()
+                if bulk_job_id is not None:
+                    logger.info("Job catasto elaborazione massiva %s prelevato dalla coda", bulk_job_id)
+                    await self._process_bulk_search_job(bulk_job_id)
+                    continue
 
-            autodoc_job_id = self._next_autodoc_sync_job_id()
-            if autodoc_job_id is not None:
-                logger.info("Job AUTODOC %s prelevato dalla coda", autodoc_job_id)
-                await self._process_autodoc_sync_job(autodoc_job_id)
-                continue
+            if self._handles_job_family("autodoc"):
+                autodoc_job_id = self._next_autodoc_sync_job_id()
+                if autodoc_job_id is not None:
+                    logger.info("Job AUTODOC %s prelevato dalla coda", autodoc_job_id)
+                    await self._process_autodoc_sync_job(autodoc_job_id)
+                    continue
 
-            batch_id = self._next_batch_id()
-            if batch_id is None:
-                await asyncio.sleep(POLL_INTERVAL_SEC)
-                continue
-            logger.info("Batch %s prelevato dalla coda di lavorazione", batch_id)
-            await self._process_batch(batch_id)
+            if self._handles_job_family("visure_batches"):
+                batch_id = self._next_batch_id()
+                if batch_id is not None:
+                    logger.info("Batch %s prelevato dalla coda di lavorazione", batch_id)
+                    await self._process_batch(batch_id)
+                    continue
+
+            await asyncio.sleep(POLL_INTERVAL_SEC)
 
     def _install_signal_handlers(self) -> None:
         loop = asyncio.get_running_loop()
@@ -206,33 +233,68 @@ class CatastoWorker:
     def _request_stop(self) -> None:
         self.state.stop_requested = True
 
+    @staticmethod
+    def _parse_job_families(raw_value: str) -> set[str]:
+        requested = [item.strip().lower() for item in raw_value.split(",") if item.strip()]
+        if not requested:
+            return set(ALL_JOB_FAMILIES)
+
+        families: set[str] = set()
+        for item in requested:
+            alias_members = JOB_FAMILY_ALIASES.get(item)
+            if alias_members is not None:
+                families.update(alias_members)
+                continue
+            if item in ALL_JOB_FAMILIES:
+                families.add(item)
+                continue
+            raise ValueError(f"Famiglia job worker non riconosciuta: {item}")
+        return families or set(ALL_JOB_FAMILIES)
+
+    def _handles_job_family(self, family: str) -> bool:
+        return family in self.job_families
+
     def _recover_stuck_requests(self) -> None:
         with SessionLocal() as db:
-            stuck_connection_tests = db.scalars(
-                select(CatastoConnectionTest).where(
-                    CatastoConnectionTest.status == CatastoConnectionTestStatus.PROCESSING.value,
-                )
-            ).all()
-            for connection_test in stuck_connection_tests:
-                connection_test.status = CatastoConnectionTestStatus.PENDING.value
-                connection_test.message = "Recuperato dopo riavvio worker"
+            if self._handles_job_family("connection_tests"):
+                stuck_connection_tests = db.scalars(
+                    select(CatastoConnectionTest).where(
+                        CatastoConnectionTest.status == CatastoConnectionTestStatus.PROCESSING.value,
+                    )
+                ).all()
+                for connection_test in stuck_connection_tests:
+                    connection_test.status = CatastoConnectionTestStatus.PENDING.value
+                    connection_test.message = "Recuperato dopo riavvio worker"
 
-            stuck_requests = db.scalars(
-                select(CatastoVisuraRequest).where(
-                    CatastoVisuraRequest.status == CatastoVisuraRequestStatus.PROCESSING.value,
-                )
-            ).all()
-            for request in stuck_requests:
-                request.status = CatastoVisuraRequestStatus.PENDING.value
-                request.current_operation = "Recuperato dopo riavvio worker"
+            if self._handles_job_family("visure_batches"):
+                stuck_requests = db.scalars(
+                    select(CatastoVisuraRequest).where(
+                        CatastoVisuraRequest.status == CatastoVisuraRequestStatus.PROCESSING.value,
+                    )
+                ).all()
+                for request in stuck_requests:
+                    request.status = CatastoVisuraRequestStatus.PENDING.value
+                    request.current_operation = "Recuperato dopo riavvio worker"
 
-            history_ids = prepare_anagrafica_history_jobs_for_recovery(db)
-            incass_ids = prepare_incass_sync_jobs_for_recovery(db)
-            terreni_ids = prepare_terreni_sync_jobs_for_recovery(db)
-            particelle_ids = prepare_particelle_sync_jobs_for_recovery(db)
-            bulk_jobs = prepare_bulk_search_jobs_for_recovery(db)
-            registry_ids = prepare_registry_import_jobs_for_recovery(db)
-            ade_sync_runs = prepare_ade_sync_runs_for_recovery(db)
+            history_ids: list[int] = []
+            incass_ids: list[int] = []
+            terreni_ids: list[int] = []
+            particelle_ids: list[int] = []
+            bulk_jobs = 0
+            registry_ids: list[int] = []
+            ade_sync_runs = 0
+
+            if self._handles_job_family("capacitas"):
+                history_ids = prepare_anagrafica_history_jobs_for_recovery(db)
+                incass_ids = prepare_incass_sync_jobs_for_recovery(db)
+                terreni_ids = prepare_terreni_sync_jobs_for_recovery(db)
+                particelle_ids = prepare_particelle_sync_jobs_for_recovery(db)
+            if self._handles_job_family("bulk_search"):
+                bulk_jobs = prepare_bulk_search_jobs_for_recovery(db)
+            if self._handles_job_family("registry"):
+                registry_ids = prepare_registry_import_jobs_for_recovery(db)
+            if self._handles_job_family("ade_sync"):
+                ade_sync_runs = prepare_ade_sync_runs_for_recovery(db)
             if history_ids:
                 logger.info("Recuperati %d job Capacitas storico anagrafica", len(history_ids))
             if incass_ids:

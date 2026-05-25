@@ -296,6 +296,21 @@ def test_operating_window_supports_overnight_windows(monkeypatch: pytest.MonkeyP
     assert not CatastoWorker._is_within_operating_window(day_utc)
 
 
+def test_parse_job_families_expands_aliases() -> None:
+    assert CatastoWorker._parse_job_families("visure,autodoc") == {
+        "connection_tests",
+        "visure_batches",
+        "ade_sync",
+        "bulk_search",
+        "autodoc",
+    }
+
+
+def test_parse_job_families_rejects_unknown_values() -> None:
+    with pytest.raises(ValueError):
+        CatastoWorker._parse_job_families("visure,unknown-family")
+
+
 def test_next_request_id_claims_pending_request_and_marks_processing(worker_db) -> None:
     worker, SessionLocal, _ = worker_db
     _, batch_id, request_ids = _seed_batch(SessionLocal, request_statuses=[CatastoVisuraRequestStatus.PENDING.value])

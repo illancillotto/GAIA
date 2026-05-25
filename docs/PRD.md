@@ -72,7 +72,8 @@ Fornire un unico punto di accesso operativo per:
 - namespace canonici di dominio in `backend/app/modules/<modulo>/`
 - frontend unico Next.js sotto `frontend/`
 - database PostgreSQL condiviso
-- worker tecnici separati solo dove necessario, ad esempio `modules/elaborazioni/worker/` e scanner LAN
+- worker tecnici separati per famiglia di carico, ad esempio `elaborazioni-worker-visure`, `elaborazioni-worker-runtime`, `elaborazioni-worker-autodoc` e scanner LAN
+- regola di piattaforma: ogni nuovo worker introdotto nel repository deve avere una coda o famiglia di job dedicata e non deve condividere il polling con worker eterogenei gia esistenti
 
 ## 5. Requisiti trasversali
 

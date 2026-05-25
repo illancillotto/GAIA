@@ -140,11 +140,11 @@ services:
       timeout: 5s
       retries: 3
 
-  elaborazioni-worker:
+  elaborazioni-worker-visure:
     build:
       context: .
       dockerfile: ./modules/elaborazioni/worker/Dockerfile
-    container_name: gaia-elaborazioni-worker
+    container_name: gaia-elaborazioni-worker-visure
     restart: unless-stopped
     stop_grace_period: "30s"
     dns:
@@ -166,6 +166,79 @@ services:
       ELABORAZIONI_DEBUG_ARTIFACTS_PATH: ${ELABORAZIONI_DEBUG_ARTIFACTS_PATH:-${CATASTO_DEBUG_ARTIFACTS_PATH:-/data/catasto/debug}}
       ELABORAZIONI_SISTER_SELECTORS_PATH: ${ELABORAZIONI_SISTER_SELECTORS_PATH:-${CATASTO_SISTER_SELECTORS_PATH:-/app/worker/sister_selectors.json}}
       ELABORAZIONI_LOG_LEVEL: ${ELABORAZIONI_LOG_LEVEL:-${CATASTO_LOG_LEVEL:-INFO}}
+      ELABORAZIONI_WORKER_FAMILIES: ${ELABORAZIONI_WORKER_FAMILIES_VISURE:-visure}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - catasto-data:/data/catasto
+      - /home/cbo/.local/share/cursor-agent:/home/cbo/.local/share/cursor-agent:ro
+      - /home/cbo/.cursor:/home/cbo/.cursor:rw
+      - /home/cbo/.config/cursor:/home/cbo/.config/cursor:ro
+
+  elaborazioni-worker-runtime:
+    build:
+      context: .
+      dockerfile: ./modules/elaborazioni/worker/Dockerfile
+    container_name: gaia-elaborazioni-worker-runtime
+    restart: unless-stopped
+    stop_grace_period: "30s"
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      CREDENTIAL_MASTER_KEY: ${CREDENTIAL_MASTER_KEY}
+      BETWEEN_VISURE_DELAY_SEC: ${BETWEEN_VISURE_DELAY_SEC:-5}
+      CAPTCHA_LLM_AGENT_CMD: ${CAPTCHA_LLM_AGENT_CMD:-/home/cbo/.local/share/cursor-agent/versions/2026.05.09-0afadcc/cursor-agent}
+      HOME: /home/cbo
+      CAPTCHA_LLM_ENABLED: ${CAPTCHA_LLM_ENABLED:-true}
+      CAPTCHA_LLM_ATTEMPTS: ${CAPTCHA_LLM_ATTEMPTS:-3}
+      CAPTCHA_EXTERNAL_ATTEMPTS: ${CAPTCHA_EXTERNAL_ATTEMPTS:-3}
+      ELABORAZIONI_DOCUMENT_STORAGE_PATH: ${ELABORAZIONI_DOCUMENT_STORAGE_PATH:-${CATASTO_DOCUMENT_STORAGE_PATH:-/data/catasto/documents}}
+      ELABORAZIONI_CAPTCHA_STORAGE_PATH: ${ELABORAZIONI_CAPTCHA_STORAGE_PATH:-${CATASTO_CAPTCHA_STORAGE_PATH:-/data/catasto/captcha}}
+      ELABORAZIONI_DEBUG_ARTIFACTS_PATH: ${ELABORAZIONI_DEBUG_ARTIFACTS_PATH:-${CATASTO_DEBUG_ARTIFACTS_PATH:-/data/catasto/debug}}
+      ELABORAZIONI_SISTER_SELECTORS_PATH: ${ELABORAZIONI_SISTER_SELECTORS_PATH:-${CATASTO_SISTER_SELECTORS_PATH:-/app/worker/sister_selectors.json}}
+      ELABORAZIONI_LOG_LEVEL: ${ELABORAZIONI_LOG_LEVEL:-${CATASTO_LOG_LEVEL:-INFO}}
+      ELABORAZIONI_WORKER_FAMILIES: ${ELABORAZIONI_WORKER_FAMILIES_RUNTIME:-runtime}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - catasto-data:/data/catasto
+      - /home/cbo/.local/share/cursor-agent:/home/cbo/.local/share/cursor-agent:ro
+      - /home/cbo/.cursor:/home/cbo/.cursor:rw
+      - /home/cbo/.config/cursor:/home/cbo/.config/cursor:ro
+
+  elaborazioni-worker-autodoc:
+    build:
+      context: .
+      dockerfile: ./modules/elaborazioni/worker/Dockerfile
+    container_name: gaia-elaborazioni-worker-autodoc
+    restart: unless-stopped
+    stop_grace_period: "30s"
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      CREDENTIAL_MASTER_KEY: ${CREDENTIAL_MASTER_KEY}
+      BETWEEN_VISURE_DELAY_SEC: ${BETWEEN_VISURE_DELAY_SEC:-5}
+      CAPTCHA_LLM_AGENT_CMD: ${CAPTCHA_LLM_AGENT_CMD:-/home/cbo/.local/share/cursor-agent/versions/2026.05.09-0afadcc/cursor-agent}
+      HOME: /home/cbo
+      CAPTCHA_LLM_ENABLED: ${CAPTCHA_LLM_ENABLED:-true}
+      CAPTCHA_LLM_ATTEMPTS: ${CAPTCHA_LLM_ATTEMPTS:-3}
+      CAPTCHA_EXTERNAL_ATTEMPTS: ${CAPTCHA_EXTERNAL_ATTEMPTS:-3}
+      ELABORAZIONI_DOCUMENT_STORAGE_PATH: ${ELABORAZIONI_DOCUMENT_STORAGE_PATH:-${CATASTO_DOCUMENT_STORAGE_PATH:-/data/catasto/documents}}
+      ELABORAZIONI_CAPTCHA_STORAGE_PATH: ${ELABORAZIONI_CAPTCHA_STORAGE_PATH:-${CATASTO_CAPTCHA_STORAGE_PATH:-/data/catasto/captcha}}
+      ELABORAZIONI_DEBUG_ARTIFACTS_PATH: ${ELABORAZIONI_DEBUG_ARTIFACTS_PATH:-${CATASTO_DEBUG_ARTIFACTS_PATH:-/data/catasto/debug}}
+      ELABORAZIONI_SISTER_SELECTORS_PATH: ${ELABORAZIONI_SISTER_SELECTORS_PATH:-${CATASTO_SISTER_SELECTORS_PATH:-/app/worker/sister_selectors.json}}
+      ELABORAZIONI_LOG_LEVEL: ${ELABORAZIONI_LOG_LEVEL:-${CATASTO_LOG_LEVEL:-INFO}}
+      ELABORAZIONI_WORKER_FAMILIES: ${ELABORAZIONI_WORKER_FAMILIES_AUTODOC:-autodoc}
     depends_on:
       postgres:
         condition: service_healthy

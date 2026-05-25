@@ -62,7 +62,7 @@ Funzioni effettivamente implementate oggi:
 
 I job monitorabili di sync massiva (`Terreni`, sync progressiva particelle e
 import `Storico anagrafica`) vengono creati dalle API come record `pending` e
-prelevati dal container `elaborazioni-worker`. Il backend web resta responsabile
+prelevati dal container `elaborazioni-worker-runtime`. Il backend web resta responsabile
 di auth, validazione, creazione job e monitoraggio; l'esecuzione lunga con
 sessioni Capacitas e scritture DB avviene fuori dai worker Uvicorn.
 
