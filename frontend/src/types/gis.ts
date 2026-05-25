@@ -359,6 +359,9 @@ export interface GisMapOverlayLayer {
   saved_selection_id?: string | null;
   name: string;
   color: string;
+  outlineColor?: string;
+  pulse?: boolean;
+  pulseUntil?: number;
   opacity?: number;
   showFill?: boolean;
   visible: boolean;

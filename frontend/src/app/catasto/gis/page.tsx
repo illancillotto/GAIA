@@ -284,7 +284,7 @@ export default function CatastoGisPage() {
   const [basemap, setBasemap] = useState<GisBasemap>("osm");
   const [highlightSelected, setHighlightSelected] = useState(true);
   const [distrettiOpacity, setDistrettiOpacity] = useState(0.34);
-  const [particelleOpacity, setParticelleOpacity] = useState(0.42);
+  const [particelleOpacity, setParticelleOpacity] = useState(0.05);
   const [distrettoLayer, setDistrettoLayer] = useState<string>("");
   const [distretti, setDistretti] = useState<CatDistretto[]>([]);
   const [distrettiOpen, setDistrettiOpen] = useState(true);
@@ -329,8 +329,11 @@ export default function CatastoGisPage() {
       layer_key: "gis-search-results",
       saved_selection_id: null,
       name: `Ricerca: ${searchResult.query}`,
-      color: "#0F766E",
-      opacity: 0.28,
+      color: "#FACC15",
+      outlineColor: "#F97316",
+      pulse: true,
+      pulseUntil: Date.now() + 4000,
+      opacity: 0.82,
       showFill: true,
       visible: true,
       source_filename: null,
@@ -1573,7 +1576,7 @@ export default function CatastoGisPage() {
                   className={isExpanded ? "min-h-0 h-full rounded-2xl" : "min-h-0 rounded-none"}
                 />
                 {popupParticella ? (
-                  <div className="pointer-events-none absolute inset-x-3 bottom-3 z-10 sm:inset-x-auto sm:bottom-4 sm:left-4 sm:top-24 sm:w-[380px]">
+                  <div className="pointer-events-none absolute inset-x-3 bottom-3 z-10 sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-24 sm:w-[380px]">
                     <div className="pointer-events-auto rounded-2xl border border-white/70 bg-white/[0.88] p-4 shadow-2xl ring-1 ring-black/5 backdrop-blur-xl">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">

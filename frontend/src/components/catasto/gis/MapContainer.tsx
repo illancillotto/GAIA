@@ -163,6 +163,9 @@ function buildLayerGeojson(layer: GisMapOverlayLayer): GeoJSON.FeatureCollection
         __overlayLayerKey: layer.layer_key,
         __overlayName: layer.name,
         __overlayColor: layer.color,
+        __overlayOutlineColor: layer.outlineColor ?? layer.color,
+        __overlayPulse: layer.pulse === true,
+        __overlayPulseUntil: layer.pulseUntil ?? null,
         __overlaySavedSelectionId: layer.saved_selection_id ?? null,
       },
     })),
@@ -439,7 +442,7 @@ export default function MapContainer({
             "#10B981",
             "#6366F1",
           ],
-          "fill-opacity": 0.38,
+          "fill-opacity": 0.05,
         },
       });
 
@@ -636,7 +639,7 @@ export default function MapContainer({
     const showParticelle = mapLayers?.showParticelle ?? true;
     const showParticelleFill = mapLayers?.showParticelleFill ?? true;
     const distrettiOpacity = mapLayers?.distrettiOpacity ?? 0.3;
-    const particelleOpacity = mapLayers?.particelleOpacity ?? 0.42;
+    const particelleOpacity = mapLayers?.particelleOpacity ?? 0.05;
     const distrettoColor = buildDistrettoColorExpression(mapLayers?.distrettoColors);
     const particelleQuickFilter = mapLayers?.particelleQuickFilter ?? "all";
 
@@ -734,6 +737,7 @@ export default function MapContainer({
       const centroidData = buildLayerCentroidGeojson(layer);
       const opacity = layer.opacity ?? 0.55;
       const color = layer.color ?? "#10B981";
+      const outlineColor = layer.outlineColor ?? color;
       const showFill = layer.showFill ?? true;
       const isVisible = layer.visible !== false;
 
@@ -788,7 +792,7 @@ export default function MapContainer({
           type: "line",
           source: ids.sourceId,
           paint: {
-            "line-color": ["coalesce", ["get", "__overlayColor"], color],
+            "line-color": ["coalesce", ["get", "__overlayOutlineColor"], outlineColor],
             "line-opacity": lineOpacity,
             "line-width": [
               "interpolate",
@@ -804,7 +808,7 @@ export default function MapContainer({
           },
         });
       } else {
-        map.setPaintProperty(ids.outlineId, "line-color", ["coalesce", ["get", "__overlayColor"], color]);
+        map.setPaintProperty(ids.outlineId, "line-color", ["coalesce", ["get", "__overlayOutlineColor"], outlineColor]);
         map.setPaintProperty(ids.outlineId, "line-opacity", lineOpacity);
       }
 
@@ -856,6 +860,84 @@ export default function MapContainer({
       map.setLayoutProperty(ids.outlineId, "visibility", isVisible ? "visible" : "none");
       map.setLayoutProperty(ids.centroidId, "visibility", isVisible ? "visible" : "none");
     }
+  }, [overlayLayers, mapReadyVersion]);
+
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || mapReadyVersion === 0) return;
+
+    const resetLayerStyle = (layer: GisMapOverlayLayer) => {
+      const ids = overlayLayerIds(layer.layer_key);
+      const baseOpacity = layer.opacity ?? 0.82;
+      const lineOpacity = Math.min(1, baseOpacity * 0.9);
+      const circleStrokeOpacity = Math.min(1, baseOpacity * 0.95);
+      const fillOpacityExpr: maplibregl.ExpressionSpecification = [
+        "*",
+        baseOpacity,
+        ["interpolate", ["linear"], ["zoom"], 8, 1, 11, 0.75, 14, 0.5],
+      ];
+      const circleOpacityExpr: maplibregl.ExpressionSpecification = [
+        "*",
+        baseOpacity,
+        ["interpolate", ["linear"], ["zoom"], 7, 1, 12, 0.85, 16, 0],
+      ];
+      if (map.getLayer(ids.fillId)) map.setPaintProperty(ids.fillId, "fill-opacity", fillOpacityExpr);
+      if (map.getLayer(ids.outlineId)) {
+        map.setPaintProperty(ids.outlineId, "line-opacity", lineOpacity);
+        map.setPaintProperty(
+          ids.outlineId,
+          "line-width",
+          ["interpolate", ["linear"], ["zoom"], 8, 2.5, 12, 2, 16, 1.25],
+        );
+      }
+      if (map.getLayer(ids.centroidId)) {
+        map.setPaintProperty(ids.centroidId, "circle-opacity", circleOpacityExpr);
+        map.setPaintProperty(ids.centroidId, "circle-stroke-opacity", circleStrokeOpacity);
+      }
+    };
+
+    const pulsingLayers = (overlayLayers ?? []).filter(
+      (layer) => layer.visible !== false && layer.pulse && (layer.pulseUntil ?? 0) > Date.now(),
+    );
+    if (pulsingLayers.length === 0) return;
+
+    let frameId = 0;
+    const tick = () => {
+      const now = Date.now();
+      const activeLayers = pulsingLayers.filter((layer) => (layer.pulseUntil ?? 0) > now);
+      if (activeLayers.length === 0) {
+        for (const layer of pulsingLayers) resetLayerStyle(layer);
+        return;
+      }
+      const phase = (Math.sin(now / 260) + 1) / 2;
+      for (const layer of activeLayers) {
+        const ids = overlayLayerIds(layer.layer_key);
+        const baseOpacity = layer.opacity ?? 0.82;
+        const fillOpacity = Math.max(0.22, Math.min(0.98, 0.18 + phase * baseOpacity * 0.95));
+        const lineOpacity = Math.max(0.78, Math.min(1, 0.82 + phase * 0.18));
+        const lineWidth = 2.8 + phase * 2.8;
+        const circleOpacity = Math.max(0.8, Math.min(1, 0.84 + phase * 0.16));
+
+        if (map.getLayer(ids.fillId)) {
+          map.setPaintProperty(ids.fillId, "fill-opacity", fillOpacity);
+        }
+        if (map.getLayer(ids.outlineId)) {
+          map.setPaintProperty(ids.outlineId, "line-opacity", lineOpacity);
+          map.setPaintProperty(ids.outlineId, "line-width", lineWidth);
+        }
+        if (map.getLayer(ids.centroidId)) {
+          map.setPaintProperty(ids.centroidId, "circle-opacity", circleOpacity);
+          map.setPaintProperty(ids.centroidId, "circle-stroke-opacity", circleOpacity);
+        }
+      }
+      frameId = window.requestAnimationFrame(tick);
+    };
+
+    frameId = window.requestAnimationFrame(tick);
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      for (const layer of pulsingLayers) resetLayerStyle(layer);
+    };
   }, [overlayLayers, mapReadyVersion]);
 
   useEffect(() => {
