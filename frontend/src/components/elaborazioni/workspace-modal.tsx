@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { CatastoArchiveWorkspaceContent } from "@/components/catasto/archive-workspace";
 import { CatastoDocumentDetailWorkspace } from "@/components/catasto/document-detail-workspace";
 import { ElaborazioneArchiveWorkspaceContent } from "@/components/elaborazioni/archive-workspace";
+import { ElaborazioniAutodocWorkspace } from "@/components/elaborazioni/autodoc-workspace";
 import { ElaborazioneBatchDetailWorkspace } from "@/components/elaborazioni/batch-detail-workspace";
 import { ElaborazioniCapacitasWorkspace } from "@/components/elaborazioni/capacitas-workspace";
 import { ElaborazioniAdeAlignmentWorkspace } from "@/components/elaborazioni/ade-alignment-workspace";
@@ -156,6 +157,10 @@ function NativeWorkspaceRenderer({
 
   if (href === "/elaborazioni/ade-alignment") {
     return <ElaborazioniAdeAlignmentWorkspace embedded />;
+  }
+
+  if (href === "/elaborazioni/autodoc") {
+    return <ElaborazioniAutodocWorkspace embedded />;
   }
 
   if (href === "/catasto/archive?view=documents") {

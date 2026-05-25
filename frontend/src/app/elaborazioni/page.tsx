@@ -87,7 +87,7 @@ const QUICK_ACTIONS = [
     icon: GridIcon,
   },
   {
-    href: "/operazioni/mezzi",
+    href: "/elaborazioni/autodoc",
     title: "AUTODOC mezzi",
     description: "Sync massiva dettagli mezzi e accesso rapido al parco mezzi.",
     icon: RefreshIcon,
@@ -521,7 +521,7 @@ export default function ElaborazioniPage() {
     setAutodocSyncBusy(mode);
     try {
       const response = await queueVehicleAutodocSync({
-        only_with_autodoc_url: mode === "cached",
+        only_with_autodoc_url: true,
         force_refresh: mode === "full",
       });
       setAutodocSyncJob(response.job);
@@ -574,6 +574,40 @@ export default function ElaborazioniPage() {
     }
     return `${base} · ripresa ${formatDateTime(windowConfig.next_resume_at)}`;
   }, [runtimeMetrics]);
+  const activeBatchCount = batches.filter((batch) => ["pending", "processing"].includes(batch.status)).length;
+  const activeParticelleCount = particelleSyncJobs.filter((job) => ["pending", "processing", "queued_resume"].includes(job.status)).length;
+  const activeBonificaCount = Object.values(bonificaSyncStatus?.entities ?? {}).filter((item) => item.status === "running").length;
+  const activeAutodocCount = autodocSyncJob?.status === "queued" || autodocSyncJob?.status === "running" ? 1 : 0;
+  const totalActiveOperations = activeBatchCount + activeParticelleCount + activeBonificaCount + activeAutodocCount;
+  const latestAnprRun = anprSummary?.recent_runs[0] ?? null;
+  const totalAnprRecentCalls = anprSummary?.recent_runs.reduce((total, run) => total + run.calls_used, 0) ?? 0;
+  const totalAnprRecentSubjects = anprSummary?.recent_runs.reduce((total, run) => total + run.subjects_processed, 0) ?? 0;
+  const totalAnprRecentDeceased = anprSummary?.recent_runs.reduce((total, run) => total + run.deceased_found, 0) ?? 0;
+  const totalAnprRecentErrors = anprSummary?.recent_runs.reduce((total, run) => total + run.errors, 0) ?? 0;
+  const totalWarnings =
+    capacitasWarningCount +
+    bonificaWarningCount +
+    (credentialStatus?.configured === false ? 1 : 0) +
+    ((anprSummary?.calls_today ?? 0) >= (anprSummary?.effective_daily_limit ?? Number.MAX_SAFE_INTEGER) ? 1 : 0);
+  const primaryStatusLabel = error
+    ? "Errore dati"
+    : totalWarnings > 0
+      ? "Da verificare"
+      : totalActiveOperations > 0
+        ? "Operativo"
+        : "Stabile";
+  const attentionItems = [
+    credentialStatus?.configured === false ? "SISTER non configurato." : null,
+    capacitasWarningCount > 0 ? `${capacitasWarningCount} account Capacitas con warning.` : null,
+    bonificaWarningCount > 0 ? `${bonificaWarningCount} account WhiteCompany con warning.` : null,
+    anprSummary && anprSummary.calls_today >= anprSummary.effective_daily_limit
+      ? `ANPR ha raggiunto il limite giornaliero di ${anprSummary.effective_daily_limit} chiamate.`
+      : null,
+    totalActiveOperations > 0 ? `${totalActiveOperations} lavorazioni in corso.` : null,
+  ].filter((item): item is string => Boolean(item));
+  const heroRefreshDescription = hasActivePollingTargets
+    ? "Aggiornamento automatico attivo finché esistono batch, sync o job in esecuzione."
+    : "Nessun polling continuo: la pagina si aggiorna al ritorno in primo piano.";
   const quickActions = useMemo(
     () =>
       QUICK_ACTIONS.map((action) => {
@@ -715,10 +749,10 @@ export default function ElaborazioniPage() {
         title: `Sync massiva #${autodocSyncJob.job_id.slice(0, 8)}`,
         detail:
           autodocSyncJob.status === "queued"
-            ? "Job AUTODOC in coda per il parco mezzi"
-            : params.only_with_autodoc_url
-              ? "Aggiornamento mezzi con link AUTODOC già noto"
-              : "Aggiornamento completo dettagli AUTODOC del parco mezzi",
+            ? "Job AUTODOC in coda per i mezzi con URL salvato"
+            : params.force_refresh
+              ? "Refresh forzato dei mezzi con link AUTODOC già noto"
+              : "Aggiornamento mezzi con link AUTODOC già noto",
         startedAt: autodocSyncJob.started_at,
         tone: "warning",
         kind: "bonifica",
@@ -744,6 +778,18 @@ export default function ElaborazioniPage() {
     setModalState({ href, title, description });
   }
 
+  useEffect(() => {
+    const scrollToHashTarget = (): void => {
+      if (typeof window === "undefined" || window.location.hash !== "#autodoc-mezzi") return;
+      const target = window.document.getElementById("autodoc-mezzi");
+      target?.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+
+    scrollToHashTarget();
+    window.addEventListener("hashchange", scrollToHashTarget);
+    return () => window.removeEventListener("hashchange", scrollToHashTarget);
+  }, []);
+
   const previewModalUrl = previewModalRequest ? artifactPreviewUrls[previewModalRequest.requestId] ?? null : null;
 
   return (
@@ -767,139 +813,193 @@ export default function ElaborazioniPage() {
             <ElaborazioneNoticeCard title="Errore dashboard" description={error} tone="danger" />
           ) : (
             <ElaborazioneNoticeCard
-              title="Refresh automatico attivo"
-              description="Quando la pagina è in primo piano, i dati vengono ricaricati periodicamente per tenere allineati batch, pool e richieste CAPTCHA."
+              title={hasActivePollingTargets ? "Monitor live attivo" : "Monitor automatico pronto"}
+              description={heroRefreshDescription}
             />
           )
         }
       >
         <ModuleWorkspaceKpiRow>
           <ModuleWorkspaceKpiTile
+            label="Stato generale"
+            variant={error || totalWarnings > 0 ? "amber" : "emerald"}
+            value={primaryStatusLabel}
+            hint={error ? "Controlla il caricamento della dashboard" : `${totalWarnings} segnalazioni · ${totalActiveOperations} lavorazioni attive`}
+          />
+          <ModuleWorkspaceKpiTile
             label="SISTER"
-            variant="emerald"
-            value={credentialStatus?.configured ? "Attivo" : "Setup"}
+            variant="amber"
+            value={credentialStatus?.configured ? "Pronto" : "Setup"}
             hint={
               credentialStatus?.configured
-                ? `${activeSisterCredentials.length}/${credentialStatus?.credentials.length ?? 0} attive · ${credentialStatus?.default_credential?.label ?? "default"}`
-                : "non configurato"
+                ? `${activeSisterCredentials.length}/${credentialStatus?.credentials.length ?? 0} credenziali attive`
+                : "Configura almeno una credenziale"
             }
           />
           <ModuleWorkspaceKpiTile
-            label="Capacitas"
-            variant="amber"
-            value={`${activeCapacitasCredentials.length}/${capacitasCredentials.length}`}
-            hint={`${capacitasWarningCount} warning`}
+            label="Sync esterni"
+            variant={capacitasWarningCount + bonificaWarningCount > 0 ? "amber" : "emerald"}
+            value={`${activeCapacitasCredentials.length + activeBonificaCredentials.length} attivi`}
+            hint={`Capacitas ${activeCapacitasCredentials.length}/${capacitasCredentials.length} · White ${activeBonificaCredentials.length}/${bonificaCredentials.length}`}
           />
           <ModuleWorkspaceKpiTile
-            label="WhiteCompany"
-            variant="emerald"
-            value={`${activeBonificaCredentials.length}/${bonificaCredentials.length}`}
-            hint={`${bonificaWarningCount} warning`}
-          />
-          <ModuleWorkspaceKpiTile
-            label="CAPTCHA"
-            value={captchaSummary?.processed ?? 0}
-            hint={`${captchaSummary?.correct ?? 0} ok · ${captchaSummary?.wrong ?? 0} ko`}
-          />
-          <ModuleWorkspaceKpiTile
-            label="Ultimo uso"
-            value={latestCapacitasUsage ? "Registrato" : "Assente"}
-            hint={latestCapacitasUsage ? formatDateTime(latestCapacitasUsage) : "mai"}
+            label="Lavorazioni attive"
+            value={totalActiveOperations}
+            hint={`batch ${activeBatchCount} · sync ${activeBonificaCount + activeAutodocCount} · particelle ${activeParticelleCount}`}
           />
         </ModuleWorkspaceKpiRow>
-        <div className="mt-4 grid gap-3 xl:grid-cols-4">
-          <div className="rounded-2xl border border-gray-100 bg-white/80 px-4 py-3">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">Visure 24h</p>
-            <p className="mt-2 text-sm font-semibold text-gray-900">
-              {formatMetricNumber(runtimeMetrics?.last_24_hours.processed_requests ?? null)}
-            </p>
-            <p className="mt-1 text-xs text-gray-500">
-              {formatMetricNumber(runtimeMetrics?.last_24_hours.throughput_per_hour ?? null, 2)} /h · ok{" "}
-              {formatMetricNumber(runtimeMetrics?.last_24_hours.requests_completed ?? null)}
-            </p>
+        <div className="mt-4 grid gap-4 xl:grid-cols-[1.35fr,0.65fr]">
+          <div className="rounded-[24px] border border-[#d9dfd6] bg-white/85 p-5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#1D4E35]">Situazione operativa</p>
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              <div className="rounded-2xl bg-[#f6faf7] px-4 py-3">
+                <p className="text-sm font-semibold text-gray-900">Visure ultime 24 ore</p>
+                <p className="mt-2 text-2xl font-semibold text-[#163524]">
+                  {formatMetricNumber(runtimeMetrics?.last_24_hours.processed_requests ?? null)}
+                </p>
+                <p className="mt-1 text-sm text-gray-600">
+                  {formatMetricNumber(runtimeMetrics?.last_24_hours.requests_completed ?? null)} concluse ·{" "}
+                  {formatMetricNumber(runtimeMetrics?.last_24_hours.throughput_per_hour ?? null, 2)} all&apos;ora
+                </p>
+              </div>
+              <div className="rounded-2xl bg-[#f6faf7] px-4 py-3">
+                <p className="text-sm font-semibold text-gray-900">Tempo medio di lavorazione</p>
+                <p className="mt-2 text-2xl font-semibold text-[#163524]">
+                  {formatMetricSeconds(runtimeMetrics?.totals.average_request_duration_seconds ?? null)}
+                </p>
+                <p className="mt-1 text-sm text-gray-600">
+                  batch medi {formatMetricMinutes(runtimeMetrics?.totals.average_batch_duration_minutes ?? null)}
+                </p>
+              </div>
+              <div className="rounded-2xl bg-[#f6faf7] px-4 py-3">
+                <p className="text-sm font-semibold text-gray-900">Ultimo elemento processato</p>
+                <p className="mt-2 text-base font-semibold text-[#163524]">
+                  {runtimeMetrics?.totals.latest_processed_at ? formatDateTime(runtimeMetrics.totals.latest_processed_at) : "Nessun dato"}
+                </p>
+                <p className="mt-1 text-sm text-gray-600">
+                  totali {formatMetricNumber(runtimeMetrics?.totals.processed_requests ?? null)} · fallite{" "}
+                  {formatMetricNumber(runtimeMetrics?.totals.requests_failed ?? null)}
+                </p>
+              </div>
+              <div className="rounded-2xl bg-[#f6faf7] px-4 py-3">
+                <p className="text-sm font-semibold text-gray-900">ANPR oggi</p>
+                <p className="mt-2 text-2xl font-semibold text-[#163524]">
+                  {anprSummary ? `${anprSummary.calls_today}/${anprSummary.effective_daily_limit}` : "—"}
+                </p>
+                <p className="mt-1 text-sm text-gray-600">
+                  {anprSummary
+                    ? `batch ${anprSummary.batch_size} · ruolo ${anprSummary.ruolo_year ?? "auto"}`
+                    : "Monitor chiamate e run giornalieri"}
+                </p>
+              </div>
+            </div>
           </div>
-          <div className="rounded-2xl border border-gray-100 bg-white/80 px-4 py-3">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">Visure 7g</p>
-            <p className="mt-2 text-sm font-semibold text-gray-900">
-              {formatMetricNumber(runtimeMetrics?.last_7_days.processed_requests ?? null)}
-            </p>
-            <p className="mt-1 text-xs text-gray-500">
-              successo {formatMetricNumber(runtimeMetrics?.last_7_days.success_rate ?? null, 2)}% · batch{" "}
-              {formatMetricNumber(runtimeMetrics?.last_7_days.batches_total ?? null)}
-            </p>
-          </div>
-          <div className="rounded-2xl border border-gray-100 bg-white/80 px-4 py-3">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">Tempo medio</p>
-            <p className="mt-2 text-sm font-semibold text-gray-900">
-              {formatMetricSeconds(runtimeMetrics?.totals.average_request_duration_seconds ?? null)}
-            </p>
-            <p className="mt-1 text-xs text-gray-500">
-              batch {formatMetricMinutes(runtimeMetrics?.totals.average_batch_duration_minutes ?? null)}
-            </p>
-          </div>
-          <div className="rounded-2xl border border-gray-100 bg-white/80 px-4 py-3">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">Finestra operativa</p>
-            <p className="mt-2 text-sm font-semibold text-gray-900">{runtimeMetrics?.operating_window.state_label ?? "—"}</p>
-            <p className="mt-1 text-xs text-gray-500">{operatingWindowHint}</p>
+          <div className="space-y-4">
+            <div className="rounded-[24px] border border-[#d9dfd6] bg-white/85 p-5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#1D4E35]">Da controllare</p>
+              {attentionItems.length > 0 ? (
+                <div className="mt-4 space-y-2">
+                  {attentionItems.slice(0, 4).map((item) => (
+                    <div key={item} className="rounded-2xl border border-amber-100 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                      {item}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-4 rounded-2xl border border-emerald-100 bg-emerald-50 px-3 py-3 text-sm text-emerald-900">
+                  Nessuna criticità evidente. Le credenziali sono attive e non risultano blocchi operativi.
+                </div>
+              )}
+            </div>
+            <div className="rounded-[24px] border border-[#d9dfd6] bg-white/85 p-5">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#1D4E35]">Monitor rapido</p>
+              <div className="mt-4 space-y-3 text-sm text-gray-600">
+                <div className="flex items-start justify-between gap-3">
+                  <span>Finestra operativa</span>
+                  <span className="text-right font-semibold text-gray-900">{runtimeMetrics?.operating_window.state_label ?? "—"}</span>
+                </div>
+                <p className="text-xs leading-5 text-gray-500">{operatingWindowHint}</p>
+                <div className="flex items-start justify-between gap-3">
+                  <span>CAPTCHA gestiti</span>
+                  <span className="text-right font-semibold text-gray-900">
+                    {formatMetricNumber(captchaSummary?.processed ?? null)} totali
+                  </span>
+                </div>
+                <p className="text-xs leading-5 text-gray-500">
+                  corretti {formatMetricNumber(captchaSummary?.correct ?? null)} · errati {formatMetricNumber(captchaSummary?.wrong ?? null)}
+                </p>
+                <div className="flex items-start justify-between gap-3">
+                  <span>Ultimo uso pool</span>
+                  <span className="text-right font-semibold text-gray-900">
+                    {latestCapacitasUsage ? formatDateTime(latestCapacitasUsage) : "Mai"}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
-        <div className="mt-3 grid gap-3 lg:grid-cols-[1.1fr,1fr,1fr]">
-          <ElaborazioneNoticeCard
-            title="ANPR batch a ruolo"
-            description={
-              anprSummary
-                ? `${anprSummary.calls_today}/${anprSummary.effective_daily_limit} chiamate oggi · batch ${anprSummary.batch_size} · ruolo ${anprSummary.ruolo_year ?? "auto"}`
-                : "Monitor chiamate e run ANPR sui soggetti a ruolo."
-            }
-            tone={
-              anprSummary && anprSummary.calls_today >= anprSummary.effective_daily_limit
-                ? "warning"
-                : "neutral"
-            }
-            compact
-          />
-          <div className="rounded-2xl border border-gray-100 bg-white/80 px-4 py-3">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">Ultimo processato</p>
-            <p className="mt-2 text-sm font-semibold text-gray-900">
-              {runtimeMetrics?.totals.latest_processed_at ? formatDateTime(runtimeMetrics.totals.latest_processed_at) : "Nessun dato"}
-            </p>
-            <p className="mt-1 text-xs text-gray-500">
-              totali {formatMetricNumber(runtimeMetrics?.totals.processed_requests ?? null)} · fallite{" "}
-              {formatMetricNumber(runtimeMetrics?.totals.requests_failed ?? null)} · non trovate{" "}
-              {formatMetricNumber(runtimeMetrics?.totals.requests_not_found ?? null)}
-            </p>
+        <div className="mt-4 grid items-start gap-3 lg:grid-cols-[0.95fr,1.05fr]">
+          <div
+            className={[
+              "rounded-2xl border px-4 py-3",
+              latestAnprRun?.status === "completed_with_errors" ? "border-amber-200 bg-amber-50 text-amber-900" : "border-gray-100 bg-white/80 text-gray-700",
+            ].join(" ")}
+          >
+            <p className="text-sm font-semibold text-gray-900">Ultimo run ANPR</p>
+            {latestAnprRun ? (
+              <>
+                <p className="mt-2 text-sm leading-5">
+                  {formatDateTime(latestAnprRun.started_at)} · {latestAnprRun.status}
+                </p>
+                <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                  <div className="rounded-xl bg-white/60 px-3 py-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Questo run</p>
+                    <p className="mt-1 text-sm font-semibold text-gray-900">{formatMetricNumber(latestAnprRun.calls_used)} chiamate</p>
+                  </div>
+                  <div className="rounded-xl bg-white/60 px-3 py-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Soggetti recenti</p>
+                    <p className="mt-1 text-sm font-semibold text-gray-900">{formatMetricNumber(totalAnprRecentSubjects)}</p>
+                  </div>
+                  <div className="rounded-xl bg-white/60 px-3 py-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Call recenti</p>
+                    <p className="mt-1 text-sm font-semibold text-gray-900">{formatMetricNumber(totalAnprRecentCalls)}</p>
+                  </div>
+                  <div className="rounded-xl bg-white/60 px-3 py-2">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-500">Errori recenti</p>
+                    <p className="mt-1 text-sm font-semibold text-gray-900">{formatMetricNumber(totalAnprRecentErrors)}</p>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <p className="mt-2 text-sm text-gray-500">Nessuna esecuzione ANPR registrata.</p>
+            )}
           </div>
           <div className="rounded-2xl border border-gray-100 bg-white/80 px-4 py-3">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">Ultimo run ANPR</p>
-            <p className="mt-2 text-sm font-semibold text-gray-900">
-              {anprSummary?.recent_runs[0] ? formatDateTime(anprSummary.recent_runs[0].started_at) : "Nessun run"}
-            </p>
-            <p className="mt-1 text-xs text-gray-500">
-              {anprSummary?.recent_runs[0]
-                ? `${anprSummary.recent_runs[0].status} · ${anprSummary.recent_runs[0].calls_used} chiamate · ${anprSummary.recent_runs[0].subjects_processed} soggetti`
-                : "Nessuna esecuzione registrata"}
-            </p>
-          </div>
-          <div className="rounded-2xl border border-gray-100 bg-white/80 px-4 py-3">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">Storico run</p>
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">Storico ANPR recente</p>
             {anprSummary?.recent_runs.length ? (
-              <div className="mt-2 space-y-2">
+              <p className="mt-2 text-xs text-gray-500">
+                Totali: {formatMetricNumber(totalAnprRecentCalls)} call · {formatMetricNumber(totalAnprRecentSubjects)} soggetti ·{" "}
+                {formatMetricNumber(totalAnprRecentDeceased)} deceduti · {formatMetricNumber(totalAnprRecentErrors)} errori
+              </p>
+            ) : null}
+            {anprSummary?.recent_runs.length ? (
+              <div className="mt-3 space-y-1.5">
                 {anprSummary.recent_runs.slice(0, 3).map((run) => (
-                  <div key={run.id} className="flex items-center justify-between gap-3 text-xs text-gray-600">
+                  <div key={run.id} className="flex items-center justify-between gap-3 rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-600">
                     <span className="truncate">{formatDateTime(run.started_at)}</span>
                     <span className="shrink-0">{run.calls_used} call</span>
-                    <span className="shrink-0">{run.status}</span>
+                    <span className="shrink-0 font-medium text-gray-800">{run.status}</span>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="mt-2 text-xs text-gray-500">Nessun run registrato.</p>
+              <p className="mt-3 text-xs text-gray-500">Nessun run registrato.</p>
             )}
           </div>
         </div>
       </ElaborazioneHero>
 
-      <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
+      <article id="autodoc-mezzi" className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
         <ElaborazionePanelHeader
           badge={
             <>
@@ -935,10 +1035,10 @@ export default function ElaborazioniPage() {
               <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
                 <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">Modalità</p>
                 <p className="mt-2 text-sm font-semibold text-gray-900">
-                  {autodocSyncJob?.params_json?.only_with_autodoc_url ? "Solo URL noti" : "Parco completo"}
+                  {autodocSyncJob?.params_json?.force_refresh ? "Refresh URL salvati" : "Solo non sincronizzati"}
                 </p>
                 <p className="mt-1 text-xs text-gray-500">
-                  {autodocSyncJob?.params_json?.force_refresh ? "refresh forzato" : "riuso dati salvati"}
+                  La sync massiva aggiorna solo i mezzi che hanno già un link AUTODOC salvato.
                 </p>
               </div>
             </div>
@@ -957,7 +1057,7 @@ export default function ElaborazioniPage() {
             <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#1D4E35]">Azioni AUTODOC</p>
             <h3 className="mt-2 text-lg font-semibold text-gray-900">Avvio e monitoraggio run</h3>
             <p className="mt-2 text-sm leading-6 text-gray-600">
-              La sync completa forza il refresh dei dettagli AUTODOC su tutto il parco mezzi. La modalità veloce lavora solo sui mezzi che hanno già un link AUTODOC salvato.
+              La sync massiva AUTODOC aggiorna i mezzi che hanno già un link AUTODOC salvato. Il refresh forzato rilegge tutte le schede note; la modalità veloce salta quelle già sincronizzate.
             </p>
             <div className="mt-5 flex flex-wrap gap-3">
               <button
@@ -966,7 +1066,7 @@ export default function ElaborazioniPage() {
                 onClick={() => void handleQueueAutodocSync("full")}
                 type="button"
               >
-                {autodocSyncBusy === "full" ? "Avvio sync..." : "Sync completa"}
+                {autodocSyncBusy === "full" ? "Avvio refresh..." : "Refresh URL salvati"}
               </button>
               <button
                 className="btn-secondary"
@@ -974,7 +1074,7 @@ export default function ElaborazioniPage() {
                 onClick={() => void handleQueueAutodocSync("cached")}
                 type="button"
               >
-                {autodocSyncBusy === "cached" ? "Avvio refresh..." : "Solo URL noti"}
+                {autodocSyncBusy === "cached" ? "Avvio sync..." : "Solo non sincronizzati"}
               </button>
               <button
                 className="btn-secondary"

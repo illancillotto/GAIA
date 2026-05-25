@@ -230,7 +230,7 @@ function DashboardContent() {
   async function handleAutodocSync(): Promise<void> {
     setAutodocSyncLoading(true);
     try {
-      const payload = await queueVehicleAutodocSync({ only_with_autodoc_url: false, force_refresh: true });
+      const payload = await queueVehicleAutodocSync({ only_with_autodoc_url: true, force_refresh: true });
       setAutodocSyncJob(payload.job);
       setAutodocSyncError(null);
     } catch (error) {

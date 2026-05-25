@@ -119,6 +119,7 @@ export function ModuleSidebar({
         <NavItem href="/elaborazioni/visure" icon={SearchIcon} label="Visure" match="prefix" />
         <NavItem href="/elaborazioni/capacitas" icon={SearchIcon} label="Capacitas" match="prefix" />
         <NavItem href="/elaborazioni/ade-alignment" icon={GridIcon} label="Allineamento AdE" match="prefix" />
+        <NavItem href="/elaborazioni/autodoc" icon={TruckIcon} label="AUTODOC mezzi" match="prefix" />
 
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Configurazioni</p>
         <NavItem href="/elaborazioni/settings" icon={LockIcon} label="Credenziali" />
