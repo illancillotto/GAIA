@@ -493,7 +493,14 @@ export default function MapContainer({
         const clickableLayers = [...overlayFillIds, "particelle-hitbox"].filter(
           (l) => map.getLayer(l) != null,
         );
-        const features = map.queryRenderedFeatures(event.point, { layers: clickableLayers });
+        const clickPadding = 6;
+        const features = map.queryRenderedFeatures(
+          [
+            [event.point.x - clickPadding, event.point.y - clickPadding],
+            [event.point.x + clickPadding, event.point.y + clickPadding],
+          ],
+          { layers: clickableLayers },
+        );
         const clickableFeature = features.find((feature) => {
           const featureId = feature.properties?.id;
           return featureId != null && String(featureId).trim().length > 0;

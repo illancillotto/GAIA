@@ -1576,7 +1576,7 @@ export default function CatastoGisPage() {
                   className={isExpanded ? "min-h-0 h-full rounded-2xl" : "min-h-0 rounded-none"}
                 />
                 {popupParticella ? (
-                  <div className="pointer-events-none absolute inset-x-3 bottom-3 z-10 sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-24 sm:w-[380px]">
+                  <div className="pointer-events-none absolute inset-x-3 bottom-3 z-30 sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-24 sm:w-[380px]">
                     <div
                       className="pointer-events-auto rounded-2xl border border-white/70 bg-white/[0.88] p-4 shadow-2xl ring-1 ring-black/5 backdrop-blur-xl"
                       onClick={(event) => event.stopPropagation()}
