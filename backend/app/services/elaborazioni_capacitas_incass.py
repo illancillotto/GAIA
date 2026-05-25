@@ -4,18 +4,21 @@ import asyncio
 from datetime import date, datetime, timezone
 from uuid import UUID
 
-from sqlalchemy import delete, or_, select
+from sqlalchemy import exists, delete, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.capacitas import CapacitasInCassSyncJob
 from app.modules.elaborazioni.capacitas.apps.incass.client import InCassClient
 from app.modules.elaborazioni.capacitas.models import (
     CapacitasInCassNoticeRow,
+    CapacitasInCassRuoloHarvestRequest,
+    CapacitasInCassRuoloHarvestResponse,
     CapacitasInCassSyncItemResult,
     CapacitasInCassSyncJobCreateRequest,
     CapacitasInCassSyncJobOut,
     CapacitasInCassSyncJobResult,
 )
+from app.modules.ruolo.models import RuoloAvviso
 from app.modules.utenze.models import (
     AnagraficaCompany,
     AnagraficaPaymentNotice,
@@ -63,6 +66,76 @@ def delete_incass_sync_job(db: Session, job: CapacitasInCassSyncJob) -> None:
 
 def serialize_incass_sync_job(job: CapacitasInCassSyncJob) -> CapacitasInCassSyncJobOut:
     return CapacitasInCassSyncJobOut.model_validate(job)
+
+
+def load_incass_ruolo_subject_ids(
+    db: Session,
+    *,
+    anno: int | None,
+    limit_subjects: int | None,
+    exclude_synced_subjects: bool,
+) -> list[UUID]:
+    stmt = (
+        select(RuoloAvviso.subject_id)
+        .where(RuoloAvviso.subject_id.is_not(None))
+        .group_by(RuoloAvviso.subject_id)
+        .order_by(RuoloAvviso.subject_id)
+    )
+    if anno is not None:
+        stmt = stmt.where(RuoloAvviso.anno_tributario == anno)
+    if exclude_synced_subjects:
+        synced_notice_exists = exists(
+            select(AnagraficaPaymentNotice.id).where(
+                AnagraficaPaymentNotice.subject_id == RuoloAvviso.subject_id,
+                AnagraficaPaymentNotice.source_system == "incass",
+            )
+        )
+        stmt = stmt.where(~synced_notice_exists)
+    if limit_subjects is not None:
+        stmt = stmt.limit(limit_subjects)
+    return [value for value in db.scalars(stmt).all() if value is not None]
+
+
+def create_incass_ruolo_harvest_jobs(
+    db: Session,
+    *,
+    requested_by_user_id: int | None,
+    payload: CapacitasInCassRuoloHarvestRequest,
+) -> CapacitasInCassRuoloHarvestResponse:
+    subject_ids = load_incass_ruolo_subject_ids(
+        db,
+        anno=payload.anno,
+        limit_subjects=payload.limit_subjects,
+        exclude_synced_subjects=payload.exclude_synced_subjects,
+    )
+    job_ids: list[int] = []
+    for index in range(0, len(subject_ids), payload.chunk_size):
+        chunk = subject_ids[index:index + payload.chunk_size]
+        if not chunk:
+            continue
+        job = create_incass_sync_job(
+            db,
+            requested_by_user_id=requested_by_user_id,
+            credential_id=payload.credential_id,
+            payload=CapacitasInCassSyncJobCreateRequest(
+                credential_id=payload.credential_id,
+                subject_ids=chunk,
+                include_details=payload.include_details,
+                include_partitario=payload.include_partitario,
+                continue_on_error=payload.continue_on_error,
+                throttle_ms=payload.throttle_ms,
+            ),
+        )
+        job_ids.append(job.id)
+    return CapacitasInCassRuoloHarvestResponse(
+        anno=payload.anno,
+        chunk_size=payload.chunk_size,
+        total_subjects=len(subject_ids),
+        total_jobs=len(job_ids),
+        job_ids=job_ids,
+        credential_id=payload.credential_id,
+        exclude_synced_subjects=payload.exclude_synced_subjects,
+    )
 
 
 def prepare_incass_sync_jobs_for_recovery(db: Session) -> list[int]:
@@ -124,17 +197,29 @@ async def run_incass_sync_job(
             synced_for_subject = 0
             for row in result.rows:
                 detail_info_text: str | None = None
+                detail_info_html: str | None = None
                 detail_payload: dict[str, object] | None = None
                 pdf_links_json: list[dict[str, str | None]] = []
                 if payload.include_details and row.avviso:
                     detail = await client.fetch_notice_detail(row.avviso)
                     detail_info_text = detail.info_text
+                    detail_info_html = detail.info_html
                     detail_payload = detail.model_dump(mode="json")
                     pdf_links_json = [pdf.model_dump(mode="json") for pdf in detail.pdf_links]
                 if payload.include_partitario and row.avviso:
-                    partitario_text = await client.fetch_notice_partitario(row.avviso)
-                    if partitario_text:
-                        detail_info_text = f"{detail_info_text}\n\n{partitario_text}".strip() if detail_info_text else partitario_text
+                    partitario = await client.fetch_notice_partitario(row.avviso)
+                    if partitario is not None:
+                        partitario_text = partitario.info_text
+                        if partitario_text:
+                            detail_info_text = (
+                                f"{detail_info_text}\n\n{partitario_text}".strip()
+                                if detail_info_text
+                                else partitario_text
+                            )
+                        detail_payload = {
+                            **(detail_payload or {}),
+                            "partitario": partitario.model_dump(mode="json"),
+                        }
 
                 _upsert_payment_notice(
                     db,
@@ -142,6 +227,7 @@ async def run_incass_sync_job(
                     identifier=identifier,
                     display_name=display_name,
                     row=row,
+                    detail_info_html=detail_info_html,
                     detail_info_text=detail_info_text,
                     pdf_links_json=pdf_links_json,
                     detail_payload=detail_payload,
@@ -262,6 +348,7 @@ def _upsert_payment_notice(
     identifier: str,
     display_name: str,
     row: CapacitasInCassNoticeRow,
+    detail_info_html: str | None,
     detail_info_text: str | None,
     pdf_links_json: list[dict[str, str | None]],
     detail_payload: dict[str, object] | None,
@@ -304,6 +391,7 @@ def _upsert_payment_notice(
     existing.importo_rateizzato = row.rateizzato
     existing.importo_annullato = row.annullato
     existing.detail_url = row.detail_url
+    existing.detail_info_html = detail_info_html
     existing.detail_info_text = detail_info_text
     existing.pdf_links_json = pdf_links_json or None
     existing.raw_row_json = row.model_dump(mode="json", by_alias=True)

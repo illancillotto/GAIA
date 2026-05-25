@@ -1,7 +1,7 @@
 from collections.abc import Generator
 from datetime import UTC, date, datetime, timedelta
 from io import BytesIO
-from uuid import UUID
+from uuid import UUID, uuid4
 import zipfile
 
 from cryptography.fernet import Fernet
@@ -18,6 +18,8 @@ from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.models.capacitas import CapacitasInCassSyncJob
+from app.modules.ruolo.models import RuoloAvviso
+from app.modules.utenze.models import AnagraficaSubject
 from app.modules.utenze.anpr.models import AnprJobRun, AnprSyncConfig
 from app.models.catasto import (
     CatastoBatch,
@@ -801,6 +803,66 @@ def test_capacitas_incass_jobs_crud_and_rerun() -> None:
 
     not_found_response = client.get(f"/elaborazioni/capacitas/incass/avvisi/jobs/{job_id}", headers=auth_headers())
     assert not_found_response.status_code == 404
+
+
+def test_capacitas_incass_ruolo_harvest_creates_chunked_jobs() -> None:
+    db = TestingSessionLocal()
+    try:
+        subjects = [
+            AnagraficaSubject(subject_type="company", source_name_raw=f"Soggetto {index}")
+            for index in range(3)
+        ]
+        db.add_all(subjects)
+        db.flush()
+
+        for index, subject in enumerate(subjects):
+            db.add(
+                RuoloAvviso(
+                    import_job_id=uuid4(),
+                    codice_cnc=f"CNC{index}",
+                    anno_tributario=2025,
+                    subject_id=subject.id,
+                )
+            )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.post(
+        "/elaborazioni/capacitas/incass/avvisi/jobs/ruolo-harvest",
+        headers=auth_headers(),
+        json={
+            "anno": 2025,
+            "chunk_size": 2,
+            "include_details": True,
+            "include_partitario": True,
+            "continue_on_error": True,
+            "throttle_ms": 250,
+        },
+    )
+
+    assert response.status_code == 202
+    payload = response.json()
+    assert payload["anno"] == 2025
+    assert payload["chunk_size"] == 2
+    assert payload["total_subjects"] == 3
+    assert payload["total_jobs"] == 2
+    assert len(payload["job_ids"]) == 2
+
+    db = TestingSessionLocal()
+    try:
+        jobs = (
+            db.query(CapacitasInCassSyncJob)
+            .filter(CapacitasInCassSyncJob.id.in_(payload["job_ids"]))
+            .order_by(CapacitasInCassSyncJob.id.asc())
+            .all()
+        )
+        assert len(jobs) == 2
+        assert jobs[0].status == "pending"
+        assert len(jobs[0].payload_json["subject_ids"]) == 2
+        assert len(jobs[1].payload_json["subject_ids"]) == 1
+    finally:
+        db.close()
 
 
 def test_credentials_test_queues_saved_credentials_and_exposes_worker_result() -> None:

@@ -50,6 +50,8 @@ import type {
   CapacitasAnagraficaHistoryImportJob,
   CapacitasAnagraficaHistoryImportResult,
   CapacitasInCassSyncJob,
+  CapacitasInCassRuoloHarvestInput,
+  CapacitasInCassRuoloHarvestResult,
   CapacitasInCassSyncJobCreateInput,
   CapacitasLookupOption,
   CapacitasParticellaAnomalia,
@@ -1549,6 +1551,19 @@ export async function createCapacitasInCassSyncJob(
   payload: CapacitasInCassSyncJobCreateInput,
 ): Promise<CapacitasInCassSyncJob> {
   return request<CapacitasInCassSyncJob>("/elaborazioni/capacitas/incass/avvisi/jobs", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createCapacitasInCassRuoloHarvest(
+  token: string,
+  payload: CapacitasInCassRuoloHarvestInput,
+): Promise<CapacitasInCassRuoloHarvestResult> {
+  return request<CapacitasInCassRuoloHarvestResult>("/elaborazioni/capacitas/incass/avvisi/jobs/ruolo-harvest", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,

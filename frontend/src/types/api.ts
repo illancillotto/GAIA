@@ -1499,6 +1499,28 @@ export type CapacitasInCassSyncJobCreateInput = {
   throttle_ms?: number;
 };
 
+export type CapacitasInCassRuoloHarvestInput = {
+  credential_id?: number | null;
+  anno?: number | null;
+  chunk_size?: number;
+  limit_subjects?: number | null;
+  exclude_synced_subjects?: boolean;
+  include_details?: boolean;
+  include_partitario?: boolean;
+  continue_on_error?: boolean;
+  throttle_ms?: number;
+};
+
+export type CapacitasInCassRuoloHarvestResult = {
+  anno: number | null;
+  chunk_size: number;
+  total_subjects: number;
+  total_jobs: number;
+  job_ids: number[];
+  credential_id: number | null;
+  exclude_synced_subjects: boolean;
+};
+
 export type CapacitasInCassSyncItemResult = {
   subject_id: string;
   identifier: string | null;

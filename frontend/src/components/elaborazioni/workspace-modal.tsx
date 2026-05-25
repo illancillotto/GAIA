@@ -8,7 +8,7 @@ import { CatastoDocumentDetailWorkspace } from "@/components/catasto/document-de
 import { ElaborazioneArchiveWorkspaceContent } from "@/components/elaborazioni/archive-workspace";
 import { ElaborazioniAutodocWorkspace } from "@/components/elaborazioni/autodoc-workspace";
 import { ElaborazioneBatchDetailWorkspace } from "@/components/elaborazioni/batch-detail-workspace";
-import { ElaborazioniCapacitasWorkspace } from "@/components/elaborazioni/capacitas-workspace";
+import { ElaborazioniCapacitasWorkspace, type CapacitasSection } from "@/components/elaborazioni/capacitas-workspace";
 import { ElaborazioniAdeAlignmentWorkspace } from "@/components/elaborazioni/ade-alignment-workspace";
 import { ElaborazioniAnprWorkspace } from "@/components/elaborazioni/anpr-workspace";
 import { ElaborazioniBonificaSyncWorkspace } from "@/components/elaborazioni/bonifica-sync-workspace";
@@ -127,6 +127,8 @@ function NativeWorkspaceRenderer({
     onRendered();
   }, [href, onRendered]);
 
+  const capacitasSection = getCapacitasSectionFromHref(href);
+
   if (href === "/elaborazioni/new-single" || href === "/elaborazioni/visure") {
     return <ElaborazioneRequestWorkspace embedded initialMode="single" onOpenBatch={(batchId) => onNavigate(`/elaborazioni/batches/${batchId}`)} />;
   }
@@ -139,8 +141,8 @@ function NativeWorkspaceRenderer({
     return <ElaborazioneArchiveWorkspaceContent embedded initialView="batches" isolatedView />;
   }
 
-  if (href === "/elaborazioni/capacitas") {
-    return <ElaborazioniCapacitasWorkspace embedded />;
+  if (href.startsWith("/elaborazioni/capacitas")) {
+    return <ElaborazioniCapacitasWorkspace embedded initialSection={capacitasSection} />;
   }
 
   if (href === "/elaborazioni/settings") {
@@ -189,4 +191,19 @@ function NativeWorkspaceRenderer({
       title={href}
     />
   );
+}
+
+function getCapacitasSectionFromHref(href: string): CapacitasSection {
+  if (typeof window !== "undefined") {
+    try {
+      const url = new URL(href, window.location.origin);
+      const rawSection = url.searchParams.get("section") ?? url.hash.replace(/^#/, "");
+      if (rawSection === "particelle" || rawSection === "storico" || rawSection === "terreni" || rawSection === "certificati" || rawSection === "anomalie" || rawSection === "incass") {
+        return rawSection;
+      }
+    } catch {
+      return "particelle";
+    }
+  }
+  return "particelle";
 }

@@ -15,6 +15,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { DocumentIcon, RefreshIcon, ServerIcon, UsersIcon } from "@/components/ui/icons";
 import {
   createCapacitasAnagraficaHistoryJob,
+  createCapacitasInCassRuoloHarvest,
   createCapacitasInCassSyncJob,
   createCapacitasParticelleSyncJob,
   createCapacitasTerreniJob,
@@ -45,6 +46,7 @@ import type {
   CapacitasAnagraficaHistoryImportResult,
   CapacitasCredential,
   CapacitasFrazioneCandidate,
+  CapacitasInCassRuoloHarvestResult,
   CapacitasInCassSyncJob,
   CapacitasParticellaAnomalia,
   CapacitasParticelleSyncJob,
@@ -57,7 +59,7 @@ import type {
 const JOB_POLL_INTERVAL_MS = 5000;
 const PREVIEW_ROWS_LIMIT = 20;
 
-type CapacitasSection = "particelle" | "storico" | "terreni" | "certificati" | "anomalie" | "incass";
+export type CapacitasSection = "particelle" | "storico" | "terreni" | "certificati" | "anomalie" | "incass";
 
 const CAPACITAS_SECTIONS: Array<{ id: CapacitasSection; label: string; description: string }> = [
   { id: "particelle", label: "Sync particelle", description: "Riallinea il catalogo particelle GAIA" },
@@ -495,10 +497,16 @@ function isIncassSyncJobResult(value: unknown): value is {
   );
 }
 
-export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?: boolean }) {
+export function ElaborazioniCapacitasWorkspace({
+  embedded = false,
+  initialSection = "particelle",
+}: {
+  embedded?: boolean;
+  initialSection?: CapacitasSection;
+}) {
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [credentials, setCredentials] = useState<CapacitasCredential[]>([]);
-  const [activeSection, setActiveSection] = useState<CapacitasSection>("particelle");
+  const [activeSection, setActiveSection] = useState<CapacitasSection>(initialSection);
 
   const [terreniJobs, setTerreniJobs] = useState<CapacitasTerreniJob[]>([]);
   const [terreniJobsLoading, setTerreniJobsLoading] = useState(false);
@@ -572,6 +580,7 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
   const [incassJobs, setIncassJobs] = useState<CapacitasInCassSyncJob[]>([]);
   const [incassJobsLoading, setIncassJobsLoading] = useState(false);
   const [incassCreatingJob, setIncassCreatingJob] = useState(false);
+  const [incassHarvestCreating, setIncassHarvestCreating] = useState(false);
   const [incassJobBusyId, setIncassJobBusyId] = useState<number | null>(null);
   const [incassDeletingJobId, setIncassDeletingJobId] = useState<number | null>(null);
   const [incassMonitorSessionExpired, setIncassMonitorSessionExpired] = useState(false);
@@ -586,6 +595,18 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
     continue_on_error: true,
     throttle_ms: "250",
   });
+  const [incassHarvestForm, setIncassHarvestForm] = useState({
+    credential_id: "",
+    anno: "2025",
+    chunk_size: "100",
+    limit_subjects: "",
+    exclude_synced_subjects: true,
+    include_details: true,
+    include_partitario: true,
+    continue_on_error: true,
+    throttle_ms: "250",
+  });
+  const [incassHarvestResult, setIncassHarvestResult] = useState<CapacitasInCassRuoloHarvestResult | null>(null);
 
   const [refetchForm, setRefetchForm] = useState({ credential_id: "", limit: 100, throttle_ms: 300 });
   const [refetchBusy, setRefetchBusy] = useState(false);
@@ -633,6 +654,10 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
     void loadHistoryJobs();
     void loadIncassJobs();
   }, []);
+
+  useEffect(() => {
+    setActiveSection(initialSection);
+  }, [initialSection]);
 
   useEffect(() => {
     if (!jobsInFlight) return undefined;
@@ -1192,6 +1217,39 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
       setIncassError(createError instanceof Error ? createError.message : "Errore avvio job avvisi");
     } finally {
       setIncassCreatingJob(false);
+    }
+  }
+
+  async function handleCreateIncassHarvest(): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) return;
+
+    setIncassHarvestCreating(true);
+    try {
+      const result = await createCapacitasInCassRuoloHarvest(token, {
+        credential_id: incassHarvestForm.credential_id ? Number.parseInt(incassHarvestForm.credential_id, 10) : undefined,
+        anno: incassHarvestForm.anno.trim() ? Number.parseInt(incassHarvestForm.anno, 10) : undefined,
+        chunk_size: incassHarvestForm.chunk_size.trim() ? Number.parseInt(incassHarvestForm.chunk_size, 10) : 100,
+        limit_subjects: incassHarvestForm.limit_subjects.trim() ? Number.parseInt(incassHarvestForm.limit_subjects, 10) : undefined,
+        exclude_synced_subjects: incassHarvestForm.exclude_synced_subjects,
+        include_details: incassHarvestForm.include_details,
+        include_partitario: incassHarvestForm.include_partitario,
+        continue_on_error: incassHarvestForm.continue_on_error,
+        throttle_ms: incassHarvestForm.throttle_ms.trim() ? Number.parseInt(incassHarvestForm.throttle_ms, 10) : 250,
+      });
+      setIncassMonitorSessionExpired(false);
+      setIncassHarvestResult(result);
+      setIncassStatusMessage(
+        result.total_jobs > 0
+          ? `Creati ${result.total_jobs} job inCass per ${result.total_subjects} soggetti a ruolo.`
+          : "Nessun soggetto a ruolo eleggibile per il batch richiesto.",
+      );
+      setIncassError(null);
+      await loadIncassJobs();
+    } catch (createError) {
+      setIncassError(createError instanceof Error ? createError.message : "Errore creazione job harvest inCass");
+    } finally {
+      setIncassHarvestCreating(false);
     }
   }
 
@@ -1801,6 +1859,143 @@ export function ElaborazioniCapacitasWorkspace({ embedded = false }: { embedded?
                   : historyBatchFile
                     ? `${historyBatchItems.length} righe pronte${historyBatchSkipped > 0 ? ` · ${historyBatchSkipped} vuote saltate` : ""}`
                     : "Nessun file selezionato"}
+              </span>
+            </div>
+          </div>
+        </article>
+
+        <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white p-0 shadow-panel">
+          <ElaborazionePanelHeader
+            badge={
+              <>
+                <ServerIcon className="h-3.5 w-3.5" />
+                Harvest ruolo
+              </>
+            }
+            title="Crea job massivi inCass dai soggetti a ruolo"
+            description="Usa l'archivio ruolo come input, spezza i soggetti in chunk e genera una coda di job inCass gestibile direttamente da Elaborazioni."
+          />
+          <div className="space-y-6 p-6">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+              <label className="space-y-2">
+                <span className="label-caption">Credenziale</span>
+                <select
+                  className="form-control"
+                  value={incassHarvestForm.credential_id}
+                  onChange={(event) => setIncassHarvestForm((current) => ({ ...current, credential_id: event.target.value }))}
+                >
+                  <option value="">Auto-selezione backend</option>
+                  {credentials.map((credential) => (
+                    <option key={credential.id} value={credential.id}>
+                      {credential.label} · {credential.username}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="space-y-2">
+                <span className="label-caption">Anno ruolo</span>
+                <input
+                  className="form-control"
+                  inputMode="numeric"
+                  placeholder="Vuoto = tutti gli anni"
+                  value={incassHarvestForm.anno}
+                  onChange={(event) => setIncassHarvestForm((current) => ({ ...current, anno: event.target.value.replace(/[^\d]/g, "") }))}
+                />
+              </label>
+              <label className="space-y-2">
+                <span className="label-caption">Soggetti per job</span>
+                <input
+                  className="form-control"
+                  inputMode="numeric"
+                  placeholder="100"
+                  value={incassHarvestForm.chunk_size}
+                  onChange={(event) => setIncassHarvestForm((current) => ({ ...current, chunk_size: event.target.value.replace(/[^\d]/g, "") }))}
+                />
+              </label>
+              <label className="space-y-2">
+                <span className="label-caption">Limite soggetti</span>
+                <input
+                  className="form-control"
+                  inputMode="numeric"
+                  placeholder="Vuoto = tutti"
+                  value={incassHarvestForm.limit_subjects}
+                  onChange={(event) => setIncassHarvestForm((current) => ({ ...current, limit_subjects: event.target.value.replace(/[^\d]/g, "") }))}
+                />
+              </label>
+              <label className="space-y-2">
+                <span className="label-caption">Pausa richieste (ms)</span>
+                <input
+                  className="form-control"
+                  inputMode="numeric"
+                  placeholder="250"
+                  value={incassHarvestForm.throttle_ms}
+                  onChange={(event) => setIncassHarvestForm((current) => ({ ...current, throttle_ms: event.target.value.replace(/[^\d]/g, "") }))}
+                />
+              </label>
+              <div className="rounded-[20px] border border-[#d9dfd6] bg-[#f8fbf8] px-4 py-3 text-sm text-gray-600">
+                {incassHarvestResult ? (
+                  <>
+                    Ultimo batch: <span className="font-medium text-gray-900">{incassHarvestResult.total_jobs}</span> job per{" "}
+                    <span className="font-medium text-gray-900">{incassHarvestResult.total_subjects}</span> soggetti.
+                  </>
+                ) : (
+                  <>
+                    Pianifica un harvest completo da `ruolo` verso `inCass` senza usare script esterni.
+                  </>
+                )}
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <label className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
+                <input
+                  checked={incassHarvestForm.exclude_synced_subjects}
+                  className="h-4 w-4 accent-[#1D4E35]"
+                  type="checkbox"
+                  onChange={(event) => setIncassHarvestForm((current) => ({ ...current, exclude_synced_subjects: event.target.checked }))}
+                />
+                <span className="text-sm text-gray-700">Escludi soggetti già sincronizzati</span>
+              </label>
+              <label className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
+                <input
+                  checked={incassHarvestForm.include_details}
+                  className="h-4 w-4 accent-[#1D4E35]"
+                  type="checkbox"
+                  onChange={(event) => setIncassHarvestForm((current) => ({ ...current, include_details: event.target.checked }))}
+                />
+                <span className="text-sm text-gray-700">Salva dettaglio avviso</span>
+              </label>
+              <label className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
+                <input
+                  checked={incassHarvestForm.include_partitario}
+                  className="h-4 w-4 accent-[#1D4E35]"
+                  type="checkbox"
+                  onChange={(event) => setIncassHarvestForm((current) => ({ ...current, include_partitario: event.target.checked }))}
+                />
+                <span className="text-sm text-gray-700">Salva partitario completo</span>
+              </label>
+              <label className="flex items-center gap-3 rounded-lg border border-gray-100 bg-gray-50 px-4 py-3">
+                <input
+                  checked={incassHarvestForm.continue_on_error}
+                  className="h-4 w-4 accent-[#1D4E35]"
+                  type="checkbox"
+                  onChange={(event) => setIncassHarvestForm((current) => ({ ...current, continue_on_error: event.target.checked }))}
+                />
+                <span className="text-sm text-gray-700">Continua se un soggetto fallisce</span>
+              </label>
+            </div>
+
+            <div className="rounded-[20px] border border-[#d9dfd6] bg-[#f8fbf8] px-4 py-4 text-sm text-gray-600">
+              Questa modalità prende i <span className="font-medium text-gray-900">soggetti presenti in ruolo</span>, li divide in più job `inCass`
+              e li lascia nel monitor qui sotto. Serve per campagne massive sui casi con partitario troncato nel dump.
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              <button className="btn-primary" disabled={incassHarvestCreating} onClick={() => void handleCreateIncassHarvest()} type="button">
+                {incassHarvestCreating ? "Creo batch..." : "Crea batch job da ruolo"}
+              </button>
+              <span className="text-xs text-gray-500">
+                Il monitor sotto mostra sia i job singoli sia quelli generati dal batch ruolo.
               </span>
             </div>
           </div>

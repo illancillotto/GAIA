@@ -18,6 +18,8 @@ from app.modules.elaborazioni.capacitas.models import (
     CapacitasAnagraficaHistoryImportJobOut,
     CapacitasAnagraficaHistoryImportRequest,
     CapacitasAnagraficaHistoryImportResponse,
+    CapacitasInCassRuoloHarvestRequest,
+    CapacitasInCassRuoloHarvestResponse,
     CapacitasInCassSyncJobCreateRequest,
     CapacitasInCassSyncJobOut,
     CapacitasLookupOption,
@@ -58,6 +60,7 @@ from app.services.elaborazioni_capacitas_anagrafica_history import (
     serialize_anagrafica_history_job,
 )
 from app.services.elaborazioni_capacitas_incass import (
+    create_incass_ruolo_harvest_jobs,
     create_incass_sync_job,
     delete_incass_sync_job,
     expire_stale_incass_sync_jobs,
@@ -426,6 +429,25 @@ async def create_incass_job_route(
         payload=body,
     )
     return serialize_incass_sync_job(job)
+
+
+@router.post("/incass/avvisi/jobs/ruolo-harvest", response_model=CapacitasInCassRuoloHarvestResponse, status_code=status.HTTP_202_ACCEPTED)
+async def create_incass_ruolo_harvest_route(
+    body: CapacitasInCassRuoloHarvestRequest,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> CapacitasInCassRuoloHarvestResponse:
+    expire_stale_incass_sync_jobs(db)
+    if body.credential_id is not None:
+        try:
+            pick_credential(db, body.credential_id)
+        except RuntimeError as exc:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(exc)) from exc
+    return create_incass_ruolo_harvest_jobs(
+        db,
+        requested_by_user_id=current_user.id,
+        payload=body,
+    )
 
 
 @router.get("/incass/avvisi/jobs", response_model=list[CapacitasInCassSyncJobOut])

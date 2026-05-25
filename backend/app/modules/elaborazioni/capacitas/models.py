@@ -542,6 +542,41 @@ class CapacitasInCassNoticeDetail(BaseModel):
     raw_html: str | None = None
 
 
+class CapacitasInCassPartitarioParcel(BaseModel):
+    domanda_irrigua: str | None = None
+    distretto: str | None = None
+    foglio: str
+    particella: str
+    subalterno: str | None = None
+    sup_catastale_are: str | None = None
+    sup_catastale_ha: str | None = None
+    sup_irrigata_ha: str | None = None
+    coltura: str | None = None
+    importo_manut_euro: str | None = None
+    importo_irrig_euro: str | None = None
+    importo_ist_euro: str | None = None
+
+
+class CapacitasInCassPartitarioPartita(BaseModel):
+    codice_partita: str
+    comune_nome: str
+    contribuente: str | None = None
+    contribuente_cf: str | None = None
+    co_intestati_raw: str | None = None
+    importo_0648_euro: str | None = None
+    importo_0985_euro: str | None = None
+    importo_0668_euro: str | None = None
+    particelle: list[CapacitasInCassPartitarioParcel] = Field(default_factory=list)
+
+
+class CapacitasInCassPartitarioDetail(BaseModel):
+    avviso: str
+    info_html: str | None = None
+    info_text: str | None = None
+    partite: list[CapacitasInCassPartitarioPartita] = Field(default_factory=list)
+    raw_html: str | None = None
+
+
 class CapacitasInCassSyncItem(BaseModel):
     subject_id: UUID
     identifier: str | None = None
@@ -556,6 +591,28 @@ class CapacitasInCassSyncJobCreateRequest(BaseModel):
     include_partitario: bool = True
     continue_on_error: bool = True
     throttle_ms: int = Field(default=250, ge=0, le=5000)
+
+
+class CapacitasInCassRuoloHarvestRequest(BaseModel):
+    credential_id: int | None = None
+    anno: int | None = Field(default=None, ge=2000, le=2100)
+    chunk_size: int = Field(default=100, ge=1, le=500)
+    limit_subjects: int | None = Field(default=None, ge=1, le=50000)
+    exclude_synced_subjects: bool = False
+    include_details: bool = True
+    include_partitario: bool = True
+    continue_on_error: bool = True
+    throttle_ms: int = Field(default=250, ge=0, le=5000)
+
+
+class CapacitasInCassRuoloHarvestResponse(BaseModel):
+    anno: int | None = None
+    chunk_size: int
+    total_subjects: int
+    total_jobs: int
+    job_ids: list[int] = Field(default_factory=list)
+    credential_id: int | None = None
+    exclude_synced_subjects: bool = False
 
 
 class CapacitasInCassSyncItemResult(BaseModel):

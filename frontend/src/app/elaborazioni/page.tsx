@@ -25,6 +25,7 @@ import {
   getElaborazioneCredentials,
   getElaborazioneRuntimeMetrics,
   getBonificaSyncStatus,
+  listCapacitasInCassSyncJobs,
   listBonificaOristaneseCredentials,
   listCapacitasParticelleSyncJobs,
   listCapacitasCredentials,
@@ -42,6 +43,7 @@ import type {
   BonificaOristaneseCredential,
   BonificaSyncStatusResponse,
   CapacitasCredential,
+  CapacitasInCassSyncJob,
   CapacitasParticelleSyncJob,
   CapacitasParticelleSyncJobResult,
   CatastoDocument,
@@ -144,6 +146,10 @@ function isParticelleSyncJobResult(value: CapacitasParticelleSyncJob["result_jso
   return value != null && !Array.isArray(value) && typeof value === "object" && "progress_percent" in value;
 }
 
+function isInCassJobInFlight(status: string): boolean {
+  return status === "pending" || status === "processing" || status === "queued_resume";
+}
+
 function triggerDownload(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const anchor = window.document.createElement("a");
@@ -223,6 +229,7 @@ export default function ElaborazioniPage() {
   const [anprSummary, setAnprSummary] = useState<ElaborazioneAnprSummary | null>(null);
   const [runtimeMetrics, setRuntimeMetrics] = useState<ElaborazioneRuntimeMetrics | null>(null);
   const [capacitasCredentials, setCapacitasCredentials] = useState<CapacitasCredential[]>([]);
+  const [incassJobs, setIncassJobs] = useState<CapacitasInCassSyncJob[]>([]);
   const [particelleSyncJobs, setParticelleSyncJobs] = useState<CapacitasParticelleSyncJob[]>([]);
   const [bonificaCredentials, setBonificaCredentials] = useState<BonificaOristaneseCredential[]>([]);
   const [bonificaSyncStatus, setBonificaSyncStatus] = useState<BonificaSyncStatusResponse | null>(null);
@@ -252,6 +259,7 @@ export default function ElaborazioniPage() {
         anprSummaryResult,
         runtimeMetricsResult,
         capacitasResult,
+        incassJobsResult,
         particelleSyncResult,
         bonificaResult,
         bonificaSyncResult,
@@ -263,6 +271,7 @@ export default function ElaborazioniPage() {
         getElaborazioneAnprSummary(token),
         getElaborazioneRuntimeMetrics(token),
         listCapacitasCredentials(token),
+        listCapacitasInCassSyncJobs(token),
         listCapacitasParticelleSyncJobs(token),
         listBonificaOristaneseCredentials(token),
         getBonificaSyncStatus(token),
@@ -283,6 +292,7 @@ export default function ElaborazioniPage() {
       setAnprSummary(anprSummaryResult);
       setRuntimeMetrics(runtimeMetricsResult);
       setCapacitasCredentials(capacitasResult);
+      setIncassJobs(incassJobsResult);
       setParticelleSyncJobs(particelleSyncResult);
       setBonificaCredentials(bonificaResult);
       setBonificaSyncStatus(bonificaSyncResult);
@@ -576,9 +586,23 @@ export default function ElaborazioniPage() {
   }, [runtimeMetrics]);
   const activeBatchCount = batches.filter((batch) => ["pending", "processing"].includes(batch.status)).length;
   const activeParticelleCount = particelleSyncJobs.filter((job) => ["pending", "processing", "queued_resume"].includes(job.status)).length;
+  const activeInCassCount = incassJobs.filter((job) => isInCassJobInFlight(job.status)).length;
+  const latestInCassJob = incassJobs[0] ?? null;
+  const latestInCassResult =
+    latestInCassJob?.result_json && !Array.isArray(latestInCassJob.result_json) && typeof latestInCassJob.result_json === "object"
+      ? latestInCassJob.result_json
+      : null;
+  const inCassNoticesSynced =
+    latestInCassResult && "notices_synced" in latestInCassResult && typeof latestInCassResult.notices_synced === "number"
+      ? latestInCassResult.notices_synced
+      : null;
+  const inCassProcessedSubjects =
+    latestInCassResult && "processed_subjects" in latestInCassResult && typeof latestInCassResult.processed_subjects === "number"
+      ? latestInCassResult.processed_subjects
+      : null;
   const activeBonificaCount = Object.values(bonificaSyncStatus?.entities ?? {}).filter((item) => item.status === "running").length;
   const activeAutodocCount = autodocSyncJob?.status === "queued" || autodocSyncJob?.status === "running" ? 1 : 0;
-  const totalActiveOperations = activeBatchCount + activeParticelleCount + activeBonificaCount + activeAutodocCount;
+  const totalActiveOperations = activeBatchCount + activeParticelleCount + activeInCassCount + activeBonificaCount + activeAutodocCount;
   const latestAnprRun = anprSummary?.recent_runs[0] ?? null;
   const totalAnprRecentCalls = anprSummary?.recent_runs.reduce((total, run) => total + run.calls_used, 0) ?? 0;
   const totalAnprRecentSubjects = anprSummary?.recent_runs.reduce((total, run) => total + run.subjects_processed, 0) ?? 0;
@@ -603,6 +627,7 @@ export default function ElaborazioniPage() {
     anprSummary && anprSummary.calls_today >= anprSummary.effective_daily_limit
       ? `ANPR ha raggiunto il limite giornaliero di ${anprSummary.effective_daily_limit} chiamate.`
       : null,
+    activeInCassCount > 0 ? `${activeInCassCount} job inCass in esecuzione o in coda.` : null,
     totalActiveOperations > 0 ? `${totalActiveOperations} lavorazioni in corso.` : null,
   ].filter((item): item is string => Boolean(item));
   const heroRefreshDescription = hasActivePollingTargets
@@ -998,6 +1023,84 @@ export default function ElaborazioniPage() {
           </div>
         </div>
       </ElaborazioneHero>
+
+      <article className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
+        <ElaborazionePanelHeader
+          badge={
+            <>
+              <UsersIcon className="h-3.5 w-3.5" />
+              inCass ruolo
+            </>
+          }
+          title="Harvest massivo avvisi e partitario"
+          description="Accesso rapido alla coda inCass costruita dai soggetti a ruolo, con focus sui job batch per completare i casi troncati nel dump."
+        />
+        <div className="grid gap-6 p-6 lg:grid-cols-[1.1fr,0.9fr]">
+          <div className="space-y-4">
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">Job attivi</p>
+                <p className="mt-2 text-2xl font-semibold text-[#163524]">{formatMetricNumber(activeInCassCount)}</p>
+                <p className="mt-1 text-xs text-gray-500">pending, processing o resume pianificato</p>
+              </div>
+              <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">Ultimo stato</p>
+                <p className="mt-2 text-sm font-semibold text-gray-900">{latestInCassJob?.status ?? "Nessun job"}</p>
+                <p className="mt-1 text-xs text-gray-500">
+                  {latestInCassJob?.created_at ? `Creato ${formatDateTime(latestInCassJob.created_at)}` : "Nessun batch registrato"}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">Soggetti processati</p>
+                <p className="mt-2 text-sm font-semibold text-emerald-700">{formatMetricNumber(inCassProcessedSubjects)}</p>
+                <p className="mt-1 text-xs text-gray-500">ultimo job con risultato persistito</p>
+              </div>
+              <div className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-gray-500">Avvisi sincronizzati</p>
+                <p className="mt-2 text-sm font-semibold text-[#1D4E35]">{formatMetricNumber(inCassNoticesSynced)}</p>
+                <p className="mt-1 text-xs text-gray-500">ultimo job con dettaglio notice/partitario</p>
+              </div>
+            </div>
+            {latestInCassJob?.error_detail ? (
+              <div className="rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700">Ultimo errore inCass</p>
+                <p className="mt-2 break-words text-sm text-amber-900">{latestInCassJob.error_detail}</p>
+              </div>
+            ) : (
+              <div className="rounded-2xl border border-gray-100 bg-[#f7faf8] px-4 py-3 text-sm text-gray-600">
+                La sezione `Avvisi pagamenti` ora gestisce sia il sync puntuale sia l&apos;harvest massivo da soggetti `a ruolo`, con chunk configurabili e monitor unico.
+              </div>
+            )}
+          </div>
+          <div className="rounded-[24px] border border-[#d9dfd6] bg-[#f7faf8] p-5">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#1D4E35]">Azioni inCass</p>
+            <h3 className="mt-2 text-lg font-semibold text-gray-900">Apri il monitor batch ruolo</h3>
+            <p className="mt-2 text-sm leading-6 text-gray-600">
+              Usa la workspace `Capacitas` già posizionata sulla scheda `Avvisi pagamenti` per creare job da `ruolo`, escludere i soggetti già sincronizzati e seguire l&apos;avanzamento del partitario completo.
+            </p>
+            <div className="mt-5 flex flex-wrap gap-3">
+              <button
+                className="btn-primary"
+                onClick={() =>
+                  openWorkspaceModal(
+                    "/elaborazioni/capacitas?section=incass",
+                    "Capacitas · Avvisi pagamenti",
+                    "Apre direttamente la sezione inCass con monitor job e harvest massivo da ruolo.",
+                  )
+                }
+                type="button"
+              >
+                Apri monitor inCass
+              </button>
+            </div>
+            <div className="mt-5 space-y-2 text-xs text-gray-500">
+              <p>Ultimo job id: {latestInCassJob?.id ?? "nessuno"}</p>
+              <p>Credenziali Capacitas attive: {activeCapacitasCredentials.length}</p>
+              <p>Ultimo uso pool: {latestCapacitasUsage ? formatDateTime(latestCapacitasUsage) : "Mai"}</p>
+            </div>
+          </div>
+        </div>
+      </article>
 
       <article id="autodoc-mezzi" className="overflow-hidden rounded-[28px] border border-[#d9dfd6] bg-white shadow-panel">
         <ElaborazionePanelHeader
