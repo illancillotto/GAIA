@@ -395,7 +395,9 @@ def _search_particelle_by_tax_code(db: Session, query: str, limit: int) -> list[
     )
     ids.extend(str(particella_id) for particella_id in intestatario_rows if particella_id is not None)
 
-    return _filter_current_particella_ids(db, ids, limit)
+    current_ids = _filter_current_particella_ids(db, ids, candidate_limit)
+    prioritized_ids = _prioritize_ruolo_particella_ids(db, current_ids)
+    return prioritized_ids[:limit]
 
 
 def _search_particelle_by_mode(db: Session, query: str, limit: int, mode: GisSearchMode) -> list[str]:
@@ -600,6 +602,37 @@ def _filter_current_particella_ids(db: Session, candidate_ids: list[str], limit:
     return [particella_id for particella_id in deduped if particella_id in current_ids][:limit]
 
 
+def _prioritize_ruolo_particella_ids(db: Session, candidate_ids: list[str]) -> list[str]:
+    if not candidate_ids:
+        return []
+
+    parsed_ids = [_parse_uuid(item, "particella_id") for item in candidate_ids]
+    ruolo_match = (
+        select(RuoloParticella.id)
+        .where(
+            or_(
+                RuoloParticella.cat_particella_id == CatParticella.id,
+                RuoloParticella.catasto_parcel_id == CatParticella.id,
+            )
+        )
+        .exists()
+    )
+    ruolo_ids = {
+        str(particella_id)
+        for particella_id in db.execute(
+            select(CatParticella.id).where(CatParticella.id.in_(parsed_ids), ruolo_match)
+        ).scalars().all()
+    }
+    original_positions = {particella_id: index for index, particella_id in enumerate(candidate_ids)}
+    return sorted(
+        candidate_ids,
+        key=lambda particella_id: (
+            particella_id not in ruolo_ids,
+            original_positions[particella_id],
+        ),
+    )
+
+
 def _load_particelle_search_rows(db: Session, id_list: list[str]) -> list[dict[str, Any]]:
     if not id_list:
         return []
@@ -733,7 +766,7 @@ def _load_particella_ruolo_summary(db: Session, particella: CatParticella) -> Pa
         .where(match_condition, RuoloParticella.anno_tributario <= requested_year)
     )
     if selected_year is None:
-        return None
+        return _load_particella_ruolo_summary_fallback(db, particella, requested_year)
 
     rows = db.execute(
         select(
@@ -753,7 +786,7 @@ def _load_particella_ruolo_summary(db: Session, particella: CatParticella) -> Pa
         )
     ).all()
     if not rows:
-        return None
+        return _load_particella_ruolo_summary_fallback(db, particella, requested_year)
 
     items: list[ParticellaPopupRuoloItem] = []
     subalterni: set[str] = set()
@@ -825,6 +858,7 @@ def _load_particella_ruolo_summary(db: Session, particella: CatParticella) -> Pa
     return ParticellaPopupRuoloSummary(
         anno_tributario_latest=anno_latest,
         anno_tributario_richiesto=requested_year,
+        source_mode="exact",
         n_righe=len(items),
         n_subalterni=len(subalterni),
         sup_catastale_ha_totale=round(total_sup_catastale, 4) if has_sup_catastale else None,
@@ -835,6 +869,147 @@ def _load_particella_ruolo_summary(db: Session, particella: CatParticella) -> Pa
         importo_totale_euro=round(total_importo, 2) if has_importo else None,
         items=items,
     )
+
+
+def _load_particella_ruolo_summary_fallback(
+    db: Session,
+    particella: CatParticella,
+    requested_year: int,
+) -> ParticellaPopupRuoloSummary | None:
+    identifiers = _load_particella_tax_identifiers(db, particella.id)
+    comune_nome = _norm_str(particella.nome_comune)
+    if not identifiers or comune_nome is None:
+        return None
+
+    partita_has_detail = (
+        select(RuoloParticella.id)
+        .where(RuoloParticella.partita_id == RuoloPartita.id)
+        .exists()
+    )
+    selected_year = db.scalar(
+        select(func.max(RuoloAvviso.anno_tributario))
+        .join(RuoloPartita, RuoloPartita.avviso_id == RuoloAvviso.id)
+        .where(
+            RuoloAvviso.codice_fiscale_raw.in_(identifiers),
+            func.upper(RuoloPartita.comune_nome) == comune_nome.upper(),
+            RuoloAvviso.anno_tributario <= requested_year,
+            ~partita_has_detail,
+        )
+    )
+    if selected_year is None:
+        return None
+
+    rows = db.execute(
+        select(
+            RuoloPartita,
+            RuoloAvviso.codice_cnc,
+            RuoloAvviso.anno_tributario,
+        )
+        .join(RuoloAvviso, RuoloAvviso.id == RuoloPartita.avviso_id)
+        .where(
+            RuoloAvviso.codice_fiscale_raw.in_(identifiers),
+            func.upper(RuoloPartita.comune_nome) == comune_nome.upper(),
+            RuoloAvviso.anno_tributario == selected_year,
+            ~partita_has_detail,
+        )
+        .order_by(RuoloPartita.codice_partita)
+    ).all()
+    if not rows:
+        return None
+
+    items: list[ParticellaPopupRuoloItem] = []
+    total_importo_manut = 0.0
+    total_importo_irrig = 0.0
+    total_importo_ist = 0.0
+    total_importo = 0.0
+    has_importo_manut = False
+    has_importo_irrig = False
+    has_importo_ist = False
+    has_importo = False
+
+    for partita, codice_cnc, anno_tributario in rows:
+        importo_manut = _to_float(partita.importo_0648, 2)
+        importo_irrig = _to_float(partita.importo_0668, 2)
+        importo_ist = _to_float(partita.importo_0985, 2)
+        importo_totale_raw = None
+        if importo_manut is not None or importo_irrig is not None or importo_ist is not None:
+            importo_totale_raw = (importo_manut or 0) + (importo_irrig or 0) + (importo_ist or 0)
+        importo_totale = _to_float(importo_totale_raw, 2)
+
+        if importo_manut is not None:
+            has_importo_manut = True
+            total_importo_manut += importo_manut
+        if importo_irrig is not None:
+            has_importo_irrig = True
+            total_importo_irrig += importo_irrig
+        if importo_ist is not None:
+            has_importo_ist = True
+            total_importo_ist += importo_ist
+        if importo_totale is not None:
+            has_importo = True
+            total_importo += importo_totale
+
+        items.append(
+            ParticellaPopupRuoloItem(
+                anno_tributario=int(anno_tributario),
+                importo_manut_euro=importo_manut,
+                importo_irrig_euro=importo_irrig,
+                importo_ist_euro=importo_ist,
+                importo_totale_euro=importo_totale,
+                codice_partita=partita.codice_partita,
+                codice_cnc=codice_cnc,
+            )
+        )
+
+    return ParticellaPopupRuoloSummary(
+        anno_tributario_latest=int(selected_year),
+        anno_tributario_richiesto=requested_year,
+        source_mode="subject_comune_fallback",
+        source_note="Dettaglio particelle assente nel file ruolo; match inferito per soggetto e comune.",
+        n_righe=len(items),
+        n_subalterni=0,
+        importo_manut_euro_totale=round(total_importo_manut, 2) if has_importo_manut else None,
+        importo_irrig_euro_totale=round(total_importo_irrig, 2) if has_importo_irrig else None,
+        importo_ist_euro_totale=round(total_importo_ist, 2) if has_importo_ist else None,
+        importo_totale_euro=round(total_importo, 2) if has_importo else None,
+        items=items,
+    )
+
+
+def _load_particella_tax_identifiers(db: Session, particella_uuid: uuid.UUID) -> list[str]:
+    identifiers: list[str] = []
+
+    utenza_rows = db.execute(
+        select(CatUtenzaIrrigua.codice_fiscale)
+        .where(CatUtenzaIrrigua.particella_id == particella_uuid)
+        .order_by(desc(CatUtenzaIrrigua.anno_campagna), desc(CatUtenzaIrrigua.created_at))
+    ).all()
+    identifiers.extend(value for (value,) in utenza_rows if _normalize_tax_code(value))
+
+    intestatario_rows = db.execute(
+        select(CatUtenzaIntestatario.codice_fiscale, CatUtenzaIntestatario.partita_iva)
+        .join(CatUtenzaIrrigua, CatUtenzaIrrigua.id == CatUtenzaIntestatario.utenza_id)
+        .where(CatUtenzaIrrigua.particella_id == particella_uuid)
+        .order_by(
+            desc(CatUtenzaIntestatario.anno_riferimento),
+            desc(CatUtenzaIntestatario.collected_at),
+        )
+    ).all()
+    for codice_fiscale, partita_iva in intestatario_rows:
+        if _normalize_tax_code(codice_fiscale):
+            identifiers.append(codice_fiscale)
+        if _normalize_tax_code(partita_iva):
+            identifiers.append(partita_iva)
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for value in identifiers:
+        token = _normalize_tax_code(value)
+        if token is None or token in seen:
+            continue
+        seen.add(token)
+        normalized.append(token)
+    return normalized
 
 
 def _load_popup_swapped_capacitas(db: Session, particella_uuid: uuid.UUID) -> ParticellaPopupSwappedCapacitas | None:

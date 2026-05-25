@@ -266,6 +266,8 @@ class ParticellaPopupRuoloItem(BaseModel):
 class ParticellaPopupRuoloSummary(BaseModel):
     anno_tributario_latest: int
     anno_tributario_richiesto: int | None = None
+    source_mode: str = "exact"
+    source_note: str | None = None
     n_righe: int
     n_subalterni: int
     sup_catastale_ha_totale: float | None = None

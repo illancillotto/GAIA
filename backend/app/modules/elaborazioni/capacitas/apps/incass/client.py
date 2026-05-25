@@ -4,11 +4,15 @@ from urllib.parse import quote
 
 from app.modules.elaborazioni.capacitas.apps import get_capacitas_app
 from app.modules.elaborazioni.capacitas.decoder import decode_response
-from app.modules.elaborazioni.capacitas.models import CapacitasInCassNoticeDetail, CapacitasInCassSearchResult
+from app.modules.elaborazioni.capacitas.models import (
+    CapacitasInCassNoticeDetail,
+    CapacitasInCassPartitarioDetail,
+    CapacitasInCassSearchResult,
+)
 from app.modules.elaborazioni.capacitas.session import CapacitasSessionManager
 from app.modules.elaborazioni.capacitas.apps.incass.parsers import (
     parse_incass_notice_detail,
-    parse_incass_partitario_html,
+    parse_incass_partitario_dialog,
     parse_incass_search_result,
 )
 
@@ -16,7 +20,7 @@ INCASS_APP = get_capacitas_app("incass")
 AJAX_RICERCA_URL = f"{INCASS_APP.base_url}/pages/ajax/ajaxRicerca.aspx"
 RICERCA_AVVISI_URL = f"{INCASS_APP.base_url}/pages/ricercaAvvisi.aspx"
 DETTAGLIO_AVVISO_URL = f"{INCASS_APP.base_url}/pages/dettaglioAvviso.aspx"
-DLG_PARTITARIO_URL = f"{INCASS_APP.base_url}/pages/dialog/dlgPartitario.aspx"
+DLG_PARTITARIO_URL = f"{INCASS_APP.base_url}/pages/dialog/dlgPartitarioKUI.aspx"
 
 _AJAX_HEADERS = {
     "Accept": "*/*",
@@ -84,8 +88,12 @@ class InCassClient:
         detail_url = str(response.url)
         return parse_incass_notice_detail(response.text, detail_url=detail_url, base_url=INCASS_APP.base_url, avviso=avviso)
 
-    async def fetch_notice_partitario(self, avviso: str) -> str | None:
+    async def fetch_notice_partitario(self, avviso: str) -> CapacitasInCassPartitarioDetail | None:
         http = self._manager.get_http_client()
-        response = await http.get(DLG_PARTITARIO_URL, params={"avviso": avviso})
+        response = await http.post(
+            DLG_PARTITARIO_URL,
+            data={"idDlg": "dlg-vis-part-kui", "avviso": avviso},
+            headers={**_AJAX_HEADERS, "Referer": f"{DETTAGLIO_AVVISO_URL}?avviso={avviso}"},
+        )
         response.raise_for_status()
-        return parse_incass_partitario_html(response.text)
+        return parse_incass_partitario_dialog(response.text, avviso=avviso)

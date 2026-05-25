@@ -123,27 +123,18 @@ _RE_NP_PREFIX = re.compile(r'^NP\s{2}\d+\s')
 
 def _strip_np_prefix(line: str) -> tuple[str, int]:
     """
-    Rimuove il prefisso 'NP  N  ' o 'NP  NN ' dalla riga mantenendo l'allineamento colonne.
-    Il prefisso ha larghezza fissa di 7 caratteri: 'NP  ' (4) + numero (1-2 cifre) + spazi.
-    Per 1 cifra: 'NP  4  ' = 7 chars. Per 2 cifre: 'NP  10 ' = 7 chars.
+    Rimuove il prefisso 'NP ... numero ...' mantenendo l'allineamento colonne.
+    Nei file reali la spaziatura non e` perfettamente costante, quindi usiamo
+    la lunghezza effettiva del match invece di offset fissi.
     """
     if not line.startswith("NP "):
         return line, 0
-    # Individua la fine del numero di riga
-    m = re.match(r'^NP\s{2}(\d+)', line)
+    m = re.match(r'^NP\s+\d+', line)
     if not m:
         return line, 0
-    # Offset fisso = 4 ("NP  ") + lunghezza numero + spazi a riempire fino a 7
-    num_len = len(m.group(1))
-    # Total prefix width: 4 (NP + 2 spaces) + number field (3 chars, right-aligned with trailing spaces)
-    # = sempre 7 per numeri 1-99
-    offset = 4 + max(num_len, 2) + 1  # "NP  " + 2-char number field + 1 space = 7
-    if num_len == 1:
-        offset = 7  # NP(2) + 2spaces(2) + 1digit(1) + 2spaces(2) = 7
-    elif num_len == 2:
-        offset = 7  # NP(2) + 2spaces(2) + 2digits(2) + 1space(1) = 7
-    else:
-        offset = 4 + num_len + 1  # per numeri >99
+    offset = m.end()
+    if offset < len(line) and line[offset] == " ":
+        offset += 1
     return line[offset:], offset
 
 
@@ -164,6 +155,24 @@ _COLUMN_KEYWORDS = [
     ("irrig", "IRRIG."),
     ("ist", "IST."),
 ]
+
+
+def _looks_like_particelle_header(line: str) -> bool:
+    """
+    Riconosce header particelle anche quando il file omette DOM./DIS.
+    o presenta piccole varianti di spaziatura.
+    """
+    header_content, _ = _strip_np_prefix(line)
+    header_upper = header_content.upper()
+
+    if "ANNO DOMANDA DISTRETTO" in header_upper:
+        return False
+
+    required_tokens = ("FOG.", "PART.", "SUP.CATA.")
+    if not all(token in header_upper for token in required_tokens):
+        return False
+
+    return "MANUT." in header_upper or "SUP.IRR." in header_upper or "IRRIG." in header_upper
 
 
 def _build_column_positions(header_content: str) -> list[tuple[str, int, int]]:
@@ -482,10 +491,6 @@ _RE_NP_COINTEST = re.compile(r'NP\s+\d+\s+CO-INTESTATO CON:\s+(.*)', re.IGNORECA
 _RE_NP_TRIBUTO = re.compile(
     r'NP\s+\d+\s+(\d{4})\s+(0648|0985|0668)\s+.+?\s+([\d.,]+)\s+EURO', re.IGNORECASE
 )
-_RE_NP_HEADER_PART = re.compile(
-    r'NP\s+\d+\s+DOM\.\s+DIS\.\s+FOG\.\s+PART\.',
-    re.IGNORECASE,
-)
 _RE_NP_LINE = re.compile(r'^NP\s+(\d+)\s+(.*)')
 _RE_NP_STOP_PARTICELLE = re.compile(
     r'NP\s+\d+\s+(?:'
@@ -563,7 +568,7 @@ def _parse_partite_block(block: str) -> list[ParsedPartita]:
             continue
 
         # Match header colonne particelle → calcola posizioni
-        if _RE_NP_HEADER_PART.match(line):
+        if _looks_like_particelle_header(line):
             header_content, _ = _strip_np_prefix(line)
             col_positions = _build_column_positions(header_content)
             in_particelle = True

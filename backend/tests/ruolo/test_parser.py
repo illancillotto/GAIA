@@ -288,6 +288,25 @@ NP  15 =========================================================================
     assert result[0].partite[0].particelle[0].foglio == "8"
 
 
+def test_parse_particelle_header_without_dom_dis_columns():
+    sample = """\
+<qm500>--Partita CNC 01.02025000000005------------------------------------------<017.743><01.A><02025000000005><inizio>
+N2 RSSMRA75T50A331X 00000000 00 N
+ROSSI MARIA
+NP   4 PARTITA 000000005/00000 BENI IN COMUNE DI ARBOREA
+NP   5 CONTRIBUENTE: ROSSI MARIA                        C.F. RSSMRA75T50A331X
+NP   9  FOG. PART.  SUB SUP.CATA.  SUP.IRR. COLT.     MANUT.   IRRIG.     IST.
+NP  10    8   752          1.870                       6,83              4,87
+----------------<017.743><01.A><02025000000005><-fine->
+"""
+    result = parse_ruolo_file(sample)
+    assert len(result) == 1
+    assert len(result[0].partite) == 1
+    assert len(result[0].partite[0].particelle) == 1
+    assert result[0].partite[0].particelle[0].foglio == "8"
+    assert result[0].partite[0].particelle[0].particella == "752"
+
+
 # ---------------------------------------------------------------------------
 # Test helper: _parse_header
 # ---------------------------------------------------------------------------
