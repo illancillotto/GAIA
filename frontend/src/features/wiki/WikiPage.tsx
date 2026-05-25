@@ -239,25 +239,39 @@ export function WikiPage() {
 
   return (
     <div className="space-y-4">
-      <article className="panel-card border-[#e7eee8] bg-gradient-to-r from-white via-[#fbfcf8] to-[#f3f7f0] px-5 py-4">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-3">
-              <p className="label-caption text-[#1D4E35]">Knowledge Base</p>
-              <span className="rounded-full bg-[#eaf4ec] px-2.5 py-1 text-[11px] font-semibold text-[#1D4E35]">
-                {articles.length} documenti
-              </span>
-              <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-600 ring-1 ring-[#dbe7dc]">
-                {messages.length} messaggi
-              </span>
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
+        <article className="panel-card border-[#e7eee8] bg-gradient-to-r from-white via-[#fbfcf8] to-[#f3f7f0] px-5 py-4">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-3">
+                <p className="label-caption text-[#1D4E35]">Knowledge Base</p>
+                <span className="rounded-full bg-[#eaf4ec] px-2.5 py-1 text-[11px] font-semibold text-[#1D4E35]">
+                  {articles.length} documenti
+                </span>
+                <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-gray-600 ring-1 ring-[#dbe7dc]">
+                  {messages.length} messaggi
+                </span>
+              </div>
+              <h3 className="mt-2 font-newsreader text-2xl text-[#173224]">Wiki operativa GAIA</h3>
+              <p className="mt-1 max-w-3xl text-sm text-gray-600">
+                Indice, assistente e documento nello stesso workspace. L&apos;assistente resta subito visibile senza scorrere la pagina.
+              </p>
             </div>
-            <h3 className="mt-2 font-newsreader text-2xl text-[#173224]">Wiki operativa GAIA</h3>
-            <p className="mt-1 max-w-3xl text-sm text-gray-600">
-              Indice, assistente e documento nello stesso workspace. L&apos;assistente resta subito visibile senza scorrere la pagina.
-            </p>
           </div>
-        </div>
-      </article>
+        </article>
+
+        <article className="panel-card min-w-0 xl:sticky xl:top-4">
+          <ChatPanel
+            contextArticle={selected?.source_file}
+            scope={chatScope}
+            onScopeChange={setChatScope}
+            messages={messages}
+            loading={loading}
+            error={error}
+            onSend={sendMessage}
+          />
+        </article>
+      </div>
 
       <div className="grid items-start gap-4 xl:grid-cols-[420px_minmax(0,1fr)]">
         <article className="panel-card h-[calc(100vh-12rem)] min-h-[32rem] p-0 xl:sticky xl:top-4">
@@ -329,18 +343,6 @@ export function WikiPage() {
         </article>
 
         <div className="grid gap-4">
-          <article className="panel-card min-w-0">
-            <ChatPanel
-              contextArticle={selected?.source_file}
-              scope={chatScope}
-              onScopeChange={setChatScope}
-              messages={messages}
-              loading={loading}
-              error={error}
-              onSend={sendMessage}
-            />
-          </article>
-
           <article className="panel-card h-[calc(100vh-28rem)] min-h-[22rem] min-w-0">
             <div className="border-b border-gray-100 pb-4">
               <p className="label-caption text-[#1D4E35]">Contenuto</p>
