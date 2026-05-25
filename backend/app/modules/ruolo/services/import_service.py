@@ -27,6 +27,7 @@ from app.modules.ruolo.services.parser import (
     _normalize_partita_comune_nome,
 )
 from app.modules.utenze.models import AnagraficaCompany, AnagraficaPerson, AnagraficaSubject
+from app.modules.utenze.services.subject_identity import is_probable_person_cf, is_probable_vat_number, normalize_tax_identifier
 
 logger = logging.getLogger(__name__)
 _RE_CATASTO_CODE = re.compile(r"\b([A-Z]\d{3})\b")
@@ -180,28 +181,45 @@ def _resolve_subject_id(db: Session, codice_fiscale_raw: str) -> uuid.UUID | Non
     if not codice_fiscale_raw:
         return None
 
-    cf = codice_fiscale_raw.strip().upper()
+    cf = normalize_tax_identifier(codice_fiscale_raw)
+    if cf is None:
+        return None
 
-    # Prima prova su ana_persons (persone fisiche — CF 16 chars)
-    person = db.scalar(
-        select(AnagraficaPerson).where(AnagraficaPerson.codice_fiscale == cf)
-    )
-    if person is not None:
-        return person.subject_id
+    # Gli identificativi a 11 cifre vanno trattati come P.IVA per evitare
+    # di preferire soggetti persona spuri creati da import non affidabili.
+    if is_probable_vat_number(cf):
+        company = db.scalar(select(AnagraficaCompany).where(AnagraficaCompany.partita_iva == cf))
+        if company is not None:
+            return company.subject_id
+        company_cf = db.scalar(select(AnagraficaCompany).where(AnagraficaCompany.codice_fiscale == cf))
+        if company_cf is not None:
+            return company_cf.subject_id
+        person = db.scalar(select(AnagraficaPerson).where(AnagraficaPerson.codice_fiscale == cf))
+        if person is not None:
+            return person.subject_id
+        return None
 
-    # Poi prova su ana_companies (partita IVA — 11 chars o CF aziendale)
-    company = db.scalar(
-        select(AnagraficaCompany).where(AnagraficaCompany.partita_iva == cf)
-    )
+    if is_probable_person_cf(cf):
+        person = db.scalar(select(AnagraficaPerson).where(AnagraficaPerson.codice_fiscale == cf))
+        if person is not None:
+            return person.subject_id
+        company_cf = db.scalar(select(AnagraficaCompany).where(AnagraficaCompany.codice_fiscale == cf))
+        if company_cf is not None:
+            return company_cf.subject_id
+        company = db.scalar(select(AnagraficaCompany).where(AnagraficaCompany.partita_iva == cf))
+        if company is not None:
+            return company.subject_id
+        return None
+
+    company = db.scalar(select(AnagraficaCompany).where(AnagraficaCompany.partita_iva == cf))
     if company is not None:
         return company.subject_id
-
-    # Fallback: CF aziendale in ana_companies
-    company_cf = db.scalar(
-        select(AnagraficaCompany).where(AnagraficaCompany.codice_fiscale == cf)
-    )
+    company_cf = db.scalar(select(AnagraficaCompany).where(AnagraficaCompany.codice_fiscale == cf))
     if company_cf is not None:
         return company_cf.subject_id
+    person = db.scalar(select(AnagraficaPerson).where(AnagraficaPerson.codice_fiscale == cf))
+    if person is not None:
+        return person.subject_id
 
     return None
 

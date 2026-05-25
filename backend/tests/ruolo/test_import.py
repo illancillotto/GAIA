@@ -17,7 +17,7 @@ from app.modules.ruolo.services.import_service import (
     create_import_job,
 )
 from app.modules.ruolo.services.parser import ParsedPartitaCNC
-from app.modules.utenze.models import AnagraficaPerson, AnagraficaSubject
+from app.modules.utenze.models import AnagraficaCompany, AnagraficaPerson, AnagraficaSubject
 
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
@@ -159,6 +159,48 @@ def test_run_import_job_records_imported_when_subject_is_resolved(
     assert saved_job.params_json["report_preview"]["skipped_items"] == []
     assert len(avvisi) == 1
     assert avvisi[0].subject_id == subject_id
+    db.close()
+
+
+def test_resolve_subject_id_prefers_company_for_11_digit_identifier() -> None:
+    db = TestingSessionLocal()
+
+    wrong_person_subject = AnagraficaSubject(
+        source_name_raw="Societa Agricola Fittizia",
+        subject_type="person",
+        source_system="capacitas",
+    )
+    db.add(wrong_person_subject)
+    db.flush()
+    db.add(
+        AnagraficaPerson(
+            subject_id=wrong_person_subject.id,
+            cognome="Societa",
+            nome="Agricola Fittizia",
+            codice_fiscale="00050540384",
+        )
+    )
+
+    correct_company_subject = AnagraficaSubject(
+        source_name_raw="Societa Agricola Fittizia S.R.L.",
+        subject_type="company",
+        source_system="gaia",
+    )
+    db.add(correct_company_subject)
+    db.flush()
+    db.add(
+        AnagraficaCompany(
+            subject_id=correct_company_subject.id,
+            ragione_sociale="Societa Agricola Fittizia S.R.L.",
+            partita_iva="00050540384",
+            codice_fiscale="00050540384",
+        )
+    )
+    db.commit()
+
+    resolved = import_service_module._resolve_subject_id(db, "00050540384")
+
+    assert resolved == correct_company_subject.id
     db.close()
 
 

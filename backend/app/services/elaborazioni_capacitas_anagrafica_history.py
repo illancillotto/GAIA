@@ -32,6 +32,7 @@ from app.modules.utenze.models import (
     AnagraficaSubjectType,
 )
 from app.modules.utenze.services.person_history_service import persist_person_source_snapshot
+from app.modules.utenze.services.subject_identity import infer_subject_kind
 from app.services.elaborazioni_capacitas_terreni import (
     _compose_address,
     _normalize_cf,
@@ -407,6 +408,16 @@ async def _import_single_item(
 
     latest_row = history_rows[-1]
     latest_detail = await _load_detail(client, latest_row.history_id, detail_cache)
+    latest_kind = infer_subject_kind(
+        codice_fiscale=latest_detail.codice_fiscale or latest_row.codice_fiscale,
+        partita_iva=latest_detail.partita_iva or latest_row.partita_iva,
+        denominazione=latest_detail.denominazione or latest_row.denominazione,
+        is_persona_fisica=latest_detail.is_persona_fisica,
+    )
+    if latest_kind == "company":
+        raise CapacitasAnagraficaHistoryImportError(
+            "Lo storico anagrafico Capacitas non deve creare soggetti azienda come persona."
+        )
     subject, person = _ensure_subject_person(
         db,
         subject=resolved.subject,

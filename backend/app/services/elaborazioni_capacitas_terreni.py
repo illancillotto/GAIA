@@ -24,8 +24,19 @@ from app.models.catasto_phase1 import (
     CatUtenzaIntestatario,
     CatUtenzaIrrigua,
 )
-from app.modules.utenze.models import AnagraficaPerson, AnagraficaSubject, AnagraficaSubjectStatus, AnagraficaSubjectType
+from app.modules.utenze.models import (
+    AnagraficaCompany,
+    AnagraficaPerson,
+    AnagraficaSubject,
+    AnagraficaSubjectStatus,
+    AnagraficaSubjectType,
+)
 from app.modules.utenze.services.person_history_service import persist_person_source_snapshot, snapshot_person_if_changed
+from app.modules.utenze.services.subject_identity import (
+    infer_subject_kind,
+    is_probable_vat_number,
+    normalize_tax_identifier,
+)
 from app.models.capacitas import CapacitasTerreniSyncJob
 from app.modules.elaborazioni.capacitas.apps.involture.client import CapacitasSessionExpiredError, InVoltureClient
 from app.modules.elaborazioni.capacitas.models import (
@@ -691,15 +702,39 @@ async def _persist_utenza_intestatari_from_history(
     return resolved_subject
 
 
+def _find_company_subject(
+    db: Session,
+    *,
+    codice_fiscale: str | None,
+    partita_iva: str | None,
+) -> AnagraficaCompany | None:
+    normalized_piva = normalize_tax_identifier(partita_iva)
+    normalized_cf = normalize_tax_identifier(codice_fiscale)
+    if normalized_piva:
+        company = db.scalar(select(AnagraficaCompany).where(AnagraficaCompany.partita_iva == normalized_piva))
+        if company is not None:
+            return company
+    if normalized_cf:
+        return db.scalar(select(AnagraficaCompany).where(AnagraficaCompany.codice_fiscale == normalized_cf))
+    return None
+
+
 def _find_existing_subject_from_intestatario(
     db: Session,
     intestatario: CapacitasIntestatario,
 ) -> AnagraficaSubject | None:
     normalized_cf = _normalize_cf(intestatario.codice_fiscale)
+    if is_probable_vat_number(normalized_cf):
+        company = _find_company_subject(db, codice_fiscale=normalized_cf, partita_iva=normalized_cf)
+        if company is not None:
+            return db.get(AnagraficaSubject, company.subject_id)
     if normalized_cf:
         person = db.scalar(select(AnagraficaPerson).where(AnagraficaPerson.codice_fiscale == normalized_cf))
         if person is not None:
             return db.get(AnagraficaSubject, person.subject_id)
+        company_cf = _find_company_subject(db, codice_fiscale=normalized_cf, partita_iva=None)
+        if company_cf is not None:
+            return db.get(AnagraficaSubject, company_cf.subject_id)
 
     if intestatario.idxana:
         return db.scalar(
@@ -726,10 +761,20 @@ async def _match_or_create_subject_from_history_row(
         anagrafica_detail_cache[history_row.history_id] = detail
 
     normalized_cf = _normalize_cf(detail.codice_fiscale or history_row.codice_fiscale or intestatario.codice_fiscale)
+    normalized_piva = _normalize_cf(detail.partita_iva or history_row.partita_iva)
+    subject_kind = infer_subject_kind(
+        codice_fiscale=normalized_cf,
+        partita_iva=normalized_piva,
+        denominazione=detail.denominazione or history_row.denominazione or intestatario.denominazione,
+        is_persona_fisica=detail.is_persona_fisica,
+    )
     person: AnagraficaPerson | None = None
-    if normalized_cf:
+    company: AnagraficaCompany | None = None
+    if subject_kind == "company":
+        company = _find_company_subject(db, codice_fiscale=normalized_cf, partita_iva=normalized_piva)
+    elif normalized_cf:
         person = db.scalar(select(AnagraficaPerson).where(AnagraficaPerson.codice_fiscale == normalized_cf))
-    if person is None and (history_row.idxana or intestatario.idxana):
+    if company is None and person is None and (history_row.idxana or intestatario.idxana):
         subject = db.scalar(
             select(AnagraficaSubject).where(
                 AnagraficaSubject.source_system == "capacitas",
@@ -737,15 +782,43 @@ async def _match_or_create_subject_from_history_row(
             )
         )
         if subject is not None:
-            person = db.get(AnagraficaPerson, subject.id)
+            if subject.subject_type == AnagraficaSubjectType.COMPANY.value:
+                company = db.get(AnagraficaCompany, subject.id)
+            else:
+                person = db.get(AnagraficaPerson, subject.id)
 
-    if person is None and not normalized_cf:
+    if subject_kind == "company":
+        if company is None and not (normalized_piva or normalized_cf):
+            return None
+    elif person is None and not normalized_cf:
         return None
 
     person_data = _build_person_payload_from_history(detail, history_row, intestatario, normalized_cf)
+    company_data = _build_company_payload_from_history(
+        detail,
+        history_row,
+        intestatario,
+        normalized_cf=normalized_cf,
+        normalized_piva=normalized_piva,
+    )
     collected_at = _parse_datetime_value(history_row.data_agg) or datetime.now(timezone.utc)
 
-    if person is None:
+    if subject_kind == "company" and company is None:
+        subject = AnagraficaSubject(
+            subject_type=AnagraficaSubjectType.COMPANY.value,
+            status=AnagraficaSubjectStatus.ACTIVE.value,
+            source_system="capacitas",
+            source_external_id=history_row.idxana or intestatario.idxana,
+            source_name_raw=detail.denominazione or history_row.denominazione or intestatario.denominazione or normalized_piva or normalized_cf,
+            requires_review=False,
+        )
+        db.add(subject)
+        db.flush()
+        company = AnagraficaCompany(subject_id=subject.id, **company_data)
+        db.add(company)
+        return subject
+
+    if subject_kind != "company" and person is None:
         assert normalized_cf is not None
         subject = AnagraficaSubject(
             subject_type=AnagraficaSubjectType.PERSON.value,
@@ -768,27 +841,31 @@ async def _match_or_create_subject_from_history_row(
         )
         return subject
 
-    subject = db.get(AnagraficaSubject, person.subject_id)
+    subject = db.get(AnagraficaSubject, person.subject_id if person is not None else company.subject_id)
     if subject is None:
         return None
 
-    _persist_capacitas_history_person_snapshot(
-        db,
-        person,
-        person_data,
-        history_row,
-        collected_at=collected_at,
-    )
-    snapshot_person_if_changed(
-        db,
-        person,
-        person_data,
-        source_system="capacitas",
-        source_ref=history_row.idxana or intestatario.idxana,
-        collected_at=collected_at,
-    )
-    for key, value in person_data.items():
-        setattr(person, key, value)
+    if person is not None:
+        _persist_capacitas_history_person_snapshot(
+            db,
+            person,
+            person_data,
+            history_row,
+            collected_at=collected_at,
+        )
+        snapshot_person_if_changed(
+            db,
+            person,
+            person_data,
+            source_system="capacitas",
+            source_ref=history_row.idxana or intestatario.idxana,
+            collected_at=collected_at,
+        )
+        for key, value in person_data.items():
+            setattr(person, key, value)
+    elif company is not None:
+        for key, value in company_data.items():
+            setattr(company, key, value)
 
     if history_row.idxana or intestatario.idxana:
         subject.source_external_id = history_row.idxana or intestatario.idxana
@@ -859,6 +936,37 @@ def _build_person_payload_from_history(
         "comune_residenza": comune_residenza,
         "cap": cap,
         "email": detail.email,
+        "telefono": detail.telefono or detail.cellulare,
+        "note": " | ".join(note_parts) if note_parts else None,
+    }
+
+
+def _build_company_payload_from_history(
+    detail: CapacitasAnagraficaDetail,
+    history_row: CapacitasStoricoAnagraficaRow,
+    intestatario: CapacitasIntestatario,
+    *,
+    normalized_cf: str | None,
+    normalized_piva: str | None,
+) -> dict[str, object | None]:
+    residenza, comune_residenza, cap = _build_residenza_from_detail(detail, intestatario)
+    indirizzo = _compose_address(
+        detail.residenza_toponimo,
+        detail.residenza_indirizzo,
+        detail.residenza_civico,
+        detail.residenza_sub,
+    ) or residenza or intestatario.residenza
+    note_parts = [part for part in detail.note if part]
+    company_identifier = normalized_piva or normalized_cf or ""
+    return {
+        "ragione_sociale": detail.denominazione or history_row.denominazione or intestatario.denominazione or company_identifier or "Capacitas azienda",
+        "partita_iva": company_identifier,
+        "codice_fiscale": normalized_cf if normalized_cf and normalized_cf != company_identifier else None,
+        "forma_giuridica": None,
+        "sede_legale": indirizzo,
+        "comune_sede": comune_residenza,
+        "cap": cap,
+        "email_pec": detail.pec or detail.email,
         "telefono": detail.telefono or detail.cellulare,
         "note": " | ".join(note_parts) if note_parts else None,
     }
@@ -939,11 +1047,18 @@ def _match_or_create_subject_from_intestatario(
     collected_at: datetime,
 ) -> AnagraficaSubject | None:
     normalized_cf = _normalize_cf(intestatario.codice_fiscale)
+    subject_kind = infer_subject_kind(
+        codice_fiscale=normalized_cf,
+        denominazione=intestatario.denominazione,
+    )
     person: AnagraficaPerson | None = None
+    company: AnagraficaCompany | None = None
 
-    if normalized_cf:
+    if subject_kind == "company":
+        company = _find_company_subject(db, codice_fiscale=normalized_cf, partita_iva=normalized_cf)
+    elif normalized_cf:
         person = db.scalar(select(AnagraficaPerson).where(AnagraficaPerson.codice_fiscale == normalized_cf))
-    if person is None and intestatario.idxana:
+    if company is None and person is None and intestatario.idxana:
         subject = db.scalar(
             select(AnagraficaSubject).where(
                 AnagraficaSubject.source_system == "capacitas",
@@ -951,12 +1066,42 @@ def _match_or_create_subject_from_intestatario(
             )
         )
         if subject is not None:
-            person = db.get(AnagraficaPerson, subject.id)
+            if subject.subject_type == AnagraficaSubjectType.COMPANY.value:
+                company = db.get(AnagraficaCompany, subject.id)
+            else:
+                person = db.get(AnagraficaPerson, subject.id)
 
-    if person is None and not normalized_cf:
+    if subject_kind == "company":
+        if company is None and not normalized_cf:
+            return None
+    elif person is None and not normalized_cf:
         return None
 
-    if person is None:
+    if subject_kind == "company" and company is None:
+        assert normalized_cf is not None
+        subject = AnagraficaSubject(
+            subject_type=AnagraficaSubjectType.COMPANY.value,
+            status=AnagraficaSubjectStatus.ACTIVE.value,
+            source_system="capacitas",
+            source_external_id=intestatario.idxana,
+            source_name_raw=intestatario.denominazione or normalized_cf or "Capacitas intestatario",
+            requires_review=False,
+        )
+        db.add(subject)
+        db.flush()
+        company = AnagraficaCompany(
+            subject_id=subject.id,
+            ragione_sociale=intestatario.denominazione or normalized_cf,
+            partita_iva=normalized_cf,
+            codice_fiscale=None,
+            sede_legale=intestatario.residenza,
+            comune_sede=intestatario.comune_residenza,
+            cap=intestatario.cap,
+        )
+        db.add(company)
+        return subject
+
+    if subject_kind != "company" and person is None:
         assert normalized_cf is not None
         subject = AnagraficaSubject(
             subject_type=AnagraficaSubjectType.PERSON.value,
@@ -983,40 +1128,47 @@ def _match_or_create_subject_from_intestatario(
         db.add(person)
         return subject
 
-    subject = db.get(AnagraficaSubject, person.subject_id)
+    subject = db.get(AnagraficaSubject, person.subject_id if person is not None else company.subject_id)
     if subject is None:
         return None
 
-    cognome, nome = _split_denominazione(intestatario.denominazione, fallback_cognome=person.cognome, fallback_nome=person.nome)
-    merged_data = {
-        "cognome": cognome,
-        "nome": nome,
-        "codice_fiscale": normalized_cf or person.codice_fiscale,
-        "data_nascita": intestatario.data_nascita or person.data_nascita,
-        "comune_nascita": intestatario.luogo_nascita or person.comune_nascita,
-        "indirizzo": intestatario.residenza or person.indirizzo,
-        "comune_residenza": intestatario.comune_residenza or person.comune_residenza,
-        "cap": intestatario.cap or person.cap,
-        "email": person.email,
-        "telefono": person.telefono,
-        "note": person.note,
-    }
-    snapshot_person_if_changed(
-        db,
-        person,
-        merged_data,
-        source_system="capacitas",
-        source_ref=intestatario.idxana,
-        collected_at=collected_at,
-    )
-    person.cognome = merged_data["cognome"]
-    person.nome = merged_data["nome"]
-    person.codice_fiscale = merged_data["codice_fiscale"]
-    person.data_nascita = merged_data["data_nascita"]
-    person.comune_nascita = merged_data["comune_nascita"]
-    person.indirizzo = merged_data["indirizzo"]
-    person.comune_residenza = merged_data["comune_residenza"]
-    person.cap = merged_data["cap"]
+    if person is not None:
+        cognome, nome = _split_denominazione(intestatario.denominazione, fallback_cognome=person.cognome, fallback_nome=person.nome)
+        merged_data = {
+            "cognome": cognome,
+            "nome": nome,
+            "codice_fiscale": normalized_cf or person.codice_fiscale,
+            "data_nascita": intestatario.data_nascita or person.data_nascita,
+            "comune_nascita": intestatario.luogo_nascita or person.comune_nascita,
+            "indirizzo": intestatario.residenza or person.indirizzo,
+            "comune_residenza": intestatario.comune_residenza or person.comune_residenza,
+            "cap": intestatario.cap or person.cap,
+            "email": person.email,
+            "telefono": person.telefono,
+            "note": person.note,
+        }
+        snapshot_person_if_changed(
+            db,
+            person,
+            merged_data,
+            source_system="capacitas",
+            source_ref=intestatario.idxana,
+            collected_at=collected_at,
+        )
+        person.cognome = merged_data["cognome"]
+        person.nome = merged_data["nome"]
+        person.codice_fiscale = merged_data["codice_fiscale"]
+        person.data_nascita = merged_data["data_nascita"]
+        person.comune_nascita = merged_data["comune_nascita"]
+        person.indirizzo = merged_data["indirizzo"]
+        person.comune_residenza = merged_data["comune_residenza"]
+        person.cap = merged_data["cap"]
+    elif company is not None:
+        company.ragione_sociale = intestatario.denominazione or company.ragione_sociale
+        company.partita_iva = normalized_cf or company.partita_iva
+        company.sede_legale = intestatario.residenza or company.sede_legale
+        company.comune_sede = intestatario.comune_residenza or company.comune_sede
+        company.cap = intestatario.cap or company.cap
 
     if subject.source_system == "capacitas" and intestatario.idxana:
         subject.source_external_id = intestatario.idxana
@@ -1029,10 +1181,7 @@ def _match_or_create_subject_from_intestatario(
 
 
 def _normalize_cf(value: str | None) -> str | None:
-    if not value:
-        return None
-    normalized = re.sub(r"\s+", "", value).upper()
-    return normalized or None
+    return normalize_tax_identifier(value)
 
 
 def _parse_date_ddmmyyyy(value: str | None) -> date | None:

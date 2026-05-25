@@ -37,7 +37,7 @@ from app.models.catasto_phase1 import (
     CatSchemaContributo,
     CatUtenzaIrrigua,
 )
-from app.modules.utenze.models import AnagraficaPerson, AnagraficaPersonSnapshot, AnagraficaSubject
+from app.modules.utenze.models import AnagraficaCompany, AnagraficaPerson, AnagraficaPersonSnapshot, AnagraficaSubject
 from app.modules.elaborazioni.capacitas.models import (
     CapacitasAnagrafica,
     CapacitasAnagraficaDetail,
@@ -209,6 +209,92 @@ def auth_headers() -> dict[str, str]:
     response = client.post("/auth/login", json={"username": "elaborazioni-admin", "password": "secret123"})
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
+
+
+def test_capacitas_intestatario_with_11_digit_identifier_creates_company_subject() -> None:
+    from app.modules.elaborazioni.capacitas.models import CapacitasIntestatario
+    from app.services.elaborazioni_capacitas_terreni import _match_or_create_subject_from_intestatario
+
+    db = TestingSessionLocal()
+
+    subject = _match_or_create_subject_from_intestatario(
+        db,
+        CapacitasIntestatario(
+            idxana="IDX-001",
+            codice_fiscale="00050540384",
+            denominazione="SOCIETA PER LA BONIFICA DEI TERRENI FERRARESI E PER IMPRESE AGRICOLE S.P.A.",
+            comune_residenza="Ferrara",
+            cap="44121",
+            residenza="Via Test 1",
+        ),
+        datetime.now(timezone.utc),
+    )
+    db.flush()
+
+    assert subject is not None
+    assert subject.subject_type == "company"
+    assert db.get(AnagraficaPerson, subject.id) is None
+
+    company = db.get(AnagraficaCompany, subject.id)
+    assert company is not None
+    assert company.partita_iva == "00050540384"
+    assert company.ragione_sociale.startswith("SOCIETA PER LA BONIFICA")
+    db.close()
+
+
+def test_capacitas_intestatario_11_digit_prefers_existing_company_over_person() -> None:
+    from app.modules.elaborazioni.capacitas.models import CapacitasIntestatario
+    from app.services.elaborazioni_capacitas_terreni import _match_or_create_subject_from_intestatario
+
+    db = TestingSessionLocal()
+
+    wrong_person_subject = AnagraficaSubject(
+        source_name_raw="Comune Di Oristano",
+        subject_type="person",
+        source_system="capacitas",
+    )
+    db.add(wrong_person_subject)
+    db.flush()
+    db.add(
+        AnagraficaPerson(
+            subject_id=wrong_person_subject.id,
+            cognome="Comune",
+            nome="Di Oristano",
+            codice_fiscale="00052090958",
+        )
+    )
+
+    correct_company_subject = AnagraficaSubject(
+        source_name_raw="Comune Di Oristano",
+        subject_type="company",
+        source_system="gaia",
+    )
+    db.add(correct_company_subject)
+    db.flush()
+    db.add(
+        AnagraficaCompany(
+            subject_id=correct_company_subject.id,
+            ragione_sociale="Comune Di Oristano",
+            partita_iva="00052090958",
+            codice_fiscale="00052090958",
+        )
+    )
+    db.commit()
+
+    subject = _match_or_create_subject_from_intestatario(
+        db,
+        CapacitasIntestatario(
+            idxana="IDX-002",
+            codice_fiscale="00052090958",
+            denominazione="COMUNE DI ORISTANO",
+        ),
+        datetime.now(timezone.utc),
+    )
+
+    assert subject is not None
+    assert subject.id == correct_company_subject.id
+    assert subject.subject_type == "company"
+    db.close()
 
 
 def test_particelle_sync_policy_uses_900ms_daytime_default() -> None:
