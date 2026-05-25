@@ -5,7 +5,6 @@ import { PropsWithChildren } from "react";
 import { clearStoredAccessToken } from "@/lib/auth";
 import type { CurrentUser } from "@/types/api";
 import { Sidebar } from "@/components/layout/sidebar";
-import { WikiWidget } from "@/features/wiki/WikiWidget";
 
 type AppShellProps = PropsWithChildren<{
   currentUser?: CurrentUser | null;
@@ -42,7 +41,6 @@ export function AppShell({
         grantedSectionKeys={grantedSectionKeys}
       />
       <main className="min-w-0 flex-1">{children}</main>
-      <WikiWidget />
     </div>
   );
 }

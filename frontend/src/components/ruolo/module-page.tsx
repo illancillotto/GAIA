@@ -33,7 +33,11 @@ export function RuoloModulePage({
   }, []);
 
   if (isEmbedded) {
-    return <main className="min-h-full bg-white p-4">{children}</main>;
+    return (
+      <main className="min-h-full bg-white p-4">
+        {children}
+      </main>
+    );
   }
 
   return (

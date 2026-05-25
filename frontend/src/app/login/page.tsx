@@ -4,7 +4,6 @@ import { FormEvent, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 import { AlertBanner } from "@/components/ui/alert-banner";
-import { WikiWidget } from "@/features/wiki/WikiWidget";
 import { login } from "@/lib/api";
 import { getStoredAccessToken, setStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/cn";
@@ -255,7 +254,6 @@ export default function LoginPage() {
           </div>
         </section>
       </main>
-      <WikiWidget />
     </div>
   );
 }

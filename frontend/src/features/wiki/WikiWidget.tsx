@@ -134,16 +134,16 @@ export function WikiWidget() {
     return null;
   }
 
-  return createPortal(
+  const widget = (
     <>
-      {/* Floating button */}
       <button
         onClick={() => setOpen((v) => !v)}
         className={cn(
-          "fixed bottom-6 right-6 z-50 flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-all",
+          "fixed z-[120] flex h-14 w-14 items-center justify-center rounded-full shadow-lg transition-all",
           "bg-[#1D4E35] text-white hover:bg-[#163d29] focus:outline-none focus:ring-2 focus:ring-[#1D4E35] focus:ring-offset-2",
           open && "rotate-45"
         )}
+        style={{ position: "fixed", right: "1.5rem", bottom: "1.5rem" }}
         aria-label={open ? "Chiudi assistente" : "Apri assistente GAIA"}
         title={open ? "Chiudi assistente" : "Assistente GAIA"}
       >
@@ -152,20 +152,21 @@ export function WikiWidget() {
         </span>
       </button>
 
-      {/* Chat overlay */}
       {open && (
-        <div className="fixed bottom-24 right-6 z-50 flex w-96 max-w-[calc(100vw-3rem)] flex-col rounded-2xl bg-white shadow-2xl border border-gray-200 overflow-hidden">
-          {/* Header */}
+        <div
+          className="fixed z-[120] flex w-96 max-w-[calc(100vw-3rem)] flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl"
+          style={{ position: "fixed", right: "1.5rem", bottom: "6rem" }}
+        >
           <div className="flex items-center justify-between bg-[#1D4E35] px-4 py-3">
             <div className="flex items-center gap-2">
-              <span className="material-symbols-outlined text-white text-xl">assistant</span>
+              <span className="material-symbols-outlined text-xl text-white">assistant</span>
               <span className="text-sm font-semibold text-white">Assistente GAIA</span>
             </div>
             <div className="flex items-center gap-2">
               {messages.length > 0 && (
                 <button
                   onClick={clearMessages}
-                  className="text-white/70 hover:text-white text-xs underline underline-offset-2"
+                  className="text-xs text-white/70 underline underline-offset-2 hover:text-white"
                   title="Nuova conversazione"
                 >
                   Resetta
@@ -181,21 +182,16 @@ export function WikiWidget() {
             </div>
           </div>
 
-          {/* Messages */}
-          <div className="flex flex-col gap-3 overflow-y-auto p-4 h-80">
+          <div className="flex h-80 flex-col gap-3 overflow-y-auto p-4">
             {messages.length === 0 && (
-              <div className="flex flex-col items-center justify-center h-full gap-2 text-center text-sm text-gray-400">
+              <div className="flex h-full flex-col items-center justify-center gap-2 text-center text-sm text-gray-400">
                 <span className="material-symbols-outlined text-4xl text-gray-300">assistant</span>
                 <p>Ciao! Sono l&apos;assistente GAIA.</p>
                 <p>Chiedi qualsiasi cosa sulla piattaforma.</p>
               </div>
             )}
             {messages.map((msg) => (
-              <ChatMessage
-                key={msg.id}
-                msg={msg}
-                onSaveRequest={handleSaveRequest}
-              />
+              <ChatMessage key={msg.id} msg={msg} onSaveRequest={handleSaveRequest} />
             ))}
             {loading && (
               <div className="flex items-start gap-2">
@@ -204,16 +200,11 @@ export function WikiWidget() {
                 </div>
               </div>
             )}
-            {savedRequest && (
-              <p className="text-center text-xs text-green-600">
-                Richiesta registrata. Grazie!
-              </p>
-            )}
+            {savedRequest && <p className="text-center text-xs text-green-600">Richiesta registrata. Grazie!</p>}
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Input */}
-          <form onSubmit={handleSubmit} className="border-t border-gray-200 p-3 flex gap-2">
+          <form onSubmit={handleSubmit} className="flex gap-2 border-t border-gray-200 p-3">
             <input
               ref={inputRef}
               value={input}
@@ -225,7 +216,7 @@ export function WikiWidget() {
             <button
               type="submit"
               disabled={!input.trim() || loading}
-              className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#1D4E35] text-white hover:bg-[#163d29] disabled:opacity-40 transition-colors"
+              className="flex h-9 w-9 items-center justify-center rounded-xl bg-[#1D4E35] text-white transition-colors hover:bg-[#163d29] disabled:opacity-40"
             >
               <span className="material-symbols-outlined text-base">send</span>
             </button>
@@ -233,7 +224,7 @@ export function WikiWidget() {
         </div>
       )}
     </>
-    ,
-    document.body
   );
+
+  return createPortal(widget, document.body);
 }
