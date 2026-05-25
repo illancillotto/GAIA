@@ -183,6 +183,71 @@ class TestVehicleIntegration:
         assert stopped.status == "closed"
         assert stopped.end_odometer_km == Decimal("10050.5")
 
+    def test_list_vehicles_orders_by_usage_frequency(self, db_session, cleanup_vehicles):
+        busiest = create_vehicle(
+            db_session,
+            {
+                "code": "INT-TEST-ORD-001",
+                "name": "Busy Vehicle",
+                "vehicle_type": "auto",
+            },
+        )
+        recent = create_vehicle(
+            db_session,
+            {
+                "code": "INT-TEST-ORD-002",
+                "name": "Recent Vehicle",
+                "vehicle_type": "auto",
+            },
+        )
+        quiet = create_vehicle(
+            db_session,
+            {
+                "code": "INT-TEST-ORD-003",
+                "name": "Quiet Vehicle",
+                "vehicle_type": "auto",
+            },
+        )
+        db_session.commit()
+        cleanup_vehicles.extend([busiest.id, recent.id, quiet.id])
+
+        for started_at in (
+            datetime(2026, 5, 1, 8, 0, 0),
+            datetime(2026, 5, 2, 8, 0, 0),
+        ):
+            start_usage_session(
+                db_session,
+                {
+                    "vehicle_id": busiest.id,
+                    "started_by_user_id": 1,
+                    "started_at": started_at,
+                    "start_odometer_km": Decimal("10000.0"),
+                },
+            )
+        start_usage_session(
+            db_session,
+            {
+                "vehicle_id": recent.id,
+                "started_by_user_id": 1,
+                "started_at": datetime(2026, 5, 3, 8, 0, 0),
+                "start_odometer_km": Decimal("20000.0"),
+            },
+        )
+        db_session.commit()
+
+        vehicles, _total = list_vehicles(
+            db_session,
+            vehicle_type="auto",
+            search="Vehicle",
+            page_size=10,
+        )
+        ordered_codes = [vehicle.code for vehicle in vehicles[:3]]
+        assert ordered_codes == [
+            "INT-TEST-ORD-001",
+            "INT-TEST-ORD-002",
+            "INT-TEST-ORD-003",
+        ]
+
     def test_create_fuel_log(self, db_session, cleanup_vehicles):
         vehicle = create_vehicle(
             db_session,

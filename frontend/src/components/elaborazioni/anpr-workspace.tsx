@@ -31,6 +31,8 @@ export function ElaborazioniAnprWorkspace({ embedded = false }: { embedded?: boo
   const [summary, setSummary] = useState<ElaborazioneAnprSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [expandedRuns, setExpandedRuns] = useState<Record<string, boolean>>({});
+  const totalProcessedSubjects = summary?.recent_runs.reduce((total, run) => total + run.subjects_processed, 0) ?? 0;
+  const totalRunErrors = summary?.recent_runs.reduce((total, run) => total + run.errors, 0) ?? 0;
 
   const loadSummary = useCallback(async () => {
     const token = getStoredAccessToken();
@@ -95,6 +97,19 @@ export function ElaborazioniAnprWorkspace({ embedded = false }: { embedded?: boo
           />
           <ModuleWorkspaceKpiTile
             compact={embedded}
+            label="Utenze aggiornate"
+            value={totalProcessedSubjects}
+            hint={`ultimi ${summary?.recent_runs.length ?? 0} run`}
+          />
+          <ModuleWorkspaceKpiTile
+            compact={embedded}
+            label="Utenze in errore"
+            variant={totalRunErrors > 0 ? "amber" : "default"}
+            value={totalRunErrors}
+            hint="errori registrati nei run"
+          />
+          <ModuleWorkspaceKpiTile
+            compact={embedded}
             label="Run registrati"
             value={summary?.recent_runs.length ?? 0}
             hint={summary?.recent_runs[0] ? summary.recent_runs[0].status : "nessuno"}
@@ -104,7 +119,7 @@ export function ElaborazioniAnprWorkspace({ embedded = false }: { embedded?: boo
             label="Da verificare"
             variant={(summary?.total_error_subjects ?? 0) > 0 ? "amber" : "default"}
             value={summary?.total_error_subjects ?? 0}
-            hint="utenze in errore"
+            hint="utenze in errore aperte"
           />
         </ModuleWorkspaceKpiRow>
       </ElaborazioneHero>

@@ -266,7 +266,7 @@ function MezziContent() {
 
       <OperazioniCollectionPanel
         title="Parco mezzi"
-        description="Ricerca per codice, targa o nome e filtro per stato operativo."
+        description="Ricerca per codice, targa o nome e filtro per stato operativo. L'elenco mostra prima i mezzi piu usati."
         count={vehicles.length}
       >
         <OperazioniToolbar

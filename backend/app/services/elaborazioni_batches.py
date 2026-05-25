@@ -97,6 +97,55 @@ RELEASE_REQUESTED_OPERATION = "Release requested by user"
 RELEASE_REQUESTED_MESSAGE = "Credenziale SISTER liberata su richiesta utente"
 
 
+def normalize_released_processing_batches(db: Session, user_id: int | None = None) -> int:
+    statement = select(ElaborazioneBatch).where(
+        ElaborazioneBatch.status == ElaborazioneBatchStatus.PROCESSING.value,
+    )
+    if user_id is not None:
+        statement = statement.where(ElaborazioneBatch.user_id == user_id)
+
+    batches = list(db.scalars(statement).all())
+    normalized = 0
+    now = datetime.now(UTC)
+
+    for batch in batches:
+        requests = get_batch_requests(db, batch.id)
+        if not requests:
+            continue
+        if any(
+            item.status in {
+                ElaborazioneRichiestaStatus.PROCESSING.value,
+                ElaborazioneRichiestaStatus.AWAITING_CAPTCHA.value,
+            }
+            for item in requests
+        ):
+            continue
+
+        released_pending = [
+            item
+            for item in requests
+            if item.status == ElaborazioneRichiestaStatus.PENDING.value
+            and item.error_message == RELEASE_REQUESTED_MESSAGE
+        ]
+        if not released_pending:
+            continue
+
+        for request in released_pending:
+            request.status = ElaborazioneRichiestaStatus.SKIPPED.value
+            request.current_operation = RELEASE_REQUESTED_OPERATION
+            request.processed_at = request.processed_at or now
+
+        batch.status = ElaborazioneBatchStatus.CANCELLED.value
+        batch.completed_at = now
+        batch.current_operation = RELEASE_REQUESTED_OPERATION
+        recalculate_batch_counters(batch, requests)
+        normalized += 1
+
+    if normalized:
+        db.commit()
+    return normalized
+
+
 @dataclass(slots=True)
 class ValidatedVisuraRow:
     row_index: int
@@ -509,6 +558,7 @@ def create_batch_from_validated_rows(
 
 
 def expire_stale_pending_batches(db: Session, user_id: int | None = None) -> int:
+    normalize_released_processing_batches(db, user_id)
     timeout_minutes = max(settings.elaborazioni_pending_start_timeout_minutes, 1)
     now = datetime.now(UTC)
     stale_cutoff = now.timestamp() - (timeout_minutes * 60)

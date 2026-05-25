@@ -62,6 +62,10 @@ from app.services.elaborazioni_capacitas_incass import (
     expire_stale_incass_sync_jobs,
     prepare_incass_sync_jobs_for_recovery,
 )
+from app.services.elaborazioni_batches import (
+    RELEASE_REQUESTED_MESSAGE,
+    RELEASE_REQUESTED_OPERATION,
+)
 from app.modules.catasto.services.ade_status_scan import ADE_SCAN_PURPOSE, persist_ade_status_scan_result
 from app.modules.catasto.services.ade_wfs import execute_ade_sync_run, prepare_ade_sync_runs_for_recovery
 from app.modules.catasto.services.ade_historical_visura_parser import parse_historical_visura_pdf
@@ -937,6 +941,12 @@ class CatastoWorker:
         with SessionLocal() as db:
             request = db.get(CatastoVisuraRequest, request_id)
             if request is None:
+                return
+            if request.error_message == RELEASE_REQUESTED_MESSAGE:
+                request.status = CatastoVisuraRequestStatus.SKIPPED.value
+                request.current_operation = RELEASE_REQUESTED_OPERATION
+                request.processed_at = request.processed_at or datetime.now(timezone.utc)
+                db.commit()
                 return
             request.status = CatastoVisuraRequestStatus.PENDING.value
             request.current_operation = operation

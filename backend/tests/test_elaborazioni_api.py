@@ -28,6 +28,10 @@ from app.models.catasto import (
     CatastoVisuraRequest,
     CatastoVisuraRequestStatus,
 )
+from app.services.elaborazioni_batches import (
+    RELEASE_REQUESTED_MESSAGE,
+    RELEASE_REQUESTED_OPERATION,
+)
 from app.services.catasto_credentials import get_credential_fernet
 
 
@@ -382,6 +386,81 @@ def create_batch_with_stale_counters() -> str:
             current_operation="Pending",
         )
         db.add_all([completed_request, pending_request])
+        db.commit()
+        return str(batch.id)
+    finally:
+        db.close()
+
+
+def create_processing_batch_with_released_pending_request() -> str:
+    db = TestingSessionLocal()
+    try:
+        user = db.query(ApplicationUser).filter(ApplicationUser.username == "elaborazioni-admin").one()
+        batch = CatastoBatch(
+            user_id=user.id,
+            name="Batch processing release normalization",
+            status="processing",
+            total_items=3,
+            completed_items=0,
+            failed_items=1,
+            skipped_items=1,
+            current_operation="Credenziale TEST in cooldown, attesa 300s",
+            started_at=datetime.now(UTC) - timedelta(days=1),
+        )
+        db.add(batch)
+        db.flush()
+
+        db.add(
+            CatastoVisuraRequest(
+                batch_id=batch.id,
+                user_id=user.id,
+                row_index=1,
+                comune="Oristano",
+                comune_codice="G113#ORISTANO#5#5",
+                catasto="Terreni e Fabbricati",
+                foglio="1",
+                particella="101",
+                tipo_visura="Completa",
+                status=CatastoVisuraRequestStatus.SKIPPED.value,
+                current_operation=RELEASE_REQUESTED_OPERATION,
+                error_message=RELEASE_REQUESTED_MESSAGE,
+                processed_at=datetime.now(UTC) - timedelta(hours=4),
+            )
+        )
+        db.add(
+            CatastoVisuraRequest(
+                batch_id=batch.id,
+                user_id=user.id,
+                row_index=2,
+                comune="Oristano",
+                comune_codice="G113#ORISTANO#5#5",
+                catasto="Terreni e Fabbricati",
+                foglio="2",
+                particella="102",
+                tipo_visura="Completa",
+                status=CatastoVisuraRequestStatus.FAILED.value,
+                current_operation="Richiesta fallita, batch in prosecuzione",
+                error_message="Errore test",
+                processed_at=datetime.now(UTC) - timedelta(hours=3),
+            )
+        )
+        db.add(
+            CatastoVisuraRequest(
+                batch_id=batch.id,
+                user_id=user.id,
+                row_index=3,
+                comune="Oristano",
+                comune_codice="G113#ORISTANO#5#5",
+                catasto="Terreni e Fabbricati",
+                foglio="3",
+                particella="103",
+                tipo_visura="Completa",
+                status=CatastoVisuraRequestStatus.PENDING.value,
+                current_operation="Sessione/timeout su TEST, retry differito",
+                error_message=RELEASE_REQUESTED_MESSAGE,
+                processed_at=datetime.now(UTC) - timedelta(hours=2),
+            )
+        )
         db.commit()
         return str(batch.id)
     finally:
@@ -1195,6 +1274,31 @@ def test_start_batch_resumes_only_released_requests_and_keeps_completed_items() 
         assert requests[1].status == CatastoVisuraRequestStatus.PENDING.value
         assert requests[1].current_operation == "Queued after release"
         assert requests[1].processed_at is None
+    finally:
+        db.close()
+
+
+def test_get_batch_normalizes_processing_batch_left_pending_after_release() -> None:
+    batch_id = create_processing_batch_with_released_pending_request()
+
+    response = client.get(f"/elaborazioni/batches/{batch_id}", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "cancelled"
+    assert payload["current_operation"] == RELEASE_REQUESTED_OPERATION
+    assert payload["skipped_items"] == 2
+    assert payload["failed_items"] == 1
+
+    db = TestingSessionLocal()
+    try:
+        batch = db.query(CatastoBatch).filter(CatastoBatch.id == UUID(batch_id)).one()
+        requests = db.query(CatastoVisuraRequest).filter(CatastoVisuraRequest.batch_id == batch.id).order_by(CatastoVisuraRequest.row_index.asc()).all()
+        assert batch.status == "cancelled"
+        assert batch.current_operation == RELEASE_REQUESTED_OPERATION
+        assert requests[2].status == CatastoVisuraRequestStatus.SKIPPED.value
+        assert requests[2].current_operation == RELEASE_REQUESTED_OPERATION
+        assert requests[2].error_message == RELEASE_REQUESTED_MESSAGE
     finally:
         db.close()
 

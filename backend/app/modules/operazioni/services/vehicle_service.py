@@ -33,7 +33,21 @@ def list_vehicles(
     page: int = 1,
     page_size: int = 25,
 ) -> tuple[list[Vehicle], int]:
-    query = select(Vehicle).where(Vehicle.is_active == True)
+    usage_stats = (
+        select(
+            VehicleUsageSession.vehicle_id.label("vehicle_id"),
+            func.count(VehicleUsageSession.id).label("usage_count"),
+            func.max(VehicleUsageSession.started_at).label("last_used_at"),
+        )
+        .group_by(VehicleUsageSession.vehicle_id)
+        .subquery()
+    )
+
+    query = (
+        select(Vehicle)
+        .outerjoin(usage_stats, usage_stats.c.vehicle_id == Vehicle.id)
+        .where(Vehicle.is_active == True)
+    )
 
     if status:
         query = query.where(Vehicle.current_status == status)
@@ -54,7 +68,13 @@ def list_vehicles(
     total = db.scalar(count_query) or 0
 
     vehicles = db.scalars(
-        query.order_by(Vehicle.name).offset((page - 1) * page_size).limit(page_size)
+        query.order_by(
+            func.coalesce(usage_stats.c.usage_count, 0).desc(),
+            usage_stats.c.last_used_at.desc().nullslast(),
+            Vehicle.name.asc(),
+        )
+        .offset((page - 1) * page_size)
+        .limit(page_size)
     ).all()
 
     return list(vehicles), total
