@@ -8,7 +8,14 @@ from datetime import datetime, timezone
 from typing import Any
 from urllib.parse import urljoin
 
-from playwright.async_api import Browser, BrowserContext, Page, Playwright, async_playwright
+from playwright.async_api import (
+    Browser,
+    BrowserContext,
+    Page,
+    Playwright,
+    TimeoutError as PlaywrightTimeoutError,
+    async_playwright,
+)
 from sqlalchemy import select
 
 from app.models.wc_sync_job import WCSyncJob
@@ -23,11 +30,14 @@ AUTODOC_USER_AGENT = (
     "Chrome/136.0.0.0 Safari/537.36"
 )
 AUTODOC_CHALLENGE_TITLE = "Just a moment..."
-AUTODOC_WAIT_AFTER_GOTO_MS = 15000
+AUTODOC_WAIT_AFTER_GOTO_MS = 5000
 AUTODOC_MAX_CHALLENGE_WAIT_SEC = 45
 AUTODOC_BASE_URL = "https://www.auto-doc.it/"
 AUTODOC_PLATE_SEARCH_PATH = "/ajax/selector/vehicle/search-number"
 AUTODOC_RICAMBI_PATH_FRAGMENT = "/ricambi-auto/"
+AUTODOC_DISCOVERY_RESPONSE_TIMEOUT_MS = 8000
+AUTODOC_DISCOVERY_SETTLE_TIMEOUT_MS = 10000
+AUTODOC_ENABLE_PLATE_DISCOVERY = False
 
 
 def _parse_vehicle_page_text(title: str, heading: str, image_url: str | None) -> dict[str, str]:
@@ -149,8 +159,58 @@ async def _dismiss_cookie_overlays(page: Page) -> None:
         """
         () => {
           document
-            .querySelectorAll('[data-popup-cookies], .notification-popup, .overlay')
+            .querySelectorAll(
+              [
+                '[data-popup-cookies]',
+                '.notification-popup',
+                '.notification-popup__content',
+                '.popup',
+                '.popup--notification',
+                '.overlay',
+                '.header-search__overlay-wrap',
+              ].join(',')
+            )
             .forEach((node) => node.remove());
+          document.body.style.overflow = 'auto';
+          document.documentElement.style.overflow = 'auto';
+        }
+        """
+    )
+
+
+async def _set_plate_search_value(page: Page, normalized_plate: str) -> None:
+    input_locator = page.locator("#kba1").first
+    try:
+        await input_locator.fill(normalized_plate, timeout=5000)
+        return
+    except Exception:
+        logger.info("AUTODOC fill standard fallita, provo input via DOM per targa %s", normalized_plate)
+
+    await input_locator.evaluate(
+        """
+        (element, value) => {
+          element.focus();
+          element.value = value;
+          element.dispatchEvent(new Event('input', { bubbles: true }));
+          element.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        """,
+        normalized_plate,
+    )
+
+
+async def _trigger_plate_search(page: Page, normalized_plate: str) -> None:
+    button = page.locator("[data-selector-number-button]").first
+    try:
+        await button.click(timeout=5000)
+        return
+    except Exception:
+        logger.info("AUTODOC click standard fallito, provo click via DOM per targa %s", normalized_plate)
+
+    await button.evaluate(
+        """
+        (element) => {
+          element.click();
         }
         """
     )
@@ -174,49 +234,75 @@ async def _discover_vehicle_url_by_plate(page: Page, plate_number: str) -> str:
     if not normalized_plate:
         raise RuntimeError("Targa mezzo mancante o non valida per ricerca AUTODOC")
 
+    logger.info("AUTODOC discovery avviata per targa %s", normalized_plate)
     await _prepare_page(page, AUTODOC_BASE_URL)
     await _dismiss_cookie_overlays(page)
-    await page.locator("#kba1").fill(normalized_plate)
+    await _set_plate_search_value(page, normalized_plate)
 
-    async with page.expect_response(
-        lambda response: AUTODOC_PLATE_SEARCH_PATH in response.url(),
-        timeout=30000,
-    ) as response_info:
-        await page.locator("[data-selector-number-button]").first.click()
-    response = await response_info.value
-
-    if response.status >= 400:
-        raise RuntimeError(
-            f"Ricerca targa AUTODOC bloccata da Cloudflare ({response.status})"
-        )
+    response = None
 
     try:
-        payload = await response.json()
-    except Exception:
-        payload = await response.text()
-    discovered_url = _extract_autodoc_url_from_object(payload)
-    if discovered_url:
-        return discovered_url
+        async with page.expect_response(
+            lambda response: AUTODOC_PLATE_SEARCH_PATH in response.url,
+            timeout=AUTODOC_DISCOVERY_RESPONSE_TIMEOUT_MS,
+        ) as response_info:
+            await _trigger_plate_search(page, normalized_plate)
+        response = await response_info.value
+    except PlaywrightTimeoutError:
+        logger.info(
+            "AUTODOC discovery senza response AJAX per targa %s, verifico navigazione/DOM",
+            normalized_plate,
+        )
+        await _trigger_plate_search(page, normalized_plate)
 
-    await page.wait_for_timeout(1500)
-    candidate_urls = await page.evaluate(
-        """
-        () => Array.from(document.querySelectorAll('a[href*="/ricambi-auto/"]'))
-          .map((node) => node.getAttribute('href'))
-          .filter(Boolean)
-        """
+    if response is not None:
+        if response.status >= 400:
+            logger.warning(
+                "AUTODOC discovery bloccata per targa %s con status %s",
+                normalized_plate,
+                response.status,
+            )
+            raise RuntimeError(
+                f"Ricerca targa AUTODOC bloccata da Cloudflare ({response.status})"
+            )
+
+        try:
+            payload = await response.json()
+        except Exception:
+            payload = await response.text()
+        discovered_url = _extract_autodoc_url_from_object(payload)
+        if discovered_url:
+            logger.info(
+                "AUTODOC discovery completata per targa %s -> %s",
+                normalized_plate,
+                discovered_url,
+            )
+            return discovered_url
+
+    deadline = asyncio.get_running_loop().time() + (AUTODOC_DISCOVERY_SETTLE_TIMEOUT_MS / 1000)
+    while asyncio.get_running_loop().time() < deadline:
+        if AUTODOC_RICAMBI_PATH_FRAGMENT in page.url:
+            normalized = _coerce_autodoc_url(page.url)
+            if normalized:
+                logger.info(
+                    "AUTODOC discovery completata da page.url per targa %s -> %s",
+                    normalized_plate,
+                    normalized,
+                )
+                return normalized
+        await page.wait_for_timeout(500)
+
+    title = (await page.title()).strip()
+    current_url = page.url
+    logger.warning(
+        "AUTODOC discovery senza risultati per targa %s url=%s title=%s",
+        normalized_plate,
+        current_url,
+        title,
     )
-    for candidate in candidate_urls:
-        normalized = _coerce_autodoc_url(candidate)
-        if normalized:
-            return normalized
-
-    if AUTODOC_RICAMBI_PATH_FRAGMENT in page.url:
-        normalized = _coerce_autodoc_url(page.url)
-        if normalized:
-            return normalized
-
-    raise RuntimeError("Nessun risultato AUTODOC trovato per la targa indicata")
+    raise RuntimeError(
+        f"Nessun risultato AUTODOC trovato per {normalized_plate} (url={current_url}, title={title})"
+    )
 
 
 async def _build_browser() -> tuple[Playwright, Browser, BrowserContext, Page]:
@@ -305,9 +391,17 @@ async def run_autodoc_sync_job_by_id(session_factory, job_id: str | uuid.UUID) -
 
             now = datetime.now(timezone.utc)
             try:
+                logger.info(
+                    "AUTODOC sync mezzo %s/%s id=%s code=%s plate=%s",
+                    index,
+                    total,
+                    vehicle.id,
+                    vehicle.code,
+                    vehicle.plate_number,
+                )
                 autodoc_url = vehicle.autodoc_url
                 had_saved_autodoc_url = bool(autodoc_url)
-                if not autodoc_url and vehicle.plate_number:
+                if not autodoc_url and AUTODOC_ENABLE_PLATE_DISCOVERY and vehicle.plate_number:
                     assert page is not None
                     autodoc_url = await _discover_vehicle_url_by_plate(page, vehicle.plate_number)
                     vehicle.autodoc_url = autodoc_url
@@ -315,18 +409,23 @@ async def run_autodoc_sync_job_by_id(session_factory, job_id: str | uuid.UUID) -
                 if not autodoc_url:
                     skipped += 1
                     vehicle.autodoc_sync_error = (
-                        "Impossibile determinare il link AUTODOC: targa mancante o discovery non disponibile"
+                        "Link AUTODOC mancante: la sync massiva aggiorna solo i mezzi con URL AUTODOC gia salvato"
                     )
                     result = {
                         "vehicle_id": str(vehicle.id),
                         "status": "skipped",
-                        "reason": "missing_url_and_plate",
+                        "reason": "missing_autodoc_url",
                     }
                 elif not force_refresh and vehicle.autodoc_synced_at and vehicle.autodoc_data:
                     skipped += 1
                     result = {"vehicle_id": str(vehicle.id), "status": "skipped", "reason": "already_synced"}
                 else:
                     assert page is not None
+                    logger.info(
+                        "AUTODOC snapshot avviata per mezzo %s url=%s",
+                        vehicle.code,
+                        autodoc_url,
+                    )
                     title, data = await _extract_vehicle_snapshot(page, autodoc_url)
                     vehicle.autodoc_title = title
                     vehicle.autodoc_data = data
@@ -344,6 +443,11 @@ async def run_autodoc_sync_job_by_id(session_factory, job_id: str | uuid.UUID) -
                         "status": "synced",
                         "autodoc_url_discovered": not had_saved_autodoc_url,
                     }
+                    logger.info(
+                        "AUTODOC sync completata per mezzo %s discovered=%s",
+                        vehicle.code,
+                        not had_saved_autodoc_url,
+                    )
             except Exception as exc:
                 errors += 1
                 message = str(exc)
@@ -351,6 +455,11 @@ async def run_autodoc_sync_job_by_id(session_factory, job_id: str | uuid.UUID) -
                 vehicle.autodoc_synced_at = now
                 vehicle.autodoc_sync_error = message
                 result = {"vehicle_id": str(vehicle.id), "status": "failed", "reason": message}
+                logger.warning(
+                    "AUTODOC sync fallita per mezzo %s: %s",
+                    vehicle.code,
+                    message,
+                )
 
             recent_results = list((job.params_json or {}).get("recent_results", []))
             recent_results.append(result)
