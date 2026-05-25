@@ -442,7 +442,7 @@ export default function MapContainer({
             "#10B981",
             "#6366F1",
           ],
-          "fill-opacity": 0.05,
+          "fill-opacity": 0.5,
         },
       });
 
@@ -502,10 +502,10 @@ export default function MapContainer({
           { layers: clickableLayers },
         );
         const clickableFeature = features.find((feature) => {
-          const featureId = feature.properties?.id;
+          const featureId = feature.properties?.id ?? feature.id;
           return featureId != null && String(featureId).trim().length > 0;
         });
-        const id = clickableFeature?.properties?.id;
+        const id = clickableFeature?.properties?.id ?? clickableFeature?.id;
         popupRef.current?.remove();
         if (!id) {
           handlersRef.current.onParticellaClick?.(null);
@@ -650,7 +650,7 @@ export default function MapContainer({
     const showParticelle = mapLayers?.showParticelle ?? true;
     const showParticelleFill = mapLayers?.showParticelleFill ?? true;
     const distrettiOpacity = mapLayers?.distrettiOpacity ?? 0.3;
-    const particelleOpacity = mapLayers?.particelleOpacity ?? 0.05;
+    const particelleOpacity = mapLayers?.particelleOpacity ?? 0.5;
     const distrettoColor = buildDistrettoColorExpression(mapLayers?.distrettoColors);
     const particelleQuickFilter = mapLayers?.particelleQuickFilter ?? "all";
 

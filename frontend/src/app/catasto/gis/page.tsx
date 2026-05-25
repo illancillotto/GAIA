@@ -284,7 +284,7 @@ export default function CatastoGisPage() {
   const [basemap, setBasemap] = useState<GisBasemap>("osm");
   const [highlightSelected, setHighlightSelected] = useState(true);
   const [distrettiOpacity, setDistrettiOpacity] = useState(0.34);
-  const [particelleOpacity, setParticelleOpacity] = useState(0.05);
+  const [particelleOpacity, setParticelleOpacity] = useState(0.5);
   const [distrettoLayer, setDistrettoLayer] = useState<string>("");
   const [distretti, setDistretti] = useState<CatDistretto[]>([]);
   const [distrettiOpen, setDistrettiOpen] = useState(true);
