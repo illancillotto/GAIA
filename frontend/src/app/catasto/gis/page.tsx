@@ -1577,7 +1577,11 @@ export default function CatastoGisPage() {
                 />
                 {popupParticella ? (
                   <div className="pointer-events-none absolute inset-x-3 bottom-3 z-10 sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-24 sm:w-[380px]">
-                    <div className="pointer-events-auto rounded-2xl border border-white/70 bg-white/[0.88] p-4 shadow-2xl ring-1 ring-black/5 backdrop-blur-xl">
+                    <div
+                      className="pointer-events-auto rounded-2xl border border-white/70 bg-white/[0.88] p-4 shadow-2xl ring-1 ring-black/5 backdrop-blur-xl"
+                      onClick={(event) => event.stopPropagation()}
+                      onMouseDown={(event) => event.stopPropagation()}
+                    >
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
@@ -1604,7 +1608,10 @@ export default function CatastoGisPage() {
                         </div>
                         <button
                           type="button"
-                          onClick={() => setPopupParticella(null)}
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            setPopupParticella(null);
+                          }}
                           className="rounded-full border border-slate-200 bg-white/80 p-1.5 text-slate-500 shadow-sm transition hover:bg-white hover:text-slate-700"
                           aria-label="Chiudi dettaglio particella GIS"
                         >

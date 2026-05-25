@@ -494,7 +494,11 @@ export default function MapContainer({
           (l) => map.getLayer(l) != null,
         );
         const features = map.queryRenderedFeatures(event.point, { layers: clickableLayers });
-        const id = features[0]?.properties?.id;
+        const clickableFeature = features.find((feature) => {
+          const featureId = feature.properties?.id;
+          return featureId != null && String(featureId).trim().length > 0;
+        });
+        const id = clickableFeature?.properties?.id;
         popupRef.current?.remove();
         if (!id) {
           handlersRef.current.onParticellaClick?.(null);
