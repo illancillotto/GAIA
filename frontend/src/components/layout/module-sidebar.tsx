@@ -29,6 +29,7 @@ type ModuleSidebarProps = {
     | "operazioni"
     | "riordino"
     | "ruolo"
+    | "inaz"
     | "wiki";
   reviewBadge?: number;
   userBadge?: number;
@@ -213,11 +214,35 @@ export function ModuleSidebar({
     );
   }
 
+  if (currentModuleKey === "inaz") {
+    return (
+      <div className="space-y-0.5 px-2 pb-3">
+        <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Panoramica</p>
+        <NavItem href="/inaz" icon={GridIcon} label="Dashboard" />
+
+        <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Gestione</p>
+        <NavItem href="/inaz/collaboratori" icon={UsersIcon} label="Collaboratori" match="prefix" />
+        <NavItem href="/inaz/giornaliere" icon={CalendarIcon} label="Giornaliere" match="prefix" />
+        <NavItem href="/inaz/import" icon={RefreshIcon} label="Import" match="prefix" />
+        <NavItem href="/inaz/export" icon={DocumentIcon} label="Export" match="prefix" />
+        <NavItem href="/inaz/sync" icon={RefreshIcon} label="Sync" match="prefix" />
+        <NavItem href="/inaz/settings" icon={DocumentIcon} label="Settings" match="prefix" />
+      </div>
+    );
+  }
+
   if (currentModuleKey === "wiki") {
     return (
       <div className="space-y-0.5 px-2 pb-3">
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Panoramica</p>
-        <NavItem href="/wiki" icon={DocumentIcon} label="Wiki" match="prefix" />
+        <NavItem href="/wiki" icon={DocumentIcon} label="Wiki" />
+        <NavItem href="/wiki/conversations" icon={FolderIcon} label="Conversazioni" match="prefix" />
+        <NavItem href="/wiki/conversations/analytics" icon={CalendarIcon} label="Analytics conversazioni" match="prefix" />
+        <NavItem href="/wiki/conversations/settings" icon={DocumentIcon} label="Settings conversazioni" match="prefix" />
+
+        <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Governance</p>
+        <NavItem href="/wiki/audit" icon={SearchIcon} label="Audit tool call" match="prefix" />
+        <NavItem href="/wiki/telemetry" icon={GridIcon} label="Telemetria" match="prefix" />
       </div>
     );
   }

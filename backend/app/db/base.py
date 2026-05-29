@@ -26,6 +26,7 @@ from app.modules.catasto.models import (
 )
 from app.modules.accessi.wc_org_charts import WCOrgChart, WCOrgChartEntry
 from app.modules.inventory.models import WarehouseRequest
+from app.modules.inaz.models import InazCollaborator, InazCredential, InazDailyPunch, InazDailyRecord, InazEventSummary, InazImportJob, InazSyncJob
 from app.modules.operazioni.models.wc_area import WCArea
 from app.modules.operazioni.models.wc_operator import WCOperator
 from app.modules.operazioni.models.vehicles import WCRefuelEvent
@@ -60,6 +61,19 @@ from app.modules.utenze.models import (
     BonificaUserStaging,
 )
 from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob, RuoloParticella, RuoloPartita
+from app.modules.wiki.models import (
+    WikiChunk,
+    WikiConversationDailyMetric,
+    WikiConversation,
+    WikiConversationEvent,
+    WikiConversationGovernanceConfig,
+    WikiConversationMetricsBackfillJob,
+    WikiConversationMessage,
+    WikiRequest,
+    WikiTelemetryDailyMetric,
+    WikiTelemetryPeriodMetric,
+    WikiToolAuditLog,
+)
 from app.modules.utenze.anpr.models import AnprCheckLog, AnprJobRun, AnprSyncConfig
 from app.models.catasto import (
     CatastoBatch,
@@ -91,6 +105,13 @@ from app.modules.network.models import (
 
 __all__ = [
     "ApplicationUser",
+    "InazCollaborator",
+    "InazCredential",
+    "InazDailyPunch",
+    "InazDailyRecord",
+    "InazEventSummary",
+    "InazImportJob",
+    "InazSyncJob",
     "AnagraficaAuditLog",
     "AnagraficaCompany",
     "AnagraficaDocument",
@@ -173,6 +194,17 @@ __all__ = [
     "WCOrgChartEntry",
     "WCOperator",
     "WCSyncJob",
+    "WikiChunk",
+    "WikiConversationDailyMetric",
+    "WikiConversation",
+    "WikiConversationEvent",
+    "WikiConversationGovernanceConfig",
+    "WikiConversationMetricsBackfillJob",
+    "WikiConversationMessage",
+    "WikiRequest",
+    "WikiTelemetryDailyMetric",
+    "WikiTelemetryPeriodMetric",
+    "WikiToolAuditLog",
     "Share",
     "Snapshot",
     "SyncRun",

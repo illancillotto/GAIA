@@ -31,6 +31,7 @@ class ApplicationUserCreate(BaseModel):
     module_operazioni: bool = False
     module_riordino: bool = False
     module_ruolo: bool = False
+    module_inaz: bool = False
 
     @field_validator("email")
     @classmethod
@@ -58,6 +59,7 @@ class ApplicationUserUpdate(BaseModel):
     module_operazioni: bool | None = None
     module_riordino: bool | None = None
     module_ruolo: bool | None = None
+    module_inaz: bool | None = None
 
     @field_validator("email")
     @classmethod
@@ -90,6 +92,7 @@ class ApplicationUserResponse(BaseModel):
     module_operazioni: bool
     module_riordino: bool
     module_ruolo: bool
+    module_inaz: bool
     enabled_modules: list[str]
     created_at: datetime
     updated_at: datetime

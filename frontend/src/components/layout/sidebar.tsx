@@ -49,6 +49,8 @@ export function Sidebar({
                         ? "riordino"
                         : pathname.startsWith("/ruolo")
                           ? "ruolo"
+                          : pathname.startsWith("/inaz")
+                            ? "inaz"
                           : pathname.startsWith("/wiki")
                             ? "wiki"
                         : "nas_control";
@@ -74,6 +76,8 @@ export function Sidebar({
                         ? "Riordino"
                         : currentModuleKey === "ruolo"
                           ? "Ruolo"
+                          : currentModuleKey === "inaz"
+                            ? "Inaz"
                           : currentModuleKey === "wiki"
                             ? "Wiki"
                         : "NAS Control";

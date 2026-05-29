@@ -102,6 +102,8 @@ def patch_user_modules(
     module_utenze: bool = Query(...),
     module_operazioni: bool = Query(...),
     module_riordino: bool = Query(...),
+    module_ruolo: bool = Query(...),
+    module_inaz: bool = Query(...),
 ) -> ApplicationUserResponse:
     user = get_application_user_by_id(db, user_id)
     if user is None:
@@ -114,5 +116,7 @@ def patch_user_modules(
         module_utenze=module_utenze,
         module_operazioni=module_operazioni,
         module_riordino=module_riordino,
+        module_ruolo=module_ruolo,
+        module_inaz=module_inaz,
     )
     return ApplicationUserResponse.model_validate(update_application_user(db, user, payload))

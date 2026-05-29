@@ -1,0 +1,388 @@
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, test, vi } from "vitest";
+
+import InazCollaboratoriPage from "@/app/inaz/collaboratori/page";
+import InazImportPage from "@/app/inaz/import/page";
+import InazSettingsPage from "@/app/inaz/settings/page";
+import InazSyncPage from "@/app/inaz/sync/page";
+
+const mocks = vi.hoisted(() => ({
+  getStoredAccessToken: vi.fn(),
+  getCurrentUser: vi.fn(),
+  listApplicationUsers: vi.fn(),
+  listInazCollaborators: vi.fn(),
+  mapInazCollaboratorApplicationUser: vi.fn(),
+  listInazImportJobs: vi.fn(),
+  previewInazImport: vi.fn(),
+  importInazJson: vi.fn(),
+  listInazSyncJobs: vi.fn(),
+  createInazSyncJob: vi.fn(),
+  retryInazSyncJob: vi.fn(),
+  cancelInazSyncJob: vi.fn(),
+  downloadInazSyncArtifact: vi.fn(),
+  listInazCredentials: vi.fn(),
+  createInazCredential: vi.fn(),
+  updateInazCredential: vi.fn(),
+  deleteInazCredential: vi.fn(),
+  testInazCredential: vi.fn(),
+  push: vi.fn(),
+}));
+
+vi.mock("@/lib/auth", () => ({
+  getStoredAccessToken: mocks.getStoredAccessToken,
+}));
+
+vi.mock("@/lib/api", () => ({
+  getCurrentUser: mocks.getCurrentUser,
+  listApplicationUsers: mocks.listApplicationUsers,
+  listInazCollaborators: mocks.listInazCollaborators,
+  mapInazCollaboratorApplicationUser: mocks.mapInazCollaboratorApplicationUser,
+  listInazImportJobs: mocks.listInazImportJobs,
+  previewInazImport: mocks.previewInazImport,
+  importInazJson: mocks.importInazJson,
+  listInazSyncJobs: mocks.listInazSyncJobs,
+  createInazSyncJob: mocks.createInazSyncJob,
+  retryInazSyncJob: mocks.retryInazSyncJob,
+  cancelInazSyncJob: mocks.cancelInazSyncJob,
+  downloadInazSyncArtifact: mocks.downloadInazSyncArtifact,
+  listInazCredentials: mocks.listInazCredentials,
+  createInazCredential: mocks.createInazCredential,
+  updateInazCredential: mocks.updateInazCredential,
+  deleteInazCredential: mocks.deleteInazCredential,
+  testInazCredential: mocks.testInazCredential,
+}));
+
+vi.mock("@/components/app/protected-page", () => ({
+  ProtectedPage: ({ children, title }: { children: React.ReactNode; title: string }) => (
+    <div>
+      <h1>{title}</h1>
+      {children}
+    </div>
+  ),
+}));
+
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({ push: mocks.push }),
+}));
+
+describe("Inaz pages", () => {
+  beforeEach(() => {
+    mocks.getStoredAccessToken.mockReturnValue("token");
+    mocks.getCurrentUser.mockResolvedValue({
+      id: 1,
+      username: "admin",
+      email: "admin@example.local",
+      role: "admin",
+      is_active: true,
+      module_accessi: true,
+      module_rete: false,
+      module_inventario: false,
+      module_catasto: false,
+      module_utenze: false,
+      module_operazioni: false,
+      module_riordino: false,
+      module_ruolo: false,
+      module_inaz: true,
+      enabled_modules: ["accessi", "inaz"],
+    });
+    mocks.listApplicationUsers.mockResolvedValue({
+      items: [
+        {
+          id: 7,
+          username: "mrossi",
+          email: "mrossi@example.local",
+          role: "viewer",
+          is_active: true,
+          module_accessi: true,
+          module_rete: false,
+          module_inventario: false,
+          module_catasto: false,
+          module_utenze: false,
+          module_operazioni: false,
+          module_riordino: false,
+          module_ruolo: false,
+          module_inaz: true,
+          enabled_modules: ["accessi", "inaz"],
+          created_at: "2026-05-29T00:00:00Z",
+          updated_at: "2026-05-29T00:00:00Z",
+        },
+      ],
+      total: 1,
+    });
+    mocks.listInazCollaborators.mockResolvedValue({
+      items: [
+        {
+          id: "collab-1",
+          application_user_id: null,
+          kint: "10159",
+          kkint: "{demo}",
+          employee_code: "1854",
+          company_code: "53",
+          company_label: "53 - CBO",
+          name: "AMADU SALVATORE",
+          birth_date: "1967-02-26",
+          is_active: true,
+          last_seen_at: "2026-05-29T09:00:00Z",
+          created_at: "2026-05-29T09:00:00Z",
+          updated_at: "2026-05-29T09:00:00Z",
+        },
+      ],
+      total: 1,
+      page: 1,
+      page_size: 200,
+    });
+    mocks.mapInazCollaboratorApplicationUser.mockResolvedValue({
+      id: "collab-1",
+      application_user_id: 7,
+      kint: "10159",
+      kkint: "{demo}",
+      employee_code: "1854",
+      company_code: "53",
+      company_label: "53 - CBO",
+      name: "AMADU SALVATORE",
+      birth_date: "1967-02-26",
+      is_active: true,
+      last_seen_at: "2026-05-29T09:00:00Z",
+      created_at: "2026-05-29T09:00:00Z",
+      updated_at: "2026-05-29T09:00:00Z",
+    });
+    mocks.listInazImportJobs.mockResolvedValue([]);
+    mocks.previewInazImport.mockResolvedValue({
+      total_collaborators: 1,
+      total_daily_rows: 31,
+      total_summary_rows: 7,
+      collaborators: [
+        {
+          employee_code: "1854",
+          company_code: "53",
+          name: "AMADU SALVATORE",
+          application_user_id: null,
+          total_daily_rows: 31,
+          total_summary_rows: 7,
+          period_start: "2026-05-01",
+          period_end: "2026-05-31",
+        },
+      ],
+      errors: [],
+    });
+    mocks.listInazSyncJobs.mockResolvedValue([]);
+    mocks.listInazCredentials.mockResolvedValue([
+      {
+        id: 4,
+        application_user_id: 1,
+        label: "Ufficio HR",
+        username: "hr.inaz",
+        active: true,
+        last_used_at: null,
+        last_authenticated_url: null,
+        last_error: null,
+        consecutive_failures: 0,
+        created_at: "2026-05-29T09:00:00Z",
+        updated_at: "2026-05-29T09:00:00Z",
+      },
+    ]);
+    mocks.createInazSyncJob.mockResolvedValue({
+      id: "sync-1",
+      status: "pending",
+      requested_by_user_id: 1,
+      credential_id: null,
+      import_job_id: null,
+      period_start: "2026-05-01",
+      period_end: "2026-05-31",
+      collaborator_limit: 2,
+      records_imported: 0,
+      records_skipped: 0,
+      records_errors: 0,
+      json_artifact_path: "/tmp/inaz/sync-1/inaz_collaboratori.json",
+      worker_log_path: "/tmp/inaz/sync-1/worker.log",
+      worker_pid: 4242,
+      attempt_count: 0,
+      max_attempts: 3,
+      error_detail: null,
+      params_json: { cdp_endpoint: "http://127.0.0.1:9224", year: 2026, month: 5 },
+      created_at: "2026-05-29T09:00:00Z",
+      started_at: null,
+      finished_at: null,
+    });
+    mocks.createInazCredential.mockResolvedValue({
+      id: 5,
+      application_user_id: 1,
+      label: "Admin Inaz",
+      username: "admin.inaz",
+      active: true,
+      last_used_at: null,
+      last_authenticated_url: null,
+      last_error: null,
+      consecutive_failures: 0,
+      created_at: "2026-05-29T09:00:00Z",
+      updated_at: "2026-05-29T09:00:00Z",
+    });
+    mocks.downloadInazSyncArtifact.mockResolvedValue(new Blob(['{"ok":true}'], { type: "application/json" }));
+    mocks.cancelInazSyncJob.mockResolvedValue({
+      id: "sync-1",
+      status: "cancelled",
+      requested_by_user_id: 1,
+      credential_id: null,
+      import_job_id: null,
+      period_start: "2026-05-01",
+      period_end: "2026-05-31",
+      collaborator_limit: 2,
+      records_imported: 0,
+      records_skipped: 0,
+      records_errors: 0,
+      json_artifact_path: "/tmp/inaz/sync-1/inaz_collaboratori.json",
+      worker_log_path: "/tmp/inaz/sync-1/worker.log",
+      worker_pid: 4242,
+      attempt_count: 1,
+      max_attempts: 3,
+      error_detail: "Sync job cancelled by user",
+      params_json: { cdp_endpoint: "http://127.0.0.1:9224", year: 2026, month: 5 },
+      created_at: "2026-05-29T09:00:00Z",
+      started_at: "2026-05-29T09:01:00Z",
+      finished_at: "2026-05-29T09:02:00Z",
+    });
+  });
+
+  test("renders collaborators and saves mapping", async () => {
+    render(<InazCollaboratoriPage />);
+
+    await screen.findAllByText("AMADU SALVATORE");
+    fireEvent.change(screen.getByRole("combobox", { name: "" }), { target: { value: "7" } });
+    fireEvent.click(screen.getByText("Salva"));
+
+    await waitFor(() => {
+      expect(mocks.mapInazCollaboratorApplicationUser).toHaveBeenCalledWith("token", "collab-1", 7);
+    });
+  });
+
+  test("renders import preview after file selection", async () => {
+    render(<InazImportPage />);
+
+    const file = new File(['{"demo":true}'], "giornaliere.json", { type: "application/json" });
+    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
+    fireEvent.change(fileInput, { target: { files: [file] } });
+    fireEvent.click(screen.getByText("Esegui preview"));
+
+    await waitFor(() => {
+      expect(screen.getByText("31")).toBeInTheDocument();
+      expect(screen.getByText(/AMADU SALVATORE/)).toBeInTheDocument();
+    });
+  });
+
+  test("creates a live sync job", async () => {
+    render(<InazSyncPage />);
+
+    fireEvent.change(screen.getByDisplayValue(String(new Date().getFullYear())), { target: { value: "2026" } });
+    fireEvent.change(screen.getByDisplayValue(String(new Date().getMonth() + 1).padStart(2, "0")), { target: { value: "05" } });
+    fireEvent.change(screen.getByPlaceholderText("Vuoto = tutti"), { target: { value: "2" } });
+    fireEvent.click(screen.getByText("Avvia sync live"));
+
+    await waitFor(() => {
+      expect(mocks.createInazSyncJob).toHaveBeenCalledWith("token", {
+        year: 2026,
+        month: 5,
+        credential_id: null,
+        collaborator_limit: 2,
+        cdp_endpoint: "http://127.0.0.1:9224",
+      });
+      expect(screen.getByText(/Job live sync creato/)).toBeInTheDocument();
+    });
+  });
+
+  test("downloads a sync artifact", async () => {
+    mocks.listInazSyncJobs.mockResolvedValue([
+      {
+        id: "sync-1",
+        status: "completed",
+        requested_by_user_id: 1,
+        credential_id: null,
+        import_job_id: "import-1",
+        period_start: "2026-05-01",
+        period_end: "2026-05-31",
+        collaborator_limit: null,
+        records_imported: 3,
+        records_skipped: 0,
+        records_errors: 0,
+        json_artifact_path: "/tmp/inaz/sync-1/inaz_collaboratori.json",
+        worker_log_path: "/tmp/inaz/sync-1/worker.log",
+        worker_pid: 4242,
+        attempt_count: 1,
+        max_attempts: 3,
+        error_detail: null,
+        params_json: { auth_mode: "cdp" },
+        created_at: "2026-05-29T09:00:00Z",
+        started_at: "2026-05-29T09:01:00Z",
+        finished_at: "2026-05-29T09:02:00Z",
+      },
+    ]);
+
+    const createObjectUrlSpy = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:demo");
+    const revokeObjectUrlSpy = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+
+    render(<InazSyncPage />);
+    fireEvent.click(await screen.findByText("Scarica JSON"));
+
+    await waitFor(() => {
+      expect(mocks.downloadInazSyncArtifact).toHaveBeenCalledWith("token", "sync-1", "json");
+    });
+
+    createObjectUrlSpy.mockRestore();
+    revokeObjectUrlSpy.mockRestore();
+    clickSpy.mockRestore();
+  });
+
+  test("cancels an active sync job", async () => {
+    mocks.listInazSyncJobs.mockResolvedValue([
+      {
+        id: "sync-1",
+        status: "running",
+        requested_by_user_id: 1,
+        credential_id: null,
+        import_job_id: null,
+        period_start: "2026-05-01",
+        period_end: "2026-05-31",
+        collaborator_limit: 2,
+        records_imported: 0,
+        records_skipped: 0,
+        records_errors: 0,
+        json_artifact_path: "/tmp/inaz/sync-1/inaz_collaboratori.json",
+        worker_log_path: "/tmp/inaz/sync-1/worker.log",
+        worker_pid: 4242,
+        attempt_count: 1,
+        max_attempts: 3,
+        error_detail: null,
+        params_json: { auth_mode: "cdp" },
+        created_at: "2026-05-29T09:00:00Z",
+        started_at: "2026-05-29T09:01:00Z",
+        finished_at: null,
+      },
+    ]);
+
+    render(<InazSyncPage />);
+    fireEvent.click(await screen.findByText("Annulla job"));
+
+    await waitFor(() => {
+      expect(mocks.cancelInazSyncJob).toHaveBeenCalledWith("token", "sync-1");
+      expect(screen.getByText(/annullato/)).toBeInTheDocument();
+    });
+  });
+
+  test("creates an inaz credential from settings", async () => {
+    render(<InazSettingsPage />);
+
+    fireEvent.change(screen.getByLabelText("Label"), { target: { value: "Admin Inaz" } });
+    fireEvent.change(screen.getByLabelText("Username Inaz"), { target: { value: "admin.inaz" } });
+    fireEvent.change(screen.getByLabelText("Password"), { target: { value: "secret123" } });
+    fireEvent.click(screen.getByText("Crea credenziale"));
+
+    await waitFor(() => {
+      expect(mocks.createInazCredential).toHaveBeenCalledWith("token", {
+        label: "Admin Inaz",
+        username: "admin.inaz",
+        password: "secret123",
+        active: true,
+      });
+    });
+  });
+});

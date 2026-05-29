@@ -17,6 +17,7 @@ export type CurrentUser = {
   module_operazioni: boolean;
   module_riordino: boolean;
   module_ruolo: boolean;
+  module_inaz: boolean;
   enabled_modules: string[];
 };
 
@@ -47,6 +48,7 @@ export type ApplicationUser = {
   module_operazioni: boolean;
   module_riordino: boolean;
   module_ruolo: boolean;
+  module_inaz: boolean;
   enabled_modules: string[];
   created_at: string;
   updated_at: string;
@@ -71,6 +73,7 @@ export type ApplicationUserCreateInput = {
   module_operazioni: boolean;
   module_riordino: boolean;
   module_ruolo?: boolean;
+  module_inaz?: boolean;
 };
 
 export type ApplicationUserUpdateInput = {
@@ -86,6 +89,227 @@ export type ApplicationUserUpdateInput = {
   module_operazioni?: boolean;
   module_riordino?: boolean;
   module_ruolo?: boolean;
+  module_inaz?: boolean;
+};
+
+export type InazCollaborator = {
+  id: string;
+  application_user_id: number | null;
+  kint: string | null;
+  kkint: string | null;
+  employee_code: string;
+  company_code: string | null;
+  company_label: string | null;
+  name: string;
+  birth_date: string | null;
+  is_active: boolean;
+  last_seen_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type InazCollaboratorListResponse = {
+  items: InazCollaborator[];
+  total: number;
+  page: number;
+  page_size: number;
+};
+
+export type InazDailyPunch = {
+  id: string;
+  daily_record_id: string;
+  sequence: number;
+  entry_time: string | null;
+  exit_time: string | null;
+};
+
+export type InazDailyRecord = {
+  id: string;
+  collaborator_id: string;
+  application_user_id: number | null;
+  work_date: string;
+  schedule_code: string | null;
+  teo_minutes: number | null;
+  ordinary_minutes: number | null;
+  absence_minutes: number | null;
+  justified_minutes: number | null;
+  maggiorazione_minutes: number | null;
+  mpe_minutes: number | null;
+  straordinario_minutes: number | null;
+  stato: string | null;
+  evidenze: string | null;
+  raw_weekday: string | null;
+  raw_payload_json: Record<string, unknown> | unknown[] | null;
+  source_job_id: string | null;
+  created_at: string;
+  updated_at: string;
+  punches: InazDailyPunch[];
+};
+
+export type InazDailyRecordListResponse = {
+  items: InazDailyRecord[];
+  total: number;
+  page: number;
+  page_size: number;
+};
+
+export type InazEventSummary = {
+  id: string;
+  collaborator_id: string;
+  application_user_id: number | null;
+  period_start: string;
+  period_end: string;
+  event_code: string | null;
+  description: string;
+  valid_from: string | null;
+  valid_to: string | null;
+  spettante_minutes: number | null;
+  fruito_minutes: number | null;
+  residuo_prec_minutes: number | null;
+  saldo_minutes: number | null;
+  autorizzato_minutes: number | null;
+  pianificato_minutes: number | null;
+  richiesto_minutes: number | null;
+  saldo_totale_minutes: number | null;
+  unitamisura: string | null;
+  raw_payload_json: Record<string, unknown> | unknown[] | null;
+  source_job_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type InazCollaboratorCalendarResponse = {
+  collaborator: InazCollaborator;
+  date_from: string;
+  date_to: string;
+  items: InazDailyRecord[];
+};
+
+export type InazCollaboratorSummaryResponse = {
+  collaborator: InazCollaborator;
+  period_start: string;
+  period_end: string;
+  items: InazEventSummary[];
+};
+
+export type InazImportPreviewCollaborator = {
+  employee_code: string;
+  company_code: string | null;
+  name: string;
+  application_user_id: number | null;
+  total_daily_rows: number;
+  total_summary_rows: number;
+  period_start: string;
+  period_end: string;
+};
+
+export type InazImportPreviewResponse = {
+  total_collaborators: number;
+  total_daily_rows: number;
+  total_summary_rows: number;
+  collaborators: InazImportPreviewCollaborator[];
+  errors: string[];
+};
+
+export type InazImportJob = {
+  id: string;
+  status: string;
+  filename: string | null;
+  requested_by_user_id: number;
+  target_user_id: number | null;
+  date_from: string | null;
+  date_to: string | null;
+  total_records: number;
+  records_imported: number;
+  records_skipped: number;
+  records_errors: number;
+  error_detail: string | null;
+  params_json: Record<string, unknown> | null;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+};
+
+export type InazImportJobListResponse = {
+  items: InazImportJob[];
+  total: number;
+};
+
+export type InazCredential = {
+  id: number;
+  application_user_id: number;
+  label: string;
+  username: string;
+  active: boolean;
+  last_used_at: string | null;
+  last_authenticated_url: string | null;
+  last_error: string | null;
+  consecutive_failures: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type InazCredentialCreateInput = {
+  label: string;
+  username: string;
+  password: string;
+  active: boolean;
+};
+
+export type InazCredentialUpdateInput = {
+  label?: string;
+  username?: string;
+  password?: string;
+  active?: boolean;
+};
+
+export type InazCredentialTestResult = {
+  ok: boolean;
+  authenticated_url: string | null;
+  cookies: string | null;
+  error: string | null;
+};
+
+export type InazSyncJobCreateInput = {
+  year: number;
+  month: number;
+  credential_id?: number | null;
+  collaborator_limit?: number | null;
+  cdp_endpoint?: string | null;
+};
+
+export type InazSyncJob = {
+  id: string;
+  status: string;
+  requested_by_user_id: number;
+  credential_id: number | null;
+  import_job_id: string | null;
+  period_start: string;
+  period_end: string;
+  collaborator_limit: number | null;
+  records_imported: number;
+  records_skipped: number;
+  records_errors: number;
+  json_artifact_path: string | null;
+  worker_log_path: string | null;
+  worker_pid: number | null;
+  attempt_count: number;
+  max_attempts: number;
+  error_detail: string | null;
+  params_json: Record<string, unknown> | null;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+};
+
+export type InazSyncJobListResponse = {
+  items: InazSyncJob[];
+  total: number;
+};
+
+export type InazImportJsonResponse = {
+  job: InazImportJob;
+  preview: InazImportPreviewResponse;
 };
 
 export type DashboardSummary = {
@@ -95,6 +319,288 @@ export type DashboardSummary = {
   reviews: number;
   snapshots: number;
   sync_runs: number;
+};
+
+export type WikiToolAuditLog = {
+  id: string;
+  username: string;
+  role: string;
+  intent: string;
+  mode: string;
+  tool_name: string;
+  module_key: string | null;
+  conversation_id: string | null;
+  question_hash: string;
+  question_preview: string;
+  context_article: string | null;
+  entity_key: string | null;
+  entity_label: string | null;
+  response_excerpt: string | null;
+  fallback_reason: string | null;
+  success: boolean;
+  found: boolean;
+  latency_ms: number;
+  docs_source_count: number;
+  evidence_count: number;
+  created_at: string;
+};
+
+export type WikiToolAuditLogListResponse = {
+  items: WikiToolAuditLog[];
+  total: number;
+  page: number;
+  page_size: number;
+};
+
+export type WikiAuditCount = {
+  key: string;
+  count: number;
+};
+
+export type WikiAuditLatencyByMode = {
+  mode: string;
+  avg_latency_ms: number;
+};
+
+export type WikiAuditDailyCount = {
+  day: string;
+  total: number;
+  denied: number;
+};
+
+export type WikiToolAuditSummary = {
+  total: number;
+  success_count: number;
+  denied_count: number;
+  no_match_count: number;
+  docs_only_count: number;
+  live_count: number;
+  logic_count: number;
+  hybrid_count: number;
+  avg_latency_ms: number;
+  top_tools: WikiAuditCount[];
+  top_modules: WikiAuditCount[];
+  top_intents: WikiAuditCount[];
+  top_denied_tools: WikiAuditCount[];
+  latency_by_mode: WikiAuditLatencyByMode[];
+  daily_counts: WikiAuditDailyCount[];
+};
+
+export type WikiToolAuditLogDetailResponse = {
+  item: WikiToolAuditLog;
+};
+
+export type WikiToolAuditLogRelatedResponse = {
+  items: WikiToolAuditLog[];
+};
+
+export type WikiTelemetryCount = {
+  key: string;
+  count: number;
+};
+
+export type WikiTelemetrySeriesPoint = {
+  metric_date: string;
+  period_label: string;
+  total: number;
+  denied_count: number;
+  no_match_count: number;
+  docs_only_count: number;
+  live_count: number;
+  logic_count: number;
+  hybrid_count: number;
+  avg_latency_ms: number;
+};
+
+export type WikiTelemetrySummary = {
+  total: number;
+  success_count: number;
+  denied_count: number;
+  no_match_count: number;
+  docs_only_count: number;
+  live_count: number;
+  logic_count: number;
+  hybrid_count: number;
+  avg_latency_ms: number;
+  top_tools: WikiTelemetryCount[];
+  top_modules: WikiTelemetryCount[];
+  top_modes: WikiTelemetryCount[];
+  top_fallback_reasons: WikiTelemetryCount[];
+};
+
+export type WikiTelemetrySeriesResponse = {
+  dimension_type: string;
+  dimension_key: string | null;
+  days: number;
+  granularity: string;
+  items: WikiTelemetrySeriesPoint[];
+};
+
+export type WikiTelemetryRefreshResponse = {
+  status: string;
+  days: number;
+};
+
+export type WikiTelemetrySchedule = {
+  enabled: boolean;
+  cron: string;
+  timezone: string;
+  lookback_days: number;
+};
+
+export type WikiTelemetryRetention = {
+  audit_retention_days: number;
+  daily_retention_days: number;
+  period_retention_days: number;
+};
+
+export type WikiTelemetryPruneResponse = {
+  status: string;
+  deleted_audit_rows: number;
+  deleted_daily_rows: number;
+  deleted_period_rows: number;
+};
+
+export type WikiConversationMetricCount = {
+  key: string;
+  count: number;
+};
+
+export type WikiConversationContextLink = {
+  href: string | null;
+  resolved: boolean;
+  resolution_kind: string;
+};
+
+export type WikiConversationGovernanceConfig = {
+  fallback_heavy_threshold: number;
+  no_match_repeated_threshold: number;
+  high_latency_ms_threshold: number;
+  data_complete_from: string | null;
+  last_backfill_at: string | null;
+  updated_by: string | null;
+  updated_at: string | null;
+};
+
+export type WikiConversationMetricsBackfillJob = {
+  id: string;
+  parent_job_id: string | null;
+  retry_count: number;
+  status: string;
+  requested_by: string;
+  start_date: string;
+  end_date: string;
+  data_complete_from: string | null;
+  progress_total_days: number;
+  progress_completed_days: number;
+  progress_percent: number;
+  progress_message: string | null;
+  error_detail: string | null;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+  queue_position: number | null;
+  is_latest_attempt: boolean;
+};
+
+export type WikiConversationMetricsBackfillJobListResponse = {
+  items: WikiConversationMetricsBackfillJob[];
+};
+
+export type WikiConversationMetricsBackfillJobChain = {
+  root_job_id: string;
+  chain_status: string;
+  retry_count_total: number;
+  has_active_retry: boolean;
+  oldest_created_at: string;
+  latest_job: WikiConversationMetricsBackfillJob;
+  items: WikiConversationMetricsBackfillJob[];
+};
+
+export type WikiConversationMetricsBackfillJobChainListResponse = {
+  items: WikiConversationMetricsBackfillJobChain[];
+};
+
+export type WikiConversationMetricsBackfillJobChainSummary = {
+  total_chains: number;
+  failed_chains: number;
+  chains_with_active_retry: number;
+  completed_chains: number;
+  avg_retries_per_chain: number;
+  oldest_active_chain_created_at: string | null;
+};
+
+export type WikiConversationMetricsBackfillJobChainDetail = {
+  root_job_id: string;
+  chain_status: string;
+  retry_count_total: number;
+  has_active_retry: boolean;
+  oldest_created_at: string;
+  latest_job: WikiConversationMetricsBackfillJob;
+  items: WikiConversationMetricsBackfillJob[];
+};
+
+export type WikiConversationMetricsBackfillJobPruneResponse = {
+  deleted_count: number;
+};
+
+export type WikiConversationMetricsSummary = {
+  total_threads: number;
+  created_count: number;
+  closed_count: number;
+  open_count: number;
+  in_review_count: number;
+  waiting_user_count: number;
+  resolved_count: number;
+  high_priority_count: number;
+  needs_review_count: number;
+  review_entered_count: number;
+  reassigned_count: number;
+  reopened_count: number;
+  avg_time_to_review_hours: number;
+  avg_time_to_resolve_hours: number;
+  avg_open_to_review_hours: number;
+  avg_review_to_resolve_hours: number;
+  avg_waiting_user_hours: number;
+  data_complete_from: string | null;
+  last_backfill_at: string | null;
+  top_statuses: WikiConversationMetricCount[];
+  top_priorities: WikiConversationMetricCount[];
+  top_owners: WikiConversationMetricCount[];
+  top_review_reasons: WikiConversationMetricCount[];
+  top_event_types: WikiConversationMetricCount[];
+};
+
+export type WikiConversationMetricsSeriesPoint = {
+  metric_date: string;
+  period_label: string;
+  created_count: number;
+  closed_count: number;
+  open_count: number;
+  in_review_count: number;
+  waiting_user_count: number;
+  resolved_count: number;
+  high_priority_count: number;
+  needs_review_count: number;
+  denied_threads_count: number;
+  fallback_threads_count: number;
+  no_match_threads_count: number;
+  review_entered_count: number;
+  reassigned_count: number;
+  reopened_count: number;
+  avg_time_to_review_hours: number;
+  avg_time_to_resolve_hours: number;
+  avg_open_to_review_hours: number;
+  avg_review_to_resolve_hours: number;
+  avg_waiting_user_hours: number;
+};
+
+export type WikiConversationMetricsSeriesResponse = {
+  dimension_type: string;
+  dimension_key: string | null;
+  days: number;
+  granularity: string;
+  items: WikiConversationMetricsSeriesPoint[];
 };
 
 export type NetworkDashboardSummary = {

@@ -14,6 +14,7 @@ from app.core.logging import configure_logging
 from app.models.section_permission import Section
 from app.modules.elaborazioni.bonifica_oristanese_scheduler import register_bonifica_scheduler
 from app.modules.utenze.anpr.scheduler import register_anpr_scheduler
+from app.modules.wiki.telemetry_scheduler import register_wiki_telemetry_scheduler
 from app.scripts.bootstrap_sections import ensure_default_sections
 from app.services.bootstrap_admin import ensure_bootstrap_admin
 
@@ -72,6 +73,7 @@ async def lifespan(_: FastAPI):
     scheduler = AsyncIOScheduler(timezone="UTC")
     await register_bonifica_scheduler(scheduler, get_db)
     await register_anpr_scheduler(scheduler, get_db)
+    await register_wiki_telemetry_scheduler(scheduler, get_db)
     scheduler.start()
     yield
     scheduler.shutdown(wait=False)

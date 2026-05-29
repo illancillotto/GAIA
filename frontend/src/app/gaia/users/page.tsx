@@ -42,6 +42,7 @@ type UserFormState = {
   moduleOperazioni: boolean;
   moduleRiordino: boolean;
   moduleRuolo: boolean;
+  moduleInaz: boolean;
 };
 
 const emptyFormState: UserFormState = {
@@ -58,6 +59,7 @@ const emptyFormState: UserFormState = {
   moduleOperazioni: false,
   moduleRiordino: false,
   moduleRuolo: false,
+  moduleInaz: false,
 };
 
 const roleOptions = [
@@ -93,6 +95,9 @@ function formatModules(user: ApplicationUser): string {
   }
   if (user.module_ruolo) {
     labels.push("Ruolo");
+  }
+  if (user.module_inaz) {
+    labels.push("Inaz");
   }
 
   return labels.length > 0 ? labels.join(", ") : "Nessun modulo";
@@ -156,6 +161,7 @@ export default function GaiaUsersPage() {
       moduleOperazioni: selectedUser.module_operazioni,
       moduleRiordino: selectedUser.module_riordino,
       moduleRuolo: selectedUser.module_ruolo,
+      moduleInaz: selectedUser.module_inaz,
     });
   }, [selectedUser]);
 
@@ -275,6 +281,7 @@ export default function GaiaUsersPage() {
           module_operazioni: formState.moduleOperazioni,
           module_riordino: formState.moduleRiordino,
           module_ruolo: formState.moduleRuolo,
+          module_inaz: formState.moduleInaz,
         });
         setSuccessMessage(`Utente ${selectedUser.username} aggiornato.`);
       } else {
@@ -292,6 +299,7 @@ export default function GaiaUsersPage() {
           module_operazioni: formState.moduleOperazioni,
           module_riordino: formState.moduleRiordino,
           module_ruolo: formState.moduleRuolo,
+          module_inaz: formState.moduleInaz,
         });
         setSuccessMessage(`Utente ${formState.username} creato.`);
       }
@@ -351,6 +359,7 @@ export default function GaiaUsersPage() {
         <MetricCard label="Utenze" value={users.filter((user) => user.module_utenze).length} sub="Utenti con modulo Utenze abilitato" />
         <MetricCard label="Riordino" value={users.filter((user) => user.module_riordino).length} sub="Utenti con modulo Riordino abilitato" />
         <MetricCard label="Ruolo" value={users.filter((user) => user.module_ruolo).length} sub="Utenti con modulo Ruolo abilitato" />
+        <MetricCard label="Inaz" value={users.filter((user) => user.module_inaz).length} sub="Utenti con modulo Inaz abilitato" />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
@@ -510,6 +519,10 @@ export default function GaiaUsersPage() {
                 <label className="flex items-center gap-3">
                   <input type="checkbox" checked={formState.moduleRuolo} onChange={(event) => updateFormState("moduleRuolo", event.target.checked)} />
                   Ruolo
+                </label>
+                <label className="flex items-center gap-3">
+                  <input type="checkbox" checked={formState.moduleInaz} onChange={(event) => updateFormState("moduleInaz", event.target.checked)} />
+                  Inaz
                 </label>
                 <label className="flex items-center gap-3 pt-2">
                   <input type="checkbox" checked={formState.isActive} onChange={(event) => updateFormState("isActive", event.target.checked)} />

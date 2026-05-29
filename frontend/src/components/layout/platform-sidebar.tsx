@@ -29,6 +29,7 @@ const platformModules: PlatformModule[] = [
   { href: "/operazioni", label: "Operazioni", icon: TruckIcon },
   { href: "/riordino", label: "Riordino", icon: DocumentIcon },
   { href: "/ruolo", label: "Ruolo", icon: CalendarIcon },
+  { href: "/inaz", label: "Inaz", icon: CalendarIcon },
   { href: "/wiki", label: "Wiki", icon: BookOpenIcon },
 ];
 
@@ -55,6 +56,8 @@ export function PlatformSidebar({ currentModuleLabel, currentUser }: PlatformSid
                     ? "riordino"
                     : href === "/ruolo"
                       ? "ruolo"
+                      : href === "/inaz"
+                        ? "inaz"
                     : "";
 
     if (!moduleKey) return true;

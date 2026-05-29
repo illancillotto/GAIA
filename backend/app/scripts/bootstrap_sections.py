@@ -50,6 +50,13 @@ DEFAULT_SECTIONS = [
     ("ruolo.avvisi", "Ruolo — Avvisi", "ruolo", "viewer"),
     ("ruolo.import", "Ruolo — Import", "ruolo", "admin"),
     ("ruolo.stats", "Ruolo — Statistiche", "ruolo", "viewer"),
+    ("inaz.dashboard", "Inaz - Dashboard", "inaz", "viewer"),
+    ("inaz.giornaliere", "Inaz - Giornaliere", "inaz", "viewer"),
+    ("inaz.import", "Inaz - Import", "inaz", "admin"),
+    ("inaz.sync", "Inaz - Sync portale", "inaz", "admin"),
+    ("inaz.review", "Inaz - Review", "inaz", "reviewer"),
+    ("inaz.export", "Inaz - Export", "inaz", "reviewer"),
+    ("inaz.admin", "Inaz - Amministrazione", "inaz", "admin"),
 ]
 
 

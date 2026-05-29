@@ -81,6 +81,22 @@ import type {
   DashboardSummary,
   EffectivePermission,
   EffectivePermissionPreview,
+  InazCollaborator,
+  InazCollaboratorCalendarResponse,
+  InazCollaboratorListResponse,
+  InazCollaboratorSummaryResponse,
+  InazCredential,
+  InazCredentialCreateInput,
+  InazCredentialTestResult,
+  InazCredentialUpdateInput,
+  InazDailyRecordListResponse,
+  InazImportJob,
+  InazImportJobListResponse,
+  InazImportJsonResponse,
+  InazImportPreviewResponse,
+  InazSyncJob,
+  InazSyncJobCreateInput,
+  InazSyncJobListResponse,
   LoginResponse,
   MyPermissionsResponse,
   NetworkAlert,
@@ -111,6 +127,26 @@ import type {
   SyncPreview,
   SyncPreviewRequest,
   SyncRun,
+  WikiToolAuditLogListResponse,
+  WikiToolAuditLogDetailResponse,
+  WikiToolAuditLogRelatedResponse,
+  WikiToolAuditSummary,
+  WikiTelemetryPruneResponse,
+  WikiTelemetryRefreshResponse,
+  WikiTelemetryRetention,
+  WikiTelemetrySchedule,
+  WikiTelemetrySeriesResponse,
+  WikiTelemetrySummary,
+  WikiConversationMetricsSeriesResponse,
+  WikiConversationMetricsSummary,
+  WikiConversationContextLink,
+  WikiConversationGovernanceConfig,
+  WikiConversationMetricsBackfillJob,
+  WikiConversationMetricsBackfillJobChainDetail,
+  WikiConversationMetricsBackfillJobChainListResponse,
+  WikiConversationMetricsBackfillJobChainSummary,
+  WikiConversationMetricsBackfillJobListResponse,
+  WikiConversationMetricsBackfillJobPruneResponse,
 } from "@/types/api";
 
 const DEFAULT_API_BASE_URL = "/api";
@@ -371,6 +407,856 @@ export async function getNasUsersForUsersSection(token: string): Promise<NasUser
 
 export async function listApplicationUsers(token: string): Promise<ApplicationUserListResponse> {
   return request<ApplicationUserListResponse>("/admin/users", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function listInazCollaborators(
+  token: string,
+  params: {
+    q?: string;
+    mappedOnly?: boolean | null;
+    page?: number;
+    pageSize?: number;
+  } = {},
+): Promise<InazCollaboratorListResponse> {
+  const query = new URLSearchParams();
+  if (params.q) {
+    query.set("q", params.q);
+  }
+  if (params.mappedOnly != null) {
+    query.set("mapped_only", String(params.mappedOnly));
+  }
+  if (params.page) {
+    query.set("page", String(params.page));
+  }
+  if (params.pageSize) {
+    query.set("page_size", String(params.pageSize));
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<InazCollaboratorListResponse>(`/inaz/collaborators${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function listInazCredentials(token: string): Promise<InazCredential[]> {
+  return request<InazCredential[]>("/inaz/credentials", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function createInazCredential(token: string, payload: InazCredentialCreateInput): Promise<InazCredential> {
+  return request<InazCredential>("/inaz/credentials", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateInazCredential(
+  token: string,
+  credentialId: number,
+  payload: InazCredentialUpdateInput,
+): Promise<InazCredential> {
+  return request<InazCredential>(`/inaz/credentials/${credentialId}`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteInazCredential(token: string, credentialId: number): Promise<void> {
+  const response = await fetch(`${getApiBaseUrl()}/inaz/credentials/${credentialId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    let detail = "Request failed";
+    try {
+      const payload = (await response.json()) as { detail?: unknown };
+      if (typeof payload.detail === "string") {
+        detail = payload.detail;
+      }
+    } catch {
+      detail = response.statusText || detail;
+    }
+    throw new ApiError(detail, undefined, response.status);
+  }
+}
+
+export async function testInazCredential(token: string, credentialId: number): Promise<InazCredentialTestResult> {
+  return request<InazCredentialTestResult>(`/inaz/credentials/${credentialId}/test`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function mapInazCollaboratorApplicationUser(
+  token: string,
+  collaboratorId: string,
+  applicationUserId: number | null,
+): Promise<InazCollaborator> {
+  return request<InazCollaborator>(`/inaz/collaborators/${collaboratorId}/application-user`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ application_user_id: applicationUserId }),
+  });
+}
+
+export async function getInazCollaboratorCalendar(
+  token: string,
+  collaboratorId: string,
+  dateFrom: string,
+  dateTo: string,
+): Promise<InazCollaboratorCalendarResponse> {
+  const query = new URLSearchParams({ date_from: dateFrom, date_to: dateTo });
+  return request<InazCollaboratorCalendarResponse>(`/inaz/collaborators/${collaboratorId}/calendar?${query.toString()}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getInazCollaboratorSummary(
+  token: string,
+  collaboratorId: string,
+  periodStart: string,
+  periodEnd: string,
+): Promise<InazCollaboratorSummaryResponse> {
+  const query = new URLSearchParams({ period_start: periodStart, period_end: periodEnd });
+  return request<InazCollaboratorSummaryResponse>(`/inaz/collaborators/${collaboratorId}/summary?${query.toString()}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function listInazDailyRecords(
+  token: string,
+  params: {
+    collaboratorId?: string;
+    applicationUserId?: number;
+    dateFrom?: string;
+    dateTo?: string;
+    q?: string;
+    page?: number;
+    pageSize?: number;
+  } = {},
+): Promise<InazDailyRecordListResponse> {
+  const query = new URLSearchParams();
+  if (params.collaboratorId) {
+    query.set("collaborator_id", params.collaboratorId);
+  }
+  if (params.applicationUserId != null) {
+    query.set("application_user_id", String(params.applicationUserId));
+  }
+  if (params.dateFrom) {
+    query.set("date_from", params.dateFrom);
+  }
+  if (params.dateTo) {
+    query.set("date_to", params.dateTo);
+  }
+  if (params.q) {
+    query.set("q", params.q);
+  }
+  if (params.page) {
+    query.set("page", String(params.page));
+  }
+  if (params.pageSize) {
+    query.set("page_size", String(params.pageSize));
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<InazDailyRecordListResponse>(`/inaz/giornaliere${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function previewInazImport(
+  token: string,
+  file: File,
+): Promise<InazImportPreviewResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return request<InazImportPreviewResponse>("/inaz/import/preview", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+}
+
+export async function importInazJson(
+  token: string,
+  file: File,
+): Promise<InazImportJsonResponse> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return request<InazImportJsonResponse>("/inaz/import/json", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
+  });
+}
+
+export async function listInazImportJobs(token: string): Promise<InazImportJob[]> {
+  const response = await request<InazImportJobListResponse>("/inaz/import/jobs", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  return response.items;
+}
+
+export async function getInazImportJob(token: string, jobId: string): Promise<InazImportJob> {
+  return request<InazImportJob>(`/inaz/import/jobs/${jobId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function createInazSyncJob(token: string, payload: InazSyncJobCreateInput): Promise<InazSyncJob> {
+  return request<InazSyncJob>("/inaz/sync/jobs", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function listInazSyncJobs(token: string): Promise<InazSyncJob[]> {
+  const response = await request<InazSyncJobListResponse>("/inaz/sync/jobs", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+  return response.items;
+}
+
+export async function getInazSyncJob(token: string, jobId: string): Promise<InazSyncJob> {
+  return request<InazSyncJob>(`/inaz/sync/jobs/${jobId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function retryInazSyncJob(token: string, jobId: string): Promise<InazSyncJob> {
+  return request<InazSyncJob>(`/inaz/sync/jobs/${jobId}/retry`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function cancelInazSyncJob(token: string, jobId: string): Promise<InazSyncJob> {
+  return request<InazSyncJob>(`/inaz/sync/jobs/${jobId}/cancel`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function downloadInazSyncArtifact(
+  token: string,
+  jobId: string,
+  artifactName: "json" | "log" | "summary",
+): Promise<Blob> {
+  return requestBlob(`/inaz/sync/jobs/${jobId}/artifacts/${artifactName}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function exportInazXlsm(
+  token: string,
+  params: {
+    periodStart: string;
+    collaboratorIds?: string[];
+    employeeKind?: string;
+    templatePath?: string;
+  },
+): Promise<Blob> {
+  const query = new URLSearchParams({ period_start: params.periodStart });
+  if (params.employeeKind) {
+    query.set("employee_kind", params.employeeKind);
+  }
+  if (params.templatePath) {
+    query.set("template_path", params.templatePath);
+  }
+  for (const collaboratorId of params.collaboratorIds ?? []) {
+    query.append("collaborator_id", collaboratorId);
+  }
+  return requestBlob(`/inaz/export/giornaliere.xlsm?${query.toString()}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getWikiToolAuditLogs(
+  token: string,
+  params: {
+    page?: number;
+    pageSize?: number;
+    toolName?: string;
+    moduleKey?: string;
+    conversationId?: string;
+    username?: string;
+    intent?: string;
+    mode?: string;
+    success?: boolean | null;
+  } = {},
+): Promise<WikiToolAuditLogListResponse> {
+  const query = new URLSearchParams();
+  if (params.page) {
+    query.set("page", String(params.page));
+  }
+  if (params.pageSize) {
+    query.set("page_size", String(params.pageSize));
+  }
+  if (params.toolName) {
+    query.set("tool_name", params.toolName);
+  }
+  if (params.moduleKey) {
+    query.set("module_key", params.moduleKey);
+  }
+  if (params.conversationId) {
+    query.set("conversation_id", params.conversationId);
+  }
+  if (params.username) {
+    query.set("username", params.username);
+  }
+  if (params.intent) {
+    query.set("intent", params.intent);
+  }
+  if (params.mode) {
+    query.set("mode", params.mode);
+  }
+  if (params.success != null) {
+    query.set("success", String(params.success));
+  }
+
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<WikiToolAuditLogListResponse>(`/wiki/audit/tool-calls${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getWikiToolAuditSummary(
+  token: string,
+  params: {
+    toolName?: string;
+    moduleKey?: string;
+    conversationId?: string;
+    username?: string;
+    intent?: string;
+    mode?: string;
+    success?: boolean | null;
+  } = {},
+): Promise<WikiToolAuditSummary> {
+  const query = new URLSearchParams();
+  if (params.toolName) {
+    query.set("tool_name", params.toolName);
+  }
+  if (params.moduleKey) {
+    query.set("module_key", params.moduleKey);
+  }
+  if (params.conversationId) {
+    query.set("conversation_id", params.conversationId);
+  }
+  if (params.username) {
+    query.set("username", params.username);
+  }
+  if (params.intent) {
+    query.set("intent", params.intent);
+  }
+  if (params.mode) {
+    query.set("mode", params.mode);
+  }
+  if (params.success != null) {
+    query.set("success", String(params.success));
+  }
+
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<WikiToolAuditSummary>(`/wiki/audit/tool-calls/summary${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getWikiToolAuditLogDetail(
+  token: string,
+  auditId: string,
+): Promise<WikiToolAuditLogDetailResponse> {
+  return request<WikiToolAuditLogDetailResponse>(`/wiki/audit/tool-calls/${auditId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getWikiToolAuditRelatedLogs(
+  token: string,
+  auditId: string,
+  params: { limit?: number | null } = {},
+): Promise<WikiToolAuditLogRelatedResponse> {
+  const query = new URLSearchParams();
+  if (params.limit != null) {
+    query.set("limit", String(params.limit));
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<WikiToolAuditLogRelatedResponse>(`/wiki/audit/tool-calls/${auditId}/related${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function exportWikiToolAuditLogs(
+  token: string,
+  params: {
+    toolName?: string;
+    moduleKey?: string;
+    conversationId?: string;
+    username?: string;
+    intent?: string;
+    mode?: string;
+    success?: boolean | null;
+  } = {},
+): Promise<Blob> {
+  const query = new URLSearchParams();
+  if (params.toolName) {
+    query.set("tool_name", params.toolName);
+  }
+  if (params.moduleKey) {
+    query.set("module_key", params.moduleKey);
+  }
+  if (params.conversationId) {
+    query.set("conversation_id", params.conversationId);
+  }
+  if (params.username) {
+    query.set("username", params.username);
+  }
+  if (params.intent) {
+    query.set("intent", params.intent);
+  }
+  if (params.mode) {
+    query.set("mode", params.mode);
+  }
+  if (params.success != null) {
+    query.set("success", String(params.success));
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return requestBlob(`/wiki/audit/tool-calls/export${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getWikiTelemetrySummary(
+  token: string,
+  params: { days?: number | null } = {},
+): Promise<WikiTelemetrySummary> {
+  const query = new URLSearchParams();
+  if (params.days != null) {
+    query.set("days", String(params.days));
+  }
+
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<WikiTelemetrySummary>(`/wiki/telemetry/summary${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getWikiTelemetrySeries(
+  token: string,
+  params: {
+    dimensionType?: string | null;
+    dimensionKey?: string | null;
+    days?: number | null;
+    granularity?: string | null;
+  } = {},
+): Promise<WikiTelemetrySeriesResponse> {
+  const query = new URLSearchParams();
+  if (params.dimensionType) {
+    query.set("dimension_type", params.dimensionType);
+  }
+  if (params.dimensionKey) {
+    query.set("dimension_key", params.dimensionKey);
+  }
+  if (params.days != null) {
+    query.set("days", String(params.days));
+  }
+  if (params.granularity) {
+    query.set("granularity", params.granularity);
+  }
+
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<WikiTelemetrySeriesResponse>(`/wiki/telemetry/series${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function refreshWikiTelemetry(
+  token: string,
+  params: { days?: number | null } = {},
+): Promise<WikiTelemetryRefreshResponse> {
+  const query = new URLSearchParams();
+  if (params.days != null) {
+    query.set("days", String(params.days));
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<WikiTelemetryRefreshResponse>(`/wiki/telemetry/refresh${suffix}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getWikiTelemetrySchedule(token: string): Promise<WikiTelemetrySchedule> {
+  return request<WikiTelemetrySchedule>("/wiki/telemetry/schedule", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getWikiTelemetryRetention(token: string): Promise<WikiTelemetryRetention> {
+  return request<WikiTelemetryRetention>("/wiki/telemetry/retention", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function pruneWikiTelemetry(token: string): Promise<WikiTelemetryPruneResponse> {
+  return request<WikiTelemetryPruneResponse>("/wiki/telemetry/prune", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function exportWikiTelemetrySeries(
+  token: string,
+  params: {
+    dimensionType?: string | null;
+    dimensionKey?: string | null;
+    days?: number | null;
+    granularity?: string | null;
+  } = {},
+): Promise<Blob> {
+  const query = new URLSearchParams();
+  if (params.dimensionType) {
+    query.set("dimension_type", params.dimensionType);
+  }
+  if (params.dimensionKey) {
+    query.set("dimension_key", params.dimensionKey);
+  }
+  if (params.days != null) {
+    query.set("days", String(params.days));
+  }
+  if (params.granularity) {
+    query.set("granularity", params.granularity);
+  }
+
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return requestBlob(`/wiki/telemetry/series/export${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getWikiConversationMetricsSummary(
+  token: string,
+  params: { days?: number | null } = {},
+): Promise<WikiConversationMetricsSummary> {
+  const query = new URLSearchParams();
+  if (params.days != null) {
+    query.set("days", String(params.days));
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<WikiConversationMetricsSummary>(`/wiki/conversations/metrics/summary${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getWikiConversationMetricsSeries(
+  token: string,
+  params: {
+    dimensionType?: string | null;
+    dimensionKey?: string | null;
+    days?: number | null;
+    granularity?: string | null;
+  } = {},
+): Promise<WikiConversationMetricsSeriesResponse> {
+  const query = new URLSearchParams();
+  if (params.dimensionType) {
+    query.set("dimension_type", params.dimensionType);
+  }
+  if (params.dimensionKey) {
+    query.set("dimension_key", params.dimensionKey);
+  }
+  if (params.days != null) {
+    query.set("days", String(params.days));
+  }
+  if (params.granularity) {
+    query.set("granularity", params.granularity);
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<WikiConversationMetricsSeriesResponse>(`/wiki/conversations/metrics/series${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function resolveWikiConversationContextLink(
+  token: string,
+  params: {
+    entityKey?: string | null;
+    moduleKey?: string | null;
+  } = {},
+): Promise<WikiConversationContextLink> {
+  const query = new URLSearchParams();
+  if (params.entityKey) {
+    query.set("entity_key", params.entityKey);
+  }
+  if (params.moduleKey) {
+    query.set("module_key", params.moduleKey);
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<WikiConversationContextLink>(`/wiki/conversations/context-link${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getWikiConversationGovernanceConfig(token: string): Promise<WikiConversationGovernanceConfig> {
+  return request<WikiConversationGovernanceConfig>("/wiki/conversations/governance-config", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function updateWikiConversationGovernanceConfig(
+  token: string,
+  payload: {
+    fallback_heavy_threshold?: number;
+    no_match_repeated_threshold?: number;
+    high_latency_ms_threshold?: number;
+  },
+): Promise<WikiConversationGovernanceConfig> {
+  return request<WikiConversationGovernanceConfig>("/wiki/conversations/governance-config", {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function backfillWikiConversationMetrics(
+  token: string,
+  payload: {
+    start_date: string;
+    end_date: string;
+    data_complete_from?: string | null;
+  },
+): Promise<WikiConversationGovernanceConfig> {
+  return request<WikiConversationGovernanceConfig>("/wiki/conversations/metrics/backfill", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function enqueueWikiConversationMetricsBackfill(
+  token: string,
+  payload: {
+    start_date: string;
+    end_date: string;
+    data_complete_from?: string | null;
+  },
+): Promise<WikiConversationMetricsBackfillJob> {
+  return request<WikiConversationMetricsBackfillJob>("/wiki/conversations/metrics/backfill-jobs", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getLatestWikiConversationMetricsBackfillJob(
+  token: string,
+): Promise<WikiConversationMetricsBackfillJob | null> {
+  return request<WikiConversationMetricsBackfillJob | null>("/wiki/conversations/metrics/backfill-jobs/latest", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function listWikiConversationMetricsBackfillJobs(
+  token: string,
+  limit = 10,
+): Promise<WikiConversationMetricsBackfillJobListResponse> {
+  return request<WikiConversationMetricsBackfillJobListResponse>(
+    `/wiki/conversations/metrics/backfill-jobs?limit=${encodeURIComponent(String(limit))}`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+}
+
+export async function listWikiConversationMetricsBackfillJobChains(
+  token: string,
+  limit = 10,
+  filters: {
+    latestStatus?: string;
+    requestedBy?: string;
+    hasActiveRetry?: boolean;
+    sortBy?: string;
+  } = {},
+): Promise<WikiConversationMetricsBackfillJobChainListResponse> {
+  const query = new URLSearchParams();
+  query.set("limit", String(limit));
+  if (filters.latestStatus) {
+    query.set("latest_status", filters.latestStatus);
+  }
+  if (filters.requestedBy) {
+    query.set("requested_by", filters.requestedBy);
+  }
+  if (filters.hasActiveRetry != null) {
+    query.set("has_active_retry", String(filters.hasActiveRetry));
+  }
+  if (filters.sortBy) {
+    query.set("sort_by", filters.sortBy);
+  }
+  return request<WikiConversationMetricsBackfillJobChainListResponse>(
+    `/wiki/conversations/metrics/backfill-job-chains?${query.toString()}`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+}
+
+export async function getWikiConversationMetricsBackfillJobChainSummary(
+  token: string,
+  filters: {
+    latestStatus?: string;
+    requestedBy?: string;
+    hasActiveRetry?: boolean;
+    sortBy?: string;
+  } = {},
+): Promise<WikiConversationMetricsBackfillJobChainSummary> {
+  const query = new URLSearchParams();
+  if (filters.latestStatus) {
+    query.set("latest_status", filters.latestStatus);
+  }
+  if (filters.requestedBy) {
+    query.set("requested_by", filters.requestedBy);
+  }
+  if (filters.hasActiveRetry != null) {
+    query.set("has_active_retry", String(filters.hasActiveRetry));
+  }
+  if (filters.sortBy) {
+    query.set("sort_by", filters.sortBy);
+  }
+  return request<WikiConversationMetricsBackfillJobChainSummary>(
+    `/wiki/conversations/metrics/backfill-job-chains/summary${query.size > 0 ? `?${query.toString()}` : ""}`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+}
+
+export async function getWikiConversationMetricsBackfillJobChainDetail(
+  token: string,
+  rootJobId: string,
+): Promise<WikiConversationMetricsBackfillJobChainDetail> {
+  return request<WikiConversationMetricsBackfillJobChainDetail>(
+    `/wiki/conversations/metrics/backfill-job-chains/${encodeURIComponent(rootJobId)}`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+}
+
+export async function retryWikiConversationMetricsBackfillJob(
+  token: string,
+  jobId: string,
+): Promise<WikiConversationMetricsBackfillJob> {
+  return request<WikiConversationMetricsBackfillJob>(
+    `/wiki/conversations/metrics/backfill-jobs/${encodeURIComponent(jobId)}/retry`,
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    },
+  );
+}
+
+export async function clearWikiConversationMetricsBackfillJobHistory(
+  token: string,
+): Promise<WikiConversationMetricsBackfillJobPruneResponse> {
+  return request<WikiConversationMetricsBackfillJobPruneResponse>("/wiki/conversations/metrics/backfill-jobs", {
+    method: "DELETE",
     headers: {
       Authorization: `Bearer ${token}`,
     },
