@@ -16,7 +16,7 @@
   - `backend/app/services/elaborazioni_capacitas_terreni.py`
   - `backend/app/services/elaborazioni_capacitas_anagrafica_history.py`
 - Routes: `backend/app/modules/elaborazioni/capacitas_routes.py`
-- Bootstrap recovery: `backend/app/main.py` -> `resume_capacitas_runtime_jobs_on_startup()`
+- Bootstrap recovery runtime worker: `modules/elaborazioni/worker/worker.py` -> `_recover_stuck_requests()`
 - Migration: `backend/alembic/versions/20260402_0027_capacitas_credentials.py`
 
 ## Struttura runtime
@@ -29,6 +29,11 @@
 - i job monitorabili Capacitas (`Terreni`, sync progressiva particelle e `Storico anagrafica`) sono record persistenti con stato su DB, avviati dalle route e schedulati come runtime task tracciati nel backend API
 - il backend esegue startup recovery: marca stale/orfani, converte i job recuperabili in `queued_resume` e li rilancia automaticamente quando la policy del job lo consente
 - la scadenza della sessione GAIA ferma solo il monitor frontend; non e sinonimo di stop del task backend
+- per `inCass` il worker runtime:
+  - recupera i job `processing` su restart marcandoli `queued_resume`
+  - evita la duplicazione dei soggetti gia presenti in job `pending/processing/queued_resume`
+  - applica retry automatico per errori transienti di rete/sessione sia a livello subject sia a livello job
+  - gestisce in upsert anche notice duplicate nello stesso lotto, evitando `UniqueViolation` su `ana_payment_notices`
 
 Macro-moduli registrati ad oggi:
 
@@ -76,6 +81,12 @@ Implementato:
   - `GET /elaborazioni/capacitas/involture/anagrafica/storico/jobs/{id}`
   - `POST /elaborazioni/capacitas/involture/anagrafica/storico/jobs/{id}/run`
   - `DELETE /elaborazioni/capacitas/involture/anagrafica/storico/jobs/{id}`
+  - `POST /elaborazioni/capacitas/incass/avvisi/jobs`
+  - `POST /elaborazioni/capacitas/incass/avvisi/jobs/ruolo-harvest`
+  - `GET /elaborazioni/capacitas/incass/avvisi/jobs`
+  - `GET /elaborazioni/capacitas/incass/avvisi/jobs/{id}`
+  - `POST /elaborazioni/capacitas/incass/avvisi/jobs/{id}/run`
+  - `DELETE /elaborazioni/capacitas/incass/avvisi/jobs/{id}`
   - `POST /elaborazioni/capacitas/involture/certificati/refetch-empty`
   - `GET /elaborazioni/capacitas/involture/particelle/anomalie`
   - `POST /elaborazioni/capacitas/involture/particelle/{id}/resolve-frazione`
@@ -100,6 +111,7 @@ Implementato:
   - preview risultati Terreni
   - avvio job Terreni in background
   - tab `Massiva da file` con import `.xlsx/.csv` locale e creazione job batch
+  - tab `Avvisi pagamenti` con monitor `inCass`, sync puntuale e `harvest ruolo` massivo a chunk
   - template scaricabile `Excel` / `CSV` con colonne umane `comune, sezione, foglio, particella, sub`
   - risoluzione backend `comune -> frazione_id Capacitas` durante il batch
   - se un comune ha piu frazioni candidate con match sul nome (`Arborea`, `Santa Giusta`, ecc.), il batch prova prima tutte le frazioni con una ricerca leggera (probe) e:
@@ -116,6 +128,7 @@ Limitazioni deliberate di questo step:
 - il matching automatico con `ana_subjects` e ora introdotto solo per gli intestatari proprietari con `codice_fiscale` disponibile
 - quando e disponibile lo storico anagrafico Capacitas, il sync usa il dettaglio storico come fonte per aggiornare `ana_persons` e scrivere `ana_person_snapshots`
 - non e ancora presente una deduplica multi-sorgente avanzata oltre al match su CF e al fallback su `IDXANA`
+- `inCass` non usa ancora una coda esterna dedicata: la presa in carico resta sul runtime worker applicativo, con recovery su riavvio e retry transiente lato codice
 
 Regola speciale implementata:
 

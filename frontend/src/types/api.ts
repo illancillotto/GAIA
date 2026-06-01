@@ -503,10 +503,6 @@ export type WikiConversationMetricsBackfillJob = {
   is_latest_attempt: boolean;
 };
 
-export type WikiConversationMetricsBackfillJobListResponse = {
-  items: WikiConversationMetricsBackfillJob[];
-};
-
 export type WikiConversationMetricsBackfillJobChain = {
   root_job_id: string;
   chain_status: string;

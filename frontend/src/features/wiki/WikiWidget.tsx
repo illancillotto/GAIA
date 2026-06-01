@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 
 import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/cn";
+import { EvidenceBadge, ModeBadge, ToolCallBadge } from "./message-metadata";
 import type { WikiChatMessage, WikiRequestCreate } from "./types";
 import { useWikiChat } from "./useWikiChat";
 
@@ -37,7 +38,7 @@ function ChatMessage({
   onSaveRequest,
 }: {
   msg: WikiChatMessage;
-  onSaveRequest: (question: string, answer: string) => void;
+  onSaveRequest: (answer: string) => void;
 }) {
   const isUser = msg.role === "user";
 
@@ -54,6 +55,13 @@ function ChatMessage({
         {msg.content}
       </div>
 
+      {!isUser ? (
+        <div className="flex max-w-[85%] flex-wrap gap-1 px-1">
+          <ModeBadge mode={msg.mode} />
+          {msg.tool_calls?.map((toolCall, index) => <ToolCallBadge key={`${toolCall.tool_name}-${index}`} toolCall={toolCall} />)}
+        </div>
+      ) : null}
+
       {!isUser && msg.sources && msg.sources.length > 0 && (
         <div className="flex flex-wrap gap-1 px-1">
           {msg.sources.map((s, i) => (
@@ -62,12 +70,17 @@ function ChatMessage({
         </div>
       )}
 
+      {!isUser && msg.evidences && msg.evidences.length > 0 && (
+        <div className="grid max-w-[85%] gap-1.5 px-1">
+          {msg.evidences.map((evidence, index) => (
+            <EvidenceBadge key={`${evidence.source_key}-${index}`} evidence={evidence} />
+          ))}
+        </div>
+      )}
+
       {!isUser && msg.found === false && (
         <button
-          onClick={() => onSaveRequest(
-            messages_ref_hack(msg),
-            msg.content
-          )}
+          onClick={() => onSaveRequest(msg.content)}
           className="ml-1 text-xs text-[#1D4E35] underline underline-offset-2 hover:opacity-70"
         >
           Registra come richiesta
@@ -75,12 +88,6 @@ function ChatMessage({
       )}
     </div>
   );
-}
-
-// Workaround: il messaggio utente precedente non è accessibile nel componente figlio.
-// ChatMessage riceve solo il messaggio corrente; il genitore passa la domanda nel handler.
-function messages_ref_hack(_msg: WikiChatMessage): string {
-  return "";
 }
 
 export function WikiWidget() {
@@ -92,7 +99,7 @@ export function WikiWidget() {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const { messages, loading, sendMessage, clearMessages } = useWikiChat();
+  const { messages, conversationId, loading, sendMessage, clearMessages } = useWikiChat();
 
   useEffect(() => {
     setMounted(true);
@@ -117,11 +124,10 @@ export function WikiWidget() {
     setSavedRequest(false);
   }
 
-  async function handleSaveRequest(question: string, answer: string) {
-    // Recupera l'ultima domanda utente dalla lista messaggi
+  async function handleSaveRequest(answer: string) {
     const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
     await saveWikiRequest({
-      user_question: lastUserMsg?.content ?? question,
+      user_question: lastUserMsg?.content ?? "",
       agent_response: answer,
       category: "feature_request",
     });
@@ -173,7 +179,7 @@ export function WikiWidget() {
                 </button>
               )}
               <a
-                href="/wiki"
+                href={conversationId ? `/wiki?conversation=${conversationId}` : "/wiki"}
                 className="text-white/70 hover:text-white"
                 title="Apri Wiki completa"
               >

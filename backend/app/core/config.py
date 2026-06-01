@@ -218,6 +218,19 @@ class Settings(BaseSettings):
     network_gateway_arp_port: int = Field(default=22, alias="NETWORK_GATEWAY_ARP_PORT")
     network_gateway_arp_username: str | None = Field(default=None, alias="NETWORK_GATEWAY_ARP_USERNAME")
     network_gateway_arp_password: str | None = Field(default=None, alias="NETWORK_GATEWAY_ARP_PASSWORD")
+    wiki_telemetry_schedule_enabled: bool = Field(default=False, alias="WIKI_TELEMETRY_SCHEDULE_ENABLED")
+    wiki_telemetry_schedule_cron: str = Field(default="30 3 * * *", alias="WIKI_TELEMETRY_SCHEDULE_CRON")
+    wiki_telemetry_schedule_timezone: str = Field(default="Europe/Rome", alias="WIKI_TELEMETRY_SCHEDULE_TIMEZONE")
+    wiki_telemetry_schedule_lookback_days: int = Field(default=35, alias="WIKI_TELEMETRY_SCHEDULE_LOOKBACK_DAYS")
+    wiki_conversation_backfill_worker_enabled: bool = Field(default=True, alias="WIKI_CONVERSATION_BACKFILL_WORKER_ENABLED")
+    wiki_conversation_backfill_poll_seconds: int = Field(default=15, alias="WIKI_CONVERSATION_BACKFILL_POLL_SECONDS")
+    wiki_conversation_backfill_retention_days: int = Field(default=30, alias="WIKI_CONVERSATION_BACKFILL_RETENTION_DAYS")
+    wiki_review_fallback_heavy_threshold: int = Field(default=2, alias="WIKI_REVIEW_FALLBACK_HEAVY_THRESHOLD")
+    wiki_review_no_match_repeated_threshold: int = Field(default=2, alias="WIKI_REVIEW_NO_MATCH_REPEATED_THRESHOLD")
+    wiki_review_high_latency_ms_threshold: int = Field(default=1000, alias="WIKI_REVIEW_HIGH_LATENCY_MS_THRESHOLD")
+    wiki_audit_retention_days: int = Field(default=365, alias="WIKI_AUDIT_RETENTION_DAYS")
+    wiki_telemetry_daily_retention_days: int = Field(default=365, alias="WIKI_TELEMETRY_DAILY_RETENTION_DAYS")
+    wiki_telemetry_period_retention_days: int = Field(default=730, alias="WIKI_TELEMETRY_PERIOD_RETENTION_DAYS")
     network_gateway_arp_private_key_path: str | None = Field(default=None, alias="NETWORK_GATEWAY_ARP_PRIVATE_KEY_PATH")
     network_gateway_arp_command: str = Field(
         default="ip neigh show {ip}",
@@ -226,6 +239,26 @@ class Settings(BaseSettings):
     bootstrap_admin_username: str = Field(default="admin", alias="BOOTSTRAP_ADMIN_USERNAME")
     bootstrap_admin_email: str = Field(default="admin@example.local", alias="BOOTSTRAP_ADMIN_EMAIL")
     bootstrap_admin_password: str = Field(default="change_me_admin", alias="BOOTSTRAP_ADMIN_PASSWORD")
+    inaz_scraper_project_path: str = Field(
+        default="/home/cbo/CursorProjects/inaz-scraper",
+        alias="INAZ_SCRAPER_PROJECT_PATH",
+    )
+    inaz_scraper_python_path: str = Field(
+        default="/home/cbo/CursorProjects/inaz-scraper/.venv/bin/python",
+        alias="INAZ_SCRAPER_PYTHON_PATH",
+    )
+    inaz_scraper_cdp_endpoint: str = Field(
+        default="http://127.0.0.1:9224",
+        alias="INAZ_SCRAPER_CDP_ENDPOINT",
+    )
+    inaz_sync_artifacts_path: str = Field(
+        default=str(REPO_ROOT / "runtime-data" / "inaz" / "sync"),
+        alias="INAZ_SYNC_ARTIFACTS_PATH",
+    )
+    inaz_sync_max_attempts: int = Field(
+        default=3,
+        alias="INAZ_SYNC_MAX_ATTEMPTS",
+    )
 
     anagrafica_delete_password: str | None = Field(default=None, alias="ANAGRAFICA_DELETE_PASSWORD")
     utenze_delete_password: str | None = Field(default=None, alias="UTENZE_DELETE_PASSWORD")

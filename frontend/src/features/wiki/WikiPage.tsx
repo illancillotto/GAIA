@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/cn";
+import { EvidenceBadge, ModeBadge, ToolCallBadge } from "./message-metadata";
 import type { WikiArticleGroup, WikiChatMessage, WikiRequestCreate } from "./types";
 import { useWikiChat } from "./useWikiChat";
 
@@ -136,6 +138,14 @@ function ChatPanel({
             >
               {msg.content}
             </div>
+            {msg.role === "assistant" ? (
+              <div className="flex max-w-[90%] flex-wrap gap-1 px-1">
+                <ModeBadge mode={msg.mode} />
+                {msg.tool_calls?.map((toolCall, index) => (
+                  <ToolCallBadge key={`${toolCall.tool_name}-${index}`} toolCall={toolCall} />
+                ))}
+              </div>
+            ) : null}
             {msg.role === "assistant" && msg.sources && msg.sources.length > 0 ? (
               <div className="flex flex-wrap gap-1 px-1">
                 {msg.sources.map((s, i) => (
@@ -145,6 +155,13 @@ function ChatPanel({
                   >
                     {s.source_file.split("/").pop()}
                   </span>
+                ))}
+              </div>
+            ) : null}
+            {msg.role === "assistant" && msg.evidences && msg.evidences.length > 0 ? (
+              <div className="grid max-w-[90%] gap-1.5 px-1">
+                {msg.evidences.map((evidence, index) => (
+                  <EvidenceBadge key={`${evidence.source_key}-${index}`} evidence={evidence} />
                 ))}
               </div>
             ) : null}
@@ -198,13 +215,23 @@ function ChatPanel({
 }
 
 export function WikiPage() {
+  const searchParams = useSearchParams();
   const [articles, setArticles] = useState<WikiArticleGroup[]>([]);
   const [selected, setSelected] = useState<WikiArticleGroup | null>(null);
   const [loadingArticles, setLoadingArticles] = useState(true);
   const [articleQuery, setArticleQuery] = useState("");
+  const initialConversationId = searchParams.get("conversation");
 
   const [chatScope, setChatScope] = useState<"article" | "codebase">("codebase");
-  const { messages, loading, error, sendMessage } = useWikiChat(chatScope === "article" ? selected?.source_file : undefined);
+  const {
+    messages,
+    conversationId,
+    conversations,
+    loading,
+    error,
+    sendMessage,
+    loadConversation,
+  } = useWikiChat(chatScope === "article" ? selected?.source_file : undefined, initialConversationId);
   const normalizedQuery = articleQuery.trim().toLowerCase();
   const filteredArticles = normalizedQuery
     ? articles.filter((article) => {
@@ -272,6 +299,39 @@ export function WikiPage() {
           />
         </article>
       </div>
+
+      <article className="panel-card">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="label-caption text-[#1D4E35]">Conversazioni</p>
+            <p className="mt-1 text-sm text-gray-500">Thread recenti del Wiki Agent.</p>
+          </div>
+          <span className="rounded-full bg-[#f3f7f0] px-2.5 py-1 text-[11px] font-semibold text-[#1D4E35]">
+            {conversations.length} thread
+          </span>
+        </div>
+        <div className="mt-4 grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+          {conversations.length > 0 ? conversations.map((conversation) => (
+            <button
+              key={conversation.id}
+              type="button"
+              onClick={() => void loadConversation(conversation.id)}
+              className={cn(
+                "rounded-xl border px-3 py-3 text-left text-sm transition",
+                conversation.id === conversationId
+                  ? "border-[#1D4E35] bg-[#f8fbf8]"
+                  : "border-gray-200 bg-white hover:border-[#1D4E35]/30"
+              )}
+            >
+              <p className="truncate font-medium text-gray-900">{conversation.title}</p>
+              <p className="mt-1 text-xs text-gray-500">
+                {conversation.message_count} messaggi
+                {conversation.context_article ? ` · ${formatArticleLabel(conversation.context_article)}` : ""}
+              </p>
+            </button>
+          )) : <p className="text-sm text-gray-400">Nessuna conversazione salvata.</p>}
+        </div>
+      </article>
 
       <div className="grid items-start gap-4 xl:grid-cols-[420px_minmax(0,1fr)]">
         <article className="panel-card h-[calc(100vh-12rem)] min-h-[32rem] p-0 xl:sticky xl:top-4">

@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Generator
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
+import asyncio
 import uuid
 
 from cryptography.fernet import Fernet
@@ -20,6 +21,7 @@ from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.models.capacitas import CapacitasCredential
 from app.models.capacitas import (
     CapacitasAnagraficaHistoryImportJob,
+    CapacitasInCassSyncJob,
     CapacitasParticelleSyncJob,
     CapacitasTerreniSyncJob,
 )
@@ -37,19 +39,36 @@ from app.models.catasto_phase1 import (
     CatSchemaContributo,
     CatUtenzaIrrigua,
 )
-from app.modules.utenze.models import AnagraficaCompany, AnagraficaPerson, AnagraficaPersonSnapshot, AnagraficaSubject
+from app.modules.utenze.models import (
+    AnagraficaCompany,
+    AnagraficaPaymentNotice,
+    AnagraficaPerson,
+    AnagraficaPersonSnapshot,
+    AnagraficaSubject,
+)
 from app.modules.elaborazioni.capacitas.models import (
     CapacitasAnagrafica,
     CapacitasAnagraficaDetail,
+    CapacitasInCassNoticeDetail,
+    CapacitasInCassNoticePdf,
+    CapacitasInCassNoticeRow,
+    CapacitasInCassRuoloHarvestRequest,
+    CapacitasInCassSearchResult,
+    CapacitasInCassSyncJobCreateRequest,
     CapacitasLookupOption,
     CapacitasStoricoAnagraficaRow,
     CapacitasSearchResult,
-    CapacitasTerreniSearchResult,
     CapacitasTerrenoCertificato,
     CapacitasTerrenoDetail,
+    CapacitasTerreniSearchResult,
 )
 from app.services.catasto_credentials import get_credential_fernet
 from app.services.elaborazioni_capacitas_anagrafica_history import prepare_anagrafica_history_jobs_for_recovery
+from app.services.elaborazioni_capacitas_incass import (
+    create_incass_ruolo_harvest_jobs,
+    prepare_incass_sync_jobs_for_recovery,
+    run_incass_sync_job,
+)
 from app.services.elaborazioni_capacitas_particelle_sync import prepare_particelle_sync_jobs_for_recovery
 from app.services.elaborazioni_capacitas_terreni import prepare_terreni_sync_jobs_for_recovery
 
@@ -3280,6 +3299,255 @@ def test_prepare_anagrafica_history_jobs_for_recovery_marks_jobs_as_queued_resum
         assert isinstance(recoverable.result_json, dict)
         assert recoverable.result_json["resume_reason"] == "backend_restart"
         assert not_recoverable.status == "processing"
+    finally:
+        db.close()
+
+
+def test_prepare_incass_sync_jobs_for_recovery_marks_jobs_as_queued_resume() -> None:
+    db = TestingSessionLocal()
+    try:
+        recoverable = CapacitasInCassSyncJob(
+            requested_by_user_id=1,
+            credential_id=None,
+            status="processing",
+            mode="subjects_sync",
+            payload_json={"subject_ids": [str(uuid.uuid4())]},
+            result_json={"processed_subjects": 2},
+        )
+        db.add(recoverable)
+        db.commit()
+        db.refresh(recoverable)
+
+        resumed_ids = prepare_incass_sync_jobs_for_recovery(db)
+
+        assert resumed_ids == [recoverable.id]
+        db.flush()
+        db.refresh(recoverable)
+        assert recoverable.status == "queued_resume"
+        assert recoverable.completed_at is None
+        assert isinstance(recoverable.result_json, dict)
+        assert recoverable.result_json["resume_reason"] == "backend_restart"
+        assert recoverable.result_json["resume_count"] == 1
+    finally:
+        db.close()
+
+
+def test_create_incass_ruolo_harvest_jobs_skips_subjects_already_queued() -> None:
+    db = TestingSessionLocal()
+    try:
+        queued_subject = AnagraficaSubject(subject_type="company", source_name_raw="Queued subject")
+        fresh_subject = AnagraficaSubject(subject_type="company", source_name_raw="Fresh subject")
+        db.add_all([queued_subject, fresh_subject])
+        db.flush()
+
+        db.add_all(
+            [
+                CapacitasInCassSyncJob(
+                    requested_by_user_id=1,
+                    credential_id=None,
+                    status="pending",
+                    mode="subjects_sync",
+                    payload_json={"subject_ids": [str(queued_subject.id)]},
+                ),
+                CapacitasInCassSyncJob(
+                    requested_by_user_id=1,
+                    credential_id=None,
+                    status="succeeded",
+                    mode="subjects_sync",
+                    payload_json={"subject_ids": [str(uuid.uuid4())]},
+                ),
+            ]
+        )
+        from app.modules.ruolo.models import RuoloAvviso
+
+        db.add_all(
+            [
+                RuoloAvviso(import_job_id=uuid.uuid4(), codice_cnc="CNC-Q", anno_tributario=2025, subject_id=queued_subject.id),
+                RuoloAvviso(import_job_id=uuid.uuid4(), codice_cnc="CNC-F", anno_tributario=2025, subject_id=fresh_subject.id),
+            ]
+        )
+        db.commit()
+
+        response = create_incass_ruolo_harvest_jobs(
+            db,
+            requested_by_user_id=1,
+            payload=CapacitasInCassRuoloHarvestRequest(
+                anno=2025,
+                chunk_size=100,
+                exclude_synced_subjects=False,
+            ),
+        )
+
+        assert response.total_subjects == 1
+        assert response.total_jobs == 1
+        created_job = db.get(CapacitasInCassSyncJob, response.job_ids[0])
+        assert created_job is not None
+        assert created_job.payload_json["subject_ids"] == [str(fresh_subject.id)]
+    finally:
+        db.close()
+
+
+def test_run_incass_sync_job_retries_transient_subject_errors(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeClient:
+        def __init__(self) -> None:
+            self.refresh_calls = 0
+            self.search_calls = 0
+
+        async def warmup_search_page(self) -> None:
+            return None
+
+        async def refresh_session(self) -> None:
+            self.refresh_calls += 1
+
+        async def search_notices(self, identifier: str) -> CapacitasInCassSearchResult:
+            import httpx
+
+            self.search_calls += 1
+            if self.search_calls == 1:
+                raise httpx.TimeoutException("timeout", request=httpx.Request("POST", "https://incass.local/search"))
+            return CapacitasInCassSearchResult(
+                total=1,
+                rows=[
+                    CapacitasInCassNoticeRow(
+                        avviso="020250000000001",
+                        anno="2025",
+                        denominazione="ACME SRL",
+                        codice_fiscale="01234567890",
+                        carico="100,00",
+                        differenza="100,00",
+                        detail_url="https://incass.local/detail/1",
+                    )
+                ],
+            )
+
+        async def fetch_notice_detail(self, avviso: str) -> CapacitasInCassNoticeDetail:
+            return CapacitasInCassNoticeDetail(
+                avviso=avviso,
+                detail_url=f"https://incass.local/detail/{avviso}",
+                info_text="Dettaglio",
+                pdf_links=[CapacitasInCassNoticePdf(label="Avviso", url="https://incass.local/pdf/1")],
+            )
+
+        async def fetch_notice_partitario(self, avviso: str):
+            return None
+
+    monkeypatch.setattr("app.services.elaborazioni_capacitas_incass.INCASS_RETRY_DELAYS_SEC", (0, 0))
+
+    db = TestingSessionLocal()
+    try:
+        subject = AnagraficaSubject(subject_type="company", source_name_raw="ACME SRL")
+        db.add(subject)
+        db.flush()
+        db.add(
+            AnagraficaCompany(
+                subject_id=subject.id,
+                ragione_sociale="ACME SRL",
+                partita_iva="01234567890",
+                codice_fiscale="01234567890",
+            )
+        )
+        job = CapacitasInCassSyncJob(
+            requested_by_user_id=1,
+            credential_id=None,
+            status="processing",
+            mode="subjects_sync",
+            payload_json=CapacitasInCassSyncJobCreateRequest(
+                subject_ids=[subject.id],
+                include_details=True,
+                include_partitario=False,
+                continue_on_error=True,
+                throttle_ms=0,
+            ).model_dump(mode="json"),
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+
+        client = FakeClient()
+        result = asyncio.run(run_incass_sync_job(db, client, job))
+
+        assert result.status == "succeeded"
+        assert client.refresh_calls == 1
+        assert client.search_calls == 2
+        db.refresh(job)
+        assert isinstance(job.result_json, dict)
+        assert job.result_json["processed_subjects"] == 1
+        assert job.result_json["notices_synced"] == 1
+    finally:
+        db.close()
+
+
+def test_run_incass_sync_job_deduplicates_notice_ids_within_same_subject() -> None:
+    class FakeClient:
+        async def warmup_search_page(self) -> None:
+            return None
+
+        async def refresh_session(self) -> None:
+            return None
+
+        async def search_notices(self, identifier: str) -> CapacitasInCassSearchResult:
+            duplicate_row = CapacitasInCassNoticeRow(
+                avviso="020250009999999",
+                anno="2025",
+                denominazione="ACME SRL",
+                codice_fiscale="01234567890",
+                carico="100,00",
+                differenza="100,00",
+                detail_url="https://incass.local/detail/1",
+            )
+            return CapacitasInCassSearchResult(total=2, rows=[duplicate_row, duplicate_row.model_copy(deep=True)])
+
+        async def fetch_notice_detail(self, avviso: str) -> CapacitasInCassNoticeDetail:
+            return CapacitasInCassNoticeDetail(
+                avviso=avviso,
+                detail_url=f"https://incass.local/detail/{avviso}",
+                info_text="Dettaglio",
+                pdf_links=[CapacitasInCassNoticePdf(label="Avviso", url="https://incass.local/pdf/1")],
+            )
+
+        async def fetch_notice_partitario(self, avviso: str):
+            return None
+
+    db = TestingSessionLocal()
+    try:
+        subject = AnagraficaSubject(subject_type="company", source_name_raw="ACME SRL")
+        db.add(subject)
+        db.flush()
+        db.add(
+            AnagraficaCompany(
+                subject_id=subject.id,
+                ragione_sociale="ACME SRL",
+                partita_iva="01234567890",
+                codice_fiscale="01234567890",
+            )
+        )
+        job = CapacitasInCassSyncJob(
+            requested_by_user_id=1,
+            credential_id=None,
+            status="processing",
+            mode="subjects_sync",
+            payload_json=CapacitasInCassSyncJobCreateRequest(
+                subject_ids=[subject.id],
+                include_details=True,
+                include_partitario=False,
+                continue_on_error=True,
+                throttle_ms=0,
+            ).model_dump(mode="json"),
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+
+        result = asyncio.run(run_incass_sync_job(db, FakeClient(), job))
+
+        assert result.status == "succeeded"
+        notices = db.scalars(select(AnagraficaPaymentNotice)).all()
+        assert len(notices) == 1
+        assert notices[0].source_notice_id == "020250009999999"
+        db.refresh(job)
+        assert isinstance(job.result_json, dict)
+        assert job.result_json["notices_found"] == 2
+        assert job.result_json["notices_synced"] == 2
     finally:
         db.close()
 

@@ -145,7 +145,6 @@ import type {
   WikiConversationMetricsBackfillJobChainDetail,
   WikiConversationMetricsBackfillJobChainListResponse,
   WikiConversationMetricsBackfillJobChainSummary,
-  WikiConversationMetricsBackfillJobListResponse,
   WikiConversationMetricsBackfillJobPruneResponse,
 } from "@/types/api";
 
@@ -1143,20 +1142,6 @@ export async function getLatestWikiConversationMetricsBackfillJob(
   });
 }
 
-export async function listWikiConversationMetricsBackfillJobs(
-  token: string,
-  limit = 10,
-): Promise<WikiConversationMetricsBackfillJobListResponse> {
-  return request<WikiConversationMetricsBackfillJobListResponse>(
-    `/wiki/conversations/metrics/backfill-jobs?limit=${encodeURIComponent(String(limit))}`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-    },
-  );
-}
-
 export async function listWikiConversationMetricsBackfillJobChains(
   token: string,
   limit = 10,
@@ -1213,8 +1198,9 @@ export async function getWikiConversationMetricsBackfillJobChainSummary(
   if (filters.sortBy) {
     query.set("sort_by", filters.sortBy);
   }
+  const queryString = query.toString();
   return request<WikiConversationMetricsBackfillJobChainSummary>(
-    `/wiki/conversations/metrics/backfill-job-chains/summary${query.size > 0 ? `?${query.toString()}` : ""}`,
+    `/wiki/conversations/metrics/backfill-job-chains/summary${queryString ? `?${queryString}` : ""}`,
     {
       headers: {
         Authorization: `Bearer ${token}`,

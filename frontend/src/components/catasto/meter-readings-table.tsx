@@ -66,32 +66,32 @@ export function MeterReadingsTable({ subjectId }: { subjectId?: string }) {
     void initializeAnno();
   }, []);
 
-  async function load() {
-    const token = getStoredAccessToken();
-    if (!token || !anno) return;
-    try {
-      setLoading(true);
-      setError(null);
-      const result = await catastoListMeterReadings(token, {
-        anno: anno ? Number(anno) : undefined,
-        puntoConsegna: puntoConsegna || undefined,
-        codiceFiscale: codiceFiscale || undefined,
-        subjectId: subjectId || undefined,
-        pageSize: subjectId ? 200 : 50,
-      });
-      setData(result);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Caricamento letture fallito");
-    } finally {
-      setLoading(false);
-    }
-  }
-
   useEffect(() => {
     if (!anno) {
       return;
     }
-    void load();
+    async function loadReadings() {
+      const token = getStoredAccessToken();
+      if (!token) return;
+      try {
+        setLoading(true);
+        setError(null);
+        const result = await catastoListMeterReadings(token, {
+          anno: Number(anno),
+          puntoConsegna: puntoConsegna || undefined,
+          codiceFiscale: codiceFiscale || undefined,
+          subjectId: subjectId || undefined,
+          pageSize: subjectId ? 200 : 50,
+        });
+        setData(result);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Caricamento letture fallito");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    void loadReadings();
   }, [anno, puntoConsegna, codiceFiscale, subjectId]);
 
   async function openDetail(id: string) {

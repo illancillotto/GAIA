@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 
+import httpx
+
 from app.core.database import SessionLocal
-from app.modules.elaborazioni.capacitas.apps.incass.client import InCassClient
+from app.modules.elaborazioni.capacitas.apps.incass.client import CapacitasInCassSessionExpiredError, InCassClient
 from app.modules.elaborazioni.capacitas.apps.involture.client import InVoltureClient
 from app.modules.elaborazioni.capacitas.models import (
     CapacitasAnagraficaHistoryImportJobCreateRequest,
@@ -22,50 +25,70 @@ from app.services.elaborazioni_capacitas_terreni import get_terreni_sync_job, ru
 logger = logging.getLogger(__name__)
 
 TERMINAL_JOB_STATUSES = {"succeeded", "completed_with_errors", "failed"}
+INCASS_JOB_RETRY_DELAYS_SEC = (2, 5)
 
 
 async def run_incass_job_by_id(job_id: int) -> None:
-    db = SessionLocal()
-    manager: CapacitasSessionManager | None = None
-    credential_id: int | None = None
-    try:
-        job = get_incass_sync_job(db, job_id)
-        if job is None:
-            return
-
-        payload = CapacitasInCassSyncJobCreateRequest.model_validate(job.payload_json or {})
+    last_exc: Exception | None = None
+    for attempt in range(1, len(INCASS_JOB_RETRY_DELAYS_SEC) + 2):
+        db = SessionLocal()
+        manager: CapacitasSessionManager | None = None
+        credential_id: int | None = None
         try:
-            credential, password = pick_credential(db, payload.credential_id or job.credential_id)
-        except RuntimeError as exc:
-            job.status = "failed"
-            job.error_detail = str(exc)
-            job.completed_at = datetime.now(timezone.utc)
-            db.commit()
-            return
+            job = get_incass_sync_job(db, job_id)
+            if job is None:
+                return
 
-        credential_id = credential.id
-        manager = CapacitasSessionManager(credential.username, password)
-        await manager.login()
-        await manager.activate_app("incass")
-        await manager.start_keepalive("incass")
-        client = InCassClient(manager)
-        await run_incass_sync_job(db, client, job)
-        mark_credential_used(db, credential.id)
-    except Exception as exc:
-        logger.exception("Errore worker job avvisi inCASS Capacitas: job_id=%d err=%s", job_id, exc)
-        db.rollback()
-        if credential_id is not None:
-            mark_credential_error(db, credential_id, str(exc))
-        job = get_incass_sync_job(db, job_id)
-        if job is not None and job.status not in TERMINAL_JOB_STATUSES:
-            job.status = "failed"
-            job.error_detail = str(exc)
-            job.completed_at = datetime.now(timezone.utc)
-            db.commit()
-    finally:
-        if manager is not None:
-            await manager.close()
-        db.close()
+            payload = CapacitasInCassSyncJobCreateRequest.model_validate(job.payload_json or {})
+            try:
+                credential, password = pick_credential(db, payload.credential_id or job.credential_id)
+            except RuntimeError as exc:
+                job.status = "failed"
+                job.error_detail = str(exc)
+                job.completed_at = datetime.now(timezone.utc)
+                db.commit()
+                return
+
+            credential_id = credential.id
+            manager = CapacitasSessionManager(credential.username, password)
+            await manager.login()
+            await manager.activate_app("incass")
+            await manager.start_keepalive("incass")
+            client = InCassClient(manager)
+            await run_incass_sync_job(db, client, job)
+            mark_credential_used(db, credential.id)
+            return
+        except Exception as exc:
+            last_exc = exc
+            logger.exception("Errore worker job avvisi inCASS Capacitas: job_id=%d attempt=%d err=%s", job_id, attempt, exc)
+            db.rollback()
+            if credential_id is not None:
+                mark_credential_error(db, credential_id, str(exc))
+            if _is_retryable_incass_runtime_exception(exc) and attempt <= len(INCASS_JOB_RETRY_DELAYS_SEC):
+                await asyncio.sleep(INCASS_JOB_RETRY_DELAYS_SEC[attempt - 1])
+                continue
+            job = get_incass_sync_job(db, job_id)
+            if job is not None and job.status not in TERMINAL_JOB_STATUSES:
+                job.status = "failed"
+                job.error_detail = str(exc)
+                job.completed_at = datetime.now(timezone.utc)
+                db.commit()
+            return
+        finally:
+            if manager is not None:
+                await manager.close()
+            db.close()
+
+
+def _is_retryable_incass_runtime_exception(exc: Exception) -> bool:
+    if isinstance(exc, (CapacitasInCassSessionExpiredError, httpx.TimeoutException, httpx.NetworkError)):
+        return True
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code in {429, 500, 502, 503, 504}
+    if isinstance(exc, RuntimeError):
+        message = str(exc).lower()
+        return any(marker in message for marker in ("sessione", "errore.aspx", "timeout", "tempor"))
+    return False
 
 
 async def run_terreni_job_by_id(job_id: int) -> None:

@@ -4,11 +4,15 @@ import asyncio
 from datetime import date, datetime, timezone
 from uuid import UUID
 
+import httpx
 from sqlalchemy import exists, delete, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.capacitas import CapacitasInCassSyncJob
-from app.modules.elaborazioni.capacitas.apps.incass.client import InCassClient
+from app.modules.elaborazioni.capacitas.apps.incass.client import (
+    CapacitasInCassSessionExpiredError,
+    InCassClient,
+)
 from app.modules.elaborazioni.capacitas.models import (
     CapacitasInCassNoticeRow,
     CapacitasInCassRuoloHarvestRequest,
@@ -28,6 +32,8 @@ from app.modules.utenze.models import (
 
 UTC = timezone.utc
 TERMINAL_JOB_STATUSES = {"succeeded", "completed_with_errors", "failed", "cancelled"}
+ACTIVE_JOB_STATUSES = {"pending", "processing", "queued_resume"}
+INCASS_RETRY_DELAYS_SEC = (1, 3)
 
 
 def create_incass_sync_job(
@@ -108,6 +114,8 @@ def create_incass_ruolo_harvest_jobs(
         limit_subjects=payload.limit_subjects,
         exclude_synced_subjects=payload.exclude_synced_subjects,
     )
+    already_queued_subject_ids = _load_active_incass_subject_ids(db)
+    subject_ids = [subject_id for subject_id in subject_ids if subject_id not in already_queued_subject_ids]
     job_ids: list[int] = []
     for index in range(0, len(subject_ids), payload.chunk_size):
         chunk = subject_ids[index:index + payload.chunk_size]
@@ -147,9 +155,17 @@ def prepare_incass_sync_jobs_for_recovery(db: Session) -> list[int]:
     ).all()
     recovered: list[int] = []
     for job in jobs:
-        job.status = "pending"
+        job.status = "queued_resume"
         job.started_at = None
+        job.completed_at = None
         job.error_detail = "Recuperato dopo riavvio worker"
+        if isinstance(job.result_json, dict):
+            resume_count = int(job.result_json.get("resume_count", 0) or 0) + 1
+            job.result_json = {
+                **job.result_json,
+                "resume_reason": "backend_restart",
+                "resume_count": resume_count,
+            }
         recovered.append(job.id)
     return recovered
 
@@ -186,103 +202,57 @@ async def run_incass_sync_job(
 
     await client.warmup_search_page()
 
-    item_results: list[CapacitasInCassSyncItemResult] = []
-    notices_found = 0
-    notices_synced = 0
-    failed_subjects = 0
+    item_results_map = _load_existing_item_results(job)
+    succeeded_subject_ids = {
+        subject_id
+        for subject_id, item in item_results_map.items()
+        if item.status == "succeeded"
+    }
 
     for subject, identifier, display_name in subjects:
+        subject_key = str(subject.id)
+        if subject_key in succeeded_subject_ids:
+            continue
         try:
-            result = await client.search_notices(identifier)
-            synced_for_subject = 0
-            for row in result.rows:
-                detail_info_text: str | None = None
-                detail_info_html: str | None = None
-                detail_payload: dict[str, object] | None = None
-                pdf_links_json: list[dict[str, str | None]] = []
-                if payload.include_details and row.avviso:
-                    detail = await client.fetch_notice_detail(row.avviso)
-                    detail_info_text = detail.info_text
-                    detail_info_html = detail.info_html
-                    detail_payload = detail.model_dump(mode="json")
-                    pdf_links_json = [pdf.model_dump(mode="json") for pdf in detail.pdf_links]
-                if payload.include_partitario and row.avviso:
-                    partitario = await client.fetch_notice_partitario(row.avviso)
-                    if partitario is not None:
-                        partitario_text = partitario.info_text
-                        if partitario_text:
-                            detail_info_text = (
-                                f"{detail_info_text}\n\n{partitario_text}".strip()
-                                if detail_info_text
-                                else partitario_text
-                            )
-                        detail_payload = {
-                            **(detail_payload or {}),
-                            "partitario": partitario.model_dump(mode="json"),
-                        }
-
-                _upsert_payment_notice(
-                    db,
-                    subject_id=subject.id,
-                    identifier=identifier,
-                    display_name=display_name,
-                    row=row,
-                    detail_info_html=detail_info_html,
-                    detail_info_text=detail_info_text,
-                    pdf_links_json=pdf_links_json,
-                    detail_payload=detail_payload,
-                )
-                synced_for_subject += 1
-                notices_synced += 1
-                if payload.throttle_ms > 0:
-                    await asyncio.sleep(payload.throttle_ms / 1000)
-
-            notices_found += result.total
-            item_results.append(
-                CapacitasInCassSyncItemResult(
-                    subject_id=str(subject.id),
-                    identifier=identifier,
-                    display_name=display_name,
-                    status="succeeded",
-                    notices_found=result.total,
-                    notices_synced=synced_for_subject,
-                )
+            item_result = await _sync_incass_subject(
+                client=client,
+                db=db,
+                subject_id=subject.id,
+                identifier=identifier,
+                display_name=display_name,
+                include_details=payload.include_details,
+                include_partitario=payload.include_partitario,
+                throttle_ms=payload.throttle_ms,
             )
+            item_results_map[subject_key] = item_result
             db.commit()
         except Exception as exc:
             db.rollback()
-            failed_subjects += 1
-            item_results.append(
-                CapacitasInCassSyncItemResult(
-                    subject_id=str(subject.id),
-                    identifier=identifier,
-                    display_name=display_name,
-                    status="failed",
-                    error=str(exc),
-                )
+            item_results_map[subject_key] = CapacitasInCassSyncItemResult(
+                subject_id=subject_key,
+                identifier=identifier,
+                display_name=display_name,
+                status="failed",
+                error=str(exc),
             )
+        finally:
+            _update_incass_job_progress(job, item_results_map)
+            db.commit()
+
+        if item_results_map[subject_key].status == "succeeded":
+            succeeded_subject_ids.add(subject_key)
+
+        if item_results_map[subject_key].status == "failed":
             if not payload.continue_on_error:
                 job.status = "failed"
-                job.error_detail = str(exc)
-                job.result_json = CapacitasInCassSyncJobResult(
-                    items=item_results,
-                    processed_subjects=len(item_results),
-                    failed_subjects=failed_subjects,
-                    notices_found=notices_found,
-                    notices_synced=notices_synced,
-                ).model_dump(mode="json")
+                job.error_detail = item_results_map[subject_key].error
                 job.completed_at = datetime.now(UTC)
                 db.commit()
                 db.refresh(job)
                 return job
 
-    result_payload = CapacitasInCassSyncJobResult(
-        items=item_results,
-        processed_subjects=len(item_results),
-        failed_subjects=failed_subjects,
-        notices_found=notices_found,
-        notices_synced=notices_synced,
-    )
+    result_payload = _build_incass_job_result(item_results_map)
+    failed_subjects = result_payload.failed_subjects
     job.result_json = result_payload.model_dump(mode="json")
     job.status = "completed_with_errors" if failed_subjects > 0 else "succeeded"
     job.completed_at = datetime.now(UTC)
@@ -290,6 +260,166 @@ async def run_incass_sync_job(
     db.commit()
     db.refresh(job)
     return job
+
+
+def _load_active_incass_subject_ids(db: Session) -> set[UUID]:
+    queued: set[UUID] = set()
+    jobs = db.scalars(
+        select(CapacitasInCassSyncJob).where(CapacitasInCassSyncJob.status.in_(tuple(ACTIVE_JOB_STATUSES)))
+    ).all()
+    for job in jobs:
+        if not isinstance(job.payload_json, dict):
+            continue
+        raw_subject_ids = job.payload_json.get("subject_ids")
+        if not isinstance(raw_subject_ids, list):
+            continue
+        for raw_subject_id in raw_subject_ids:
+            try:
+                queued.add(UUID(str(raw_subject_id)))
+            except (TypeError, ValueError):
+                continue
+    return queued
+
+
+def _load_existing_item_results(job: CapacitasInCassSyncJob) -> dict[str, CapacitasInCassSyncItemResult]:
+    if not isinstance(job.result_json, dict):
+        return {}
+    try:
+        parsed = CapacitasInCassSyncJobResult.model_validate(job.result_json)
+    except Exception:
+        return {}
+    return {item.subject_id: item for item in parsed.items}
+
+
+def _build_incass_job_result(
+    item_results_map: dict[str, CapacitasInCassSyncItemResult],
+) -> CapacitasInCassSyncJobResult:
+    items = list(item_results_map.values())
+    items.sort(key=lambda item: item.subject_id)
+    return CapacitasInCassSyncJobResult(
+        items=items,
+        processed_subjects=len(items),
+        failed_subjects=sum(1 for item in items if item.status == "failed"),
+        notices_found=sum(item.notices_found for item in items),
+        notices_synced=sum(item.notices_synced for item in items),
+    )
+
+
+def _update_incass_job_progress(
+    job: CapacitasInCassSyncJob,
+    item_results_map: dict[str, CapacitasInCassSyncItemResult],
+) -> None:
+    job.result_json = _build_incass_job_result(item_results_map).model_dump(mode="json")
+
+
+async def _sync_incass_subject(
+    *,
+    client: InCassClient,
+    db: Session,
+    subject_id: UUID,
+    identifier: str,
+    display_name: str,
+    include_details: bool,
+    include_partitario: bool,
+    throttle_ms: int,
+) -> CapacitasInCassSyncItemResult:
+    result = await _run_incass_retryable(
+        client,
+        lambda: client.search_notices(identifier),
+        label=f"search_notices:{identifier}",
+    )
+    synced_for_subject = 0
+    for row in result.rows:
+        detail_info_text: str | None = None
+        detail_info_html: str | None = None
+        detail_payload: dict[str, object] | None = None
+        pdf_links_json: list[dict[str, str | None]] = []
+        if include_details and row.avviso:
+            detail = await _run_incass_retryable(
+                client,
+                lambda: client.fetch_notice_detail(row.avviso),
+                label=f"fetch_notice_detail:{row.avviso}",
+            )
+            detail_info_text = detail.info_text
+            detail_info_html = detail.info_html
+            detail_payload = detail.model_dump(mode="json")
+            pdf_links_json = [pdf.model_dump(mode="json") for pdf in detail.pdf_links]
+        if include_partitario and row.avviso:
+            partitario = await _run_incass_retryable(
+                client,
+                lambda: client.fetch_notice_partitario(row.avviso),
+                label=f"fetch_notice_partitario:{row.avviso}",
+            )
+            if partitario is not None:
+                partitario_text = partitario.info_text
+                if partitario_text:
+                    detail_info_text = (
+                        f"{detail_info_text}\n\n{partitario_text}".strip()
+                        if detail_info_text
+                        else partitario_text
+                    )
+                detail_payload = {
+                    **(detail_payload or {}),
+                    "partitario": partitario.model_dump(mode="json"),
+                }
+
+        _upsert_payment_notice(
+            db,
+            subject_id=subject_id,
+            identifier=identifier,
+            display_name=display_name,
+            row=row,
+            detail_info_html=detail_info_html,
+            detail_info_text=detail_info_text,
+            pdf_links_json=pdf_links_json,
+            detail_payload=detail_payload,
+        )
+        synced_for_subject += 1
+        if throttle_ms > 0:
+            await asyncio.sleep(throttle_ms / 1000)
+
+    return CapacitasInCassSyncItemResult(
+        subject_id=str(subject_id),
+        identifier=identifier,
+        display_name=display_name,
+        status="succeeded",
+        notices_found=result.total,
+        notices_synced=synced_for_subject,
+    )
+
+
+async def _run_incass_retryable(client: InCassClient, operation, *, label: str):
+    last_exc: Exception | None = None
+    for attempt in range(1, len(INCASS_RETRY_DELAYS_SEC) + 2):
+        try:
+            return await operation()
+        except Exception as exc:
+            last_exc = exc
+            if not _is_retryable_incass_exception(exc) or attempt > len(INCASS_RETRY_DELAYS_SEC):
+                raise
+            await client.refresh_session()
+            await asyncio.sleep(INCASS_RETRY_DELAYS_SEC[attempt - 1])
+    raise last_exc or RuntimeError(f"Retry loop exhausted for {label}")
+
+
+def _is_retryable_incass_exception(exc: Exception) -> bool:
+    if isinstance(exc, (CapacitasInCassSessionExpiredError, httpx.TimeoutException, httpx.NetworkError)):
+        return True
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code in {429, 500, 502, 503, 504}
+    if isinstance(exc, RuntimeError):
+        message = str(exc).lower()
+        transient_markers = (
+            "sessione",
+            "login sso",
+            "errore.aspx",
+            "tempor",
+            "timeout",
+            "connection reset",
+            "remoteprotocolerror",
+        )
+        return any(marker in message for marker in transient_markers)
+    return False
 
 
 def _resolve_subjects(
@@ -355,12 +485,18 @@ def _upsert_payment_notice(
 ) -> None:
     if not row.avviso:
         return
-    existing = db.scalar(
+    existing = _find_pending_payment_notice(
+        db,
+        source_system="incass",
+        source_notice_id=row.avviso,
+    )
+    if existing is None:
+        existing = db.scalar(
         select(AnagraficaPaymentNotice).where(
             AnagraficaPaymentNotice.source_system == "incass",
             AnagraficaPaymentNotice.source_notice_id == row.avviso,
         )
-    )
+        )
     if existing is None:
         existing = AnagraficaPaymentNotice(source_system="incass", source_notice_id=row.avviso)
         db.add(existing)
@@ -397,6 +533,20 @@ def _upsert_payment_notice(
     existing.raw_row_json = row.model_dump(mode="json", by_alias=True)
     existing.raw_detail_json = detail_payload
     existing.synced_at = datetime.now(UTC)
+
+
+def _find_pending_payment_notice(
+    db: Session,
+    *,
+    source_system: str,
+    source_notice_id: str,
+) -> AnagraficaPaymentNotice | None:
+    for instance in db.new:
+        if not isinstance(instance, AnagraficaPaymentNotice):
+            continue
+        if instance.source_system == source_system and instance.source_notice_id == source_notice_id:
+            return instance
+    return None
 
 
 def _join_address(row: CapacitasInCassNoticeRow) -> str | None:

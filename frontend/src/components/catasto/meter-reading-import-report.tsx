@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 
-import type { CatMeterReadingImportPreview, CatMeterReadingImportPreviewItem } from "@/types/catasto";
+import type { CatMeterReadingImportPreview } from "@/types/catasto";
 
 export type MeterReadingImportReportItem = {
   filename: string;

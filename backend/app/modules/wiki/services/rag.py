@@ -100,7 +100,6 @@ def answer_question(
         max_tokens=1024,
     )
 
-    # TODO(Codex): aggiungere streaming SSE con StreamingResponse + stream=True
     answer = completion.choices[0].message.content or ""
 
     sources = [

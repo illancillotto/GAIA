@@ -134,6 +134,7 @@ Nella root del repository resta solo `README.md` (entry point del progetto).
 
 - `domain-docs/wiki/docs/PRD_wiki.md`
 - `domain-docs/wiki/docs/IMPLEMENTATION_PLAN_wiki.md`
+- `domain-docs/wiki/docs/IMPLEMENTATION_PLAN_wiki_live_agent.md`
 - `domain-docs/wiki/docs/PROMPT_CODEX_wiki.md`
 
 ## Struttura sintetica del repository

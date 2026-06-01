@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 
@@ -36,17 +37,22 @@ type UserRow = {
 };
 
 export default function UsersPage() {
+  const searchParams = useSearchParams();
   const [users, setUsers] = useState<NasUser[]>([]);
   const [groups, setGroups] = useState<NasGroup[]>([]);
   const [permissions, setPermissions] = useState<EffectivePermission[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [selectedUserId, setSelectedUserId] = useState<number | null>(null);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState(searchParams.get("q")?.trim() ?? "");
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
   const [groupFilter, setGroupFilter] = useState("all");
   const [pageSize, setPageSize] = useState<10 | 30 | 100>(30);
 
   const deferredSearchTerm = useDeferredValue(searchTerm);
+
+  useEffect(() => {
+    setSearchTerm(searchParams.get("q")?.trim() ?? "");
+  }, [searchParams]);
 
   useEffect(() => {
     if (selectedUserId == null) return;

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useDeferredValue, useEffect, useMemo, useState } from "react";
 
 import { ProtectedPage } from "@/components/app/protected-page";
@@ -22,14 +23,19 @@ type ShareRow = Share & {
 };
 
 export default function SharesPage() {
+  const searchParams = useSearchParams();
   const [shares, setShares] = useState<Share[]>([]);
   const [permissions, setPermissions] = useState<EffectivePermission[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [selectedShareId, setSelectedShareId] = useState<number | null>(null);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState(searchParams.get("q")?.trim() ?? "");
   const [sectorFilter, setSectorFilter] = useState<SectorFilter>("all");
 
   const deferredSearchTerm = useDeferredValue(searchTerm);
+
+  useEffect(() => {
+    setSearchTerm(searchParams.get("q")?.trim() ?? "");
+  }, [searchParams]);
 
   useEffect(() => {
     async function loadShares() {

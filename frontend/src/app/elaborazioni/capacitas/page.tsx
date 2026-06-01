@@ -1,10 +1,11 @@
 "use client";
 
-import { ElaborazioniCapacitasWorkspace } from "@/components/elaborazioni/capacitas-workspace";
 import { Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 
-export default function ElaborazioniCapacitasPage() {
+import { ElaborazioniCapacitasWorkspace } from "@/components/elaborazioni/capacitas-workspace";
+
+function ElaborazioniCapacitasPageContent() {
   const searchParams = useSearchParams();
   const requestedSection = searchParams.get("section");
   const initialSection =
@@ -17,9 +18,13 @@ export default function ElaborazioniCapacitasPage() {
       ? requestedSection
       : "particelle";
 
+  return <ElaborazioniCapacitasWorkspace initialSection={initialSection} />;
+}
+
+export default function ElaborazioniCapacitasPage() {
   return (
     <Suspense fallback={null}>
-      <ElaborazioniCapacitasWorkspace initialSection={initialSection} />
+      <ElaborazioniCapacitasPageContent />
     </Suspense>
   );
 }
