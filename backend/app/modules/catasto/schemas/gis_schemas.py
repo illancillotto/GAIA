@@ -327,6 +327,7 @@ class ParticellaPopupData(BaseModel):
     n_anomalie_aperte: int = 0
     titolare: ParticellaPopupTitolare | None = None
     ha_ruolo: bool = False
+    ha_ruolo_inferito: bool = False
     ruolo_summary: ParticellaPopupRuoloSummary | None = None
     swapped_capacitas: ParticellaPopupSwappedCapacitas | None = None
     anomalie_aperte: list[ParticellaPopupAnomalia] = Field(default_factory=list)

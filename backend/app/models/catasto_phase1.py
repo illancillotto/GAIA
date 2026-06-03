@@ -209,6 +209,7 @@ class CatParticellaGisFlag(Base):
         ForeignKey("cat_particelle.id", ondelete="CASCADE"), primary_key=True
     )
     ha_ruolo: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    ha_ruolo_inferito: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     ha_anomalie: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     ruolo_anno_latest: Mapped[int | None] = mapped_column(Integer, nullable=True)
     anomalie_aperte_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

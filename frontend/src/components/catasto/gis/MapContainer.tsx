@@ -24,7 +24,7 @@ interface MapContainerProps {
     distretto?: string | null;
     highlightSelected?: boolean;
     distrettoColors?: Record<string, string>;
-    particelleQuickFilter?: "all" | "ruolo";
+    particelleQuickFilter?: "all" | "ruolo" | "ruolo_inferito";
   };
   overlayLayers?: GisMapOverlayLayer[];
   focusGeojson?: GeoJSON.FeatureCollection | null;
@@ -54,7 +54,7 @@ type Position = [number, number] | [number, number, number];
 type LinearRing = Position[];
 type PolygonCoords = LinearRing[];
 type MultiPolygonCoords = PolygonCoords[];
-type ParticelleQuickFilter = "all" | "ruolo";
+type ParticelleQuickFilter = "all" | "ruolo" | "ruolo_inferito";
 
 const CONSORZIO_BOUNDS: [[number, number], [number, number]] = [
   [8.39, 39.62],
@@ -106,13 +106,13 @@ function buildParticelleFillOpacity(
   baseOpacity: number,
   quickFilter: ParticelleQuickFilter,
 ): number | maplibregl.ExpressionSpecification {
-  if (quickFilter !== "ruolo") {
+  if (quickFilter === "all") {
     return baseOpacity;
   }
 
   return [
     "case",
-    BOOLEAN_TRUE_EXPRESSION("ha_ruolo"),
+    quickFilter === "ruolo" ? BOOLEAN_TRUE_EXPRESSION("ha_ruolo") : BOOLEAN_TRUE_EXPRESSION("ha_ruolo_inferito"),
     baseOpacity,
     0.05,
   ] as maplibregl.ExpressionSpecification;
@@ -486,6 +486,8 @@ export default function MapContainer({
             "#EF4444",
             ["==", ["get", "ha_ruolo"], true],
             "#10B981",
+            ["==", ["get", "ha_ruolo_inferito"], true],
+            "#F59E0B",
             "#6366F1",
           ],
           "fill-opacity": 0.5,

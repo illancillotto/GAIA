@@ -30,6 +30,8 @@ export interface ParticellaGisSummary {
   utenza_cf?: string | null;
   utenza_denominazione?: string | null;
   ha_anomalie: boolean;
+  ha_ruolo?: boolean;
+  ha_ruolo_inferito?: boolean;
 }
 
 export interface FoglioAggr {
@@ -223,6 +225,7 @@ export interface ParticellaPopupData {
   n_anomalie_aperte: number;
   titolare?: ParticellaPopupTitolare | null;
   ha_ruolo: boolean;
+  ha_ruolo_inferito: boolean;
   ruolo_summary?: ParticellaPopupRuoloSummary | null;
   swapped_capacitas?: ParticellaPopupSwappedCapacitas | null;
   anomalie_aperte: ParticellaPopupAnomalia[];
@@ -277,6 +280,8 @@ export interface ParticellaPopupRuoloItem {
 export interface ParticellaPopupRuoloSummary {
   anno_tributario_latest: number;
   anno_tributario_richiesto?: number | null;
+  source_mode?: string;
+  source_note?: string | null;
   n_righe: number;
   n_subalterni: number;
   sup_catastale_ha_totale?: number | null;

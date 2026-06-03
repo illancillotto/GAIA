@@ -91,10 +91,11 @@ const BASEMAP_OPTIONS: Array<{ id: GisBasemap; label: string; swatch: string; re
   { id: "satellite", label: "Satellite", swatch: "bg-cyan-600" },
   { id: "google_satellite", label: "Google Earth", swatch: "bg-lime-600", requiresGoogleKey: true },
 ];
-type ParticelleQuickFilter = "all" | "ruolo";
+type ParticelleQuickFilter = "all" | "ruolo" | "ruolo_inferito";
 const PARTICELLE_QUICK_FILTERS: Array<{ id: ParticelleQuickFilter; label: string; dot: string }> = [
   { id: "all", label: "Tutte", dot: "bg-indigo-400" },
   { id: "ruolo", label: "A ruolo", dot: "bg-emerald-500" },
+  { id: "ruolo_inferito", label: "Ruolo inferito", dot: "bg-amber-500" },
 ];
 const GIS_SEARCH_MODE_OPTIONS: Array<{ id: GisSearchMode; label: string }> = [
   { id: "auto", label: "Auto" },
@@ -189,7 +190,7 @@ function popupToMatch(popup: ParticellaPopupData | null): CatAnagraficaMatch | n
     cert_pvc: null,
     cert_fra: null,
     cert_ccs: null,
-    stato_ruolo: popup.ha_ruolo ? "a_ruolo" : null,
+    stato_ruolo: popup.ha_ruolo ? "a_ruolo" : popup.ha_ruolo_inferito ? "ruolo_inferito" : null,
     stato_cnc: null,
     intestatari: [],
     anomalie_count: popup.n_anomalie_aperte ?? 0,
@@ -1017,6 +1018,8 @@ export default function CatastoGisPage() {
                 selected
                   ? option.id === "ruolo"
                     ? "border-emerald-200 bg-emerald-50 text-emerald-700 shadow-sm"
+                    : option.id === "ruolo_inferito"
+                      ? "border-amber-200 bg-amber-50 text-amber-700 shadow-sm"
                     : "border-indigo-200 bg-indigo-50 text-indigo-700 shadow-sm"
                   : isDark
                     ? "border-white/10 bg-white/5 text-white/60 hover:bg-white/10"
@@ -1386,6 +1389,19 @@ export default function CatastoGisPage() {
     </div>
   );
 
+  const popupRuoloSourceMode = popupParticella?.ruolo_summary?.source_mode ?? null;
+  const popupHasFallbackRuolo = Boolean(popupParticella?.ha_ruolo_inferito || (popupParticella?.ruolo_summary && popupRuoloSourceMode && popupRuoloSourceMode !== "exact"));
+  const popupRuoloBadgeClass = popupParticella?.ha_ruolo
+    ? "bg-emerald-100 text-emerald-700"
+    : popupHasFallbackRuolo
+      ? "bg-amber-100 text-amber-700"
+      : "bg-slate-100 text-slate-600";
+  const popupRuoloBadgeLabel = popupParticella?.ha_ruolo
+    ? "A ruolo"
+    : popupHasFallbackRuolo
+      ? "Ruolo inferito"
+      : "Fuori ruolo";
+
   return (
     <CatastoPage
       title="GIS"
@@ -1631,11 +1647,9 @@ export default function CatastoGisPage() {
                               {popupParticella.cfm || `${popupParticella.foglio ?? "-"} / ${popupParticella.particella ?? "-"}`}
                             </p>
                             <span
-                              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                                popupParticella.ha_ruolo ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-600"
-                              }`}
+                              className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${popupRuoloBadgeClass}`}
                             >
-                              {popupParticella.ha_ruolo ? "A ruolo" : "Fuori ruolo"}
+                              {popupRuoloBadgeLabel}
                             </span>
                             {popupParticella.n_anomalie_aperte > 0 ? (
                               <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold text-red-700">
@@ -1779,6 +1793,11 @@ export default function CatastoGisPage() {
                               popupParticella.ruolo_summary.anno_tributario_richiesto !== popupParticella.ruolo_summary.anno_tributario_latest ? (
                                 <div className="mt-0.5 text-[11px] font-medium text-emerald-700">
                                   Ultimo ruolo disponibile per l&apos;anno richiesto {popupParticella.ruolo_summary.anno_tributario_richiesto}
+                                </div>
+                              ) : null}
+                              {popupParticella.ruolo_summary.source_note ? (
+                                <div className="mt-0.5 text-[11px] font-medium text-amber-700">
+                                  {popupParticella.ruolo_summary.source_note}
                                 </div>
                               ) : null}
                             </div>

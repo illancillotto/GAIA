@@ -1117,6 +1117,8 @@ def get_popup_data(db: Session, particella_id: str) -> ParticellaPopupData:
     )
     anomalie_aperte = _load_popup_anomalie_aperte(db, particella_uuid)
     ruolo_summary = _load_particella_ruolo_summary(db, particella)
+    has_exact_ruolo_match = ruolo_summary is not None and ruolo_summary.source_mode == "exact"
+    has_inferred_ruolo_match = ruolo_summary is not None and ruolo_summary.source_mode != "exact"
     titolare = _load_popup_titolare(db, particella_uuid)
     swapped_capacitas = _load_popup_swapped_capacitas(db, particella_uuid)
     return ParticellaPopupData(
@@ -1135,7 +1137,8 @@ def get_popup_data(db: Session, particella_id: str) -> ParticellaPopupData:
         nome_distretto=particella.nome_distretto,
         n_anomalie_aperte=int(n_anomalie_aperte or 0),
         titolare=titolare,
-        ha_ruolo=ruolo_summary is not None,
+        ha_ruolo=has_exact_ruolo_match,
+        ha_ruolo_inferito=has_inferred_ruolo_match,
         ruolo_summary=ruolo_summary,
         swapped_capacitas=swapped_capacitas,
         anomalie_aperte=anomalie_aperte,
