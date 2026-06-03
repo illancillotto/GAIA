@@ -96,6 +96,12 @@ function buildParticelleFilter(
   if (distretto) {
     clauses.push(["==", ["get", "num_distretto"], distretto]);
   }
+  if (quickFilter === "all") {
+    clauses.push(
+      ["!", BOOLEAN_TRUE_EXPRESSION("ha_ruolo")],
+      ["!", BOOLEAN_TRUE_EXPRESSION("ha_ruolo_inferito")],
+    );
+  }
 
   if (clauses.length === 0) return null;
   if (clauses.length === 1) return clauses[0] as maplibregl.FilterSpecification;
@@ -106,10 +112,7 @@ function buildParticelleFillOpacity(
   baseOpacity: number,
   quickFilter: ParticelleQuickFilter,
 ): number | maplibregl.ExpressionSpecification {
-  if (quickFilter === "all") {
-    return baseOpacity;
-  }
-
+  if (quickFilter === "all") return baseOpacity;
   return [
     "case",
     quickFilter === "ruolo" ? BOOLEAN_TRUE_EXPRESSION("ha_ruolo") : BOOLEAN_TRUE_EXPRESSION("ha_ruolo_inferito"),

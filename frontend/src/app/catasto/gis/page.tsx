@@ -93,7 +93,7 @@ const BASEMAP_OPTIONS: Array<{ id: GisBasemap; label: string; swatch: string; re
 ];
 type ParticelleQuickFilter = "all" | "ruolo" | "ruolo_inferito";
 const PARTICELLE_QUICK_FILTERS: Array<{ id: ParticelleQuickFilter; label: string; dot: string }> = [
-  { id: "all", label: "Tutte", dot: "bg-indigo-400" },
+  { id: "all", label: "Solo particelle", dot: "bg-indigo-400" },
   { id: "ruolo", label: "A ruolo", dot: "bg-emerald-500" },
   { id: "ruolo_inferito", label: "Ruolo inferito", dot: "bg-amber-500" },
 ];
