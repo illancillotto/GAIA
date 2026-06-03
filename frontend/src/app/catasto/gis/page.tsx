@@ -298,6 +298,7 @@ export default function CatastoGisPage() {
   const [savedSelectionFills, setSavedSelectionFills] = useState<Record<string, boolean>>({});
   const [savedBusy, setSavedBusy] = useState(false);
   const [focusGeojson, setFocusGeojson] = useState<GeoJSON.FeatureCollection | null>(null);
+  const [focusOptions, setFocusOptions] = useState<{ maxZoom?: number; padding?: number; duration?: number } | null>(null);
   const [focusSignal, setFocusSignal] = useState(0);
   const [popupParticella, setPopupParticella] = useState<ParticellaPopupData | null>(null);
   const [popupDetailOpen, setPopupDetailOpen] = useState(false);
@@ -305,6 +306,7 @@ export default function CatastoGisPage() {
   const [searchMode, setSearchMode] = useState<GisSearchMode>("auto");
   const [searchBusy, setSearchBusy] = useState(false);
   const [searchResult, setSearchResult] = useState<GisSearchResponse | null>(null);
+  const [focusedSearchIds, setFocusedSearchIds] = useState<string[]>([]);
   const [adeRunStatus, setAdeRunStatus] = useState<AdeWfsRunStatusResponse | null>(null);
   const [adeReport, setAdeReport] = useState<AdeAlignmentReportResponse | null>(null);
   const layerCounterRef = useRef(0);
@@ -343,9 +345,36 @@ export default function CatastoGisPage() {
       isPersisted: false,
     };
   }, [searchResult]);
+  const focusedSearchOverlayLayer = useMemo<OverlayLayerState | null>(() => {
+    if (!searchResult?.geojson || focusedSearchIds.length === 0) return null;
+    const ids = new Set(focusedSearchIds);
+    const features = searchResult.geojson.features.filter((feature) => ids.has(String(feature.properties?.id ?? "")));
+    if (features.length === 0) return null;
+    return {
+      layer_key: "gis-search-focus",
+      saved_selection_id: null,
+      name: "Focus ricerca GIS",
+      color: "#F000B8",
+      outlineColor: "#C4008E",
+      pulse: true,
+      pulseUntil: Date.now() + 6000,
+      opacity: 0.9,
+      showFill: true,
+      visible: true,
+      source_filename: null,
+      geojson: { type: "FeatureCollection", features },
+      importStats: null,
+      importedItems: [],
+      isPersisted: false,
+    };
+  }, [focusedSearchIds, searchResult]);
   const visibleOverlayLayers = useMemo(
-    () => (searchOverlayLayer ? [searchOverlayLayer, ...overlayLayers.filter((layer) => layer.visible)] : overlayLayers.filter((layer) => layer.visible)),
-    [overlayLayers, searchOverlayLayer],
+    () => {
+      const visibleBaseLayers = overlayLayers.filter((layer) => layer.visible);
+      const searchLayers = [searchOverlayLayer, focusedSearchOverlayLayer].filter((layer): layer is OverlayLayerState => layer != null);
+      return searchLayers.length > 0 ? [...searchLayers, ...visibleBaseLayers] : visibleBaseLayers;
+    },
+    [focusedSearchOverlayLayer, overlayLayers, searchOverlayLayer],
   );
   const distrettoColorMap = useMemo(
     () =>
@@ -487,15 +516,20 @@ export default function CatastoGisPage() {
     }
   }, []);
 
-  const focusLayerGeojson = useCallback((geojson: GeoJSON.FeatureCollection | null | undefined) => {
+  const focusLayerGeojson = useCallback((
+    geojson: GeoJSON.FeatureCollection | null | undefined,
+    options?: { maxZoom?: number; padding?: number; duration?: number },
+  ) => {
     if (!geojson || geojson.features.length === 0) return;
     setFocusGeojson(geojson);
+    setFocusOptions(options ?? null);
     setFocusSignal((value) => value + 1);
     setResizeSignal((value) => value + 1);
   }, []);
 
   const handleClearSearch = useCallback(() => {
     setSearchResult(null);
+    setFocusedSearchIds([]);
     setSearchQuery("");
     setGisError(null);
     setGisInfo(null);
@@ -518,6 +552,7 @@ export default function CatastoGisPage() {
     try {
       const response = await catastoGisSearch(token, { query, mode: searchMode, limit: 25 });
       setSearchResult(response);
+      setFocusedSearchIds([]);
       setShowParticelle(true);
       setShowParticelleFill(true);
       if (response.geojson && response.geojson.features.length > 0) {
@@ -539,9 +574,15 @@ export default function CatastoGisPage() {
   const handleOpenSearchResult = useCallback(async (item: GisSearchResultItem) => {
     if (!token) return;
 
-    const feature = searchResult?.geojson?.features.find((entry) => String(entry.properties?.id ?? "") === item.id) ?? null;
-    if (feature) {
-      focusLayerGeojson({ type: "FeatureCollection", features: [feature] });
+    const matchingFeatures = searchResult?.geojson?.features.filter((entry) => String(entry.properties?.id ?? "") === item.id) ?? [];
+    if (matchingFeatures.length > 0) {
+      setFocusedSearchIds(matchingFeatures.map((feature) => String(feature.properties?.id ?? item.id)));
+      focusLayerGeojson(
+        { type: "FeatureCollection", features: matchingFeatures },
+        { maxZoom: 18, padding: 18, duration: 700 },
+      );
+    } else {
+      setFocusedSearchIds([item.id]);
     }
     setShowParticelle(true);
     try {
@@ -1568,6 +1609,7 @@ export default function CatastoGisPage() {
                   }}
                   overlayLayers={visibleOverlayLayers}
                   focusGeojson={focusGeojson}
+                  focusOptions={focusOptions ?? undefined}
                   focusSignal={focusSignal}
                   drawSignal={drawSignal}
                   clearSignal={clearSignal}

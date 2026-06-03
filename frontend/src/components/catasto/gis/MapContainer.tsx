@@ -29,6 +29,11 @@ interface MapContainerProps {
   overlayLayers?: GisMapOverlayLayer[];
   focusGeojson?: GeoJSON.FeatureCollection | null;
   focusSignal?: number;
+  focusOptions?: {
+    maxZoom?: number;
+    padding?: number;
+    duration?: number;
+  };
   drawSignal: number;
   clearSignal: number;
   resizeSignal?: number;
@@ -216,7 +221,15 @@ function buildParticelleTilesUrl(revision: string): string {
   return `${window.location.origin}/tiles/cat_particelle_current/{z}/{x}/{y}?v=${encodeURIComponent(revision)}`;
 }
 
-function fitCollectionBounds(map: maplibregl.Map, collection: GeoJSON.FeatureCollection | null | undefined): void {
+function fitCollectionBounds(
+  map: maplibregl.Map,
+  collection: GeoJSON.FeatureCollection | null | undefined,
+  options?: {
+    maxZoom?: number;
+    padding?: number;
+    duration?: number;
+  },
+): void {
   if (!collection || collection.features.length === 0) return;
 
   try {
@@ -230,7 +243,11 @@ function fitCollectionBounds(map: maplibregl.Map, collection: GeoJSON.FeatureCol
       }
     }
     if (!bounds.isEmpty()) {
-      map.fitBounds(bounds, { padding: 40, duration: 600, maxZoom: 16 });
+      map.fitBounds(bounds, {
+        padding: options?.padding ?? 40,
+        duration: options?.duration ?? 600,
+        maxZoom: options?.maxZoom ?? 16,
+      });
     }
   } catch {
     // Fit bounds is best-effort.
@@ -293,6 +310,7 @@ export default function MapContainer({
   overlayLayers,
   focusGeojson,
   focusSignal,
+  focusOptions,
   drawSignal,
   clearSignal,
   resizeSignal,
@@ -995,8 +1013,8 @@ export default function MapContainer({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || mapReadyVersion === 0 || !focusSignal) return;
-    fitCollectionBounds(map, focusGeojson);
-  }, [focusGeojson, focusSignal, mapReadyVersion]);
+    fitCollectionBounds(map, focusGeojson, focusOptions);
+  }, [focusGeojson, focusOptions, focusSignal, mapReadyVersion]);
 
   if (mapError) {
     return (
