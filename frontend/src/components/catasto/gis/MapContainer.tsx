@@ -91,13 +91,26 @@ function buildParticelleFilter(
   if (distretto) {
     clauses.push(["==", ["get", "num_distretto"], distretto]);
   }
-  if (quickFilter === "ruolo") {
-    clauses.push(BOOLEAN_TRUE_EXPRESSION("ha_ruolo"));
-  }
 
   if (clauses.length === 0) return null;
   if (clauses.length === 1) return clauses[0] as maplibregl.FilterSpecification;
   return ["all", ...clauses] as maplibregl.FilterSpecification;
+}
+
+function buildParticelleFillOpacity(
+  baseOpacity: number,
+  quickFilter: ParticelleQuickFilter,
+): number | maplibregl.ExpressionSpecification {
+  if (quickFilter !== "ruolo") {
+    return baseOpacity;
+  }
+
+  return [
+    "case",
+    BOOLEAN_TRUE_EXPRESSION("ha_ruolo"),
+    baseOpacity,
+    0.05,
+  ] as maplibregl.ExpressionSpecification;
 }
 
 function getGeometryRings(geom: GeoJSON.Geometry): PolygonCoords {
@@ -199,6 +212,10 @@ function buildDistrettoColorExpression(colors: Record<string, string> | undefine
   return expression as maplibregl.ExpressionSpecification;
 }
 
+function buildParticelleTilesUrl(revision: string): string {
+  return `${window.location.origin}/tiles/cat_particelle_current/{z}/{x}/{y}?v=${encodeURIComponent(revision)}`;
+}
+
 function fitCollectionBounds(map: maplibregl.Map, collection: GeoJSON.FeatureCollection | null | undefined): void {
   if (!collection || collection.features.length === 0) return;
 
@@ -292,6 +309,7 @@ export default function MapContainer({
   const resizeRafRef = useRef<number | null>(null);
   const overlayMapKeysRef = useRef<Set<string>>(new Set());
   const lastParticelleQuickFilterRef = useRef<ParticelleQuickFilter>("all");
+  const particelleTilesRevisionRef = useRef<string>(Date.now().toString());
 
   useEffect(() => {
     handlersRef.current = { onGeometryDrawn, onSelectionCleared, onParticellaClick, token };
@@ -364,6 +382,16 @@ export default function MapContainer({
     map.addControl(new maplibregl.NavigationControl(), "top-right");
     map.addControl(new maplibregl.ScaleControl({ unit: "metric" }), "bottom-right");
 
+    const refreshParticelleTiles = () => {
+      const nextRevision = Date.now().toString();
+      particelleTilesRevisionRef.current = nextRevision;
+      const source = map.getSource("particelle-source") as
+        | (maplibregl.Source & { setTiles?: (tiles: string[]) => void })
+        | undefined;
+      source?.setTiles?.([buildParticelleTilesUrl(nextRevision)]);
+      map.triggerRepaint();
+    };
+
     const draw = new MapboxDraw({
       displayControlsDefault: false,
       controls: {},
@@ -422,7 +450,7 @@ export default function MapContainer({
 
       map.addSource("particelle-source", {
         type: "vector",
-        tiles: [`${window.location.origin}/tiles/cat_particelle_current/{z}/{x}/{y}`],
+        tiles: [buildParticelleTilesUrl(particelleTilesRevisionRef.current)],
         minzoom: 13,
         maxzoom: 20,
       });
@@ -549,9 +577,22 @@ export default function MapContainer({
     drawEventTarget.on("draw.update", handleDraw);
     drawEventTarget.on("draw.delete", () => handlersRef.current.onSelectionCleared());
 
+    const handleWindowFocus = () => {
+      refreshParticelleTiles();
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshParticelleTiles();
+      }
+    };
+    window.addEventListener("focus", handleWindowFocus);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
     mapRef.current = map;
 
     return () => {
+      window.removeEventListener("focus", handleWindowFocus);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       if (resizeRafRef.current != null) {
         window.cancelAnimationFrame(resizeRafRef.current);
         resizeRafRef.current = null;
@@ -666,7 +707,7 @@ export default function MapContainer({
     }
     if (map.getLayer("particelle-fill")) {
       map.setLayoutProperty("particelle-fill", "visibility", showParticelle && showParticelleFill ? "visible" : "none");
-      map.setPaintProperty("particelle-fill", "fill-opacity", particelleOpacity);
+      map.setPaintProperty("particelle-fill", "fill-opacity", buildParticelleFillOpacity(particelleOpacity, particelleQuickFilter));
     }
     if (map.getLayer("particelle-outline")) {
       map.setLayoutProperty("particelle-outline", "visibility", showParticelle ? "visible" : "none");
