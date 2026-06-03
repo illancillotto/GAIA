@@ -42,7 +42,7 @@ class AnprSyncConfig(Base):
     job_enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     job_cron: Mapped[str] = mapped_column(String(50), default="0 8-17 * * *", nullable=False)
     lookback_years: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
-    retry_not_found_days: Mapped[int] = mapped_column(Integer, default=90, nullable=False)
+    retry_not_found_days: Mapped[int] = mapped_column(Integer, default=180, nullable=False)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     updated_by_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("application_users.id"),

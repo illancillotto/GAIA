@@ -83,7 +83,7 @@ class AnprSyncConfig(Base):
     job_enabled = Column(Boolean, default=True, nullable=False)
     job_cron = Column(String(50), default="0 8-17 * * *", nullable=False)
     lookback_years = Column(Integer, default=1, nullable=False)
-    retry_not_found_days = Column(Integer, default=90, nullable=False)
+    retry_not_found_days = Column(Integer, default=180, nullable=False)
     updated_at = Column(DateTime(timezone=True), onupdate=lambda: datetime.now(timezone.utc))
     updated_by_user_id = Column(Integer, ForeignKey("application_users.id"), nullable=True)
 ```

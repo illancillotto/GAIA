@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 
 import pytest
@@ -242,6 +242,76 @@ async def test_build_check_queue_excludes_subjects_marked_deceased_by_capacitas(
     queue = await build_check_queue(db_session, config)
 
     assert [item.subject_id for item in queue] == [str(included.id)]
+
+
+@pytest.mark.anyio
+async def test_build_check_queue_skips_recent_not_found_subjects(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import app.modules.utenze.anpr.service as service_module
+
+    frozen_now = datetime(2026, 5, 15, 10, 0, tzinfo=UTC)
+
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return frozen_now if tz is None else frozen_now.astimezone(tz)
+
+    monkeypatch.setattr(service_module, "datetime", FrozenDateTime)
+    monkeypatch.setattr(service_module.settings, "anpr_job_ruolo_year", 2025)
+    monkeypatch.setattr(service_module.settings, "anpr_job_batch_size", 10)
+    monkeypatch.setattr(service_module.settings, "anpr_job_timezone", "Europe/Rome")
+
+    config = AnprSyncConfig(id=1, max_calls_per_day=10, job_enabled=True, job_cron="0 8-17 * * *", lookback_years=1, retry_not_found_days=180)
+    skipped = _create_person_subject(
+        db_session,
+        "NFRECENT00000001",
+        data_nascita=date(1940, 1, 1),
+        stato_anpr="not_found_anpr",
+        last_anpr_check_at=frozen_now - timedelta(days=30),
+    )
+    included = _create_person_subject(db_session, "ROLELIVE2025001", data_nascita=date(1950, 1, 1))
+    ruolo_2025 = _create_ruolo_job(db_session, anno_tributario=2025)
+    _add_ruolo_row(db_session, batch_id=ruolo_2025.id, anno_tributario=2025, subject_id=skipped.id)
+    _add_ruolo_row(db_session, batch_id=ruolo_2025.id, anno_tributario=2025, subject_id=included.id)
+
+    queue = await build_check_queue(db_session, config)
+
+    assert [item.subject_id for item in queue] == [str(included.id)]
+
+
+@pytest.mark.anyio
+async def test_build_check_queue_retries_not_found_after_retry_threshold(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import app.modules.utenze.anpr.service as service_module
+
+    frozen_now = datetime(2026, 5, 15, 10, 0, tzinfo=UTC)
+
+    class FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return frozen_now if tz is None else frozen_now.astimezone(tz)
+
+    monkeypatch.setattr(service_module, "datetime", FrozenDateTime)
+    monkeypatch.setattr(service_module.settings, "anpr_job_ruolo_year", 2025)
+    monkeypatch.setattr(service_module.settings, "anpr_job_batch_size", 10)
+    monkeypatch.setattr(service_module.settings, "anpr_job_timezone", "Europe/Rome")
+
+    config = AnprSyncConfig(id=1, max_calls_per_day=10, job_enabled=True, job_cron="0 8-17 * * *", lookback_years=1, retry_not_found_days=180)
+    retried = _create_person_subject(
+        db_session,
+        "NFRETRY000000001",
+        data_nascita=date(1940, 1, 1),
+        stato_anpr="not_found_anpr",
+        last_anpr_check_at=frozen_now - timedelta(days=181),
+    )
+    ruolo_2025 = _create_ruolo_job(db_session, anno_tributario=2025)
+    _add_ruolo_row(db_session, batch_id=ruolo_2025.id, anno_tributario=2025, subject_id=retried.id)
+
+    queue = await build_check_queue(db_session, config)
+
+    assert [item.subject_id for item in queue] == [str(retried.id)]
 
 
 @pytest.mark.anyio

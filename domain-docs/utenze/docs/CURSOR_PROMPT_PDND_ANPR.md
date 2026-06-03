@@ -56,7 +56,7 @@ Crea una nuova migration Alembic che:
    - `job_enabled BOOLEAN NOT NULL DEFAULT TRUE`
    - `job_cron VARCHAR(50) NOT NULL DEFAULT '0 2 * * *'`
    - `lookback_years INTEGER NOT NULL DEFAULT 1`
-   - `retry_not_found_days INTEGER NOT NULL DEFAULT 90`
+   - `retry_not_found_days INTEGER NOT NULL DEFAULT 180`
    - `updated_at TIMESTAMP WITH TIME ZONE NULL`
    - `updated_by_user_id INTEGER NULL REFERENCES application_users(id)`
 

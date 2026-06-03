@@ -50,6 +50,7 @@
 - il batch ANPR continua con i soggetti successivi anche quando un singolo item genera un'eccezione inattesa; il soggetto viene marcato `error` e registrato con log tecnico `JOBERR`
 - il monitor `frontend/src/components/elaborazioni/anpr-workspace.tsx` ora include la sezione `Utenze ANPR in errore` con ultimo dettaglio errore e link diretto alla scheda soggetto per verifica manuale
 - il monitor `Ultime esecuzioni ANPR` in `frontend/src/components/elaborazioni/anpr-workspace.tsx` è ora espandibile per batch: ogni run mostra i record elaborati ricostruiti dai log ANPR della finestra del job, con esito finale, tipi chiamata (`C030`/`C004`/`JOBERR`), numero chiamate e dettaglio errore quando presente
+- la coda batch ANPR usa `retry_not_found_days` anche per i soggetti `not_found_anpr`; il default operativo è stato portato a `180` giorni per dilatare il retry sugli esiti `EN122`
 
 ## Verifiche Eseguite
 
@@ -63,15 +64,15 @@
 - `pytest backend/tests/test_anpr_service.py -q` dopo il prefiltro Capacitas
 - `npx tsc --noEmit` in `frontend` ✅
 - `npm run build` in `frontend` ✅
+- `docker exec gaia-backend sh -lc 'cd /app && alembic upgrade head'` ✅ (`20260603_0106_anpr_retry_not_found_180_days`)
 
 ## Note Aperte
 
 - il mapping definitivo della risposta C004 resta marcato come non validato via `_RESPONSE_MAP_VALIDATED = False` finché non viene confermato su ambiente ANPR di test
 - restano da eseguire i test di integrazione end-to-end con credenziali PDND reali e soggetti di test ANPR/SOGEI
-- il tracciamento giornaliero `anpr_job_runs` è persistito lato backend ma non è ancora esposto in una vista dedicata del workspace `elaborazioni`
 - l'evidenza Capacitas viene usata solo come esclusione preventiva della coda ANPR e non promuove automaticamente `stato_anpr = deceased`
 
 ## Prossimo Step
 
-- implementazione locale completata per batch a ruolo, cap giornaliero e KPI dashboard
-- prossimo passo utile: esporre `anpr_job_runs` nel workspace `elaborazioni` e validare in runtime il throughput giornaliero reale con dati di ruolo 2025
+- implementazione locale completata per batch a ruolo, cap giornaliero, retry `not_found` a 180 giorni e KPI dashboard
+- prossimo passo utile: validare in runtime il bilanciamento tra retry a 180 giorni ed evoluzione delle annualità ruolo sui primi cicli reali

@@ -60,7 +60,7 @@ Per ogni soggetto persona fisica con `codice_fiscale` valorizzato e senza `anpr_
 - Loggare l'esito in `anpr_check_log`
 
 Casi di errore:
-- CF non trovato in ANPR → `stato_anpr = not_found_anpr`, non ritentare per N giorni
+- CF non trovato in ANPR → `stato_anpr = not_found_anpr`, non ritentare per 180 giorni
 - Errore tecnico → log errore, ritentare al prossimo ciclo
 
 ### RF-02 — Verifica stato decesso via C004
@@ -109,7 +109,7 @@ Endpoint admin per leggere e aggiornare la configurazione del job:
 - `job_enabled`: abilitazione/disabilitazione job (booleano)
 - `job_cron`: espressione cron orario esecuzione (stringa, default `"0 2 * * *"`)
 - `lookback_years`: quanti anni di storico `cat_utenze_irrigue` considerare per la priorità 1 (intero, default 1)
-- `retry_not_found_days`: giorni prima di ritentare soggetti con `not_found_anpr` (intero, default 90)
+- `retry_not_found_days`: giorni prima di ritentare soggetti con `not_found_anpr` (intero, default 180)
 
 ### RF-06 — Tracciabilità e audit
 
@@ -178,7 +178,7 @@ Ogni chiamata ANPR deve produrre un record in `anpr_check_log` con:
 | `job_enabled` | `BOOLEAN` | true |
 | `job_cron` | `VARCHAR(50)` | `"0 2 * * *"` |
 | `lookback_years` | `INTEGER` | 1 |
-| `retry_not_found_days` | `INTEGER` | 90 |
+| `retry_not_found_days` | `INTEGER` | 180 |
 | `updated_at` | `TIMESTAMP` | |
 | `updated_by_user_id` | `INTEGER nullable FK → application_users.id` | |
 
