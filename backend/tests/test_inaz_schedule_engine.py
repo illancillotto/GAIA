@@ -163,3 +163,48 @@ def test_xlsm_export_uses_template_classification_for_special_days() -> None:
 
     assert ws.cell(5, ordinary_festive_col).value == 6
     assert ws.cell(5, extra_festive_col).value == 6
+
+
+def test_detail_classification_takes_precedence_over_template_when_present() -> None:
+    collaborator = InazCollaborator(id=uuid.uuid4(), employee_code="1854", company_code="53", name="Operaio")
+    template = InazScheduleTemplate(id=40, code="CATASTO_OP", label="Catasto operai", is_active=True)
+    assignment = InazCollaboratorScheduleAssignment(collaborator_id=collaborator.id, template_id=template.id)
+    rule = InazScheduleRule(
+        template_id=template.id,
+        weekday=5,
+        recurrence_kind="alternating_weeks",
+        interval_weeks=2,
+        anchor_date=date(2026, 5, 16),
+        start_time=time(7, 0),
+        end_time=time(13, 0),
+        applies_on_holiday=False,
+        sort_order=0,
+    )
+    context = _context(collaborator, assignment, template, [rule])
+
+    record = InazDailyRecord(
+        id=uuid.uuid4(),
+        collaborator_id=collaborator.id,
+        work_date=date(2026, 5, 23),
+        ordinary_minutes=330,
+        mpe_minutes=45,
+        straordinario_minutes=75,
+        raw_payload_json={
+            "detail_status": "Giornata anomala",
+            "detail_day_summary": {
+                "Ore teoriche": "06:30",
+                "Ore Ordinarie": "05:30",
+            },
+            "detail_day_totals": {
+                "CARTELLINO Gruppo Ore Maggior Presenza": "00:45",
+                "CARTELLINO Gruppo Ore Straordinario": "01:15",
+            },
+        },
+    )
+    punches = [InazDailyPunch(daily_record_id=record.id, sequence=1, entry_time=time(7, 0), exit_time=time(13, 0))]
+
+    result = classify_daily_record(collaborator, record, punches, context)
+
+    assert result.source == "detail"
+    assert result.ordinary_minutes == 330
+    assert result.extra_minutes == 120

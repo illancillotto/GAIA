@@ -4,12 +4,12 @@ import argparse
 import json
 import os
 import signal
-import subprocess
 import sys
+import traceback
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
-from app.core.config import settings
 from app.core.database import SessionLocal
 from app.models.application_user import ApplicationUser
 from app.modules.inaz.models import InazSyncJob
@@ -20,6 +20,15 @@ from app.modules.inaz.services.parser import load_json_payload, parse_import_pay
 from app.modules.inaz.services.sync_runtime import get_sync_artifact_dir
 
 CURRENT_JOB_ID: str | None = None
+
+
+def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
+    with path.open("a", encoding="utf-8") as handle:
+        handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
+
+
+def _write_progress(path: Path, payload: dict[str, Any]) -> None:
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def _mark_job_cancelled(job_id: str) -> None:
@@ -65,15 +74,85 @@ def main() -> int:
         artifact_dir = get_sync_artifact_dir(str(job.id))
         artifact_dir.mkdir(parents=True, exist_ok=True)
         json_output = artifact_dir / "inaz_collaboratori.json"
+        progress_path = artifact_dir / "progress.json"
+        events_path = artifact_dir / "events.ndjson"
 
         job.status = "running"
         job.started_at = datetime.now(UTC)
+        job.finished_at = None
+        job.error_detail = None
         job.worker_pid = os.getpid()
         job.worker_log_path = str(artifact_dir / "worker.log")
         job.json_artifact_path = str(json_output)
         job.attempt_count += 1
+        base_params = dict(job.params_json or {})
+        base_params["progress"] = {
+            "state": "running",
+            "job_id": str(job.id),
+            "attempt_count": job.attempt_count,
+            "started_at": job.started_at.isoformat(),
+            "completed_collaborators": 0,
+            "failed_collaborators": 0,
+            "total_collaborators": None,
+            "last_event": "worker_started",
+            "last_event_at": datetime.now(UTC).isoformat(),
+        }
+        job.params_json = base_params
         db.add(job)
         db.commit()
+
+        _append_jsonl(
+            events_path,
+            {
+                "timestamp": datetime.now(UTC).isoformat(),
+                "type": "worker_started",
+                "job_id": str(job.id),
+                "attempt_count": job.attempt_count,
+            },
+        )
+        _write_progress(progress_path, job.params_json["progress"])
+
+        def on_progress(event: dict[str, Any]) -> None:
+            event_time = datetime.now(UTC).isoformat()
+            event_payload = {"timestamp": event_time, **event}
+            _append_jsonl(events_path, event_payload)
+
+            progress = dict((job.params_json or {}).get("progress") or {})
+            progress["state"] = "running"
+            progress["job_id"] = str(job.id)
+            progress["attempt_count"] = job.attempt_count
+            progress["last_event"] = event.get("type")
+            progress["last_event_at"] = event_time
+            for key in (
+                "index",
+                "total",
+                "employee_code",
+                "name",
+                "elapsed_seconds",
+                "completed_collaborators",
+                "error_count",
+                "daily_rows",
+                "summary_rows",
+                "error",
+                "resumed",
+                "pending_collaborators",
+            ):
+                if key in event:
+                    progress[key] = event[key]
+            if "total" in event:
+                progress["total_collaborators"] = event["total"]
+            if "completed_collaborators" in event:
+                progress["completed_collaborators"] = event["completed_collaborators"]
+            if "error_count" in event:
+                progress["failed_collaborators"] = event["error_count"]
+                job.records_errors = int(event["error_count"])
+
+            updated_params = dict(job.params_json or {})
+            updated_params["progress"] = progress
+            job.params_json = updated_params
+            db.add(job)
+            db.commit()
+            _write_progress(progress_path, progress)
 
         params = job.params_json or {}
         if job.credential_id is not None:
@@ -89,53 +168,14 @@ def main() -> int:
                     period_end=job.period_end,
                     json_output=json_output,
                     limit=job.collaborator_limit,
+                    progress_callback=on_progress,
                 )
                 mark_credential_used(db, credential.id, scrape_result.get("authenticated_url"))
             except Exception as exc:
                 mark_credential_error(db, credential.id, str(exc))
                 raise
         else:
-            command = [
-                settings.inaz_scraper_python_path,
-                "-m",
-                "inaz_scraper.collaborators",
-                "--cdp-endpoint",
-                str(params.get("cdp_endpoint") or settings.inaz_scraper_cdp_endpoint),
-                "--year",
-                str(job.period_start.year),
-                "--month",
-                str(job.period_start.month),
-                "--json-output",
-                str(json_output),
-                "--start-date",
-                job.period_start.isoformat(),
-                "--end-date",
-                job.period_end.isoformat(),
-            ]
-            if job.collaborator_limit is not None:
-                command.extend(["--limit", str(job.collaborator_limit)])
-
-            scraper_env = os.environ.copy()
-            scraper_pythonpath = scraper_env.get("PYTHONPATH", "")
-            scraper_src = str(Path(settings.inaz_scraper_project_path).expanduser() / "src")
-            scraper_env["PYTHONPATH"] = scraper_src if not scraper_pythonpath else f"{scraper_src}:{scraper_pythonpath}"
-
-            completed = subprocess.run(
-                command,
-                cwd=settings.inaz_scraper_project_path,
-                env=scraper_env,
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            if completed.stdout:
-                print(completed.stdout, end="")
-            if completed.stderr:
-                print(completed.stderr, end="", file=sys.stderr)
-            if completed.returncode != 0:
-                raise RuntimeError(f"Scraper exited with code {completed.returncode}")
-            if not json_output.exists():
-                raise RuntimeError(f"JSON artifact not produced: {json_output}")
+            raise RuntimeError("Legacy Inaz sync mode is disabled. Create a new sync job with a saved credential.")
 
         parsed = parse_import_payload(load_json_payload(json_output.read_bytes()))
         import_result = run_import_job(
@@ -153,6 +193,18 @@ def main() -> int:
         job.status = "completed"
         job.error_detail = None
         job.finished_at = datetime.now(UTC)
+        final_params = dict(job.params_json or {})
+        final_params["progress"] = {
+            **dict(final_params.get("progress") or {}),
+            "state": "completed",
+            "finished_at": job.finished_at.isoformat(),
+            "completed_collaborators": scrape_result.get("completed_collaborators"),
+            "failed_collaborators": scrape_result.get("failed_collaborators"),
+            "total_collaborators": scrape_result.get("total_collaborators"),
+            "last_event": "job_completed",
+            "last_event_at": datetime.now(UTC).isoformat(),
+        }
+        job.params_json = final_params
         db.add(job)
         db.commit()
 
@@ -166,11 +218,27 @@ def main() -> int:
                     "records_imported": job.records_imported,
                     "records_skipped": job.records_skipped,
                     "records_errors": job.records_errors,
+                    "completed_collaborators": scrape_result.get("completed_collaborators"),
+                    "failed_collaborators": scrape_result.get("failed_collaborators"),
+                    "total_collaborators": scrape_result.get("total_collaborators"),
+                    "resumed_from_checkpoint": scrape_result.get("resumed_from_checkpoint"),
+                    "error_items": scrape_result.get("errors"),
                 },
                 indent=2,
             ),
             encoding="utf-8",
         )
+        _append_jsonl(
+            events_path,
+            {
+                "timestamp": datetime.now(UTC).isoformat(),
+                "type": "job_completed",
+                "job_id": str(job.id),
+                "records_imported": job.records_imported,
+                "records_errors": job.records_errors,
+            },
+        )
+        _write_progress(progress_path, job.params_json["progress"])
         return 0
     except Exception as exc:
         rollback_db = SessionLocal()
@@ -180,11 +248,21 @@ def main() -> int:
                 failed_job.status = "failed"
                 failed_job.error_detail = str(exc)
                 failed_job.finished_at = datetime.now(UTC)
+                failed_params = dict(failed_job.params_json or {})
+                failed_params["progress"] = {
+                    **dict(failed_params.get("progress") or {}),
+                    "state": "failed",
+                    "finished_at": failed_job.finished_at.isoformat(),
+                    "last_event": "job_failed",
+                    "last_event_at": datetime.now(UTC).isoformat(),
+                    "error": str(exc),
+                }
+                failed_job.params_json = failed_params
                 rollback_db.add(failed_job)
                 rollback_db.commit()
         finally:
             rollback_db.close()
-        print(str(exc), file=sys.stderr)
+        print(traceback.format_exc(), file=sys.stderr)
         return 1
     finally:
         db.close()

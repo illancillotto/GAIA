@@ -1,6 +1,6 @@
 # Progress Inaz
 
-Data aggiornamento: 2026-05-29
+Data aggiornamento: 2026-06-03
 
 ## Stato attuale
 
@@ -24,6 +24,13 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
   - `inaz_schedule_rules`
   - `inaz_collaborator_schedule_assignments`
 - import JSON compatibile con l'output dello scraper `inaz-collaboratori`;
+- import JSON che normalizza e persiste anche i campi ricchi del dettaglio giorno Inaz:
+  - orario programmato/effettivo
+  - fasce orarie
+  - ore teoriche / ore assenza
+  - riepilogo giornata
+  - totali giornata
+  - richieste / anomalie;
 - mapping collaboratore -> `application_users`;
 - endpoint calendario collaboratore;
 - endpoint riepilogo eventi collaboratore;
@@ -31,6 +38,10 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
 - endpoint admin per bootstrap festivita locali/mobili e assegnazione template orari ai collaboratori;
 - export `.xlsm` dal DB con preservazione macro via `openpyxl(..., keep_vba=True)`.
 - classificazione export `.xlsm` non piu solo `sabato/domenica`: adesso usa festivita, sabati alternati, primo sabato del mese e rientri stagionali se presenti nei template.
+- precedenza logica classificazione giornaliera:
+  - `detail` Inaz se presente e strutturato;
+  - fallback su valori importati dalla griglia/cartellino;
+  - fallback finale su template orari GAIA.
 
 ### Frontend
 
@@ -42,8 +53,14 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
   - riepilogo eventi;
   - mapping verso utente GAIA per admin;
 - pagina `/inaz/giornaliere`;
+- pagina `/inaz/giornaliere` con dettaglio operativo della singola giornata:
+  - orario Inaz;
+  - stato giornata;
+  - riepilogo e totali;
+  - richieste e anomalie;
 - pagina `/inaz/import` con preview e conferma import;
 - pagina `/inaz/export` con download `.xlsm`;
+- pagina `/inaz/export` con preview dataset del mese, perimetro collaboratori e KPI di righe/giorni speciali;
 - pagina `/inaz/sync` con avvio job live, polling stato, retry e storico run;
 - navigazione modulo aggiornata in sidebar e module switcher.
 
@@ -51,10 +68,11 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
 
 - introdotta tabella `inaz_sync_jobs` per orchestrare le run live;
 - aggiunto worker Python separato avviato fuori dal processo FastAPI;
-- integrazione con lo scraper esterno `inaz-scraper` via CDP;
-- supporto anche a login Playwright con credenziali cifrate selezionate dal vault `Inaz`;
+- integrazione con lo scraper esterno `inaz-scraper` tramite worker dedicato;
+- login automatico con credenziali cifrate selezionate dal vault `Inaz`;
 - ogni run live produce artefatto JSON persistito su filesystem e poi riusa il normale import GAIA;
-- retry applicativo disponibile fino al limite configurato.
+- retry applicativo disponibile fino al limite configurato;
+- cancel e delete dei job falliti/storici disponibili da UI.
 
 ### Test e verifica
 
@@ -64,6 +82,7 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
   - sabato alternato operai catasto;
   - rientro del lunedi stagionale;
   - scrittura corretta delle colonne speciali in `Archivio2`;
+- aggiunti test per la precedenza `detail Inaz > template fallback`;
 - aggiunti test frontend iniziali `frontend/tests/unit/inaz-pages.test.tsx`;
 - typecheck frontend completato con successo;
 - verifica smoke backend eseguita su parser JSON e compilazione XLSM.
@@ -76,16 +95,15 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
   - niente selector template assistito lato filesystem;
 - manca ancora la UI dedicata per gestione festivita/template orari e assegnazioni collaboratore;
 - sync live ancora minimale:
-  - nessun download diretto artefatti da UI;
-  - nessun kill/cancel job;
   - nessuna policy di retry automatica schedulata;
-  - nessuna rotazione automatica tra piu credenziali attive;
-- test end-to-end backend non ancora eseguibili in ambiente corrente per dipendenza esterna mancante (`shapely` in import app completo).
+  - nessuna orchestrazione multi-worker o schedulazione periodica;
+- resta solo un warning non bloccante nei test export `openpyxl/zipfile`;
+- test end-to-end con credenziali reali e run live su mese completo ancora da consolidare come procedura operativa.
 
 ## Prossimi passi consigliati
 
-1. download artefatti/log del sync live da UI;
-2. cancel/stop job e cleanup processi worker;
-3. calendario mensile dedicato nel dettaglio collaboratore;
-4. export con preset template e selezione massiva collaboratori;
-5. fixture reali di import per test backend piu completi.
+1. calendario mensile dedicato nel dettaglio collaboratore;
+2. gestione UI festivita/template orari/assegnazioni;
+3. preview differenziale import e duplicate handling piu ricco;
+4. preset template export e selector filesystem assistito;
+5. run end-to-end documentata su credenziale reale e validazione `.xlsm` su mese completo.

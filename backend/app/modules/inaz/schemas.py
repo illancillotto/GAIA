@@ -217,9 +217,31 @@ class InazDailyRecordResponse(BaseModel):
     maggiorazione_minutes: int | None = None
     mpe_minutes: int | None = None
     straordinario_minutes: int | None = None
+    km_value: int | None = None
+    override_straordinario_minutes: int | None = None
+    override_mpe_minutes: int | None = None
+    manual_note: str | None = None
+    effective_straordinario_minutes: int | None = None
+    effective_mpe_minutes: int | None = None
+    effective_extra_minutes: int | None = None
     stato: str | None = None
     evidenze: str | None = None
     raw_weekday: str | None = None
+    detail_title: str | None = None
+    detail_status: str | None = None
+    detail_programmed_schedule: str | None = None
+    detail_effective_schedule: str | None = None
+    detail_time_slots: str | None = None
+    detail_schedule_type: str | None = None
+    detail_theoretical_hours: str | None = None
+    detail_absence_hours: str | None = None
+    detail_day_summary: dict[str, str] = Field(default_factory=dict)
+    detail_day_totals: dict[str, str] = Field(default_factory=dict)
+    detail_requests: list[dict[str, str]] = Field(default_factory=list)
+    detail_anomalies: list[dict[str, str]] = Field(default_factory=list)
+    detail_text: str | None = None
+    detail_error: str | None = None
+    special_day: bool | None = None
     raw_payload_json: dict[str, Any] | list[Any] | None = None
     source_job_id: uuid.UUID | None = None
     created_at: datetime
@@ -232,6 +254,13 @@ class InazDailyRecordListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+class InazDailyRecordManualUpdate(BaseModel):
+    km_value: int | None = Field(default=None, ge=0, le=5000)
+    override_straordinario_minutes: int | None = Field(default=None, ge=0, le=1440)
+    override_mpe_minutes: int | None = Field(default=None, ge=0, le=1440)
+    manual_note: str | None = Field(default=None, max_length=1000)
 
 
 class InazEventSummaryResponse(BaseModel):
@@ -346,9 +375,8 @@ class InazCredentialTestResult(BaseModel):
 class InazSyncJobCreateRequest(BaseModel):
     year: int = Field(ge=2000, le=2100)
     month: int = Field(ge=1, le=12)
-    credential_id: int | None = None
+    credential_id: int
     collaborator_limit: int | None = Field(default=None, ge=1, le=500)
-    cdp_endpoint: str | None = None
 
 
 class InazSyncJobResponse(BaseModel):

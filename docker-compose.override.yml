@@ -15,6 +15,7 @@ services:
       - ./secrets/pdnd:/app/secrets/pdnd:ro
       - catasto-data:/data/catasto
       - .:/app/docs:ro
+      - /home/cbo/CursorProjects/inaz-scraper:/home/cbo/CursorProjects/inaz-scraper:ro
     ports:
       - "${BACKEND_PORT:-8000}:8000"
 

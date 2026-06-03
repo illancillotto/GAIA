@@ -6,7 +6,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Response, UploadFile
 from fastapi.responses import FileResponse
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
@@ -40,6 +40,7 @@ from app.modules.inaz.schemas import (
     InazCredentialUpdate,
     InazCollaboratorSummaryResponse,
     InazDailyRecordListResponse,
+    InazDailyRecordManualUpdate,
     InazDailyRecordResponse,
     InazEventSummaryResponse,
     InazHolidayBootstrapResponse,
@@ -70,13 +71,15 @@ from app.modules.inaz.services.credentials import (
     update_credential,
 )
 from app.modules.inaz.services.import_jobs import build_preview, run_import_job
-from app.modules.inaz.services.parser import load_json_payload, parse_import_payload
+from app.modules.inaz.services.parser import detail_indicates_special_day, extract_detail_payload, load_json_payload, parse_import_payload
 from app.modules.inaz.services.schedule_engine import build_schedule_context, seed_holidays_for_year
 from app.modules.inaz.services.sync_runtime import (
     build_period,
+    delete_sync_artifact_dir,
     get_sync_artifact_dir,
     has_running_sync_job,
     launch_sync_worker,
+    reconcile_stale_sync_jobs,
     resolve_sync_artifact_path,
     stop_sync_worker,
 )
@@ -528,6 +531,23 @@ def get_giornaliera(
     return _serialize_daily_record(db, _get_daily_record_or_404(db, record_id, current_user))
 
 
+@router.patch("/giornaliere/{record_id}", response_model=InazDailyRecordResponse)
+def update_giornaliera(
+    record_id: uuid.UUID,
+    payload: InazDailyRecordManualUpdate,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    _: Annotated[ApplicationUser, RequireInazModule],
+) -> InazDailyRecordResponse:
+    record = _get_daily_record_or_404(db, record_id, current_user)
+    for field, value in payload.model_dump(exclude_unset=True).items():
+        setattr(record, field, value)
+    db.add(record)
+    db.commit()
+    db.refresh(record)
+    return _serialize_daily_record(db, record)
+
+
 @router.get("/collaborators/{collaborator_id}/calendar", response_model=InazCollaboratorCalendarResponse)
 def get_collaborator_calendar(
     collaborator_id: uuid.UUID,
@@ -649,8 +669,11 @@ def create_sync_job(
 ) -> InazSyncJobResponse:
     if has_running_sync_job(db):
         raise HTTPException(status_code=409, detail="Another Inaz sync job is already pending or running")
-    if payload.credential_id is not None and get_credential(db, payload.credential_id, current_user) is None:
+    credential = get_credential(db, payload.credential_id, current_user)
+    if credential is None:
         raise HTTPException(status_code=404, detail="Credenziale Inaz non trovata")
+    if not credential.active:
+        raise HTTPException(status_code=409, detail="La credenziale Inaz selezionata non e attiva")
 
     period_start, period_end = build_period(payload.year, payload.month)
     job = InazSyncJob(
@@ -662,8 +685,7 @@ def create_sync_job(
         collaborator_limit=payload.collaborator_limit,
         max_attempts=settings.inaz_sync_max_attempts,
         params_json={
-            "cdp_endpoint": payload.cdp_endpoint or settings.inaz_scraper_cdp_endpoint,
-            "auth_mode": "credential" if payload.credential_id is not None else "cdp",
+            "auth_mode": "credential",
             "year": payload.year,
             "month": payload.month,
         },
@@ -698,6 +720,7 @@ def list_sync_jobs(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     _: Annotated[ApplicationUser, RequireInazModule],
 ) -> InazSyncJobListResponse:
+    reconcile_stale_sync_jobs(db)
     stmt = select(InazSyncJob)
     if current_user.role not in {"admin", "super_admin"}:
         stmt = stmt.where(InazSyncJob.requested_by_user_id == current_user.id)
@@ -712,6 +735,7 @@ def get_sync_job(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     _: Annotated[ApplicationUser, RequireInazModule],
 ) -> InazSyncJobResponse:
+    reconcile_stale_sync_jobs(db)
     job = db.get(InazSyncJob, job_id)
     if job is None or (current_user.role not in {"admin", "super_admin"} and job.requested_by_user_id != current_user.id):
         raise HTTPException(status_code=404, detail="Sync job not found")
@@ -733,6 +757,8 @@ def retry_sync_job(
         raise HTTPException(status_code=404, detail="Sync job not found")
     if job.status not in {"failed", "completed"}:
         raise HTTPException(status_code=409, detail="Sync job is not retryable in the current state")
+    if job.credential_id is None:
+        raise HTTPException(status_code=409, detail="Questo job usa una configurazione legacy. Crea una nuova sync con una credenziale Inaz salvata.")
     if job.attempt_count >= job.max_attempts:
         raise HTTPException(status_code=409, detail="Sync job reached the configured max attempts")
 
@@ -776,6 +802,8 @@ def download_sync_job_artifact(
     media_type = {
         "json": "application/json",
         "summary": "application/json",
+        "progress": "application/json",
+        "events": "application/x-ndjson",
         "log": "text/plain; charset=utf-8",
     }.get(artifact_name, "application/octet-stream")
     return FileResponse(artifact_path, media_type=media_type, filename=artifact_path.name)
@@ -806,6 +834,25 @@ def cancel_sync_job(
     return InazSyncJobResponse.model_validate(job)
 
 
+@router.delete("/sync/jobs/{job_id}", status_code=204)
+def delete_sync_job(
+    job_id: uuid.UUID,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    _: Annotated[ApplicationUser, RequireInazModule],
+) -> Response:
+    job = db.get(InazSyncJob, job_id)
+    if job is None or (current_user.role not in {"admin", "super_admin"} and job.requested_by_user_id != current_user.id):
+        raise HTTPException(status_code=404, detail="Sync job not found")
+    if job.status not in {"failed", "cancelled", "completed"}:
+        raise HTTPException(status_code=409, detail="Only terminal sync jobs can be deleted")
+
+    delete_sync_artifact_dir(str(job.id))
+    db.delete(job)
+    db.commit()
+    return Response(status_code=204)
+
+
 @router.get("/export/giornaliere.xlsm")
 def export_giornaliere_xlsm(
     db: Annotated[Session, Depends(get_db)],
@@ -830,7 +877,7 @@ def export_giornaliere_xlsm(
         period_end = date(period_start.year, period_start.month + 1, 1)
     schedule_context = build_schedule_context(
         db,
-        collaborator_ids=[str(item.id) for item in collaborators],
+        collaborator_ids=[item.id for item in collaborators],
         date_from=period_start,
         date_to=period_end,
     )
@@ -880,7 +927,37 @@ def _serialize_daily_record(db: Session, record: InazDailyRecord) -> InazDailyRe
     punches = db.execute(
         select(InazDailyPunch).where(InazDailyPunch.daily_record_id == record.id).order_by(InazDailyPunch.sequence.asc())
     ).scalars().all()
-    return InazDailyRecordResponse.model_validate({**record.__dict__, "punches": punches})
+    detail = extract_detail_payload(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else {}
+    effective_straordinario = (
+        record.override_straordinario_minutes
+        if record.override_straordinario_minutes is not None
+        else record.straordinario_minutes
+    )
+    effective_mpe = record.override_mpe_minutes if record.override_mpe_minutes is not None else record.mpe_minutes
+    return InazDailyRecordResponse.model_validate(
+        {
+            **record.__dict__,
+            "punches": punches,
+            "effective_straordinario_minutes": effective_straordinario,
+            "effective_mpe_minutes": effective_mpe,
+            "effective_extra_minutes": (effective_straordinario or 0) + (effective_mpe or 0) or None,
+            "detail_title": detail.get("title"),
+            "detail_status": detail.get("status"),
+            "detail_programmed_schedule": detail.get("programmed_schedule"),
+            "detail_effective_schedule": detail.get("effective_schedule"),
+            "detail_time_slots": detail.get("time_slots"),
+            "detail_schedule_type": detail.get("schedule_type"),
+            "detail_theoretical_hours": detail.get("theoretical_hours"),
+            "detail_absence_hours": detail.get("absence_hours"),
+            "detail_day_summary": detail.get("day_summary") or {},
+            "detail_day_totals": detail.get("day_totals") or {},
+            "detail_requests": detail.get("requests") or [],
+            "detail_anomalies": detail.get("anomalies") or [],
+            "detail_text": detail.get("text"),
+            "detail_error": detail.get("error"),
+            "special_day": detail_indicates_special_day(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None,
+        }
+    )
 
 
 def _get_collaborator_or_404(db: Session, collaborator_id: uuid.UUID, current_user: ApplicationUser | None = None) -> InazCollaborator:

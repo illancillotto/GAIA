@@ -12,6 +12,7 @@ codicefiscale>=0.9,<1.0
 openpyxl==3.1.5
 pandas==2.3.2
 paramiko==3.5.1
+playwright==1.55.0
 PyJWT==2.10.1
 psycopg[binary]==3.2.10
 pydantic-settings==2.11.0

@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import os
 import signal
+import shutil
 import subprocess
 import sys
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 
 from sqlalchemy import select
@@ -14,7 +15,9 @@ from app.core.config import settings
 from app.modules.inaz.models import InazSyncJob
 
 
-BACKEND_ROOT = Path(__file__).resolve().parents[3]
+# sync_runtime.py lives in /app/app/modules/inaz/services, while `python -m app...`
+# needs the repository root `/app` on PYTHONPATH.
+BACKEND_ROOT = Path(__file__).resolve().parents[4]
 
 
 def build_period(year: int, month: int) -> tuple[date, date]:
@@ -36,11 +39,17 @@ def resolve_sync_artifact_path(job_id: str, artifact_name: str) -> Path:
         "json": "inaz_collaboratori.json",
         "log": "worker.log",
         "summary": "summary.json",
+        "progress": "progress.json",
+        "events": "events.ndjson",
     }
     filename = allowed.get(artifact_name)
     if filename is None:
         raise ValueError(f"Unsupported artifact: {artifact_name}")
     return (artifact_dir / filename).resolve()
+
+
+def delete_sync_artifact_dir(job_id: str) -> None:
+    shutil.rmtree(get_sync_artifact_dir(job_id), ignore_errors=True)
 
 
 def launch_sync_worker(job: InazSyncJob) -> int:
@@ -77,6 +86,39 @@ def stop_sync_worker(job: InazSyncJob) -> None:
         raise RuntimeError(f"Unable to stop worker process group {job.worker_pid}: {exc}") from exc
 
 
+def _pid_exists(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return False
+    except PermissionError:
+        return True
+    return True
+
+
+def reconcile_stale_sync_jobs(db: Session) -> None:
+    stale_jobs = db.execute(select(InazSyncJob).where(InazSyncJob.status.in_(("pending", "running")))).scalars().all()
+    changed = False
+    now = datetime.now(UTC)
+    for job in stale_jobs:
+        if job.status == "running" and job.worker_pid and not _pid_exists(job.worker_pid):
+            job.status = "failed"
+            job.finished_at = now
+            job.error_detail = "Worker process not found; sync job marked stale after restart or crash"
+            db.add(job)
+            changed = True
+            continue
+        if job.status == "pending" and job.created_at and now - job.created_at > timedelta(minutes=10):
+            job.status = "failed"
+            job.finished_at = now
+            job.error_detail = "Pending sync job expired without worker start"
+            db.add(job)
+            changed = True
+    if changed:
+        db.commit()
+
+
 def has_running_sync_job(db: Session) -> bool:
+    reconcile_stale_sync_jobs(db)
     existing = db.execute(select(InazSyncJob.id).where(InazSyncJob.status.in_(("pending", "running"))).limit(1)).first()
     return existing is not None

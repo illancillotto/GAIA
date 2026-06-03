@@ -8,7 +8,21 @@ from sqlalchemy.orm import Session
 
 from app.modules.inaz.models import InazCollaborator, InazDailyPunch, InazDailyRecord, InazEventSummary, InazImportJob
 from app.modules.inaz.schemas import InazImportJobResponse, InazImportJsonResponse, InazImportPreviewCollaborator, InazImportPreviewResponse
-from app.modules.inaz.services.parser import duration_to_minutes, parse_clock, parse_portal_date
+from app.modules.inaz.services.parser import (
+    duration_to_minutes,
+    parse_clock,
+    parse_portal_date,
+    resolve_absence_minutes,
+    resolve_evidenze,
+    resolve_justified_minutes,
+    resolve_maggiorazione_minutes,
+    resolve_mpe_minutes,
+    resolve_ordinary_minutes,
+    resolve_schedule_code,
+    resolve_stato,
+    resolve_straordinario_minutes,
+    resolve_teo_minutes,
+)
 
 
 def build_preview(parsed: Any) -> InazImportPreviewResponse:
@@ -63,6 +77,7 @@ def run_import_job(
             collaborator = upsert_collaborator(db, payload)
             collaborator.last_seen_at = datetime.now(UTC)
             db.add(collaborator)
+            db.flush()
 
             for daily_row in payload.daily_rows:
                 work_date = parse_portal_date(daily_row.get("work_date"))
@@ -89,16 +104,16 @@ def run_import_job(
                     skipped_count += 1
 
                 record.application_user_id = collaborator.application_user_id
-                record.schedule_code = clean(payload=daily_row.get("schedule_code"))
-                record.teo_minutes = duration_to_minutes(daily_row.get("teo"))
-                record.ordinary_minutes = duration_to_minutes(daily_row.get("ordinary"))
-                record.absence_minutes = duration_to_minutes(daily_row.get("absence"))
-                record.justified_minutes = duration_to_minutes(daily_row.get("justified"))
-                record.maggiorazione_minutes = duration_to_minutes(daily_row.get("maggiorazione"))
-                record.mpe_minutes = duration_to_minutes(daily_row.get("mpe"))
-                record.straordinario_minutes = duration_to_minutes(daily_row.get("straordinario"))
-                record.stato = clean(payload=daily_row.get("stato"))
-                record.evidenze = clean(payload=daily_row.get("evidenze"))
+                record.schedule_code = resolve_schedule_code(daily_row)
+                record.teo_minutes = resolve_teo_minutes(daily_row)
+                record.ordinary_minutes = resolve_ordinary_minutes(daily_row)
+                record.absence_minutes = resolve_absence_minutes(daily_row)
+                record.justified_minutes = resolve_justified_minutes(daily_row)
+                record.maggiorazione_minutes = resolve_maggiorazione_minutes(daily_row)
+                record.mpe_minutes = resolve_mpe_minutes(daily_row)
+                record.straordinario_minutes = resolve_straordinario_minutes(daily_row)
+                record.stato = resolve_stato(daily_row)
+                record.evidenze = resolve_evidenze(daily_row)
                 record.raw_weekday = clean(payload=daily_row.get("raw_weekday"))
                 record.raw_payload_json = daily_row
                 db.query(InazDailyPunch).filter(InazDailyPunch.daily_record_id == record.id).delete()

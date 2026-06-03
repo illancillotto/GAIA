@@ -11,7 +11,7 @@ import {
 } from "@/components/layout/module-workspace-hero";
 import { EmptyState } from "@/components/ui/empty-state";
 import { RefreshIcon } from "@/components/ui/icons";
-import { cancelInazSyncJob, createInazSyncJob, downloadInazSyncArtifact, listInazCredentials, listInazSyncJobs, retryInazSyncJob } from "@/lib/api";
+import { cancelInazSyncJob, createInazSyncJob, deleteInazSyncJob, downloadInazSyncArtifact, listInazCredentials, listInazSyncJobs, retryInazSyncJob } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import type { InazCredential, InazSyncJob } from "@/types/api";
 
@@ -25,7 +25,6 @@ export default function InazSyncPage() {
   const [month, setMonth] = useState(String(today.getMonth() + 1).padStart(2, "0"));
   const [collaboratorLimit, setCollaboratorLimit] = useState("");
   const [credentialId, setCredentialId] = useState("");
-  const [cdpEndpoint, setCdpEndpoint] = useState("http://127.0.0.1:9224");
   const [credentials, setCredentials] = useState<InazCredential[]>([]);
   const [jobs, setJobs] = useState<InazSyncJob[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -34,39 +33,42 @@ export default function InazSyncPage() {
   const [retryingJobId, setRetryingJobId] = useState<string | null>(null);
   const [downloadingArtifact, setDownloadingArtifact] = useState<string | null>(null);
   const [cancellingJobId, setCancellingJobId] = useState<string | null>(null);
+  const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
+
+  async function refreshSyncState(options?: { silent?: boolean }) {
+    const token = getStoredAccessToken();
+    if (!token) return;
+    try {
+      const [items, credentialsResult] = await Promise.all([listInazSyncJobs(token), listInazCredentials(token)]);
+      setJobs(items);
+      setCredentials(credentialsResult);
+      setCredentialId((current) => {
+        const selectedCredential = credentialsResult.find((credential) => String(credential.id) === current && credential.active);
+        if (selectedCredential) {
+          return current;
+        }
+        const firstActiveCredential = credentialsResult.find((credential) => credential.active);
+        return firstActiveCredential ? String(firstActiveCredential.id) : "";
+      });
+      if (!options?.silent) {
+        setError(null);
+      }
+    } catch (loadError) {
+      setError(loadError instanceof Error ? loadError.message : "Errore caricamento job sync Inaz");
+    }
+  }
 
   useEffect(() => {
-    let cancelled = false;
+    void refreshSyncState();
 
-    async function loadJobs() {
-      const token = getStoredAccessToken();
-      if (!token) return;
-      try {
-        const [items, credentialsResult] = await Promise.all([listInazSyncJobs(token), listInazCredentials(token)]);
-        if (!cancelled) {
-          setJobs(items);
-          setCredentials(credentialsResult);
-        }
-      } catch (loadError) {
-        if (!cancelled) {
-          setError(loadError instanceof Error ? loadError.message : "Errore caricamento job sync Inaz");
-        }
-      }
-    }
-
-    void loadJobs();
     const intervalId = window.setInterval(() => {
-      const hasActiveJobs = jobs.some((job) => job.status === "pending" || job.status === "running");
-      if (hasActiveJobs) {
-        void loadJobs();
-      }
-    }, 5000);
+      void refreshSyncState({ silent: true });
+    }, 10000);
 
     return () => {
-      cancelled = true;
       window.clearInterval(intervalId);
     };
-  }, [jobs]);
+  }, []);
 
   const activeJob = jobs.find((job) => job.status === "running" || job.status === "pending") ?? null;
   const completedJobs = useMemo(() => jobs.filter((job) => job.status === "completed").length, [jobs]);
@@ -79,15 +81,19 @@ export default function InazSyncPage() {
     setIsSubmitting(true);
     setError(null);
     setSuccess(null);
+    if (!credentialId) {
+      setError("Seleziona una credenziale Inaz attiva prima di avviare la sync.");
+      setIsSubmitting(false);
+      return;
+    }
     try {
       const created = await createInazSyncJob(token, {
         year: Number(year),
         month: Number(month),
-        credential_id: credentialId ? Number(credentialId) : null,
+        credential_id: Number(credentialId),
         collaborator_limit: collaboratorLimit ? Number(collaboratorLimit) : null,
-        cdp_endpoint: credentialId ? null : cdpEndpoint || null,
       });
-      setJobs((current) => [created, ...current]);
+      await refreshSyncState({ silent: true });
       setSuccess(`Job live sync creato per ${String(created.period_start).slice(0, 7)}.`);
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : "Errore avvio sync Inaz");
@@ -103,8 +109,8 @@ export default function InazSyncPage() {
     setError(null);
     setSuccess(null);
     try {
-      const retried = await retryInazSyncJob(token, jobId);
-      setJobs((current) => current.map((job) => (job.id === jobId ? retried : job)));
+      await retryInazSyncJob(token, jobId);
+      await refreshSyncState({ silent: true });
       setSuccess(`Retry avviato per job ${jobId}.`);
     } catch (retryError) {
       setError(retryError instanceof Error ? retryError.message : "Errore retry sync Inaz");
@@ -120,8 +126,8 @@ export default function InazSyncPage() {
     setError(null);
     setSuccess(null);
     try {
-      const cancelled = await cancelInazSyncJob(token, jobId);
-      setJobs((current) => current.map((job) => (job.id === jobId ? cancelled : job)));
+      await cancelInazSyncJob(token, jobId);
+      await refreshSyncState({ silent: true });
       setSuccess(`Job ${jobId} annullato.`);
     } catch (cancelError) {
       setError(cancelError instanceof Error ? cancelError.message : "Errore annullamento sync Inaz");
@@ -130,7 +136,7 @@ export default function InazSyncPage() {
     }
   }
 
-  async function handleDownloadArtifact(jobId: string, artifactName: "json" | "log" | "summary") {
+  async function handleDownloadArtifact(jobId: string, artifactName: "json" | "log" | "summary" | "progress" | "events") {
     const token = getStoredAccessToken();
     if (!token) return;
     const key = `${jobId}:${artifactName}`;
@@ -140,7 +146,7 @@ export default function InazSyncPage() {
       const blob = await downloadInazSyncArtifact(token, jobId, artifactName);
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement("a");
-      const extension = artifactName === "log" ? "log" : "json";
+      const extension = artifactName === "log" ? "log" : artifactName === "events" ? "ndjson" : "json";
       link.href = url;
       link.download = `inaz-sync-${jobId}-${artifactName}.${extension}`;
       document.body.appendChild(link);
@@ -154,10 +160,27 @@ export default function InazSyncPage() {
     }
   }
 
+  async function handleDelete(jobId: string) {
+    const token = getStoredAccessToken();
+    if (!token) return;
+    setDeletingJobId(jobId);
+    setError(null);
+    setSuccess(null);
+    try {
+      await deleteInazSyncJob(token, jobId);
+      await refreshSyncState({ silent: true });
+      setSuccess(`Job ${jobId} eliminato.`);
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Errore eliminazione job sync Inaz");
+    } finally {
+      setDeletingJobId(null);
+    }
+  }
+
   return (
     <ProtectedPage
       title="Sync Inaz"
-      description="Avvio e monitor del worker live Inaz via browser CDP."
+      description="Avvio e monitor del worker automatico Inaz."
       breadcrumb="Inaz"
       requiredModule="inaz"
     >
@@ -165,7 +188,7 @@ export default function InazSyncPage() {
         <ModuleWorkspaceHero
           badge={<>Worker live</>}
           title="Avvia una sync collaboratori Inaz su processo separato e monitora import automatico e diagnostica."
-          description="Il backend accoda un job persistente, avvia un worker Python separato, richiama lo scraper esterno via CDP e poi importa il JSON nel database GAIA."
+          description="Il backend accoda un job persistente, avvia un worker Python separato, accede a Inaz con le credenziali salvate e importa il JSON nel database GAIA."
           actions={
             <>
               <ModuleWorkspaceNoticeCard
@@ -174,8 +197,15 @@ export default function InazSyncPage() {
                 tone={activeJob ? "warning" : "neutral"}
               />
               <ModuleWorkspaceNoticeCard
-                title={credentialId ? "Autenticazione via credenziali" : "Endpoint CDP"}
-                description={credentialId ? "Il worker fara login Playwright con la credenziale selezionata." : cdpEndpoint || "Non configurato"}
+                title="Credenziale selezionata"
+                description={
+                  credentialId
+                    ? (() => {
+                        const selectedCredential = credentials.find((credential) => String(credential.id) === credentialId);
+                        return selectedCredential ? `${selectedCredential.label} · ${selectedCredential.username}` : "Credenziale pronta";
+                      })()
+                    : "Seleziona una credenziale Inaz attiva per avviare il worker."
+                }
                 tone="info"
               />
             </>
@@ -195,7 +225,7 @@ export default function InazSyncPage() {
         <article className="panel-card space-y-5">
           <div>
             <p className="section-title">Nuova sync live</p>
-            <p className="section-copy">La run puo fare login con credenziali cifrate oppure collegarsi a una sessione Chrome gia autenticata via CDP, poi usa il formato JSON standard per l'import GAIA.</p>
+            <p className="section-copy">La run usa le credenziali Inaz cifrate salvate nel vault, esegue lo scraping automatico del cartellino collaboratori e importa il JSON standard in GAIA.</p>
           </div>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <label className="block text-sm font-medium text-gray-700">
@@ -209,9 +239,8 @@ export default function InazSyncPage() {
             <label className="block text-sm font-medium text-gray-700">
               Credenziale Inaz
               <select className="form-control mt-1" value={credentialId} onChange={(event) => setCredentialId(event.target.value)}>
-                <option value="">Usa sessione CDP</option>
                 {credentials.map((credential) => (
-                  <option key={credential.id} value={credential.id}>
+                  <option key={credential.id} value={credential.id} disabled={!credential.active}>
                     {credential.label} · {credential.username} {credential.active ? "" : "(disattiva)"}
                   </option>
                 ))}
@@ -221,13 +250,9 @@ export default function InazSyncPage() {
               Limite collaboratori
               <input className="form-control mt-1" value={collaboratorLimit} onChange={(event) => setCollaboratorLimit(event.target.value)} placeholder="Vuoto = tutti" />
             </label>
-            <label className="block text-sm font-medium text-gray-700">
-              Endpoint CDP
-              <input className="form-control mt-1" value={cdpEndpoint} onChange={(event) => setCdpEndpoint(event.target.value)} disabled={Boolean(credentialId)} />
-            </label>
           </div>
           <div className="flex flex-wrap gap-3">
-            <button className="btn-primary" type="button" onClick={() => void handleCreateJob()} disabled={isSubmitting}>
+            <button className="btn-primary" type="button" onClick={() => void handleCreateJob()} disabled={isSubmitting || !credentialId}>
               {isSubmitting ? "Avvio..." : "Avvia sync live"}
             </button>
           </div>
@@ -236,7 +261,7 @@ export default function InazSyncPage() {
         <article className="panel-card">
           <div className="mb-4">
             <p className="section-title">Storico job sync</p>
-            <p className="section-copy">Monitor periodi, artefatti JSON, esito import e tentativi worker.</p>
+            <p className="section-copy">Monitor periodi, artefatti JSON, esito import e tentativi worker. Aggiornamento automatico ogni 10 secondi.</p>
           </div>
           {jobs.length === 0 ? (
             <EmptyState icon={RefreshIcon} title="Nessun job disponibile" description="Avvia la prima sync live per popolare il monitor." />
@@ -248,7 +273,7 @@ export default function InazSyncPage() {
                     <div className="space-y-1">
                       <p className="font-medium text-gray-900">{formatMonthLabel(job.period_start)}</p>
                       <p className="text-xs text-gray-500">
-                        {job.status} · {job.credential_id ? `credenziale #${job.credential_id}` : "modalita CDP"} · tentativo {job.attempt_count}/{job.max_attempts} · importati {job.records_imported} · scartati {job.records_skipped} · errori {job.records_errors}
+                        {job.status} · {job.credential_id ? `credenziale #${job.credential_id}` : "configurazione legacy"} · tentativo {job.attempt_count}/{job.max_attempts} · importati {job.records_imported} · scartati {job.records_skipped} · errori {job.records_errors}
                       </p>
                       <p className="text-xs text-gray-500">
                         JSON: {job.json_artifact_path ?? "n/d"} · Log: {job.worker_log_path ?? "n/d"}
@@ -280,6 +305,22 @@ export default function InazSyncPage() {
                       >
                         {downloadingArtifact === `${job.id}:summary` ? "Summary..." : "Scarica summary"}
                       </button>
+                      <button
+                        className="btn-secondary"
+                        type="button"
+                        onClick={() => void handleDownloadArtifact(job.id, "progress")}
+                        disabled={downloadingArtifact === `${job.id}:progress`}
+                      >
+                        {downloadingArtifact === `${job.id}:progress` ? "Progress..." : "Scarica progress"}
+                      </button>
+                      <button
+                        className="btn-secondary"
+                        type="button"
+                        onClick={() => void handleDownloadArtifact(job.id, "events")}
+                        disabled={downloadingArtifact === `${job.id}:events`}
+                      >
+                        {downloadingArtifact === `${job.id}:events` ? "Eventi..." : "Scarica eventi"}
+                      </button>
                       {job.status === "pending" || job.status === "running" ? (
                         <button className="btn-secondary" type="button" onClick={() => void handleCancel(job.id)} disabled={cancellingJobId === job.id}>
                           {cancellingJobId === job.id ? "Stop..." : "Annulla job"}
@@ -288,6 +329,11 @@ export default function InazSyncPage() {
                       {job.status === "failed" && job.attempt_count < job.max_attempts ? (
                         <button className="btn-secondary" type="button" onClick={() => void handleRetry(job.id)} disabled={retryingJobId === job.id}>
                           {retryingJobId === job.id ? "Retry..." : "Riprova"}
+                        </button>
+                      ) : null}
+                      {["failed", "cancelled", "completed"].includes(job.status) ? (
+                        <button className="btn-secondary" type="button" onClick={() => void handleDelete(job.id)} disabled={deletingJobId === job.id}>
+                          {deletingJobId === job.id ? "Elimino..." : "Elimina"}
                         </button>
                       ) : null}
                     </div>

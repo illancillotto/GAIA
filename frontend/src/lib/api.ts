@@ -82,6 +82,8 @@ import type {
   EffectivePermission,
   EffectivePermissionPreview,
   InazCollaborator,
+  InazCollaboratorScheduleAssignment,
+  InazCollaboratorScheduleAssignmentCreateInput,
   InazCollaboratorCalendarResponse,
   InazCollaboratorListResponse,
   InazCollaboratorSummaryResponse,
@@ -89,11 +91,21 @@ import type {
   InazCredentialCreateInput,
   InazCredentialTestResult,
   InazCredentialUpdateInput,
+  InazDailyRecordManualUpdateInput,
   InazDailyRecordListResponse,
+  InazHoliday,
+  InazHolidayCreateInput,
+  InazHolidayUpdateInput,
   InazImportJob,
   InazImportJobListResponse,
   InazImportJsonResponse,
   InazImportPreviewResponse,
+  InazScheduleRule,
+  InazScheduleRuleCreateInput,
+  InazScheduleRuleUpdateInput,
+  InazScheduleTemplate,
+  InazScheduleTemplateCreateInput,
+  InazScheduleTemplateUpdateInput,
   InazSyncJob,
   InazSyncJobCreateInput,
   InazSyncJobListResponse,
@@ -590,6 +602,164 @@ export async function listInazDailyRecords(
   });
 }
 
+export async function updateInazDailyRecord(
+  token: string,
+  recordId: string,
+  payload: InazDailyRecordManualUpdateInput,
+): Promise<import("@/types/api").InazDailyRecord> {
+  return request(`/inaz/giornaliere/${recordId}`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function listInazHolidays(token: string, year?: number): Promise<InazHoliday[]> {
+  const query = year != null ? `?year=${year}` : "";
+  return request<InazHoliday[]>(`/inaz/holidays${query}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function bootstrapInazHolidays(token: string, year: number): Promise<{ year: number; created: number; items: InazHoliday[] }> {
+  return request(`/inaz/holidays/bootstrap?year=${year}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function createInazHoliday(token: string, payload: InazHolidayCreateInput): Promise<InazHoliday> {
+  return request<InazHoliday>("/inaz/holidays", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateInazHoliday(token: string, holidayId: number, payload: InazHolidayUpdateInput): Promise<InazHoliday> {
+  return request<InazHoliday>(`/inaz/holidays/${holidayId}`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteInazHoliday(token: string, holidayId: number): Promise<void> {
+  await request<void>(`/inaz/holidays/${holidayId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function listInazScheduleTemplates(token: string): Promise<InazScheduleTemplate[]> {
+  return request<InazScheduleTemplate[]>("/inaz/schedule/templates", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function createInazScheduleTemplate(token: string, payload: InazScheduleTemplateCreateInput): Promise<InazScheduleTemplate> {
+  return request<InazScheduleTemplate>("/inaz/schedule/templates", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateInazScheduleTemplate(token: string, templateId: number, payload: InazScheduleTemplateUpdateInput): Promise<InazScheduleTemplate> {
+  return request<InazScheduleTemplate>(`/inaz/schedule/templates/${templateId}`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteInazScheduleTemplate(token: string, templateId: number): Promise<void> {
+  await request<void>(`/inaz/schedule/templates/${templateId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function createInazScheduleRule(token: string, templateId: number, payload: InazScheduleRuleCreateInput): Promise<InazScheduleRule> {
+  return request<InazScheduleRule>(`/inaz/schedule/templates/${templateId}/rules`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateInazScheduleRule(token: string, ruleId: number, payload: InazScheduleRuleUpdateInput): Promise<InazScheduleRule> {
+  return request<InazScheduleRule>(`/inaz/schedule/rules/${ruleId}`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteInazScheduleRule(token: string, ruleId: number): Promise<void> {
+  await request<void>(`/inaz/schedule/rules/${ruleId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function listInazCollaboratorScheduleAssignments(token: string, collaboratorId: string): Promise<InazCollaboratorScheduleAssignment[]> {
+  return request<InazCollaboratorScheduleAssignment[]>(`/inaz/collaborators/${collaboratorId}/schedule-assignments`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function createInazCollaboratorScheduleAssignment(
+  token: string,
+  collaboratorId: string,
+  payload: InazCollaboratorScheduleAssignmentCreateInput,
+): Promise<InazCollaboratorScheduleAssignment> {
+  return request<InazCollaboratorScheduleAssignment>(`/inaz/collaborators/${collaboratorId}/schedule-assignments`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteInazScheduleAssignment(token: string, assignmentId: number): Promise<void> {
+  await request<void>(`/inaz/schedule-assignments/${assignmentId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
 export async function previewInazImport(
   token: string,
   file: File,
@@ -682,10 +852,19 @@ export async function cancelInazSyncJob(token: string, jobId: string): Promise<I
   });
 }
 
+export async function deleteInazSyncJob(token: string, jobId: string): Promise<void> {
+  await request<void>(`/inaz/sync/jobs/${jobId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
 export async function downloadInazSyncArtifact(
   token: string,
   jobId: string,
-  artifactName: "json" | "log" | "summary",
+  artifactName: "json" | "log" | "summary" | "progress" | "events",
 ): Promise<Blob> {
   return requestBlob(`/inaz/sync/jobs/${jobId}/artifacts/${artifactName}`, {
     headers: {

@@ -2,6 +2,7 @@ from collections.abc import Generator
 from datetime import date
 import io
 from pathlib import Path
+import uuid
 
 import pytest
 from fastapi.testclient import TestClient
@@ -105,7 +106,25 @@ def _sample_payload(employee_code: str = "1854") -> bytes:
           "mpe": "00:45",
           "straordinario": "01:15",
           "stato": "OK",
-          "evidenze": "Ore mancanti Permesso ordinario"
+          "evidenze": "Ore mancanti Permesso ordinario",
+          "detail_status": "Giornata anomala",
+          "detail_programmed_schedule": "OPESAB - Rientro Operai",
+          "detail_time_slots": "07:00 - 13:30",
+          "detail_theoretical_hours": "06:30",
+          "detail_absence_hours": "01:00",
+          "detail_day_summary": {{
+            "Ore teoriche": "06:30",
+            "Ore Ordinarie": "05:30",
+            "Assenza Giustificata": "01:00"
+          }},
+          "detail_day_totals": {{
+            "CARTELLINO Gruppo Ore Ordinarie": "05:30",
+            "CARTELLINO Gruppo Ore Assenza": "01:00",
+            "CARTELLINO Gruppo Ore Maggior Presenza": "00:45",
+            "CARTELLINO Gruppo Ore Straordinario": "01:15"
+          }},
+          "detail_anomalies": [{{"Anomalia giornata": "Ore mancanti"}}],
+          "detail_requests": [{{"Descrizione": "Permesso ordinario"}}]
         }}
       ],
       "summary_rows": [
@@ -134,6 +153,24 @@ def _create_template(path: Path) -> None:
     ws.title = "Archivio2"
     wb.create_sheet("Giornaliera")
     wb.save(path)
+
+
+def _create_inaz_credential(user: ApplicationUser, *, label: str = "Test", username: str = "test.inaz") -> int:
+    db = TestingSessionLocal()
+    try:
+        credential = InazCredential(
+            application_user_id=user.id,
+            label=label,
+            username=username,
+            password_encrypted="encrypted",
+            active=True,
+        )
+        db.add(credential)
+        db.commit()
+        db.refresh(credential)
+        return credential.id
+    finally:
+        db.close()
 
 
 def test_inaz_module_requires_flag() -> None:
@@ -187,6 +224,66 @@ def test_inaz_import_is_idempotent_per_collaborator_and_date() -> None:
     assert listing.status_code == 200
     assert listing.json()["total"] == 1
     assert listing.json()["items"][0]["ordinary_minutes"] == 330
+
+
+def test_inaz_import_prefers_day_detail_fields_when_available() -> None:
+    admin = _create_user("detail_admin")
+    token = _login(admin.username)
+
+    payload = _sample_payload().decode("utf-8").replace('"ordinary": "05:30"', '"ordinary": "00:00"').replace(
+        '"stato": "OK"', '"stato": "Sintesi non affidabile"'
+    )
+    response = client.post(
+        "/inaz/import/json",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("giornaliere.json", payload.encode("utf-8"), "application/json")},
+    )
+
+    assert response.status_code == 200
+    listing = client.get("/inaz/giornaliere", headers={"Authorization": f"Bearer {token}"})
+    assert listing.status_code == 200
+    item = listing.json()["items"][0]
+    assert item["ordinary_minutes"] == 330
+    assert item["stato"] == "Giornata anomala"
+    assert item["detail_programmed_schedule"] == "OPESAB - Rientro Operai"
+    assert item["detail_day_totals"]["CARTELLINO Gruppo Ore Straordinario"] == "01:15"
+
+
+def test_inaz_daily_record_manual_overrides_update_effective_values() -> None:
+    admin = _create_user("manual_admin")
+    token = _login(admin.username)
+
+    imported = client.post(
+        "/inaz/import/json",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("giornaliere.json", _sample_payload(), "application/json")},
+    )
+    assert imported.status_code == 200
+
+    listing = client.get("/inaz/giornaliere", headers={"Authorization": f"Bearer {token}"})
+    assert listing.status_code == 200
+    record_id = listing.json()["items"][0]["id"]
+
+    updated = client.patch(
+        f"/inaz/giornaliere/{record_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "km_value": 42,
+            "override_straordinario_minutes": 90,
+            "override_mpe_minutes": 15,
+            "manual_note": "Correzione capo settore",
+        },
+    )
+
+    assert updated.status_code == 200
+    body = updated.json()
+    assert body["km_value"] == 42
+    assert body["override_straordinario_minutes"] == 90
+    assert body["override_mpe_minutes"] == 15
+    assert body["manual_note"] == "Correzione capo settore"
+    assert body["effective_straordinario_minutes"] == 90
+    assert body["effective_mpe_minutes"] == 15
+    assert body["effective_extra_minutes"] == 105
 
 
 def test_inaz_can_map_collaborator_to_application_user() -> None:
@@ -314,13 +411,14 @@ def test_inaz_export_generates_xlsm(tmp_path: Path) -> None:
 def test_inaz_sync_job_can_be_created(monkeypatch: pytest.MonkeyPatch) -> None:
     admin = _create_user("sync_admin")
     token = _login(admin.username)
+    credential_id = _create_inaz_credential(admin, label="Sync", username="sync.inaz")
 
     monkeypatch.setattr("app.modules.inaz.router.launch_sync_worker", lambda job: 4242)
 
     response = client.post(
         "/inaz/sync/jobs",
         headers={"Authorization": f"Bearer {token}"},
-        json={"year": 2026, "month": 5, "collaborator_limit": 2, "cdp_endpoint": "http://127.0.0.1:9333"},
+        json={"year": 2026, "month": 5, "collaborator_limit": 2, "credential_id": credential_id},
     )
 
     assert response.status_code == 200
@@ -328,7 +426,8 @@ def test_inaz_sync_job_can_be_created(monkeypatch: pytest.MonkeyPatch) -> None:
     assert body["status"] == "pending"
     assert body["worker_pid"] == 4242
     assert body["collaborator_limit"] == 2
-    assert body["params_json"]["cdp_endpoint"] == "http://127.0.0.1:9333"
+    assert body["credential_id"] == credential_id
+    assert body["params_json"]["auth_mode"] == "credential"
 
 
 def test_inaz_credentials_crud_and_test(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -395,20 +494,21 @@ def test_inaz_credentials_are_scoped_to_current_user() -> None:
 def test_inaz_sync_job_retry_respects_max_attempts(monkeypatch: pytest.MonkeyPatch) -> None:
     admin = _create_user("sync_retry_admin")
     token = _login(admin.username)
+    credential_id = _create_inaz_credential(admin, label="Retry", username="retry.inaz")
     pid_iter = iter((1111, 2222))
     monkeypatch.setattr("app.modules.inaz.router.launch_sync_worker", lambda job: next(pid_iter))
 
     created = client.post(
         "/inaz/sync/jobs",
         headers={"Authorization": f"Bearer {token}"},
-        json={"year": 2026, "month": 5},
+        json={"year": 2026, "month": 5, "credential_id": credential_id},
     )
     assert created.status_code == 200
     job_id = created.json()["id"]
 
     db = TestingSessionLocal()
     try:
-        job = db.get(InazSyncJob, job_id)
+        job = db.get(InazSyncJob, uuid.UUID(job_id))
         assert job is not None
         job.status = "failed"
         job.attempt_count = 1
@@ -429,22 +529,7 @@ def test_inaz_sync_job_can_reference_credential(monkeypatch: pytest.MonkeyPatch)
     admin = _create_user("sync_cred_admin")
     token = _login(admin.username)
     monkeypatch.setattr("app.modules.inaz.router.launch_sync_worker", lambda job: 9898)
-
-    db = TestingSessionLocal()
-    try:
-        credential = InazCredential(
-            application_user_id=admin.id,
-            label="Ufficio",
-            username="ufficio.inaz",
-            password_encrypted="encrypted",
-            active=True,
-        )
-        db.add(credential)
-        db.commit()
-        db.refresh(credential)
-        credential_id = credential.id
-    finally:
-        db.close()
+    credential_id = _create_inaz_credential(admin, label="Ufficio", username="ufficio.inaz")
 
     response = client.post(
         "/inaz/sync/jobs",

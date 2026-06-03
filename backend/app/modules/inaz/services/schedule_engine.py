@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, time, timedelta
+import uuid
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -15,6 +16,7 @@ from app.modules.inaz.models import (
     InazScheduleRule,
     InazScheduleTemplate,
 )
+from app.modules.inaz.services.parser import detail_has_authoritative_classification, detail_indicates_special_day
 
 RECURRENCE_WEEKLY = "weekly"
 RECURRENCE_FIRST_WEEKDAY = "first_weekday_of_month"
@@ -41,7 +43,7 @@ class ScheduleContext:
 def build_schedule_context(
     db: Session,
     *,
-    collaborator_ids: list[str],
+    collaborator_ids: list[uuid.UUID],
     date_from: date,
     date_to: date,
 ) -> ScheduleContext:
@@ -91,13 +93,30 @@ def classify_daily_record(
     context: ScheduleContext | None,
 ) -> DayClassification:
     holiday = resolve_holiday(record.work_date, collaborator, context)
-    special_day = record.work_date.weekday() >= 5 or (holiday is not None and not holiday.is_workday_override)
-    imported_extra = record.straordinario_minutes if record.straordinario_minutes is not None else record.mpe_minutes
+    raw_payload = record.raw_payload_json if isinstance(record.raw_payload_json, dict) else None
+    imported_special_day = raw_payload is not None and detail_indicates_special_day(raw_payload)
+    special_day = record.work_date.weekday() >= 5 or (holiday is not None and not holiday.is_workday_override) or imported_special_day
+    effective_straordinario = (
+        record.override_straordinario_minutes
+        if record.override_straordinario_minutes is not None
+        else record.straordinario_minutes
+    )
+    effective_mpe = record.override_mpe_minutes if record.override_mpe_minutes is not None else record.mpe_minutes
+    imported_extra = (effective_straordinario or 0) + (effective_mpe or 0)
+    imported_extra_value = imported_extra or None
+    if raw_payload is not None and detail_has_authoritative_classification(raw_payload):
+        return DayClassification(
+            special_day=special_day,
+            ordinary_minutes=record.ordinary_minutes,
+            extra_minutes=imported_extra_value,
+            source="detail",
+        )
+
     if context is None or not punches:
         return DayClassification(
             special_day=special_day,
             ordinary_minutes=record.ordinary_minutes,
-            extra_minutes=imported_extra,
+            extra_minutes=imported_extra_value,
             source="imported",
         )
 
@@ -106,7 +125,7 @@ def classify_daily_record(
         return DayClassification(
             special_day=special_day,
             ordinary_minutes=record.ordinary_minutes,
-            extra_minutes=imported_extra,
+            extra_minutes=imported_extra_value,
             source="imported",
         )
 
@@ -115,7 +134,7 @@ def classify_daily_record(
         return DayClassification(
             special_day=special_day,
             ordinary_minutes=record.ordinary_minutes,
-            extra_minutes=imported_extra,
+            extra_minutes=imported_extra_value,
             source="imported",
         )
 
@@ -130,7 +149,7 @@ def classify_daily_record(
         return DayClassification(
             special_day=special_day,
             ordinary_minutes=0 if actual_minutes > 0 else record.ordinary_minutes,
-            extra_minutes=actual_minutes if actual_minutes > 0 else imported_extra,
+            extra_minutes=actual_minutes if actual_minutes > 0 else imported_extra_value,
             source="template",
         )
 

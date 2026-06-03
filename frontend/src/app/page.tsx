@@ -25,7 +25,7 @@ import type {
 } from "@/types/api";
 
 type ModuleStatus = "active" | "warming" | "coming";
-type ModuleId = "accessi" | "rete" | "inventario" | "catasto" | "elaborazioni" | "utenze" | "operazioni" | "riordino" | "ruolo" | "wiki";
+type ModuleId = "accessi" | "rete" | "inventario" | "catasto" | "elaborazioni" | "utenze" | "operazioni" | "riordino" | "ruolo" | "wiki" | "inaz";
 
 type HomeModule = {
   id: ModuleId;
@@ -68,6 +68,14 @@ const menuSearchRoutes: SearchRoute[] = [
 
   // Wiki
   { label: "Wiki · Documentazione e assistente", href: "/wiki", keywords: ["wiki", "documentazione", "assistente"] },
+
+  // Inaz
+  { label: "Inaz · Dashboard", href: "/inaz", moduleKey: "inaz", keywords: ["giornaliere", "cartellino", "inaz"] },
+  { label: "Inaz · Collaboratori", href: "/inaz/collaboratori", moduleKey: "inaz", keywords: ["collaboratori", "dipendenti"] },
+  { label: "Inaz · Giornaliere", href: "/inaz/giornaliere", moduleKey: "inaz", keywords: ["giornaliere", "presenze"] },
+  { label: "Inaz · Import", href: "/inaz/import", moduleKey: "inaz", keywords: ["import", "json"] },
+  { label: "Inaz · Export", href: "/inaz/export", moduleKey: "inaz", keywords: ["export", "xlsm"] },
+  { label: "Inaz · Sync", href: "/inaz/sync", moduleKey: "inaz", keywords: ["sync", "portale"] },
 
   // Catasto
   { label: "Catasto · Dashboard", href: "/catasto", moduleKey: "catasto" },
@@ -254,6 +262,18 @@ const allModules: HomeModule[] = [
     statusLabel: "Operativo",
     icon: "menu_book",
     enabledKeys: ["wiki"],
+  },
+  {
+    id: "inaz",
+    title: "GAIA Inaz",
+    eyebrow: "Giornaliere e collaboratori",
+    description:
+      "Collaboratori, giornaliere, import JSON dal portale Inaz, sync live ed export XLSM per i capi settore.",
+    href: "/inaz",
+    status: "active",
+    statusLabel: "Operativo",
+    icon: "calendar_month",
+    enabledKeys: ["inaz"],
   },
   {
     id: "riordino",

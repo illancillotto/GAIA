@@ -136,14 +136,43 @@ export type InazDailyRecord = {
   maggiorazione_minutes: number | null;
   mpe_minutes: number | null;
   straordinario_minutes: number | null;
+  km_value: number | null;
+  override_straordinario_minutes: number | null;
+  override_mpe_minutes: number | null;
+  manual_note: string | null;
+  effective_straordinario_minutes: number | null;
+  effective_mpe_minutes: number | null;
+  effective_extra_minutes: number | null;
   stato: string | null;
   evidenze: string | null;
   raw_weekday: string | null;
+  detail_title: string | null;
+  detail_status: string | null;
+  detail_programmed_schedule: string | null;
+  detail_effective_schedule: string | null;
+  detail_time_slots: string | null;
+  detail_schedule_type: string | null;
+  detail_theoretical_hours: string | null;
+  detail_absence_hours: string | null;
+  detail_day_summary: Record<string, string>;
+  detail_day_totals: Record<string, string>;
+  detail_requests: Array<Record<string, string>>;
+  detail_anomalies: Array<Record<string, string>>;
+  detail_text: string | null;
+  detail_error: string | null;
+  special_day: boolean | null;
   raw_payload_json: Record<string, unknown> | unknown[] | null;
   source_job_id: string | null;
   created_at: string;
   updated_at: string;
   punches: InazDailyPunch[];
+};
+
+export type InazDailyRecordManualUpdateInput = {
+  km_value?: number | null;
+  override_straordinario_minutes?: number | null;
+  override_mpe_minutes?: number | null;
+  manual_note?: string | null;
 };
 
 export type InazDailyRecordListResponse = {
@@ -176,6 +205,112 @@ export type InazEventSummary = {
   source_job_id: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type InazHoliday = {
+  id: number;
+  holiday_date: string;
+  label: string;
+  company_code: string | null;
+  is_workday_override: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+export type InazHolidayCreateInput = {
+  holiday_date: string;
+  label: string;
+  company_code?: string | null;
+  is_workday_override?: boolean;
+};
+
+export type InazHolidayUpdateInput = Partial<InazHolidayCreateInput>;
+
+export type InazScheduleRule = {
+  id: number;
+  template_id: number;
+  label: string | null;
+  weekday: number | null;
+  recurrence_kind: string;
+  week_of_month: number | null;
+  interval_weeks: number | null;
+  anchor_date: string | null;
+  start_time: string;
+  end_time: string;
+  season_start_month: number | null;
+  season_start_day: number | null;
+  season_end_month: number | null;
+  season_end_day: number | null;
+  applies_on_holiday: boolean;
+  ordinary_label: string | null;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+};
+
+export type InazScheduleTemplate = {
+  id: number;
+  code: string;
+  label: string;
+  company_code: string | null;
+  is_active: boolean;
+  valid_from: string | null;
+  valid_to: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  rules: InazScheduleRule[];
+};
+
+export type InazScheduleTemplateCreateInput = {
+  code: string;
+  label: string;
+  company_code?: string | null;
+  is_active?: boolean;
+  valid_from?: string | null;
+  valid_to?: string | null;
+  notes?: string | null;
+};
+
+export type InazScheduleTemplateUpdateInput = Partial<InazScheduleTemplateCreateInput>;
+
+export type InazScheduleRuleCreateInput = {
+  label?: string | null;
+  weekday?: number | null;
+  recurrence_kind?: string;
+  week_of_month?: number | null;
+  interval_weeks?: number | null;
+  anchor_date?: string | null;
+  start_time: string;
+  end_time: string;
+  season_start_month?: number | null;
+  season_start_day?: number | null;
+  season_end_month?: number | null;
+  season_end_day?: number | null;
+  applies_on_holiday?: boolean;
+  ordinary_label?: string | null;
+  sort_order?: number;
+};
+
+export type InazScheduleRuleUpdateInput = Partial<InazScheduleRuleCreateInput>;
+
+export type InazCollaboratorScheduleAssignment = {
+  id: number;
+  collaborator_id: string;
+  template_id: number;
+  valid_from: string | null;
+  valid_to: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+  template: InazScheduleTemplate | null;
+};
+
+export type InazCollaboratorScheduleAssignmentCreateInput = {
+  template_id: number;
+  valid_from?: string | null;
+  valid_to?: string | null;
+  notes?: string | null;
 };
 
 export type InazCollaboratorCalendarResponse = {
@@ -273,9 +408,8 @@ export type InazCredentialTestResult = {
 export type InazSyncJobCreateInput = {
   year: number;
   month: number;
-  credential_id?: number | null;
+  credential_id: number;
   collaborator_limit?: number | null;
-  cdp_endpoint?: string | null;
 };
 
 export type InazSyncJob = {

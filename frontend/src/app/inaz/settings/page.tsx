@@ -167,7 +167,7 @@ export default function InazSettingsPage() {
         <article className="panel-card">
           <div className="mb-4">
             <p className="section-title">Vault credenziali</p>
-            <p className="section-copy">Usa il test per verificare login automatico Playwright. Le sync live potranno usare solo le credenziali associate al tuo utente.</p>
+            <p className="section-copy">Usa il test per verificare l&apos;accesso automatico a Inaz. Le sync live useranno solo le credenziali associate al tuo utente.</p>
           </div>
           {loading ? (
             <p className="text-sm text-gray-500">Caricamento credenziali...</p>

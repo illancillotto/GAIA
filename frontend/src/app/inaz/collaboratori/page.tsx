@@ -7,23 +7,41 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { ProtectedPage } from "@/components/app/protected-page";
 import { DataTable } from "@/components/table/data-table";
 import { Badge } from "@/components/ui/badge";
-import { getCurrentUser, listApplicationUsers, listInazCollaborators, mapInazCollaboratorApplicationUser } from "@/lib/api";
+import { getCurrentUser, listApplicationUsers, listInazCollaborators, listInazDailyRecords, mapInazCollaboratorApplicationUser } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
-import type { ApplicationUser, CurrentUser, InazCollaborator } from "@/types/api";
+import type { ApplicationUser, CurrentUser, InazCollaborator, InazDailyRecord } from "@/types/api";
 
 type CollaboratorRow = {
   id: string;
   employeeCode: string;
+  internalCode: string;
   name: string;
   company: string;
   birthDate: string;
+  lastSeen: string;
+  active: boolean;
+  dailyRows: number;
+  ordinaryHours: string;
+  extraHours: string;
   mapped: boolean;
   mappedUser: string;
 };
 
+function currentMonthBounds(): { start: string; end: string } {
+  const now = new Date();
+  const start = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  const end = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()).padStart(2, "0")}`;
+  return { start, end };
+}
+
+function formatHours(minutes: number): string {
+  return `${(minutes / 60).toFixed(1)} h`;
+}
+
 export default function InazCollaboratoriPage() {
   const router = useRouter();
   const [collaborators, setCollaborators] = useState<InazCollaborator[]>([]);
+  const [records, setRecords] = useState<InazDailyRecord[]>([]);
   const [users, setUsers] = useState<ApplicationUser[]>([]);
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [search, setSearch] = useState("");
@@ -37,34 +55,60 @@ export default function InazCollaboratoriPage() {
     getCurrentUser(token)
       .then((sessionUser) => {
         setCurrentUser(sessionUser);
+        const { start, end } = currentMonthBounds();
         return Promise.all([
           listInazCollaborators(token, { page: 1, pageSize: 200 }),
+          listInazDailyRecords(token, { dateFrom: start, dateTo: end, page: 1, pageSize: 200 }),
           sessionUser.role === "admin" || sessionUser.role === "super_admin"
             ? listApplicationUsers(token)
             : Promise.resolve({ items: [], total: 0 }),
         ]);
       })
-      .then(([collaboratorResponse, usersResponse]) => {
+      .then(([collaboratorResponse, recordResponse, usersResponse]) => {
         setCollaborators(collaboratorResponse.items);
+        setRecords(recordResponse.items);
         setUsers(usersResponse.items);
       })
       .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Errore caricamento collaboratori"));
   }, []);
 
   const userMap = useMemo(() => new Map(users.map((user) => [user.id, user])), [users]);
+  const recordsByCollaborator = useMemo(() => {
+    const grouped = new Map<string, InazDailyRecord[]>();
+    for (const record of records) {
+      const current = grouped.get(record.collaborator_id) ?? [];
+      current.push(record);
+      grouped.set(record.collaborator_id, current);
+    }
+    return grouped;
+  }, [records]);
 
   const rows = useMemo<CollaboratorRow[]>(
     () =>
-      collaborators.map((item) => ({
-        id: item.id,
-        employeeCode: item.employee_code,
-        name: item.name,
-        company: item.company_label ?? item.company_code ?? "—",
-        birthDate: item.birth_date ?? "—",
-        mapped: item.application_user_id != null,
-        mappedUser: item.application_user_id != null ? userMap.get(item.application_user_id)?.username ?? `#${item.application_user_id}` : "—",
-      })),
-    [collaborators, userMap],
+      collaborators.map((item) => {
+        const collaboratorRecords = recordsByCollaborator.get(item.id) ?? [];
+        const ordinaryMinutes = collaboratorRecords.reduce((sum, record) => sum + (record.ordinary_minutes ?? 0), 0);
+        const extraMinutes = collaboratorRecords.reduce(
+          (sum, record) => sum + (record.effective_extra_minutes ?? (record.effective_straordinario_minutes ?? record.straordinario_minutes ?? 0) + (record.effective_mpe_minutes ?? record.mpe_minutes ?? 0)),
+          0,
+        );
+        return {
+          id: item.id,
+          employeeCode: item.employee_code,
+          internalCode: item.kint ?? item.kkint ?? "—",
+          name: item.name,
+          company: item.company_label ?? item.company_code ?? "—",
+          birthDate: item.birth_date ?? "—",
+          lastSeen: item.last_seen_at ?? "—",
+          active: item.is_active,
+          dailyRows: collaboratorRecords.length,
+          ordinaryHours: formatHours(ordinaryMinutes),
+          extraHours: formatHours(extraMinutes),
+          mapped: item.application_user_id != null,
+          mappedUser: item.application_user_id != null ? userMap.get(item.application_user_id)?.username ?? `#${item.application_user_id}` : "—",
+        };
+      }),
+    [collaborators, userMap, recordsByCollaborator],
   );
 
   const filteredRows = useMemo(() => {
@@ -76,7 +120,9 @@ export default function InazCollaboratoriPage() {
         (mappedOnly === "unmapped" && !row.mapped);
       const searchFilter =
         !normalizedSearch ||
-        [row.employeeCode, row.name, row.company, row.birthDate, row.mappedUser].some((value) => value.toLowerCase().includes(normalizedSearch));
+        [row.employeeCode, row.internalCode, row.name, row.company, row.birthDate, row.mappedUser, row.lastSeen].some((value) =>
+          value.toLowerCase().includes(normalizedSearch),
+        );
       return mappingFilter && searchFilter;
     });
   }, [rows, search, mappedOnly]);
@@ -98,9 +144,19 @@ export default function InazCollaboratoriPage() {
   const columns = useMemo<ColumnDef<CollaboratorRow>[]>(
     () => [
       { header: "Matricola", accessorKey: "employeeCode" },
+      { header: "Codice Inaz", accessorKey: "internalCode" },
       { header: "Nome", accessorKey: "name" },
       { header: "Azienda", accessorKey: "company" },
       { header: "Nascita", accessorKey: "birthDate" },
+      {
+        header: "Stato",
+        accessorKey: "active",
+        cell: ({ row }) => <Badge variant={row.original.active ? "success" : "warning"}>{row.original.active ? "Attivo" : "Inattivo"}</Badge>,
+      },
+      { header: "Ultimo sync", accessorKey: "lastSeen" },
+      { header: "Giornaliere mese", accessorKey: "dailyRows" },
+      { header: "Ordinarie", accessorKey: "ordinaryHours" },
+      { header: "Extra", accessorKey: "extraHours" },
       {
         header: "Mapping",
         accessorKey: "mapped",
@@ -140,7 +196,7 @@ export default function InazCollaboratoriPage() {
         <article className="panel-card">
           <div className="mb-4">
             <p className="section-title">Elenco collaboratori</p>
-            <p className="section-copy">Apri il dettaglio per calendario e riepilogo eventi. Se sei admin puoi aggiornare il mapping direttamente qui.</p>
+            <p className="section-copy">Vista estesa di anagrafica, mapping, stato operativo e volume giornaliere del mese. Apri il dettaglio per KM, straordinari e cartellino completo.</p>
           </div>
           <DataTable
             data={filteredRows}

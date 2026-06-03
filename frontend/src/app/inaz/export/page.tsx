@@ -10,23 +10,35 @@ import {
   ModuleWorkspaceNoticeCard,
 } from "@/components/layout/module-workspace-hero";
 import { EmptyState } from "@/components/ui/empty-state";
+import { Badge } from "@/components/ui/badge";
 import { DocumentIcon } from "@/components/ui/icons";
-import { exportInazXlsm, listInazCollaborators } from "@/lib/api";
+import { exportInazXlsm, listInazCollaborators, listInazDailyRecords } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
-import type { InazCollaborator } from "@/types/api";
+import type { InazCollaborator, InazDailyRecord } from "@/types/api";
 
 function monthStartInputValue(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
 }
 
+function monthBoundsFromStart(value: string): { start: string; end: string } {
+  const [year, month] = value.split("-").map(Number);
+  const end = new Date(year, month, 0).getDate();
+  return {
+    start: `${year}-${String(month).padStart(2, "0")}-01`,
+    end: `${year}-${String(month).padStart(2, "0")}-${String(end).padStart(2, "0")}`,
+  };
+}
+
 export default function InazExportPage() {
   const [collaborators, setCollaborators] = useState<InazCollaborator[]>([]);
+  const [records, setRecords] = useState<InazDailyRecord[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [periodStart, setPeriodStart] = useState(monthStartInputValue());
   const [employeeKind, setEmployeeKind] = useState("AVVENTIZI");
   const [templatePath, setTemplatePath] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingPreview, setIsLoadingPreview] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
@@ -40,7 +52,33 @@ export default function InazExportPage() {
       .finally(() => setIsLoading(false));
   }, []);
 
+  useEffect(() => {
+    const token = getStoredAccessToken();
+    if (!token || !periodStart) return;
+    const bounds = monthBoundsFromStart(periodStart);
+    setIsLoadingPreview(true);
+    listInazDailyRecords(token, { dateFrom: bounds.start, dateTo: bounds.end, page: 1, pageSize: 200 })
+      .then((response) => setRecords(response.items))
+      .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Errore caricamento preview export"))
+      .finally(() => setIsLoadingPreview(false));
+  }, [periodStart]);
+
   const mappedCount = useMemo(() => collaborators.filter((item) => item.application_user_id != null).length, [collaborators]);
+  const selectedCollaborators = useMemo(
+    () => (selectedIds.length > 0 ? collaborators.filter((item) => selectedIds.includes(item.id)) : collaborators),
+    [collaborators, selectedIds],
+  );
+  const selectedCollaboratorIds = useMemo(() => new Set(selectedCollaborators.map((item) => item.id)), [selectedCollaborators]);
+  const scopedRecords = useMemo(
+    () => records.filter((record) => selectedIds.length === 0 || selectedCollaboratorIds.has(record.collaborator_id)),
+    [records, selectedIds, selectedCollaboratorIds],
+  );
+  const specialDayCount = useMemo(() => scopedRecords.filter((record) => record.special_day).length, [scopedRecords]);
+  const detailDrivenCount = useMemo(
+    () => scopedRecords.filter((record) => Object.keys(record.detail_day_totals).length > 0 || Object.keys(record.detail_day_summary).length > 0).length,
+    [scopedRecords],
+  );
+  const previewCollaborators = useMemo(() => selectedCollaborators.slice(0, 6), [selectedCollaborators]);
 
   async function handleExport() {
     const token = getStoredAccessToken();
@@ -107,6 +145,7 @@ export default function InazExportPage() {
             <ModuleWorkspaceKpiTile label="Collaboratori" value={collaborators.length} hint="Dataset disponibile" />
             <ModuleWorkspaceKpiTile label="Mappati GAIA" value={mappedCount} hint="Collegati a application_users" variant="emerald" />
             <ModuleWorkspaceKpiTile label="Selezionati" value={selectedIds.length || "Tutti"} hint="Ambito export" />
+            <ModuleWorkspaceKpiTile label="Righe mese" value={scopedRecords.length} hint="Giornaliere incluse" />
           </ModuleWorkspaceKpiRow>
         </ModuleWorkspaceHero>
 
@@ -177,6 +216,58 @@ export default function InazExportPage() {
               </div>
             </div>
           )}
+
+          <div className="grid gap-4 xl:grid-cols-[1.2fr_1fr]">
+            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+              <p className="section-title">Preview dataset mese</p>
+              <p className="section-copy">
+                {isLoadingPreview
+                  ? "Caricamento giornaliere del mese selezionato..."
+                  : `Periodo ${monthBoundsFromStart(periodStart).start} / ${monthBoundsFromStart(periodStart).end}. La preview usa le giornaliere gia persistite in GAIA.`}
+              </p>
+              <div className="mt-4 grid gap-3 md:grid-cols-3">
+                <div className="rounded-xl border border-white bg-white px-3 py-3">
+                  <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Righe incluse</p>
+                  <p className="mt-2 text-2xl font-semibold text-gray-900">{scopedRecords.length}</p>
+                </div>
+                <div className="rounded-xl border border-white bg-white px-3 py-3">
+                  <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Giorni speciali</p>
+                  <p className="mt-2 text-2xl font-semibold text-gray-900">{specialDayCount}</p>
+                </div>
+                <div className="rounded-xl border border-white bg-white px-3 py-3">
+                  <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Dettaglio Inaz ricco</p>
+                  <p className="mt-2 text-2xl font-semibold text-gray-900">{detailDrivenCount}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+              <p className="section-title">Collaboratori esportati</p>
+              <p className="section-copy">
+                {selectedIds.length > 0
+                  ? "Campione dei collaboratori selezionati esplicitamente."
+                  : "Campione dei collaboratori che rientreranno nell'export completo."}
+              </p>
+              <div className="mt-4 space-y-3">
+                {previewCollaborators.map((collaborator) => (
+                  <div key={collaborator.id} className="rounded-xl border border-white bg-white px-3 py-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="font-medium text-gray-900">{collaborator.name}</p>
+                        <p className="text-xs text-gray-500">
+                          Matricola {collaborator.employee_code} · Azienda {collaborator.company_code ?? "n/d"}
+                        </p>
+                      </div>
+                      <Badge variant={collaborator.application_user_id ? "success" : "warning"}>
+                        {collaborator.application_user_id ? "Mappato" : "Non mappato"}
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+                {previewCollaborators.length === 0 ? <p className="text-sm text-gray-500">Nessun collaboratore nel perimetro selezionato.</p> : null}
+              </div>
+            </div>
+          </div>
 
           <div className="flex justify-end">
             <button className="btn-primary" type="button" onClick={() => void handleExport()} disabled={isExporting || !periodStart}>

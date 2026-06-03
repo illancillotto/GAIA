@@ -106,7 +106,7 @@ export default function InazImportPage() {
         <article className="panel-card space-y-5">
           <div>
             <p className="section-title">Carica file JSON</p>
-            <p className="section-copy">Usa direttamente l'output di `inaz-collaboratori --json-output ...`.</p>
+            <p className="section-copy">Usa direttamente l&apos;output di `inaz-collaboratori --json-output ...`.</p>
           </div>
           <input type="file" accept=".json,application/json" onChange={(event) => setFile(event.target.files?.[0] ?? null)} />
           <div className="flex flex-wrap gap-3">

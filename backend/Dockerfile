@@ -11,6 +11,8 @@ RUN apt-get update \
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
+RUN python -m playwright install-deps chromium \
+    && python -m playwright install chromium
 
 COPY . .
 RUN chmod +x /app/docker-entrypoint.sh

@@ -7,6 +7,7 @@ from pathlib import Path
 from openpyxl import load_workbook
 
 from app.modules.inaz.models import InazCollaborator, InazDailyPunch, InazDailyRecord
+from app.modules.inaz.services.parser import detail_indicates_special_day
 from app.modules.inaz.services.schedule_engine import DayClassification, ScheduleContext, classify_daily_record
 
 MONTHS_IT = [
@@ -41,7 +42,12 @@ def minutes_to_excel_hours(value: int | None) -> float | None:
 
 
 def is_festive(row: InazDailyRecord) -> bool:
-    return row.raw_weekday in {"S", "D"} or row.schedule_code in {"SAB", "DOM", "OPESAB"}
+    raw_payload = row.raw_payload_json if isinstance(row.raw_payload_json, dict) else None
+    return (
+        row.raw_weekday in {"S", "D"}
+        or row.schedule_code in {"SAB", "DOM", "OPESAB"}
+        or (raw_payload is not None and detail_indicates_special_day(raw_payload))
+    )
 
 
 def upsert_archive2_row(ws, collaborator: InazCollaborator, period_label: str) -> int:
@@ -133,11 +139,17 @@ def resolve_day_classification(
 ) -> DayClassification:
     punches = export_row.punches_by_record_id.get(str(daily.id), [])
     if schedule_context is None:
-        imported_extra = daily.straordinario_minutes if daily.straordinario_minutes is not None else daily.mpe_minutes
+        effective_straordinario = (
+            daily.override_straordinario_minutes
+            if daily.override_straordinario_minutes is not None
+            else daily.straordinario_minutes
+        )
+        effective_mpe = daily.override_mpe_minutes if daily.override_mpe_minutes is not None else daily.mpe_minutes
+        imported_extra_total = (effective_straordinario or 0) + (effective_mpe or 0)
         return DayClassification(
             special_day=is_festive(daily),
             ordinary_minutes=daily.ordinary_minutes,
-            extra_minutes=imported_extra,
+            extra_minutes=imported_extra_total or None,
             source="imported",
         )
     return classify_daily_record(export_row.collaborator, daily, punches, schedule_context)

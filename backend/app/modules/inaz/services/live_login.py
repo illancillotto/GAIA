@@ -1,16 +1,27 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import sys
 from datetime import date
 from pathlib import Path
-from typing import Any
+from time import monotonic
+from typing import Any, Callable
 
 from app.core.config import settings
 
+ProgressCallback = Callable[[dict[str, Any]], None]
+
 
 def _ensure_scraper_src_on_path() -> None:
-    scraper_src = str(Path(settings.inaz_scraper_project_path).expanduser() / "src")
+    scraper_root = Path(settings.inaz_scraper_project_path).expanduser()
+    scraper_src_path = scraper_root / "src"
+    if not scraper_src_path.exists():
+        raise RuntimeError(
+            f"Inaz scraper project not found at {scraper_root}. "
+            "Ensure the repository is available and mounted inside the backend container."
+        )
+    scraper_src = str(scraper_src_path)
     if scraper_src not in sys.path:
         sys.path.insert(0, scraper_src)
 
@@ -47,18 +58,93 @@ async def scrape_with_credentials(
     period_end: date,
     json_output: Path,
     limit: int | None = None,
+    progress_callback: ProgressCallback | None = None,
+    employee_timeout_seconds: int = 150,
 ) -> dict[str, Any]:
     _ensure_scraper_src_on_path()
 
     from playwright.async_api import async_playwright
-    from inaz_scraper.cli import LOGIN_URL, login, wait_for_portal_idle
+    from inaz_scraper.cli import LOGIN_URL, find_login_frame, login, wait_for_portal_idle
     from inaz_scraper.collaborators import (
+        EmployeeTimesheet,
         extract_collaborators,
         open_collaborator_list,
         open_collaborators_wizard,
         scrape_one_employee,
+        timesheet_to_jsonable,
         write_timesheets_json,
     )
+
+    def emit(event_type: str, **payload: Any) -> None:
+        if progress_callback is None:
+            return
+        progress_callback({"type": event_type, **payload})
+
+    def load_checkpoint() -> tuple[list[EmployeeTimesheet], list[dict[str, str]]]:
+        if not json_output.exists():
+            return [], []
+        try:
+            payload = json.loads(json_output.read_text(encoding="utf-8"))
+        except Exception:
+            return [], []
+        if not isinstance(payload, dict):
+            return [], []
+        if payload.get("period_start") != period_start.strftime("%d/%m/%Y"):
+            return [], []
+        if payload.get("period_end") != period_end.strftime("%d/%m/%Y"):
+            return [], []
+
+        employees = payload.get("employees")
+        errors = payload.get("errors")
+        if not isinstance(employees, list):
+            return [], []
+
+        results: list[EmployeeTimesheet] = []
+        for item in employees:
+            if not isinstance(item, dict) or not isinstance(item.get("collaborator"), dict):
+                continue
+            from inaz_scraper.collaborators import Collaborator, DailyRow, SummaryRow
+
+            results.append(
+                EmployeeTimesheet(
+                    collaborator=Collaborator(**item["collaborator"]),
+                    company_label=item.get("company_label"),
+                    period_start=item.get("period_start") or period_start.strftime("%d/%m/%Y"),
+                    period_end=item.get("period_end") or period_end.strftime("%d/%m/%Y"),
+                    daily_rows=[DailyRow(**row) for row in item.get("daily_rows", []) if isinstance(row, dict)],
+                    summary_rows=[SummaryRow(**row) for row in item.get("summary_rows", []) if isinstance(row, dict)],
+                )
+            )
+        parsed_errors = [item for item in errors if isinstance(item, dict)] if isinstance(errors, list) else []
+        return results, parsed_errors
+
+    def upsert_error(errors: list[dict[str, str]], employee_code: str, name: str, error: str) -> None:
+        for item in errors:
+            if item.get("employee_code") == employee_code:
+                item["name"] = name
+                item["error"] = error
+                return
+        errors.append({"employee_code": employee_code, "name": name, "error": error})
+
+    def remove_error(errors: list[dict[str, str]], employee_code: str) -> list[dict[str, str]]:
+        return [item for item in errors if item.get("employee_code") != employee_code]
+
+    async def restore_portal_page(context, current_page):
+        try:
+            await current_page.close()
+        except Exception:
+            pass
+        page = await context.new_page()
+        await page.goto(LOGIN_URL, wait_until="domcontentloaded")
+        try:
+            await find_login_frame(page)
+        except Exception:
+            pass
+        else:
+            await login(page, username, password)
+        await wait_for_portal_idle(page)
+        await open_collaborators_wizard(page)
+        return page
 
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True)
@@ -75,30 +161,83 @@ async def scrape_with_credentials(
             if limit is not None:
                 collaborators = collaborators[:limit]
 
-            results: list[Any] = []
-            errors: list[dict[str, str]] = []
-            for index, collaborator in enumerate(collaborators, start=1):
+            results, errors = load_checkpoint()
+            completed_codes = {item.collaborator.employee_code for item in results}
+            pending_collaborators = [item for item in collaborators if item.employee_code not in completed_codes]
+
+            emit(
+                "resume_state",
+                total_collaborators=len(collaborators),
+                completed_collaborators=len(results),
+                pending_collaborators=len(pending_collaborators),
+                error_count=len(errors),
+                resumed=bool(results or errors),
+            )
+
+            for index, collaborator in enumerate(pending_collaborators, start=len(results) + 1):
                 print(f"[{index}/{len(collaborators)}] {collaborator.employee_code} {collaborator.name}", flush=True)
+                emit(
+                    "collaborator_started",
+                    index=index,
+                    total=len(collaborators),
+                    employee_code=collaborator.employee_code,
+                    name=collaborator.name,
+                )
+                started_at = monotonic()
                 try:
-                    results.append(await scrape_one_employee(page, collaborator, period_start, period_end))
-                except Exception as exc:
-                    errors.append(
-                        {
-                            "employee_code": collaborator.employee_code,
-                            "name": collaborator.name,
-                            "error": f"{type(exc).__name__}: {exc}",
-                        }
+                    timesheet = await asyncio.wait_for(
+                        scrape_one_employee(page, collaborator, period_start, period_end),
+                        timeout=employee_timeout_seconds,
                     )
+                    results.append(timesheet)
+                    completed_codes.add(collaborator.employee_code)
+                    errors = remove_error(errors, collaborator.employee_code)
+                    write_timesheets_json(json_output, period_start, period_end, results, errors)
+                    emit(
+                        "collaborator_completed",
+                        index=index,
+                        total=len(collaborators),
+                        employee_code=collaborator.employee_code,
+                        name=collaborator.name,
+                        elapsed_seconds=round(monotonic() - started_at, 2),
+                        completed_collaborators=len(results),
+                        error_count=len(errors),
+                        daily_rows=len(timesheet.daily_rows),
+                        summary_rows=len(timesheet.summary_rows),
+                    )
+                except Exception as exc:
+                    error_text = f"{type(exc).__name__}: {exc}"
+                    upsert_error(errors, collaborator.employee_code, collaborator.name, error_text)
                     print(
-                        f"  ERRORE {collaborator.employee_code} {collaborator.name}: {type(exc).__name__}: {exc}",
+                        f"  ERRORE {collaborator.employee_code} {collaborator.name}: {error_text}",
                         flush=True,
                     )
-                write_timesheets_json(json_output, period_start, period_end, results, errors)
+                    write_timesheets_json(json_output, period_start, period_end, results, errors)
+                    emit(
+                        "collaborator_failed",
+                        index=index,
+                        total=len(collaborators),
+                        employee_code=collaborator.employee_code,
+                        name=collaborator.name,
+                        elapsed_seconds=round(monotonic() - started_at, 2),
+                        completed_collaborators=len(results),
+                        error_count=len(errors),
+                        error=error_text,
+                    )
+                    page = await restore_portal_page(context, page)
 
             if not json_output.exists():
                 write_timesheets_json(json_output, period_start, period_end, results, errors)
 
-            return {"authenticated_url": page.url, "errors": errors, "total_collaborators": len(results)}
+            return {
+                "authenticated_url": page.url,
+                "errors": errors,
+                "total_collaborators": len(collaborators),
+                "completed_collaborators": len(results),
+                "failed_collaborators": len(errors),
+                "resumed_from_checkpoint": bool(completed_codes or errors),
+                "employees": [timesheet_to_jsonable(item) for item in results],
+            }
         finally:
             await context.close()
             await browser.close()
