@@ -24,7 +24,7 @@ type DayColumn = {
   isToday: boolean;
 };
 
-type CellKind = "anomaly" | "special" | "absence" | "worked" | "rest";
+type CellKind = "anomaly" | "special" | "ferie" | "permesso" | "malattia" | "absence" | "worked" | "rest";
 
 const WEEKDAY_LABELS = ["dom", "lun", "mar", "mer", "gio", "ven", "sab"];
 
@@ -128,6 +128,9 @@ function recordScheduleLabel(record: InazDailyRecord): string | null {
 function classifyCell(record: InazDailyRecord): CellKind {
   if (record.detail_anomalies.length > 0 || record.detail_error) return "anomaly";
   if (record.special_day) return "special";
+  if (record.resolved_absence_cause === "ferie") return "ferie";
+  if (record.resolved_absence_cause === "permesso") return "permesso";
+  if (record.resolved_absence_cause === "malattia") return "malattia";
   if ((record.ordinary_minutes ?? 0) > 0) return "worked";
   if ((record.absence_minutes ?? 0) > 0) return "absence";
   return "rest";
@@ -136,6 +139,9 @@ function classifyCell(record: InazDailyRecord): CellKind {
 const CELL_TONE: Record<CellKind, string> = {
   anomaly: "bg-red-50 text-red-700 ring-1 ring-inset ring-red-200 hover:bg-red-100",
   special: "bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200 hover:bg-violet-100",
+  ferie: "bg-amber-50 text-amber-800 ring-1 ring-inset ring-amber-200 hover:bg-amber-100",
+  permesso: "bg-sky-50 text-sky-800 ring-1 ring-inset ring-sky-200 hover:bg-sky-100",
+  malattia: "bg-fuchsia-50 text-fuchsia-800 ring-1 ring-inset ring-fuchsia-200 hover:bg-fuchsia-100",
   absence: "bg-sky-50 text-sky-700 ring-1 ring-inset ring-sky-200 hover:bg-sky-100",
   worked: "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-100 hover:bg-emerald-100",
   rest: "bg-gray-50 text-gray-300 hover:bg-gray-100",
@@ -145,6 +151,9 @@ function cellPrimaryLabel(record: InazDailyRecord, kind: CellKind): string {
   if (kind === "worked" || kind === "special") {
     return formatHoursCompact(record.ordinary_minutes ?? record.teo_minutes);
   }
+  if (kind === "ferie") return "Fer";
+  if (kind === "permesso") return "Perm";
+  if (kind === "malattia") return "Mal";
   if (kind === "absence" || kind === "anomaly") {
     const status = (record.detail_status ?? record.stato ?? "").trim();
     if (status) {
@@ -160,9 +169,32 @@ function detailBadgeVariant(record: InazDailyRecord): "danger" | "warning" | "su
   if (status.includes("regolare")) return "success";
   const kind = classifyCell(record);
   if (kind === "anomaly") return "danger";
-  if (kind === "special") return "warning";
+  if (kind === "special" || kind === "ferie" || kind === "permesso" || kind === "malattia") return "warning";
   if (kind === "worked") return "success";
   return "neutral";
+}
+
+function formatAbsenceCause(cause: string | null | undefined): string {
+  if (!cause) return "—";
+  const labels: Record<string, string> = {
+    ferie: "Ferie",
+    permesso: "Permesso",
+    malattia: "Malattia",
+    riposo: "Riposo",
+    festivita: "Festivita",
+    banca_ore: "Banca ore",
+    assenza_da_giustificare: "Assenza da giustificare",
+  };
+  return labels[cause] ?? cause.replaceAll("_", " ");
+}
+
+function formatRequestDescription(value: string | null | undefined): string {
+  if (!value) return "—";
+  if (value.includes(" - ")) {
+    const [, right] = value.split(" - ", 2);
+    if (right?.trim()) return right.trim();
+  }
+  return value;
 }
 
 export default function InazGiornalierePage() {
@@ -747,6 +779,30 @@ export default function InazGiornalierePage() {
                   </div>
                 </div>
               </div>
+
+              {(selectedRecord.request_description || selectedRecord.resolved_absence_cause || selectedRecord.request_status) ? (
+                <div className="mt-4 rounded-2xl border border-sky-200 bg-sky-50 p-4">
+                  <p className="text-xs uppercase tracking-[0.16em] text-sky-600">Causale Inaz rilevata</p>
+                  <div className="mt-2 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <div>
+                      <p className="text-[11px] uppercase tracking-wide text-sky-500">Causale</p>
+                      <p className="text-sm font-medium text-sky-950">{formatAbsenceCause(selectedRecord.resolved_absence_cause)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] uppercase tracking-wide text-sky-500">Richiesta</p>
+                      <p className="text-sm font-medium text-sky-950">{formatRequestDescription(selectedRecord.request_description)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] uppercase tracking-wide text-sky-500">Stato richiesta</p>
+                      <p className="text-sm font-medium text-sky-950">{selectedRecord.request_status ?? "—"}</p>
+                    </div>
+                    <div>
+                      <p className="text-[11px] uppercase tracking-wide text-sky-500">Autorizzato da</p>
+                      <p className="text-sm font-medium text-sky-950">{selectedRecord.request_authorized_by ?? "—"}</p>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
 
               {(selectedRecord.detail_anomalies.length > 0 || selectedRecord.detail_error) ? (
                 <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4">

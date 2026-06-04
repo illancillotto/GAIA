@@ -41,6 +41,38 @@ def minutes_to_excel_hours(value: int | None) -> float | None:
     return value / 60
 
 
+def normalize_request_display_label(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip()
+    if not normalized:
+        return None
+    if " - " in normalized:
+        _, right = normalized.split(" - ", 1)
+        if right.strip():
+            return right.strip()
+    return normalized
+
+
+def resolve_export_absence_code(row: InazDailyRecord) -> str | None:
+    if row.request_description:
+        return (normalize_request_display_label(row.request_description) or row.request_description)[:32]
+    if row.resolved_absence_cause:
+        labels = {
+            "ferie": "Ferie",
+            "permesso": "Permesso",
+            "malattia": "Malattia",
+            "riposo": "Riposo",
+            "festivita": "Festivita",
+            "banca_ore": "Banca ore",
+            "assenza_da_giustificare": "Ass. da giustificare",
+        }
+        return labels.get(row.resolved_absence_cause, row.resolved_absence_cause.replace("_", " "))[:32]
+    if row.evidenze:
+        return row.evidenze[:32]
+    return None
+
+
 def is_festive(row: InazDailyRecord) -> bool:
     raw_payload = row.raw_payload_json if isinstance(row.raw_payload_json, dict) else None
     return (
@@ -103,8 +135,9 @@ def write_archive2_daily_values(
             ws.cell(row_index, col + offsets["maggiorazione"]).value = maggiorazione
         if absence is not None:
             ws.cell(row_index, col + offsets["absence_hours"]).value = absence
-        if daily.evidenze:
-            ws.cell(row_index, col + offsets["absence_code"]).value = daily.evidenze[:32]
+        absence_code = resolve_export_absence_code(daily)
+        if absence_code:
+            ws.cell(row_index, col + offsets["absence_code"]).value = absence_code
 
 
 def compile_workbook(

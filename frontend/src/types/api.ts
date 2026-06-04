@@ -151,6 +151,11 @@ export type InazDailyRecord = {
   override_straordinario_minutes: number | null;
   override_mpe_minutes: number | null;
   manual_note: string | null;
+  request_type: string | null;
+  request_description: string | null;
+  request_status: string | null;
+  request_authorized_by: string | null;
+  resolved_absence_cause: string | null;
   effective_straordinario_minutes: number | null;
   effective_mpe_minutes: number | null;
   effective_extra_minutes: number | null;

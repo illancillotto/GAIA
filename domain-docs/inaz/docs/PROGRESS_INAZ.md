@@ -31,12 +31,19 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
   - riepilogo giornata
   - totali giornata
   - richieste / anomalie;
+- normalizzazione dedicata delle richieste giornaliere Inaz su `inaz_daily_records`:
+  - `request_type`
+  - `request_description`
+  - `request_status`
+  - `request_authorized_by`
+  - `resolved_absence_cause` (es. `ferie`, `permesso`, `malattia`);
 - mapping collaboratore -> `application_users`;
 - endpoint calendario collaboratore;
 - endpoint riepilogo eventi collaboratore;
 - endpoint elenco giornaliere;
 - endpoint admin per bootstrap festivita locali/mobili e assegnazione template orari ai collaboratori;
-- export `.xlsm` dal DB con preservazione macro via `openpyxl(..., keep_vba=True)`.
+- export `.xlsm` dal DB con preservazione macro via `openpyxl(..., keep_vba=True)`;
+- export `.xlsm` che usa la causale assenza normalizzata / descrizione richiesta (`Ferie`, `Permesso ordinario`, ecc.) nel blocco `absence_code`, prima del fallback su `evidenze`.
 - classificazione export `.xlsm` non piu solo `sabato/domenica`: adesso usa festivita, sabati alternati, primo sabato del mese e rientri stagionali se presenti nei template.
 - precedenza logica classificazione giornaliera:
   - `detail` Inaz se presente e strutturato;
@@ -59,9 +66,11 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
   - collaboratori in verticale, giorni in orizzontale, con colonna collaboratore e header giorni "sticky";
   - perimetro dati filtrato sul responsabile che ha eseguito la sync (`owner_user_id`);
   - celle colorate per stato (lavorato / assenza / giorno speciale / anomalia) con indicatori compatti `▲` extra, `🚗` KM, `✉` richieste; weekend ombreggiati e giorno corrente evidenziato;
-  - cella espandibile: il click apre sotto il pannello operativo della giornata (totali, anomalie, rettifiche);
+  - dettaglio giornata in **modale** con navigazione `precedente/successivo`, supporto tastiera `Esc`, `←`, `→` e badge stato coerente con l'analisi;
   - riquadro dedicato **"Aggiungi KM carburante"** + modalita **"Inserisci KM"** che trasforma ogni cella in input rapido con salvataggio automatico al blur;
   - modifica diretta di `KM`, straordinario override, maggior presenza override e nota operativa;
+  - evidenza esplicita della **causale Inaz rilevata** (es. ferie / permesso), stato richiesta e autorizzatore nel dettaglio giornata;
+  - celle matrice rese piu leggibili per le assenze normalizzate (`ferie`, `permesso`, `malattia`) con etichette e tono distinti;
   - **filtri rapidi per tipo orario / contratto** derivati dal template orario prevalente (`schedule_code`) di ogni collaboratore;
   - selettore mese con **frecce `‹ ›`** per scorrere rapidamente; header riorganizzato su griglia a colonne (mese, ricerca, azioni, filtri, riepilogo mese, legenda);
   - **scroll orizzontale anche via drag** (tieni premuto il tasto sinistro e trascina), con soglia anti-click sulle celle;

@@ -126,7 +126,7 @@ def _sample_payload(employee_code: str = "1854") -> bytes:
             "CARTELLINO Gruppo Ore Straordinario": "01:15"
           }},
           "detail_anomalies": [{{"Anomalia giornata": "Ore mancanti"}}],
-          "detail_requests": [{{"Descrizione": "Permesso ordinario"}}]
+          "detail_requests": [{{"Tipo": "Eventi", "Descrizione": "Permesso ordinario", "Stato": "RIC", "Autorizzato da": "PODDA FABRIZIO"}}]
         }}
       ],
       "summary_rows": [
@@ -249,6 +249,61 @@ def test_inaz_import_prefers_day_detail_fields_when_available() -> None:
     assert item["stato"] == "Giornata anomala"
     assert item["detail_programmed_schedule"] == "OPESAB - Rientro Operai"
     assert item["detail_day_totals"]["CARTELLINO Gruppo Ore Straordinario"] == "01:15"
+
+
+def test_inaz_import_normalizes_request_fields_and_absence_cause() -> None:
+    admin = _create_user("request_admin")
+    token = _login(admin.username)
+
+    response = client.post(
+        "/inaz/import/json",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("giornaliere.json", _sample_payload(), "application/json")},
+    )
+
+    assert response.status_code == 200
+    listing = client.get("/inaz/giornaliere", headers={"Authorization": f"Bearer {token}"})
+    assert listing.status_code == 200
+    item = listing.json()["items"][0]
+    assert item["request_type"] == "Eventi"
+    assert item["request_description"] == "Permesso ordinario"
+    assert item["request_status"] == "RIC"
+    assert item["request_authorized_by"] == "PODDA FABRIZIO"
+    assert item["resolved_absence_cause"] == "permesso"
+
+    filtered = client.get("/inaz/giornaliere?q=permesso", headers={"Authorization": f"Bearer {token}"})
+    assert filtered.status_code == 200
+    assert filtered.json()["total"] == 1
+
+
+def test_inaz_import_normalizes_real_portal_request_shape() -> None:
+    admin = _create_user("request_portal_admin")
+    token = _login(admin.username)
+
+    payload = (
+        _sample_payload()
+        .decode("utf-8")
+        .replace(
+            '"detail_requests": [{"Tipo": "Eventi", "Descrizione": "Permesso ordinario", "Stato": "RIC", "Autorizzato da": "PODDA FABRIZIO"}]',
+            '"detail_requests": [{"Kcausale": "E", "DescCausale": "Eventi", "KEvento": "FERIE - Ferie", "Stato": "RIC", "Author": "PODDA FABRIZIO"}]',
+        )
+    )
+
+    response = client.post(
+        "/inaz/import/json",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("giornaliere.json", payload.encode("utf-8"), "application/json")},
+    )
+
+    assert response.status_code == 200
+    listing = client.get("/inaz/giornaliere", headers={"Authorization": f"Bearer {token}"})
+    assert listing.status_code == 200
+    item = listing.json()["items"][0]
+    assert item["request_type"] == "Eventi"
+    assert item["request_description"] == "FERIE - Ferie"
+    assert item["request_status"] == "RIC"
+    assert item["request_authorized_by"] == "PODDA FABRIZIO"
+    assert item["resolved_absence_cause"] == "ferie"
 
 
 def test_inaz_daily_record_manual_overrides_update_effective_values() -> None:
@@ -459,6 +514,9 @@ def test_inaz_export_generates_xlsm(tmp_path: Path) -> None:
     workbook = load_workbook(output_path, keep_vba=True)
     assert "Archivio2" in workbook.sheetnames
     assert "Giornaliera" in workbook.sheetnames
+    archive2 = workbook["Archivio2"]
+    # giorno 16 => colonna 8 + 15, blocco absence_code +435
+    assert archive2.cell(5, 458).value == "Permesso ordinario"
 
 
 def test_inaz_sync_job_can_be_created(monkeypatch: pytest.MonkeyPatch) -> None:

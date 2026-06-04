@@ -113,6 +113,11 @@ describe("Inaz giornaliere workspace", () => {
           override_straordinario_minutes: null,
           override_mpe_minutes: null,
           manual_note: null,
+          request_type: "Eventi",
+          request_description: "Permesso ordinario",
+          request_status: "RIC",
+          request_authorized_by: "PODDA FABRIZIO",
+          resolved_absence_cause: "permesso",
           effective_straordinario_minutes: 75,
           effective_mpe_minutes: 45,
           effective_extra_minutes: 120,
@@ -170,11 +175,16 @@ describe("Inaz giornaliere workspace", () => {
       mpe_minutes: 45,
       straordinario_minutes: 75,
       km_value: 30,
-      override_straordinario_minutes: 90,
-      override_mpe_minutes: 30,
-      manual_note: "Corretto dal capo settore",
-      effective_straordinario_minutes: 90,
-      effective_mpe_minutes: 30,
+          override_straordinario_minutes: 90,
+          override_mpe_minutes: 30,
+          manual_note: "Corretto dal capo settore",
+          request_type: "Eventi",
+          request_description: "Permesso ordinario",
+          request_status: "RIC",
+          request_authorized_by: "PODDA FABRIZIO",
+          resolved_absence_cause: "permesso",
+          effective_straordinario_minutes: 90,
+          effective_mpe_minutes: 30,
       effective_extra_minutes: 120,
       stato: "Giornata anomala",
       evidenze: "Ore mancanti",
@@ -227,6 +237,9 @@ describe("Inaz giornaliere workspace", () => {
     fireEvent.click(await screen.findByTitle("2026-05-16 · Giornata anomala"));
     expect(await screen.findByLabelText("Giorno precedente")).toBeDisabled();
     expect(screen.getByLabelText("Giorno successivo")).toBeDisabled();
+    expect(screen.getByText("Causale Inaz rilevata")).toBeInTheDocument();
+    expect(screen.getByText("Permesso ordinario")).toBeInTheDocument();
+    expect(screen.getByText("PODDA FABRIZIO")).toBeInTheDocument();
 
     fireEvent.change(await screen.findByLabelText("Chilometri (auto)"), { target: { value: "30" } });
     fireEvent.change(screen.getByLabelText("Straordinario override"), { target: { value: "01:30" } });

@@ -15,11 +15,16 @@ from app.modules.inaz.services.parser import (
     parse_clock,
     parse_portal_date,
     resolve_absence_minutes,
+    resolve_absence_cause,
     resolve_evidenze,
     resolve_justified_minutes,
     resolve_maggiorazione_minutes,
     resolve_mpe_minutes,
     resolve_ordinary_minutes,
+    resolve_request_authorized_by,
+    resolve_request_description,
+    resolve_request_status,
+    resolve_request_type,
     resolve_schedule_code,
     resolve_stato,
     resolve_straordinario_minutes,
@@ -120,6 +125,11 @@ def import_collaborator_payload(db: Session, *, payload: ParsedCollaboratorPaylo
         record.maggiorazione_minutes = resolve_maggiorazione_minutes(daily_row)
         record.mpe_minutes = resolve_mpe_minutes(daily_row)
         record.straordinario_minutes = resolve_straordinario_minutes(daily_row)
+        record.request_type = resolve_request_type(daily_row)
+        record.request_description = resolve_request_description(daily_row)
+        record.request_status = resolve_request_status(daily_row)
+        record.request_authorized_by = resolve_request_authorized_by(daily_row)
+        record.resolved_absence_cause = resolve_absence_cause(daily_row)
         record.stato = resolve_stato(daily_row)
         record.evidenze = resolve_evidenze(daily_row)
         record.raw_weekday = clean(payload=daily_row.get("raw_weekday"))

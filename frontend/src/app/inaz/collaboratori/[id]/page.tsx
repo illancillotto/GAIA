@@ -40,6 +40,29 @@ function formatHours(minutes: number | null): string {
   return `${(minutes / 60).toFixed(2)} h`;
 }
 
+function formatAbsenceCause(cause: string | null | undefined): string {
+  if (!cause) return "—";
+  const labels: Record<string, string> = {
+    ferie: "Ferie",
+    permesso: "Permesso",
+    malattia: "Malattia",
+    riposo: "Riposo",
+    festivita: "Festivita",
+    banca_ore: "Banca ore",
+    assenza_da_giustificare: "Assenza da giustificare",
+  };
+  return labels[cause] ?? cause.replaceAll("_", " ");
+}
+
+function formatRequestDescription(value: string | null | undefined): string {
+  if (!value) return "—";
+  if (value.includes(" - ")) {
+    const [, right] = value.split(" - ", 2);
+    if (right?.trim()) return right.trim();
+  }
+  return value;
+}
+
 function formatDetailEntries(values: Record<string, string>): Array<[string, string]> {
   return Object.entries(values);
 }
@@ -462,6 +485,19 @@ export default function InazCollaboratoreDetailPage() {
                           <span className="font-medium text-gray-900">Ore assenza:</span> {record.detail_absence_hours ?? formatHours(record.absence_minutes)}
                         </div>
                       </div>
+                      {(record.request_description || record.resolved_absence_cause || record.request_status) ? (
+                        <div className="mt-3 grid gap-3 md:grid-cols-4">
+                          <div className="rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-sm text-sky-900">
+                            <span className="font-medium text-sky-950">Causale:</span> {formatAbsenceCause(record.resolved_absence_cause)}
+                          </div>
+                          <div className="rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-sm text-sky-900 md:col-span-2">
+                            <span className="font-medium text-sky-950">Richiesta:</span> {formatRequestDescription(record.request_description)}
+                          </div>
+                          <div className="rounded-xl border border-sky-100 bg-sky-50 px-3 py-2 text-sm text-sky-900">
+                            <span className="font-medium text-sky-950">Stato:</span> {record.request_status ?? "—"}
+                          </div>
+                        </div>
+                      ) : null}
                       <div className="mt-3 grid gap-2 md:grid-cols-3">
                         {record.punches.map((punch) => (
                           <div key={punch.id} className="rounded-xl border border-white bg-white px-3 py-2 text-sm text-gray-700">

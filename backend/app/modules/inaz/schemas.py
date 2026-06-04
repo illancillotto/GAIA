@@ -223,6 +223,11 @@ class InazDailyRecordResponse(BaseModel):
     override_straordinario_minutes: int | None = None
     override_mpe_minutes: int | None = None
     manual_note: str | None = None
+    request_type: str | None = None
+    request_description: str | None = None
+    request_status: str | None = None
+    request_authorized_by: str | None = None
+    resolved_absence_cause: str | None = None
     effective_straordinario_minutes: int | None = None
     effective_mpe_minutes: int | None = None
     effective_extra_minutes: int | None = None

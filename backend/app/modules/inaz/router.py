@@ -71,7 +71,17 @@ from app.modules.inaz.services.credentials import (
     update_credential,
 )
 from app.modules.inaz.services.import_jobs import build_preview, run_import_job
-from app.modules.inaz.services.parser import detail_indicates_special_day, extract_detail_payload, load_json_payload, parse_import_payload
+from app.modules.inaz.services.parser import (
+    detail_indicates_special_day,
+    extract_detail_payload,
+    load_json_payload,
+    parse_import_payload,
+    resolve_absence_cause,
+    resolve_request_authorized_by,
+    resolve_request_description,
+    resolve_request_status,
+    resolve_request_type,
+)
 from app.modules.inaz.services.schedule_engine import build_schedule_context, seed_holidays_for_year
 from app.modules.inaz.services.sync_runtime import (
     build_period,
@@ -506,8 +516,16 @@ def list_giornaliere(
         count_stmt = count_stmt.where(InazDailyRecord.work_date <= date_to)
     if q:
         term = f"%{q.strip()}%"
-        stmt = stmt.where(or_(InazDailyRecord.evidenze.ilike(term), InazDailyRecord.stato.ilike(term)))
-        count_stmt = count_stmt.where(or_(InazDailyRecord.evidenze.ilike(term), InazDailyRecord.stato.ilike(term)))
+        filters = or_(
+            InazDailyRecord.evidenze.ilike(term),
+            InazDailyRecord.stato.ilike(term),
+            InazDailyRecord.request_description.ilike(term),
+            InazDailyRecord.request_status.ilike(term),
+            InazDailyRecord.request_authorized_by.ilike(term),
+            InazDailyRecord.resolved_absence_cause.ilike(term),
+        )
+        stmt = stmt.where(filters)
+        count_stmt = count_stmt.where(filters)
 
     rows = db.execute(
         stmt.order_by(InazDailyRecord.work_date.asc()).offset((page - 1) * page_size).limit(page_size)
@@ -944,6 +962,16 @@ def _serialize_daily_record(db: Session, record: InazDailyRecord) -> InazDailyRe
             "effective_straordinario_minutes": effective_straordinario,
             "effective_mpe_minutes": effective_mpe,
             "effective_extra_minutes": (effective_straordinario or 0) + (effective_mpe or 0) or None,
+            "request_type": record.request_type
+            or (resolve_request_type(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None),
+            "request_description": record.request_description
+            or (resolve_request_description(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None),
+            "request_status": record.request_status
+            or (resolve_request_status(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None),
+            "request_authorized_by": record.request_authorized_by
+            or (resolve_request_authorized_by(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None),
+            "resolved_absence_cause": record.resolved_absence_cause
+            or (resolve_absence_cause(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None),
             "detail_title": detail.get("title"),
             "detail_status": detail.get("status"),
             "detail_programmed_schedule": detail.get("programmed_schedule"),

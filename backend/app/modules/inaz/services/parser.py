@@ -196,6 +196,75 @@ def resolve_evidenze(daily_row: dict[str, Any]) -> str | None:
     return " | ".join(dict.fromkeys(labels))
 
 
+def _first_request_row(daily_row: dict[str, Any]) -> dict[str, str] | None:
+    detail = extract_detail_payload(daily_row)
+    for item in detail["requests"]:
+        if item:
+            return item
+    return None
+
+
+def _request_value(request: dict[str, str] | None, *aliases: str) -> str | None:
+    if not request:
+        return None
+    alias_set = {alias.casefold().replace(" ", "") for alias in aliases}
+    for key, value in request.items():
+        normalized_key = normalize_portal_key(key).replace(" ", "")
+        if normalized_key in alias_set:
+            normalized_value = normalize_portal_text(value)
+            if normalized_value:
+                return normalized_value
+    return None
+
+
+def resolve_request_type(daily_row: dict[str, Any]) -> str | None:
+    request = _first_request_row(daily_row)
+    return _request_value(request, "Tipo", "type", "DescCausale", "col_2")
+
+
+def resolve_request_description(daily_row: dict[str, Any]) -> str | None:
+    request = _first_request_row(daily_row)
+    return _request_value(request, "Descrizione", "Description", "KEvento", "col_3") or _request_value(
+        request, "Tipo", "type", "DescCausale", "col_2"
+    )
+
+
+def resolve_request_status(daily_row: dict[str, Any]) -> str | None:
+    request = _first_request_row(daily_row)
+    return _request_value(request, "Stato", "Status", "col_8")
+
+
+def resolve_request_authorized_by(daily_row: dict[str, Any]) -> str | None:
+    request = _first_request_row(daily_row)
+    return _request_value(request, "Autorizzato da", "Autorizzatoda", "Authorizedby", "Author", "col_9")
+
+
+def resolve_absence_cause(daily_row: dict[str, Any]) -> str | None:
+    candidates = [
+        resolve_request_description(daily_row),
+        resolve_evidenze(daily_row),
+    ]
+    for value in candidates:
+        normalized = normalize_portal_key(value)
+        if not normalized:
+            continue
+        if "ferie" in normalized:
+            return "ferie"
+        if "permesso" in normalized:
+            return "permesso"
+        if "malattia" in normalized:
+            return "malattia"
+        if "riposo" in normalized:
+            return "riposo"
+        if "festivit" in normalized:
+            return "festivita"
+        if "banca ore" in normalized:
+            return "banca_ore"
+        if "giustific" in normalized:
+            return "assenza_da_giustificare"
+    return None
+
+
 def detail_indicates_special_day(daily_row: dict[str, Any]) -> bool:
     detail = extract_detail_payload(daily_row)
     special_labels = {
