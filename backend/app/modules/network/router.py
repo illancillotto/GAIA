@@ -1,5 +1,5 @@
-from collections import defaultdict
-from datetime import datetime, timedelta, timezone
+from collections import Counter, defaultdict
+from datetime import UTC, datetime, timedelta, timezone
 from functools import lru_cache
 import ipaddress
 import socket
@@ -37,6 +37,10 @@ from app.modules.network.schemas import (
     NetworkFirewallEventResponse,
     NetworkFirewallMetricResponse,
     NetworkFirewallResponse,
+    NetworkStatisticsCountItem,
+    NetworkStatisticsSummary,
+    NetworkStatisticsTimelinePoint,
+    NetworkStatisticsTrafficItem,
     NetworkScanDetailResponse,
     NetworkScanDeviceResponse,
     NetworkScanDiffEntry,
@@ -100,6 +104,7 @@ def _serialize_device(
         "display_name": device.display_name,
         "resolved_label": resolved_label,
         "label_source": label_source,
+        "lifecycle_state": device.lifecycle_state,
         "asset_label": device.asset_label,
         "vendor": device.vendor,
         "model_name": device.model_name,
@@ -117,21 +122,8 @@ def _serialize_device(
         "last_seen_at": device.last_seen_at,
         "created_at": device.created_at,
         "updated_at": device.updated_at,
-        "assigned_user": NetworkAssignedUserSummary(
-            id=device.assigned_user.id,
-            username=device.assigned_user.username,
-            email=device.assigned_user.email,
-            is_active=device.assigned_user.is_active,
-            full_name=device.assigned_user.full_name,
-            office_location=device.assigned_user.office_location,
-            phone_extension=device.assigned_user.phone_extension,
-            is_placeholder_profile=(
-                (not device.assigned_user.is_active)
-                and device.assigned_user.email.endswith("@users.local")
-            ),
-        )
-        if device.assigned_user
-        else None,
+        "assigned_user": _serialize_assigned_user(device.assigned_user) if device.assigned_user else None,
+        "retired_at": device.retired_at,
         "positions": [DevicePositionResponse.model_validate(position) for position in positions or []],
         "scan_history": [
             {
@@ -147,6 +139,19 @@ def _serialize_device(
         "traffic_summary": traffic_summary,
     }
     return NetworkDeviceResponse.model_validate(payload)
+
+
+def _serialize_assigned_user(user: ApplicationUser) -> NetworkAssignedUserSummary:
+    return NetworkAssignedUserSummary(
+        id=user.id,
+        username=user.username,
+        email=user.email,
+        is_active=user.is_active,
+        full_name=user.full_name,
+        office_location=user.office_location,
+        phone_extension=user.phone_extension,
+        is_placeholder_profile=((not user.is_active) and user.email.endswith("@users.local")),
+    )
 
 
 def _extract_event_traffic(event: NetworkFirewallEvent, *, device_ip: str) -> tuple[int, int, str | None]:
@@ -337,6 +342,239 @@ def _build_device_traffic_summary(db: Session, device: NetworkDevice, *, window_
     )
 
 
+def _counter_to_items(counter: Counter[str], *, labels: dict[str, str] | None = None, limit: int = 6) -> list[NetworkStatisticsCountItem]:
+    items: list[NetworkStatisticsCountItem] = []
+    for key, count in counter.most_common(limit):
+        if not key:
+            continue
+        items.append(NetworkStatisticsCountItem(key=key, label=(labels or {}).get(key, key), count=count))
+    return items
+
+
+def _traffic_map_to_items(
+    values: dict[str, dict[str, Any]],
+    *,
+    limit: int = 8,
+) -> list[NetworkStatisticsTrafficItem]:
+    items: list[NetworkStatisticsTrafficItem] = []
+    ranked = sorted(
+        values.items(),
+        key=lambda item: (item[1]["bytes_total"], item[1]["events_count"]),
+        reverse=True,
+    )[:limit]
+    for key, payload in ranked:
+        items.append(
+            NetworkStatisticsTrafficItem(
+                label=payload.get("label") or key,
+                ip_address=payload.get("ip_address"),
+                events_count=payload["events_count"],
+                bytes_in=payload["bytes_in"],
+                bytes_out=payload["bytes_out"],
+                bytes_total=payload["bytes_total"],
+            )
+        )
+    return items
+
+
+def _build_network_statistics_summary(db: Session, *, window_hours: int = 24) -> NetworkStatisticsSummary:
+    now = datetime.now(UTC)
+    window_start = now - timedelta(hours=window_hours)
+
+    devices = db.scalars(select(NetworkDevice)).all()
+    device_by_ip = {device.ip_address: device for device in devices}
+    firewalls = list_network_firewalls(db)
+    alerts = list_network_alerts(db, status="open")
+    events = db.scalars(
+        select(NetworkFirewallEvent)
+        .where(NetworkFirewallEvent.observed_at >= window_start)
+        .order_by(NetworkFirewallEvent.observed_at.desc())
+    ).all()
+
+    total_devices = len(devices)
+    active_devices = sum(1 for device in devices if device.lifecycle_state == "active")
+    retired_devices = sum(1 for device in devices if device.lifecycle_state == "retired")
+    online_devices = sum(1 for device in devices if device.lifecycle_state == "active" and device.status == "online")
+    offline_devices = sum(1 for device in devices if device.lifecycle_state == "active" and device.status == "offline")
+    known_devices = sum(1 for device in devices if device.lifecycle_state == "active" and device.is_known_device)
+    unknown_devices = sum(1 for device in devices if device.lifecycle_state == "active" and not device.is_known_device)
+    monitored_devices = sum(1 for device in devices if device.lifecycle_state == "active" and device.is_monitored)
+    assigned_devices = sum(1 for device in devices if device.lifecycle_state == "active" and device.assigned_user_id is not None)
+    unassigned_devices = sum(1 for device in devices if device.lifecycle_state == "active" and device.assigned_user_id is None)
+    placeholder_profiles = sum(
+        1
+        for device in devices
+        if device.lifecycle_state == "active"
+        and device.assigned_user is not None
+        and (not device.assigned_user.is_active)
+        and device.assigned_user.email.endswith("@users.local")
+    )
+
+    device_type_counter: Counter[str] = Counter()
+    vendor_counter: Counter[str] = Counter()
+    office_counter: Counter[str] = Counter()
+    assignee_counter: Counter[str] = Counter()
+    for device in devices:
+        if device.lifecycle_state != "active":
+            continue
+        if device.device_type:
+            device_type_counter[device.device_type] += 1
+        if device.vendor:
+            vendor_counter[device.vendor] += 1
+        office_value = device.assigned_user.office_location if device.assigned_user and device.assigned_user.office_location else device.location_hint
+        if office_value:
+            office_counter[office_value] += 1
+        if device.assigned_user:
+            assignee_counter[device.assigned_user.full_name or device.assigned_user.username] += 1
+
+    severity_counter: Counter[str] = Counter()
+    protocol_counter: Counter[str] = Counter()
+    event_type_counter: Counter[str] = Counter()
+    firewall_rule_counter: Counter[str] = Counter()
+    domains_map: dict[str, dict[str, Any]] = defaultdict(lambda: {"label": None, "ip_address": None, "events_count": 0, "bytes_in": 0, "bytes_out": 0, "bytes_total": 0})
+    destinations_map: dict[str, dict[str, Any]] = defaultdict(lambda: {"label": None, "ip_address": None, "events_count": 0, "bytes_in": 0, "bytes_out": 0, "bytes_total": 0})
+    sources_map: dict[str, dict[str, Any]] = defaultdict(lambda: {"label": None, "ip_address": None, "events_count": 0, "bytes_in": 0, "bytes_out": 0, "bytes_total": 0})
+    timeline_map: dict[str, dict[str, int]] = defaultdict(lambda: {"events_count": 0, "bytes_in": 0, "bytes_out": 0})
+    seen_domains: set[str] = set()
+    external_peers: set[str] = set()
+    source_devices_with_traffic: set[int] = set()
+    total_bytes_in = 0
+    total_bytes_out = 0
+    allowed_events = 0
+    blocked_events = 0
+
+    for event in events:
+        severity_counter[event.severity or "info"] += 1
+        protocol_counter[(event.protocol or "n/d").upper()] += 1
+        event_type_counter[event.event_type] += 1
+
+        raw_payload = metadata_sources_to_dict(event.raw_payload) or {}
+        parsed = raw_payload.get("parsed") if isinstance(raw_payload, dict) else None
+        parsed = parsed if isinstance(parsed, dict) else {}
+
+        bytes_in = 0
+        bytes_out = 0
+        source_device = device_by_ip.get(event.src_ip or "")
+        source_label = None
+        if source_device and source_device.lifecycle_state == "active":
+            bytes_in, bytes_out, _ = _extract_event_traffic(event, device_ip=source_device.ip_address)
+            source_label = _resolve_device_label(source_device)[0]
+            source_devices_with_traffic.add(source_device.id)
+        else:
+            try:
+                bytes_out = max(int(str(parsed.get("bytes_sent", 0)).strip()), 0)
+            except (TypeError, ValueError):
+                bytes_out = 0
+            try:
+                bytes_in = max(int(str(parsed.get("bytes_received", 0)).strip()), 0)
+            except (TypeError, ValueError):
+                bytes_in = 0
+
+        total_bytes_in += bytes_in
+        total_bytes_out += bytes_out
+
+        lowered_type = event.event_type.lower()
+        if "allow" in lowered_type:
+            allowed_events += 1
+        if "deny" in lowered_type or "block" in lowered_type or "drop" in lowered_type:
+            blocked_events += 1
+
+        firewall_rule_name = parsed.get("fw_rule_name")
+        if isinstance(firewall_rule_name, str) and firewall_rule_name.strip():
+            firewall_rule_counter[firewall_rule_name.strip()] += 1
+
+        domain_value = parsed.get("domain")
+        if not isinstance(domain_value, str) or not domain_value.strip():
+            raw_url = parsed.get("url")
+            if isinstance(raw_url, str) and raw_url.strip():
+                domain_value = urlparse(raw_url.strip()).hostname
+        if isinstance(domain_value, str) and domain_value.strip():
+            normalized_domain = domain_value.strip().lower()
+            seen_domains.add(normalized_domain)
+            domains_entry = domains_map[normalized_domain]
+            domains_entry["label"] = normalized_domain
+            domains_entry["events_count"] += 1
+            domains_entry["bytes_in"] += bytes_in
+            domains_entry["bytes_out"] += bytes_out
+            domains_entry["bytes_total"] += bytes_in + bytes_out
+
+        peer_ip = event.dst_ip or event.src_ip
+        if peer_ip:
+            try:
+                peer_parsed = ipaddress.ip_address(peer_ip)
+            except ValueError:
+                peer_parsed = None
+            if peer_parsed and not (peer_parsed.is_private or peer_parsed.is_loopback or peer_parsed.is_link_local or peer_parsed.is_multicast):
+                external_peers.add(peer_ip)
+            peer_label = _extract_peer_hint(event, peer_ip=peer_ip) or peer_ip
+            destinations_entry = destinations_map[peer_ip]
+            destinations_entry["label"] = peer_label
+            destinations_entry["ip_address"] = peer_ip
+            destinations_entry["events_count"] += 1
+            destinations_entry["bytes_in"] += bytes_in
+            destinations_entry["bytes_out"] += bytes_out
+            destinations_entry["bytes_total"] += bytes_in + bytes_out
+
+        if source_label:
+            source_entry = sources_map[source_device.ip_address]
+            source_entry["label"] = source_label
+            source_entry["ip_address"] = source_device.ip_address
+            source_entry["events_count"] += 1
+            source_entry["bytes_in"] += bytes_in
+            source_entry["bytes_out"] += bytes_out
+            source_entry["bytes_total"] += bytes_in + bytes_out
+
+        bucket = event.observed_at.astimezone(timezone.utc).strftime("%d/%m %H:00")
+        timeline_map[bucket]["events_count"] += 1
+        timeline_map[bucket]["bytes_in"] += bytes_in
+        timeline_map[bucket]["bytes_out"] += bytes_out
+
+    return NetworkStatisticsSummary(
+        window_hours=window_hours,
+        generated_at=now,
+        total_devices=total_devices,
+        active_devices=active_devices,
+        retired_devices=retired_devices,
+        online_devices=online_devices,
+        offline_devices=offline_devices,
+        known_devices=known_devices,
+        unknown_devices=unknown_devices,
+        monitored_devices=monitored_devices,
+        assigned_devices=assigned_devices,
+        unassigned_devices=unassigned_devices,
+        placeholder_profiles=placeholder_profiles,
+        devices_with_traffic=len(source_devices_with_traffic),
+        firewall_count=len(firewalls),
+        open_alerts=len(alerts),
+        total_events=len(events),
+        allowed_events=allowed_events,
+        blocked_events=blocked_events,
+        bytes_in=total_bytes_in,
+        bytes_out=total_bytes_out,
+        unique_external_peers=len(external_peers),
+        unique_domains=len(seen_domains),
+        top_device_types=_counter_to_items(device_type_counter, limit=6),
+        top_vendors=_counter_to_items(vendor_counter, limit=6),
+        top_offices=_counter_to_items(office_counter, limit=6),
+        top_assignees=_counter_to_items(assignee_counter, limit=8),
+        severity_breakdown=_counter_to_items(severity_counter, labels={"info": "Info", "warning": "Warning", "danger": "Danger", "critical": "Critical", "notice": "Notice"}, limit=6),
+        protocol_breakdown=_counter_to_items(protocol_counter, limit=6),
+        top_event_types=_counter_to_items(event_type_counter, limit=8),
+        top_firewall_rules=_counter_to_items(firewall_rule_counter, limit=8),
+        top_domains=_traffic_map_to_items(domains_map, limit=8),
+        top_destinations=_traffic_map_to_items(destinations_map, limit=8),
+        top_source_devices=_traffic_map_to_items(sources_map, limit=8),
+        hourly_timeline=[
+            NetworkStatisticsTimelinePoint(
+                bucket=bucket,
+                events_count=values["events_count"],
+                bytes_in=values["bytes_in"],
+                bytes_out=values["bytes_out"],
+            )
+            for bucket, values in sorted(timeline_map.items(), key=lambda item: item[0])
+        ],
+    )
+
+
 def _serialize_scan(scan_id: int, scan: object, db: Session) -> NetworkScanResponse:
     payload = NetworkScanResponse.model_validate(scan).model_dump()
     payload["delta"] = get_scan_delta(db, scan_id)
@@ -433,6 +671,16 @@ def get_dashboard(
     return NetworkDashboardSummary(**get_network_dashboard_summary(db))
 
 
+@router.get("/statistics", response_model=NetworkStatisticsSummary)
+def get_statistics(
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+    window_hours: int = Query(default=24, ge=1, le=24 * 30),
+) -> NetworkStatisticsSummary:
+    _require_network_module(current_user)
+    return _build_network_statistics_summary(db, window_hours=window_hours)
+
+
 @router.get("/devices", response_model=NetworkDeviceListResponse)
 def get_devices(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
@@ -462,6 +710,16 @@ def get_devices(
         page=page,
         page_size=page_size,
     )
+
+
+@router.get("/device-assignees", response_model=list[NetworkAssignedUserSummary])
+def get_device_assignees(
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[NetworkAssignedUserSummary]:
+    _require_network_module(current_user)
+    users = db.scalars(select(ApplicationUser).order_by(ApplicationUser.full_name.asc(), ApplicationUser.username.asc())).all()
+    return [_serialize_assigned_user(user) for user in users]
 
 
 @router.get("/devices/{device_id}", response_model=NetworkDeviceResponse)
@@ -499,6 +757,12 @@ def patch_device(
         assigned_user = db.get(ApplicationUser, updates["assigned_user_id"])
         if assigned_user is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assigned user not found")
+    if updates.get("lifecycle_state") == "retired":
+        updates["assigned_user_id"] = None
+        updates["is_monitored"] = False
+        updates["retired_at"] = device.retired_at or datetime.now(UTC)
+    elif updates.get("lifecycle_state") == "active":
+        updates["retired_at"] = None
     for field_name, field_value in updates.items():
         setattr(device, field_name, field_value)
 

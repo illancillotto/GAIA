@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import { NetworkDeviceModal } from "@/components/network/network-device-modal";
@@ -30,7 +31,13 @@ const emptySummary: NetworkDashboardSummary = {
   latest_scan_at: null,
 };
 
+type DashboardLifecycleFilter = "all" | "active" | "retired";
+type DashboardAssignmentFilter = "all" | "assigned" | "unassigned";
+
 function DashboardContent({ token }: { token: string }) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [summary, setSummary] = useState<NetworkDashboardSummary>(emptySummary);
   const [recentDevices, setRecentDevices] = useState<NetworkDevice[]>([]);
   const [onlineDevices, setOnlineDevices] = useState<NetworkDevice[]>([]);
@@ -41,9 +48,23 @@ function DashboardContent({ token }: { token: string }) {
   const [isTriggeringScan, setIsTriggeringScan] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedDeviceId, setSelectedDeviceId] = useState<number | null>(null);
-  const [onlineFilter, setOnlineFilter] = useState("");
-  const [recentFilter, setRecentFilter] = useState("");
-  const [alertFilter, setAlertFilter] = useState("");
+  const [onlineFilter, setOnlineFilter] = useState(searchParams.get("online") ?? "");
+  const [recentFilter, setRecentFilter] = useState(searchParams.get("recent") ?? "");
+  const [alertFilter, setAlertFilter] = useState(searchParams.get("alerts") ?? "");
+  const [lifecycleFilter, setLifecycleFilter] = useState<DashboardLifecycleFilter>(() => {
+    const initialValue = searchParams.get("lifecycle");
+    if (initialValue === "active" || initialValue === "retired") {
+      return initialValue;
+    }
+    return "all";
+  });
+  const [assignmentFilter, setAssignmentFilter] = useState<DashboardAssignmentFilter>(() => {
+    const initialValue = searchParams.get("assignment");
+    if (initialValue === "assigned" || initialValue === "unassigned") {
+      return initialValue;
+    }
+    return "all";
+  });
 
   const loadData = useCallback(async () => {
     try {
@@ -74,6 +95,53 @@ function DashboardContent({ token }: { token: string }) {
     void loadData();
   }, [loadData]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString());
+
+    if (onlineFilter.trim()) {
+      params.set("online", onlineFilter.trim());
+    } else {
+      params.delete("online");
+    }
+
+    if (recentFilter.trim()) {
+      params.set("recent", recentFilter.trim());
+    } else {
+      params.delete("recent");
+    }
+
+    if (alertFilter.trim()) {
+      params.set("alerts", alertFilter.trim());
+    } else {
+      params.delete("alerts");
+    }
+
+    if (lifecycleFilter !== "all") {
+      params.set("lifecycle", lifecycleFilter);
+    } else {
+      params.delete("lifecycle");
+    }
+
+    if (assignmentFilter !== "all") {
+      params.set("assignment", assignmentFilter);
+    } else {
+      params.delete("assignment");
+    }
+
+    const nextQuery = params.toString();
+    const nextUrl = nextQuery ? `${pathname}?${nextQuery}` : pathname;
+    router.replace(nextUrl, { scroll: false });
+  }, [
+    alertFilter,
+    assignmentFilter,
+    lifecycleFilter,
+    onlineFilter,
+    pathname,
+    recentFilter,
+    router,
+    searchParams,
+  ]);
+
   async function handleScanTrigger() {
     setIsTriggeringScan(true);
     try {
@@ -91,6 +159,22 @@ function DashboardContent({ token }: { token: string }) {
     setOnlineDevices((currentItems) => currentItems.map((item) => (item.id === updatedDevice.id ? { ...item, ...updatedDevice } : item)));
   }
 
+  function matchesDashboardDeviceFilters(device: NetworkDevice) {
+    if (lifecycleFilter === "active" && device.lifecycle_state !== "active") {
+      return false;
+    }
+    if (lifecycleFilter === "retired" && device.lifecycle_state !== "retired") {
+      return false;
+    }
+    if (assignmentFilter === "assigned" && !device.assigned_user_id) {
+      return false;
+    }
+    if (assignmentFilter === "unassigned" && (device.assigned_user_id || device.lifecycle_state === "retired")) {
+      return false;
+    }
+    return true;
+  }
+
   const filteredOnlineDevices = onlineDevices.filter((device) => {
     const haystack = [
       device.resolved_label,
@@ -103,7 +187,7 @@ function DashboardContent({ token }: { token: string }) {
       .filter(Boolean)
       .join(" ")
       .toLowerCase();
-    return haystack.includes(onlineFilter.trim().toLowerCase());
+    return matchesDashboardDeviceFilters(device) && haystack.includes(onlineFilter.trim().toLowerCase());
   });
   const filteredRecentDevices = recentDevices.filter((device) => {
     const haystack = [
@@ -117,13 +201,27 @@ function DashboardContent({ token }: { token: string }) {
       .filter(Boolean)
       .join(" ")
       .toLowerCase();
-    return haystack.includes(recentFilter.trim().toLowerCase());
+    return matchesDashboardDeviceFilters(device) && haystack.includes(recentFilter.trim().toLowerCase());
   });
   const filteredAlerts = alerts.filter((alert) => {
     const haystack = [alert.title, alert.message, alert.alert_type, alert.severity].filter(Boolean).join(" ").toLowerCase();
     return haystack.includes(alertFilter.trim().toLowerCase());
   });
-  const unassignedDevices = recentDevices.filter((device) => !device.assigned_user_id);
+  const unassignedDevices = recentDevices.filter(
+    (device) =>
+      !device.assigned_user_id &&
+      device.lifecycle_state !== "retired" &&
+      lifecycleFilter !== "retired" &&
+      haystacklessAssignmentMatch(assignmentFilter),
+  );
+  const activeDevicesCount = recentDevices.filter((device) => device.lifecycle_state === "active").length;
+  const retiredDevicesCount = recentDevices.filter((device) => device.lifecycle_state === "retired").length;
+  const assignedDevicesCount = recentDevices.filter((device) => Boolean(device.assigned_user_id)).length;
+  const unassignedDevicesCount = recentDevices.filter((device) => !device.assigned_user_id && device.lifecycle_state !== "retired").length;
+
+  function haystacklessAssignmentMatch(filter: DashboardAssignmentFilter) {
+    return filter === "all" || filter === "unassigned";
+  }
 
   return (
     <div className="page-stack">
@@ -177,6 +275,27 @@ function DashboardContent({ token }: { token: string }) {
         </ModuleWorkspaceKpiRow>
       </ModuleWorkspaceHero>
 
+      <article className="panel-card">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="section-title">Filtri dashboard</p>
+            <p className="section-copy">Applica gli stessi criteri ai blocchi dispositivi della panoramica.</p>
+          </div>
+          <div className="flex flex-wrap gap-3">
+            <select className="form-control min-w-[190px]" value={lifecycleFilter} onChange={(event) => setLifecycleFilter(event.target.value as DashboardLifecycleFilter)}>
+              <option value="all">Tutti i cicli vita</option>
+              <option value="active">Attivi ({activeDevicesCount})</option>
+              <option value="retired">Rotamati ({retiredDevicesCount})</option>
+            </select>
+            <select className="form-control min-w-[210px]" value={assignmentFilter} onChange={(event) => setAssignmentFilter(event.target.value as DashboardAssignmentFilter)}>
+              <option value="all">Tutte le assegnazioni</option>
+              <option value="assigned">Con utente ({assignedDevicesCount})</option>
+              <option value="unassigned">Senza utente ({unassignedDevicesCount})</option>
+            </select>
+          </div>
+        </div>
+      </article>
+
       <div className="grid gap-6 xl:grid-cols-4">
         <article className="panel-card">
           <div className="mb-4 flex items-center justify-between gap-3">
@@ -218,6 +337,7 @@ function DashboardContent({ token }: { token: string }) {
                     </p>
                     <div className="mt-2 flex flex-wrap gap-2">
                       {device.assigned_user?.is_placeholder_profile ? <Badge variant="warning">Profilo placeholder</Badge> : null}
+                      {device.lifecycle_state === "retired" ? <Badge variant="neutral">Rotamato</Badge> : null}
                     </div>
                     {device.asset_label || device.notes ? (
                       <p className="mt-1 text-xs text-gray-500">
@@ -369,7 +489,8 @@ function DashboardContent({ token }: { token: string }) {
                     </p>
                     <div className="mt-2 flex flex-wrap gap-2">
                       {device.assigned_user?.is_placeholder_profile ? <Badge variant="warning">Profilo placeholder</Badge> : null}
-                      {!device.assigned_user_id ? <Badge variant="warning">Senza utente</Badge> : null}
+                      {device.lifecycle_state === "retired" ? <Badge variant="neutral">Rotamato</Badge> : null}
+                      {!device.assigned_user_id && device.lifecycle_state !== "retired" ? <Badge variant="warning">Senza utente</Badge> : null}
                     </div>
                     {device.asset_label || device.notes ? (
                       <p className="mt-1 text-xs text-gray-500">

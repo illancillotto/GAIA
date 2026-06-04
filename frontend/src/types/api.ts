@@ -783,6 +783,77 @@ export type NetworkDashboardSummary = {
   latest_scan_at: string | null;
 };
 
+export type NetworkStatisticsCountItem = {
+  key: string;
+  label: string;
+  count: number;
+};
+
+export type NetworkStatisticsTrafficItem = {
+  label: string;
+  ip_address: string | null;
+  events_count: number;
+  bytes_in: number;
+  bytes_out: number;
+  bytes_total: number;
+};
+
+export type NetworkStatisticsTimelinePoint = {
+  bucket: string;
+  events_count: number;
+  bytes_in: number;
+  bytes_out: number;
+};
+
+export type NetworkStatisticsSummary = {
+  window_hours: number;
+  generated_at: string;
+  total_devices: number;
+  active_devices: number;
+  retired_devices: number;
+  online_devices: number;
+  offline_devices: number;
+  known_devices: number;
+  unknown_devices: number;
+  monitored_devices: number;
+  assigned_devices: number;
+  unassigned_devices: number;
+  placeholder_profiles: number;
+  devices_with_traffic: number;
+  firewall_count: number;
+  open_alerts: number;
+  total_events: number;
+  allowed_events: number;
+  blocked_events: number;
+  bytes_in: number;
+  bytes_out: number;
+  unique_external_peers: number;
+  unique_domains: number;
+  top_device_types: NetworkStatisticsCountItem[];
+  top_vendors: NetworkStatisticsCountItem[];
+  top_offices: NetworkStatisticsCountItem[];
+  top_assignees: NetworkStatisticsCountItem[];
+  severity_breakdown: NetworkStatisticsCountItem[];
+  protocol_breakdown: NetworkStatisticsCountItem[];
+  top_event_types: NetworkStatisticsCountItem[];
+  top_firewall_rules: NetworkStatisticsCountItem[];
+  top_domains: NetworkStatisticsTrafficItem[];
+  top_destinations: NetworkStatisticsTrafficItem[];
+  top_source_devices: NetworkStatisticsTrafficItem[];
+  hourly_timeline: NetworkStatisticsTimelinePoint[];
+};
+
+export type NetworkAssignedUserSummary = {
+  id: number;
+  username: string;
+  email: string;
+  is_active: boolean;
+  full_name: string | null;
+  office_location: string | null;
+  phone_extension: string | null;
+  is_placeholder_profile: boolean;
+};
+
 export type NetworkDevice = {
   id: number;
   last_scan_id: number | null;
@@ -794,6 +865,7 @@ export type NetworkDevice = {
   display_name: string | null;
   resolved_label: string;
   label_source: string;
+  lifecycle_state: "active" | "retired";
   asset_label: string | null;
   vendor: string | null;
   model_name: string | null;
@@ -807,16 +879,8 @@ export type NetworkDevice = {
   status: string;
   is_monitored: boolean;
   open_ports: string | null;
-  assigned_user: {
-    id: number;
-    username: string;
-    email: string;
-    is_active: boolean;
-    full_name: string | null;
-    office_location: string | null;
-    phone_extension: string | null;
-    is_placeholder_profile: boolean;
-  } | null;
+  retired_at: string | null;
+  assigned_user: NetworkAssignedUserSummary | null;
   first_seen_at: string;
   last_seen_at: string;
   created_at: string;
@@ -863,6 +927,7 @@ export type NetworkDevice = {
 
 export type NetworkDeviceUpdateInput = {
   display_name?: string | null;
+  lifecycle_state?: "active" | "retired" | null;
   asset_label?: string | null;
   model_name?: string | null;
   device_type?: string | null;

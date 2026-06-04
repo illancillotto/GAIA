@@ -135,6 +135,7 @@ export function ModuleSidebar({
         <NavItem href="/network" icon={GridIcon} label="Dashboard" />
         <NavItem href="/network/devices" icon={ServerIcon} label="Dispositivi" match="prefix" />
         <NavItem href="/network/firewalls" icon={ServerIcon} label="Firewall" match="prefix" />
+        <NavItem href="/network/statistics" icon={SearchIcon} label="Statistiche" match="prefix" />
         <NavItem href="/network/floor-plan" icon={FolderIcon} label="Planimetria" />
         <NavItem href="/network/alerts" icon={AlertTriangleIcon} label="Alert" />
         <NavItem href="/network/scans" icon={RefreshIcon} label="Scansioni" match="prefix" />

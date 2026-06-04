@@ -15,6 +15,66 @@ class NetworkDashboardSummary(BaseModel):
     latest_scan_at: datetime | None
 
 
+class NetworkStatisticsCountItem(BaseModel):
+    key: str
+    label: str
+    count: int
+
+
+class NetworkStatisticsTrafficItem(BaseModel):
+    label: str
+    ip_address: str | None = None
+    events_count: int
+    bytes_in: int = 0
+    bytes_out: int = 0
+    bytes_total: int = 0
+
+
+class NetworkStatisticsTimelinePoint(BaseModel):
+    bucket: str
+    events_count: int
+    bytes_in: int = 0
+    bytes_out: int = 0
+
+
+class NetworkStatisticsSummary(BaseModel):
+    window_hours: int = 24
+    generated_at: datetime
+    total_devices: int
+    active_devices: int
+    retired_devices: int
+    online_devices: int
+    offline_devices: int
+    known_devices: int
+    unknown_devices: int
+    monitored_devices: int
+    assigned_devices: int
+    unassigned_devices: int
+    placeholder_profiles: int
+    devices_with_traffic: int
+    firewall_count: int
+    open_alerts: int
+    total_events: int = 0
+    allowed_events: int = 0
+    blocked_events: int = 0
+    bytes_in: int = 0
+    bytes_out: int = 0
+    unique_external_peers: int = 0
+    unique_domains: int = 0
+    top_device_types: list[NetworkStatisticsCountItem] = Field(default_factory=list)
+    top_vendors: list[NetworkStatisticsCountItem] = Field(default_factory=list)
+    top_offices: list[NetworkStatisticsCountItem] = Field(default_factory=list)
+    top_assignees: list[NetworkStatisticsCountItem] = Field(default_factory=list)
+    severity_breakdown: list[NetworkStatisticsCountItem] = Field(default_factory=list)
+    protocol_breakdown: list[NetworkStatisticsCountItem] = Field(default_factory=list)
+    top_event_types: list[NetworkStatisticsCountItem] = Field(default_factory=list)
+    top_firewall_rules: list[NetworkStatisticsCountItem] = Field(default_factory=list)
+    top_domains: list[NetworkStatisticsTrafficItem] = Field(default_factory=list)
+    top_destinations: list[NetworkStatisticsTrafficItem] = Field(default_factory=list)
+    top_source_devices: list[NetworkStatisticsTrafficItem] = Field(default_factory=list)
+    hourly_timeline: list[NetworkStatisticsTimelinePoint] = Field(default_factory=list)
+
+
 class DevicePositionResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -94,6 +154,7 @@ class NetworkDeviceResponse(BaseModel):
     display_name: str | None = None
     resolved_label: str
     label_source: str
+    lifecycle_state: str = "active"
     asset_label: str | None = None
     vendor: str | None = None
     model_name: str | None = None
@@ -109,6 +170,7 @@ class NetworkDeviceResponse(BaseModel):
     open_ports: str | None
     assigned_user_id: int | None = None
     assigned_user: NetworkAssignedUserSummary | None = None
+    retired_at: datetime | None = None
     first_seen_at: datetime
     last_seen_at: datetime
     created_at: datetime
@@ -120,6 +182,7 @@ class NetworkDeviceResponse(BaseModel):
 
 class NetworkDeviceUpdateRequest(BaseModel):
     display_name: str | None = None
+    lifecycle_state: str | None = Field(default=None, pattern="^(active|retired)$")
     asset_label: str | None = None
     model_name: str | None = None
     device_type: str | None = None

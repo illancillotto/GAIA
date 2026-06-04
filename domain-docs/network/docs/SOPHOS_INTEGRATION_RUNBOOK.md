@@ -223,3 +223,19 @@ Lo script:
 - assegna `network_devices.assigned_user_id` quando trova un solo match non ambiguo
 - valorizza `application_users.full_name`, `office_location` e `phone_extension` se mancanti
 - resta in `dry-run` di default e stampa preview dei match, dei mancati match e dei casi ambigui
+
+## Cambio detentore e rotamazione device
+
+Dal dettaglio device o dalla modal rapida su `/network/devices` e possibile:
+
+- cambiare il detentore selezionando un diverso `application_users`
+- sganciare completamente il device dall'utente corrente
+- marcare il device come `rotamato`
+
+Effetto della rotamazione:
+
+- `assigned_user_id = null`
+- `is_monitored = false`
+- `lifecycle_state = retired`
+- valorizzazione di `retired_at`
+- esclusione del device dai conteggi operativi dashboard

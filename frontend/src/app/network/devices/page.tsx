@@ -18,6 +18,8 @@ const DEFAULT_SORTING: SortingState = [
 ];
 
 type DeviceKnowledgeFilter = "all" | "known" | "unknown";
+type DeviceLifecycleFilter = "all" | "active" | "retired";
+type DeviceAssignmentFilter = "all" | "assigned" | "unassigned";
 
 function toComparableIp(ipAddress: string): number {
   const parts = ipAddress.split(".").map((part) => Number(part));
@@ -51,6 +53,7 @@ const columns: ColumnDef<NetworkDevice>[] = [
       <div>
         <p className="font-medium text-gray-900">{row.original.resolved_label || row.original.display_name || row.original.hostname || row.original.ip_address}</p>
         <div className="mt-1 flex flex-wrap items-center gap-2">
+          {row.original.lifecycle_state === "retired" ? <Badge variant="neutral">Rotamato</Badge> : null}
           <span className="text-xs text-gray-500">
             {row.original.assigned_user?.username
               ? `Utente ${row.original.assigned_user.username}`
@@ -125,6 +128,20 @@ function DevicesContent({ token }: { token: string }) {
     return "all";
   });
   const [status, setStatus] = useState(searchParams.get("status") ?? "");
+  const [lifecycleFilter, setLifecycleFilter] = useState<DeviceLifecycleFilter>(() => {
+    const initialValue = searchParams.get("lifecycle");
+    if (initialValue === "active" || initialValue === "retired") {
+      return initialValue;
+    }
+    return "all";
+  });
+  const [assignmentFilter, setAssignmentFilter] = useState<DeviceAssignmentFilter>(() => {
+    const initialValue = searchParams.get("assignment");
+    if (initialValue === "assigned" || initialValue === "unassigned") {
+      return initialValue;
+    }
+    return "all";
+  });
   const [deviceType, setDeviceType] = useState(searchParams.get("type") ?? "");
   const [vendor, setVendor] = useState(searchParams.get("vendor") ?? "");
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -183,6 +200,18 @@ function DevicesContent({ token }: { token: string }) {
     if (status && item.status !== status) {
       return false;
     }
+    if (lifecycleFilter === "active" && item.lifecycle_state !== "active") {
+      return false;
+    }
+    if (lifecycleFilter === "retired" && item.lifecycle_state !== "retired") {
+      return false;
+    }
+    if (assignmentFilter === "assigned" && !item.assigned_user_id) {
+      return false;
+    }
+    if (assignmentFilter === "unassigned" && (item.assigned_user_id || item.lifecycle_state === "retired")) {
+      return false;
+    }
     if (deviceType && item.device_type !== deviceType) {
       return false;
     }
@@ -194,6 +223,10 @@ function DevicesContent({ token }: { token: string }) {
 
   const knownDevicesCount = items.filter((item) => item.is_known_device).length;
   const unknownDevicesCount = items.length - knownDevicesCount;
+  const activeDevicesCount = items.filter((item) => item.lifecycle_state === "active").length;
+  const retiredDevicesCount = items.filter((item) => item.lifecycle_state === "retired").length;
+  const assignedDevicesCount = items.filter((item) => Boolean(item.assigned_user_id)).length;
+  const unassignedDevicesCount = items.filter((item) => !item.assigned_user_id && item.lifecycle_state !== "retired").length;
 
   const availableDeviceTypes = Array.from(new Set(items.map((item) => item.device_type).filter(Boolean))).sort((left, right) => (left || "").localeCompare(right || "", "it"));
   const availableVendors = Array.from(new Set(items.map((item) => item.vendor).filter(Boolean))).sort((left, right) => (left || "").localeCompare(right || "", "it"));
@@ -233,7 +266,7 @@ function DevicesContent({ token }: { token: string }) {
           </div>
           <p className="text-xs text-gray-500">Filtra rapidamente l&apos;inventario tra dispositivi censiti e dispositivi da classificare.</p>
         </div>
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1.4fr)_180px_220px_220px_auto]">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1.4fr)_180px_190px_190px_220px_220px_auto]">
           <input
             className="form-control"
             value={search}
@@ -244,6 +277,16 @@ function DevicesContent({ token }: { token: string }) {
             <option value="">Tutti gli stati</option>
             <option value="online">Online</option>
             <option value="offline">Offline</option>
+          </select>
+          <select className="form-control" value={lifecycleFilter} onChange={(event) => setLifecycleFilter(event.target.value as DeviceLifecycleFilter)}>
+            <option value="all">Tutti i cicli vita</option>
+            <option value="active">Attivi ({activeDevicesCount})</option>
+            <option value="retired">Rotamati ({retiredDevicesCount})</option>
+          </select>
+          <select className="form-control" value={assignmentFilter} onChange={(event) => setAssignmentFilter(event.target.value as DeviceAssignmentFilter)}>
+            <option value="all">Tutte le assegnazioni</option>
+            <option value="assigned">Con utente ({assignedDevicesCount})</option>
+            <option value="unassigned">Senza utente ({unassignedDevicesCount})</option>
           </select>
           <select className="form-control" value={deviceType} onChange={(event) => setDeviceType(event.target.value)}>
             <option value="">Tutti i tipi</option>

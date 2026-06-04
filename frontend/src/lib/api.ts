@@ -114,8 +114,10 @@ import type {
   NetworkAlert,
   NetworkAlertUpdateInput,
   NetworkDashboardSummary,
+  NetworkAssignedUserSummary,
   NetworkDevice,
   NetworkDeviceListResponse,
+  NetworkStatisticsSummary,
   NetworkDeviceUpdateInput,
   NetworkFirewall,
   NetworkFirewallEvent,
@@ -419,12 +421,44 @@ export async function getNasUsersForUsersSection(token: string): Promise<NasUser
   });
 }
 
-export async function listApplicationUsers(token: string): Promise<ApplicationUserListResponse> {
-  return request<ApplicationUserListResponse>("/admin/users", {
+export async function listApplicationUsers(
+  token: string,
+  params: { skip?: number; limit?: number; role?: string; isActive?: boolean } = {},
+): Promise<ApplicationUserListResponse> {
+  const query = new URLSearchParams();
+  if (params.skip != null) {
+    query.set("skip", String(params.skip));
+  }
+  if (params.limit != null) {
+    query.set("limit", String(params.limit));
+  }
+  if (params.role) {
+    query.set("role", params.role);
+  }
+  if (params.isActive != null) {
+    query.set("is_active", String(params.isActive));
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<ApplicationUserListResponse>(`/admin/users${suffix}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
   });
+}
+
+export async function listAllApplicationUsers(token: string): Promise<ApplicationUser[]> {
+  const pageSize = 200;
+  let skip = 0;
+  const items: ApplicationUser[] = [];
+
+  while (true) {
+    const response = await listApplicationUsers(token, { skip, limit: pageSize });
+    items.push(...response.items);
+    if (items.length >= response.total || response.items.length === 0) {
+      return items;
+    }
+    skip += pageSize;
+  }
 }
 
 export async function listInazCollaborators(
@@ -455,6 +489,21 @@ export async function listInazCollaborators(
       Authorization: `Bearer ${token}`,
     },
   });
+}
+
+export async function listAllInazCollaborators(token: string): Promise<InazCollaborator[]> {
+  const pageSize = 200;
+  let page = 1;
+  const items: InazCollaborator[] = [];
+
+  while (true) {
+    const response = await listInazCollaborators(token, { page, pageSize });
+    items.push(...response.items);
+    if (items.length >= response.total || response.items.length === 0) {
+      return items;
+    }
+    page += 1;
+  }
 }
 
 export async function listInazCredentials(token: string): Promise<InazCredential[]> {
@@ -1480,6 +1529,22 @@ export async function getNetworkDashboard(token: string): Promise<NetworkDashboa
   });
 }
 
+export async function getNetworkStatistics(
+  token: string,
+  params: { windowHours?: number } = {},
+): Promise<NetworkStatisticsSummary> {
+  const query = new URLSearchParams();
+  if (params.windowHours != null) {
+    query.set("window_hours", String(params.windowHours));
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<NetworkStatisticsSummary>(`/network/statistics${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
 export async function getNetworkDevices(
   token: string,
   params?: { search?: string; status?: string; page?: number; pageSize?: number },
@@ -1508,6 +1573,14 @@ export async function getNetworkDevices(
 
 export async function getNetworkDevice(token: string, deviceId: number): Promise<NetworkDevice> {
   return request<NetworkDevice>(`/network/devices/${deviceId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function listNetworkDeviceAssignees(token: string): Promise<NetworkAssignedUserSummary[]> {
+  return request<NetworkAssignedUserSummary[]>("/network/device-assignees", {
     headers: {
       Authorization: `Bearer ${token}`,
     },

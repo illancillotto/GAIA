@@ -6,17 +6,20 @@ import { useEffect, useState } from "react";
 import { NetworkModulePage } from "@/components/network/network-module-page";
 import { NetworkStatusBadge } from "@/components/network/network-status-badge";
 import { Badge } from "@/components/ui/badge";
-import { getNetworkDevice, updateNetworkDevice } from "@/lib/api";
+import { getNetworkDevice, listNetworkDeviceAssignees, updateNetworkDevice } from "@/lib/api";
 import { getNetworkDeviceAdminUrl } from "@/lib/network-device-utils";
-import type { NetworkDevice } from "@/types/api";
+import type { NetworkAssignedUserSummary, NetworkDevice } from "@/types/api";
 
 function DeviceDetailContent({ token, deviceId }: { token: string; deviceId: number }) {
   const [device, setDevice] = useState<NetworkDevice | null>(null);
+  const [applicationUsers, setApplicationUsers] = useState<NetworkAssignedUserSummary[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [displayName, setDisplayName] = useState("");
+  const [assignedUserId, setAssignedUserId] = useState("");
+  const [lifecycleState, setLifecycleState] = useState<"active" | "retired">("active");
   const [assetLabel, setAssetLabel] = useState("");
   const [locationHint, setLocationHint] = useState("");
   const [notes, setNotes] = useState("");
@@ -30,8 +33,12 @@ function DeviceDetailContent({ token, deviceId }: { token: string; deviceId: num
   useEffect(() => {
     async function loadDevice() {
       try {
-        const response = await getNetworkDevice(token, deviceId);
+        const [response, users] = await Promise.all([
+          getNetworkDevice(token, deviceId),
+          listNetworkDeviceAssignees(token),
+        ]);
         setDevice(response);
+        setApplicationUsers(users);
         setLoadError(null);
       } catch (error) {
         setLoadError(error instanceof Error ? error.message : "Errore nel caricamento dispositivo");
@@ -46,6 +53,8 @@ function DeviceDetailContent({ token, deviceId }: { token: string; deviceId: num
       return;
     }
     setDisplayName(device.display_name || "");
+    setAssignedUserId(device.assigned_user_id ? String(device.assigned_user_id) : "");
+    setLifecycleState(device.lifecycle_state);
     setAssetLabel(device.asset_label || "");
     setLocationHint(device.location_hint || "");
     setNotes(device.notes || "");
@@ -68,6 +77,8 @@ function DeviceDetailContent({ token, deviceId }: { token: string; deviceId: num
     try {
       const updated = await updateNetworkDevice(token, device.id, {
         display_name: displayName || null,
+        assigned_user_id: lifecycleState === "retired" ? null : assignedUserId ? Number(assignedUserId) : null,
+        lifecycle_state: lifecycleState,
         asset_label: assetLabel || null,
         location_hint: locationHint || null,
         notes: notes || null,
@@ -78,6 +89,8 @@ function DeviceDetailContent({ token, deviceId }: { token: string; deviceId: num
         is_monitored: isMonitored,
       });
       setDevice(updated);
+      setAssignedUserId(updated.assigned_user_id ? String(updated.assigned_user_id) : "");
+      setLifecycleState(updated.lifecycle_state);
       setSaveMessage("Metadati dispositivo aggiornati.");
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : "Errore salvataggio dispositivo");
@@ -99,6 +112,10 @@ function DeviceDetailContent({ token, deviceId }: { token: string; deviceId: num
     return <article className="panel-card text-sm text-gray-500">Caricamento dettaglio dispositivo.</article>;
   }
 
+  const sortedUsers = [...applicationUsers].sort((left, right) =>
+    (left.full_name || left.username).localeCompare(right.full_name || right.username, "it"),
+  );
+
   return (
     <div className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
       <article className="panel-card">
@@ -106,7 +123,10 @@ function DeviceDetailContent({ token, deviceId }: { token: string; deviceId: num
           <div>
             <p className="section-title">Identità dispositivo</p>
             <p className="mt-1 text-lg font-medium text-gray-900">{device.resolved_label || device.display_name || device.hostname || device.ip_address}</p>
-            <p className="mt-1 text-sm text-gray-500">{device.asset_label || device.dns_name || "Nessuna label assegnata"}</p>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <p className="text-sm text-gray-500">{device.asset_label || device.dns_name || "Nessuna label assegnata"}</p>
+              {device.lifecycle_state === "retired" ? <Badge variant="neutral">Rotamato</Badge> : null}
+            </div>
             <p className="mt-1 text-xs text-gray-500">
               Fonte label: {device.label_source === "application_user" ? "utente applicativo" : device.label_source}
             </p>
@@ -179,6 +199,14 @@ function DeviceDetailContent({ token, deviceId }: { token: string; deviceId: num
                 {device.assigned_user?.is_placeholder_profile ? <Badge variant="warning">Profilo placeholder</Badge> : null}
               </div>
             </dd>
+          </div>
+          <div>
+            <dt className="label-caption">Ciclo di vita</dt>
+            <dd className="mt-1 text-sm text-gray-800">{device.lifecycle_state === "retired" ? "Rotamato" : "Attivo"}</dd>
+          </div>
+          <div>
+            <dt className="label-caption">Data rotamazione</dt>
+            <dd className="mt-1 text-sm text-gray-800">{device.retired_at ? new Date(device.retired_at).toLocaleString("it-IT") : "n/d"}</dd>
           </div>
           <div>
             <dt className="label-caption">Interno</dt>
@@ -311,6 +339,33 @@ function DeviceDetailContent({ token, deviceId }: { token: string; deviceId: num
         {saveMessage ? <p className="mb-3 text-sm text-[#1D4E35]">{saveMessage}</p> : null}
         <div className="grid gap-4 md:grid-cols-2">
           <label className="block text-sm font-medium text-gray-700">
+            Detentore
+            <select
+              className="form-control mt-1"
+              value={assignedUserId}
+              onChange={(event) => setAssignedUserId(event.target.value)}
+              disabled={lifecycleState === "retired"}
+            >
+              <option value="">Nessun utente assegnato</option>
+              {sortedUsers.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {(user.full_name || user.username) + (user.is_active ? "" : " · inattivo")}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block text-sm font-medium text-gray-700">
+            Stato apparato
+            <select
+              className="form-control mt-1"
+              value={lifecycleState}
+              onChange={(event) => setLifecycleState(event.target.value as "active" | "retired")}
+            >
+              <option value="active">Attivo</option>
+              <option value="retired">Rotamato</option>
+            </select>
+          </label>
+          <label className="block text-sm font-medium text-gray-700">
             Nome dispositivo
             <input className="form-control mt-1" value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="es. Switch Core Piano Terra" />
           </label>
@@ -348,9 +403,33 @@ function DeviceDetailContent({ token, deviceId }: { token: string; deviceId: num
           </label>
         </div>
         <div className="mt-4 flex justify-end">
-          <button className="btn-primary" onClick={() => void handleSave()} type="button" disabled={isSaving}>
-            {isSaving ? "Salvataggio..." : "Salva metadati"}
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              className="btn-secondary"
+              type="button"
+              onClick={() => {
+                setAssignedUserId("");
+                setLifecycleState("active");
+              }}
+              disabled={isSaving}
+            >
+              Sgancia utente
+            </button>
+            <button
+              className="btn-secondary"
+              type="button"
+              onClick={() => {
+                setAssignedUserId("");
+                setLifecycleState("retired");
+              }}
+              disabled={isSaving}
+            >
+              Segna come rotamato
+            </button>
+            <button className="btn-primary" onClick={() => void handleSave()} type="button" disabled={isSaving}>
+              {isSaving ? "Salvataggio..." : "Salva metadati"}
+            </button>
+          </div>
         </div>
       </article>
     </div>

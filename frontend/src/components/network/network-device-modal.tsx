@@ -5,9 +5,10 @@ import { useEffect, useState } from "react";
 
 import { NetworkStatusBadge } from "@/components/network/network-status-badge";
 import { Badge } from "@/components/ui/badge";
-import { getNetworkDevice, updateNetworkDevice } from "@/lib/api";
+import { ChevronRightIcon } from "@/components/ui/icons";
+import { getNetworkDevice, listNetworkDeviceAssignees, updateNetworkDevice } from "@/lib/api";
 import { getNetworkDeviceAdminUrl } from "@/lib/network-device-utils";
-import type { NetworkDevice } from "@/types/api";
+import type { NetworkAssignedUserSummary, NetworkDevice } from "@/types/api";
 
 type NetworkDeviceModalProps = {
   token: string;
@@ -45,9 +46,12 @@ function formatEventType(eventType: string) {
 
 export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }: NetworkDeviceModalProps) {
   const [selectedDevice, setSelectedDevice] = useState<NetworkDevice | null>(null);
+  const [applicationUsers, setApplicationUsers] = useState<NetworkAssignedUserSummary[]>([]);
   const [detailError, setDetailError] = useState<string | null>(null);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [displayName, setDisplayName] = useState("");
+  const [lifecycleState, setLifecycleState] = useState<"active" | "retired">("active");
+  const [assignedUserId, setAssignedUserId] = useState("");
   const [assetLabel, setAssetLabel] = useState("");
   const [notes, setNotes] = useState("");
   const [isKnownDevice, setIsKnownDevice] = useState(false);
@@ -85,6 +89,8 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
         const response = await getNetworkDevice(token, deviceId);
         setSelectedDevice(response);
         setDisplayName(response.display_name || "");
+        setLifecycleState(response.lifecycle_state);
+        setAssignedUserId(response.assigned_user_id ? String(response.assigned_user_id) : "");
         setAssetLabel(response.asset_label || "");
         setNotes(response.notes || "");
         setIsKnownDevice(response.is_known_device);
@@ -99,6 +105,23 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
     void loadDeviceDetail();
   }, [deviceId, open, token]);
 
+  useEffect(() => {
+    async function loadUsers() {
+      if (!open) {
+        setApplicationUsers([]);
+        return;
+      }
+      try {
+        const users = await listNetworkDeviceAssignees(token);
+        setApplicationUsers(users);
+      } catch {
+        setApplicationUsers([]);
+      }
+    }
+
+    void loadUsers();
+  }, [open, token]);
+
   async function handleSave() {
     if (!selectedDevice) {
       return;
@@ -111,12 +134,16 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
     try {
       const updated = await updateNetworkDevice(token, selectedDevice.id, {
         display_name: displayName || null,
+        lifecycle_state: lifecycleState,
+        assigned_user_id: lifecycleState === "retired" ? null : assignedUserId ? Number(assignedUserId) : null,
         asset_label: assetLabel || null,
         notes: notes || null,
         is_known_device: isKnownDevice,
       });
       setSelectedDevice(updated);
       setDisplayName(updated.display_name || "");
+      setLifecycleState(updated.lifecycle_state);
+      setAssignedUserId(updated.assigned_user_id ? String(updated.assigned_user_id) : "");
       setAssetLabel(updated.asset_label || "");
       setNotes(updated.notes || "");
       setIsKnownDevice(updated.is_known_device);
@@ -133,6 +160,12 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
     return null;
   }
 
+  const sortedUsers = [...applicationUsers].sort((left, right) => {
+    const leftLabel = (left.full_name || left.username).toLowerCase();
+    const rightLabel = (right.full_name || right.username).toLowerCase();
+    return leftLabel.localeCompare(rightLabel, "it");
+  });
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6 backdrop-blur-sm">
       <div className="max-h-[94vh] w-full max-w-[92rem] overflow-y-auto rounded-[28px] border border-gray-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.24)]">
@@ -142,7 +175,10 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
             <h2 className="mt-2 text-2xl font-semibold text-gray-900">
               {selectedDevice?.resolved_label || selectedDevice?.display_name || selectedDevice?.hostname || selectedDevice?.ip_address || `Dispositivo #${deviceId}`}
             </h2>
-            <p className="mt-1 text-sm text-gray-500">Vista rapida senza lasciare il contesto operativo.</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <p className="text-sm text-gray-500">Vista rapida senza lasciare il contesto operativo.</p>
+              {selectedDevice?.lifecycle_state === "retired" ? <Badge variant="neutral">Rotamato</Badge> : null}
+            </div>
           </div>
           <button className="btn-secondary" type="button" onClick={onClose}>
             Chiudi
@@ -229,6 +265,18 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
                         </dd>
                       </div>
                       <div>
+                        <dt className="label-caption">Ciclo di vita</dt>
+                        <dd className="mt-1 text-sm text-gray-800">
+                          {selectedDevice.lifecycle_state === "retired" ? "Rotamato" : "Attivo"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="label-caption">Data rotamazione</dt>
+                        <dd className="mt-1 text-sm text-gray-800">
+                          {selectedDevice.retired_at ? new Date(selectedDevice.retired_at).toLocaleString("it-IT") : "n/d"}
+                        </dd>
+                      </div>
+                      <div>
                         <dt className="label-caption">Interno</dt>
                         <dd className="mt-1 text-sm text-gray-800">{selectedDevice.assigned_user?.phone_extension || "n/d"}</dd>
                       </div>
@@ -301,6 +349,43 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
                   {saveMessage ? <p className="mb-3 text-sm text-[#1D4E35]">{saveMessage}</p> : null}
                   <div className="space-y-4">
                     <label className="block text-sm font-medium text-gray-700">
+                      Detentore
+                      <select
+                        className="form-control mt-1"
+                        value={assignedUserId}
+                        onChange={(event) => setAssignedUserId(event.target.value)}
+                        disabled={lifecycleState === "retired"}
+                      >
+                        <option value="">Nessun utente assegnato</option>
+                        {sortedUsers.map((user) => (
+                          <option key={user.id} value={user.id}>
+                            {(user.full_name || user.username) + (user.is_active ? "" : " · inattivo")}
+                          </option>
+                        ))}
+                      </select>
+                      <span className="mt-1 block text-xs text-gray-500">
+                        Usa `Nessun utente assegnato` quando il PC cambia detentore o è in transizione.
+                      </span>
+                    </label>
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <label className="block text-sm font-medium text-gray-700">
+                        Stato apparato
+                        <select
+                          className="form-control mt-1"
+                          value={lifecycleState}
+                          onChange={(event) => setLifecycleState(event.target.value as "active" | "retired")}
+                        >
+                          <option value="active">Attivo</option>
+                          <option value="retired">Rotamato</option>
+                        </select>
+                      </label>
+                      <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+                        {lifecycleState === "retired"
+                          ? "Il device viene sganciato dall'utente e rimosso dal monitoraggio attivo."
+                          : "Il device resta assegnabile e visibile nel monitoraggio di rete."}
+                      </div>
+                    </div>
+                    <label className="block text-sm font-medium text-gray-700">
                       Label locale dispositivo
                       <input
                         className="form-control mt-1"
@@ -332,7 +417,31 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
                       Dispositivo conosciuto
                     </label>
                   </div>
-                  <div className="mt-4 flex justify-end">
+                  <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        className="btn-secondary"
+                        type="button"
+                        onClick={() => {
+                          setAssignedUserId("");
+                          setLifecycleState("active");
+                        }}
+                        disabled={isSaving}
+                      >
+                        Sgancia utente
+                      </button>
+                      <button
+                        className="btn-secondary"
+                        type="button"
+                        onClick={() => {
+                          setLifecycleState("retired");
+                          setAssignedUserId("");
+                        }}
+                        disabled={isSaving}
+                      >
+                        Segna come rotamato
+                      </button>
+                    </div>
                     <button className="btn-primary" onClick={() => void handleSave()} type="button" disabled={isSaving}>
                       {isSaving ? "Salvataggio..." : "Salva"}
                     </button>
@@ -452,41 +561,53 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
               </article>
 
               <article className="panel-card">
-                <div className="mb-4">
-                  <p className="section-title">Posizionamento e storico</p>
-                  <p className="section-copy">Ultime posizioni note e snapshot recenti del dispositivo.</p>
-                </div>
-                <div className="grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
-                  <div>
-                    <p className="label-caption">Posizioni planimetria</p>
-                    <div className="mt-3 space-y-3">
-                      {selectedDevice.positions.map((position) => (
-                        <div key={position.id} className="rounded-lg border border-gray-100 px-4 py-3 text-sm text-gray-700">
-                          <p className="font-medium text-gray-900">Planimetria #{position.floor_plan_id}</p>
-                          <p className="mt-1">Coordinate: {position.x}, {position.y}</p>
-                          <p className="mt-1">{position.label || "Etichetta non impostata"}</p>
-                        </div>
-                      ))}
-                      {selectedDevice.positions.length === 0 ? <p className="text-sm text-gray-500">Nessuna posizione registrata.</p> : null}
+                <details key={selectedDevice.id} className="group">
+                  <summary className="flex cursor-pointer list-none items-start justify-between gap-4 [&::-webkit-details-marker]:hidden">
+                    <div className="min-w-0">
+                      <p className="section-title">Posizionamento e storico</p>
+                      <p className="section-copy">Ultime posizioni note e snapshot recenti del dispositivo.</p>
                     </div>
-                  </div>
-                  <div>
-                    <p className="label-caption">Ultimi snapshot</p>
-                    <div className="mt-3 space-y-3">
-                      {selectedDevice.scan_history.map((entry) => (
-                        <div key={`${entry.scan_id}-${entry.observed_at}`} className="rounded-lg border border-gray-100 px-4 py-3">
-                          <div className="flex items-center justify-between gap-3">
-                            <p className="text-sm font-medium text-gray-900">Snapshot #{entry.scan_id}</p>
-                            <NetworkStatusBadge status={entry.status} />
+                    <div className="flex shrink-0 items-center gap-2 pt-0.5 text-xs text-gray-500">
+                      <span>
+                        {selectedDevice.positions.length} posiz.
+                        {" · "}
+                        {selectedDevice.scan_history.length} snapshot
+                      </span>
+                      <ChevronRightIcon className="h-4 w-4 text-gray-400 transition-transform group-open:rotate-90" />
+                    </div>
+                  </summary>
+                  <div className="mt-4 grid gap-6 xl:grid-cols-[0.8fr_1.2fr]">
+                    <div>
+                      <p className="label-caption">Posizioni planimetria</p>
+                      <div className="mt-3 space-y-3">
+                        {selectedDevice.positions.map((position) => (
+                          <div key={position.id} className="rounded-lg border border-gray-100 px-4 py-3 text-sm text-gray-700">
+                            <p className="font-medium text-gray-900">Planimetria #{position.floor_plan_id}</p>
+                            <p className="mt-1">Coordinate: {position.x}, {position.y}</p>
+                            <p className="mt-1">{position.label || "Etichetta non impostata"}</p>
                           </div>
-                          <p className="mt-1 text-xs text-gray-500">{new Date(entry.observed_at).toLocaleString("it-IT")}</p>
-                          <p className="mt-2 text-xs text-gray-500">{entry.hostname || entry.ip_address} · {entry.open_ports || "porte n/d"}</p>
-                        </div>
-                      ))}
-                      {selectedDevice.scan_history.length === 0 ? <p className="text-sm text-gray-500">Nessuno snapshot disponibile.</p> : null}
+                        ))}
+                        {selectedDevice.positions.length === 0 ? <p className="text-sm text-gray-500">Nessuna posizione registrata.</p> : null}
+                      </div>
+                    </div>
+                    <div>
+                      <p className="label-caption">Ultimi snapshot</p>
+                      <div className="mt-3 space-y-3">
+                        {selectedDevice.scan_history.map((entry) => (
+                          <div key={`${entry.scan_id}-${entry.observed_at}`} className="rounded-lg border border-gray-100 px-4 py-3">
+                            <div className="flex items-center justify-between gap-3">
+                              <p className="text-sm font-medium text-gray-900">Snapshot #{entry.scan_id}</p>
+                              <NetworkStatusBadge status={entry.status} />
+                            </div>
+                            <p className="mt-1 text-xs text-gray-500">{new Date(entry.observed_at).toLocaleString("it-IT")}</p>
+                            <p className="mt-2 text-xs text-gray-500">{entry.hostname || entry.ip_address} · {entry.open_ports || "porte n/d"}</p>
+                          </div>
+                        ))}
+                        {selectedDevice.scan_history.length === 0 ? <p className="text-sm text-gray-500">Nessuno snapshot disponibile.</p> : null}
+                      </div>
                     </div>
                   </div>
-                </div>
+                </details>
               </article>
 
               <div className="flex justify-end">

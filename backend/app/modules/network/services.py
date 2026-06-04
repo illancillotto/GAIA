@@ -1155,11 +1155,12 @@ def list_network_scans(db: Session) -> list[NetworkScan]:
 def get_network_dashboard_summary(db: Session) -> dict[str, object]:
     now = datetime.now(UTC)
     latest_scan_at = db.scalar(select(func.max(NetworkScan.completed_at)))
+    active_device_predicate = NetworkDevice.lifecycle_state != "retired"
 
     return {
-        "total_devices": db.scalar(select(func.count(NetworkDevice.id))) or 0,
-        "online_devices": db.scalar(select(func.count(NetworkDevice.id)).where(NetworkDevice.status == "online")) or 0,
-        "offline_devices": db.scalar(select(func.count(NetworkDevice.id)).where(NetworkDevice.status == "offline")) or 0,
+        "total_devices": db.scalar(select(func.count(NetworkDevice.id)).where(active_device_predicate)) or 0,
+        "online_devices": db.scalar(select(func.count(NetworkDevice.id)).where(active_device_predicate, NetworkDevice.status == "online")) or 0,
+        "offline_devices": db.scalar(select(func.count(NetworkDevice.id)).where(active_device_predicate, NetworkDevice.status == "offline")) or 0,
         "open_alerts": db.scalar(select(func.count(NetworkAlert.id)).where(NetworkAlert.status == "open")) or 0,
         "firewalls_online": db.scalar(select(func.count(NetworkFirewall.id)).where(NetworkFirewall.status == "online")) or 0,
         "scans_last_24h": db.scalar(

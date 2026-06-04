@@ -314,6 +314,28 @@ def test_network_device_detail_prefers_assigned_application_user_label() -> None
     assert payload["assigned_user"]["phone_extension"] == "301"
 
 
+def test_network_device_assignees_endpoint_returns_assignable_users() -> None:
+    response = client.get("/network/device-assignees", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert any(item["username"] == "operatore.ced" for item in payload)
+
+
+def test_network_statistics_summary_returns_traffic_and_device_aggregates() -> None:
+    response = client.get("/network/statistics?window_hours=24", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total_devices"] == 2
+    assert payload["active_devices"] == 2
+    assert payload["online_devices"] == 1
+    assert payload["total_events"] == 1
+    assert payload["blocked_events"] == 1
+    assert payload["top_source_devices"][0]["ip_address"] == "192.168.1.10"
+    assert payload["top_event_types"][0]["key"] == "firewall.firewall_rule.drop"
+
+
 def test_network_device_metadata_can_be_updated() -> None:
     response = client.patch(
         "/network/devices/2",
@@ -348,6 +370,43 @@ def test_network_device_can_be_assigned_to_application_user() -> None:
     assert payload["assigned_user_id"] == 2
     assert payload["resolved_label"] == "Operatore CED"
     assert payload["label_source"] == "application_user"
+
+
+def test_network_device_can_be_unassigned_from_application_user() -> None:
+    response = client.patch(
+        "/network/devices/1",
+        headers=auth_headers(),
+        json={"assigned_user_id": None},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["assigned_user_id"] is None
+    assert payload["assigned_user"] is None
+    assert payload["resolved_label"] == "Core Switch"
+    assert payload["label_source"] == "device"
+
+
+def test_network_device_can_be_marked_retired() -> None:
+    response = client.patch(
+        "/network/devices/2",
+        headers=auth_headers(),
+        json={"assigned_user_id": 2, "lifecycle_state": "retired"},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["lifecycle_state"] == "retired"
+    assert payload["assigned_user_id"] is None
+    assert payload["is_monitored"] is False
+    assert payload["retired_at"] is not None
+
+    dashboard_response = client.get("/network/dashboard", headers=auth_headers())
+    assert dashboard_response.status_code == 200
+    dashboard_payload = dashboard_response.json()
+    assert dashboard_payload["total_devices"] == 1
+    assert dashboard_payload["online_devices"] == 1
+    assert dashboard_payload["offline_devices"] == 0
 
 
 def test_network_device_can_toggle_known_state_and_create_unknown_alert() -> None:

@@ -94,6 +94,8 @@ L'interfaccia presenta i dispositivi rilevati su una mappa interattiva organizza
 
 - Ogni dispositivo puo avere un nome operativo assegnato manualmente (`display_name`) e una etichetta inventariale (`asset_label`)
 - Quando presente un collegamento a `application_users`, il label operativo mostrato in UI viene risolto dal profilo utente (`full_name`, fallback `username`)
+- Il detentore del dispositivo puo essere modificato manualmente dalla scheda device, sganciando o riassegnando l'apparato a un diverso `application_users`
+- I device non piu in uso possono essere marcati come `rotamati`: restano a storico ma escono dal monitoraggio operativo attivo
 - Il backend conserva anche il nome osservato automaticamente (`hostname`) e la sua sorgente (`hostname_source`)
 - Il sistema salva le sorgenti di arricchimento effettivamente usate (`metadata_sources`) per rendere ispezionabile il dato
 - L'ordine di preferenza del nome osservato e: `nmap`, `snmp`, `netbios`, `mdns`, `dns`
@@ -138,9 +140,10 @@ L'interfaccia presenta i dispositivi rilevati su una mappa interattiva organizza
 | `POST /network/scans` | Avvia nuova scansione manuale |
 | `GET /network/scans/{id}` | Dettaglio snapshot con lista dispositivi |
 | `GET /network/scans/{id}/diff/{id2}` | Confronto tra due snapshot |
+| `GET /network/statistics` | Vista aggregata su rete, dispositivi e navigazione firewall |
 | `GET /network/devices` | Lista dispositivi con filtri (stato, piano, vendor) |
 | `GET /network/devices/{id}` | Dettaglio dispositivo con storico, posizione e riepilogo traffico Sophos ultime 24h |
-| `PATCH /network/devices/{id}` | Aggiorna naming operativo e metadati manuali del dispositivo |
+| `PATCH /network/devices/{id}` | Aggiorna naming operativo, detentore, ciclo di vita e metadati manuali del dispositivo |
 | `GET /network/alerts` | Lista alert attivi e risolti |
 | `PATCH /network/alerts/{id}` | Aggiorna stato alert (risolto/ignorato) |
 | `GET /network/firewalls` | Lista firewall registrati nel modulo rete |
@@ -223,6 +226,14 @@ Formato `NETWORK_SNMP_COMMUNITY_PROFILES`:
 - il riepilogo espone traffico in ingresso/uscita, eventi consentiti/bloccati, peer principali e ultimi eventi traffico
 - i peer pubblici vengono arricchiti con label leggibili usando, in ordine: `domain` / hostname da `url` del log Sophos, reverse DNS, fallback RDAP/organizzazione
 
+### 5.2D-bis Statistiche rete
+
+- la sezione `/network/statistics` aggrega, su finestra temporale configurabile, lo stato dei dispositivi e la navigazione osservata dal firewall
+- espone KPI su dispositivi attivi, rotamati, assegnati, non assegnati, monitorati, traffico in ingresso/uscita, eventi allowed e blocked
+- include breakdown per tipi dispositivo, vendor, uffici, assegnatari, severita, protocolli, eventi Sophos e regole firewall
+- include top list per domini navigati, destinazioni esterne e device sorgente piu attivi
+- include timeline per fascia oraria degli eventi e del volume di traffico
+
 ### 5.2E Import censimento dispositivi
 
 - script operativo: `backend/scripts/import_network_census_xlsx.py`
@@ -246,6 +257,12 @@ Formato `NETWORK_SNMP_COMMUNITY_PROFILES`:
   3. `network_devices.display_name`
   4. `network_devices.hostname`
   5. `network_devices.ip_address`
+- i device possono assumere `lifecycle_state=active|retired`
+- quando un device viene marcato `retired`, GAIA:
+  - azzera `assigned_user_id`
+  - disattiva `is_monitored`
+  - salva `retired_at`
+  - lo esclude dai conteggi operativi di dashboard
 
 ### 5.3 Struttura cartelle
 

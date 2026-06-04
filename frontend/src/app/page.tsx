@@ -88,6 +88,7 @@ const menuSearchRoutes: SearchRoute[] = [
   { label: "Rete · Dashboard", href: "/network", moduleKey: "rete" },
   { label: "Rete · Dispositivi", href: "/network/devices", moduleKey: "rete", keywords: ["switch", "ap", "devices"] },
   { label: "Rete · Firewall", href: "/network/firewalls", moduleKey: "rete", keywords: ["sophos", "xgs", "syslog", "snmp"] },
+  { label: "Rete · Statistiche", href: "/network/statistics", moduleKey: "rete", keywords: ["analytics", "traffico", "navigazione"] },
   { label: "Rete · Planimetria", href: "/network/floor-plan", moduleKey: "rete", keywords: ["mappa", "planimetria"] },
   { label: "Rete · Alert", href: "/network/alerts", moduleKey: "rete", keywords: ["allarmi"] },
   { label: "Rete · Scansioni", href: "/network/scans", moduleKey: "rete", keywords: ["scan", "scansioni"] },
