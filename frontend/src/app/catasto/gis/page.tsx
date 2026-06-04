@@ -1836,6 +1836,15 @@ export default function CatastoGisPage() {
                                   {popupParticella.titolare.titoli ? <span>{popupParticella.titolare.titoli}</span> : null}
                                 </div>
                               </>
+                            ) : popupParticella.ha_ruolo || popupHasFallbackRuolo ? (
+                              <div className="mt-1 space-y-1">
+                                <div className="text-xs font-medium text-slate-600">
+                                  Particella a ruolo, ma titolare non ancora riconciliato nel GIS.
+                                </div>
+                                <div className="text-[11px] text-slate-500">
+                                  Il ruolo esiste, ma manca ancora il collegamento a utenza/intestatario per questa particella.
+                                </div>
+                              </div>
                             ) : (
                               <div className="mt-1 text-xs font-medium text-slate-500">
                                 Nessun titolare collegato alla particella.
