@@ -1032,6 +1032,10 @@ export default function CatastoGisPage() {
           );
         })}
       </div>
+      <div className={`mt-2 flex items-center gap-2 text-[11px] ${isDark ? "text-white/60" : "text-slate-500"}`}>
+        <span className="h-2 w-2 rounded-full bg-fuchsia-500" />
+        <span>Fucsia: record GIS incompleti in cat_particelle</span>
+      </div>
     </div>
   );
 
@@ -1401,6 +1405,23 @@ export default function CatastoGisPage() {
     : popupHasFallbackRuolo
       ? "Ruolo inferito"
       : "Fuori ruolo";
+  const popupHasIncompleteKey = Boolean(
+    popupParticella &&
+      (!popupParticella.codice_catastale || !popupParticella.foglio || !popupParticella.particella),
+  );
+  const popupTitle = popupParticella
+    ? popupParticella.cfm || (popupHasIncompleteKey ? "Particella GIS incompleta" : `${popupParticella.foglio ?? "-"} / ${popupParticella.particella ?? "-"}`)
+    : "";
+  const popupLocationLine = popupHasIncompleteKey
+    ? "Riferimenti catastali non disponibili per questo poligono GIS."
+    : `${popupParticella?.nome_comune ?? popupParticella?.codice_catastale ?? "Comune ND"} · Fg. ${popupParticella?.foglio ?? "-"} · Part. ${popupParticella?.particella ?? "-"}${popupParticella?.subalterno ? ` · Sub. ${popupParticella.subalterno}` : ""}`;
+  const popupRecordState = popupParticella
+    ? popupParticella.suppressed
+      ? "Soppresso"
+      : popupParticella.is_current
+        ? "Corrente"
+        : "Storico"
+    : "-";
 
   return (
     <CatastoPage
@@ -1644,7 +1665,7 @@ export default function CatastoGisPage() {
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="truncate text-sm font-bold text-slate-900">
-                              {popupParticella.cfm || `${popupParticella.foglio ?? "-"} / ${popupParticella.particella ?? "-"}`}
+                              {popupTitle}
                             </p>
                             <span
                               className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${popupRuoloBadgeClass}`}
@@ -1658,8 +1679,7 @@ export default function CatastoGisPage() {
                             ) : null}
                           </div>
                           <p className="mt-1 text-xs text-slate-500">
-                            {popupParticella.nome_comune ?? popupParticella.codice_catastale ?? "Comune ND"} · Fg. {popupParticella.foglio ?? "-"} · Part. {popupParticella.particella ?? "-"}
-                            {popupParticella.subalterno ? ` · Sub. ${popupParticella.subalterno}` : ""}
+                            {popupLocationLine}
                           </p>
                         </div>
                         <button
@@ -1677,7 +1697,9 @@ export default function CatastoGisPage() {
 
                       <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
                         <div className="rounded-xl bg-white/75 px-3 py-2 shadow-sm ring-1 ring-slate-200/60">
-                          <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">Superficie</div>
+                          <div className="text-[10px] font-semibold uppercase tracking-widest text-slate-400">
+                            {popupParticella.superficie_mq != null ? "Superficie" : "Superficie grafica"}
+                          </div>
                           <div className="mt-1 font-semibold text-slate-800">
                             {(popupParticella.superficie_mq ?? popupParticella.superficie_grafica_mq)?.toLocaleString("it-IT") ?? "-"} mq
                           </div>
@@ -1690,6 +1712,65 @@ export default function CatastoGisPage() {
                           </div>
                         </div>
                       </div>
+
+                      {popupHasIncompleteKey ? (
+                        <div className="mt-3 rounded-2xl border border-fuchsia-200 bg-fuchsia-50/80 px-3 py-3 text-xs text-fuchsia-950">
+                          <div className="text-[10px] font-semibold uppercase tracking-widest text-fuchsia-700">
+                            Dati record cat_particella
+                          </div>
+                          <div className="mt-2 grid grid-cols-2 gap-2">
+                            <div className="rounded-xl border border-fuchsia-100 bg-white/80 px-2.5 py-2">
+                              <div className="text-[10px] font-semibold uppercase tracking-widest text-fuchsia-500">ID GIS</div>
+                              <div className="mt-1 break-all font-mono text-[11px] text-fuchsia-900">{popupParticella.id}</div>
+                            </div>
+                            <div className="rounded-xl border border-fuchsia-100 bg-white/80 px-2.5 py-2">
+                              <div className="text-[10px] font-semibold uppercase tracking-widest text-fuchsia-500">Stato record</div>
+                              <div className="mt-1 font-semibold text-fuchsia-900">{popupRecordState}</div>
+                            </div>
+                            <div className="rounded-xl border border-fuchsia-100 bg-white/80 px-2.5 py-2">
+                              <div className="text-[10px] font-semibold uppercase tracking-widest text-fuchsia-500">Sorgente</div>
+                              <div className="mt-1 font-semibold text-fuchsia-900">{popupParticella.source_type ?? "ND"}</div>
+                            </div>
+                            <div className="rounded-xl border border-fuchsia-100 bg-white/80 px-2.5 py-2">
+                              <div className="text-[10px] font-semibold uppercase tracking-widest text-fuchsia-500">Cod. comune Capacitas</div>
+                              <div className="mt-1 font-semibold text-fuchsia-900">{popupParticella.cod_comune_capacitas ?? "-"}</div>
+                            </div>
+                            <div className="rounded-xl border border-fuchsia-100 bg-white/80 px-2.5 py-2">
+                              <div className="text-[10px] font-semibold uppercase tracking-widest text-fuchsia-500">CFM</div>
+                              <div className="mt-1 font-semibold text-fuchsia-900">{popupParticella.cfm ?? "-"}</div>
+                            </div>
+                            <div className="rounded-xl border border-fuchsia-100 bg-white/80 px-2.5 py-2">
+                              <div className="text-[10px] font-semibold uppercase tracking-widest text-fuchsia-500">Chiave catastale</div>
+                              <div className="mt-1 font-semibold text-fuchsia-900">
+                                {popupParticella.codice_catastale ?? "-"} · Fg. {popupParticella.foglio ?? "-"} · Part. {popupParticella.particella ?? "-"}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {popupHasIncompleteKey ? (
+                        <div className="mt-3 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-3 text-xs text-amber-950">
+                          <div className="text-[10px] font-semibold uppercase tracking-widest text-amber-700">
+                            Record GIS incompleto
+                          </div>
+                          <div className="mt-1 font-medium">
+                            Questo poligono e presente nel layer GIS ma non ha ancora una chiave catastale completa.
+                          </div>
+                          <div className="mt-1 text-[11px] leading-4 text-amber-900">
+                            Ruolo, titolare, distretto e scheda particella possono risultare assenti o non riconciliati finche il record non viene riallineato.
+                          </div>
+                          {popupParticella.missing_fields.length > 0 ? (
+                            <div className="mt-2 rounded-xl border border-amber-100 bg-white/70 px-2.5 py-2 text-[11px] text-amber-900">
+                              <span className="font-semibold">Campi mancanti:</span> {popupParticella.missing_fields.join(", ")}
+                            </div>
+                          ) : null}
+                          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-amber-900">
+                            <span>Sorgente: <span className="font-semibold">{popupParticella.source_type ?? "ND"}</span></span>
+                            <span>Ruolo: <span className="font-semibold">{popupParticella.ha_ruolo ? "esatto" : popupParticella.ha_ruolo_inferito ? "inferito" : "assente"}</span></span>
+                          </div>
+                        </div>
+                      ) : null}
 
                       {popupParticella.swapped_capacitas ? (
                         <div className="mt-3 rounded-2xl border border-orange-200 bg-orange-50 px-3 py-3 text-xs text-orange-950">

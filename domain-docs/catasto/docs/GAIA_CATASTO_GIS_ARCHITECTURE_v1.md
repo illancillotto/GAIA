@@ -98,6 +98,8 @@ I batch shapefile delle particelle non devono più eseguire `ST_Union` per popol
 
 Per Martin è stata aggiunta una migration dedicata che crea la view `cat_particelle_current`, filtrata su `is_current = TRUE` e su chiave catastale completa (`cod_comune_capacitas`, `codice_catastale`, `foglio`, `particella`). I flag usati dai layer GIS (`ha_ruolo`, `ha_anomalie`) non vengono ricalcolati dentro la view a ogni tile: sono mantenuti nella cache `cat_particelle_gis_flags`, aggiornata da funzioni/trigger DB su `ruolo_particelle`, `cat_anomalie`, `cat_utenze_irrigue` e `cat_particelle`. La view evita di pubblicare nei tiles lo storico particelle non corrente e poligoni tecnici importati senza chiave operativa, facendo solo una join per chiave primaria verso la cache.
 
+Guardrail operativo: se un poligono e visibile/cliccabile come particella nel GIS, deve essere una particella operativa con chiave catastale completa. I record `cat_particelle` legacy o tecnici con sola geometria (`source_type=shapefile`, chiave incompleta) non devono entrare in `cat_particelle_current`; se un tile stale li referenzia ancora, l'endpoint popup `/catasto/gis/particella/{id}/popup` deve rifiutarli con `404` invece di renderli come particelle valide.
+
 L'unica verifica da fare è che PostGIS sia abilitato con `ST_Transform` disponibile (richiede PROJ). Questo è garantito dall'immagine Docker `postgis/postgis` già usata in GAIA.
 
 **Nota SRID**: Le query di superficie usano `ST_Transform(geometry, 32632)` (UTM zone 32N) per ottenere aree in metri quadri accurate per la Sardegna. Il DB continua a memorizzare geometrie in EPSG:4326.

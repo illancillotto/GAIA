@@ -73,6 +73,17 @@ const BOOLEAN_TRUE_EXPRESSION: (property: string) => maplibregl.ExpressionSpecif
   ["==", ["get", property], 1],
   ["==", ["get", property], "true"],
 ];
+const STRING_PROPERTY_MISSING_EXPRESSION: (property: string) => maplibregl.ExpressionSpecification = (property) => [
+  "==",
+  ["coalesce", ["to-string", ["get", property]], ""],
+  "",
+];
+const PARTICELLA_INCOMPLETE_KEY_EXPRESSION: maplibregl.ExpressionSpecification = [
+  "any",
+  STRING_PROPERTY_MISSING_EXPRESSION("codice_catastale"),
+  STRING_PROPERTY_MISSING_EXPRESSION("foglio"),
+  STRING_PROPERTY_MISSING_EXPRESSION("particella"),
+];
 
 type GoogleTilesSession = {
   session?: string;
@@ -112,9 +123,23 @@ function buildParticelleFillOpacity(
   baseOpacity: number,
   quickFilter: ParticelleQuickFilter,
 ): number | maplibregl.ExpressionSpecification {
-  if (quickFilter === "all") return baseOpacity;
+  const incompleteOpacityExpr: maplibregl.ExpressionSpecification = [
+    "*",
+    Math.min(baseOpacity, 0.22),
+    0.45,
+  ];
+  if (quickFilter === "all") {
+    return [
+      "case",
+      PARTICELLA_INCOMPLETE_KEY_EXPRESSION,
+      incompleteOpacityExpr,
+      baseOpacity,
+    ] as maplibregl.ExpressionSpecification;
+  }
   return [
     "case",
+    PARTICELLA_INCOMPLETE_KEY_EXPRESSION,
+    incompleteOpacityExpr,
     quickFilter === "ruolo" ? BOOLEAN_TRUE_EXPRESSION("ha_ruolo") : BOOLEAN_TRUE_EXPRESSION("ha_ruolo_inferito"),
     baseOpacity,
     0.05,
@@ -485,6 +510,8 @@ export default function MapContainer({
         paint: {
           "fill-color": [
             "case",
+            PARTICELLA_INCOMPLETE_KEY_EXPRESSION,
+            "#F000B8",
             ["==", ["get", "ha_anomalie"], true],
             "#EF4444",
             ["==", ["get", "ha_ruolo"], true],
@@ -493,7 +520,7 @@ export default function MapContainer({
             "#F59E0B",
             "#6366F1",
           ],
-          "fill-opacity": 0.5,
+          "fill-opacity": buildParticelleFillOpacity(0.5, "all"),
         },
       });
 
@@ -504,8 +531,18 @@ export default function MapContainer({
         "source-layer": "cat_particelle_current",
         minzoom: 14,
         paint: {
-          "line-color": "#4338CA",
-          "line-width": 0.5,
+          "line-color": [
+            "case",
+            PARTICELLA_INCOMPLETE_KEY_EXPRESSION,
+            "#C4008E",
+            "#4338CA",
+          ],
+          "line-width": [
+            "case",
+            PARTICELLA_INCOMPLETE_KEY_EXPRESSION,
+            1.2,
+            0.5,
+          ],
         },
       });
 
@@ -573,7 +610,7 @@ export default function MapContainer({
               .addTo(map);
           }
         } catch {
-          // Popup failures are non-blocking for the map interaction.
+          handlersRef.current.onParticellaClick?.(null);
         }
       });
 

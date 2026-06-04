@@ -322,8 +322,12 @@ class ParticellaPopupData(BaseModel):
     subalterno: str | None = None
     superficie_mq: float | None = None
     superficie_grafica_mq: float | None = None
+    source_type: str | None = None
+    is_current: bool = True
+    suppressed: bool = False
     num_distretto: str | None = None
     nome_distretto: str | None = None
+    missing_fields: list[str] = Field(default_factory=list)
     n_anomalie_aperte: int = 0
     titolare: ParticellaPopupTitolare | None = None
     ha_ruolo: bool = False

@@ -3523,6 +3523,34 @@ def test_gis_popup_returns_latest_visible_titolare() -> None:
     }
 
 
+def test_gis_popup_rejects_incomplete_gis_particella() -> None:
+    db = TestingSessionLocal()
+    try:
+        particella = CatParticella(
+            cod_comune_capacitas=0,
+            codice_catastale="",
+            nome_comune=None,
+            foglio="",
+            particella="",
+            source_type="shapefile",
+            is_current=True,
+            suppressed=False,
+        )
+        db.add(particella)
+        db.commit()
+        particella_id = str(particella.id)
+    finally:
+        db.close()
+
+    response = client.get(
+        f"/catasto/gis/particella/{particella_id}/popup",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Particella GIS incompleta o non operativa"
+
+
 def test_particelle_endpoint_supports_solo_con_anagrafica_filter() -> None:
     db = TestingSessionLocal()
     try:

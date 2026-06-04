@@ -1093,6 +1093,16 @@ def _load_popup_anomalie_aperte(db: Session, particella_uuid: uuid.UUID) -> list
     ]
 
 
+def _has_valid_gis_key(particella: CatParticella) -> bool:
+    return (
+        not bool(particella.suppressed)
+        and (particella.cod_comune_capacitas or 0) > 0
+        and _norm_str(particella.codice_catastale) is not None
+        and _norm_str(particella.foglio) is not None
+        and _norm_str(particella.particella) is not None
+    )
+
+
 def get_popup_data(db: Session, particella_id: str) -> ParticellaPopupData:
     particella_uuid = _parse_uuid(particella_id, field_name="particella_id")
     particella = db.get(CatParticella, particella_uuid)
@@ -1100,6 +1110,8 @@ def get_popup_data(db: Session, particella_id: str) -> ParticellaPopupData:
         raise HTTPException(status_code=404, detail="Particella non trovata")
     if particella.suppressed:
         raise HTTPException(status_code=404, detail="Particella GIS soppressa")
+    if not _has_valid_gis_key(particella):
+        raise HTTPException(status_code=404, detail="Particella GIS incompleta o non operativa")
 
     n_anomalie_aperte = db.scalar(
         select(func.count(CatAnomalia.id))
@@ -1115,6 +1127,19 @@ def get_popup_data(db: Session, particella_id: str) -> ParticellaPopupData:
     has_inferred_ruolo_match = ruolo_summary is not None and ruolo_summary.source_mode != "exact"
     titolare = _load_popup_titolare(db, particella_uuid)
     swapped_capacitas = _load_popup_swapped_capacitas(db, particella_uuid)
+    missing_fields: list[str] = []
+    if _norm_str(particella.nome_comune) is None:
+        missing_fields.append("comune")
+    if _norm_str(particella.codice_catastale) is None:
+        missing_fields.append("codice catastale")
+    if _norm_str(particella.foglio) is None:
+        missing_fields.append("foglio")
+    if _norm_str(particella.particella) is None:
+        missing_fields.append("particella")
+    if _norm_str(particella.num_distretto) is None:
+        missing_fields.append("distretto")
+    if titolare is None:
+        missing_fields.append("titolare")
     return ParticellaPopupData(
         id=str(particella.id),
         cfm=particella.cfm,
@@ -1127,8 +1152,12 @@ def get_popup_data(db: Session, particella_id: str) -> ParticellaPopupData:
         subalterno=particella.subalterno,
         superficie_mq=float(particella.superficie_mq) if particella.superficie_mq is not None else None,
         superficie_grafica_mq=float(particella.superficie_grafica_mq) if particella.superficie_grafica_mq is not None else None,
+        source_type=particella.source_type,
+        is_current=bool(particella.is_current),
+        suppressed=bool(particella.suppressed),
         num_distretto=particella.num_distretto,
         nome_distretto=particella.nome_distretto,
+        missing_fields=missing_fields,
         n_anomalie_aperte=int(n_anomalie_aperte or 0),
         titolare=titolare,
         ha_ruolo=has_exact_ruolo_match,

@@ -220,8 +220,12 @@ export interface ParticellaPopupData {
   subalterno?: string | null;
   superficie_mq?: number | null;
   superficie_grafica_mq?: number | null;
+  source_type?: string | null;
+  is_current: boolean;
+  suppressed: boolean;
   num_distretto?: string | null;
   nome_distretto?: string | null;
+  missing_fields: string[];
   n_anomalie_aperte: number;
   titolare?: ParticellaPopupTitolare | null;
   ha_ruolo: boolean;
