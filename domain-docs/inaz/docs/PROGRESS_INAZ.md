@@ -1,6 +1,6 @@
 # Progress Inaz
 
-Data aggiornamento: 2026-06-04
+Data aggiornamento: 2026-06-04 (cartellino a matrice + pagina anomalie)
 
 ## Stato attuale
 
@@ -55,16 +55,22 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
   - riepilogo eventi;
   - mapping verso utente GAIA per admin;
   - suggerimento mapping come prima opzione del select, con preselezione automatica se il collaboratore non e ancora collegato;
-- pagina `/inaz/giornaliere`;
-- pagina `/inaz/giornaliere` con dettaglio operativo della singola giornata:
-  - orario Inaz;
-  - stato giornata;
-  - riepilogo e totali;
-  - richieste e anomalie;
-- pagina `/inaz/giornaliere` rifatta come workspace del capo settore:
+- pagina `/inaz/giornaliere` rifatta come **cartellino mensile a matrice**:
+  - collaboratori in verticale, giorni in orizzontale, con colonna collaboratore e header giorni "sticky";
   - perimetro dati filtrato sul responsabile che ha eseguito la sync (`owner_user_id`);
-  - KPI mese, filtri anomalie/extra, tabella operativa e pannello rettifiche;
+  - celle colorate per stato (lavorato / assenza / giorno speciale / anomalia) con indicatori compatti `▲` extra, `🚗` KM, `✉` richieste; weekend ombreggiati e giorno corrente evidenziato;
+  - cella espandibile: il click apre sotto il pannello operativo della giornata (totali, anomalie, rettifiche);
+  - riquadro dedicato **"Aggiungi KM carburante"** + modalita **"Inserisci KM"** che trasforma ogni cella in input rapido con salvataggio automatico al blur;
   - modifica diretta di `KM`, straordinario override, maggior presenza override e nota operativa;
+  - **filtri rapidi per tipo orario / contratto** derivati dal template orario prevalente (`schedule_code`) di ogni collaboratore;
+  - selettore mese con **frecce `‹ ›`** per scorrere rapidamente; header riorganizzato su griglia a colonne (mese, ricerca, azioni, filtri, riepilogo mese, legenda);
+  - **scroll orizzontale anche via drag** (tieni premuto il tasto sinistro e trascina), con soglia anti-click sulle celle;
+  - **popup mese vuoto**: se per il mese non esistono giornaliere, una modal propone di caricare il mese precedente o avviare la sync;
+  - **modal scheda collaboratore**: il nome del collaboratore apre una modal sintetica (totali mese + elenco giornate) invece di navigare, con link alla scheda completa;
+- pagina `/inaz/anomalie` dedicata all'analisi delle giornate da verificare (anomalie, richieste, giorni speciali):
+  - nasce dal contenuto della vecchia giornaliere (tabella + pannello rettifiche);
+  - scansione automatica degli ultimi mesi e fallback automatico al mese precedente se quello corrente non ha anomalie;
+  - voce **"Anomalie"** aggiunta nella sidebar del modulo;
 - route `/inaz/import` mantenuta solo come redirect tecnico verso `/inaz/sync`, non piu esposta come flusso operativo utente;
 - pagina `/inaz/export` con download `.xlsm`;
 - pagina `/inaz/export` con preview dataset del mese, perimetro collaboratori e KPI di righe/giorni speciali;
@@ -83,6 +89,8 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
 - collaboratori, giornaliere e summary persistiti portano anche `owner_user_id`, distinto dal mapping `application_user_id` del singolo dipendente;
 - il job aggiorna un checkpoint persistito in `inaz_sync_jobs.params_json.checkpoint.completed_employee_codes`;
 - il retry riparte dai collaboratori non ancora persistiti, invece di ricominciare da `1/N`;
+- il worker espone fasi di avanzamento piu granulari (`opening_timesheet`, `daily_rows_loaded`, `opening_summary`, `summary_loaded`) per rendere piu leggibile lo stato del job;
+- se il riepilogo eventi di un collaboratore fallisce, la sync non perde piu il collaboratore: prosegue persistendo almeno anagrafica e giornaliere, e registra il warning nel log/event stream;
 - retry applicativo disponibile fino al limite configurato;
 - cancel e delete dei job falliti/storici disponibili da UI.
 
@@ -97,19 +105,21 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
 - aggiunti test per la precedenza `detail Inaz > template fallback`;
 - aggiunti test frontend iniziali `frontend/tests/unit/inaz-pages.test.tsx`;
 - aggiunti test frontend sul dettaglio collaboratore e preselezione del mapping suggerito in `frontend/tests/unit/inaz-collaboratore-detail.test.tsx`;
-- aggiunti test frontend sul workspace operatore giornaliere in `frontend/tests/unit/inaz-giornaliere-page.test.tsx`;
+- aggiornati test frontend sul cartellino a matrice in `frontend/tests/unit/inaz-giornaliere-page.test.tsx` (rendering matrice, apertura giornata + salvataggio rettifiche, apertura modal collaboratore);
+- aggiunti test frontend per la pagina anomalie e gli helper mesi/anomalie in `frontend/tests/unit/inaz-anomalie-page.test.tsx` e `inaz-anomaly-months.test.ts`;
 - aggiunto test backend sul filtro per `owner_user_id`, per garantire che un capo settore veda i dati da lui importati anche senza mapping del collaboratore verso `application_users`;
 - `pytest backend/tests/test_inaz_api.py tests/test_inaz_schedule_engine.py -q`: ok;
 - `frontend npm run typecheck`: ok;
-- `frontend npm run test:unit -- inaz-pages.test.tsx inaz-collaboratore-detail.test.tsx inaz-giornaliere-page.test.tsx`: ok;
+- `frontend npx vitest run`: ok (57 test);
 - verifica smoke backend eseguita su parser JSON e compilazione XLSM.
 
 ## Gap aperti
 
 - UI frontend ancora essenziale:
-  - niente calendario visuale mensile dedicato;
+  - cartellino mensile a matrice disponibile su `/inaz/giornaliere`, ma manca ancora un calendario per singolo collaboratore nel dettaglio;
   - niente preview differenziale/import duplicati avanzata;
   - niente selector template assistito lato filesystem;
+  - il "tipo di contratto" e oggi un proxy basato sul template orario (`schedule_code`): manca il dato contrattuale reale (tag manuale GAIA o estrazione da Inaz);
 - manca ancora la UI dedicata per gestione festivita/template orari e assegnazioni collaboratore;
 - sync live ancora minimale:
   - nessuna policy di retry automatica schedulata;

@@ -1,37 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
-import type { ColumnDef } from "@tanstack/react-table";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ProtectedPage } from "@/components/app/protected-page";
 import { Badge } from "@/components/ui/badge";
-import { DataTable } from "@/components/table/data-table";
 import { getCurrentUser, listInazCollaborators, listInazDailyRecords, updateInazDailyRecord } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import type { CurrentUser, InazCollaborator, InazDailyRecord } from "@/types/api";
-
-type DailyRow = {
-  id: string;
-  workDate: string;
-  collaboratorId: string;
-  collaborator: string;
-  collaboratorCode: string;
-  company: string;
-  scheduleCode: string;
-  programmedSchedule: string;
-  status: string;
-  timeSlots: string;
-  ordinaryMinutes: number | null;
-  absenceMinutes: number | null;
-  effectiveExtraMinutes: number;
-  kmValue: number | null;
-  specialDay: boolean;
-  hasAnomalies: boolean;
-  hasRequests: boolean;
-  evidenze: string;
-  summary: string;
-};
 
 type DailyEditForm = {
   kmValue: string;
@@ -40,23 +16,73 @@ type DailyEditForm = {
   manualNote: string;
 };
 
+type DayColumn = {
+  iso: string;
+  day: number;
+  weekday: string;
+  isWeekend: boolean;
+  isToday: boolean;
+};
+
+type CellKind = "anomaly" | "special" | "absence" | "worked" | "rest";
+
+const WEEKDAY_LABELS = ["dom", "lun", "mar", "mer", "gio", "ven", "sab"];
+
 function currentMonthValue(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
-function monthBounds(monthValue: string): { start: string; end: string } {
+function shiftMonth(monthValue: string, delta: number): string {
+  const [year, month] = monthValue.split("-").map(Number);
+  const shifted = new Date(year, month - 1 + delta, 1);
+  return `${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function formatMonthLabel(monthValue: string): string {
+  return new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric" }).format(new Date(`${monthValue}-01T00:00:00`));
+}
+
+function todayIso(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+function buildMonthDays(monthValue: string): DayColumn[] {
   const [yearString, monthString] = monthValue.split("-");
   const year = Number(yearString);
   const month = Number(monthString);
-  const start = `${yearString}-${monthString}-01`;
-  const end = `${yearString}-${monthString}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`;
-  return { start, end };
+  const total = new Date(year, month, 0).getDate();
+  const today = todayIso();
+  const days: DayColumn[] = [];
+  for (let day = 1; day <= total; day += 1) {
+    const iso = `${yearString}-${monthString}-${String(day).padStart(2, "0")}`;
+    const weekdayIndex = new Date(`${iso}T00:00:00`).getDay();
+    days.push({
+      iso,
+      day,
+      weekday: WEEKDAY_LABELS[weekdayIndex],
+      isWeekend: weekdayIndex === 0 || weekdayIndex === 6,
+      isToday: iso === today,
+    });
+  }
+  return days;
 }
 
-function formatHours(minutes: number | null): string {
+function monthBounds(monthValue: string): { start: string; end: string } {
+  const days = buildMonthDays(monthValue);
+  return { start: days[0]?.iso ?? `${monthValue}-01`, end: days[days.length - 1]?.iso ?? `${monthValue}-28` };
+}
+
+function formatHours(minutes: number | null | undefined): string {
   if (minutes == null) return "—";
   return `${(minutes / 60).toFixed(2)} h`;
+}
+
+function formatHoursCompact(minutes: number | null | undefined): string {
+  if (!minutes) return "0";
+  const value = minutes / 60;
+  return Number.isInteger(value) ? String(value) : value.toFixed(1);
 }
 
 function formatMinutesInput(minutes: number | null): string {
@@ -80,30 +106,53 @@ function parseMinutesInput(value: string): number | null {
   return null;
 }
 
-function summarizeMap(values: Record<string, string>): string {
-  const entries = Object.entries(values);
-  if (entries.length === 0) return "—";
-  return entries
-    .slice(0, 3)
-    .map(([label, value]) => `${label}: ${value}`)
-    .join(" · ");
+function effectiveExtraMinutes(record: InazDailyRecord): number {
+  return (
+    record.effective_extra_minutes ??
+    (record.effective_straordinario_minutes ?? record.straordinario_minutes ?? 0) +
+      (record.effective_mpe_minutes ?? record.mpe_minutes ?? 0)
+  );
 }
 
-async function listAllDailyRecords(token: string, params: { dateFrom: string; dateTo: string; collaboratorId?: string; q?: string; applicationUserId?: number }) {
-  const pageSize = 200;
-  let page = 1;
-  let items: InazDailyRecord[] = [];
-  let total = 0;
+function recordScheduleCode(record: InazDailyRecord): string | null {
+  if (record.schedule_code) return record.schedule_code;
+  const programmed = record.detail_programmed_schedule;
+  if (programmed) return programmed.split(" - ")[0]?.trim() || null;
+  return null;
+}
 
-  while (true) {
-    const response = await listInazDailyRecords(token, { ...params, page, pageSize });
-    items = [...items, ...response.items];
-    total = response.total;
-    if (items.length >= total || response.items.length === 0) {
-      return items;
-    }
-    page += 1;
+function recordScheduleLabel(record: InazDailyRecord): string | null {
+  return record.detail_programmed_schedule ?? record.schedule_code ?? null;
+}
+
+function classifyCell(record: InazDailyRecord): CellKind {
+  if (record.detail_anomalies.length > 0 || record.detail_error) return "anomaly";
+  if (record.special_day) return "special";
+  if ((record.ordinary_minutes ?? 0) > 0) return "worked";
+  if ((record.absence_minutes ?? 0) > 0) return "absence";
+  return "rest";
+}
+
+const CELL_TONE: Record<CellKind, string> = {
+  anomaly: "bg-red-50 text-red-700 ring-1 ring-inset ring-red-200 hover:bg-red-100",
+  special: "bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200 hover:bg-violet-100",
+  absence: "bg-sky-50 text-sky-700 ring-1 ring-inset ring-sky-200 hover:bg-sky-100",
+  worked: "bg-emerald-50 text-emerald-700 ring-1 ring-inset ring-emerald-100 hover:bg-emerald-100",
+  rest: "bg-gray-50 text-gray-300 hover:bg-gray-100",
+};
+
+function cellPrimaryLabel(record: InazDailyRecord, kind: CellKind): string {
+  if (kind === "worked" || kind === "special") {
+    return formatHoursCompact(record.ordinary_minutes ?? record.teo_minutes);
   }
+  if (kind === "absence" || kind === "anomaly") {
+    const status = (record.detail_status ?? record.stato ?? "").trim();
+    if (status) {
+      return status.length > 4 ? status.slice(0, 4) : status;
+    }
+    return formatHoursCompact(record.absence_minutes);
+  }
+  return "·";
 }
 
 export default function InazGiornalierePage() {
@@ -111,15 +160,20 @@ export default function InazGiornalierePage() {
   const [records, setRecords] = useState<InazDailyRecord[]>([]);
   const [collaborators, setCollaborators] = useState<InazCollaborator[]>([]);
   const [selectedMonth, setSelectedMonth] = useState(currentMonthValue());
-  const [selectedCollaboratorId, setSelectedCollaboratorId] = useState("");
   const [search, setSearch] = useState("");
-  const [onlyAnomalies, setOnlyAnomalies] = useState(false);
-  const [onlyExtra, setOnlyExtra] = useState(false);
+  const [scheduleFilter, setScheduleFilter] = useState("");
+  const [kmMode, setKmMode] = useState(false);
+  const [kmDrafts, setKmDrafts] = useState<Record<string, string>>({});
+  const [savingRecordId, setSavingRecordId] = useState<string | null>(null);
   const [selectedRecordId, setSelectedRecordId] = useState("");
+  const [collaboratorModalId, setCollaboratorModalId] = useState("");
   const [editor, setEditor] = useState<DailyEditForm | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const [dismissedMonth, setDismissedMonth] = useState<string | null>(null);
 
   useEffect(() => {
     const token = getStoredAccessToken();
@@ -137,81 +191,127 @@ export default function InazGiornalierePage() {
     const token = getStoredAccessToken();
     if (!token) return;
     const { start, end } = monthBounds(selectedMonth);
-    listAllDailyRecords(token, { dateFrom: start, dateTo: end })
+    setIsLoading(true);
+    (async () => {
+      const pageSize = 200;
+      let page = 1;
+      let items: InazDailyRecord[] = [];
+      while (true) {
+        const response = await listInazDailyRecords(token, { dateFrom: start, dateTo: end, page, pageSize });
+        items = [...items, ...response.items];
+        if (items.length >= response.total || response.items.length === 0) break;
+        page += 1;
+      }
+      return items;
+    })()
       .then((dailyItems) => {
         setRecords(dailyItems);
         setSelectedRecordId("");
       })
-      .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Errore caricamento giornaliere"));
+      .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Errore caricamento giornaliere"))
+      .finally(() => {
+        setIsLoading(false);
+        setHasLoaded(true);
+      });
   }, [selectedMonth]);
 
+  const days = useMemo(() => buildMonthDays(selectedMonth), [selectedMonth]);
   const collaboratorMap = useMemo(() => new Map(collaborators.map((item) => [item.id, item])), [collaborators]);
-  const mappedCollaboratorCount = useMemo(
-    () => collaborators.filter((item) => item.application_user_id != null).length,
-    [collaborators],
-  );
 
-  const rows = useMemo<DailyRow[]>(
-    () =>
-      records.map((record) => {
-        const collaborator = collaboratorMap.get(record.collaborator_id);
-        const effectiveExtra = record.effective_extra_minutes ?? (record.effective_straordinario_minutes ?? record.straordinario_minutes ?? 0) + (record.effective_mpe_minutes ?? record.mpe_minutes ?? 0);
-        return {
-          id: record.id,
-          collaboratorId: record.collaborator_id,
-          workDate: record.work_date,
-          collaborator: collaborator?.name ?? record.collaborator_id,
-          collaboratorCode: collaborator?.employee_code ?? "—",
-          company: collaborator?.company_label ?? collaborator?.company_code ?? "—",
-          scheduleCode: record.schedule_code ?? "—",
-          programmedSchedule: record.detail_programmed_schedule ?? "—",
-          status: record.detail_status ?? record.stato ?? "—",
-          timeSlots: record.detail_time_slots ?? "—",
-          ordinaryMinutes: record.ordinary_minutes,
-          absenceMinutes: record.absence_minutes,
-          effectiveExtraMinutes: effectiveExtra,
-          kmValue: record.km_value,
-          specialDay: Boolean(record.special_day),
-          hasAnomalies: record.detail_anomalies.length > 0 || Boolean(record.detail_error),
-          hasRequests: record.detail_requests.length > 0,
-          evidenze: record.evidenze ?? "—",
-          summary: summarizeMap(record.detail_day_summary),
-        };
-      }),
-    [records, collaboratorMap],
-  );
-
-  const filteredRows = useMemo(() => {
-    const normalizedSearch = search.trim().toLowerCase();
-    return rows.filter((row) => {
-      const matchesCollaborator = !selectedCollaboratorId || row.collaboratorId === selectedCollaboratorId;
-      const matchesSearch =
-        !normalizedSearch ||
-        [
-          row.collaborator,
-          row.collaboratorCode,
-          row.company,
-          row.scheduleCode,
-          row.programmedSchedule,
-          row.status,
-          row.evidenze,
-          row.summary,
-          row.workDate,
-          row.timeSlots,
-        ].some((value) => value.toLowerCase().includes(normalizedSearch));
-      const matchesAnomalies = !onlyAnomalies || row.hasAnomalies;
-      const matchesExtra = !onlyExtra || row.effectiveExtraMinutes > 0;
-      return matchesCollaborator && matchesSearch && matchesAnomalies && matchesExtra;
-    });
-  }, [rows, search, selectedCollaboratorId, onlyAnomalies, onlyExtra]);
-
-  const selectedRecord = useMemo(() => {
-    const explicit = records.find((record) => record.id === selectedRecordId);
-    if (explicit) {
-      return explicit;
+  const recordIndex = useMemo(() => {
+    const index = new Map<string, InazDailyRecord>();
+    for (const record of records) {
+      index.set(`${record.collaborator_id}|${record.work_date}`, record);
     }
-    return filteredRows.length > 0 ? records.find((record) => record.id === filteredRows[0]?.id) ?? null : null;
-  }, [records, selectedRecordId, filteredRows]);
+    return index;
+  }, [records]);
+
+  const collaboratorSchedule = useMemo(() => {
+    const counts = new Map<string, Map<string, number>>();
+    const labels = new Map<string, string>();
+    for (const record of records) {
+      const code = recordScheduleCode(record);
+      if (!code) continue;
+      const perCollab = counts.get(record.collaborator_id) ?? new Map<string, number>();
+      perCollab.set(code, (perCollab.get(code) ?? 0) + 1);
+      counts.set(record.collaborator_id, perCollab);
+      if (!labels.has(code)) {
+        const label = recordScheduleLabel(record);
+        if (label) labels.set(code, label);
+      }
+    }
+    const result = new Map<string, { code: string; label: string }>();
+    for (const [collabId, perCollab] of counts) {
+      let bestCode = "";
+      let best = -1;
+      for (const [code, occurrences] of perCollab) {
+        if (occurrences > best) {
+          best = occurrences;
+          bestCode = code;
+        }
+      }
+      result.set(collabId, { code: bestCode, label: labels.get(bestCode) ?? bestCode });
+    }
+    return result;
+  }, [records]);
+
+  const scheduleOptions = useMemo(() => {
+    const map = new Map<string, { code: string; label: string; count: number }>();
+    for (const { code, label } of collaboratorSchedule.values()) {
+      const entry = map.get(code) ?? { code, label, count: 0 };
+      entry.count += 1;
+      map.set(code, entry);
+    }
+    return Array.from(map.values()).sort((a, b) => a.code.localeCompare(b.code));
+  }, [collaboratorSchedule]);
+
+  const collaboratorRows = useMemo(() => {
+    const presentIds = new Set(records.map((record) => record.collaborator_id));
+    const normalizedSearch = search.trim().toLowerCase();
+    return collaborators
+      .filter((collaborator) => presentIds.has(collaborator.id))
+      .filter((collaborator) => !scheduleFilter || collaboratorSchedule.get(collaborator.id)?.code === scheduleFilter)
+      .filter((collaborator) => {
+        const company = collaborator.company_label ?? collaborator.company_code ?? "";
+        return (
+          !normalizedSearch ||
+          [collaborator.name, collaborator.employee_code, company].some((value) =>
+            value.toLowerCase().includes(normalizedSearch),
+          )
+        );
+      })
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }, [collaborators, records, search, scheduleFilter, collaboratorSchedule]);
+
+  const monthTotals = useMemo(() => {
+    const totals = new Map<string, { ordinary: number; extra: number; km: number; anomalies: number }>();
+    for (const record of records) {
+      const current = totals.get(record.collaborator_id) ?? { ordinary: 0, extra: 0, km: 0, anomalies: 0 };
+      current.ordinary += record.ordinary_minutes ?? 0;
+      current.extra += effectiveExtraMinutes(record);
+      current.km += record.km_value ?? 0;
+      if (record.detail_anomalies.length > 0 || record.detail_error) current.anomalies += 1;
+      totals.set(record.collaborator_id, current);
+    }
+    return totals;
+  }, [records]);
+
+  const summary = useMemo(() => {
+    let anomalies = 0;
+    let km = 0;
+    let extra = 0;
+    for (const record of records) {
+      if (record.detail_anomalies.length > 0 || record.detail_error) anomalies += 1;
+      km += record.km_value ?? 0;
+      extra += effectiveExtraMinutes(record);
+    }
+    return { anomalies, km, extra };
+  }, [records]);
+
+  const selectedRecord = useMemo(
+    () => records.find((record) => record.id === selectedRecordId) ?? null,
+    [records, selectedRecordId],
+  );
 
   useEffect(() => {
     if (!selectedRecord) {
@@ -227,11 +327,63 @@ export default function InazGiornalierePage() {
   }, [selectedRecord]);
 
   const canEdit = Boolean(currentUser);
-  const totalExtraRows = useMemo(() => rows.filter((row) => row.effectiveExtraMinutes > 0).length, [rows]);
-  const totalAnomalyRows = useMemo(() => rows.filter((row) => row.hasAnomalies).length, [rows]);
-  const totalKm = useMemo(() => rows.reduce((sum, row) => sum + (row.kmValue ?? 0), 0), [rows]);
 
-  async function handleSave() {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const dragState = useRef({ active: false, startX: 0, scrollLeft: 0, moved: false });
+  const [isDragging, setIsDragging] = useState(false);
+
+  function handleDragStart(event: React.MouseEvent<HTMLDivElement>) {
+    if (event.button !== 0) return;
+    const target = event.target as HTMLElement;
+    if (target.closest("input, textarea, select")) return;
+    const el = scrollRef.current;
+    if (!el) return;
+    dragState.current = { active: true, startX: event.pageX, scrollLeft: el.scrollLeft, moved: false };
+    setIsDragging(true);
+  }
+
+  function handleDragMove(event: React.MouseEvent<HTMLDivElement>) {
+    const el = scrollRef.current;
+    if (!el || !dragState.current.active) return;
+    const delta = event.pageX - dragState.current.startX;
+    if (Math.abs(delta) > 3) dragState.current.moved = true;
+    el.scrollLeft = dragState.current.scrollLeft - delta;
+  }
+
+  function handleDragEnd() {
+    if (!dragState.current.active) return;
+    dragState.current.active = false;
+    setIsDragging(false);
+  }
+
+  function handleClickCapture(event: React.MouseEvent<HTMLDivElement>) {
+    if (dragState.current.moved) {
+      event.preventDefault();
+      event.stopPropagation();
+      dragState.current.moved = false;
+    }
+  }
+
+  async function persistKm(record: InazDailyRecord, rawValue: string) {
+    const token = getStoredAccessToken();
+    if (!token) return;
+    const trimmed = rawValue.trim();
+    const nextValue = trimmed ? Math.max(0, Math.round(Number(trimmed))) : null;
+    if (trimmed && !Number.isFinite(Number(trimmed))) return;
+    if (nextValue === (record.km_value ?? null)) return;
+    setSavingRecordId(record.id);
+    setError(null);
+    try {
+      const updated = await updateInazDailyRecord(token, record.id, { km_value: nextValue });
+      setRecords((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Errore salvataggio KM");
+    } finally {
+      setSavingRecordId(null);
+    }
+  }
+
+  async function handleSaveEditor() {
     const token = getStoredAccessToken();
     if (!token || !selectedRecord || !editor) return;
     setIsSaving(true);
@@ -253,309 +405,445 @@ export default function InazGiornalierePage() {
     }
   }
 
-  const columns = useMemo<ColumnDef<DailyRow>[]>(
-    () => [
-      { header: "Data", accessorKey: "workDate" },
-      {
-        header: "Collaboratore",
-        accessorKey: "collaborator",
-        cell: ({ row }) => (
-          <div>
-            <p className="font-medium text-gray-900">{row.original.collaborator}</p>
-            <p className="text-xs text-gray-500">
-              {row.original.collaboratorCode} · {row.original.company}
-            </p>
-          </div>
-        ),
-      },
-      {
-        header: "Stato",
-        accessorKey: "status",
-        cell: ({ row }) => (
-          <div className="flex flex-wrap items-center gap-2">
-            <Badge variant={row.original.hasAnomalies ? "danger" : row.original.specialDay ? "warning" : "neutral"}>
-              {row.original.status}
-            </Badge>
-            {row.original.hasRequests ? <Badge variant="neutral">richieste</Badge> : null}
-            {row.original.specialDay ? <Badge variant="warning">speciale</Badge> : null}
-          </div>
-        ),
-      },
-      { header: "Orario", accessorKey: "programmedSchedule" },
-      {
-        header: "Ordinarie",
-        accessorKey: "ordinaryMinutes",
-        cell: ({ row }) => formatHours(row.original.ordinaryMinutes),
-      },
-      {
-        header: "Extra",
-        accessorKey: "effectiveExtraMinutes",
-        cell: ({ row }) => (
-          <span className={row.original.effectiveExtraMinutes > 0 ? "font-medium text-emerald-700" : "text-gray-500"}>
-            {formatHours(row.original.effectiveExtraMinutes)}
-          </span>
-        ),
-      },
-      {
-        header: "KM",
-        accessorKey: "kmValue",
-        cell: ({ row }) => row.original.kmValue ?? "—",
-      },
-    ],
-    [],
-  );
-
   return (
-    <ProtectedPage title="Giornaliere Inaz" description="Consultazione e rettifica giornaliere collaboratori." breadcrumb="Inaz" requiredModule="inaz">
+    <ProtectedPage title="Giornaliere Inaz" description="Cartellino mensile a matrice: collaboratori in verticale, giorni in orizzontale." breadcrumb="Inaz" requiredModule="inaz">
       <div className="space-y-6">
         {error ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
         {success ? <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700">{success}</div> : null}
 
-        {currentUser?.role === "admin" || currentUser?.role === "super_admin" ? (
-          mappedCollaboratorCount === 0 ? (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-              Nessun collaboratore e ancora mappato a un utente GAIA. La schermata funziona per controllo centralizzato, ma per i capi settore serve completare il mapping da <Link className="font-medium underline" href="/inaz/collaboratori">Collaboratori</Link>.
-            </div>
-          ) : null
-        ) : null}
-
-        <section className="grid gap-4 xl:grid-cols-4">
-          <div className="rounded-2xl border border-gray-100 bg-white p-4">
-            <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Collaboratori</p>
-            <p className="mt-2 text-2xl font-semibold text-gray-900">{collaborators.length}</p>
-            <p className="text-xs text-gray-500">perimetro corrente</p>
-          </div>
-          <div className="rounded-2xl border border-gray-100 bg-white p-4">
-            <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Giornate caricate</p>
-            <p className="mt-2 text-2xl font-semibold text-gray-900">{records.length}</p>
-            <p className="text-xs text-gray-500">mese selezionato</p>
-          </div>
-          <div className="rounded-2xl border border-gray-100 bg-white p-4">
-            <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Anomalie</p>
-            <p className="mt-2 text-2xl font-semibold text-red-700">{totalAnomalyRows}</p>
-            <p className="text-xs text-gray-500">giornate con alert</p>
-          </div>
-          <div className="rounded-2xl border border-gray-100 bg-white p-4">
-            <p className="text-xs uppercase tracking-[0.16em] text-gray-400">KM inseriti</p>
-            <p className="mt-2 text-2xl font-semibold text-gray-900">{totalKm}</p>
-            <p className="text-xs text-gray-500">totale mese</p>
-          </div>
-        </section>
-
         <article className="panel-card">
-          <div className="mb-4">
-            <p className="section-title">Filtri giornaliere</p>
-            <p className="section-copy">Ricerca rapida per collaboratore, stato giornata, orario Inaz, anomalie, straordinari o riepilogo del dettaglio giorno.</p>
-          </div>
-          <div className="grid gap-4 lg:grid-cols-4">
-            <label className="block text-sm font-medium text-gray-700">
-              Mese operativo
-              <input className="form-control mt-1" type="month" value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)} />
-            </label>
-            <label className="block text-sm font-medium text-gray-700">
-              Collaboratore
-              <select className="form-control mt-1" value={selectedCollaboratorId} onChange={(event) => setSelectedCollaboratorId(event.target.value)}>
-                <option value="">Tutti</option>
-                {collaborators.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name} ({item.employee_code})
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="block text-sm font-medium text-gray-700 lg:col-span-2">
-              Cerca
-              <input className="form-control mt-1" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Es. Permesso, OPESAB, 2026-05-16, ferie, anomalia" />
-            </label>
-            <div className="grid gap-3 sm:grid-cols-2 lg:pt-7">
-              <label className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
-                <input checked={onlyAnomalies} onChange={(event) => setOnlyAnomalies(event.target.checked)} type="checkbox" />
-                Solo anomalie
-              </label>
-              <label className="flex items-center gap-2 rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-700">
-                <input checked={onlyExtra} onChange={(event) => setOnlyExtra(event.target.checked)} type="checkbox" />
-                Solo extra
-              </label>
+          <div className="grid gap-x-6 gap-y-4 lg:grid-cols-12">
+            <div className="lg:col-span-4">
+              <p className="text-sm font-medium text-gray-700">Mese operativo</p>
+              <div className="mt-1 flex items-stretch gap-1">
+                <button
+                  type="button"
+                  aria-label="Mese precedente"
+                  onClick={() => setSelectedMonth((current) => shiftMonth(current, -1))}
+                  className="flex w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 transition hover:bg-gray-50"
+                >
+                  ‹
+                </button>
+                <input className="form-control flex-1" type="month" aria-label="Mese operativo" value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)} />
+                <button
+                  type="button"
+                  aria-label="Mese successivo"
+                  onClick={() => setSelectedMonth((current) => shiftMonth(current, 1))}
+                  className="flex w-9 items-center justify-center rounded-lg border border-gray-200 bg-white text-gray-600 transition hover:bg-gray-50"
+                >
+                  ›
+                </button>
+              </div>
+              <p className="mt-1 text-xs capitalize text-gray-400">{formatMonthLabel(selectedMonth)}</p>
             </div>
+
+            <label className="block text-sm font-medium text-gray-700 lg:col-span-4">
+              Cerca collaboratore
+              <input className="form-control mt-1" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Nome o matricola" />
+            </label>
+
+            <div className="flex items-start gap-2 lg:col-span-4 lg:justify-end lg:pt-6">
+              <button
+                type="button"
+                onClick={() => setKmMode((value) => !value)}
+                className={kmMode ? "btn-primary" : "btn-secondary"}
+                disabled={!canEdit}
+              >
+                {kmMode ? "Esci da inserimento KM" : "Inserisci KM"}
+              </button>
+              <Link className="btn-secondary" href="/inaz/anomalie">
+                Analisi anomalie
+              </Link>
+            </div>
+
+            {scheduleOptions.length > 0 ? (
+              <div className="lg:col-span-8">
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-400">Filtri · tipo orario / contratto</p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setScheduleFilter("")}
+                    className={`rounded-full px-3 py-1 text-xs font-medium transition ${scheduleFilter === "" ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
+                  >
+                    Tutti ({collaboratorSchedule.size})
+                  </button>
+                  {scheduleOptions.map((option) => (
+                    <button
+                      key={option.code}
+                      type="button"
+                      title={option.label}
+                      onClick={() => setScheduleFilter((current) => (current === option.code ? "" : option.code))}
+                      className={`rounded-full px-3 py-1 text-xs font-medium transition ${scheduleFilter === option.code ? "bg-gray-900 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"}`}
+                    >
+                      {option.code} ({option.count})
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
+
+            <div className="lg:col-span-4 lg:justify-self-end">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-gray-400">Riepilogo mese</p>
+              <div className="flex flex-wrap gap-2 text-xs lg:justify-end">
+                <span className="rounded-full bg-gray-100 px-3 py-1 font-medium text-gray-700">{collaboratorRows.length} coll.</span>
+                <span className="rounded-full bg-emerald-100 px-3 py-1 font-medium text-emerald-700">Extra {formatHours(summary.extra)}</span>
+                <span className="rounded-full bg-amber-100 px-3 py-1 font-medium text-amber-700">{summary.km} KM</span>
+                <span className="rounded-full bg-red-100 px-3 py-1 font-medium text-red-700">{summary.anomalies} anomalie</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-4 border-t border-gray-100 pt-4 text-xs text-gray-500">
+            <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded ring-1 ring-inset ring-emerald-200 bg-emerald-50" /> Lavorato</span>
+            <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded ring-1 ring-inset ring-sky-200 bg-sky-50" /> Assenza</span>
+            <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded ring-1 ring-inset ring-violet-200 bg-violet-50" /> Giorno speciale</span>
+            <span className="inline-flex items-center gap-1.5"><span className="h-3 w-3 rounded ring-1 ring-inset ring-red-200 bg-red-50" /> Anomalia</span>
+            <span className="inline-flex items-center gap-1.5"><span className="text-emerald-600">▲</span> Extra</span>
+            <span className="inline-flex items-center gap-1.5"><span>🚗</span> KM carburante</span>
           </div>
         </article>
 
-        <section className="grid gap-6 xl:grid-cols-[1.15fr_0.85fr]">
+        <article className="panel-card overflow-hidden p-0">
+          {kmMode ? (
+            <div className="border-b border-amber-100 bg-amber-50 px-4 py-2 text-xs text-amber-800">
+              Modalita inserimento KM attiva: digita i chilometri nella cella del giorno, il salvataggio avviene all’uscita dal campo.
+            </div>
+          ) : null}
+          <div
+            ref={scrollRef}
+            onMouseDown={handleDragStart}
+            onMouseMove={handleDragMove}
+            onMouseUp={handleDragEnd}
+            onMouseLeave={handleDragEnd}
+            onClickCapture={handleClickCapture}
+            className={`overflow-x-auto ${isDragging ? "cursor-grabbing select-none" : "cursor-grab"}`}
+          >
+            <table className="border-separate border-spacing-0 text-sm">
+              <thead>
+                <tr>
+                  <th className="sticky left-0 z-20 w-56 min-w-56 border-b border-r border-gray-200 bg-gray-50 px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Collaboratore
+                  </th>
+                  {days.map((column) => (
+                    <th
+                      key={column.iso}
+                      className={`border-b border-gray-200 px-1 py-2 text-center text-[11px] font-medium ${column.isWeekend ? "bg-gray-100 text-gray-400" : "bg-gray-50 text-gray-500"} ${column.isToday ? "ring-1 ring-inset ring-gray-900/20" : ""}`}
+                    >
+                      <div className="uppercase">{column.weekday}</div>
+                      <div className={`text-sm ${column.isToday ? "font-bold text-gray-900" : "text-gray-700"}`}>{column.day}</div>
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {collaboratorRows.map((collaborator) => {
+                  const totals = monthTotals.get(collaborator.id);
+                  return (
+                    <tr key={collaborator.id} className="group">
+                      <th className="sticky left-0 z-10 w-56 min-w-56 border-b border-r border-gray-200 bg-white px-4 py-2 text-left align-top group-hover:bg-gray-50">
+                        <button
+                          type="button"
+                          onClick={() => setCollaboratorModalId(collaborator.id)}
+                          className="text-left font-medium text-gray-900 hover:underline"
+                        >
+                          {collaborator.name}
+                        </button>
+                        <p className="text-[11px] text-gray-400">
+                          {collaborator.employee_code}
+                          {collaboratorSchedule.get(collaborator.id)?.code ? (
+                            <span className="ml-1 rounded bg-indigo-50 px-1 py-0.5 font-medium text-indigo-600" title={collaboratorSchedule.get(collaborator.id)?.label}>
+                              {collaboratorSchedule.get(collaborator.id)?.code}
+                            </span>
+                          ) : null}
+                        </p>
+                        <div className="mt-1 flex flex-wrap gap-1 text-[10px]">
+                          <span className="rounded bg-gray-100 px-1.5 py-0.5 text-gray-600">Ord {formatHoursCompact(totals?.ordinary)}h</span>
+                          {totals && totals.extra > 0 ? <span className="rounded bg-emerald-100 px-1.5 py-0.5 text-emerald-700">Extra {formatHoursCompact(totals.extra)}h</span> : null}
+                          {totals && totals.km > 0 ? <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-700">{totals.km} km</span> : null}
+                          {totals && totals.anomalies > 0 ? <span className="rounded bg-red-100 px-1.5 py-0.5 text-red-700">{totals.anomalies} ⚠</span> : null}
+                        </div>
+                      </th>
+                      {days.map((column) => {
+                        const record = recordIndex.get(`${collaborator.id}|${column.iso}`);
+                        if (!record) {
+                          return (
+                            <td key={column.iso} className={`border-b border-gray-100 p-1 ${column.isWeekend ? "bg-gray-50/60" : ""}`}>
+                              <div className="mx-auto h-12 w-12 rounded-lg bg-transparent" />
+                            </td>
+                          );
+                        }
+                        const kind = classifyCell(record);
+                        const extra = effectiveExtraMinutes(record);
+                        const isSelected = record.id === selectedRecordId;
+
+                        if (kmMode) {
+                          return (
+                            <td key={column.iso} className={`border-b border-gray-100 p-1 ${column.isWeekend ? "bg-gray-50/60" : ""}`}>
+                              <input
+                                inputMode="numeric"
+                                disabled={!canEdit || savingRecordId === record.id}
+                                defaultValue={kmDrafts[record.id] ?? (record.km_value != null ? String(record.km_value) : "")}
+                                onChange={(event) => setKmDrafts((current) => ({ ...current, [record.id]: event.target.value }))}
+                                onBlur={(event) => void persistKm(record, event.target.value)}
+                                placeholder="km"
+                                className="mx-auto block h-12 w-12 rounded-lg border border-amber-200 bg-amber-50 text-center text-sm text-amber-800 focus:border-amber-400 focus:outline-none focus:ring-1 focus:ring-amber-300"
+                                title={`${record.work_date} · ${collaborator.name}`}
+                              />
+                            </td>
+                          );
+                        }
+
+                        return (
+                          <td key={column.iso} className={`border-b border-gray-100 p-1 ${column.isWeekend ? "bg-gray-50/60" : ""}`}>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedRecordId(record.id)}
+                              title={`${record.work_date} · ${record.detail_status ?? record.stato ?? "—"}`}
+                              className={`relative mx-auto flex h-12 w-12 flex-col items-center justify-center rounded-lg text-xs font-semibold transition ${CELL_TONE[kind]} ${isSelected ? "outline outline-2 outline-gray-900" : ""}`}
+                            >
+                              <span>{cellPrimaryLabel(record, kind)}</span>
+                              <span className="mt-0.5 flex items-center gap-0.5 text-[9px] font-normal leading-none">
+                                {extra > 0 ? <span className="text-emerald-600">▲</span> : null}
+                                {record.km_value != null ? <span>🚗</span> : null}
+                                {record.detail_requests.length > 0 ? <span className="text-sky-600">✉</span> : null}
+                              </span>
+                            </button>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          {!isLoading && records.length > 0 && collaboratorRows.length === 0 ? (
+            <div className="px-6 py-12 text-center text-sm text-gray-500">
+              Nessun collaboratore corrisponde ai filtri correnti.
+            </div>
+          ) : null}
+          {isLoading ? <div className="px-6 py-12 text-center text-sm text-gray-500">Caricamento cartellino…</div> : null}
+        </article>
+
+        {selectedRecord && editor ? (
           <article className="panel-card">
-            <div className="mb-4 flex items-center justify-between gap-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <p className="section-title">Tabella giornaliere</p>
-                <p className="section-copy">Clicca una riga per aprire il pannello operativo della giornata. Il perimetro e quello del responsabile della sync, non del mapping del singolo dipendente.</p>
+                <p className="section-title">
+                  {selectedRecord.work_date} · {collaboratorMap.get(selectedRecord.collaborator_id)?.name ?? selectedRecord.collaborator_id}
+                </p>
+                <p className="section-copy">
+                  {selectedRecord.detail_programmed_schedule ?? selectedRecord.schedule_code ?? "Orario non disponibile"}
+                  {selectedRecord.detail_time_slots ? ` · ${selectedRecord.detail_time_slots}` : ""}
+                </p>
               </div>
-              <div className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
-                {filteredRows.length} righe · {totalExtraRows} con extra
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge variant={selectedRecord.detail_anomalies.length > 0 || selectedRecord.detail_error ? "danger" : selectedRecord.special_day ? "warning" : "neutral"}>
+                  {selectedRecord.detail_status ?? selectedRecord.stato ?? "n/d"}
+                </Badge>
+                {selectedRecord.effective_extra_minutes ? <Badge variant="success">extra {formatHours(selectedRecord.effective_extra_minutes)}</Badge> : null}
+                <button type="button" className="text-sm text-gray-400 hover:text-gray-700" onClick={() => setSelectedRecordId("")}>
+                  Chiudi ✕
+                </button>
               </div>
             </div>
-            <DataTable data={filteredRows} columns={columns} initialPageSize={20} onRowClick={(row) => setSelectedRecordId(row.id)} />
-          </article>
 
-          <article className="panel-card">
-            {selectedRecord && editor ? (
-              <div className="space-y-5">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <p className="section-title">{selectedRecord.work_date}</p>
-                    <p className="section-copy">
-                      {collaboratorMap.get(selectedRecord.collaborator_id)?.name ?? selectedRecord.collaborator_id} · {selectedRecord.detail_programmed_schedule ?? selectedRecord.schedule_code ?? "Orario non disponibile"}
-                    </p>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <Badge variant={selectedRecord.detail_anomalies.length > 0 || selectedRecord.detail_error ? "danger" : selectedRecord.special_day ? "warning" : "neutral"}>
-                      {selectedRecord.detail_status ?? selectedRecord.stato ?? "n/d"}
-                    </Badge>
-                    {selectedRecord.special_day ? <Badge variant="warning">giorno speciale</Badge> : null}
-                    {selectedRecord.effective_extra_minutes ? <Badge variant="success">extra {formatHours(selectedRecord.effective_extra_minutes)}</Badge> : null}
-                  </div>
+            <div className="mt-4 grid gap-4 lg:grid-cols-3">
+              <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+                <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Totali giornata</p>
+                <div className="mt-2 space-y-1 text-sm text-gray-700">
+                  <p>Ordinarie: <span className="font-medium text-gray-900">{formatHours(selectedRecord.ordinary_minutes)}</span></p>
+                  <p>Assenza: <span className="font-medium text-gray-900">{formatHours(selectedRecord.absence_minutes)}</span></p>
+                  <p>Extra effettivi: <span className="font-medium text-emerald-700">{formatHours(selectedRecord.effective_extra_minutes)}</span></p>
                 </div>
+              </div>
 
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-                    <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Orario Inaz</p>
-                    <p className="mt-2 text-sm font-semibold text-gray-900">{selectedRecord.detail_programmed_schedule ?? selectedRecord.schedule_code ?? "—"}</p>
-                    <p className="mt-1 text-xs text-gray-500">{selectedRecord.detail_time_slots ?? "Fasce non disponibili"}</p>
-                  </div>
-                  <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-                    <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Totali rapidi</p>
-                    <div className="mt-2 space-y-1 text-sm text-gray-700">
-                      <p>Ordinarie: <span className="font-medium text-gray-900">{formatHours(selectedRecord.ordinary_minutes)}</span></p>
-                      <p>Assenza: <span className="font-medium text-gray-900">{formatHours(selectedRecord.absence_minutes)}</span></p>
-                      <p>Extra effettivi: <span className="font-medium text-emerald-700">{formatHours(selectedRecord.effective_extra_minutes)}</span></p>
-                    </div>
-                  </div>
+              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 lg:col-span-2">
+                <p className="text-xs uppercase tracking-[0.16em] text-amber-500">Aggiungi KM carburante</p>
+                <div className="mt-2 flex flex-wrap items-end gap-3">
+                  <label className="block text-sm font-medium text-amber-900">
+                    Chilometri (auto)
+                    <input
+                      className="form-control mt-1 w-40"
+                      inputMode="numeric"
+                      value={editor.kmValue}
+                      onChange={(event) => setEditor((current) => current ? { ...current, kmValue: event.target.value } : current)}
+                      placeholder="Es. 24"
+                    />
+                  </label>
+                  <p className="text-xs text-amber-700">KM registrati a sistema: <span className="font-medium">{selectedRecord.km_value ?? "—"}</span></p>
                 </div>
+              </div>
+            </div>
 
-                {(selectedRecord.detail_anomalies.length > 0 || selectedRecord.detail_error) ? (
-                  <div className="rounded-2xl border border-red-200 bg-red-50 p-4">
-                    <p className="section-title text-red-900">Anomalie da gestire</p>
-                    <div className="mt-3 space-y-2 text-sm text-red-900">
-                      {selectedRecord.detail_anomalies.map((anomaly, index) => (
-                        <div key={`${selectedRecord.id}-anomaly-${index}`} className="rounded-xl border border-red-100 bg-white/70 px-3 py-2">
-                          {Object.entries(anomaly).map(([label, value]) => (
-                            <p key={label}>
-                              <span className="font-medium">{label}:</span> {value}
-                            </p>
-                          ))}
-                        </div>
+            {(selectedRecord.detail_anomalies.length > 0 || selectedRecord.detail_error) ? (
+              <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4">
+                <p className="section-title text-red-900">Anomalie da gestire</p>
+                <div className="mt-3 space-y-2 text-sm text-red-900">
+                  {selectedRecord.detail_anomalies.map((anomaly, index) => (
+                    <div key={`${selectedRecord.id}-anomaly-${index}`} className="rounded-xl border border-red-100 bg-white/70 px-3 py-2">
+                      {Object.entries(anomaly).map(([label, value]) => (
+                        <p key={label}>
+                          <span className="font-medium">{label}:</span> {value}
+                        </p>
                       ))}
-                      {selectedRecord.detail_error ? <p>{selectedRecord.detail_error}</p> : null}
                     </div>
-                  </div>
-                ) : null}
-
-                <div className="rounded-2xl border border-gray-100 bg-white p-4">
-                  <div className="mb-3">
-                    <p className="section-title">Rettifiche operatore</p>
-                    <p className="section-copy">Qui modifichi solo i campi necessari per l’operativita: KM carburante, straordinario, maggior presenza e nota.</p>
-                  </div>
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <label className="block text-sm font-medium text-gray-700">
-                      KM carburante
-                      <input className="form-control mt-1" value={editor.kmValue} onChange={(event) => setEditor((current) => current ? { ...current, kmValue: event.target.value } : current)} placeholder="Es. 24" />
-                    </label>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Straordinario override
-                      <input className="form-control mt-1" value={editor.overrideStraordinario} onChange={(event) => setEditor((current) => current ? { ...current, overrideStraordinario: event.target.value } : current)} placeholder="HH:MM oppure minuti" />
-                    </label>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Maggior presenza override
-                      <input className="form-control mt-1" value={editor.overrideMpe} onChange={(event) => setEditor((current) => current ? { ...current, overrideMpe: event.target.value } : current)} placeholder="HH:MM oppure minuti" />
-                    </label>
-                    <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-3 text-sm text-gray-700">
-                      <p className="font-medium text-gray-900">Valori Inaz letti</p>
-                      <p className="mt-2">Straordinario: {formatHours(selectedRecord.straordinario_minutes)}</p>
-                      <p>Maggior presenza: {formatHours(selectedRecord.mpe_minutes)}</p>
-                      <p>KM registrati: {selectedRecord.km_value ?? "—"}</p>
-                    </div>
-                    <label className="block text-sm font-medium text-gray-700 md:col-span-2">
-                      Nota operativa
-                      <textarea className="form-control mt-1 min-h-[110px]" value={editor.manualNote} onChange={(event) => setEditor((current) => current ? { ...current, manualNote: event.target.value } : current)} placeholder="Note per giustificazioni, carburante, straordinari o verifiche da fare." />
-                    </label>
-                  </div>
-                  <div className="mt-4 flex flex-wrap gap-3">
-                    <button className="btn-primary" type="button" onClick={() => void handleSave()} disabled={!canEdit || isSaving}>
-                      {isSaving ? "Salvataggio..." : "Salva rettifiche"}
-                    </button>
-                    <button
-                      className="btn-secondary"
-                      type="button"
-                      onClick={() =>
-                        setEditor({
-                          kmValue: selectedRecord.km_value != null ? String(selectedRecord.km_value) : "",
-                          overrideStraordinario: formatMinutesInput(selectedRecord.override_straordinario_minutes),
-                          overrideMpe: formatMinutesInput(selectedRecord.override_mpe_minutes),
-                          manualNote: selectedRecord.manual_note ?? "",
-                        })
-                      }
-                    >
-                      Ripristina
-                    </button>
-                  </div>
-                </div>
-
-                <div className="grid gap-4 xl:grid-cols-2">
-                  <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-                    <p className="section-title">Riepilogo giornata</p>
-                    <div className="mt-3 space-y-2 text-sm text-gray-700">
-                      {Object.entries(selectedRecord.detail_day_summary).length > 0 ? (
-                        Object.entries(selectedRecord.detail_day_summary).map(([label, value]) => (
-                          <div key={label} className="flex items-center justify-between gap-3">
-                            <span>{label}</span>
-                            <span className="font-medium text-gray-900">{value}</span>
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-sm text-gray-500">Nessun riepilogo disponibile.</p>
-                      )}
-                    </div>
-                  </div>
-                  <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-                    <p className="section-title">Richieste e timbrature</p>
-                    <div className="mt-3 space-y-3 text-sm text-gray-700">
-                      {selectedRecord.punches.length > 0 ? (
-                        <div className="rounded-xl border border-white bg-white px-3 py-2">
-                          {selectedRecord.punches.map((punch) => (
-                            <p key={punch.id}>
-                              Timbratura {punch.sequence}: <span className="font-medium text-gray-900">{punch.entry_time ?? "—"} / {punch.exit_time ?? "—"}</span>
-                            </p>
-                          ))}
-                        </div>
-                      ) : null}
-                      {selectedRecord.detail_requests.length > 0 ? (
-                        selectedRecord.detail_requests.map((request, index) => (
-                          <div key={`${selectedRecord.id}-request-${index}`} className="rounded-xl border border-white bg-white px-3 py-2">
-                            {Object.entries(request).map(([label, value]) => (
-                              <p key={label}>
-                                <span className="font-medium text-gray-900">{label}:</span> {value}
-                              </p>
-                            ))}
-                          </div>
-                        ))
-                      ) : (
-                        <p className="text-sm text-gray-500">Nessuna richiesta registrata.</p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap gap-3">
-                  <Link className="btn-secondary" href={`/inaz/collaboratori/${selectedRecord.collaborator_id}`}>
-                    Apri dettaglio collaboratore
-                  </Link>
+                  ))}
+                  {selectedRecord.detail_error ? <p>{selectedRecord.detail_error}</p> : null}
                 </div>
               </div>
-            ) : (
-              <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-6 py-10 text-center text-sm text-gray-500">
-                Seleziona una giornata dalla tabella per aprire il pannello operativo con anomalie, straordinari, KM e note.
+            ) : null}
+
+            <div className="mt-4 rounded-2xl border border-gray-100 bg-white p-4">
+              <div className="mb-3">
+                <p className="section-title">Rettifiche operatore</p>
+                <p className="section-copy">Straordinario, maggior presenza e nota operativa. I KM si modificano nel riquadro carburante.</p>
               </div>
-            )}
+              <div className="grid gap-4 md:grid-cols-2">
+                <label className="block text-sm font-medium text-gray-700">
+                  Straordinario override
+                  <input className="form-control mt-1" value={editor.overrideStraordinario} onChange={(event) => setEditor((current) => current ? { ...current, overrideStraordinario: event.target.value } : current)} placeholder="HH:MM oppure minuti" />
+                </label>
+                <label className="block text-sm font-medium text-gray-700">
+                  Maggior presenza override
+                  <input className="form-control mt-1" value={editor.overrideMpe} onChange={(event) => setEditor((current) => current ? { ...current, overrideMpe: event.target.value } : current)} placeholder="HH:MM oppure minuti" />
+                </label>
+                <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-3 text-sm text-gray-700 md:col-span-2">
+                  <p className="font-medium text-gray-900">Valori Inaz letti</p>
+                  <p className="mt-2">Straordinario: {formatHours(selectedRecord.straordinario_minutes)} · Maggior presenza: {formatHours(selectedRecord.mpe_minutes)}</p>
+                </div>
+                <label className="block text-sm font-medium text-gray-700 md:col-span-2">
+                  Nota operativa
+                  <textarea className="form-control mt-1 min-h-[90px]" value={editor.manualNote} onChange={(event) => setEditor((current) => current ? { ...current, manualNote: event.target.value } : current)} placeholder="Note per giustificazioni, carburante, straordinari o verifiche da fare." />
+                </label>
+              </div>
+              <div className="mt-4 flex flex-wrap gap-3">
+                <button className="btn-primary" type="button" onClick={() => void handleSaveEditor()} disabled={!canEdit || isSaving}>
+                  {isSaving ? "Salvataggio..." : "Salva rettifiche"}
+                </button>
+                <Link className="btn-secondary" href={`/inaz/collaboratori/${selectedRecord.collaborator_id}`}>
+                  Apri dettaglio collaboratore
+                </Link>
+              </div>
+            </div>
           </article>
-        </section>
+        ) : null}
       </div>
+
+      {collaboratorModalId ? (() => {
+        const collaborator = collaboratorMap.get(collaboratorModalId);
+        if (!collaborator) return null;
+        const days = records
+          .filter((record) => record.collaborator_id === collaboratorModalId)
+          .sort((a, b) => a.work_date.localeCompare(b.work_date));
+        const totals = monthTotals.get(collaboratorModalId);
+        const schedule = collaboratorSchedule.get(collaboratorModalId);
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/35 px-4 py-8" onClick={() => setCollaboratorModalId("")}>
+            <div className="flex max-h-full w-full max-w-2xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl" onClick={(event) => event.stopPropagation()}>
+              <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-6 py-5">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">{collaborator.name}</h3>
+                  <p className="mt-0.5 text-sm text-gray-500">
+                    Matricola {collaborator.employee_code} · {collaborator.company_label ?? collaborator.company_code ?? "—"}
+                    {schedule?.code ? <span className="ml-1 rounded bg-indigo-50 px-1 py-0.5 font-medium text-indigo-600" title={schedule.label}>{schedule.code}</span> : null}
+                  </p>
+                  <p className="mt-1 text-xs capitalize text-gray-400">{formatMonthLabel(selectedMonth)}</p>
+                </div>
+                <button type="button" className="text-sm text-gray-400 hover:text-gray-700" onClick={() => setCollaboratorModalId("")}>
+                  Chiudi ✕
+                </button>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 px-6 py-4 sm:grid-cols-4">
+                <div className="rounded-xl bg-gray-50 px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-wide text-gray-400">Ordinarie</p>
+                  <p className="text-sm font-semibold text-gray-900">{formatHours(totals?.ordinary ?? 0)}</p>
+                </div>
+                <div className="rounded-xl bg-emerald-50 px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-wide text-emerald-500">Extra</p>
+                  <p className="text-sm font-semibold text-emerald-700">{formatHours(totals?.extra ?? 0)}</p>
+                </div>
+                <div className="rounded-xl bg-amber-50 px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-wide text-amber-500">KM</p>
+                  <p className="text-sm font-semibold text-amber-700">{totals?.km ?? 0}</p>
+                </div>
+                <div className="rounded-xl bg-red-50 px-3 py-2">
+                  <p className="text-[10px] uppercase tracking-wide text-red-500">Anomalie</p>
+                  <p className="text-sm font-semibold text-red-700">{totals?.anomalies ?? 0}</p>
+                </div>
+              </div>
+
+              <div className="min-h-0 flex-1 overflow-y-auto border-t border-gray-100 px-6 py-4">
+                <div className="space-y-1">
+                  {days.map((record) => {
+                    const kind = classifyCell(record);
+                    const extra = effectiveExtraMinutes(record);
+                    return (
+                      <button
+                        key={record.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedRecordId(record.id);
+                          setCollaboratorModalId("");
+                        }}
+                        className="flex w-full items-center justify-between gap-3 rounded-lg px-2 py-1.5 text-left text-sm hover:bg-gray-50"
+                      >
+                        <span className="flex items-center gap-2">
+                          <span className={`h-2.5 w-2.5 rounded-full ${CELL_TONE[kind].split(" ").find((token) => token.startsWith("bg-")) ?? "bg-gray-200"}`} />
+                          <span className="font-medium text-gray-700">{record.work_date}</span>
+                          <span className="text-gray-400">{record.detail_status ?? record.stato ?? "—"}</span>
+                        </span>
+                        <span className="flex items-center gap-3 text-xs text-gray-500">
+                          <span>Ord {formatHoursCompact(record.ordinary_minutes)}h</span>
+                          {extra > 0 ? <span className="text-emerald-600">Extra {formatHoursCompact(extra)}h</span> : null}
+                          {record.km_value != null ? <span className="text-amber-600">{record.km_value} km</span> : null}
+                        </span>
+                      </button>
+                    );
+                  })}
+                  {days.length === 0 ? <p className="text-sm text-gray-500">Nessuna giornaliera nel mese.</p> : null}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap justify-end gap-2 border-t border-gray-100 px-6 py-4">
+                <Link className="btn-secondary" href={`/inaz/collaboratori/${collaborator.id}`}>
+                  Apri scheda completa
+                </Link>
+              </div>
+            </div>
+          </div>
+        );
+      })() : null}
+
+      {hasLoaded && !isLoading && records.length === 0 && dismissedMonth !== selectedMonth ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/35 px-4">
+          <div className="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+            <p className="text-xs font-semibold uppercase tracking-[0.24em] text-gray-400">Cartellino vuoto</p>
+            <h3 className="mt-2 text-lg font-semibold text-gray-900">Nessuna giornaliera per {formatMonthLabel(selectedMonth)}</h3>
+            <p className="mt-3 text-sm leading-6 text-gray-600">
+              Non risultano giornaliere caricate per questo mese. Vuoi consultare {formatMonthLabel(shiftMonth(selectedMonth, -1))}?
+            </p>
+            <div className="mt-6 flex flex-wrap justify-end gap-2">
+              <button className="btn-secondary" type="button" onClick={() => setDismissedMonth(selectedMonth)}>
+                Resta su {formatMonthLabel(selectedMonth)}
+              </button>
+              <button
+                className="btn-primary"
+                type="button"
+                onClick={() => setSelectedMonth((current) => shiftMonth(current, -1))}
+              >
+                Carica {formatMonthLabel(shiftMonth(selectedMonth, -1))}
+              </button>
+            </div>
+            <div className="mt-3 text-center">
+              <Link className="text-xs font-medium text-gray-500 underline" href="/inaz/sync">
+                Oppure avvia una sync Inaz
+              </Link>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </ProtectedPage>
   );
 }

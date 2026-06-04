@@ -224,6 +224,7 @@ export function ModuleSidebar({
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Gestione</p>
         <NavItem href="/inaz/collaboratori" icon={UsersIcon} label="Collaboratori" match="prefix" />
         <NavItem href="/inaz/giornaliere" icon={CalendarIcon} label="Giornaliere" match="prefix" />
+        <NavItem href="/inaz/anomalie" icon={AlertTriangleIcon} label="Anomalie" match="prefix" />
         <NavItem href="/inaz/export" icon={DocumentIcon} label="Export" match="prefix" />
         <NavItem href="/inaz/sync" icon={RefreshIcon} label="Sync" match="prefix" />
         <NavItem href="/inaz/configurazione" icon={LockIcon} label="Configurazione" match="prefix" />

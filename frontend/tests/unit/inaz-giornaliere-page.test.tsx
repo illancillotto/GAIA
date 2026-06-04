@@ -212,16 +212,21 @@ describe("Inaz giornaliere workspace", () => {
     });
   });
 
-  test("shows owner-scoped operator workspace and saves manual overrides", async () => {
+  test("renders the monthly matrix, opens a day and saves overrides", async () => {
     render(<InazGiornalierePage />);
 
     expect(await screen.findByText("Giornaliere Inaz")).toBeInTheDocument();
-    expect(await screen.findByText(/Il perimetro e quello del responsabile della sync/i)).toBeInTheDocument();
-    expect(screen.getByText("AMADU SALVATORE 2026-05-16")).toBeInTheDocument();
-    expect(screen.getByText(/1 righe · 1 con extra/i)).toBeInTheDocument();
-    expect(screen.getByText("AMADU SALVATORE 2026-05-16")).toBeInTheDocument();
 
-    fireEvent.change(screen.getByLabelText("KM carburante"), { target: { value: "30" } });
+    // Sposta la vista sul mese del record mockato (maggio 2026).
+    fireEvent.change(await screen.findByLabelText("Mese operativo"), { target: { value: "2026-05" } });
+
+    // Il collaboratore compare in verticale nella matrice.
+    expect(await screen.findByRole("button", { name: "AMADU SALVATORE" })).toBeInTheDocument();
+
+    // La cella del giorno apre il pannello operativo.
+    fireEvent.click(await screen.findByTitle("2026-05-16 · Giornata anomala"));
+
+    fireEvent.change(await screen.findByLabelText("Chilometri (auto)"), { target: { value: "30" } });
     fireEvent.change(screen.getByLabelText("Straordinario override"), { target: { value: "01:30" } });
     fireEvent.change(screen.getByLabelText("Maggior presenza override"), { target: { value: "00:30" } });
     fireEvent.change(screen.getByLabelText("Nota operativa"), { target: { value: "Corretto dal capo settore" } });
@@ -237,5 +242,18 @@ describe("Inaz giornaliere workspace", () => {
     });
 
     expect(await screen.findByText("Giornata 2026-05-16 aggiornata.")).toBeInTheDocument();
+  });
+
+  test("opens the collaborator detail modal from the matrix", async () => {
+    render(<InazGiornalierePage />);
+
+    expect(await screen.findByText("Giornaliere Inaz")).toBeInTheDocument();
+    fireEvent.change(await screen.findByLabelText("Mese operativo"), { target: { value: "2026-05" } });
+
+    fireEvent.click(await screen.findByRole("button", { name: "AMADU SALVATORE" }));
+
+    // La modal mostra la scheda sintetica del collaboratore e l'elenco giornate.
+    expect(await screen.findByText("Apri scheda completa")).toBeInTheDocument();
+    expect(screen.getByText("2026-05-16")).toBeInTheDocument();
   });
 });
