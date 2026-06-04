@@ -155,6 +155,16 @@ function cellPrimaryLabel(record: InazDailyRecord, kind: CellKind): string {
   return "·";
 }
 
+function detailBadgeVariant(record: InazDailyRecord): "danger" | "warning" | "success" | "neutral" {
+  const status = (record.detail_status ?? record.stato ?? "").toLowerCase();
+  if (status.includes("regolare")) return "success";
+  const kind = classifyCell(record);
+  if (kind === "anomaly") return "danger";
+  if (kind === "special") return "warning";
+  if (kind === "worked") return "success";
+  return "neutral";
+}
+
 export default function InazGiornalierePage() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [records, setRecords] = useState<InazDailyRecord[]>([]);
@@ -312,6 +322,54 @@ export default function InazGiornalierePage() {
     () => records.find((record) => record.id === selectedRecordId) ?? null,
     [records, selectedRecordId],
   );
+  const selectedCollaboratorRecords = useMemo(() => {
+    if (!selectedRecord) return [];
+    return records
+      .filter((record) => record.collaborator_id === selectedRecord.collaborator_id)
+      .sort((a, b) => a.work_date.localeCompare(b.work_date));
+  }, [records, selectedRecord]);
+  const selectedRecordIndex = useMemo(() => {
+    if (!selectedRecord) return -1;
+    return selectedCollaboratorRecords.findIndex((record) => record.id === selectedRecord.id);
+  }, [selectedCollaboratorRecords, selectedRecord]);
+  const previousRecord = selectedRecordIndex > 0 ? selectedCollaboratorRecords[selectedRecordIndex - 1] : null;
+  const nextRecord =
+    selectedRecordIndex >= 0 && selectedRecordIndex < selectedCollaboratorRecords.length - 1
+      ? selectedCollaboratorRecords[selectedRecordIndex + 1]
+      : null;
+
+  useEffect(() => {
+    if (!selectedRecord) return;
+
+    function onKeyDown(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select")) {
+        if (event.key !== "Escape") {
+          return;
+        }
+      }
+
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setSelectedRecordId("");
+        return;
+      }
+
+      if (event.key === "ArrowLeft" && previousRecord) {
+        event.preventDefault();
+        setSelectedRecordId(previousRecord.id);
+        return;
+      }
+
+      if (event.key === "ArrowRight" && nextRecord) {
+        event.preventDefault();
+        setSelectedRecordId(nextRecord.id);
+      }
+    }
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [selectedRecord, previousRecord, nextRecord]);
 
   useEffect(() => {
     if (!selectedRecord) {
@@ -625,9 +683,22 @@ export default function InazGiornalierePage() {
           {isLoading ? <div className="px-6 py-12 text-center text-sm text-gray-500">Caricamento cartellino…</div> : null}
         </article>
 
-        {selectedRecord && editor ? (
-          <article className="panel-card">
-            <div className="flex flex-wrap items-start justify-between gap-3">
+      </div>
+
+      {selectedRecord && editor ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-950/45 px-4 py-6" onClick={() => setSelectedRecordId("")}>
+          <div className="relative flex w-full max-w-[calc(80rem+7rem)] items-center justify-center gap-2" onClick={(event) => event.stopPropagation()}>
+            <button
+              type="button"
+              aria-label="Giorno precedente"
+              disabled={!previousRecord}
+              onClick={() => previousRecord && setSelectedRecordId(previousRecord.id)}
+              className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-3xl text-gray-700 shadow-lg transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-30"
+            >
+              ‹
+            </button>
+            <div className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
+            <div className="flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 px-6 py-5">
               <div>
                 <p className="section-title">
                   {selectedRecord.work_date} · {collaboratorMap.get(selectedRecord.collaborator_id)?.name ?? selectedRecord.collaborator_id}
@@ -638,7 +709,7 @@ export default function InazGiornalierePage() {
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <Badge variant={selectedRecord.detail_anomalies.length > 0 || selectedRecord.detail_error ? "danger" : selectedRecord.special_day ? "warning" : "neutral"}>
+                <Badge variant={detailBadgeVariant(selectedRecord)}>
                   {selectedRecord.detail_status ?? selectedRecord.stato ?? "n/d"}
                 </Badge>
                 {selectedRecord.effective_extra_minutes ? <Badge variant="success">extra {formatHours(selectedRecord.effective_extra_minutes)}</Badge> : null}
@@ -648,87 +719,99 @@ export default function InazGiornalierePage() {
               </div>
             </div>
 
-            <div className="mt-4 grid gap-4 lg:grid-cols-3">
-              <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
-                <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Totali giornata</p>
-                <div className="mt-2 space-y-1 text-sm text-gray-700">
-                  <p>Ordinarie: <span className="font-medium text-gray-900">{formatHours(selectedRecord.ordinary_minutes)}</span></p>
-                  <p>Assenza: <span className="font-medium text-gray-900">{formatHours(selectedRecord.absence_minutes)}</span></p>
-                  <p>Extra effettivi: <span className="font-medium text-emerald-700">{formatHours(selectedRecord.effective_extra_minutes)}</span></p>
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+              <div className="grid gap-4 lg:grid-cols-3">
+                <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+                  <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Totali giornata</p>
+                  <div className="mt-2 space-y-1 text-sm text-gray-700">
+                    <p>Ordinarie: <span className="font-medium text-gray-900">{formatHours(selectedRecord.ordinary_minutes)}</span></p>
+                    <p>Assenza: <span className="font-medium text-gray-900">{formatHours(selectedRecord.absence_minutes)}</span></p>
+                    <p>Extra effettivi: <span className="font-medium text-emerald-700">{formatHours(selectedRecord.effective_extra_minutes)}</span></p>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 lg:col-span-2">
+                  <p className="text-xs uppercase tracking-[0.16em] text-amber-500">Aggiungi KM carburante</p>
+                  <div className="mt-2 flex flex-wrap items-end gap-3">
+                    <label className="block text-sm font-medium text-amber-900">
+                      Chilometri (auto)
+                      <input
+                        className="form-control mt-1 w-40"
+                        inputMode="numeric"
+                        value={editor.kmValue}
+                        onChange={(event) => setEditor((current) => current ? { ...current, kmValue: event.target.value } : current)}
+                        placeholder="Es. 24"
+                      />
+                    </label>
+                    <p className="text-xs text-amber-700">KM registrati a sistema: <span className="font-medium">{selectedRecord.km_value ?? "—"}</span></p>
+                  </div>
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 lg:col-span-2">
-                <p className="text-xs uppercase tracking-[0.16em] text-amber-500">Aggiungi KM carburante</p>
-                <div className="mt-2 flex flex-wrap items-end gap-3">
-                  <label className="block text-sm font-medium text-amber-900">
-                    Chilometri (auto)
-                    <input
-                      className="form-control mt-1 w-40"
-                      inputMode="numeric"
-                      value={editor.kmValue}
-                      onChange={(event) => setEditor((current) => current ? { ...current, kmValue: event.target.value } : current)}
-                      placeholder="Es. 24"
-                    />
+              {(selectedRecord.detail_anomalies.length > 0 || selectedRecord.detail_error) ? (
+                <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4">
+                  <p className="section-title text-red-900">Anomalie da gestire</p>
+                  <div className="mt-3 space-y-2 text-sm text-red-900">
+                    {selectedRecord.detail_anomalies.map((anomaly, index) => (
+                      <div key={`${selectedRecord.id}-anomaly-${index}`} className="rounded-xl border border-red-100 bg-white/70 px-3 py-2">
+                        {Object.entries(anomaly).map(([label, value]) => (
+                          <p key={label}>
+                            <span className="font-medium">{label}:</span> {value}
+                          </p>
+                        ))}
+                      </div>
+                    ))}
+                    {selectedRecord.detail_error ? <p>{selectedRecord.detail_error}</p> : null}
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="mt-4 rounded-2xl border border-gray-100 bg-white p-4">
+                <div className="mb-3">
+                  <p className="section-title">Rettifiche operatore</p>
+                  <p className="section-copy">Straordinario, maggior presenza e nota operativa. I KM si modificano nel riquadro carburante.</p>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    Straordinario override
+                    <input className="form-control mt-1" value={editor.overrideStraordinario} onChange={(event) => setEditor((current) => current ? { ...current, overrideStraordinario: event.target.value } : current)} placeholder="HH:MM oppure minuti" />
                   </label>
-                  <p className="text-xs text-amber-700">KM registrati a sistema: <span className="font-medium">{selectedRecord.km_value ?? "—"}</span></p>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Maggior presenza override
+                    <input className="form-control mt-1" value={editor.overrideMpe} onChange={(event) => setEditor((current) => current ? { ...current, overrideMpe: event.target.value } : current)} placeholder="HH:MM oppure minuti" />
+                  </label>
+                  <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-3 text-sm text-gray-700 md:col-span-2">
+                    <p className="font-medium text-gray-900">Valori Inaz letti</p>
+                    <p className="mt-2">Straordinario: {formatHours(selectedRecord.straordinario_minutes)} · Maggior presenza: {formatHours(selectedRecord.mpe_minutes)}</p>
+                  </div>
+                  <label className="block text-sm font-medium text-gray-700 md:col-span-2">
+                    Nota operativa
+                    <textarea className="form-control mt-1 min-h-[90px]" value={editor.manualNote} onChange={(event) => setEditor((current) => current ? { ...current, manualNote: event.target.value } : current)} placeholder="Note per giustificazioni, carburante, straordinari o verifiche da fare." />
+                  </label>
+                </div>
+                <div className="mt-4 flex flex-wrap gap-3">
+                  <button className="btn-primary" type="button" onClick={() => void handleSaveEditor()} disabled={!canEdit || isSaving}>
+                    {isSaving ? "Salvataggio..." : "Salva rettifiche"}
+                  </button>
+                  <Link className="btn-secondary" href={`/inaz/collaboratori/${selectedRecord.collaborator_id}`}>
+                    Apri dettaglio collaboratore
+                  </Link>
                 </div>
               </div>
             </div>
-
-            {(selectedRecord.detail_anomalies.length > 0 || selectedRecord.detail_error) ? (
-              <div className="mt-4 rounded-2xl border border-red-200 bg-red-50 p-4">
-                <p className="section-title text-red-900">Anomalie da gestire</p>
-                <div className="mt-3 space-y-2 text-sm text-red-900">
-                  {selectedRecord.detail_anomalies.map((anomaly, index) => (
-                    <div key={`${selectedRecord.id}-anomaly-${index}`} className="rounded-xl border border-red-100 bg-white/70 px-3 py-2">
-                      {Object.entries(anomaly).map(([label, value]) => (
-                        <p key={label}>
-                          <span className="font-medium">{label}:</span> {value}
-                        </p>
-                      ))}
-                    </div>
-                  ))}
-                  {selectedRecord.detail_error ? <p>{selectedRecord.detail_error}</p> : null}
-                </div>
-              </div>
-            ) : null}
-
-            <div className="mt-4 rounded-2xl border border-gray-100 bg-white p-4">
-              <div className="mb-3">
-                <p className="section-title">Rettifiche operatore</p>
-                <p className="section-copy">Straordinario, maggior presenza e nota operativa. I KM si modificano nel riquadro carburante.</p>
-              </div>
-              <div className="grid gap-4 md:grid-cols-2">
-                <label className="block text-sm font-medium text-gray-700">
-                  Straordinario override
-                  <input className="form-control mt-1" value={editor.overrideStraordinario} onChange={(event) => setEditor((current) => current ? { ...current, overrideStraordinario: event.target.value } : current)} placeholder="HH:MM oppure minuti" />
-                </label>
-                <label className="block text-sm font-medium text-gray-700">
-                  Maggior presenza override
-                  <input className="form-control mt-1" value={editor.overrideMpe} onChange={(event) => setEditor((current) => current ? { ...current, overrideMpe: event.target.value } : current)} placeholder="HH:MM oppure minuti" />
-                </label>
-                <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-3 text-sm text-gray-700 md:col-span-2">
-                  <p className="font-medium text-gray-900">Valori Inaz letti</p>
-                  <p className="mt-2">Straordinario: {formatHours(selectedRecord.straordinario_minutes)} · Maggior presenza: {formatHours(selectedRecord.mpe_minutes)}</p>
-                </div>
-                <label className="block text-sm font-medium text-gray-700 md:col-span-2">
-                  Nota operativa
-                  <textarea className="form-control mt-1 min-h-[90px]" value={editor.manualNote} onChange={(event) => setEditor((current) => current ? { ...current, manualNote: event.target.value } : current)} placeholder="Note per giustificazioni, carburante, straordinari o verifiche da fare." />
-                </label>
-              </div>
-              <div className="mt-4 flex flex-wrap gap-3">
-                <button className="btn-primary" type="button" onClick={() => void handleSaveEditor()} disabled={!canEdit || isSaving}>
-                  {isSaving ? "Salvataggio..." : "Salva rettifiche"}
-                </button>
-                <Link className="btn-secondary" href={`/inaz/collaboratori/${selectedRecord.collaborator_id}`}>
-                  Apri dettaglio collaboratore
-                </Link>
-              </div>
             </div>
-          </article>
-        ) : null}
-      </div>
+            <button
+              type="button"
+              aria-label="Giorno successivo"
+              disabled={!nextRecord}
+              onClick={() => nextRecord && setSelectedRecordId(nextRecord.id)}
+              className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full border border-gray-200 bg-white text-3xl text-gray-700 shadow-lg transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-30"
+            >
+              ›
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       {collaboratorModalId ? (() => {
         const collaborator = collaboratorMap.get(collaboratorModalId);
