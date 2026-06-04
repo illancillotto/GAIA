@@ -7413,6 +7413,45 @@ def test_finalize_shapefile_route_returns_service_payload(monkeypatch: pytest.Mo
     assert captured["cleanup_staging"] is True
 
 
+def test_run_shapefile_import_treats_staging_as_4326_after_ogr(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeDb:
+        def rollback(self) -> None:
+            pass
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(import_routes_module, "_append_step", lambda *args, **kwargs: None)
+    monkeypatch.setattr(import_routes_module, "drop_staging_table", lambda *args, **kwargs: None)
+    monkeypatch.setattr(import_routes_module, "SessionLocal", lambda: FakeDb())
+
+    def fake_load_zip_to_staging(*args, **kwargs) -> str:
+        captured["load_source_srid"] = kwargs["source_srid"]
+        return "comprensorio-particelle.shp"
+
+    def fake_finalize_shapefile_import(db, **kwargs):
+        captured["finalize_source_srid"] = kwargs["source_srid"]
+        captured["filename"] = kwargs["filename"]
+        return {"status": "completed"}
+
+    monkeypatch.setattr(import_routes_module, "load_zip_to_staging", fake_load_zip_to_staging)
+    monkeypatch.setattr(import_routes_module, "finalize_shapefile_import", fake_finalize_shapefile_import)
+
+    import_routes_module._run_shapefile_import(
+        uuid4(),
+        b"PK\x03\x04fakezip",
+        "comprensorio.zip",
+        created_by=1,
+        source_srid=7791,
+    )
+
+    assert captured["load_source_srid"] == 7791
+    assert captured["finalize_source_srid"] == 4326
+    assert captured["filename"] == "comprensorio-particelle.shp"
+
+
 def test_upload_distretti_shapefile_creates_processing_batch(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, object] = {}
 
@@ -7464,6 +7503,45 @@ def test_upload_distretti_shapefile_rejects_non_zip() -> None:
 
     assert response.status_code == 400
     assert "ZIP" in response.json()["detail"]
+
+
+def test_run_distretti_shapefile_import_treats_staging_as_4326_after_ogr(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeDb:
+        def rollback(self) -> None:
+            pass
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr(import_routes_module, "_append_step", lambda *args, **kwargs: None)
+    monkeypatch.setattr(import_routes_module, "drop_staging_table", lambda *args, **kwargs: None)
+    monkeypatch.setattr(import_routes_module, "SessionLocal", lambda: FakeDb())
+
+    def fake_load_zip_to_staging(*args, **kwargs) -> str:
+        captured["load_source_srid"] = kwargs["source_srid"]
+        return "distretti.shp"
+
+    def fake_finalize_distretti_shapefile_import(db, **kwargs):
+        captured["finalize_source_srid"] = kwargs["source_srid"]
+        captured["filename"] = kwargs["filename"]
+        return {"status": "completed"}
+
+    monkeypatch.setattr(import_routes_module, "load_zip_to_staging", fake_load_zip_to_staging)
+    monkeypatch.setattr(import_routes_module, "finalize_distretti_shapefile_import", fake_finalize_distretti_shapefile_import)
+
+    import_routes_module._run_distretti_shapefile_import(
+        uuid4(),
+        b"PK\x03\x04fakezip",
+        "distretti.zip",
+        created_by=1,
+        source_srid=6707,
+    )
+
+    assert captured["load_source_srid"] == 6707
+    assert captured["finalize_source_srid"] == 4326
+    assert captured["filename"] == "distretti.shp"
 
 
 def test_finalize_distretti_shapefile_route_returns_service_payload(monkeypatch: pytest.MonkeyPatch) -> None:

@@ -470,7 +470,9 @@ def _run_shapefile_import(
         finalize_shapefile_import(
             db,
             created_by=created_by,
-            source_srid=source_srid,
+            # Lo staging caricato via ogr2ogr è già riproiettato in EPSG:4326.
+            # Il finalize deve trattarlo come tale per evitare una seconda trasformazione.
+            source_srid=4326,
             batch_id=batch_id,
             filename=actual_filename,
             log_callback=lambda msg: _append_step(batch_id, msg),
@@ -537,7 +539,9 @@ def _run_distretti_shapefile_import(
         finalize_distretti_shapefile_import(
             db,
             created_by=created_by,
-            source_srid=source_srid,
+            # Lo staging caricato via ogr2ogr è già riproiettato in EPSG:4326.
+            # Il finalize deve trattarlo come tale per evitare una seconda trasformazione.
+            source_srid=4326,
             batch_id=batch_id,
             filename=actual_filename,
             log_callback=lambda msg: _append_step(batch_id, msg),
