@@ -191,7 +191,7 @@ async def scrape_with_credentials(
                 started_at = monotonic()
                 try:
                     timesheet = await asyncio.wait_for(
-                        scrape_one_employee(page, collaborator, period_start, period_end),
+                        scrape_one_employee(page, collaborator, period_start, period_end, progress_callback=emit),
                         timeout=employee_timeout_seconds,
                     )
                     results.append(timesheet)

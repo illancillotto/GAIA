@@ -6,8 +6,8 @@ import InazCollaboratoreDetailPage from "@/app/inaz/collaboratori/[id]/page";
 const mocks = vi.hoisted(() => ({
   getStoredAccessToken: vi.fn(),
   getCurrentUser: vi.fn(),
-  listApplicationUsers: vi.fn(),
-  listInazCollaborators: vi.fn(),
+  listAllApplicationUsers: vi.fn(),
+  listAllInazCollaborators: vi.fn(),
   getInazCollaboratorCalendar: vi.fn(),
   getInazCollaboratorSummary: vi.fn(),
   listInazScheduleTemplates: vi.fn(),
@@ -24,8 +24,8 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/api", () => ({
   getCurrentUser: mocks.getCurrentUser,
-  listApplicationUsers: mocks.listApplicationUsers,
-  listInazCollaborators: mocks.listInazCollaborators,
+  listAllApplicationUsers: mocks.listAllApplicationUsers,
+  listAllInazCollaborators: mocks.listAllInazCollaborators,
   getInazCollaboratorCalendar: mocks.getInazCollaboratorCalendar,
   getInazCollaboratorSummary: mocks.getInazCollaboratorSummary,
   listInazScheduleTemplates: mocks.listInazScheduleTemplates,
@@ -47,6 +47,7 @@ vi.mock("@/components/app/protected-page", () => ({
 
 vi.mock("next/navigation", () => ({
   useParams: () => ({ id: "collab-1" }),
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 describe("Inaz collaborator detail", () => {
@@ -72,8 +73,7 @@ describe("Inaz collaborator detail", () => {
       module_inaz: true,
       enabled_modules: ["accessi", "inaz"],
     });
-    mocks.listApplicationUsers.mockResolvedValue({
-      items: [
+    mocks.listAllApplicationUsers.mockResolvedValue([
         {
           id: 6,
           username: "amadu.salvatore",
@@ -118,11 +118,8 @@ describe("Inaz collaborator detail", () => {
           created_at: "2026-06-04T00:00:00Z",
           updated_at: "2026-06-04T00:00:00Z",
         },
-      ],
-      total: 2,
-    });
-    mocks.listInazCollaborators.mockResolvedValue({
-      items: [
+    ]);
+    mocks.listAllInazCollaborators.mockResolvedValue([
         {
           id: "collab-1",
           owner_user_id: 1,
@@ -139,11 +136,7 @@ describe("Inaz collaborator detail", () => {
           created_at: "2026-06-04T09:00:00Z",
           updated_at: "2026-06-04T09:00:00Z",
         },
-      ],
-      total: 1,
-      page: 1,
-      page_size: 200,
-    });
+    ]);
     mocks.getInazCollaboratorCalendar.mockResolvedValue({
       collaborator: {
         id: "collab-1",
@@ -199,5 +192,7 @@ describe("Inaz collaborator detail", () => {
     await waitFor(() => {
       expect(mocks.mapInazCollaboratorApplicationUser).toHaveBeenCalledWith("token", "collab-1", 6);
     });
+
+    expect(await screen.findByRole("status")).toHaveTextContent(/Mapping GAIA salvato correttamente/i);
   });
 });

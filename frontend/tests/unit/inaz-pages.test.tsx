@@ -9,8 +9,8 @@ import InazSyncPage from "@/app/inaz/sync/page";
 const mocks = vi.hoisted(() => ({
   getStoredAccessToken: vi.fn(),
   getCurrentUser: vi.fn(),
-  listApplicationUsers: vi.fn(),
-  listInazCollaborators: vi.fn(),
+  listAllApplicationUsers: vi.fn(),
+  listAllInazCollaborators: vi.fn(),
   listInazDailyRecords: vi.fn(),
   mapInazCollaboratorApplicationUser: vi.fn(),
   listInazImportJobs: vi.fn(),
@@ -35,8 +35,8 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/api", () => ({
   getCurrentUser: mocks.getCurrentUser,
-  listApplicationUsers: mocks.listApplicationUsers,
-  listInazCollaborators: mocks.listInazCollaborators,
+  listAllApplicationUsers: mocks.listAllApplicationUsers,
+  listAllInazCollaborators: mocks.listAllInazCollaborators,
   listInazDailyRecords: mocks.listInazDailyRecords,
   mapInazCollaboratorApplicationUser: mocks.mapInazCollaboratorApplicationUser,
   listInazImportJobs: mocks.listInazImportJobs,
@@ -87,52 +87,44 @@ describe("Inaz pages", () => {
       module_inaz: true,
       enabled_modules: ["accessi", "inaz"],
     });
-    mocks.listApplicationUsers.mockResolvedValue({
-      items: [
-        {
-          id: 7,
-          username: "mrossi",
-          email: "mrossi@example.local",
-          role: "viewer",
-          is_active: true,
-          module_accessi: true,
-          module_rete: false,
-          module_inventario: false,
-          module_catasto: false,
-          module_utenze: false,
-          module_operazioni: false,
-          module_riordino: false,
-          module_ruolo: false,
-          module_inaz: true,
-          enabled_modules: ["accessi", "inaz"],
-          created_at: "2026-05-29T00:00:00Z",
-          updated_at: "2026-05-29T00:00:00Z",
-        },
-      ],
-      total: 1,
-    });
-    mocks.listInazCollaborators.mockResolvedValue({
-      items: [
-        {
-          id: "collab-1",
-          application_user_id: null,
-          kint: "10159",
-          kkint: "{demo}",
-          employee_code: "1854",
-          company_code: "53",
-          company_label: "53 - CBO",
-          name: "AMADU SALVATORE",
-          birth_date: "1967-02-26",
-          is_active: true,
-          last_seen_at: "2026-05-29T09:00:00Z",
-          created_at: "2026-05-29T09:00:00Z",
-          updated_at: "2026-05-29T09:00:00Z",
-        },
-      ],
-      total: 1,
-      page: 1,
-      page_size: 200,
-    });
+    mocks.listAllApplicationUsers.mockResolvedValue([
+      {
+        id: 7,
+        username: "mrossi",
+        email: "mrossi@example.local",
+        role: "viewer",
+        is_active: true,
+        module_accessi: true,
+        module_rete: false,
+        module_inventario: false,
+        module_catasto: false,
+        module_utenze: false,
+        module_operazioni: false,
+        module_riordino: false,
+        module_ruolo: false,
+        module_inaz: true,
+        enabled_modules: ["accessi", "inaz"],
+        created_at: "2026-05-29T00:00:00Z",
+        updated_at: "2026-05-29T00:00:00Z",
+      },
+    ]);
+    mocks.listAllInazCollaborators.mockResolvedValue([
+      {
+        id: "collab-1",
+        application_user_id: null,
+        kint: "10159",
+        kkint: "{demo}",
+        employee_code: "1854",
+        company_code: "53",
+        company_label: "53 - CBO",
+        name: "AMADU SALVATORE",
+        birth_date: "1967-02-26",
+        is_active: true,
+        last_seen_at: "2026-05-29T09:00:00Z",
+        created_at: "2026-05-29T09:00:00Z",
+        updated_at: "2026-05-29T09:00:00Z",
+      },
+    ]);
     mocks.listInazDailyRecords.mockResolvedValue({
       items: [
         {

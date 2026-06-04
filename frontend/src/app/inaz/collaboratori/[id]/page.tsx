@@ -1,6 +1,6 @@
 "use client";
 
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
 import { ProtectedPage } from "@/components/app/protected-page";
@@ -11,13 +11,18 @@ import {
   getCurrentUser,
   getInazCollaboratorCalendar,
   getInazCollaboratorSummary,
-  listApplicationUsers,
+  listAllApplicationUsers,
+  listAllInazCollaborators,
   listInazCollaboratorScheduleAssignments,
-  listInazCollaborators,
   listInazScheduleTemplates,
   mapInazCollaboratorApplicationUser,
   updateInazDailyRecord,
 } from "@/lib/api";
+import {
+  notifyInazCollaboratorDetailUpdated,
+  scoreInazCollaboratorUserMatch,
+  usersForInazCollaboratorMappingSorted,
+} from "@/lib/inaz-collaborator-mapping";
 import { getStoredAccessToken } from "@/lib/auth";
 import type { ApplicationUser, CurrentUser, InazCollaborator, InazCollaboratorScheduleAssignment, InazDailyRecord, InazEventSummary, InazScheduleTemplate } from "@/types/api";
 
@@ -39,58 +44,14 @@ function formatDetailEntries(values: Record<string, string>): Array<[string, str
   return Object.entries(values);
 }
 
-function normalizePersonText(value: string | null | undefined): string {
-  return (value ?? "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function buildTokenSet(value: string): Set<string> {
-  return new Set(normalizePersonText(value).split(" ").filter((token) => token.length > 1));
-}
-
-function scoreSuggestion(collaborator: InazCollaborator, user: ApplicationUser): number {
-  const collaboratorName = normalizePersonText(collaborator.name);
-  if (!collaboratorName) return 0;
-
-  const userFullName = normalizePersonText(user.full_name);
-  const userUsername = normalizePersonText(user.username);
-  const userEmailLocal = normalizePersonText(user.email.split("@")[0] ?? "");
-  let score = 0;
-
-  if (userFullName && userFullName === collaboratorName) score += 120;
-  if (userUsername && userUsername === collaboratorName) score += 90;
-  if (userEmailLocal && userEmailLocal === collaboratorName) score += 80;
-
-  const collaboratorTokens = buildTokenSet(collaborator.name);
-  for (const candidate of [userFullName, userUsername, userEmailLocal]) {
-    if (!candidate) continue;
-    const candidateTokens = buildTokenSet(candidate);
-    let intersection = 0;
-    collaboratorTokens.forEach((token) => {
-      if (candidateTokens.has(token)) {
-        intersection += 1;
-      }
-    });
-    if (intersection === collaboratorTokens.size && collaboratorTokens.size > 1) {
-      score += 70;
-    } else if (intersection > 0) {
-      score += intersection * 18;
-    }
-  }
-
-  return score;
-}
-
 export default function InazCollaboratoreDetailPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const collaboratorId = params.id as string;
+  const isEmbedded = searchParams.get("embedded") === "1";
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [users, setUsers] = useState<ApplicationUser[]>([]);
+  const [allCollaborators, setAllCollaborators] = useState<InazCollaborator[]>([]);
   const [collaborator, setCollaborator] = useState<InazCollaborator | null>(null);
   const [records, setRecords] = useState<InazDailyRecord[]>([]);
   const [summary, setSummary] = useState<InazEventSummary[]>([]);
@@ -106,6 +67,8 @@ export default function InazCollaboratoreDetailPage() {
   const [assignmentNotes, setAssignmentNotes] = useState("");
   const [dailyOverrides, setDailyOverrides] = useState<Record<string, { km_value: string; override_straordinario_minutes: string; override_mpe_minutes: string; manual_note: string }>>({});
   const [error, setError] = useState<string | null>(null);
+  const [mappingNotice, setMappingNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
+  const [savingMapping, setSavingMapping] = useState(false);
 
   useEffect(() => {
     const token = getStoredAccessToken();
@@ -115,9 +78,9 @@ export default function InazCollaboratoreDetailPage() {
         Promise.all([
           Promise.resolve(sessionUser),
           sessionUser.role === "admin" || sessionUser.role === "super_admin"
-            ? listApplicationUsers(token)
-            : Promise.resolve({ items: [], total: 0 }),
-          listInazCollaborators(token, { page: 1, pageSize: 200 }),
+            ? listAllApplicationUsers(token)
+            : Promise.resolve([]),
+          listAllInazCollaborators(token),
           getInazCollaboratorCalendar(token, collaboratorId, dateFrom, dateTo),
           getInazCollaboratorSummary(token, collaboratorId, dateFrom, dateTo),
           sessionUser.role === "admin" || sessionUser.role === "super_admin"
@@ -128,17 +91,18 @@ export default function InazCollaboratoreDetailPage() {
             : Promise.resolve([]),
         ]),
       )
-      .then(([sessionUser, usersResponse, collaboratorsResponse, calendarResponse, summaryResponse, templatesResponse, assignmentsResponse]) => {
+      .then(([sessionUser, userItems, collaboratorItems, calendarResponse, summaryResponse, templatesResponse, assignmentsResponse]) => {
         setCurrentUser(sessionUser);
-        setUsers(usersResponse.items);
+        setUsers(userItems);
+        setAllCollaborators(collaboratorItems);
         setCollaborator(
-          collaboratorsResponse.items.find((item) => item.id === collaboratorId) ?? calendarResponse.collaborator,
+          collaboratorItems.find((item) => item.id === collaboratorId) ?? calendarResponse.collaborator,
         );
         setRecords(calendarResponse.items);
         setSummary(summaryResponse.items);
         setTemplates(templatesResponse);
         setAssignments(assignmentsResponse);
-        setMappingValue(String((collaboratorsResponse.items.find((item) => item.id === collaboratorId) ?? calendarResponse.collaborator).application_user_id ?? ""));
+        setMappingValue(String((collaboratorItems.find((item) => item.id === collaboratorId) ?? calendarResponse.collaborator).application_user_id ?? ""));
         setDailyOverrides(
           Object.fromEntries(
             calendarResponse.items.map((record) => [
@@ -161,12 +125,17 @@ export default function InazCollaboratoreDetailPage() {
   const totalAbsence = useMemo(() => records.reduce((sum, item) => sum + (item.absence_minutes ?? 0), 0), [records]);
   const totalExtra = useMemo(() => records.reduce((sum, item) => sum + (item.straordinario_minutes ?? 0) + (item.mpe_minutes ?? 0), 0), [records]);
   const canEdit = currentUser?.role === "admin" || currentUser?.role === "super_admin";
+  const mappingUsers = useMemo(
+    () =>
+      collaborator ? usersForInazCollaboratorMappingSorted(collaborator, users, allCollaborators, collaboratorId) : [],
+    [collaborator, users, allCollaborators, collaboratorId],
+  );
   const suggestedMapping = useMemo(() => {
-    if (!collaborator || users.length === 0) return null;
+    if (!collaborator || mappingUsers.length === 0) return null;
     let bestUser: ApplicationUser | null = null;
     let bestScore = 0;
-    for (const user of users) {
-      const score = scoreSuggestion(collaborator, user);
+    for (const user of mappingUsers) {
+      const score = scoreInazCollaboratorUserMatch(collaborator, user);
       if (score > bestScore) {
         bestScore = score;
         bestUser = user;
@@ -177,7 +146,7 @@ export default function InazCollaboratoreDetailPage() {
       user: bestUser,
       confidence: bestScore >= 120 ? "alta" : "media",
     };
-  }, [collaborator, users]);
+  }, [collaborator, mappingUsers]);
 
   useEffect(() => {
     if (!collaborator || collaborator.application_user_id != null) {
@@ -190,12 +159,51 @@ export default function InazCollaboratoreDetailPage() {
 
   async function handleSaveMapping() {
     const token = getStoredAccessToken();
-    if (!token || !collaborator) return;
+    if (!collaborator) {
+      setMappingNotice({ tone: "error", message: "Collaboratore non caricato. Ricarica la pagina." });
+      return;
+    }
+    if (!token) {
+      setMappingNotice({ tone: "error", message: "Sessione scaduta. Effettua di nuovo l'accesso." });
+      return;
+    }
+
+    const trimmedValue = mappingValue.trim();
+    const nextUserId = trimmedValue === "" ? null : Number(trimmedValue);
+    if (trimmedValue !== "" && !Number.isFinite(nextUserId)) {
+      setMappingNotice({ tone: "error", message: "Seleziona un utente GAIA valido." });
+      return;
+    }
+
+    const currentValue = collaborator.application_user_id == null ? "" : String(collaborator.application_user_id);
+    if (trimmedValue === currentValue) {
+      setMappingNotice({ tone: "success", message: "Mapping già salvato." });
+      return;
+    }
+
+    setSavingMapping(true);
+    setMappingNotice(null);
+    setError(null);
     try {
-      const updated = await mapInazCollaboratorApplicationUser(token, collaborator.id, mappingValue ? Number(mappingValue) : null);
+      const updated = await mapInazCollaboratorApplicationUser(token, collaborator.id, nextUserId);
       setCollaborator(updated);
+      setAllCollaborators((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setMappingValue(String(updated.application_user_id ?? ""));
+      setMappingNotice({
+        tone: "success",
+        message: updated.application_user_id
+          ? "Mapping GAIA salvato correttamente."
+          : "Mapping GAIA rimosso correttamente.",
+      });
+      if (isEmbedded) {
+        notifyInazCollaboratorDetailUpdated();
+      }
     } catch (mapError) {
-      setError(mapError instanceof Error ? mapError.message : "Errore salvataggio mapping");
+      const message = mapError instanceof Error ? mapError.message : "Errore salvataggio mapping";
+      setMappingNotice({ tone: "error", message });
+      setError(message);
+    } finally {
+      setSavingMapping(false);
     }
   }
 
@@ -212,6 +220,9 @@ export default function InazCollaboratoreDetailPage() {
         manual_note: form.manual_note.trim() || null,
       });
       setRecords((current) => current.map((item) => (item.id === recordId ? updated : item)));
+      if (isEmbedded) {
+        notifyInazCollaboratorDetailUpdated();
+      }
     } catch (updateError) {
       setError(updateError instanceof Error ? updateError.message : "Errore salvataggio rettifica giornaliera");
     }
@@ -232,6 +243,9 @@ export default function InazCollaboratoreDetailPage() {
       setAssignmentValidFrom("");
       setAssignmentValidTo("");
       setAssignmentNotes("");
+      if (isEmbedded) {
+        notifyInazCollaboratorDetailUpdated();
+      }
     } catch (assignmentError) {
       setError(assignmentError instanceof Error ? assignmentError.message : "Errore creazione assegnazione");
     }
@@ -243,6 +257,9 @@ export default function InazCollaboratoreDetailPage() {
     try {
       await deleteInazScheduleAssignment(token, assignmentId);
       setAssignments((current) => current.filter((item) => item.id !== assignmentId));
+      if (isEmbedded) {
+        notifyInazCollaboratorDetailUpdated();
+      }
     } catch (assignmentError) {
       setError(assignmentError instanceof Error ? assignmentError.message : "Errore eliminazione assegnazione");
     }
@@ -365,23 +382,38 @@ export default function InazCollaboratoreDetailPage() {
                           Suggerito: {suggestedMapping.user.full_name?.trim() || suggestedMapping.user.username} ({suggestedMapping.confidence})
                         </span>
                       ) : null}
-                      <select className="form-control mt-1" value={mappingValue} onChange={(event) => setMappingValue(event.target.value)}>
+                      <select
+                        className="form-control mt-1"
+                        value={mappingValue}
+                        onChange={(event) => {
+                          setMappingValue(event.target.value);
+                          setMappingNotice(null);
+                        }}
+                      >
                         <option value="">Nessun mapping</option>
-                        {suggestedMapping ? (
-                          <option value={suggestedMapping.user.id}>
-                            Suggerito: {suggestedMapping.user.full_name?.trim() || suggestedMapping.user.username} · {suggestedMapping.user.email} ({suggestedMapping.confidence})
-                          </option>
-                        ) : null}
-                        {users.map((user) => (
+                        {mappingUsers.map((user) => (
                           <option key={user.id} value={user.id}>
                             {user.username} · {user.email}
                           </option>
                         ))}
                       </select>
                     </label>
-                    <button className="btn-primary mt-3 w-full" type="button" onClick={() => void handleSaveMapping()}>
-                      Salva mapping
+                    <button
+                      className="btn-primary mt-3 w-full disabled:cursor-not-allowed disabled:opacity-60"
+                      type="button"
+                      disabled={savingMapping}
+                      onClick={() => void handleSaveMapping()}
+                    >
+                      {savingMapping ? "Salvataggio..." : "Salva mapping"}
                     </button>
+                    {mappingNotice ? (
+                      <p
+                        className={`mt-2 text-sm ${mappingNotice.tone === "success" ? "text-emerald-700" : "text-red-700"}`}
+                        role={mappingNotice.tone === "success" ? "status" : "alert"}
+                      >
+                        {mappingNotice.message}
+                      </p>
+                    ) : null}
                   </div>
                 ) : null}
               </div>

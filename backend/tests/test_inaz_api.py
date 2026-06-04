@@ -578,6 +578,43 @@ def test_inaz_sync_job_retry_respects_max_attempts(monkeypatch: pytest.MonkeyPat
     assert retried.json()["worker_pid"] == 2222
 
 
+def test_inaz_sync_job_retry_allows_resume_checkpoint_beyond_max_attempts(monkeypatch: pytest.MonkeyPatch) -> None:
+    admin = _create_user("sync_resume_admin")
+    token = _login(admin.username)
+    credential_id = _create_inaz_credential(admin, label="Resume", username="resume.inaz")
+    pid_iter = iter((3001, 3002))
+    monkeypatch.setattr("app.modules.inaz.router.launch_sync_worker", lambda job: next(pid_iter))
+
+    created = client.post(
+        "/inaz/sync/jobs",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"year": 2026, "month": 5, "credential_id": credential_id},
+    )
+    assert created.status_code == 200
+    job_id = created.json()["id"]
+
+    db = TestingSessionLocal()
+    try:
+        job = db.get(InazSyncJob, uuid.UUID(job_id))
+        assert job is not None
+        job.status = "failed"
+        job.attempt_count = job.max_attempts
+        params = dict(job.params_json or {})
+        params["checkpoint"] = {"completed_employee_codes": ["1854", "2101"], "completed_count": 2}
+        job.params_json = params
+        db.add(job)
+        db.commit()
+    finally:
+        db.close()
+
+    resumed = client.post(
+        f"/inaz/sync/jobs/{job_id}/retry",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert resumed.status_code == 200
+    assert resumed.json()["worker_pid"] == 3002
+
+
 def test_inaz_sync_job_can_reference_credential(monkeypatch: pytest.MonkeyPatch) -> None:
     admin = _create_user("sync_cred_admin")
     token = _login(admin.username)

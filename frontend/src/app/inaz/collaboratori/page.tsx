@@ -1,13 +1,18 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 
 import { ProtectedPage } from "@/components/app/protected-page";
 import { DataTable } from "@/components/table/data-table";
 import { Badge } from "@/components/ui/badge";
-import { getCurrentUser, listApplicationUsers, listInazCollaborators, listInazDailyRecords, mapInazCollaboratorApplicationUser } from "@/lib/api";
+import { getCurrentUser, listAllApplicationUsers, listAllInazCollaborators, listInazDailyRecords, mapInazCollaboratorApplicationUser } from "@/lib/api";
+import {
+  INAZ_COLLABORATOR_DETAIL_UPDATED_MESSAGE,
+  scoreInazCollaboratorUserMatch,
+  usersForInazCollaboratorMappingSorted,
+} from "@/lib/inaz-collaborator-mapping";
 import { getStoredAccessToken } from "@/lib/auth";
 import type { ApplicationUser, CurrentUser, InazCollaborator, InazDailyRecord } from "@/types/api";
 
@@ -41,59 +46,6 @@ function formatHours(minutes: number): string {
   return `${(minutes / 60).toFixed(1)} h`;
 }
 
-function normalizePersonText(value: string | null | undefined): string {
-  return (value ?? "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9\s]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function buildTokenSet(value: string): Set<string> {
-  return new Set(normalizePersonText(value).split(" ").filter((token) => token.length > 1));
-}
-
-function scoreSuggestion(collaborator: InazCollaborator, user: ApplicationUser): number {
-  const collaboratorName = normalizePersonText(collaborator.name);
-  if (!collaboratorName) return 0;
-
-  const userFullName = normalizePersonText(user.full_name);
-  const userUsername = normalizePersonText(user.username);
-  const userEmailLocal = normalizePersonText(user.email.split("@")[0] ?? "");
-
-  let score = 0;
-
-  if (userFullName && userFullName === collaboratorName) score += 120;
-  if (userUsername && userUsername === collaboratorName) score += 90;
-  if (userEmailLocal && userEmailLocal === collaboratorName) score += 80;
-
-  const collaboratorTokens = buildTokenSet(collaborator.name);
-  const candidateSources = [userFullName, userUsername, userEmailLocal].filter(Boolean);
-
-  for (const candidate of candidateSources) {
-    const candidateTokens = buildTokenSet(candidate);
-    let intersection = 0;
-    collaboratorTokens.forEach((token) => {
-      if (candidateTokens.has(token)) {
-        intersection += 1;
-      }
-    });
-    if (intersection === collaboratorTokens.size && collaboratorTokens.size > 1) {
-      score += 70;
-    } else if (intersection > 0) {
-      score += intersection * 18;
-    }
-  }
-
-  if (collaborator.birth_date && user.full_name && userFullName.includes(collaboratorName.split(" ")[0] ?? "")) {
-    score += 5;
-  }
-
-  return score;
-}
-
 function buildSuggestedLabel(user: ApplicationUser | null): string {
   if (!user) return "Nessun suggerimento";
   const identity = user.full_name?.trim() || user.username;
@@ -109,7 +61,46 @@ export default function InazCollaboratoriPage() {
   const [mappedOnly, setMappedOnly] = useState<"all" | "mapped" | "unmapped">("all");
   const [selectedMappings, setSelectedMappings] = useState<Record<string, string>>({});
   const [selectedCollaborator, setSelectedCollaborator] = useState<CollaboratorRow | null>(null);
+  const [detailModalDirty, setDetailModalDirty] = useState(false);
+  const [refreshingList, setRefreshingList] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const applyCollaboratorsPageData = useCallback(
+    (collaboratorItems: InazCollaborator[], recordItems: InazDailyRecord[], userItems: ApplicationUser[]) => {
+      setCollaborators(collaboratorItems);
+      setRecords(recordItems);
+      setUsers(userItems);
+      setSelectedMappings((current) => {
+        const next = { ...current };
+        for (const collaborator of collaboratorItems) {
+          if (collaborator.application_user_id != null) {
+            next[collaborator.id] = String(collaborator.application_user_id);
+          }
+        }
+        return next;
+      });
+    },
+    [],
+  );
+
+  const reloadCollaboratorsPageData = useCallback(async () => {
+    const token = getStoredAccessToken();
+    if (!token) return;
+
+    const { start, end } = currentMonthBounds();
+    const sessionUser = currentUser ?? (await getCurrentUser(token));
+    if (!currentUser) {
+      setCurrentUser(sessionUser);
+    }
+    const [collaboratorItems, recordResponse, userItems] = await Promise.all([
+      listAllInazCollaborators(token),
+      listInazDailyRecords(token, { dateFrom: start, dateTo: end, page: 1, pageSize: 200 }),
+      sessionUser.role === "admin" || sessionUser.role === "super_admin"
+        ? listAllApplicationUsers(token)
+        : Promise.resolve([] as ApplicationUser[]),
+    ]);
+    applyCollaboratorsPageData(collaboratorItems, recordResponse.items, userItems);
+  }, [applyCollaboratorsPageData, currentUser]);
 
   useEffect(() => {
     const token = getStoredAccessToken();
@@ -119,30 +110,62 @@ export default function InazCollaboratoriPage() {
         setCurrentUser(sessionUser);
         const { start, end } = currentMonthBounds();
         return Promise.all([
-          listInazCollaborators(token, { page: 1, pageSize: 200 }),
+          listAllInazCollaborators(token),
           listInazDailyRecords(token, { dateFrom: start, dateTo: end, page: 1, pageSize: 200 }),
           sessionUser.role === "admin" || sessionUser.role === "super_admin"
-            ? listApplicationUsers(token)
-            : Promise.resolve({ items: [], total: 0 }),
-        ]);
-      })
-      .then(([collaboratorResponse, recordResponse, usersResponse]) => {
-        setCollaborators(collaboratorResponse.items);
-        setRecords(recordResponse.items);
-        setUsers(usersResponse.items);
+            ? listAllApplicationUsers(token)
+            : Promise.resolve([] as ApplicationUser[]),
+        ]).then(([collaboratorItems, recordResponse, userItems]) => {
+          applyCollaboratorsPageData(collaboratorItems, recordResponse.items, userItems);
+        });
       })
       .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Errore caricamento collaboratori"));
-  }, []);
+  }, [applyCollaboratorsPageData]);
+
+  useEffect(() => {
+    if (!selectedCollaborator) return;
+
+    function onMessage(event: MessageEvent) {
+      if (event.origin !== window.location.origin) return;
+      if (event.data?.type !== INAZ_COLLABORATOR_DETAIL_UPDATED_MESSAGE) return;
+      setDetailModalDirty(true);
+    }
+
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
+  }, [selectedCollaborator]);
+
+  async function closeDetailModal() {
+    if (detailModalDirty) {
+      setRefreshingList(true);
+      try {
+        await reloadCollaboratorsPageData();
+        setError(null);
+      } catch (loadError) {
+        setError(loadError instanceof Error ? loadError.message : "Errore aggiornamento elenco collaboratori");
+      } finally {
+        setRefreshingList(false);
+      }
+    }
+    setSelectedCollaborator(null);
+    setDetailModalDirty(false);
+  }
+
+  function openDetailModal(row: CollaboratorRow) {
+    setDetailModalDirty(false);
+    setSelectedCollaborator(row);
+  }
 
   const userMap = useMemo(() => new Map(users.map((user) => [user.id, user])), [users]);
   const suggestionsByCollaborator = useMemo(() => {
     const suggestions = new Map<string, { userId: number | null; score: number; confidence: "high" | "medium" | "low" | "none" }>();
 
     for (const collaborator of collaborators) {
+      const candidateUsers = usersForInazCollaboratorMappingSorted(collaborator, users, collaborators, collaborator.id);
       let bestUser: ApplicationUser | null = null;
       let bestScore = 0;
-      for (const user of users) {
-        const score = scoreSuggestion(collaborator, user);
+      for (const user of candidateUsers) {
+        const score = scoreInazCollaboratorUserMatch(collaborator, user);
         if (score > bestScore) {
           bestScore = score;
           bestUser = user;
@@ -239,11 +262,26 @@ export default function InazCollaboratoriPage() {
 
   async function handleMap(collaboratorId: string) {
     const token = getStoredAccessToken();
-    if (!token) return;
-    const selectedValue = selectedMappings[collaboratorId];
+    if (!token) {
+      setError("Sessione scaduta. Effettua di nuovo l'accesso.");
+      return;
+    }
+    const selectedValue = selectedMappings[collaboratorId]?.trim() ?? "";
+    const nextUserId = selectedValue === "" ? null : Number(selectedValue);
+    if (selectedValue !== "" && !Number.isFinite(nextUserId)) {
+      setError("Seleziona un utente GAIA valido.");
+      return;
+    }
+    const collaborator = collaborators.find((item) => item.id === collaboratorId);
+    const currentValue = collaborator?.application_user_id == null ? "" : String(collaborator.application_user_id);
+    if (selectedValue === currentValue) {
+      setError(null);
+      return;
+    }
     try {
-      const mapped = await mapInazCollaboratorApplicationUser(token, collaboratorId, selectedValue ? Number(selectedValue) : null);
+      const mapped = await mapInazCollaboratorApplicationUser(token, collaboratorId, nextUserId);
       setCollaborators((current) => current.map((item) => (item.id === collaboratorId ? mapped : item)));
+      setError(null);
     } catch (mapError) {
       setError(mapError instanceof Error ? mapError.message : "Errore mapping collaboratore");
     }
@@ -319,7 +357,7 @@ export default function InazCollaboratoriPage() {
           <div className="grid gap-4 md:grid-cols-2">
             <label className="block text-sm font-medium text-gray-700">
               Cerca
-              <input className="form-control mt-1" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Es. AMADU, 1854, azienda 53" />
+              <input className="form-control mt-1" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Es. NIEDDU, 1854, Oristano" />
             </label>
             <label className="block text-sm font-medium text-gray-700">
               Stato mapping
@@ -341,7 +379,7 @@ export default function InazCollaboratoriPage() {
             data={filteredRows}
             columns={columns}
             initialPageSize={20}
-            onRowClick={(row) => setSelectedCollaborator(row)}
+            onRowClick={(row) => openDetailModal(row)}
           />
         </article>
 
@@ -377,7 +415,12 @@ export default function InazCollaboratoriPage() {
                     onChange={(event) => setSelectedMappings((current) => ({ ...current, [row.id]: event.target.value }))}
                   >
                     <option value="">Nessun mapping</option>
-                    {users.map((user) => (
+                    {(() => {
+                      const rowCollaborator = collaborators.find((item) => item.id === row.id);
+                      return rowCollaborator
+                        ? usersForInazCollaboratorMappingSorted(rowCollaborator, users, collaborators, row.id)
+                        : [];
+                    })().map((user) => (
                       <option key={user.id} value={user.id}>
                         {user.username} · {user.email}
                       </option>
@@ -393,8 +436,14 @@ export default function InazCollaboratoriPage() {
         ) : null}
 
         {selectedCollaborator ? (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">
-            <div className="flex h-[90vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6"
+            onClick={() => void closeDetailModal()}
+          >
+            <div
+              className="flex h-[90vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+              onClick={(event) => event.stopPropagation()}
+            >
               <div className="flex items-center justify-between gap-4 border-b border-gray-100 px-6 py-4">
                 <div className="min-w-0">
                   <p className="section-title">Dettaglio collaboratore Inaz</p>
@@ -406,8 +455,8 @@ export default function InazCollaboratoriPage() {
                   <Link className="btn-secondary" href={`/inaz/collaboratori/${selectedCollaborator.id}`} target="_blank">
                     Apri pagina completa
                   </Link>
-                  <button className="btn-secondary" type="button" onClick={() => setSelectedCollaborator(null)}>
-                    Chiudi
+                  <button className="btn-secondary" type="button" onClick={() => void closeDetailModal()} disabled={refreshingList}>
+                    {refreshingList ? "Aggiornamento..." : "Chiudi"}
                   </button>
                 </div>
               </div>
