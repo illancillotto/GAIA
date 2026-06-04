@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import InazCollaboratoriPage from "@/app/inaz/collaboratori/page";
 import InazImportPage from "@/app/inaz/import/page";
+import InazPage from "@/app/inaz/page";
 import InazSettingsPage from "@/app/inaz/settings/page";
 import InazSyncPage from "@/app/inaz/sync/page";
 
@@ -11,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   getCurrentUser: vi.fn(),
   listAllApplicationUsers: vi.fn(),
   listAllInazCollaborators: vi.fn(),
+  listInazCollaborators: vi.fn(),
   listInazDailyRecords: vi.fn(),
   mapInazCollaboratorApplicationUser: vi.fn(),
   listInazImportJobs: vi.fn(),
@@ -37,6 +39,7 @@ vi.mock("@/lib/api", () => ({
   getCurrentUser: mocks.getCurrentUser,
   listAllApplicationUsers: mocks.listAllApplicationUsers,
   listAllInazCollaborators: mocks.listAllInazCollaborators,
+  listInazCollaborators: mocks.listInazCollaborators,
   listInazDailyRecords: mocks.listInazDailyRecords,
   mapInazCollaboratorApplicationUser: mocks.mapInazCollaboratorApplicationUser,
   listInazImportJobs: mocks.listInazImportJobs,
@@ -125,6 +128,29 @@ describe("Inaz pages", () => {
         updated_at: "2026-05-29T09:00:00Z",
       },
     ]);
+    mocks.listInazCollaborators.mockResolvedValue({
+      items: [
+        {
+          id: "collab-1",
+          owner_user_id: 1,
+          application_user_id: null,
+          kint: "10159",
+          kkint: "{demo}",
+          employee_code: "1854",
+          company_code: "53",
+          company_label: "53 - CBO",
+          name: "AMADU SALVATORE",
+          birth_date: "1967-02-26",
+          is_active: true,
+          last_seen_at: "2026-05-29T09:00:00Z",
+          created_at: "2026-05-29T09:00:00Z",
+          updated_at: "2026-05-29T09:00:00Z",
+        },
+      ],
+      total: 1,
+      page: 1,
+      page_size: 200,
+    });
     mocks.listInazDailyRecords.mockResolvedValue({
       items: [
         {
@@ -307,6 +333,131 @@ describe("Inaz pages", () => {
     });
   });
 
+  test("renders the inaz dashboard with monthly presence metrics", async () => {
+    mocks.listInazCollaborators.mockResolvedValue({
+      items: [
+        {
+          id: "collab-1",
+          owner_user_id: 1,
+          application_user_id: 7,
+          kint: "10159",
+          kkint: "{demo}",
+          employee_code: "1854",
+          company_code: "53",
+          company_label: "53 - CBO",
+          name: "AMADU SALVATORE",
+          birth_date: "1967-02-26",
+          is_active: true,
+          last_seen_at: "2026-05-29T09:00:00Z",
+          created_at: "2026-05-29T09:00:00Z",
+          updated_at: "2026-05-29T09:00:00Z",
+        },
+      ],
+      total: 1,
+      page: 1,
+      page_size: 200,
+    });
+    mocks.listInazDailyRecords.mockResolvedValue({
+      items: [
+        {
+          id: "record-1",
+          collaborator_id: "collab-1",
+          owner_user_id: 1,
+          application_user_id: 7,
+          work_date: "2026-06-16",
+          schedule_code: "OPESAB",
+          teo_minutes: 390,
+          ordinary_minutes: 330,
+          absence_minutes: 60,
+          justified_minutes: 0,
+          maggiorazione_minutes: 0,
+          mpe_minutes: 45,
+          straordinario_minutes: 75,
+          km_value: 24,
+          override_straordinario_minutes: null,
+          override_mpe_minutes: null,
+          manual_note: null,
+          request_type: "Eventi",
+          request_description: "Permesso ordinario",
+          request_status: "RIC",
+          request_authorized_by: "PODDA FABRIZIO",
+          resolved_absence_cause: "permesso",
+          effective_straordinario_minutes: 75,
+          effective_mpe_minutes: 45,
+          effective_extra_minutes: 120,
+          stato: "Giornata anomala",
+          evidenze: "Ore mancanti",
+          raw_weekday: "S",
+          detail_title: null,
+          detail_status: "Giornata anomala",
+          detail_programmed_schedule: "OPESAB - Rientro Operai",
+          detail_effective_schedule: null,
+          detail_time_slots: "07:00 - 13:30",
+          detail_schedule_type: null,
+          detail_theoretical_hours: "06:30",
+          detail_absence_hours: "01:00",
+          detail_day_summary: {},
+          detail_day_totals: {},
+          detail_requests: [],
+          detail_anomalies: [{ "Anomalia giornata": "Ore mancanti" }],
+          detail_text: null,
+          detail_error: null,
+          special_day: true,
+          raw_payload_json: {},
+          source_job_id: null,
+          created_at: "2026-05-29T09:00:00Z",
+          updated_at: "2026-05-29T09:00:00Z",
+          punches: [],
+        },
+      ],
+      total: 1,
+      page: 1,
+      page_size: 200,
+    });
+    mocks.listInazSyncJobs.mockResolvedValue([
+      {
+        id: "sync-1",
+        status: "running",
+        requested_by_user_id: 1,
+        credential_id: 4,
+        import_job_id: null,
+        period_start: "2026-06-01",
+        period_end: "2026-06-30",
+        collaborator_limit: null,
+        records_imported: 1,
+        records_skipped: 0,
+        records_errors: 0,
+        json_artifact_path: "/tmp/inaz/sync-1/inaz_collaboratori.json",
+        worker_log_path: "/tmp/inaz/sync-1/worker.log",
+        worker_pid: 4242,
+        attempt_count: 1,
+        max_attempts: 3,
+        error_detail: null,
+        params_json: {
+          progress: {
+            index: 1,
+            total: 1,
+            completed_collaborators: 1,
+            failed_collaborators: 0,
+            last_event: "job_completed",
+          },
+        },
+        created_at: "2026-05-29T09:00:00Z",
+        started_at: "2026-05-29T09:01:00Z",
+        finished_at: null,
+      },
+    ]);
+
+    render(<InazPage />);
+
+    expect(await screen.findByText("Supervisiona collaboratori, cartellini ed export giornaliere da un unico workspace.")).toBeInTheDocument();
+    expect(screen.getAllByText("5.5 h").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("2.0 h").length).toBeGreaterThan(0);
+    expect(screen.getByText("24")).toBeInTheDocument();
+    expect(screen.getByText("Permessi")).toBeInTheDocument();
+    expect(screen.getByText("OPESAB")).toBeInTheDocument();
+  });
+
   test("redirects import page to sync", async () => {
     render(<InazImportPage />);
 
@@ -415,6 +566,57 @@ describe("Inaz pages", () => {
       expect(mocks.cancelInazSyncJob).toHaveBeenCalledWith("token", "sync-1");
       expect(screen.getByText(/annullato/)).toBeInTheDocument();
     });
+  });
+
+  test("renders sync history even when last_event arrives as structured object", async () => {
+    mocks.listInazSyncJobs.mockResolvedValue([
+      {
+        id: "sync-1",
+        status: "running",
+        requested_by_user_id: 1,
+        credential_id: 4,
+        import_job_id: null,
+        period_start: "2026-05-01",
+        period_end: "2026-05-31",
+        collaborator_limit: null,
+        records_imported: 10,
+        records_skipped: 0,
+        records_errors: 0,
+        json_artifact_path: "/tmp/inaz/sync-1/inaz_collaboratori.json",
+        worker_log_path: "/tmp/inaz/sync-1/worker.log",
+        worker_pid: 563,
+        attempt_count: 2,
+        max_attempts: 3,
+        error_detail: null,
+        params_json: {
+          progress: {
+            state: "running",
+            index: 12,
+            total: 75,
+            completed_collaborators: 11,
+            failed_collaborators: 0,
+            employee_code: "1672",
+            name: "CAUGLIA GIANLUCA",
+            last_event: {
+              type: "collaborator_phase",
+              employee_code: "1672",
+              name: "CAUGLIA GIANLUCA",
+              phase: "timesheet_opened",
+            },
+            last_event_at: "2026-06-04T14:29:59.670112+00:00",
+          },
+        },
+        created_at: "2026-05-29T09:00:00Z",
+        started_at: "2026-05-29T09:01:00Z",
+        finished_at: null,
+      },
+    ]);
+
+    render(<InazSyncPage />);
+
+    expect(await screen.findByText("Avanzamento 12/75")).toBeInTheDocument();
+    expect(screen.getByText("Collaboratore corrente: 1672 · CAUGLIA GIANLUCA")).toBeInTheDocument();
+    expect(screen.getByText(/Job attivo: running/)).toBeInTheDocument();
   });
 
   test("creates an inaz credential from settings", async () => {

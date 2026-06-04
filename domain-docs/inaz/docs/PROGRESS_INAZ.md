@@ -1,6 +1,6 @@
 # Progress Inaz
 
-Data aggiornamento: 2026-06-04 (cartellino a matrice + pagina anomalie)
+Data aggiornamento: 2026-06-04 (dashboard presenze + modale giornaliera arricchita)
 
 ## Stato attuale
 
@@ -53,6 +53,12 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
 ### Frontend
 
 - dashboard `/inaz`;
+- dashboard `/inaz` rifinita come vista macro delle presenze del mese:
+  - KPI completi su collaboratori attivi, giornaliere mese, ore ordinarie, extra effettivi;
+  - statistiche su assenze, anomalie, KM carburante, giorni speciali;
+  - distribuzione causali principali (`ferie`, `permesso`, `malattia`);
+  - codici orario / turni prevalenti del mese;
+  - caricamento con paginazione completa delle giornaliere del mese, non piu campione ridotto;
 - pagina `/inaz/settings` per gestione credenziali Inaz;
 - lista `/inaz/collaboratori`;
 - lista `/inaz/collaboratori` con suggerimento automatico di mapping verso utenti GAIA;
@@ -67,6 +73,9 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
   - perimetro dati filtrato sul responsabile che ha eseguito la sync (`owner_user_id`);
   - celle colorate per stato (lavorato / assenza / giorno speciale / anomalia) con indicatori compatti `▲` extra, `🚗` KM, `✉` richieste; weekend ombreggiati e giorno corrente evidenziato;
   - dettaglio giornata in **modale** con navigazione `precedente/successivo`, supporto tastiera `Esc`, `←`, `→` e badge stato coerente con l'analisi;
+  - il titolo della modale mostra anche il **giorno della settimana**;
+  - nella modale il link **"Apri dettaglio collaboratore"** apre in un nuovo tab;
+  - nella modale vengono mostrate anche le **timbrature** (`entrata`, `uscita`, terminale se disponibile);
   - riquadro dedicato **"Aggiungi KM carburante"** + modalita **"Inserisci KM"** che trasforma ogni cella in input rapido con salvataggio automatico al blur;
   - modifica diretta di `KM`, straordinario override, maggior presenza override e nota operativa;
   - evidenza esplicita della **causale Inaz rilevata** (es. ferie / permesso), stato richiesta e autorizzatore nel dettaglio giornata;
@@ -85,6 +94,9 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
 - pagina `/inaz/export` con preview dataset del mese, perimetro collaboratori e KPI di righe/giorni speciali;
 - pagina `/inaz/sync` con avvio job live, polling stato, retry e storico run;
 - storico `/inaz/sync` con dettaglio espandibile di avanzamento, collaboratore corrente, stato worker e ultimo errore;
+- storico `/inaz/sync` hardenizzato lato frontend contro payload `progress` non omogenei:
+  - `last_event`, `state`, `error` e collaboratore corrente normalizzati prima del render;
+  - evitati runtime error React in presenza di eventi strutturati come oggetti;
 - navigazione modulo aggiornata in sidebar e module switcher.
 
 ### Sync live
@@ -99,6 +111,7 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
 - il job aggiorna un checkpoint persistito in `inaz_sync_jobs.params_json.checkpoint.completed_employee_codes`;
 - il retry riparte dai collaboratori non ancora persistiti, invece di ricominciare da `1/N`;
 - il worker espone fasi di avanzamento piu granulari (`opening_timesheet`, `daily_rows_loaded`, `opening_summary`, `summary_loaded`) per rendere piu leggibile lo stato del job;
+- il payload `progress.last_event` puo contenere anche eventi strutturati (non solo stringhe) e la UI li gestisce correttamente;
 - se il riepilogo eventi di un collaboratore fallisce, la sync non perde piu il collaboratore: prosegue persistendo almeno anagrafica e giornaliere, e registra il warning nel log/event stream;
 - retry applicativo disponibile fino al limite configurato;
 - cancel e delete dei job falliti/storici disponibili da UI.
@@ -114,11 +127,18 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
 - aggiunti test per la precedenza `detail Inaz > template fallback`;
 - aggiunti test frontend iniziali `frontend/tests/unit/inaz-pages.test.tsx`;
 - aggiunti test frontend sul dettaglio collaboratore e preselezione del mapping suggerito in `frontend/tests/unit/inaz-collaboratore-detail.test.tsx`;
-- aggiornati test frontend sul cartellino a matrice in `frontend/tests/unit/inaz-giornaliere-page.test.tsx` (rendering matrice, apertura giornata + salvataggio rettifiche, apertura modal collaboratore);
+- aggiornati test frontend sul cartellino a matrice in `frontend/tests/unit/inaz-giornaliere-page.test.tsx` (rendering matrice, apertura giornata + salvataggio rettifiche, apertura modal collaboratore, timbrature in modale);
+- i test frontend `Inaz` oggi coprono esplicitamente:
+  - dashboard / pagine principali, inclusa la dashboard macro mese `/inaz`;
+  - mapping suggerito collaboratori;
+  - workspace giornaliere e modale operativa;
+  - dettaglio collaboratore;
+  - storico `/inaz/sync` con payload `progress` strutturato e non solo stringhe;
 - aggiunti test frontend per la pagina anomalie e gli helper mesi/anomalie in `frontend/tests/unit/inaz-anomalie-page.test.tsx` e `inaz-anomaly-months.test.ts`;
 - aggiunto test backend sul filtro per `owner_user_id`, per garantire che un capo settore veda i dati da lui importati anche senza mapping del collaboratore verso `application_users`;
 - `pytest backend/tests/test_inaz_api.py tests/test_inaz_schedule_engine.py -q`: ok;
 - `frontend npm run typecheck`: ok;
+- `frontend npm run test:unit -- tests/unit/inaz-pages.test.tsx tests/unit/inaz-collaboratore-detail.test.tsx tests/unit/inaz-giornaliere-page.test.tsx tests/unit/inaz-collaborator-mapping.test.ts`: ok (16 test);
 - `frontend npx vitest run`: ok (57 test);
 - verifica smoke backend eseguita su parser JSON e compilazione XLSM.
 
@@ -129,6 +149,7 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
   - niente preview differenziale/import duplicati avanzata;
   - niente selector template assistito lato filesystem;
   - il "tipo di contratto" e oggi un proxy basato sul template orario (`schedule_code`): manca il dato contrattuale reale (tag manuale GAIA o estrazione da Inaz);
+- la dashboard macro mese e stata arricchita, ma i KPI sono ancora calcolati in frontend da tutte le giornaliere del mese; un endpoint aggregato backend dedicato resta un miglioramento utile per performance;
 - manca ancora la UI dedicata per gestione festivita/template orari e assegnazioni collaboratore;
 - sync live ancora minimale:
   - nessuna policy di retry automatica schedulata;

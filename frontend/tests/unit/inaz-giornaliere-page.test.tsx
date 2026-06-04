@@ -150,7 +150,7 @@ describe("Inaz giornaliere workspace", () => {
               sequence: 1,
               entry_time: "06:55",
               exit_time: "12:30",
-              terminal_label: null,
+              terminal_label: "FENO-Fenoso",
               created_at: "2026-06-04T09:00:00Z",
             },
           ],
@@ -215,7 +215,7 @@ describe("Inaz giornaliere workspace", () => {
           sequence: 1,
           entry_time: "06:55",
           exit_time: "12:30",
-          terminal_label: null,
+          terminal_label: "FENO-Fenoso",
           created_at: "2026-06-04T09:00:00Z",
         },
       ],
@@ -240,6 +240,11 @@ describe("Inaz giornaliere workspace", () => {
     expect(screen.getByText("Causale Inaz rilevata")).toBeInTheDocument();
     expect(screen.getByText("Permesso ordinario")).toBeInTheDocument();
     expect(screen.getByText("PODDA FABRIZIO")).toBeInTheDocument();
+    expect(screen.getByText("Timbrature")).toBeInTheDocument();
+    expect(screen.getByText("Timbratura 1")).toBeInTheDocument();
+    expect(screen.getByText("06:55")).toBeInTheDocument();
+    expect(screen.getByText("12:30")).toBeInTheDocument();
+    expect(screen.getByText("Terminale: Fenoso")).toBeInTheDocument();
 
     fireEvent.change(await screen.findByLabelText("Chilometri (auto)"), { target: { value: "30" } });
     fireEvent.change(screen.getByLabelText("Straordinario override"), { target: { value: "01:30" } });
