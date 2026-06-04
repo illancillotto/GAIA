@@ -48,6 +48,22 @@ function formatInteger(value: number): string {
   return new Intl.NumberFormat("it-IT").format(value);
 }
 
+function normalizeTooltipValue(value: unknown): number {
+  if (Array.isArray(value)) {
+    const first = value[0];
+    return Number(first ?? 0);
+  }
+  return Number(value ?? 0);
+}
+
+function formatTooltipEuro(value: unknown): [string, string] {
+  return [formatEuro(normalizeTooltipValue(value)), "Totale euro"];
+}
+
+function formatTooltipInteger(value: unknown, label: string): [string, string] {
+  return [formatInteger(normalizeTooltipValue(value)), label];
+}
+
 function formatRuoloJobLabel(job: RuoloImportJobResponse): string {
   const raw = (job.filename ?? "").trim();
   if (!raw) {
@@ -403,7 +419,7 @@ export default function RuoloDashboardPage() {
                             <CartesianGrid strokeDasharray="3 3" stroke="#edf1eb" />
                             <XAxis dataKey="anno" tick={{ fontSize: 12 }} />
                             <YAxis tick={{ fontSize: 12 }} />
-                            <Tooltip formatter={(value: number | string) => [formatEuro(Number(value)), "Totale euro"]} />
+                            <Tooltip formatter={formatTooltipEuro} />
                             <Line type="monotone" dataKey="totaleEuro" stroke="#1D4E35" strokeWidth={2.5} dot />
                           </LineChart>
                         </ResponsiveContainer>
@@ -425,7 +441,7 @@ export default function RuoloDashboardPage() {
                             <CartesianGrid strokeDasharray="3 3" stroke="#edf1eb" />
                             <XAxis dataKey="anno" tick={{ fontSize: 12 }} />
                             <YAxis tick={{ fontSize: 12 }} />
-                            <Tooltip formatter={(value: number | string) => [formatInteger(Number(value)), "Avvisi orfani"]} />
+                            <Tooltip formatter={(value) => formatTooltipInteger(value, "Avvisi orfani")} />
                             <Bar dataKey="orfani" fill="#f59e0b" radius={[4, 4, 0, 0]} />
                           </BarChart>
                         </ResponsiveContainer>
