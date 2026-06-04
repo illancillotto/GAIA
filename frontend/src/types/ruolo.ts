@@ -196,9 +196,35 @@ export type RuoloStatsComuneItem = {
   totale_0668: number | null;
   totale_euro: number | null;
   num_avvisi: number;
+  num_partite?: number | null;
+  num_particelle?: number | null;
+  non_collegate_catasto?: number | null;
 };
 
 export type RuoloStatsComuneResponse = {
   anno_tributario: number;
   items: RuoloStatsComuneItem[];
+};
+
+export type RuoloStatsAmountBreakdownItem = {
+  key: string;
+  label: string;
+  amount: number;
+};
+
+export type RuoloStatsCountBreakdownItem = {
+  key: string;
+  label: string;
+  count: number;
+};
+
+export type RuoloStatsAnalyticsResponse = {
+  anno_tributario: number;
+  particelle_summary: RuoloParticelleSummaryResponse;
+  tributi_breakdown: RuoloStatsAmountBreakdownItem[];
+  match_status_breakdown: RuoloStatsCountBreakdownItem[];
+  match_reason_breakdown: RuoloStatsCountBreakdownItem[];
+  distretto_breakdown: RuoloStatsCountBreakdownItem[];
+  coltura_breakdown: RuoloStatsCountBreakdownItem[];
+  comuni: RuoloStatsComuneItem[];
 };

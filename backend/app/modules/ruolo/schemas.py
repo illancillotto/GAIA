@@ -203,11 +203,37 @@ class RuoloStatsComuneItem(BaseModel):
     totale_0668: float | None = None
     totale_euro: float | None = None
     num_avvisi: int
+    num_partite: int | None = None
+    num_particelle: int | None = None
+    non_collegate_catasto: int | None = None
 
 
 class RuoloStatsComuneResponse(BaseModel):
     anno_tributario: int
     items: list[RuoloStatsComuneItem]
+
+
+class RuoloStatsAmountBreakdownItem(BaseModel):
+    key: str
+    label: str
+    amount: float
+
+
+class RuoloStatsCountBreakdownItem(BaseModel):
+    key: str
+    label: str
+    count: int
+
+
+class RuoloStatsAnalyticsResponse(BaseModel):
+    anno_tributario: int
+    particelle_summary: RuoloParticelleSummaryResponse
+    tributi_breakdown: list[RuoloStatsAmountBreakdownItem]
+    match_status_breakdown: list[RuoloStatsCountBreakdownItem]
+    match_reason_breakdown: list[RuoloStatsCountBreakdownItem]
+    distretto_breakdown: list[RuoloStatsCountBreakdownItem]
+    coltura_breakdown: list[RuoloStatsCountBreakdownItem]
+    comuni: list[RuoloStatsComuneItem]
 
 
 # ---------------------------------------------------------------------------

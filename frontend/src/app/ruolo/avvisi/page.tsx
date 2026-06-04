@@ -44,15 +44,27 @@ function RuoloAvvisiPageContent() {
   const [selectedAvviso, setSelectedAvviso] = useState<RuoloAvvisoListItemResponse | null>(null);
 
   const query = searchParams.get("q")?.trim() || "";
+  const anno = searchParams.get("anno")?.trim() || "";
+  const comune = searchParams.get("comune")?.trim() || "";
   const unlinked = searchParams.get("unlinked") === "true";
   const page = Math.max(1, Number(searchParams.get("page") ?? 1));
 
   const [filterQuery, setFilterQuery] = useState(query);
+  const [filterAnno, setFilterAnno] = useState(anno);
+  const [filterComune, setFilterComune] = useState(comune);
   const [filterUnlinked, setFilterUnlinked] = useState(unlinked);
 
   useEffect(() => {
     setFilterQuery(query);
   }, [query]);
+
+  useEffect(() => {
+    setFilterAnno(anno);
+  }, [anno]);
+
+  useEffect(() => {
+    setFilterComune(comune);
+  }, [comune]);
 
   useEffect(() => {
     setFilterUnlinked(unlinked);
@@ -65,20 +77,27 @@ function RuoloAvvisiPageContent() {
     if (normalizedQuery.length > 0 && normalizedQuery.length < 3) {
       return;
     }
-    if (normalizedQuery === currentQuery && filterUnlinked === unlinked) {
+    if (
+      normalizedQuery === currentQuery
+      && filterAnno.trim() === anno
+      && filterComune.trim() === comune
+      && filterUnlinked === unlinked
+    ) {
       return;
     }
 
     const timeoutId = window.setTimeout(() => {
       const qs = new URLSearchParams();
       if (normalizedQuery) qs.set("q", normalizedQuery);
+      if (filterAnno.trim()) qs.set("anno", filterAnno.trim());
+      if (filterComune.trim()) qs.set("comune", filterComune.trim());
       if (filterUnlinked) qs.set("unlinked", "true");
       qs.set("page", "1");
       router.replace(`/ruolo/avvisi?${qs}`);
     }, 350);
 
     return () => window.clearTimeout(timeoutId);
-  }, [filterQuery, filterUnlinked, query, router, unlinked]);
+  }, [anno, comune, filterAnno, filterComune, filterQuery, filterUnlinked, query, router, unlinked]);
 
   useEffect(() => {
     setToken(getStoredAccessToken());
@@ -89,6 +108,8 @@ function RuoloAvvisiPageContent() {
     setLoading(true);
     setError(null);
     listAvvisi(token, {
+      anno: anno ? Number(anno) : undefined,
+      comune: comune || undefined,
       q: query || undefined,
       unlinked,
       page,
@@ -100,7 +121,7 @@ function RuoloAvvisiPageContent() {
       })
       .catch((err: unknown) => setError(err instanceof Error ? err.message : "Errore"))
       .finally(() => setLoading(false));
-  }, [token, query, unlinked, page]);
+  }, [token, anno, comune, query, unlinked, page]);
 
   function setPage(nextPage: number) {
     const qs = new URLSearchParams(searchParams.toString());
@@ -109,7 +130,12 @@ function RuoloAvvisiPageContent() {
   }
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
-  const exportUrl = buildExportCsvUrl({ q: query || undefined, unlinked });
+  const exportUrl = buildExportCsvUrl({
+    anno: anno ? Number(anno) : undefined,
+    comune: comune || undefined,
+    q: query || undefined,
+    unlinked,
+  });
 
   const linkedCount = useMemo(() => avvisi.filter((item) => item.is_linked).length, [avvisi]);
   const orphanCount = avvisi.length - linkedCount;
@@ -181,11 +207,11 @@ function RuoloAvvisiPageContent() {
             <>
               <ModuleWorkspaceNoticeCard
                 title={loading ? "Caricamento dataset" : `${total} avvisi nel risultato`}
-                description={
-                  query
-                    ? `Ricerca attiva su "${query}".`
-                    : "Nessun filtro testuale attivo: stai consultando l'intero storico disponibile."
-                }
+                description={[
+                  query ? `Ricerca attiva su "${query}".` : null,
+                  anno ? `Anno ${anno}.` : null,
+                  comune ? `Comune ${comune}.` : null,
+                ].filter(Boolean).join(" ") || "Nessun filtro testuale attivo: stai consultando l'intero storico disponibile."}
                 tone={loading ? "warning" : "info"}
               />
               <ModuleWorkspaceNoticeCard
@@ -249,6 +275,27 @@ function RuoloAvvisiPageContent() {
                     />
                   </div>
                 </label>
+                <label className="block xl:w-36">
+                  <span className="sr-only">Anno</span>
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    placeholder="Anno"
+                    value={filterAnno}
+                    onChange={(e) => setFilterAnno(e.target.value)}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm outline-none placeholder:text-gray-400"
+                  />
+                </label>
+                <label className="block xl:w-56">
+                  <span className="sr-only">Comune</span>
+                  <input
+                    type="text"
+                    placeholder="Comune"
+                    value={filterComune}
+                    onChange={(e) => setFilterComune(e.target.value)}
+                    className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 shadow-sm outline-none placeholder:text-gray-400"
+                  />
+                </label>
                 <label className="flex items-center gap-3 rounded-2xl border border-[#e3e9e0] bg-[#fbfcfb] px-4 py-3 text-sm text-gray-700 xl:shrink-0">
                   <input
                     type="checkbox"
@@ -273,6 +320,8 @@ function RuoloAvvisiPageContent() {
                     type="button"
                     onClick={() => {
                       setFilterQuery("");
+                      setFilterAnno("");
+                      setFilterComune("");
                       setFilterUnlinked(false);
                       router.push("/ruolo/avvisi?page=1");
                     }}

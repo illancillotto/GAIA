@@ -6,6 +6,7 @@ import io
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_module
@@ -22,7 +23,10 @@ from app.modules.ruolo.schemas import (
     RuoloParticellaResponse,
     RuoloParticelleSummaryResponse,
     RuoloPartitaResponse,
+    RuoloStatsAnalyticsResponse,
+    RuoloStatsAmountBreakdownItem,
     RuoloStatsByAnnoResponse,
+    RuoloStatsCountBreakdownItem,
     RuoloStatsComuneItem,
     RuoloStatsComuneResponse,
     RuoloStatsResponse,
@@ -51,14 +55,16 @@ def _avviso_to_list_item(avviso: RuoloAvviso, display_name: str | None, is_linke
     )
 
 
-def _particella_to_response(p: RuoloParticella) -> RuoloParticellaResponse:
-    partita = p.partita
+def _particella_to_response(p: RuoloParticella, partita: RuoloPartita | None = None) -> RuoloParticellaResponse:
+    resolved_partita = partita
+    if resolved_partita is None:
+        resolved_partita = getattr(p, "partita", None)
     return RuoloParticellaResponse(
         id=str(p.id),
         partita_id=str(p.partita_id),
         anno_tributario=p.anno_tributario,
-        comune_nome=partita.comune_nome if partita else None,
-        comune_codice=partita.comune_codice if partita else None,
+        comune_nome=resolved_partita.comune_nome if resolved_partita else None,
+        comune_codice=resolved_partita.comune_codice if resolved_partita else None,
         domanda_irrigua=p.domanda_irrigua,
         distretto=p.distretto,
         foglio=p.foglio,
@@ -255,6 +261,8 @@ def search_particelle(
     foglio: str | None = None,
     particella: str | None = None,
     comune: str | None = None,
+    match_status: str | None = None,
+    match_reason: str | None = None,
     unmatched_only: bool = False,
     page: int = 1,
     page_size: int = 50,
@@ -262,10 +270,23 @@ def search_particelle(
     current_user: ApplicationUser = Depends(require_module("ruolo")),
 ) -> list[RuoloParticellaResponse]:
     items, _ = repo.search_particelle(
-        db, anno=anno, foglio=foglio, particella=particella, comune=comune, unmatched_only=unmatched_only,
+        db,
+        anno=anno,
+        foglio=foglio,
+        particella=particella,
+        comune=comune,
+        match_status=match_status,
+        match_reason=match_reason,
+        unmatched_only=unmatched_only,
         page=page, page_size=page_size,
     )
-    return [_particella_to_response(p) for p in items]
+    partite_by_id = {
+        partita.id: partita
+        for partita in db.scalars(
+            select(RuoloPartita).where(RuoloPartita.id.in_([item.partita_id for item in items]))
+        ).all()
+    } if items else {}
+    return [_particella_to_response(p, partite_by_id.get(p.partita_id)) for p in items]
 
 
 # ---------------------------------------------------------------------------
@@ -320,10 +341,44 @@ def get_stats_comuni(
             totale_0668=d["totale_0668"],
             totale_euro=d["totale_euro"],
             num_avvisi=d["num_avvisi"],
+            num_partite=d.get("num_partite"),
+            num_particelle=d.get("num_particelle"),
+            non_collegate_catasto=d.get("non_collegate_catasto"),
         )
         for d in data
     ]
     return RuoloStatsComuneResponse(anno_tributario=anno, items=items)
+
+
+@router.get("/stats/analytics", response_model=RuoloStatsAnalyticsResponse)
+def get_stats_analytics(
+    anno: int,
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(require_module("ruolo")),
+) -> RuoloStatsAnalyticsResponse:
+    data = repo.get_stats_analytics(db, anno=anno)
+    return RuoloStatsAnalyticsResponse(
+        anno_tributario=anno,
+        particelle_summary=RuoloParticelleSummaryResponse(**data["particelle_summary"]),
+        tributi_breakdown=[
+            RuoloStatsAmountBreakdownItem(**item) for item in data["tributi_breakdown"]
+        ],
+        match_status_breakdown=[
+            RuoloStatsCountBreakdownItem(**item) for item in data["match_status_breakdown"]
+        ],
+        match_reason_breakdown=[
+            RuoloStatsCountBreakdownItem(**item) for item in data["match_reason_breakdown"]
+        ],
+        distretto_breakdown=[
+            RuoloStatsCountBreakdownItem(**item) for item in data["distretto_breakdown"]
+        ],
+        coltura_breakdown=[
+            RuoloStatsCountBreakdownItem(**item) for item in data["coltura_breakdown"]
+        ],
+        comuni=[
+            RuoloStatsComuneItem(**item) for item in data["comuni"]
+        ],
+    )
 
 
 # ---------------------------------------------------------------------------

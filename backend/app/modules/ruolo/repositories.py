@@ -4,7 +4,7 @@ from __future__ import annotations
 import uuid
 from typing import Any
 
-from sqlalchemy import String, cast, func, or_, select
+from sqlalchemy import String, case, cast, desc, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.catasto import CatastoParcel
@@ -154,6 +154,8 @@ def search_particelle(
     foglio: str | None = None,
     particella: str | None = None,
     comune: str | None = None,
+    match_status: str | None = None,
+    match_reason: str | None = None,
     unmatched_only: bool = False,
     page: int = 1,
     page_size: int = 50,
@@ -174,6 +176,10 @@ def search_particelle(
                 )
             )
         )
+    if match_status:
+        q = q.where(RuoloParticella.cat_particella_match_status == match_status)
+    if match_reason:
+        q = q.where(RuoloParticella.cat_particella_match_reason == match_reason)
     if unmatched_only:
         q = q.where(RuoloParticella.cat_particella_id.is_(None))
 
@@ -192,48 +198,36 @@ def search_particelle(
 
 def get_stats(db: Session, anno: int | None = None) -> list[dict]:
     """Aggregati per anno (o tutti gli anni se anno=None)."""
+    query = (
+        select(
+            RuoloAvviso.anno_tributario.label("anno_tributario"),
+            func.count(RuoloAvviso.id).label("total_avvisi"),
+            func.count(RuoloAvviso.subject_id).label("avvisi_collegati"),
+            func.sum(RuoloAvviso.importo_totale_0648).label("totale_0648"),
+            func.sum(RuoloAvviso.importo_totale_0985).label("totale_0985"),
+            func.sum(RuoloAvviso.importo_totale_0668).label("totale_0668"),
+            func.sum(RuoloAvviso.importo_totale_euro).label("totale_euro"),
+        )
+        .group_by(RuoloAvviso.anno_tributario)
+        .order_by(RuoloAvviso.anno_tributario.desc())
+    )
     if anno is not None:
-        anni = [anno]
-    else:
-        anni_rows = db.scalars(
-            select(RuoloAvviso.anno_tributario).distinct().order_by(RuoloAvviso.anno_tributario.desc())
-        ).all()
-        anni = list(anni_rows)
+        query = query.where(RuoloAvviso.anno_tributario == anno)
 
-    results = []
-    for a in anni:
-        total = db.scalar(
-            select(func.count(RuoloAvviso.id)).where(RuoloAvviso.anno_tributario == a)
-        ) or 0
-        collegati = db.scalar(
-            select(func.count(RuoloAvviso.id)).where(
-                RuoloAvviso.anno_tributario == a,
-                RuoloAvviso.subject_id.is_not(None),
-            )
-        ) or 0
-        totale_0648 = db.scalar(
-            select(func.sum(RuoloAvviso.importo_totale_0648)).where(RuoloAvviso.anno_tributario == a)
-        )
-        totale_0985 = db.scalar(
-            select(func.sum(RuoloAvviso.importo_totale_0985)).where(RuoloAvviso.anno_tributario == a)
-        )
-        totale_0668 = db.scalar(
-            select(func.sum(RuoloAvviso.importo_totale_0668)).where(RuoloAvviso.anno_tributario == a)
-        )
-        totale_euro = db.scalar(
-            select(func.sum(RuoloAvviso.importo_totale_euro)).where(RuoloAvviso.anno_tributario == a)
-        )
-        results.append({
-            "anno_tributario": a,
-            "total_avvisi": total,
-            "avvisi_collegati": collegati,
-            "avvisi_non_collegati": total - collegati,
-            "totale_0648": float(totale_0648) if totale_0648 else None,
-            "totale_0985": float(totale_0985) if totale_0985 else None,
-            "totale_0668": float(totale_0668) if totale_0668 else None,
-            "totale_euro": float(totale_euro) if totale_euro else None,
-        })
-    return results
+    rows = db.execute(query).all()
+    return [
+        {
+            "anno_tributario": row.anno_tributario,
+            "total_avvisi": int(row.total_avvisi or 0),
+            "avvisi_collegati": int(row.avvisi_collegati or 0),
+            "avvisi_non_collegati": int((row.total_avvisi or 0) - (row.avvisi_collegati or 0)),
+            "totale_0648": float(row.totale_0648) if row.totale_0648 is not None else None,
+            "totale_0985": float(row.totale_0985) if row.totale_0985 is not None else None,
+            "totale_0668": float(row.totale_0668) if row.totale_0668 is not None else None,
+            "totale_euro": float(row.totale_euro) if row.totale_euro is not None else None,
+        }
+        for row in rows
+    ]
 
 
 def get_particelle_summary(db: Session, anno: int | None = None) -> dict:
@@ -267,21 +261,43 @@ def get_stats_comuni(db: Session, anno: int) -> list[dict]:
             func.sum(RuoloPartita.importo_0648).label("totale_0648"),
             func.sum(RuoloPartita.importo_0985).label("totale_0985"),
             func.sum(RuoloPartita.importo_0668).label("totale_0668"),
-            func.count(RuoloPartita.id.distinct()).label("num_avvisi"),
+            func.count(RuoloPartita.avviso_id.distinct()).label("num_avvisi"),
+            func.count(RuoloPartita.id.distinct()).label("num_partite"),
         )
         .join(RuoloAvviso, RuoloPartita.avviso_id == RuoloAvviso.id)
         .where(RuoloAvviso.anno_tributario == anno)
         .group_by(RuoloPartita.comune_nome)
         .order_by(RuoloPartita.comune_nome)
     )
-    rows = db.execute(partite_q).all()
+    particelle_q = (
+        select(
+            RuoloPartita.comune_nome.label("comune_nome"),
+            func.count(RuoloParticella.id).label("num_particelle"),
+            func.sum(case((RuoloParticella.cat_particella_id.is_(None), 1), else_=0)).label("non_collegate_catasto"),
+        )
+        .join(RuoloPartita, RuoloParticella.partita_id == RuoloPartita.id)
+        .where(RuoloParticella.anno_tributario == anno)
+        .group_by(RuoloPartita.comune_nome)
+    )
+
+    partite_rows = db.execute(partite_q).all()
+    particelle_rows = db.execute(particelle_q).all()
+    particelle_by_comune = {
+        row.comune_nome: {
+            "num_particelle": int(row.num_particelle or 0),
+            "non_collegate_catasto": int(row.non_collegate_catasto or 0),
+        }
+        for row in particelle_rows
+    }
+
     result = []
-    for row in rows:
+    for row in partite_rows:
         t0648 = float(row.totale_0648) if row.totale_0648 else None
         t0985 = float(row.totale_0985) if row.totale_0985 else None
         t0668 = float(row.totale_0668) if row.totale_0668 else None
         parts = [v for v in [t0648, t0985, t0668] if v is not None]
         totale_euro = sum(parts) if parts else None
+        particelle_metrics = particelle_by_comune.get(row.comune_nome, {})
         result.append({
             "comune_nome": row.comune_nome,
             "anno_tributario": anno,
@@ -289,9 +305,103 @@ def get_stats_comuni(db: Session, anno: int) -> list[dict]:
             "totale_0985": t0985,
             "totale_0668": t0668,
             "totale_euro": totale_euro,
-            "num_avvisi": row.num_avvisi,
+            "num_avvisi": int(row.num_avvisi or 0),
+            "num_partite": int(row.num_partite or 0),
+            "num_particelle": int(particelle_metrics.get("num_particelle", 0)),
+            "non_collegate_catasto": int(particelle_metrics.get("non_collegate_catasto", 0)),
         })
     return result
+
+
+def get_stats_analytics(db: Session, anno: int) -> dict[str, Any]:
+    stats_by_anno = get_stats(db, anno=anno)
+    if not stats_by_anno:
+        return {
+            "anno_tributario": anno,
+            "particelle_summary": get_particelle_summary(db, anno=anno),
+            "tributi_breakdown": [],
+            "match_status_breakdown": [],
+            "match_reason_breakdown": [],
+            "distretto_breakdown": [],
+            "coltura_breakdown": [],
+            "comuni": [],
+        }
+
+    stats = stats_by_anno[0]
+    tributi_breakdown = [
+        {"key": "0648", "label": "0648 Manutenzione", "amount": float(stats["totale_0648"] or 0)},
+        {"key": "0985", "label": "0985 Irrigazione", "amount": float(stats["totale_0985"] or 0)},
+        {"key": "0668", "label": "0668 Istituzionale", "amount": float(stats["totale_0668"] or 0)},
+    ]
+
+    status_rows = db.execute(
+        select(
+            func.coalesce(RuoloParticella.cat_particella_match_status, "unknown").label("key"),
+            func.count(RuoloParticella.id).label("count"),
+        )
+        .where(RuoloParticella.anno_tributario == anno)
+        .group_by(func.coalesce(RuoloParticella.cat_particella_match_status, "unknown"))
+        .order_by(desc(func.count(RuoloParticella.id)))
+    ).all()
+
+    reason_rows = db.execute(
+        select(
+            func.coalesce(RuoloParticella.cat_particella_match_reason, "unspecified").label("key"),
+            func.count(RuoloParticella.id).label("count"),
+        )
+        .where(
+            RuoloParticella.anno_tributario == anno,
+            RuoloParticella.cat_particella_id.is_(None),
+        )
+        .group_by(func.coalesce(RuoloParticella.cat_particella_match_reason, "unspecified"))
+        .order_by(desc(func.count(RuoloParticella.id)))
+        .limit(8)
+    ).all()
+
+    distretto_rows = db.execute(
+        select(
+            func.coalesce(RuoloParticella.distretto, "N/D").label("key"),
+            func.count(RuoloParticella.id).label("count"),
+        )
+        .where(RuoloParticella.anno_tributario == anno)
+        .group_by(func.coalesce(RuoloParticella.distretto, "N/D"))
+        .order_by(desc(func.count(RuoloParticella.id)))
+        .limit(8)
+    ).all()
+
+    coltura_rows = db.execute(
+        select(
+            func.coalesce(RuoloParticella.coltura, "N/D").label("key"),
+            func.count(RuoloParticella.id).label("count"),
+        )
+        .where(RuoloParticella.anno_tributario == anno)
+        .group_by(func.coalesce(RuoloParticella.coltura, "N/D"))
+        .order_by(desc(func.count(RuoloParticella.id)))
+        .limit(8)
+    ).all()
+
+    return {
+        "anno_tributario": anno,
+        "particelle_summary": get_particelle_summary(db, anno=anno),
+        "tributi_breakdown": tributi_breakdown,
+        "match_status_breakdown": [
+            {"key": row.key, "label": row.key.replace("_", " "), "count": int(row.count or 0)}
+            for row in status_rows
+        ],
+        "match_reason_breakdown": [
+            {"key": row.key, "label": row.key.replace("_", " "), "count": int(row.count or 0)}
+            for row in reason_rows
+        ],
+        "distretto_breakdown": [
+            {"key": row.key, "label": row.key, "count": int(row.count or 0)}
+            for row in distretto_rows
+        ],
+        "coltura_breakdown": [
+            {"key": row.key, "label": row.key, "count": int(row.count or 0)}
+            for row in coltura_rows
+        ],
+        "comuni": get_stats_comuni(db, anno=anno),
+    }
 
 
 # ---------------------------------------------------------------------------

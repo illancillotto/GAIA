@@ -86,6 +86,8 @@ function RuoloParticellePageContent() {
   const foglio = searchParams.get("foglio")?.trim() || "";
   const particella = searchParams.get("particella")?.trim() || "";
   const anno = searchParams.get("anno")?.trim() || "";
+  const matchStatus = searchParams.get("match_status")?.trim() || "";
+  const matchReason = searchParams.get("match_reason")?.trim() || "";
   const unmatchedOnly = searchParams.get("unmatched_only") !== "false";
   const page = Math.max(1, Number(searchParams.get("page") ?? 1));
 
@@ -93,6 +95,8 @@ function RuoloParticellePageContent() {
   const [filterFoglio, setFilterFoglio] = useState(foglio);
   const [filterParticella, setFilterParticella] = useState(particella);
   const [filterAnno, setFilterAnno] = useState(anno);
+  const [filterMatchStatus, setFilterMatchStatus] = useState(matchStatus);
+  const [filterMatchReason, setFilterMatchReason] = useState(matchReason);
   const [filterUnmatchedOnly, setFilterUnmatchedOnly] = useState(unmatchedOnly);
 
   useEffect(() => {
@@ -104,8 +108,10 @@ function RuoloParticellePageContent() {
     setFilterFoglio(foglio);
     setFilterParticella(particella);
     setFilterAnno(anno);
+    setFilterMatchStatus(matchStatus);
+    setFilterMatchReason(matchReason);
     setFilterUnmatchedOnly(unmatchedOnly);
-  }, [anno, comune, foglio, particella, unmatchedOnly]);
+  }, [anno, comune, foglio, particella, matchReason, matchStatus, unmatchedOnly]);
 
   useEffect(() => {
     if (!token) return;
@@ -116,6 +122,8 @@ function RuoloParticellePageContent() {
       foglio: foglio || undefined,
       particella: particella || undefined,
       anno: anno ? Number(anno) : undefined,
+      match_status: matchStatus || undefined,
+      match_reason: matchReason || undefined,
       unmatched_only: unmatchedOnly,
       page,
       page_size: PAGE_SIZE,
@@ -123,7 +131,7 @@ function RuoloParticellePageContent() {
       .then(setItems)
       .catch((err: unknown) => setError(err instanceof Error ? err.message : "Errore caricamento particelle"))
       .finally(() => setLoading(false));
-  }, [anno, comune, foglio, page, particella, token, unmatchedOnly]);
+  }, [anno, comune, foglio, matchReason, matchStatus, page, particella, token, unmatchedOnly]);
 
   function applyFilters(): void {
     const qs = new URLSearchParams();
@@ -131,6 +139,8 @@ function RuoloParticellePageContent() {
     if (filterFoglio.trim()) qs.set("foglio", filterFoglio.trim());
     if (filterParticella.trim()) qs.set("particella", filterParticella.trim());
     if (filterAnno.trim()) qs.set("anno", filterAnno.trim());
+    if (filterMatchStatus.trim()) qs.set("match_status", filterMatchStatus.trim());
+    if (filterMatchReason.trim()) qs.set("match_reason", filterMatchReason.trim());
     if (!filterUnmatchedOnly) qs.set("unmatched_only", "false");
     qs.set("page", "1");
     router.push(`/ruolo/particelle?${qs.toString()}`);
@@ -358,6 +368,24 @@ function RuoloParticellePageContent() {
                   onChange={(event) => setFilterAnno(event.target.value)}
                 />
               </label>
+              <label className="block">
+                <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Match status</span>
+                <input
+                  className="form-control"
+                  placeholder="Es. unmatched"
+                  value={filterMatchStatus}
+                  onChange={(event) => setFilterMatchStatus(event.target.value)}
+                />
+              </label>
+              <label className="block md:col-span-2 xl:col-span-2">
+                <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Match reason</span>
+                <input
+                  className="form-control"
+                  placeholder="Es. no_cat_particella_match"
+                  value={filterMatchReason}
+                  onChange={(event) => setFilterMatchReason(event.target.value)}
+                />
+              </label>
             </div>
 
             <label className="flex items-center gap-3 rounded-2xl border border-[#e3e9e0] bg-[#fbfcfb] px-4 py-3 text-sm text-gray-700">
@@ -380,6 +408,8 @@ function RuoloParticellePageContent() {
                   setFilterFoglio("");
                   setFilterParticella("");
                   setFilterAnno("");
+                  setFilterMatchStatus("");
+                  setFilterMatchReason("");
                   setFilterUnmatchedOnly(true);
                   router.push("/ruolo/particelle");
                 }}

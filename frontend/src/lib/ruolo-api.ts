@@ -8,6 +8,7 @@ import type {
   RuoloImportYearDetectionResponse,
   RuoloParticellaResponse,
   RuoloParticelleSummaryResponse,
+  RuoloStatsAnalyticsResponse,
   RuoloStatsResponse,
   RuoloStatsComuneResponse,
 } from "@/types/ruolo";
@@ -133,6 +134,8 @@ export type ListRuoloParticelleParams = {
   foglio?: string;
   particella?: string;
   comune?: string;
+  match_status?: string;
+  match_reason?: string;
   unmatched_only?: boolean;
   page?: number;
   page_size?: number;
@@ -147,6 +150,8 @@ export async function listRuoloParticelle(
   if (params.foglio) qs.set("foglio", params.foglio);
   if (params.particella) qs.set("particella", params.particella);
   if (params.comune) qs.set("comune", params.comune);
+  if (params.match_status) qs.set("match_status", params.match_status);
+  if (params.match_reason) qs.set("match_reason", params.match_reason);
   if (params.unmatched_only) qs.set("unmatched_only", "true");
   qs.set("page", String(params.page ?? 1));
   qs.set("page_size", String(params.page_size ?? 50));
@@ -187,4 +192,11 @@ export async function getRuoloStatsComuni(
   anno: number,
 ): Promise<RuoloStatsComuneResponse> {
   return ruoloRequest<RuoloStatsComuneResponse>(`/ruolo/stats/comuni?anno=${anno}`, token);
+}
+
+export async function getRuoloStatsAnalytics(
+  token: string,
+  anno: number,
+): Promise<RuoloStatsAnalyticsResponse> {
+  return ruoloRequest<RuoloStatsAnalyticsResponse>(`/ruolo/stats/analytics?anno=${anno}`, token);
 }
