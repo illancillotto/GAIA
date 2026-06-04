@@ -181,6 +181,7 @@ class InazCollaboratorResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: uuid.UUID
+    owner_user_id: int | None = None
     application_user_id: int | None = None
     kint: str | None = None
     kkint: str | None = None
@@ -207,6 +208,7 @@ class InazDailyRecordResponse(BaseModel):
 
     id: uuid.UUID
     collaborator_id: uuid.UUID
+    owner_user_id: int | None = None
     application_user_id: int | None = None
     work_date: date
     schedule_code: str | None = None
@@ -268,6 +270,7 @@ class InazEventSummaryResponse(BaseModel):
 
     id: uuid.UUID
     collaborator_id: uuid.UUID
+    owner_user_id: int | None = None
     application_user_id: int | None = None
     period_start: date
     period_end: date

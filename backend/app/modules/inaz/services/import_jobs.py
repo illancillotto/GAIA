@@ -80,6 +80,7 @@ def import_collaborator_payload(db: Session, *, payload: ParsedCollaboratorPaylo
     error_count = 0
 
     collaborator = upsert_collaborator(db, payload)
+    collaborator.owner_user_id = job.requested_by_user_id
     collaborator.last_seen_at = datetime.now(UTC)
     db.add(collaborator)
     db.flush()
@@ -98,6 +99,7 @@ def import_collaborator_payload(db: Session, *, payload: ParsedCollaboratorPaylo
         if record is None:
             record = InazDailyRecord(
                 collaborator_id=collaborator.id,
+                owner_user_id=job.requested_by_user_id,
                 application_user_id=collaborator.application_user_id,
                 work_date=work_date,
                 source_job_id=job.id,
@@ -108,6 +110,7 @@ def import_collaborator_payload(db: Session, *, payload: ParsedCollaboratorPaylo
         else:
             skipped_count += 1
 
+        record.owner_user_id = job.requested_by_user_id
         record.application_user_id = collaborator.application_user_id
         record.schedule_code = resolve_schedule_code(daily_row)
         record.teo_minutes = resolve_teo_minutes(daily_row)
@@ -142,6 +145,7 @@ def import_collaborator_payload(db: Session, *, payload: ParsedCollaboratorPaylo
         db.add(
             InazEventSummary(
                 collaborator_id=collaborator.id,
+                owner_user_id=job.requested_by_user_id,
                 application_user_id=collaborator.application_user_id,
                 period_start=payload.period_start,
                 period_end=payload.period_end,

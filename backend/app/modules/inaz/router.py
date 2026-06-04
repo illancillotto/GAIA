@@ -418,8 +418,8 @@ def list_collaborators(
     stmt = select(InazCollaborator)
     count_stmt = select(func.count(InazCollaborator.id))
     if not _is_admin_user(current_user):
-        stmt = stmt.where(InazCollaborator.application_user_id == current_user.id)
-        count_stmt = count_stmt.where(InazCollaborator.application_user_id == current_user.id)
+        stmt = stmt.where(InazCollaborator.owner_user_id == current_user.id)
+        count_stmt = count_stmt.where(InazCollaborator.owner_user_id == current_user.id)
     if q:
         term = f"%{q.strip()}%"
         condition = or_(
@@ -489,8 +489,8 @@ def list_giornaliere(
     count_stmt = select(func.count(InazDailyRecord.id))
 
     if not _is_admin_user(current_user):
-        stmt = stmt.where(InazDailyRecord.application_user_id == current_user.id)
-        count_stmt = count_stmt.where(InazDailyRecord.application_user_id == current_user.id)
+        stmt = stmt.where(InazDailyRecord.owner_user_id == current_user.id)
+        count_stmt = count_stmt.where(InazDailyRecord.owner_user_id == current_user.id)
 
     if collaborator_id is not None:
         stmt = stmt.where(InazDailyRecord.collaborator_id == collaborator_id)
@@ -759,7 +759,10 @@ def retry_sync_job(
         raise HTTPException(status_code=409, detail="Sync job is not retryable in the current state")
     if job.credential_id is None:
         raise HTTPException(status_code=409, detail="Questo job usa una configurazione legacy. Crea una nuova sync con una credenziale Inaz salvata.")
-    if job.attempt_count >= job.max_attempts:
+    checkpoint = dict((job.params_json or {}).get("checkpoint") or {})
+    completed_employee_codes = checkpoint.get("completed_employee_codes")
+    has_resume_checkpoint = isinstance(completed_employee_codes, list) and len(completed_employee_codes) > 0
+    if job.attempt_count >= job.max_attempts and not has_resume_checkpoint:
         raise HTTPException(status_code=409, detail="Sync job reached the configured max attempts")
 
     job.status = "pending"
@@ -963,7 +966,7 @@ def _serialize_daily_record(db: Session, record: InazDailyRecord) -> InazDailyRe
 def _get_collaborator_or_404(db: Session, collaborator_id: uuid.UUID, current_user: ApplicationUser | None = None) -> InazCollaborator:
     collaborator = db.get(InazCollaborator, collaborator_id)
     if collaborator is None or (
-        current_user is not None and not _is_admin_user(current_user) and collaborator.application_user_id != current_user.id
+        current_user is not None and not _is_admin_user(current_user) and collaborator.owner_user_id != current_user.id
     ):
         raise HTTPException(status_code=404, detail="Collaborator not found")
     return collaborator
@@ -972,7 +975,7 @@ def _get_collaborator_or_404(db: Session, collaborator_id: uuid.UUID, current_us
 def _get_daily_record_or_404(db: Session, record_id: uuid.UUID, current_user: ApplicationUser | None = None) -> InazDailyRecord:
     record = db.get(InazDailyRecord, record_id)
     if record is None or (
-        current_user is not None and not _is_admin_user(current_user) and record.application_user_id != current_user.id
+        current_user is not None and not _is_admin_user(current_user) and record.owner_user_id != current_user.id
     ):
         raise HTTPException(status_code=404, detail="Daily record not found")
     return record

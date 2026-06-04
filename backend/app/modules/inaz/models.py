@@ -99,6 +99,9 @@ class InazCollaborator(Base):
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    owner_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     application_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -203,6 +206,9 @@ class InazDailyRecord(Base):
     collaborator_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("inaz_collaborators.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    owner_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     application_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -263,6 +269,9 @@ class InazEventSummary(Base):
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
     collaborator_id: Mapped[uuid.UUID] = mapped_column(
         ForeignKey("inaz_collaborators.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    owner_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True
     )
     application_user_id: Mapped[int | None] = mapped_column(
         ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True
