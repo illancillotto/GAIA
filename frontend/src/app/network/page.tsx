@@ -14,15 +14,16 @@ import {
 } from "@/components/layout/module-workspace-hero";
 import { EmptyState } from "@/components/ui/empty-state";
 import { AlertTriangleIcon, RefreshIcon, ServerIcon } from "@/components/ui/icons";
-import { getNetworkAlerts, getNetworkDashboard, getNetworkDevices, triggerNetworkScan } from "@/lib/api";
+import { getNetworkAlerts, getNetworkDashboard, getNetworkDevices, getNetworkFirewalls, getNetworkFirewallMetrics, triggerNetworkScan } from "@/lib/api";
 import { getNetworkDeviceAdminUrl } from "@/lib/network-device-utils";
-import type { NetworkAlert, NetworkDashboardSummary, NetworkDevice } from "@/types/api";
+import type { NetworkAlert, NetworkDashboardSummary, NetworkDevice, NetworkFirewall, NetworkFirewallMetric } from "@/types/api";
 
 const emptySummary: NetworkDashboardSummary = {
   total_devices: 0,
   online_devices: 0,
   offline_devices: 0,
   open_alerts: 0,
+  firewalls_online: 0,
   scans_last_24h: 0,
   floor_plans: 0,
   latest_scan_at: null,
@@ -33,6 +34,8 @@ function DashboardContent({ token }: { token: string }) {
   const [recentDevices, setRecentDevices] = useState<NetworkDevice[]>([]);
   const [onlineDevices, setOnlineDevices] = useState<NetworkDevice[]>([]);
   const [alerts, setAlerts] = useState<NetworkAlert[]>([]);
+  const [firewalls, setFirewalls] = useState<NetworkFirewall[]>([]);
+  const [firewallMetrics, setFirewallMetrics] = useState<NetworkFirewallMetric[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isTriggeringScan, setIsTriggeringScan] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -43,16 +46,21 @@ function DashboardContent({ token }: { token: string }) {
 
   const loadData = useCallback(async () => {
     try {
-      const [dashboard, recentDeviceResponse, onlineDeviceResponse, alertItems] = await Promise.all([
+      const [dashboard, recentDeviceResponse, onlineDeviceResponse, alertItems, firewallItems] = await Promise.all([
         getNetworkDashboard(token),
         getNetworkDevices(token, { pageSize: 12 }),
         getNetworkDevices(token, { status: "online", pageSize: 100 }),
         getNetworkAlerts(token),
+        getNetworkFirewalls(token),
       ]);
+      const primaryFirewall = firewallItems[0] ?? null;
+      const metricItems = primaryFirewall ? await getNetworkFirewallMetrics(token, primaryFirewall.id, { limit: 6 }) : [];
       setSummary(dashboard);
       setRecentDevices(recentDeviceResponse.items);
       setOnlineDevices(onlineDeviceResponse.items);
       setAlerts(alertItems.slice(0, 5));
+      setFirewalls(firewallItems);
+      setFirewallMetrics(metricItems);
       setLoadError(null);
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "Errore nel caricamento dati");
@@ -156,10 +164,16 @@ function DashboardContent({ token }: { token: string }) {
             value={summary.open_alerts}
             hint="sconosciuti / assenti"
           />
+          <ModuleWorkspaceKpiTile
+            label="Firewall"
+            variant={summary.firewalls_online > 0 ? "emerald" : "amber"}
+            value={summary.firewalls_online}
+            hint="sorgenti attive"
+          />
         </ModuleWorkspaceKpiRow>
       </ModuleWorkspaceHero>
 
-      <div className="grid gap-6 xl:grid-cols-3">
+      <div className="grid gap-6 xl:grid-cols-4">
         <article className="panel-card">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
@@ -206,6 +220,58 @@ function DashboardContent({ token }: { token: string }) {
                   </div>
                   <NetworkStatusBadge status={device.status} />
                 </button>
+              ))}
+            </div>
+          )}
+        </article>
+
+        <article className="panel-card">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <p className="section-title">Firewall Sophos</p>
+              <p className="section-copy">Stato appliance, ultima visibilità e metriche SNMP recenti.</p>
+            </div>
+            <Link href="/network/firewalls" className="text-sm font-medium text-[#1D4E35]">
+              Apri firewall
+            </Link>
+          </div>
+
+          {isLoading ? (
+            <p className="text-sm text-gray-500">Caricamento firewall in corso.</p>
+          ) : firewalls.length === 0 ? (
+            <EmptyState
+              icon={ServerIcon}
+              title="Nessun firewall configurato"
+              description="La telemetria Sophos non ha ancora registrato appliance nel modulo rete."
+            />
+          ) : (
+            <div className="space-y-3">
+              {firewalls.slice(0, 1).map((firewall) => (
+                <div key={firewall.id} className="rounded-lg border border-gray-100 px-4 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">{firewall.name}</p>
+                      <p className="mt-1 text-xs text-gray-500">
+                        {firewall.management_ip || "IP gestione n/d"} · {firewall.model_name || firewall.vendor}
+                      </p>
+                    </div>
+                    <NetworkStatusBadge status={firewall.status} />
+                  </div>
+                  <div className="mt-3 space-y-2">
+                    {firewallMetrics.length === 0 ? (
+                      <p className="text-xs text-gray-500">Nessuna metrica SNMP ancora registrata.</p>
+                    ) : (
+                      firewallMetrics.map((metric) => (
+                        <div key={metric.id} className="flex items-center justify-between gap-3 text-xs">
+                          <span className="text-gray-500">{metric.metric_key}</span>
+                          <span className="font-medium text-gray-800">
+                            {metric.metric_text ?? metric.metric_value ?? "n/d"}{metric.unit ? ` ${metric.unit}` : ""}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
               ))}
             </div>
           )}
@@ -267,7 +333,7 @@ function DashboardContent({ token }: { token: string }) {
           )}
         </article>
 
-        <article className="panel-card">
+        <article className="panel-card xl:col-span-1">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div>
               <p className="section-title">Alert attivi</p>

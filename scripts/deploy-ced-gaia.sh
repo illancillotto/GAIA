@@ -63,6 +63,19 @@ require_nonempty_env() {
   fi
 }
 
+require_exact_env_value() {
+  local env_file="$1"
+  local key="$2"
+  local expected="$3"
+  local value
+  value="$(read_env_value "$env_file" "$key" || true)"
+  value="$(printf '%s' "$value" | sed 's/[[:space:]]*$//')"
+  if [[ "$value" != "$expected" ]]; then
+    echo "Errore: in $env_file la variabile $key deve essere '$expected' per il deploy CED." >&2
+    exit 1
+  fi
+}
+
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   usage
   exit 0
@@ -144,6 +157,7 @@ if [[ "$DEPLOY_ACTION" == "deploy" ]]; then
   require_nonempty_env "$ENV_FILE" "BOOTSTRAP_ADMIN_EMAIL"
   require_nonempty_env "$ENV_FILE" "BOOTSTRAP_ADMIN_PASSWORD"
   require_nonempty_env "$ENV_FILE" "CREDENTIAL_MASTER_KEY"
+  require_exact_env_value "$ENV_FILE" "NETWORK_SOPHOS_SNMP_COMMUNITY" "GAIA-prod"
 
   app_env_value="$(read_env_value "$ENV_FILE" "APP_ENV" || true)"
   if [[ "$ALLOW_NON_PRODUCTION_ENV" != "yes" && "$app_env_value" != "production" ]]; then

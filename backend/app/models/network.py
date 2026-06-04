@@ -4,6 +4,9 @@ from app.modules.network.models import (
     FloorPlan,
     NetworkAlert,
     NetworkDevice,
+    NetworkFirewall,
+    NetworkFirewallEvent,
+    NetworkFirewallMetric,
     NetworkScan,
     NetworkScanDevice,
 )
@@ -14,6 +17,9 @@ __all__ = [
     "FloorPlan",
     "NetworkAlert",
     "NetworkDevice",
+    "NetworkFirewall",
+    "NetworkFirewallEvent",
+    "NetworkFirewallMetric",
     "NetworkScan",
     "NetworkScanDevice",
 ]

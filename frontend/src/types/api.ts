@@ -805,6 +805,35 @@ export type NetworkDevice = {
     ip_address: string;
     open_ports: string | null;
   }[];
+  traffic_summary: {
+    window_hours: number;
+    total_events: number;
+    allowed_events: number;
+    blocked_events: number;
+    bytes_in: number;
+    bytes_out: number;
+    last_observed_at: string | null;
+    top_peers: {
+      ip_address: string;
+      label: string | null;
+      events_count: number;
+      bytes_in: number;
+      bytes_out: number;
+    }[];
+    recent_events: {
+      id: number;
+      event_type: string;
+      severity: string;
+      protocol: string | null;
+      src_ip: string | null;
+      dst_ip: string | null;
+      peer_ip: string | null;
+      peer_label: string | null;
+      bytes_in: number;
+      bytes_out: number;
+      observed_at: string;
+    }[];
+  } | null;
 };
 
 export type NetworkDeviceUpdateInput = {

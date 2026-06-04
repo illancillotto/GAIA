@@ -7,6 +7,9 @@ from sqlalchemy.pool import StaticPool
 from app.db.base import Base
 from app.modules.network import services
 from app.modules.network.models import NetworkAlert, NetworkDevice
+from app.modules.network.sophos import ingest_sophos_syslog, parse_sophos_syslog_message, strip_syslog_prefix
+from app.modules.network.sophos_snmp import poll_sophos_firewall_metrics
+from app.modules.network.sophos_syslog_listener import SophosSyslogListener
 
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
@@ -265,6 +268,108 @@ def test_run_network_scan_creates_unknown_device_alert_for_unregistered_host(mon
     assert device.is_known_device is False
     assert len(alerts) == 1
     assert alerts[0].alert_type == "UNKNOWN_DEVICE"
+
+    db.close()
+    Base.metadata.drop_all(bind=engine)
+
+
+def test_parse_sophos_syslog_message_extracts_key_values() -> None:
+    parsed = parse_sophos_syslog_message(
+        'device_name="XGS87" log_type="Firewall" log_component="Firewall Rule" log_subtype="Drop" priority="Error" src_ip=192.168.1.50 dst_ip=8.8.8.8 message="Blocked by policy"'
+    )
+
+    assert parsed["device_name"] == "XGS87"
+    assert parsed["log_type"] == "Firewall"
+    assert parsed["src_ip"] == "192.168.1.50"
+    assert parsed["message"] == "Blocked by policy"
+
+
+def test_strip_syslog_prefix_returns_body_and_host() -> None:
+    body, host = strip_syslog_prefix(
+        '<134>2026-06-04T09:20:00+02:00 sophos-xgs87 log_type="Firewall" log_component="Firewall Rule" src_ip=192.168.1.50'
+    )
+
+    assert host == "sophos-xgs87"
+    assert body == 'log_type="Firewall" log_component="Firewall Rule" src_ip=192.168.1.50'
+
+
+def test_ingest_sophos_syslog_creates_event_and_alert() -> None:
+    db = _build_session()
+    device = NetworkDevice(
+        ip_address="192.168.1.50",
+        mac_address="aa:bb:cc:dd:ee:50",
+        hostname="printer-lab",
+        is_known_device=True,
+        status="online",
+        first_seen_at=datetime.now(UTC),
+        last_seen_at=datetime.now(UTC),
+    )
+    db.add(device)
+    db.commit()
+    db.refresh(device)
+
+    event = ingest_sophos_syslog(
+        db,
+        message='device_name="XGS87" log_type="Firewall" log_component="Firewall Rule" log_subtype="Drop" priority="Error" src_ip=192.168.1.50 dst_ip=8.8.8.8 message="Blocked by policy"',
+        firewall_name="Sophos XGS87",
+        management_ip="192.168.1.1",
+    )
+
+    alerts = db.scalars(select(NetworkAlert).where(NetworkAlert.alert_type == "FIREWALL_EVENT")).all()
+
+    assert event.firewall_id is not None
+    assert event.device_id == device.id
+    assert event.event_type == "firewall.firewall_rule.drop"
+    assert event.severity == "danger"
+    assert len(alerts) == 1
+
+    db.close()
+    Base.metadata.drop_all(bind=engine)
+
+
+def test_sophos_syslog_listener_handles_message_with_client_ip() -> None:
+    db = _build_session()
+    db.close()
+
+    listener = SophosSyslogListener(session_factory=TestingSessionLocal, firewall_name="Sophos XGS87")
+    listener.handle_message(
+        '<134>2026-06-04T09:20:00+02:00 xgs87 log_type="Firewall" log_component="Firewall Rule" log_subtype="Drop" priority="Critical" src_ip=192.168.1.99 dst_ip=8.8.8.8 message="Drop test"',
+        "192.168.1.1",
+    )
+
+    verification_db = TestingSessionLocal()
+    event = verification_db.scalar(select(services.NetworkFirewallEvent).order_by(services.NetworkFirewallEvent.id.desc()))
+    firewall = verification_db.scalar(select(services.NetworkFirewall).order_by(services.NetworkFirewall.id.desc()))
+
+    assert event is not None
+    assert event.event_type == "firewall.firewall_rule.drop"
+    assert firewall is not None
+    assert firewall.management_ip == "192.168.1.1"
+
+    verification_db.close()
+    Base.metadata.drop_all(bind=engine)
+
+
+def test_poll_sophos_firewall_metrics_records_standard_metrics(monkeypatch) -> None:
+    db = _build_session()
+    monkeypatch.setattr(services.settings, "network_sophos_snmp_host", "192.168.1.1")
+    monkeypatch.setattr(services.settings, "network_sophos_firewall_management_ip", "192.168.1.1")
+    monkeypatch.setattr(services.settings, "network_sophos_snmp_community", "public")
+    monkeypatch.setattr(
+        "app.modules.network.sophos_snmp._snmp_get_values",
+        lambda host, port, community, oids: {
+            "sys_name": "Sophos-XGS87",
+            "sys_descr": "Sophos Firewall",
+            "sys_uptime_ticks": "12345",
+            "if_number": "9",
+        },
+    )
+
+    metrics = poll_sophos_firewall_metrics(db)
+
+    assert len(metrics) == 4
+    assert any(item.metric_key == "sys_name" and item.metric_text == "Sophos-XGS87" for item in metrics)
+    assert any(item.metric_key == "if_number" and item.metric_value == 9 for item in metrics)
 
     db.close()
     Base.metadata.drop_all(bind=engine)

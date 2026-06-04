@@ -73,7 +73,6 @@ const menuSearchRoutes: SearchRoute[] = [
   { label: "Inaz · Dashboard", href: "/inaz", moduleKey: "inaz", keywords: ["giornaliere", "cartellino", "inaz"] },
   { label: "Inaz · Collaboratori", href: "/inaz/collaboratori", moduleKey: "inaz", keywords: ["collaboratori", "dipendenti"] },
   { label: "Inaz · Giornaliere", href: "/inaz/giornaliere", moduleKey: "inaz", keywords: ["giornaliere", "presenze"] },
-  { label: "Inaz · Import", href: "/inaz/import", moduleKey: "inaz", keywords: ["import", "json"] },
   { label: "Inaz · Export", href: "/inaz/export", moduleKey: "inaz", keywords: ["export", "xlsm"] },
   { label: "Inaz · Sync", href: "/inaz/sync", moduleKey: "inaz", keywords: ["sync", "portale"] },
 
@@ -88,6 +87,7 @@ const menuSearchRoutes: SearchRoute[] = [
   // Network (rete)
   { label: "Rete · Dashboard", href: "/network", moduleKey: "rete" },
   { label: "Rete · Dispositivi", href: "/network/devices", moduleKey: "rete", keywords: ["switch", "ap", "devices"] },
+  { label: "Rete · Firewall", href: "/network/firewalls", moduleKey: "rete", keywords: ["sophos", "xgs", "syslog", "snmp"] },
   { label: "Rete · Planimetria", href: "/network/floor-plan", moduleKey: "rete", keywords: ["mappa", "planimetria"] },
   { label: "Rete · Alert", href: "/network/alerts", moduleKey: "rete", keywords: ["allarmi"] },
   { label: "Rete · Scansioni", href: "/network/scans", moduleKey: "rete", keywords: ["scan", "scansioni"] },
@@ -145,6 +145,7 @@ const emptyNetworkSummary: NetworkDashboardSummary = {
   online_devices: 0,
   offline_devices: 0,
   open_alerts: 0,
+  firewalls_online: 0,
   scans_last_24h: 0,
   floor_plans: 0,
   latest_scan_at: null,

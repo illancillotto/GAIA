@@ -21,6 +21,8 @@ from app.modules.network.models import (
     FloorPlan,
     NetworkAlert,
     NetworkDevice,
+    NetworkFirewall,
+    NetworkFirewallEvent,
     NetworkScan,
     NetworkScanDevice,
 )
@@ -1159,6 +1161,7 @@ def get_network_dashboard_summary(db: Session) -> dict[str, object]:
         "online_devices": db.scalar(select(func.count(NetworkDevice.id)).where(NetworkDevice.status == "online")) or 0,
         "offline_devices": db.scalar(select(func.count(NetworkDevice.id)).where(NetworkDevice.status == "offline")) or 0,
         "open_alerts": db.scalar(select(func.count(NetworkAlert.id)).where(NetworkAlert.status == "open")) or 0,
+        "firewalls_online": db.scalar(select(func.count(NetworkFirewall.id)).where(NetworkFirewall.status == "online")) or 0,
         "scans_last_24h": db.scalar(
             select(func.count(NetworkScan.id)).where(NetworkScan.started_at >= now - timedelta(hours=24))
         )

@@ -160,3 +160,60 @@ class DeviceInventoryLink(Base):
     inventory_hostname: Mapped[str | None] = mapped_column(String(255), nullable=True)
     inventory_mac_address: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     matched_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class NetworkFirewall(Base):
+    __tablename__ = "network_firewalls"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    vendor: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    model_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    serial_number: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    management_ip: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    status: Mapped[str] = mapped_column(String(32), default="unknown", nullable=False, index=True)
+    metadata_sources: Mapped[str | None] = mapped_column(Text, nullable=True)
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
+
+
+class NetworkFirewallMetric(Base):
+    __tablename__ = "network_firewall_metrics"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    firewall_id: Mapped[int] = mapped_column(ForeignKey("network_firewalls.id", ondelete="CASCADE"), nullable=False, index=True)
+    metric_key: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    metric_value: Mapped[float | None] = mapped_column(Float, nullable=True)
+    metric_text: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    unit: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    severity: Mapped[str] = mapped_column(String(32), default="info", nullable=False, index=True)
+    raw_payload: Mapped[str | None] = mapped_column(Text, nullable=True)
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+
+
+class NetworkFirewallEvent(Base):
+    __tablename__ = "network_firewall_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    firewall_id: Mapped[int] = mapped_column(ForeignKey("network_firewalls.id", ondelete="CASCADE"), nullable=False, index=True)
+    device_id: Mapped[int | None] = mapped_column(
+        ForeignKey("network_devices.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    source: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    event_type: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    severity: Mapped[str] = mapped_column(String(32), default="info", nullable=False, index=True)
+    log_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    src_ip: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    dst_ip: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    protocol: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    raw_payload: Mapped[str | None] = mapped_column(Text, nullable=True)
+    observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)

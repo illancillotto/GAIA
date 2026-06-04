@@ -278,6 +278,55 @@ services:
       - NET_RAW
       - NET_ADMIN
 
+  sophos-syslog:
+    build:
+      context: ./backend
+    container_name: gaia-sophos-syslog
+    restart: unless-stopped
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      NETWORK_SOPHOS_SYSLOG_ENABLED: ${NETWORK_SOPHOS_SYSLOG_ENABLED:-true}
+      NETWORK_SOPHOS_SYSLOG_BIND_HOST: ${NETWORK_SOPHOS_SYSLOG_BIND_HOST:-0.0.0.0}
+      NETWORK_SOPHOS_SYSLOG_PORT: ${NETWORK_SOPHOS_SYSLOG_PORT:-5514}
+      NETWORK_SOPHOS_FIREWALL_DEFAULT_NAME: ${NETWORK_SOPHOS_FIREWALL_DEFAULT_NAME:-Sophos XGS87}
+      NETWORK_SOPHOS_FIREWALL_MANAGEMENT_IP: ${NETWORK_SOPHOS_FIREWALL_MANAGEMENT_IP:-}
+    command: python -m app.scripts.network_sophos_syslog
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${NETWORK_SOPHOS_SYSLOG_PORT:-5514}:${NETWORK_SOPHOS_SYSLOG_PORT:-5514}/udp"
+
+  sophos-snmp:
+    build:
+      context: ./backend
+    container_name: gaia-sophos-snmp
+    restart: unless-stopped
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      NETWORK_SOPHOS_SNMP_ENABLED: ${NETWORK_SOPHOS_SNMP_ENABLED:-true}
+      NETWORK_SOPHOS_SNMP_HOST: ${NETWORK_SOPHOS_SNMP_HOST:-${NETWORK_SOPHOS_FIREWALL_MANAGEMENT_IP:-}}
+      NETWORK_SOPHOS_SNMP_PORT: ${NETWORK_SOPHOS_SNMP_PORT:-161}
+      NETWORK_SOPHOS_SNMP_COMMUNITY: ${NETWORK_SOPHOS_SNMP_COMMUNITY:-public}
+      NETWORK_SOPHOS_SNMP_INTERVAL_SECONDS: ${NETWORK_SOPHOS_SNMP_INTERVAL_SECONDS:-300}
+      NETWORK_SOPHOS_SNMP_CUSTOM_OIDS: ${NETWORK_SOPHOS_SNMP_CUSTOM_OIDS:-[]}
+      NETWORK_SOPHOS_FIREWALL_DEFAULT_NAME: ${NETWORK_SOPHOS_FIREWALL_DEFAULT_NAME:-Sophos XGS87}
+      NETWORK_SOPHOS_FIREWALL_MANAGEMENT_IP: ${NETWORK_SOPHOS_FIREWALL_MANAGEMENT_IP:-}
+    command: python -m app.scripts.network_sophos_snmp
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   arp-helper:
     build:
       context: ./backend

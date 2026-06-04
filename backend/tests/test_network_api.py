@@ -12,7 +12,17 @@ from app.core.security import hash_password
 from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
-from app.models.network import DevicePosition, FloorPlan, NetworkAlert, NetworkDevice, NetworkScan, NetworkScanDevice
+from app.models.network import (
+    DevicePosition,
+    FloorPlan,
+    NetworkAlert,
+    NetworkDevice,
+    NetworkFirewall,
+    NetworkFirewallEvent,
+    NetworkFirewallMetric,
+    NetworkScan,
+    NetworkScanDevice,
+)
 
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
@@ -154,6 +164,45 @@ def setup_database(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, Non
         )
     )
 
+    firewall = NetworkFirewall(
+        vendor="Sophos",
+        name="Sophos XGS87",
+        model_name="XGS87",
+        management_ip="192.168.1.1",
+        status="online",
+        metadata_sources='{"ingest":"seed"}',
+        last_seen_at=datetime.now(UTC),
+    )
+    db.add(firewall)
+    db.flush()
+    db.add(
+        NetworkFirewallEvent(
+            firewall_id=firewall.id,
+            device_id=device_one.id,
+            source="sophos_syslog",
+            event_type="firewall.firewall_rule.drop",
+            severity="danger",
+            log_id="010101600001",
+            message="Traffico bloccato verso Internet",
+            src_ip=device_one.ip_address,
+            dst_ip="8.8.8.8",
+            protocol="TCP",
+            raw_payload='{"parsed":{"log_type":"Firewall"}}',
+            observed_at=datetime.now(UTC),
+        )
+    )
+    db.add(
+        NetworkFirewallMetric(
+            firewall_id=firewall.id,
+            metric_key="sys_uptime_ticks",
+            metric_value=12345,
+            unit="ticks",
+            severity="info",
+            raw_payload='{"source":"seed"}',
+            observed_at=datetime.now(UTC),
+        )
+    )
+
     floor_plan = FloorPlan(
         name="Palazzina A - Piano Terra",
         building="Sede centrale",
@@ -223,6 +272,7 @@ def test_network_dashboard_summary() -> None:
     assert payload["online_devices"] == 1
     assert payload["offline_devices"] == 1
     assert payload["open_alerts"] == 1
+    assert payload["firewalls_online"] == 1
     assert payload["floor_plans"] == 1
 
 
@@ -357,3 +407,73 @@ def test_network_scan_can_be_triggered() -> None:
     assert payload["devices_upserted"] == 1
     assert payload["scan"]["initiated_by"] == "network-admin"
     assert "delta" in payload["scan"]
+
+
+def test_network_firewalls_are_listed() -> None:
+    response = client.get("/network/firewalls", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 1
+    assert payload[0]["vendor"] == "Sophos"
+    assert payload[0]["name"] == "Sophos XGS87"
+
+
+def test_network_firewall_events_are_listed() -> None:
+    response = client.get("/network/firewalls/1/events", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 1
+    assert payload[0]["event_type"] == "firewall.firewall_rule.drop"
+    assert payload[0]["device_id"] == 1
+
+
+def test_network_firewall_metrics_are_listed() -> None:
+    response = client.get("/network/firewalls/1/metrics", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 1
+    assert payload[0]["metric_key"] == "sys_uptime_ticks"
+    assert payload[0]["metric_value"] == 12345
+
+
+def test_sophos_syslog_can_be_ingested_via_api() -> None:
+    response = client.post(
+        "/network/firewalls/sophos/syslog",
+        headers=auth_headers(),
+        json={
+            "firewall_id": 1,
+            "message": 'device_name="XGS87" log_type="Firewall" log_component="Firewall Rule" log_subtype="Drop" priority="Critical" src_ip=192.168.1.10 dst_ip=1.1.1.1 message="Tentativo bloccato"',
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["firewall_id"] == 1
+    assert payload["severity"] == "critical"
+    assert payload["device_id"] == 1
+
+
+def test_sophos_snmp_metrics_can_be_polled_via_api(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr("app.modules.network.router.poll_sophos_firewall_metrics", lambda db: [
+        NetworkFirewallMetric(
+            id=99,
+            firewall_id=1,
+            metric_key="if_number",
+            metric_value=9,
+            metric_text=None,
+            unit="count",
+            severity="info",
+            raw_payload='{"source":"snmp"}',
+            observed_at=datetime.now(UTC),
+        )
+    ])
+
+    response = client.post("/network/firewalls/1/metrics/poll", headers=auth_headers())
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert len(payload) == 1
+    assert payload[0]["metric_key"] == "if_number"

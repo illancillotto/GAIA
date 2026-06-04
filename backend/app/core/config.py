@@ -236,6 +236,17 @@ class Settings(BaseSettings):
         default="ip neigh show {ip}",
         alias="NETWORK_GATEWAY_ARP_COMMAND",
     )
+    network_sophos_syslog_enabled: bool = Field(default=False, alias="NETWORK_SOPHOS_SYSLOG_ENABLED")
+    network_sophos_syslog_bind_host: str = Field(default="0.0.0.0", alias="NETWORK_SOPHOS_SYSLOG_BIND_HOST")
+    network_sophos_syslog_port: int = Field(default=5514, alias="NETWORK_SOPHOS_SYSLOG_PORT")
+    network_sophos_firewall_default_name: str = Field(default="Sophos XGS87", alias="NETWORK_SOPHOS_FIREWALL_DEFAULT_NAME")
+    network_sophos_firewall_management_ip: str | None = Field(default=None, alias="NETWORK_SOPHOS_FIREWALL_MANAGEMENT_IP")
+    network_sophos_snmp_enabled: bool = Field(default=False, alias="NETWORK_SOPHOS_SNMP_ENABLED")
+    network_sophos_snmp_host: str | None = Field(default=None, alias="NETWORK_SOPHOS_SNMP_HOST")
+    network_sophos_snmp_port: int = Field(default=161, alias="NETWORK_SOPHOS_SNMP_PORT")
+    network_sophos_snmp_community: str | None = Field(default=None, alias="NETWORK_SOPHOS_SNMP_COMMUNITY")
+    network_sophos_snmp_interval_seconds: int = Field(default=300, alias="NETWORK_SOPHOS_SNMP_INTERVAL_SECONDS")
+    network_sophos_snmp_custom_oids: str = Field(default="[]", alias="NETWORK_SOPHOS_SNMP_CUSTOM_OIDS")
     bootstrap_admin_username: str = Field(default="admin", alias="BOOTSTRAP_ADMIN_USERNAME")
     bootstrap_admin_email: str = Field(default="admin@example.local", alias="BOOTSTRAP_ADMIN_EMAIL")
     bootstrap_admin_password: str = Field(default="change_me_admin", alias="BOOTSTRAP_ADMIN_PASSWORD")
@@ -248,7 +259,7 @@ class Settings(BaseSettings):
         alias="INAZ_SCRAPER_PYTHON_PATH",
     )
     inaz_scraper_cdp_endpoint: str = Field(
-        default="http://127.0.0.1:9224",
+        default="http://host.docker.internal:9224",
         alias="INAZ_SCRAPER_CDP_ENDPOINT",
     )
     inaz_sync_artifacts_path: str = Field(

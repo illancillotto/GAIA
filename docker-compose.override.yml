@@ -56,6 +56,16 @@ services:
     volumes:
       - ./backend:/app
 
+  sophos-syslog:
+    command: python -m app.scripts.network_sophos_syslog
+    volumes:
+      - ./backend:/app
+
+  sophos-snmp:
+    command: python -m app.scripts.network_sophos_snmp
+    volumes:
+      - ./backend:/app
+
   arp-helper:
     volumes:
       - ./backend:/app

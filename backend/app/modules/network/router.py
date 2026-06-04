@@ -1,13 +1,22 @@
-from typing import Annotated
+from collections import defaultdict
+from datetime import datetime, timedelta, timezone
+from functools import lru_cache
+import ipaddress
+import socket
+from typing import Annotated, Any
+import urllib.error
+import urllib.request
+import json
+from urllib.parse import urlparse
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
-from app.modules.network.models import DevicePosition, FloorPlan, NetworkDevice, NetworkScan, NetworkScanDevice
+from app.modules.network.models import DevicePosition, FloorPlan, NetworkDevice, NetworkFirewallEvent, NetworkScan, NetworkScanDevice
 from app.modules.network.schemas import (
     DevicePositionResponse,
     DevicePositionUpdateRequest,
@@ -19,15 +28,24 @@ from app.modules.network.schemas import (
     NetworkAlertUpdateRequest,
     NetworkDashboardSummary,
     NetworkDeviceListResponse,
+    NetworkDeviceTrafficEventSummary,
+    NetworkDeviceTrafficPeerSummary,
+    NetworkDeviceTrafficSummary,
     NetworkDeviceResponse,
     NetworkDeviceUpdateRequest,
+    NetworkFirewallEventResponse,
+    NetworkFirewallMetricResponse,
+    NetworkFirewallResponse,
     NetworkScanDetailResponse,
     NetworkScanDeviceResponse,
     NetworkScanDiffEntry,
     NetworkScanDiffResponse,
     NetworkScanResponse,
     NetworkScanTriggerResponse,
+    SophosSyslogIngestRequest,
 )
+from app.modules.network.sophos import ingest_sophos_syslog, list_network_firewall_events, list_network_firewalls
+from app.modules.network.sophos_snmp import list_network_firewall_metrics, poll_sophos_firewall_metrics
 from app.modules.network.services import (
     create_floor_plan,
     get_device_positions,
@@ -55,6 +73,7 @@ def _serialize_device(
     *,
     positions: list[DevicePosition] | None = None,
     scan_history: list[NetworkScanDevice] | None = None,
+    traffic_summary: NetworkDeviceTrafficSummary | None = None,
 ) -> NetworkDeviceResponse:
     payload = {
         "id": device.id,
@@ -93,8 +112,197 @@ def _serialize_device(
             }
             for item in scan_history or []
         ],
+        "traffic_summary": traffic_summary,
     }
     return NetworkDeviceResponse.model_validate(payload)
+
+
+def _extract_event_traffic(event: NetworkFirewallEvent, *, device_ip: str) -> tuple[int, int, str | None]:
+    raw_payload = metadata_sources_to_dict(event.raw_payload) or {}
+    parsed = raw_payload.get("parsed") if isinstance(raw_payload, dict) else None
+    parsed = parsed if isinstance(parsed, dict) else {}
+
+    def _to_int(value: Any) -> int:
+        if value is None:
+            return 0
+        try:
+            return max(int(str(value).strip()), 0)
+        except (TypeError, ValueError):
+            return 0
+
+    bytes_sent = _to_int(parsed.get("bytes_sent"))
+    bytes_received = _to_int(parsed.get("bytes_received"))
+
+    if event.src_ip == device_ip:
+        return bytes_received, bytes_sent, event.dst_ip
+    if event.dst_ip == device_ip:
+        return bytes_sent, bytes_received, event.src_ip
+    return 0, 0, event.dst_ip or event.src_ip
+
+
+def _extract_peer_hint(event: NetworkFirewallEvent, *, peer_ip: str | None) -> str | None:
+    raw_payload = metadata_sources_to_dict(event.raw_payload) or {}
+    parsed = raw_payload.get("parsed") if isinstance(raw_payload, dict) else None
+    parsed = parsed if isinstance(parsed, dict) else {}
+
+    domain = parsed.get("domain")
+    if isinstance(domain, str) and domain.strip():
+        return domain.strip()
+
+    url = parsed.get("url")
+    if isinstance(url, str) and url.strip():
+        hostname = urlparse(url.strip()).hostname
+        if hostname:
+            return hostname
+
+    if peer_ip:
+        return _resolve_peer_label(peer_ip)
+    return None
+
+
+@lru_cache(maxsize=512)
+def _resolve_peer_label(ip_address: str | None) -> str | None:
+    if not ip_address:
+        return None
+
+    try:
+        parsed_ip = ipaddress.ip_address(ip_address)
+    except ValueError:
+        return None
+
+    try:
+        hostname, _, _ = socket.gethostbyaddr(ip_address)
+        hostname = hostname.strip().rstrip(".")
+        if hostname:
+            return hostname
+    except OSError:
+        pass
+
+    if parsed_ip.is_private or parsed_ip.is_loopback or parsed_ip.is_link_local or parsed_ip.is_multicast:
+        return None
+
+    try:
+        with urllib.request.urlopen(f"https://rdap.org/ip/{ip_address}", timeout=4) as response:
+            payload = json.load(response)
+    except (urllib.error.URLError, TimeoutError, ValueError, OSError):
+        return None
+
+    entities = payload.get("entities")
+    if isinstance(entities, list):
+        for entity in entities:
+            if not isinstance(entity, dict):
+                continue
+            vcard = entity.get("vcardArray")
+            if not (isinstance(vcard, list) and len(vcard) == 2 and isinstance(vcard[1], list)):
+                continue
+            for item in vcard[1]:
+                if (
+                    isinstance(item, list)
+                    and len(item) >= 4
+                    and item[0] == "fn"
+                    and isinstance(item[3], str)
+                    and item[3].strip()
+                ):
+                    return item[3].strip()
+
+    for key in ("name", "handle"):
+        value = payload.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _build_device_traffic_summary(db: Session, device: NetworkDevice, *, window_hours: int = 24) -> NetworkDeviceTrafficSummary:
+    window_start = datetime.now(timezone.utc) - timedelta(hours=window_hours)
+    events = db.scalars(
+        select(NetworkFirewallEvent)
+        .where(
+            NetworkFirewallEvent.observed_at >= window_start,
+            or_(
+                NetworkFirewallEvent.device_id == device.id,
+                NetworkFirewallEvent.src_ip == device.ip_address,
+                NetworkFirewallEvent.dst_ip == device.ip_address,
+            ),
+        )
+        .order_by(NetworkFirewallEvent.observed_at.desc())
+    ).all()
+
+    if not events:
+        return NetworkDeviceTrafficSummary(window_hours=window_hours)
+
+    peer_totals: dict[str, dict[str, Any]] = defaultdict(
+        lambda: {"events_count": 0, "bytes_in": 0, "bytes_out": 0, "labels": defaultdict(int)}
+    )
+    recent_events: list[NetworkDeviceTrafficEventSummary] = []
+    total_bytes_in = 0
+    total_bytes_out = 0
+    allowed_events = 0
+    blocked_events = 0
+
+    for event in events:
+        bytes_in, bytes_out, peer_ip = _extract_event_traffic(event, device_ip=device.ip_address)
+        total_bytes_in += bytes_in
+        total_bytes_out += bytes_out
+
+        lowered_type = event.event_type.lower()
+        if "allow" in lowered_type:
+            allowed_events += 1
+        if "deny" in lowered_type or "block" in lowered_type or "drop" in lowered_type:
+            blocked_events += 1
+
+        if peer_ip:
+            peer_entry = peer_totals[peer_ip]
+            peer_entry["events_count"] += 1
+            peer_entry["bytes_in"] += bytes_in
+            peer_entry["bytes_out"] += bytes_out
+            peer_label_hint = _extract_peer_hint(event, peer_ip=peer_ip)
+            if peer_label_hint:
+                peer_entry["labels"][peer_label_hint] += 1
+
+        if len(recent_events) < 8:
+            peer_label = _extract_peer_hint(event, peer_ip=peer_ip)
+            recent_events.append(
+                NetworkDeviceTrafficEventSummary(
+                    id=event.id,
+                    event_type=event.event_type,
+                    severity=event.severity,
+                    protocol=event.protocol,
+                    src_ip=event.src_ip,
+                    dst_ip=event.dst_ip,
+                    peer_ip=peer_ip,
+                    peer_label=peer_label,
+                    bytes_in=bytes_in,
+                    bytes_out=bytes_out,
+                    observed_at=event.observed_at,
+                )
+            )
+
+    top_peers = [
+        NetworkDeviceTrafficPeerSummary(
+            ip_address=ip_address,
+            label=max(values["labels"].items(), key=lambda item: item[1])[0] if values["labels"] else _resolve_peer_label(ip_address),
+            events_count=values["events_count"],
+            bytes_in=values["bytes_in"],
+            bytes_out=values["bytes_out"],
+        )
+        for ip_address, values in sorted(
+            peer_totals.items(),
+            key=lambda item: (item[1]["bytes_in"] + item[1]["bytes_out"], item[1]["events_count"]),
+            reverse=True,
+        )[:5]
+    ]
+
+    return NetworkDeviceTrafficSummary(
+        window_hours=window_hours,
+        total_events=len(events),
+        allowed_events=allowed_events,
+        blocked_events=blocked_events,
+        bytes_in=total_bytes_in,
+        bytes_out=total_bytes_out,
+        last_observed_at=events[0].observed_at,
+        top_peers=top_peers,
+        recent_events=recent_events,
+    )
 
 
 def _serialize_scan(scan_id: int, scan: object, db: Session) -> NetworkScanResponse:
@@ -126,6 +334,57 @@ def _serialize_scan_device(device: NetworkScanDevice) -> NetworkScanDeviceRespon
         "observed_at": device.observed_at,
     }
     return NetworkScanDeviceResponse.model_validate(payload)
+
+
+def _serialize_firewall(firewall: object) -> NetworkFirewallResponse:
+    payload = {
+        "id": firewall.id,
+        "vendor": firewall.vendor,
+        "name": firewall.name,
+        "model_name": firewall.model_name,
+        "serial_number": firewall.serial_number,
+        "management_ip": firewall.management_ip,
+        "status": firewall.status,
+        "metadata_sources": metadata_sources_to_dict(firewall.metadata_sources),
+        "last_seen_at": firewall.last_seen_at,
+        "created_at": firewall.created_at,
+        "updated_at": firewall.updated_at,
+    }
+    return NetworkFirewallResponse.model_validate(payload)
+
+
+def _serialize_firewall_event(event: object) -> NetworkFirewallEventResponse:
+    payload = {
+        "id": event.id,
+        "firewall_id": event.firewall_id,
+        "device_id": event.device_id,
+        "source": event.source,
+        "event_type": event.event_type,
+        "severity": event.severity,
+        "log_id": event.log_id,
+        "message": event.message,
+        "src_ip": event.src_ip,
+        "dst_ip": event.dst_ip,
+        "protocol": event.protocol,
+        "raw_payload": metadata_sources_to_dict(event.raw_payload),
+        "observed_at": event.observed_at,
+    }
+    return NetworkFirewallEventResponse.model_validate(payload)
+
+
+def _serialize_firewall_metric(metric: object) -> NetworkFirewallMetricResponse:
+    payload = {
+        "id": metric.id,
+        "firewall_id": metric.firewall_id,
+        "metric_key": metric.metric_key,
+        "metric_value": metric.metric_value,
+        "metric_text": metric.metric_text,
+        "unit": metric.unit,
+        "severity": metric.severity,
+        "raw_payload": metadata_sources_to_dict(metric.raw_payload),
+        "observed_at": metric.observed_at,
+    }
+    return NetworkFirewallMetricResponse.model_validate(payload)
 
 
 def _require_network_module(current_user: ApplicationUser) -> None:
@@ -187,6 +446,7 @@ def get_device(
         device,
         positions=get_device_positions(db, device_id),
         scan_history=get_device_scan_history(db, device_id),
+        traffic_summary=_build_device_traffic_summary(db, device),
     )
 
 
@@ -214,6 +474,7 @@ def patch_device(
         device,
         positions=get_device_positions(db, device_id),
         scan_history=get_device_scan_history(db, device_id),
+        traffic_summary=_build_device_traffic_summary(db, device),
     )
 
 
@@ -251,6 +512,69 @@ def get_alerts(
 ) -> list[NetworkAlertResponse]:
     _require_network_module(current_user)
     return [NetworkAlertResponse.model_validate(item) for item in list_network_alerts(db, status_filter, severity)]
+
+
+@router.get("/firewalls", response_model=list[NetworkFirewallResponse])
+def get_firewalls(
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[NetworkFirewallResponse]:
+    _require_network_module(current_user)
+    return [_serialize_firewall(item) for item in list_network_firewalls(db)]
+
+
+@router.get("/firewalls/{firewall_id}/events", response_model=list[NetworkFirewallEventResponse])
+def get_firewall_events(
+    firewall_id: int,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+    severity: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+) -> list[NetworkFirewallEventResponse]:
+    _require_network_module(current_user)
+    return [_serialize_firewall_event(item) for item in list_network_firewall_events(db, firewall_id=firewall_id, severity=severity, limit=limit)]
+
+
+@router.get("/firewalls/{firewall_id}/metrics", response_model=list[NetworkFirewallMetricResponse])
+def get_firewall_metrics(
+    firewall_id: int,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+    metric_key: str | None = Query(default=None),
+    limit: int = Query(default=100, ge=1, le=500),
+) -> list[NetworkFirewallMetricResponse]:
+    _require_network_module(current_user)
+    return [_serialize_firewall_metric(item) for item in list_network_firewall_metrics(db, firewall_id=firewall_id, metric_key=metric_key, limit=limit)]
+
+
+@router.post("/firewalls/{firewall_id}/metrics/poll", response_model=list[NetworkFirewallMetricResponse], status_code=status.HTTP_201_CREATED)
+def poll_firewall_metrics(
+    firewall_id: int,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[NetworkFirewallMetricResponse]:
+    _require_network_module(current_user)
+    metrics = poll_sophos_firewall_metrics(db)
+    filtered = [item for item in metrics if item.firewall_id == firewall_id]
+    return [_serialize_firewall_metric(item) for item in filtered]
+
+
+@router.post("/firewalls/sophos/syslog", response_model=NetworkFirewallEventResponse, status_code=status.HTTP_201_CREATED)
+def post_sophos_syslog(
+    payload: SophosSyslogIngestRequest,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> NetworkFirewallEventResponse:
+    _require_network_module(current_user)
+    event = ingest_sophos_syslog(
+        db,
+        message=payload.message,
+        firewall_id=payload.firewall_id,
+        firewall_name=payload.firewall_name,
+        management_ip=payload.management_ip,
+        observed_at=payload.observed_at,
+    )
+    return _serialize_firewall_event(event)
 
 
 @router.patch("/alerts/{alert_id}", response_model=NetworkAlertResponse)

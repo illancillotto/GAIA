@@ -50,6 +50,7 @@ Il backend esegue scansioni periodiche della rete locale e salva i risultati com
 | RF-NET-04 | SHOULD | Lettura alternativa via tabella ARP del gateway (fallback senza privilegi root) |
 | RF-NET-05 | SHOULD | Rilevamento sistema operativo tramite OS fingerprinting nmap |
 | RF-NET-06 | SHOULD | Enrichment best-effort via SNMP, mDNS e NetBIOS per hostname, modello, vendor e sistema operativo quando disponibili |
+| RF-NET-07 | SHOULD | Ingestione syslog da firewall Sophos per eventi di sicurezza e correlazione con i dispositivi LAN |
 
 ### 2.2 Mappa dispositivi
 
@@ -108,6 +109,9 @@ L'interfaccia presenta i dispositivi rilevati su una mappa interattiva organizza
 | `network_scans` | Snapshot di scansione: `id, started_at, completed_at, status, devices_count` |
 | `network_devices` | Dispositivo rilevato: `id, scan_id, ip, mac, hostname, hostname_source, display_name, asset_label, vendor, model_name, metadata_sources, os_guess, is_online, first_seen, last_seen` |
 | `network_alerts` | Alert generato: `id, device_id, alert_type, severity, created_at, resolved_at` |
+| `network_firewalls` | Anagrafica firewall gestiti: `id, vendor, name, model_name, management_ip, status, last_seen_at` |
+| `network_firewall_events` | Eventi ricevuti da firewall: `id, firewall_id, device_id, source, event_type, severity, src_ip, dst_ip, observed_at` |
+| `network_firewall_metrics` | Metriche puntuali firewall: `id, firewall_id, metric_key, metric_value, severity, observed_at` |
 | `floor_plans` | Planimetria: `id, name, floor_number, building, image_path, created_at` |
 | `device_positions` | Posizione su planimetria: `device_id, floor_plan_id, x, y, updated_at` |
 | `device_inventory_links` | Collegamento rete-inventario: `network_device_id, inventory_device_id, match_type (auto/manual)` |
@@ -120,6 +124,7 @@ L'interfaccia presenta i dispositivi rilevati su una mappa interattiva organizza
 | `MISSING_DEVICE` | Dispositivo in Inventario non visto da più di N scan |
 | `IP_CONFLICT` | Due MAC diversi associati allo stesso IP in scan ravvicinate |
 | `VENDOR_MISMATCH` | Vendor rilevato diverso da quello registrato in Inventario |
+| `FIREWALL_EVENT` | Evento critico ricevuto dal firewall Sophos |
 
 ---
 
@@ -132,10 +137,13 @@ L'interfaccia presenta i dispositivi rilevati su una mappa interattiva organizza
 | `GET /network/scans/{id}` | Dettaglio snapshot con lista dispositivi |
 | `GET /network/scans/{id}/diff/{id2}` | Confronto tra due snapshot |
 | `GET /network/devices` | Lista dispositivi con filtri (stato, piano, vendor) |
-| `GET /network/devices/{id}` | Dettaglio dispositivo con storico e posizione |
+| `GET /network/devices/{id}` | Dettaglio dispositivo con storico, posizione e riepilogo traffico Sophos ultime 24h |
 | `PATCH /network/devices/{id}` | Aggiorna naming operativo e metadati manuali del dispositivo |
 | `GET /network/alerts` | Lista alert attivi e risolti |
 | `PATCH /network/alerts/{id}` | Aggiorna stato alert (risolto/ignorato) |
+| `GET /network/firewalls` | Lista firewall registrati nel modulo rete |
+| `GET /network/firewalls/{id}/events` | Storico eventi del firewall |
+| `POST /network/firewalls/sophos/syslog` | Ingestione applicativa di un evento syslog Sophos |
 | `GET /network/floor-plans` | Lista planimetrie disponibili |
 | `POST /network/floor-plans` | Carica nuova planimetria |
 | `GET /network/floor-plans/{id}/devices` | Dispositivi posizionati su una planimetria |
@@ -186,11 +194,40 @@ Formato `NETWORK_SNMP_COMMUNITY_PROFILES`:
 | Componente | Tecnologia |
 |------------|------------|
 | Scanner backend | Python · python-nmap · scapy (fallback ARP) |
+| Ingestione firewall | Parser syslog Sophos + correlazione IP verso `network_devices` |
 | Scheduler | APScheduler integrato in FastAPI |
 | API modulo | FastAPI router `/network` — aggiunto al backend monolite esistente |
 | Frontend | Next.js — nuova sezione `/network` nel frontend esistente |
 | Planimetria UI | React + SVG overlay con drag-and-drop (`react-draggable`) |
 | Database | PostgreSQL — nuove tabelle migrate con Alembic |
+
+### 5.2B Collector Sophos syslog
+
+- servizio dedicato `sophos-syslog` separato dal backend HTTP
+- listener UDP configurabile via `NETWORK_SOPHOS_SYSLOG_BIND_HOST` e `NETWORK_SOPHOS_SYSLOG_PORT`
+- il listener accetta payload syslog con header RFC3164/RFC5424, rimuove il prefisso e passa il body all’ingestor Sophos
+- il client IP UDP viene usato come fallback per il `management_ip` del firewall se non configurato esplicitamente
+
+### 5.2C Poller Sophos SNMP
+
+- servizio dedicato `sophos-snmp` separato dal backend HTTP
+- polling periodico configurabile via `NETWORK_SOPHOS_SNMP_INTERVAL_SECONDS`
+- metriche standard lette da MIB supportate ufficialmente da Sophos Firewall: `sysName`, `sysDescr`, `sysUpTime`, `ifNumber`
+- supporto a OID custom via `NETWORK_SOPHOS_SNMP_CUSTOM_OIDS` per aggiungere metriche del MIB Sophos reale dopo il download dal firewall
+
+### 5.2D Correlazione traffico per dispositivo
+
+- il dettaglio dispositivo aggrega gli eventi `network_firewall_events` delle ultime 24 ore correlati per `device_id`, `src_ip` o `dst_ip`
+- il riepilogo espone traffico in ingresso/uscita, eventi consentiti/bloccati, peer principali e ultimi eventi traffico
+- i peer pubblici vengono arricchiti con label leggibili usando, in ordine: `domain` / hostname da `url` del log Sophos, reverse DNS, fallback RDAP/organizzazione
+
+### 5.2E Import censimento dispositivi
+
+- script operativo: `backend/scripts/import_network_census_xlsx.py`
+- sorgente supportata: Excel con colonne `TELEFONO INTERNO`, `NOME`, `SERVIZIO`, `IP`, `LICENZA OFFICE`
+- matching primario per `ip_address` sui device gia presenti in GAIA
+- campi aggiornati senza toccare i metadati tecnici di discovery: `display_name`, `location_hint`, `notes`, `is_known_device`
+- il contesto di censimento viene tracciato in `notes` con marcatore `[Censimento CBO]`
 
 ### 5.3 Struttura cartelle
 

@@ -9,6 +9,7 @@ class NetworkDashboardSummary(BaseModel):
     online_devices: int
     offline_devices: int
     open_alerts: int
+    firewalls_online: int = 0
     scans_last_24h: int
     floor_plans: int
     latest_scan_at: datetime | None
@@ -34,6 +35,40 @@ class NetworkDeviceHistoryEntry(BaseModel):
     hostname: str | None = None
     ip_address: str
     open_ports: str | None = None
+
+
+class NetworkDeviceTrafficPeerSummary(BaseModel):
+    ip_address: str
+    label: str | None = None
+    events_count: int
+    bytes_in: int
+    bytes_out: int
+
+
+class NetworkDeviceTrafficEventSummary(BaseModel):
+    id: int
+    event_type: str
+    severity: str
+    protocol: str | None = None
+    src_ip: str | None = None
+    dst_ip: str | None = None
+    peer_ip: str | None = None
+    peer_label: str | None = None
+    bytes_in: int = 0
+    bytes_out: int = 0
+    observed_at: datetime
+
+
+class NetworkDeviceTrafficSummary(BaseModel):
+    window_hours: int = 24
+    total_events: int = 0
+    allowed_events: int = 0
+    blocked_events: int = 0
+    bytes_in: int = 0
+    bytes_out: int = 0
+    last_observed_at: datetime | None = None
+    top_peers: list[NetworkDeviceTrafficPeerSummary] = Field(default_factory=list)
+    recent_events: list[NetworkDeviceTrafficEventSummary] = Field(default_factory=list)
 
 
 class NetworkDeviceResponse(BaseModel):
@@ -65,6 +100,7 @@ class NetworkDeviceResponse(BaseModel):
     updated_at: datetime
     positions: list[DevicePositionResponse] = Field(default_factory=list)
     scan_history: list[NetworkDeviceHistoryEntry] = Field(default_factory=list)
+    traffic_summary: NetworkDeviceTrafficSummary | None = None
 
 
 class NetworkDeviceUpdateRequest(BaseModel):
@@ -221,3 +257,59 @@ class DevicePositionUpdateRequest(BaseModel):
     x: float
     y: float
     label: str | None = Field(default=None, max_length=255)
+
+
+class NetworkFirewallResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    vendor: str
+    name: str
+    model_name: str | None = None
+    serial_number: str | None = None
+    management_ip: str | None = None
+    status: str
+    metadata_sources: dict[str, Any] | None = None
+    last_seen_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class NetworkFirewallEventResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    firewall_id: int
+    device_id: int | None = None
+    source: str
+    event_type: str
+    severity: str
+    log_id: str | None = None
+    message: str | None = None
+    src_ip: str | None = None
+    dst_ip: str | None = None
+    protocol: str | None = None
+    raw_payload: dict[str, Any] | None = None
+    observed_at: datetime
+
+
+class NetworkFirewallMetricResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    firewall_id: int
+    metric_key: str
+    metric_value: float | None = None
+    metric_text: str | None = None
+    unit: str | None = None
+    severity: str
+    raw_payload: dict[str, Any] | None = None
+    observed_at: datetime
+
+
+class SophosSyslogIngestRequest(BaseModel):
+    message: str = Field(min_length=1)
+    firewall_id: int | None = None
+    firewall_name: str | None = Field(default=None, max_length=255)
+    management_ip: str | None = Field(default=None, max_length=64)
+    observed_at: datetime | None = None
