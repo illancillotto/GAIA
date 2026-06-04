@@ -1,6 +1,6 @@
 # Progress Inaz
 
-Data aggiornamento: 2026-06-03
+Data aggiornamento: 2026-06-04
 
 ## Stato attuale
 
@@ -48,6 +48,7 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
 - dashboard `/inaz`;
 - pagina `/inaz/settings` per gestione credenziali Inaz;
 - lista `/inaz/collaboratori`;
+- apertura dettaglio collaboratore in modale embedded dalla lista, con fallback alla pagina completa;
 - dettaglio `/inaz/collaboratori/[id]` con:
   - cartellino periodo;
   - riepilogo eventi;
@@ -58,10 +59,11 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
   - stato giornata;
   - riepilogo e totali;
   - richieste e anomalie;
-- pagina `/inaz/import` con preview e conferma import;
+- route `/inaz/import` mantenuta solo come redirect tecnico verso `/inaz/sync`, non piu esposta come flusso operativo utente;
 - pagina `/inaz/export` con download `.xlsm`;
 - pagina `/inaz/export` con preview dataset del mese, perimetro collaboratori e KPI di righe/giorni speciali;
 - pagina `/inaz/sync` con avvio job live, polling stato, retry e storico run;
+- storico `/inaz/sync` con dettaglio espandibile di avanzamento, collaboratore corrente, stato worker e ultimo errore;
 - navigazione modulo aggiornata in sidebar e module switcher.
 
 ### Sync live
@@ -70,13 +72,16 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
 - aggiunto worker Python separato avviato fuori dal processo FastAPI;
 - integrazione con lo scraper esterno `inaz-scraper` tramite worker dedicato;
 - login automatico con credenziali cifrate selezionate dal vault `Inaz`;
-- ogni run live produce artefatto JSON persistito su filesystem e poi riusa il normale import GAIA;
+- ogni run live produce ancora artefatti su filesystem (`json`, `log`, `summary`, `progress`, `events`) per diagnostica;
+- il worker salva progressivamente a DB i collaboratori completati, senza aspettare piu l'import finale monolitico;
+- il job aggiorna un checkpoint persistito in `inaz_sync_jobs.params_json.checkpoint.completed_employee_codes`;
+- il retry riparte dai collaboratori non ancora persistiti, invece di ricominciare da `1/N`;
 - retry applicativo disponibile fino al limite configurato;
 - cancel e delete dei job falliti/storici disponibili da UI.
 
 ### Test e verifica
 
-- aggiornati test backend `backend/tests/test_inaz_api.py` sul nuovo flusso collaboratori JSON/XLSM;
+- aggiornati test backend `backend/tests/test_inaz_api.py` sul nuovo flusso collaboratori/sync/XLSM;
 - aggiunti test unitari backend `backend/tests/test_inaz_schedule_engine.py` per:
   - Martedi della Sartiglia e Pasquetta;
   - sabato alternato operai catasto;
@@ -84,7 +89,8 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
   - scrittura corretta delle colonne speciali in `Archivio2`;
 - aggiunti test per la precedenza `detail Inaz > template fallback`;
 - aggiunti test frontend iniziali `frontend/tests/unit/inaz-pages.test.tsx`;
-- typecheck frontend completato con successo;
+- `pytest backend/tests/test_inaz_api.py tests/test_inaz_schedule_engine.py -q`: ok;
+- `frontend npm run typecheck`: ok;
 - verifica smoke backend eseguita su parser JSON e compilazione XLSM.
 
 ## Gap aperti
@@ -97,13 +103,16 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
 - sync live ancora minimale:
   - nessuna policy di retry automatica schedulata;
   - nessuna orchestrazione multi-worker o schedulazione periodica;
+- la persistenza progressiva e stata introdotta, ma va ancora consolidata con:
+  - piu test specifici di resume dopo crash/restart;
+  - eventuale tabella dedicata `sync job items` se servira audit e retry per singolo collaboratore;
 - resta solo un warning non bloccante nei test export `openpyxl/zipfile`;
 - test end-to-end con credenziali reali e run live su mese completo ancora da consolidare come procedura operativa.
 
 ## Prossimi passi consigliati
 
-1. calendario mensile dedicato nel dettaglio collaboratore;
-2. gestione UI festivita/template orari/assegnazioni;
-3. preview differenziale import e duplicate handling piu ricco;
-4. preset template export e selector filesystem assistito;
+1. consolidare il resume post-crash con test live e recovery automatica dei job parziali;
+2. calendario mensile dedicato nel dettaglio collaboratore;
+3. gestione UI festivita/template orari/assegnazioni;
+4. preview differenziale e duplicate handling piu ricco lato giornaliere;
 5. run end-to-end documentata su credenziale reale e validazione `.xlsm` su mese completo.
