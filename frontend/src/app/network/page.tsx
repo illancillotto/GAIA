@@ -12,6 +12,7 @@ import {
   ModuleWorkspaceKpiTile,
   ModuleWorkspaceNoticeCard,
 } from "@/components/layout/module-workspace-hero";
+import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { AlertTriangleIcon, RefreshIcon, ServerIcon } from "@/components/ui/icons";
 import { getNetworkAlerts, getNetworkDashboard, getNetworkDevices, getNetworkFirewalls, getNetworkFirewallMetrics, triggerNetworkScan } from "@/lib/api";
@@ -92,6 +93,7 @@ function DashboardContent({ token }: { token: string }) {
 
   const filteredOnlineDevices = onlineDevices.filter((device) => {
     const haystack = [
+      device.resolved_label,
       device.display_name,
       device.hostname,
       device.ip_address,
@@ -105,6 +107,7 @@ function DashboardContent({ token }: { token: string }) {
   });
   const filteredRecentDevices = recentDevices.filter((device) => {
     const haystack = [
+      device.resolved_label,
       device.display_name,
       device.hostname,
       device.ip_address,
@@ -120,6 +123,7 @@ function DashboardContent({ token }: { token: string }) {
     const haystack = [alert.title, alert.message, alert.alert_type, alert.severity].filter(Boolean).join(" ").toLowerCase();
     return haystack.includes(alertFilter.trim().toLowerCase());
   });
+  const unassignedDevices = recentDevices.filter((device) => !device.assigned_user_id);
 
   return (
     <div className="page-stack">
@@ -208,15 +212,61 @@ function DashboardContent({ token }: { token: string }) {
                   className="flex w-full items-center justify-between rounded-lg border border-gray-100 px-4 py-3 text-left transition hover:bg-gray-50"
                 >
                   <div>
-                    <p className="text-sm font-medium text-gray-900">{device.display_name || device.hostname || device.ip_address}</p>
+                    <p className="text-sm font-medium text-gray-900">{device.resolved_label || device.display_name || device.hostname || device.ip_address}</p>
                     <p className="mt-1 text-xs text-gray-500">
                       {device.ip_address} · {device.mac_address || "MAC n/d"}
                     </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {device.assigned_user?.is_placeholder_profile ? <Badge variant="warning">Profilo placeholder</Badge> : null}
+                    </div>
                     {device.asset_label || device.notes ? (
                       <p className="mt-1 text-xs text-gray-500">
                         {device.asset_label || "Nessuna label"}{device.notes ? ` · ${device.notes}` : ""}
                       </p>
                     ) : null}
+                  </div>
+                  <NetworkStatusBadge status={device.status} />
+                </button>
+              ))}
+            </div>
+          )}
+        </article>
+
+        <article className="panel-card">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <p className="section-title">Device non assegnati</p>
+              <p className="section-copy">Host senza collegamento a `application_users`.</p>
+            </div>
+            <BadgeCount value={unassignedDevices.length} />
+          </div>
+
+          {isLoading ? (
+            <p className="text-sm text-gray-500">Caricamento dispositivi in corso.</p>
+          ) : unassignedDevices.length === 0 ? (
+            <EmptyState
+              icon={ServerIcon}
+              title="Nessun device non assegnato"
+              description="Tutti i dispositivi recenti hanno gia un utente o un profilo collegato."
+            />
+          ) : (
+            <div className="max-h-[28rem] space-y-3 overflow-y-auto pr-1">
+              {unassignedDevices.map((device) => (
+                <button
+                  key={device.id}
+                  type="button"
+                  onClick={() => setSelectedDeviceId(device.id)}
+                  className="flex w-full items-center justify-between rounded-lg border border-amber-100 bg-amber-50/40 px-4 py-3 text-left transition hover:bg-amber-50"
+                >
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">{device.resolved_label || device.display_name || device.hostname || device.ip_address}</p>
+                    <p className="mt-1 text-xs text-gray-500">
+                      {device.ip_address} · {device.device_type || "tipo n/d"}
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <Badge variant="warning">Senza utente</Badge>
+                      {device.is_known_device ? <Badge variant="info">Conosciuto</Badge> : null}
+                    </div>
                   </div>
                   <NetworkStatusBadge status={device.status} />
                 </button>
@@ -313,10 +363,14 @@ function DashboardContent({ token }: { token: string }) {
                   className="flex w-full items-center justify-between rounded-lg border border-gray-100 px-4 py-3 text-left transition hover:bg-gray-50"
                 >
                   <div>
-                    <p className="text-sm font-medium text-gray-900">{device.display_name || device.hostname || device.ip_address}</p>
+                    <p className="text-sm font-medium text-gray-900">{device.resolved_label || device.display_name || device.hostname || device.ip_address}</p>
                     <p className="mt-1 text-xs text-gray-500">
                       {device.ip_address} · {device.mac_address || "MAC n/d"} · {device.device_type || "tipo n/d"}
                     </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      {device.assigned_user?.is_placeholder_profile ? <Badge variant="warning">Profilo placeholder</Badge> : null}
+                      {!device.assigned_user_id ? <Badge variant="warning">Senza utente</Badge> : null}
+                    </div>
                     {device.asset_label || device.notes ? (
                       <p className="mt-1 text-xs text-gray-500">
                         {device.asset_label || "Nessuna label"}{device.notes ? ` · ${device.notes}` : ""}

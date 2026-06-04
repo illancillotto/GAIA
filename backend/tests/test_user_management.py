@@ -69,6 +69,9 @@ def test_admin_users_lifecycle_and_module_flags() -> None:
         json={
             "username": "alice",
             "email": "alice@example.local",
+            "full_name": "Alice Example",
+            "office_location": "Ufficio protocollo",
+            "phone_extension": "245",
             "password": "secret123",
             "role": "viewer",
             "is_active": True,
@@ -82,6 +85,8 @@ def test_admin_users_lifecycle_and_module_flags() -> None:
         },
     )
     assert create_resp.status_code == 201
+    assert create_resp.json()["full_name"] == "Alice Example"
+    assert create_resp.json()["phone_extension"] == "245"
     assert create_resp.json()["enabled_modules"] == ["accessi", "rete", "catasto", "utenze", "inaz"]
 
     list_resp = client.get("/admin/users", headers={"Authorization": f"Bearer {token}"})
@@ -94,6 +99,20 @@ def test_admin_users_lifecycle_and_module_flags() -> None:
     )
     assert patch_resp.status_code == 200
     assert patch_resp.json()["enabled_modules"] == ["inventario", "catasto", "utenze", "ruolo", "inaz"]
+
+    update_resp = client.put(
+        f"/admin/users/{create_resp.json()['id']}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "full_name": "Alice Esempio",
+            "office_location": "CED",
+            "phone_extension": "301",
+        },
+    )
+    assert update_resp.status_code == 200
+    assert update_resp.json()["full_name"] == "Alice Esempio"
+    assert update_resp.json()["office_location"] == "CED"
+    assert update_resp.json()["phone_extension"] == "301"
 
 
 def test_viewer_cannot_access_admin_users() -> None:

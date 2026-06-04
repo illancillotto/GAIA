@@ -47,6 +47,9 @@ def create_application_user(db: Session, payload: ApplicationUserCreate) -> Appl
     user = ApplicationUser(
         username=payload.username,
         email=str(payload.email),
+        full_name=payload.full_name,
+        office_location=payload.office_location,
+        phone_extension=payload.phone_extension,
         password_hash=hash_password(payload.password),
         role=payload.role,
         is_active=payload.is_active,

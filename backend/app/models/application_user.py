@@ -1,5 +1,6 @@
 from datetime import datetime
 from enum import Enum
+from typing import TYPE_CHECKING
 
 try:
     from enum import StrEnum
@@ -10,9 +11,12 @@ except ImportError:  # pragma: no cover
 
 
 from sqlalchemy import Boolean, DateTime, Integer, String, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+
+if TYPE_CHECKING:
+    from app.modules.network.models import NetworkDevice
 
 
 class ApplicationUserRole(StrEnum):
@@ -33,6 +37,9 @@ class ApplicationUser(Base):
     email: Mapped[str] = mapped_column(
         String(255), unique=True, index=True, nullable=False
     )
+    full_name: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
+    office_location: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    phone_extension: Mapped[str | None] = mapped_column(String(64), nullable=True)
     password_hash: Mapped[str] = mapped_column(String(512), nullable=False)
     role: Mapped[str] = mapped_column(
         String(32), default=ApplicationUserRole.VIEWER.value, nullable=False
@@ -61,6 +68,10 @@ class ApplicationUser(Base):
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,
+    )
+    assigned_network_devices: Mapped[list["NetworkDevice"]] = relationship(
+        "NetworkDevice",
+        back_populates="assigned_user",
     )
 
     @property

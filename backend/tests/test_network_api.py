@@ -64,6 +64,21 @@ def setup_database(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, Non
     db.add(user)
     db.flush()
 
+    mapped_user = ApplicationUser(
+        username="operatore.ced",
+        email="operatore.ced@example.local",
+        full_name="Operatore CED",
+        office_location="CED piano terra",
+        phone_extension="301",
+        password_hash=hash_password("secret123"),
+        role=ApplicationUserRole.VIEWER.value,
+        is_active=True,
+        module_accessi=True,
+        module_rete=True,
+    )
+    db.add(mapped_user)
+    db.flush()
+
     scan = NetworkScan(
         network_range="192.168.1.0/24",
         scan_type="incremental",
@@ -80,6 +95,7 @@ def setup_database(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, Non
 
     device_one = NetworkDevice(
         last_scan_id=scan.id,
+        assigned_user_id=mapped_user.id,
         ip_address="192.168.1.10",
         mac_address="aa:bb:cc:dd:ee:01",
         hostname="switch-core",
@@ -287,6 +303,17 @@ def test_network_devices_support_filters() -> None:
     assert payload["items"][0]["is_known_device"] is True
 
 
+def test_network_device_detail_prefers_assigned_application_user_label() -> None:
+    response = client.get("/network/devices/1", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["resolved_label"] == "Operatore CED"
+    assert payload["label_source"] == "application_user"
+    assert payload["assigned_user"]["username"] == "operatore.ced"
+    assert payload["assigned_user"]["phone_extension"] == "301"
+
+
 def test_network_device_metadata_can_be_updated() -> None:
     response = client.patch(
         "/network/devices/2",
@@ -307,6 +334,20 @@ def test_network_device_metadata_can_be_updated() -> None:
     assert payload["location_hint"] == "Ufficio contabilita"
     assert payload["notes"] == "Postazione fissa piano primo"
     assert payload["is_known_device"] is False
+
+
+def test_network_device_can_be_assigned_to_application_user() -> None:
+    response = client.patch(
+        "/network/devices/2",
+        headers=auth_headers(),
+        json={"assigned_user_id": 2},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["assigned_user_id"] == 2
+    assert payload["resolved_label"] == "Operatore CED"
+    assert payload["label_source"] == "application_user"
 
 
 def test_network_device_can_toggle_known_state_and_create_unknown_alert() -> None:

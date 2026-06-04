@@ -200,3 +200,26 @@ Lo script:
 - aggiorna solo i device gia presenti in GAIA
 - compila `display_name`, `location_hint`, `notes`, `is_known_device`
 - registra in `notes` il marcatore `[Censimento CBO]` con interno telefonico, servizio e licenza Office se disponibile
+
+## Sync device -> application_users
+
+Per trasformare i label device gia presenti in mapping espliciti verso `application_users`:
+
+```bash
+PYTHONPATH=backend DATABASE_URL='postgresql+psycopg://<user>:<password>@127.0.0.1:5434/<db>' \
+python3 backend/scripts/sync_network_devices_to_application_users.py
+```
+
+Per applicare le modifiche:
+
+```bash
+PYTHONPATH=backend DATABASE_URL='postgresql+psycopg://<user>:<password>@127.0.0.1:5434/<db>' \
+python3 backend/scripts/sync_network_devices_to_application_users.py --apply
+```
+
+Lo script:
+
+- cerca match esatti normalizzati tra `network_devices.display_name` e `application_users`
+- assegna `network_devices.assigned_user_id` quando trova un solo match non ambiguo
+- valorizza `application_users.full_name`, `office_location` e `phone_extension` se mancanti
+- resta in `dry-run` di default e stampa preview dei match, dei mancati match e dei casi ambigui

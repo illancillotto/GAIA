@@ -20,6 +20,9 @@ def normalize_email(value: str) -> str:
 class ApplicationUserCreate(BaseModel):
     username: str
     email: str
+    full_name: str | None = None
+    office_location: str | None = None
+    phone_extension: str | None = None
     password: str
     role: str = "viewer"
     is_active: bool = True
@@ -48,6 +51,9 @@ class ApplicationUserCreate(BaseModel):
 
 class ApplicationUserUpdate(BaseModel):
     email: str | None = None
+    full_name: str | None = None
+    office_location: str | None = None
+    phone_extension: str | None = None
     password: str | None = None
     role: str | None = None
     is_active: bool | None = None
@@ -82,6 +88,9 @@ class ApplicationUserResponse(BaseModel):
     id: int
     username: str
     email: str
+    full_name: str | None = None
+    office_location: str | None = None
+    phone_extension: str | None = None
     role: str
     is_active: bool
     module_accessi: bool

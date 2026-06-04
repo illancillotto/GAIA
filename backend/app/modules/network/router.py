@@ -28,6 +28,7 @@ from app.modules.network.schemas import (
     NetworkAlertUpdateRequest,
     NetworkDashboardSummary,
     NetworkDeviceListResponse,
+    NetworkAssignedUserSummary,
     NetworkDeviceTrafficEventSummary,
     NetworkDeviceTrafficPeerSummary,
     NetworkDeviceTrafficSummary,
@@ -68,6 +69,18 @@ from app.modules.network.services import (
 router = APIRouter(prefix="/network", tags=["network"])
 
 
+def _resolve_device_label(device: NetworkDevice) -> tuple[str, str]:
+    if device.assigned_user:
+        if device.assigned_user.full_name:
+            return device.assigned_user.full_name, "application_user"
+        return device.assigned_user.username, "application_user"
+    if device.display_name:
+        return device.display_name, "device"
+    if device.hostname:
+        return device.hostname, "hostname"
+    return device.ip_address, "ip_address"
+
+
 def _serialize_device(
     device: NetworkDevice,
     *,
@@ -75,14 +88,18 @@ def _serialize_device(
     scan_history: list[NetworkScanDevice] | None = None,
     traffic_summary: NetworkDeviceTrafficSummary | None = None,
 ) -> NetworkDeviceResponse:
+    resolved_label, label_source = _resolve_device_label(device)
     payload = {
         "id": device.id,
         "last_scan_id": device.last_scan_id,
+        "assigned_user_id": device.assigned_user_id,
         "ip_address": device.ip_address,
         "mac_address": device.mac_address,
         "hostname": device.hostname,
         "hostname_source": device.hostname_source,
         "display_name": device.display_name,
+        "resolved_label": resolved_label,
+        "label_source": label_source,
         "asset_label": device.asset_label,
         "vendor": device.vendor,
         "model_name": device.model_name,
@@ -100,6 +117,21 @@ def _serialize_device(
         "last_seen_at": device.last_seen_at,
         "created_at": device.created_at,
         "updated_at": device.updated_at,
+        "assigned_user": NetworkAssignedUserSummary(
+            id=device.assigned_user.id,
+            username=device.assigned_user.username,
+            email=device.assigned_user.email,
+            is_active=device.assigned_user.is_active,
+            full_name=device.assigned_user.full_name,
+            office_location=device.assigned_user.office_location,
+            phone_extension=device.assigned_user.phone_extension,
+            is_placeholder_profile=(
+                (not device.assigned_user.is_active)
+                and device.assigned_user.email.endswith("@users.local")
+            ),
+        )
+        if device.assigned_user
+        else None,
         "positions": [DevicePositionResponse.model_validate(position) for position in positions or []],
         "scan_history": [
             {
@@ -463,6 +495,10 @@ def patch_device(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
 
     updates = payload.model_dump(exclude_unset=True)
+    if "assigned_user_id" in updates and updates["assigned_user_id"] is not None:
+        assigned_user = db.get(ApplicationUser, updates["assigned_user_id"])
+        if assigned_user is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assigned user not found")
     for field_name, field_value in updates.items():
         setattr(device, field_name, field_value)
 

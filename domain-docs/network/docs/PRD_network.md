@@ -93,10 +93,12 @@ L'interfaccia presenta i dispositivi rilevati su una mappa interattiva organizza
 ### 2.6 Enrichment e naming device
 
 - Ogni dispositivo puo avere un nome operativo assegnato manualmente (`display_name`) e una etichetta inventariale (`asset_label`)
+- Quando presente un collegamento a `application_users`, il label operativo mostrato in UI viene risolto dal profilo utente (`full_name`, fallback `username`)
 - Il backend conserva anche il nome osservato automaticamente (`hostname`) e la sua sorgente (`hostname_source`)
 - Il sistema salva le sorgenti di arricchimento effettivamente usate (`metadata_sources`) per rendere ispezionabile il dato
 - L'ordine di preferenza del nome osservato e: `nmap`, `snmp`, `netbios`, `mdns`, `dns`
 - SNMP usa community globali e opzionalmente profili per subnet
+- `network_devices.assigned_user_id` collega esplicitamente il device all'utente applicativo quando il mapping e noto
 
 ---
 
@@ -228,6 +230,22 @@ Formato `NETWORK_SNMP_COMMUNITY_PROFILES`:
 - matching primario per `ip_address` sui device gia presenti in GAIA
 - campi aggiornati senza toccare i metadati tecnici di discovery: `display_name`, `location_hint`, `notes`, `is_known_device`
 - il contesto di censimento viene tracciato in `notes` con marcatore `[Censimento CBO]`
+
+### 5.2F Mapping device -> application_users
+
+- script operativo: `backend/scripts/sync_network_devices_to_application_users.py`
+- matching primario per normalizzazione del nome persona tra `network_devices.display_name` e profilo/username/email local-part di `application_users`
+- lo script puo:
+  - valorizzare `network_devices.assigned_user_id`
+  - copiare `display_name` verso `application_users.full_name` quando assente
+  - copiare `location_hint` verso `application_users.office_location` quando assente
+  - estrarre l'interno telefonico da `notes` e salvarlo in `application_users.phone_extension`
+- il label operativo esposto in UI usa questo ordine:
+  1. `application_users.full_name`
+  2. `application_users.username`
+  3. `network_devices.display_name`
+  4. `network_devices.hostname`
+  5. `network_devices.ip_address`
 
 ### 5.3 Struttura cartelle
 

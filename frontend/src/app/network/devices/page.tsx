@@ -40,18 +40,22 @@ function statusOrder(status: string): number {
 const columns: ColumnDef<NetworkDevice>[] = [
   {
     id: "host",
-    accessorFn: (row) => row.display_name || row.hostname || row.ip_address,
+    accessorFn: (row) => row.resolved_label || row.display_name || row.hostname || row.ip_address,
     header: "Host",
     sortingFn: (left, right) => {
-      const leftValue = (left.original.display_name || left.original.hostname || left.original.ip_address).toLowerCase();
-      const rightValue = (right.original.display_name || right.original.hostname || right.original.ip_address).toLowerCase();
+      const leftValue = (left.original.resolved_label || left.original.display_name || left.original.hostname || left.original.ip_address).toLowerCase();
+      const rightValue = (right.original.resolved_label || right.original.display_name || right.original.hostname || right.original.ip_address).toLowerCase();
       return leftValue.localeCompare(rightValue, "it");
     },
     cell: ({ row }) => (
       <div>
-        <p className="font-medium text-gray-900">{row.original.display_name || row.original.hostname || row.original.ip_address}</p>
+        <p className="font-medium text-gray-900">{row.original.resolved_label || row.original.display_name || row.original.hostname || row.original.ip_address}</p>
         <div className="mt-1 flex flex-wrap items-center gap-2">
-          <span className="text-xs text-gray-500">{row.original.hostname || row.original.dns_name || "Host non risolto"}</span>
+          <span className="text-xs text-gray-500">
+            {row.original.assigned_user?.username
+              ? `Utente ${row.original.assigned_user.username}`
+              : row.original.hostname || row.original.dns_name || "Host non risolto"}
+          </span>
         </div>
         <p className="text-xs text-gray-500">{row.original.ip_address}</p>
       </div>
@@ -150,12 +154,15 @@ function DevicesContent({ token }: { token: string }) {
   const normalizedSearch = search.trim().toLowerCase();
   const filteredItems = items.filter((item) => {
     const searchHaystack = [
+      item.resolved_label,
       item.display_name,
       item.hostname,
       item.ip_address,
       item.mac_address,
       item.asset_label,
       item.notes,
+      item.assigned_user?.username,
+      item.assigned_user?.full_name,
       item.vendor,
       item.model_name,
       item.device_type,

@@ -223,9 +223,9 @@ function FloorPlanContent({ token }: { token: string }) {
                           device.status === "online" ? "bg-green-600" : "bg-red-600"
                         }`}
                       >
-                        <span className="sr-only">{device.hostname || device.ip_address}</span>
+                        <span className="sr-only">{device.resolved_label || device.hostname || device.ip_address}</span>
                         <div className="pointer-events-none absolute left-7 top-1/2 hidden w-56 -translate-y-1/2 rounded-lg border border-gray-200 bg-white p-3 text-xs shadow-lg group-hover:block">
-                          <p className="font-medium text-gray-900">{device.display_name || device.hostname || device.ip_address}</p>
+                          <p className="font-medium text-gray-900">{device.resolved_label || device.display_name || device.hostname || device.ip_address}</p>
                           <p className="mt-1 text-gray-500">{device.ip_address}</p>
                           <p className="mt-1 text-gray-500">{position.label || "Posizione non etichettata"}</p>
                           {isSavingPosition === position.device_id ? <p className="mt-2 text-[#1D4E35]">Salvataggio…</p> : null}
@@ -247,7 +247,7 @@ function FloorPlanContent({ token }: { token: string }) {
                 return (
                   <div key={position.id} className="rounded-lg border border-gray-100 px-4 py-3">
                     <div className="flex items-center justify-between gap-3">
-                      <p className="text-sm font-medium text-gray-900">{device.display_name || device.hostname || device.ip_address}</p>
+                      <p className="text-sm font-medium text-gray-900">{device.resolved_label || device.display_name || device.hostname || device.ip_address}</p>
                       <NetworkStatusBadge status={device.status} />
                     </div>
                     <p className="mt-1 text-xs text-gray-500">{device.ip_address}</p>
@@ -267,7 +267,7 @@ function FloorPlanContent({ token }: { token: string }) {
                     className="rounded-lg border border-dashed border-gray-200 px-4 py-3 text-left transition hover:bg-gray-50"
                     onClick={() => void handleAddDevice(device.id)}
                   >
-                    <p className="text-sm font-medium text-gray-900">{device.display_name || device.hostname || device.ip_address}</p>
+                    <p className="text-sm font-medium text-gray-900">{device.resolved_label || device.display_name || device.hostname || device.ip_address}</p>
                     <p className="mt-1 text-xs text-gray-500">{device.ip_address}</p>
                   </button>
                 ))}

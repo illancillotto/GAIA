@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 
 import { NetworkStatusBadge } from "@/components/network/network-status-badge";
+import { Badge } from "@/components/ui/badge";
 import { getNetworkDevice, updateNetworkDevice } from "@/lib/api";
 import { getNetworkDeviceAdminUrl } from "@/lib/network-device-utils";
 import type { NetworkDevice } from "@/types/api";
@@ -139,7 +140,7 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1D4E35]">Dettaglio dispositivo</p>
             <h2 className="mt-2 text-2xl font-semibold text-gray-900">
-              {selectedDevice?.display_name || selectedDevice?.hostname || selectedDevice?.ip_address || `Dispositivo #${deviceId}`}
+              {selectedDevice?.resolved_label || selectedDevice?.display_name || selectedDevice?.hostname || selectedDevice?.ip_address || `Dispositivo #${deviceId}`}
             </h2>
             <p className="mt-1 text-sm text-gray-500">Vista rapida senza lasciare il contesto operativo.</p>
           </div>
@@ -162,10 +163,13 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
                       <div>
                         <p className="section-title">Identità dispositivo</p>
                         <p className="mt-1 text-lg font-medium text-gray-900">
-                          {selectedDevice.display_name || selectedDevice.hostname || selectedDevice.ip_address}
+                          {selectedDevice.resolved_label || selectedDevice.display_name || selectedDevice.hostname || selectedDevice.ip_address}
                         </p>
                         <p className="mt-1 text-sm text-gray-500">
                           {selectedDevice.asset_label || selectedDevice.dns_name || "Nessuna label assegnata"}
+                        </p>
+                        <p className="mt-1 text-xs text-gray-500">
+                          Fonte label: {selectedDevice.label_source === "application_user" ? "utente applicativo" : selectedDevice.label_source}
                         </p>
                         {adminUrl ? (
                           <a
@@ -212,6 +216,31 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
                       <div>
                         <dt className="label-caption">Sorgente nome</dt>
                         <dd className="mt-1 text-sm text-gray-800">{selectedDevice.hostname_source || "n/d"}</dd>
+                      </div>
+                      <div>
+                        <dt className="label-caption">Utente associato</dt>
+                        <dd className="mt-1 text-sm text-gray-800">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span>{selectedDevice.assigned_user?.full_name || selectedDevice.assigned_user?.username || "n/d"}</span>
+                            {selectedDevice.assigned_user?.is_placeholder_profile ? (
+                              <Badge variant="warning">Profilo placeholder</Badge>
+                            ) : null}
+                          </div>
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="label-caption">Interno</dt>
+                        <dd className="mt-1 text-sm text-gray-800">{selectedDevice.assigned_user?.phone_extension || "n/d"}</dd>
+                      </div>
+                      <div>
+                        <dt className="label-caption">Stato profilo</dt>
+                        <dd className="mt-1 text-sm text-gray-800">
+                          {selectedDevice.assigned_user
+                            ? selectedDevice.assigned_user.is_active
+                              ? "Attivo"
+                              : "Inattivo"
+                            : "n/d"}
+                        </dd>
                       </div>
                       <div>
                         <dt className="label-caption">Porte aperte</dt>
@@ -272,12 +301,12 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
                   {saveMessage ? <p className="mb-3 text-sm text-[#1D4E35]">{saveMessage}</p> : null}
                   <div className="space-y-4">
                     <label className="block text-sm font-medium text-gray-700">
-                      Nome dispositivo
+                      Label locale dispositivo
                       <input
                         className="form-control mt-1"
                         value={displayName}
                         onChange={(event) => setDisplayName(event.target.value)}
-                        placeholder="es. Stampante Protocollo"
+                        placeholder="Fallback se non esiste un utente associato"
                       />
                     </label>
                     <label className="block text-sm font-medium text-gray-700">

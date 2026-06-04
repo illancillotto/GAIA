@@ -71,6 +71,17 @@ class NetworkDeviceTrafficSummary(BaseModel):
     recent_events: list[NetworkDeviceTrafficEventSummary] = Field(default_factory=list)
 
 
+class NetworkAssignedUserSummary(BaseModel):
+    id: int
+    username: str
+    email: str
+    is_active: bool
+    full_name: str | None = None
+    office_location: str | None = None
+    phone_extension: str | None = None
+    is_placeholder_profile: bool = False
+
+
 class NetworkDeviceResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -81,6 +92,8 @@ class NetworkDeviceResponse(BaseModel):
     hostname: str | None
     hostname_source: str | None = None
     display_name: str | None = None
+    resolved_label: str
+    label_source: str
     asset_label: str | None = None
     vendor: str | None = None
     model_name: str | None = None
@@ -94,6 +107,8 @@ class NetworkDeviceResponse(BaseModel):
     status: str
     is_monitored: bool
     open_ports: str | None
+    assigned_user_id: int | None = None
+    assigned_user: NetworkAssignedUserSummary | None = None
     first_seen_at: datetime
     last_seen_at: datetime
     created_at: datetime
@@ -111,6 +126,7 @@ class NetworkDeviceUpdateRequest(BaseModel):
     operating_system: str | None = None
     location_hint: str | None = None
     notes: str | None = None
+    assigned_user_id: int | None = None
     is_known_device: bool | None = None
     is_monitored: bool | None = None
 

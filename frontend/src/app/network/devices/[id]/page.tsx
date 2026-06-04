@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 
 import { NetworkModulePage } from "@/components/network/network-module-page";
 import { NetworkStatusBadge } from "@/components/network/network-status-badge";
+import { Badge } from "@/components/ui/badge";
 import { getNetworkDevice, updateNetworkDevice } from "@/lib/api";
 import { getNetworkDeviceAdminUrl } from "@/lib/network-device-utils";
 import type { NetworkDevice } from "@/types/api";
@@ -104,8 +105,11 @@ function DeviceDetailContent({ token, deviceId }: { token: string; deviceId: num
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="section-title">Identità dispositivo</p>
-            <p className="mt-1 text-lg font-medium text-gray-900">{device.display_name || device.hostname || device.ip_address}</p>
+            <p className="mt-1 text-lg font-medium text-gray-900">{device.resolved_label || device.display_name || device.hostname || device.ip_address}</p>
             <p className="mt-1 text-sm text-gray-500">{device.asset_label || device.dns_name || "Nessuna label assegnata"}</p>
+            <p className="mt-1 text-xs text-gray-500">
+              Fonte label: {device.label_source === "application_user" ? "utente applicativo" : device.label_source}
+            </p>
             {adminUrl ? (
               <a href={adminUrl} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-sm font-medium text-[#1D4E35] underline underline-offset-4">
                 Apri pagina admin
@@ -121,6 +125,10 @@ function DeviceDetailContent({ token, deviceId }: { token: string; deviceId: num
           </div>
           <div>
             <dt className="label-caption">Nome assegnato</dt>
+            <dd className="mt-1 text-sm text-gray-800">{device.resolved_label || "n/d"}</dd>
+          </div>
+          <div>
+            <dt className="label-caption">Label locale</dt>
             <dd className="mt-1 text-sm text-gray-800">{device.display_name || "n/d"}</dd>
           </div>
           <div>
@@ -162,6 +170,25 @@ function DeviceDetailContent({ token, deviceId }: { token: string; deviceId: num
           <div>
             <dt className="label-caption">Dispositivo conosciuto</dt>
             <dd className="mt-1 text-sm text-gray-800">{device.is_known_device ? "Si" : "No"}</dd>
+          </div>
+          <div>
+            <dt className="label-caption">Utente associato</dt>
+            <dd className="mt-1 text-sm text-gray-800">
+              <div className="flex flex-wrap items-center gap-2">
+                <span>{device.assigned_user?.full_name || device.assigned_user?.username || "n/d"}</span>
+                {device.assigned_user?.is_placeholder_profile ? <Badge variant="warning">Profilo placeholder</Badge> : null}
+              </div>
+            </dd>
+          </div>
+          <div>
+            <dt className="label-caption">Interno</dt>
+            <dd className="mt-1 text-sm text-gray-800">{device.assigned_user?.phone_extension || "n/d"}</dd>
+          </div>
+          <div>
+            <dt className="label-caption">Stato profilo</dt>
+            <dd className="mt-1 text-sm text-gray-800">
+              {device.assigned_user ? (device.assigned_user.is_active ? "Attivo" : "Inattivo") : "n/d"}
+            </dd>
           </div>
           <div>
             <dt className="label-caption">Pagina admin</dt>

@@ -1,11 +1,15 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+
+if TYPE_CHECKING:
+    from app.models.application_user import ApplicationUser
 
 
 class NetworkScan(Base):
@@ -59,6 +63,11 @@ class NetworkDevice(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
     last_scan_id: Mapped[int | None] = mapped_column(ForeignKey("network_scans.id", ondelete="SET NULL"), nullable=True, index=True)
+    assigned_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     ip_address: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     mac_address: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     hostname: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
@@ -85,6 +94,10 @@ class NetworkDevice(Base):
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,
+    )
+    assigned_user: Mapped["ApplicationUser | None"] = relationship(
+        "ApplicationUser",
+        back_populates="assigned_network_devices",
     )
 
 

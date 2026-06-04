@@ -786,11 +786,14 @@ export type NetworkDashboardSummary = {
 export type NetworkDevice = {
   id: number;
   last_scan_id: number | null;
+  assigned_user_id: number | null;
   ip_address: string;
   mac_address: string | null;
   hostname: string | null;
   hostname_source: string | null;
   display_name: string | null;
+  resolved_label: string;
+  label_source: string;
   asset_label: string | null;
   vendor: string | null;
   model_name: string | null;
@@ -804,6 +807,16 @@ export type NetworkDevice = {
   status: string;
   is_monitored: boolean;
   open_ports: string | null;
+  assigned_user: {
+    id: number;
+    username: string;
+    email: string;
+    is_active: boolean;
+    full_name: string | null;
+    office_location: string | null;
+    phone_extension: string | null;
+    is_placeholder_profile: boolean;
+  } | null;
   first_seen_at: string;
   last_seen_at: string;
   created_at: string;
@@ -856,6 +869,7 @@ export type NetworkDeviceUpdateInput = {
   operating_system?: string | null;
   location_hint?: string | null;
   notes?: string | null;
+  assigned_user_id?: number | null;
   is_known_device?: boolean;
   is_monitored?: boolean;
 };
