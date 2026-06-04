@@ -19,6 +19,24 @@ function formatMonthLabel(value: string): string {
   return new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric" }).format(new Date(`${value}T00:00:00`));
 }
 
+function formatDateTime(value: string | null | undefined): string {
+  if (!value) return "n/d";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("it-IT", {
+    dateStyle: "short",
+    timeStyle: "medium",
+  }).format(date);
+}
+
+function formatElapsed(seconds: number | null | undefined): string {
+  if (seconds == null || Number.isNaN(seconds)) return "n/d";
+  if (seconds < 60) return `${seconds.toFixed(1)}s`;
+  const minutes = Math.floor(seconds / 60);
+  const remainingSeconds = Math.round(seconds % 60);
+  return `${minutes}m ${remainingSeconds}s`;
+}
+
 export default function InazSyncPage() {
   const today = new Date();
   const [year, setYear] = useState(String(today.getFullYear()));
@@ -269,12 +287,35 @@ export default function InazSyncPage() {
             <div className="space-y-3">
               {jobs.map((job) => (
                 <div key={job.id} className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4">
+                  {(() => {
+                    const progress = job.params_json?.progress;
+                    const currentIndex = progress?.index ?? null;
+                    const totalCollaborators = progress?.total ?? progress?.total_collaborators ?? null;
+                    const currentEmployee = progress?.employee_code && progress?.name ? `${progress.employee_code} · ${progress.name}` : null;
+                    const completedCollaborators = progress?.completed_collaborators ?? 0;
+                    const failedCollaborators = progress?.failed_collaborators ?? progress?.error_count ?? 0;
+                    const progressSummary =
+                      currentIndex && totalCollaborators
+                        ? `Avanzamento ${currentIndex}/${totalCollaborators}`
+                        : progress?.last_event
+                          ? `Evento ${progress.last_event}`
+                          : null;
+
+                    return (
+                      <>
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                     <div className="space-y-1">
                       <p className="font-medium text-gray-900">{formatMonthLabel(job.period_start)}</p>
                       <p className="text-xs text-gray-500">
                         {job.status} · {job.credential_id ? `credenziale #${job.credential_id}` : "configurazione legacy"} · tentativo {job.attempt_count}/{job.max_attempts} · importati {job.records_imported} · scartati {job.records_skipped} · errori {job.records_errors}
                       </p>
+                      {progressSummary ? <p className="text-xs font-medium text-emerald-700">{progressSummary}</p> : null}
+                      {currentEmployee ? <p className="text-xs text-gray-700">Collaboratore corrente: {currentEmployee}</p> : null}
+                      {progress ? (
+                        <p className="text-xs text-gray-500">
+                          Completati {completedCollaborators} · Falliti {failedCollaborators} · Ultimo update {formatDateTime(progress.last_event_at)}
+                        </p>
+                      ) : null}
                       <p className="text-xs text-gray-500">
                         JSON: {job.json_artifact_path ?? "n/d"} · Log: {job.worker_log_path ?? "n/d"}
                       </p>
@@ -338,6 +379,59 @@ export default function InazSyncPage() {
                       ) : null}
                     </div>
                   </div>
+                  {progress ? (
+                    <details className="mt-4 rounded-xl border border-gray-200 bg-white/80 p-3">
+                      <summary className="cursor-pointer text-sm font-medium text-gray-800">
+                        Dettagli avanzamento
+                      </summary>
+                      <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                        <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-gray-500">Stato worker</p>
+                          <p className="mt-1 text-sm font-medium text-gray-900">{progress.state ?? job.status}</p>
+                          <p className="text-xs text-gray-500">PID {job.worker_pid ?? "n/d"}</p>
+                        </div>
+                        <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-gray-500">Avanzamento</p>
+                          <p className="mt-1 text-sm font-medium text-gray-900">
+                            {currentIndex && totalCollaborators ? `${currentIndex}/${totalCollaborators}` : "n/d"}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            completati {completedCollaborators} · falliti {failedCollaborators}
+                          </p>
+                        </div>
+                        <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-gray-500">Collaboratore</p>
+                          <p className="mt-1 text-sm font-medium text-gray-900">{currentEmployee ?? "n/d"}</p>
+                          <p className="text-xs text-gray-500">
+                            righe giorno {progress.daily_rows ?? "n/d"} · summary {progress.summary_rows ?? "n/d"}
+                          </p>
+                        </div>
+                        <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-gray-500">Tempo / ultimo evento</p>
+                          <p className="mt-1 text-sm font-medium text-gray-900">{formatElapsed(progress.elapsed_seconds)}</p>
+                          <p className="text-xs text-gray-500">{progress.last_event ?? "n/d"} · {formatDateTime(progress.last_event_at)}</p>
+                        </div>
+                      </div>
+                      <div className="mt-3 grid gap-3 md:grid-cols-2">
+                        <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-gray-500">Cronologia job</p>
+                          <p className="mt-1 text-xs text-gray-700">Creato: {formatDateTime(job.created_at)}</p>
+                          <p className="text-xs text-gray-700">Avviato: {formatDateTime(job.started_at)}</p>
+                          <p className="text-xs text-gray-700">Concluso: {formatDateTime(job.finished_at)}</p>
+                          <p className="text-xs text-gray-700">Resume da checkpoint: {progress.resumed ? "si" : "no"}</p>
+                        </div>
+                        <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
+                          <p className="text-[11px] uppercase tracking-[0.18em] text-gray-500">Ultimo errore</p>
+                          <p className="mt-1 text-xs text-gray-700 whitespace-pre-wrap">
+                            {progress.error ?? job.error_detail ?? "Nessun errore registrato"}
+                          </p>
+                        </div>
+                      </div>
+                    </details>
+                  ) : null}
+                      </>
+                    );
+                  })()}
                 </div>
               ))}
             </div>

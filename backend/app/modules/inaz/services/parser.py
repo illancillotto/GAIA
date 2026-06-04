@@ -33,7 +33,12 @@ def duration_to_minutes(value: str | None) -> int | None:
     if not normalized:
         return None
     if ":" not in normalized:
-        return int(float(normalized))
+        decimal_value = normalized.replace(" ", "")
+        if "," in decimal_value and "." in decimal_value:
+            decimal_value = decimal_value.replace(".", "").replace(",", ".")
+        elif "," in decimal_value:
+            decimal_value = decimal_value.replace(",", ".")
+        return int(float(decimal_value))
     hours, minutes = normalized.split(":", 1)
     return int(hours) * 60 + int(minutes)
 

@@ -117,6 +117,9 @@ import type {
   NetworkDevice,
   NetworkDeviceListResponse,
   NetworkDeviceUpdateInput,
+  NetworkFirewall,
+  NetworkFirewallEvent,
+  NetworkFirewallMetric,
   DevicePositionUpdateInput,
   DevicePosition,
   NetworkFloorPlan,
@@ -1527,6 +1530,63 @@ export async function updateNetworkDevice(
 
 export async function getNetworkAlerts(token: string): Promise<NetworkAlert[]> {
   return request<NetworkAlert[]>("/network/alerts", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getNetworkFirewalls(token: string): Promise<NetworkFirewall[]> {
+  return request<NetworkFirewall[]>("/network/firewalls", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getNetworkFirewallEvents(
+  token: string,
+  firewallId: number,
+  params?: { severity?: string; limit?: number },
+): Promise<NetworkFirewallEvent[]> {
+  const query = new URLSearchParams();
+  if (params?.severity) {
+    query.set("severity", params.severity);
+  }
+  if (params?.limit) {
+    query.set("limit", String(params.limit));
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<NetworkFirewallEvent[]>(`/network/firewalls/${firewallId}/events${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getNetworkFirewallMetrics(
+  token: string,
+  firewallId: number,
+  params?: { metricKey?: string; limit?: number },
+): Promise<NetworkFirewallMetric[]> {
+  const query = new URLSearchParams();
+  if (params?.metricKey) {
+    query.set("metric_key", params.metricKey);
+  }
+  if (params?.limit) {
+    query.set("limit", String(params.limit));
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<NetworkFirewallMetric[]>(`/network/firewalls/${firewallId}/metrics${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function pollNetworkFirewallMetrics(token: string, firewallId: number): Promise<NetworkFirewallMetric[]> {
+  return request<NetworkFirewallMetric[]>(`/network/firewalls/${firewallId}/metrics/poll`, {
+    method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
     },

@@ -412,6 +412,30 @@ export type InazSyncJobCreateInput = {
   collaborator_limit?: number | null;
 };
 
+export type InazSyncJobProgress = {
+  state?: string;
+  job_id?: string;
+  attempt_count?: number;
+  started_at?: string;
+  finished_at?: string;
+  completed_collaborators?: number;
+  failed_collaborators?: number;
+  total_collaborators?: number;
+  last_event?: string;
+  last_event_at?: string;
+  error_count?: number;
+  resumed?: boolean;
+  pending_collaborators?: number;
+  index?: number;
+  total?: number;
+  employee_code?: string;
+  name?: string;
+  elapsed_seconds?: number;
+  daily_rows?: number;
+  summary_rows?: number;
+  error?: string;
+};
+
 export type InazSyncJob = {
   id: string;
   status: string;
@@ -430,7 +454,10 @@ export type InazSyncJob = {
   attempt_count: number;
   max_attempts: number;
   error_detail: string | null;
-  params_json: Record<string, unknown> | null;
+  params_json: {
+    progress?: InazSyncJobProgress;
+    [key: string]: unknown;
+  } | null;
   created_at: string;
   started_at: string | null;
   finished_at: string | null;
@@ -738,6 +765,7 @@ export type NetworkDashboardSummary = {
   online_devices: number;
   offline_devices: number;
   open_alerts: number;
+  firewalls_online: number;
   scans_last_24h: number;
   floor_plans: number;
   latest_scan_at: string | null;
@@ -813,6 +841,48 @@ export type NetworkAlert = {
 
 export type NetworkAlertUpdateInput = {
   status: "open" | "resolved" | "ignored";
+};
+
+export type NetworkFirewall = {
+  id: number;
+  vendor: string;
+  name: string;
+  model_name: string | null;
+  serial_number: string | null;
+  management_ip: string | null;
+  status: string;
+  metadata_sources: Record<string, string> | null;
+  last_seen_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type NetworkFirewallEvent = {
+  id: number;
+  firewall_id: number;
+  device_id: number | null;
+  source: string;
+  event_type: string;
+  severity: string;
+  log_id: string | null;
+  message: string | null;
+  src_ip: string | null;
+  dst_ip: string | null;
+  protocol: string | null;
+  raw_payload: Record<string, unknown> | null;
+  observed_at: string;
+};
+
+export type NetworkFirewallMetric = {
+  id: number;
+  firewall_id: number;
+  metric_key: string;
+  metric_value: number | null;
+  metric_text: string | null;
+  unit: string | null;
+  severity: string;
+  raw_payload: Record<string, unknown> | null;
+  observed_at: string;
 };
 
 export type NetworkScanDeltaSummary = {
