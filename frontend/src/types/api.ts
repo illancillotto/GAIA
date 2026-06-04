@@ -38,6 +38,9 @@ export type ApplicationUser = {
   id: number;
   username: string;
   email: string;
+  full_name: string | null;
+  office_location: string | null;
+  phone_extension: string | null;
   role: string;
   is_active: boolean;
   module_accessi: boolean;
@@ -62,6 +65,9 @@ export type ApplicationUserListResponse = {
 export type ApplicationUserCreateInput = {
   username: string;
   email: string;
+  full_name?: string | null;
+  office_location?: string | null;
+  phone_extension?: string | null;
   password: string;
   role: string;
   is_active: boolean;
@@ -78,6 +84,9 @@ export type ApplicationUserCreateInput = {
 
 export type ApplicationUserUpdateInput = {
   email?: string;
+  full_name?: string | null;
+  office_location?: string | null;
+  phone_extension?: string | null;
   password?: string;
   role?: string;
   is_active?: boolean;
@@ -94,6 +103,7 @@ export type ApplicationUserUpdateInput = {
 
 export type InazCollaborator = {
   id: string;
+  owner_user_id: number | null;
   application_user_id: number | null;
   kint: string | null;
   kkint: string | null;
@@ -126,6 +136,7 @@ export type InazDailyPunch = {
 export type InazDailyRecord = {
   id: string;
   collaborator_id: string;
+  owner_user_id: number | null;
   application_user_id: number | null;
   work_date: string;
   schedule_code: string | null;
@@ -185,6 +196,7 @@ export type InazDailyRecordListResponse = {
 export type InazEventSummary = {
   id: string;
   collaborator_id: string;
+  owner_user_id: number | null;
   application_user_id: number | null;
   period_start: string;
   period_end: string;

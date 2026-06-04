@@ -53,7 +53,7 @@ export default function InazSyncPage() {
   const [cancellingJobId, setCancellingJobId] = useState<string | null>(null);
   const [deletingJobId, setDeletingJobId] = useState<string | null>(null);
 
-  async function refreshSyncState(options?: { silent?: boolean }) {
+  async function refreshSyncState() {
     const token = getStoredAccessToken();
     if (!token) return;
     try {
@@ -68,9 +68,7 @@ export default function InazSyncPage() {
         const firstActiveCredential = credentialsResult.find((credential) => credential.active);
         return firstActiveCredential ? String(firstActiveCredential.id) : "";
       });
-      if (!options?.silent) {
-        setError(null);
-      }
+      setError(null);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Errore caricamento job sync Inaz");
     }
@@ -80,7 +78,7 @@ export default function InazSyncPage() {
     void refreshSyncState();
 
     const intervalId = window.setInterval(() => {
-      void refreshSyncState({ silent: true });
+      void refreshSyncState();
     }, 10000);
 
     return () => {
@@ -111,7 +109,7 @@ export default function InazSyncPage() {
         credential_id: Number(credentialId),
         collaborator_limit: collaboratorLimit ? Number(collaboratorLimit) : null,
       });
-      await refreshSyncState({ silent: true });
+      await refreshSyncState();
       setSuccess(`Job live sync creato per ${String(created.period_start).slice(0, 7)}.`);
     } catch (createError) {
       setError(createError instanceof Error ? createError.message : "Errore avvio sync Inaz");
@@ -128,7 +126,7 @@ export default function InazSyncPage() {
     setSuccess(null);
     try {
       await retryInazSyncJob(token, jobId);
-      await refreshSyncState({ silent: true });
+      await refreshSyncState();
       setSuccess(`Retry avviato per job ${jobId}.`);
     } catch (retryError) {
       setError(retryError instanceof Error ? retryError.message : "Errore retry sync Inaz");
@@ -145,7 +143,7 @@ export default function InazSyncPage() {
     setSuccess(null);
     try {
       await cancelInazSyncJob(token, jobId);
-      await refreshSyncState({ silent: true });
+      await refreshSyncState();
       setSuccess(`Job ${jobId} annullato.`);
     } catch (cancelError) {
       setError(cancelError instanceof Error ? cancelError.message : "Errore annullamento sync Inaz");
@@ -186,7 +184,7 @@ export default function InazSyncPage() {
     setSuccess(null);
     try {
       await deleteInazSyncJob(token, jobId);
-      await refreshSyncState({ silent: true });
+      await refreshSyncState();
       setSuccess(`Job ${jobId} eliminato.`);
     } catch (deleteError) {
       setError(deleteError instanceof Error ? deleteError.message : "Errore eliminazione job sync Inaz");
@@ -289,6 +287,8 @@ export default function InazSyncPage() {
                 <div key={job.id} className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-4">
                   {(() => {
                     const progress = job.params_json?.progress;
+                    const checkpoint = job.params_json?.checkpoint as { completed_employee_codes?: string[] } | undefined;
+                    const hasResumeCheckpoint = Array.isArray(checkpoint?.completed_employee_codes) && checkpoint.completed_employee_codes.length > 0;
                     const currentIndex = progress?.index ?? null;
                     const totalCollaborators = progress?.total ?? progress?.total_collaborators ?? null;
                     const currentEmployee = progress?.employee_code && progress?.name ? `${progress.employee_code} · ${progress.name}` : null;
@@ -367,9 +367,9 @@ export default function InazSyncPage() {
                           {cancellingJobId === job.id ? "Stop..." : "Annulla job"}
                         </button>
                       ) : null}
-                      {job.status === "failed" && job.attempt_count < job.max_attempts ? (
+                      {job.status === "failed" && (job.attempt_count < job.max_attempts || hasResumeCheckpoint) ? (
                         <button className="btn-secondary" type="button" onClick={() => void handleRetry(job.id)} disabled={retryingJobId === job.id}>
-                          {retryingJobId === job.id ? "Retry..." : "Riprova"}
+                          {retryingJobId === job.id ? "Riprendo..." : hasResumeCheckpoint ? "Riprendi" : "Riprova"}
                         </button>
                       ) : null}
                       {["failed", "cancelled", "completed"].includes(job.status) ? (

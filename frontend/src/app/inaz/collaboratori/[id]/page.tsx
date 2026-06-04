@@ -39,6 +39,53 @@ function formatDetailEntries(values: Record<string, string>): Array<[string, str
   return Object.entries(values);
 }
 
+function normalizePersonText(value: string | null | undefined): string {
+  return (value ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildTokenSet(value: string): Set<string> {
+  return new Set(normalizePersonText(value).split(" ").filter((token) => token.length > 1));
+}
+
+function scoreSuggestion(collaborator: InazCollaborator, user: ApplicationUser): number {
+  const collaboratorName = normalizePersonText(collaborator.name);
+  if (!collaboratorName) return 0;
+
+  const userFullName = normalizePersonText(user.full_name);
+  const userUsername = normalizePersonText(user.username);
+  const userEmailLocal = normalizePersonText(user.email.split("@")[0] ?? "");
+  let score = 0;
+
+  if (userFullName && userFullName === collaboratorName) score += 120;
+  if (userUsername && userUsername === collaboratorName) score += 90;
+  if (userEmailLocal && userEmailLocal === collaboratorName) score += 80;
+
+  const collaboratorTokens = buildTokenSet(collaborator.name);
+  for (const candidate of [userFullName, userUsername, userEmailLocal]) {
+    if (!candidate) continue;
+    const candidateTokens = buildTokenSet(candidate);
+    let intersection = 0;
+    collaboratorTokens.forEach((token) => {
+      if (candidateTokens.has(token)) {
+        intersection += 1;
+      }
+    });
+    if (intersection === collaboratorTokens.size && collaboratorTokens.size > 1) {
+      score += 70;
+    } else if (intersection > 0) {
+      score += intersection * 18;
+    }
+  }
+
+  return score;
+}
+
 export default function InazCollaboratoreDetailPage() {
   const params = useParams();
   const collaboratorId = params.id as string;
@@ -114,6 +161,32 @@ export default function InazCollaboratoreDetailPage() {
   const totalAbsence = useMemo(() => records.reduce((sum, item) => sum + (item.absence_minutes ?? 0), 0), [records]);
   const totalExtra = useMemo(() => records.reduce((sum, item) => sum + (item.straordinario_minutes ?? 0) + (item.mpe_minutes ?? 0), 0), [records]);
   const canEdit = currentUser?.role === "admin" || currentUser?.role === "super_admin";
+  const suggestedMapping = useMemo(() => {
+    if (!collaborator || users.length === 0) return null;
+    let bestUser: ApplicationUser | null = null;
+    let bestScore = 0;
+    for (const user of users) {
+      const score = scoreSuggestion(collaborator, user);
+      if (score > bestScore) {
+        bestScore = score;
+        bestUser = user;
+      }
+    }
+    if (!bestUser || bestScore < 70) return null;
+    return {
+      user: bestUser,
+      confidence: bestScore >= 120 ? "alta" : "media",
+    };
+  }, [collaborator, users]);
+
+  useEffect(() => {
+    if (!collaborator || collaborator.application_user_id != null) {
+      return;
+    }
+    if (!mappingValue && suggestedMapping) {
+      setMappingValue(String(suggestedMapping.user.id));
+    }
+  }, [collaborator, suggestedMapping, mappingValue]);
 
   async function handleSaveMapping() {
     const token = getStoredAccessToken();
@@ -287,8 +360,18 @@ export default function InazCollaboratoreDetailPage() {
                   <div>
                     <label className="block text-sm font-medium text-gray-700">
                       Mapping GAIA
+                      {suggestedMapping ? (
+                        <span className="mt-1 block text-xs text-emerald-700">
+                          Suggerito: {suggestedMapping.user.full_name?.trim() || suggestedMapping.user.username} ({suggestedMapping.confidence})
+                        </span>
+                      ) : null}
                       <select className="form-control mt-1" value={mappingValue} onChange={(event) => setMappingValue(event.target.value)}>
                         <option value="">Nessun mapping</option>
+                        {suggestedMapping ? (
+                          <option value={suggestedMapping.user.id}>
+                            Suggerito: {suggestedMapping.user.full_name?.trim() || suggestedMapping.user.username} · {suggestedMapping.user.email} ({suggestedMapping.confidence})
+                          </option>
+                        ) : null}
                         {users.map((user) => (
                           <option key={user.id} value={user.id}>
                             {user.username} · {user.email}

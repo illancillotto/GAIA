@@ -1,6 +1,6 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 
@@ -25,6 +25,9 @@ type CollaboratorRow = {
   extraHours: string;
   mapped: boolean;
   mappedUser: string;
+  suggestedUserId: number | null;
+  suggestedUserLabel: string;
+  suggestionConfidence: "high" | "medium" | "low" | "none";
 };
 
 function currentMonthBounds(): { start: string; end: string } {
@@ -38,8 +41,66 @@ function formatHours(minutes: number): string {
   return `${(minutes / 60).toFixed(1)} h`;
 }
 
+function normalizePersonText(value: string | null | undefined): string {
+  return (value ?? "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildTokenSet(value: string): Set<string> {
+  return new Set(normalizePersonText(value).split(" ").filter((token) => token.length > 1));
+}
+
+function scoreSuggestion(collaborator: InazCollaborator, user: ApplicationUser): number {
+  const collaboratorName = normalizePersonText(collaborator.name);
+  if (!collaboratorName) return 0;
+
+  const userFullName = normalizePersonText(user.full_name);
+  const userUsername = normalizePersonText(user.username);
+  const userEmailLocal = normalizePersonText(user.email.split("@")[0] ?? "");
+
+  let score = 0;
+
+  if (userFullName && userFullName === collaboratorName) score += 120;
+  if (userUsername && userUsername === collaboratorName) score += 90;
+  if (userEmailLocal && userEmailLocal === collaboratorName) score += 80;
+
+  const collaboratorTokens = buildTokenSet(collaborator.name);
+  const candidateSources = [userFullName, userUsername, userEmailLocal].filter(Boolean);
+
+  for (const candidate of candidateSources) {
+    const candidateTokens = buildTokenSet(candidate);
+    let intersection = 0;
+    collaboratorTokens.forEach((token) => {
+      if (candidateTokens.has(token)) {
+        intersection += 1;
+      }
+    });
+    if (intersection === collaboratorTokens.size && collaboratorTokens.size > 1) {
+      score += 70;
+    } else if (intersection > 0) {
+      score += intersection * 18;
+    }
+  }
+
+  if (collaborator.birth_date && user.full_name && userFullName.includes(collaboratorName.split(" ")[0] ?? "")) {
+    score += 5;
+  }
+
+  return score;
+}
+
+function buildSuggestedLabel(user: ApplicationUser | null): string {
+  if (!user) return "Nessun suggerimento";
+  const identity = user.full_name?.trim() || user.username;
+  return `${identity} · ${user.email}`;
+}
+
 export default function InazCollaboratoriPage() {
-  const router = useRouter();
   const [collaborators, setCollaborators] = useState<InazCollaborator[]>([]);
   const [records, setRecords] = useState<InazDailyRecord[]>([]);
   const [users, setUsers] = useState<ApplicationUser[]>([]);
@@ -47,6 +108,7 @@ export default function InazCollaboratoriPage() {
   const [search, setSearch] = useState("");
   const [mappedOnly, setMappedOnly] = useState<"all" | "mapped" | "unmapped">("all");
   const [selectedMappings, setSelectedMappings] = useState<Record<string, string>>({});
+  const [selectedCollaborator, setSelectedCollaborator] = useState<CollaboratorRow | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -73,6 +135,51 @@ export default function InazCollaboratoriPage() {
   }, []);
 
   const userMap = useMemo(() => new Map(users.map((user) => [user.id, user])), [users]);
+  const suggestionsByCollaborator = useMemo(() => {
+    const suggestions = new Map<string, { userId: number | null; score: number; confidence: "high" | "medium" | "low" | "none" }>();
+
+    for (const collaborator of collaborators) {
+      let bestUser: ApplicationUser | null = null;
+      let bestScore = 0;
+      for (const user of users) {
+        const score = scoreSuggestion(collaborator, user);
+        if (score > bestScore) {
+          bestScore = score;
+          bestUser = user;
+        }
+      }
+
+      const confidence: "high" | "medium" | "low" | "none" =
+        bestScore >= 120 ? "high" : bestScore >= 70 ? "medium" : bestScore >= 35 ? "low" : "none";
+
+      suggestions.set(collaborator.id, {
+        userId: bestUser && confidence !== "none" ? bestUser.id : null,
+        score: bestScore,
+        confidence,
+      });
+    }
+
+    return suggestions;
+  }, [collaborators, users]);
+
+  useEffect(() => {
+    if (users.length === 0 || collaborators.length === 0) return;
+    setSelectedMappings((current) => {
+      const next = { ...current };
+      let changed = false;
+      for (const collaborator of collaborators) {
+        if (collaborator.application_user_id != null || next[collaborator.id]) {
+          continue;
+        }
+        const suggestion = suggestionsByCollaborator.get(collaborator.id);
+        if (suggestion?.userId != null) {
+          next[collaborator.id] = String(suggestion.userId);
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+  }, [collaborators, users, suggestionsByCollaborator]);
   const recordsByCollaborator = useMemo(() => {
     const grouped = new Map<string, InazDailyRecord[]>();
     for (const record of records) {
@@ -106,9 +213,12 @@ export default function InazCollaboratoriPage() {
           extraHours: formatHours(extraMinutes),
           mapped: item.application_user_id != null,
           mappedUser: item.application_user_id != null ? userMap.get(item.application_user_id)?.username ?? `#${item.application_user_id}` : "—",
+          suggestedUserId: suggestionsByCollaborator.get(item.id)?.userId ?? null,
+          suggestedUserLabel: buildSuggestedLabel(userMap.get(suggestionsByCollaborator.get(item.id)?.userId ?? -1) ?? null),
+          suggestionConfidence: suggestionsByCollaborator.get(item.id)?.confidence ?? "none",
         };
       }),
-    [collaborators, userMap, recordsByCollaborator],
+    [collaborators, userMap, recordsByCollaborator, suggestionsByCollaborator],
   );
 
   const filteredRows = useMemo(() => {
@@ -139,6 +249,20 @@ export default function InazCollaboratoriPage() {
     }
   }
 
+  async function handleApplySuggestedMappings() {
+    const token = getStoredAccessToken();
+    if (!token) return;
+    try {
+      const pending = filteredRows.filter((row) => !row.mapped && row.suggestedUserId != null);
+      for (const row of pending) {
+        const mapped = await mapInazCollaboratorApplicationUser(token, row.id, row.suggestedUserId);
+        setCollaborators((current) => current.map((item) => (item.id === row.id ? mapped : item)));
+      }
+    } catch (mapError) {
+      setError(mapError instanceof Error ? mapError.message : "Errore applicazione mapping suggeriti");
+    }
+  }
+
   const canEditMapping = currentUser?.role === "admin" || currentUser?.role === "super_admin";
 
   const columns = useMemo<ColumnDef<CollaboratorRow>[]>(
@@ -161,6 +285,21 @@ export default function InazCollaboratoriPage() {
         header: "Mapping",
         accessorKey: "mapped",
         cell: ({ row }) => <Badge variant={row.original.mapped ? "success" : "warning"}>{row.original.mapped ? "Mappato" : "Da mappare"}</Badge>,
+      },
+      {
+        header: "Suggerito",
+        accessorKey: "suggestedUserLabel",
+        cell: ({ row }) =>
+          row.original.suggestionConfidence === "none" ? (
+            <span className="text-sm text-gray-400">Nessuno</span>
+          ) : (
+            <div className="space-y-1">
+              <p className="text-sm font-medium text-gray-900">{row.original.suggestedUserLabel}</p>
+              <Badge variant={row.original.suggestionConfidence === "high" ? "success" : row.original.suggestionConfidence === "medium" ? "warning" : "neutral"}>
+                {row.original.suggestionConfidence === "high" ? "Alta" : row.original.suggestionConfidence === "medium" ? "Media" : "Bassa"}
+              </Badge>
+            </div>
+          ),
       },
       { header: "Utente GAIA", accessorKey: "mappedUser" },
     ],
@@ -196,13 +335,13 @@ export default function InazCollaboratoriPage() {
         <article className="panel-card">
           <div className="mb-4">
             <p className="section-title">Elenco collaboratori</p>
-            <p className="section-copy">Vista estesa di anagrafica, mapping, stato operativo e volume giornaliere del mese. Apri il dettaglio per KM, straordinari e cartellino completo.</p>
+            <p className="section-copy">Vista estesa di anagrafica, mapping, suggerimento automatico e volume giornaliere del mese. Apri il dettaglio per KM, straordinari e cartellino completo.</p>
           </div>
           <DataTable
             data={filteredRows}
             columns={columns}
             initialPageSize={20}
-            onRowClick={(row) => router.push(`/inaz/collaboratori/${row.id}`)}
+            onRowClick={(row) => setSelectedCollaborator(row)}
           />
         </article>
 
@@ -210,14 +349,27 @@ export default function InazCollaboratoriPage() {
           <article className="panel-card">
             <div className="mb-4">
               <p className="section-title">Aggiorna mapping GAIA</p>
-              <p className="section-copy">Seleziona un utente GAIA per i collaboratori che richiedono collegamento.</p>
+              <p className="section-copy">Seleziona un utente GAIA per i collaboratori che richiedono collegamento. Il sistema precompila un suggerimento basato su nome completo, username ed email.</p>
+            </div>
+            <div className="mb-4 flex flex-wrap items-center gap-3">
+              <button className="btn-secondary" type="button" onClick={() => void handleApplySuggestedMappings()}>
+                Applica suggeriti
+              </button>
+              <p className="text-sm text-gray-500">
+                Vengono applicati solo i collaboratori non ancora mappati con un suggerimento disponibile.
+              </p>
             </div>
             <div className="space-y-3">
               {filteredRows.map((row) => (
-                <div key={row.id} className="grid gap-3 rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 lg:grid-cols-[1fr_280px_120px] lg:items-center">
+                <div key={row.id} className="grid gap-3 rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 lg:grid-cols-[1fr_320px_120px] lg:items-center">
                   <div>
                     <p className="font-medium text-gray-900">{row.name}</p>
                     <p className="text-xs text-gray-500">Matricola {row.employeeCode} · {row.company}</p>
+                    {row.suggestionConfidence !== "none" ? (
+                      <p className="mt-1 text-xs text-emerald-700">
+                        Suggerito: {row.suggestedUserLabel} ({row.suggestionConfidence === "high" ? "confidenza alta" : row.suggestionConfidence === "medium" ? "confidenza media" : "confidenza bassa"})
+                      </p>
+                    ) : null}
                   </div>
                   <select
                     className="form-control"
@@ -238,6 +390,36 @@ export default function InazCollaboratoriPage() {
               ))}
             </div>
           </article>
+        ) : null}
+
+        {selectedCollaborator ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6">
+            <div className="flex h-[90vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+              <div className="flex items-center justify-between gap-4 border-b border-gray-100 px-6 py-4">
+                <div className="min-w-0">
+                  <p className="section-title">Dettaglio collaboratore Inaz</p>
+                  <p className="mt-1 truncate text-sm text-gray-500">
+                    {selectedCollaborator.name} · Matricola {selectedCollaborator.employeeCode} · {selectedCollaborator.company}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Link className="btn-secondary" href={`/inaz/collaboratori/${selectedCollaborator.id}`} target="_blank">
+                    Apri pagina completa
+                  </Link>
+                  <button className="btn-secondary" type="button" onClick={() => setSelectedCollaborator(null)}>
+                    Chiudi
+                  </button>
+                </div>
+              </div>
+              <div className="min-h-0 flex-1 bg-[#f7faf7] p-4">
+                <iframe
+                  className="h-full w-full rounded-2xl border border-gray-200 bg-white"
+                  src={`/inaz/collaboratori/${selectedCollaborator.id}?embedded=1`}
+                  title={`Dettaglio collaboratore ${selectedCollaborator.name}`}
+                />
+              </div>
+            </div>
+          </div>
         ) : null}
       </div>
     </ProtectedPage>

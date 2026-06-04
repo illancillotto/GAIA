@@ -10,9 +10,9 @@ import {
   ModuleWorkspaceKpiTile,
   ModuleWorkspaceNoticeCard,
 } from "@/components/layout/module-workspace-hero";
-import { listInazCollaborators, listInazDailyRecords, listInazImportJobs } from "@/lib/api";
+import { listInazCollaborators, listInazDailyRecords, listInazSyncJobs } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
-import type { InazCollaborator, InazDailyRecord, InazImportJob } from "@/types/api";
+import type { InazCollaborator, InazDailyRecord, InazSyncJob } from "@/types/api";
 
 function currentMonthBounds(): { start: string; end: string } {
   const now = new Date();
@@ -26,7 +26,7 @@ function currentMonthBounds(): { start: string; end: string } {
 export default function InazPage() {
   const [collaborators, setCollaborators] = useState<InazCollaborator[]>([]);
   const [records, setRecords] = useState<InazDailyRecord[]>([]);
-  const [jobs, setJobs] = useState<InazImportJob[]>([]);
+  const [jobs, setJobs] = useState<InazSyncJob[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -36,7 +36,7 @@ export default function InazPage() {
     Promise.all([
       listInazCollaborators(token, { page: 1, pageSize: 6 }),
       listInazDailyRecords(token, { dateFrom: start, dateTo: end, page: 1, pageSize: 8 }),
-      listInazImportJobs(token),
+      listInazSyncJobs(token),
     ])
       .then(([collaboratorResponse, recordResponse, jobsResponse]) => {
         setCollaborators(collaboratorResponse.items);
@@ -51,6 +51,20 @@ export default function InazPage() {
     () => (records.reduce((sum, item) => sum + (item.ordinary_minutes ?? 0), 0) / 60).toFixed(1),
     [records],
   );
+  const latestJob = jobs[0] ?? null;
+  const latestJobProgress = latestJob?.params_json?.progress;
+  const latestJobTitle = latestJob
+    ? latestJob.status === "running"
+      ? "Sync in esecuzione"
+      : latestJob.status === "completed"
+        ? "Ultima sync completata"
+        : `Ultima sync: ${latestJob.status}`
+    : "Nessuna sync registrata";
+  const latestJobDescription = latestJob
+    ? latestJobProgress?.index && latestJobProgress?.total
+      ? `Avanzamento ${latestJobProgress.index}/${latestJobProgress.total} · completati ${latestJobProgress.completed_collaborators ?? 0} · falliti ${latestJobProgress.failed_collaborators ?? latestJob.records_errors}`
+      : `Periodo ${latestJob.period_start} / ${latestJob.period_end} · importati ${latestJob.records_imported} · errori ${latestJob.records_errors}`
+    : "Avvia una sync Inaz per popolare il modulo.";
 
   return (
     <ProtectedPage title="GAIA Inaz" description="Collaboratori, giornaliere e riepiloghi eventi Inaz." breadcrumb="Inaz" requiredModule="inaz">
@@ -58,13 +72,13 @@ export default function InazPage() {
         <ModuleWorkspaceHero
           badge={<>Modulo Inaz</>}
           title="Supervisiona collaboratori, cartellini ed export giornaliere da un unico workspace."
-          description="Il modulo importa il JSON prodotto dallo scraper `inaz-collaboratori`, salva giornaliere e riepiloghi eventi e genera il file `.xlsm` dal database GAIA."
+          description="Il modulo sincronizza i dati Inaz, salva giornaliere e riepiloghi eventi nel database GAIA e genera il file `.xlsm` dai dati persistiti."
           actions={
             <>
               <ModuleWorkspaceNoticeCard
-                title={jobs[0] ? `Ultimo job: ${jobs[0].status}` : "Nessun job registrato"}
-                description={jobs[0]?.filename ?? "Importa un JSON Inaz per iniziare a popolare il modulo."}
-                tone={jobs[0]?.status === "completed" ? "success" : jobs[0]?.status === "failed" ? "danger" : "warning"}
+                title={latestJobTitle}
+                description={latestJobDescription}
+                tone={latestJob?.status === "completed" ? "success" : latestJob?.status === "failed" ? "danger" : latestJob?.status === "running" ? "warning" : "warning"}
               />
               <ModuleWorkspaceNoticeCard
                 title={mappedCount > 0 ? "Collaboratori mappati" : "Mapping da completare"}
@@ -123,18 +137,23 @@ export default function InazPage() {
               <p className="section-copy">Accesso rapido ai percorsi principali del modulo.</p>
             </div>
             <div className="space-y-3">
-              <Link className="btn-secondary block text-center" href="/inaz/import">Import JSON</Link>
+              <Link className="btn-secondary block text-center" href="/inaz/sync">Sync Inaz</Link>
               <Link className="btn-secondary block text-center" href="/inaz/giornaliere">Giornaliere</Link>
               <Link className="btn-secondary block text-center" href="/inaz/export">Export XLSM</Link>
             </div>
             <div className="mt-6 space-y-2">
-              <p className="text-sm font-medium text-gray-700">Storico job</p>
+              <p className="text-sm font-medium text-gray-700">Storico sync</p>
               {jobs.map((job) => (
                 <div key={job.id} className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm">
-                  <p className="font-medium text-gray-900">{job.filename ?? "File senza nome"}</p>
+                  <p className="font-medium text-gray-900">{new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric" }).format(new Date(`${job.period_start}T00:00:00`))}</p>
                   <p className="text-xs text-gray-500">
                     {job.status} · importati {job.records_imported} · errori {job.records_errors}
                   </p>
+                  {job.params_json?.progress?.index && job.params_json?.progress?.total ? (
+                    <p className="text-xs text-gray-500">
+                      avanzamento {job.params_json.progress.index}/{job.params_json.progress.total}
+                    </p>
+                  ) : null}
                 </div>
               ))}
               {jobs.length === 0 ? <p className="text-sm text-gray-500">Nessun job disponibile.</p> : null}
