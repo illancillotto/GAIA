@@ -17,7 +17,6 @@ interface MapContainerProps {
   mapLayers?: {
     showDistretti: boolean;
     showDistrettiFill?: boolean;
-    showParticelle: boolean;
     showParticelleFill?: boolean;
     distrettiOpacity?: number;
     particelleOpacity?: number;
@@ -99,7 +98,7 @@ function canCreateWebGLContext(): boolean {
   }
 }
 
-function buildParticelleFilter(
+export function buildParticelleFilter(
   distretto: string | null,
   quickFilter: ParticelleQuickFilter,
 ): maplibregl.FilterSpecification | null {
@@ -107,11 +106,10 @@ function buildParticelleFilter(
   if (distretto) {
     clauses.push(["==", ["get", "num_distretto"], distretto]);
   }
-  if (quickFilter === "all") {
-    clauses.push(
-      ["!", BOOLEAN_TRUE_EXPRESSION("ha_ruolo")],
-      ["!", BOOLEAN_TRUE_EXPRESSION("ha_ruolo_inferito")],
-    );
+  if (quickFilter === "ruolo") {
+    clauses.push(BOOLEAN_TRUE_EXPRESSION("ha_ruolo"));
+  } else if (quickFilter === "ruolo_inferito") {
+    clauses.push(BOOLEAN_TRUE_EXPRESSION("ha_ruolo_inferito"));
   }
 
   if (clauses.length === 0) return null;
@@ -748,7 +746,6 @@ export default function MapContainer({
 
     const showDistretti = mapLayers?.showDistretti ?? true;
     const showDistrettiFill = mapLayers?.showDistrettiFill ?? false;
-    const showParticelle = mapLayers?.showParticelle ?? true;
     const showParticelleFill = mapLayers?.showParticelleFill ?? true;
     const distrettiOpacity = mapLayers?.distrettiOpacity ?? 0.3;
     const particelleOpacity = mapLayers?.particelleOpacity ?? 0.5;
@@ -766,11 +763,11 @@ export default function MapContainer({
       map.setPaintProperty("distretti-outline", "line-opacity", Math.min(1, distrettiOpacity + 0.15));
     }
     if (map.getLayer("particelle-fill")) {
-      map.setLayoutProperty("particelle-fill", "visibility", showParticelle && showParticelleFill ? "visible" : "none");
+      map.setLayoutProperty("particelle-fill", "visibility", showParticelleFill ? "visible" : "none");
       map.setPaintProperty("particelle-fill", "fill-opacity", buildParticelleFillOpacity(particelleOpacity, particelleQuickFilter));
     }
     if (map.getLayer("particelle-outline")) {
-      map.setLayoutProperty("particelle-outline", "visibility", showParticelle ? "visible" : "none");
+      map.setLayoutProperty("particelle-outline", "visibility", "visible");
       map.setPaintProperty("particelle-outline", "line-opacity", Math.min(1, particelleOpacity + 0.2));
     }
     if (map.getLayer("particelle-hitbox")) {

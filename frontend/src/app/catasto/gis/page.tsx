@@ -93,7 +93,7 @@ const BASEMAP_OPTIONS: Array<{ id: GisBasemap; label: string; swatch: string; re
 ];
 type ParticelleQuickFilter = "all" | "ruolo" | "ruolo_inferito";
 const PARTICELLE_QUICK_FILTERS: Array<{ id: ParticelleQuickFilter; label: string; dot: string }> = [
-  { id: "all", label: "Solo particelle", dot: "bg-indigo-400" },
+  { id: "all", label: "Tutte", dot: "bg-indigo-400" },
   { id: "ruolo", label: "A ruolo", dot: "bg-emerald-500" },
   { id: "ruolo_inferito", label: "Ruolo inferito", dot: "bg-amber-500" },
 ];
@@ -279,7 +279,6 @@ export default function CatastoGisPage() {
   const [gisInfo, setGisInfo] = useState<string | null>(null);
   const [showDistretti, setShowDistretti] = useState(true);
   const [showDistrettiFill, setShowDistrettiFill] = useState(true);
-  const [showParticelle, setShowParticelle] = useState(false);
   const [showParticelleFill, setShowParticelleFill] = useState(true);
   const [particelleQuickFilter, setParticelleQuickFilter] = useState<ParticelleQuickFilter>("all");
   const [basemap, setBasemap] = useState<GisBasemap>("osm");
@@ -554,7 +553,6 @@ export default function CatastoGisPage() {
       const response = await catastoGisSearch(token, { query, mode: searchMode, limit: 25 });
       setSearchResult(response);
       setFocusedSearchIds([]);
-      setShowParticelle(true);
       setShowParticelleFill(true);
       if (response.geojson && response.geojson.features.length > 0) {
         focusLayerGeojson(response.geojson);
@@ -585,7 +583,6 @@ export default function CatastoGisPage() {
     } else {
       setFocusedSearchIds([item.id]);
     }
-    setShowParticelle(true);
     try {
       const popup = await catastoGisGetPopup(token, item.id);
       setPopupParticella(popup);
@@ -648,7 +645,6 @@ export default function CatastoGisPage() {
 
   const handleSelectDistretto = useCallback(async (distretto: CatDistretto) => {
     setShowDistretti(true);
-    setShowParticelle(false);
     setDistrettoLayer(distretto.num_distretto);
     if (!token) return;
     try {
@@ -672,7 +668,6 @@ export default function CatastoGisPage() {
 
   const handleSetParticelleQuickFilter = useCallback((filter: ParticelleQuickFilter) => {
     setParticelleQuickFilter(filter);
-    setShowParticelle(true);
     setShowParticelleFill(true);
   }, []);
 
@@ -1004,7 +999,7 @@ export default function CatastoGisPage() {
   const renderParticelleQuickFilters = (isDark: boolean) => (
     <div className={`mt-2 rounded-2xl border px-2.5 py-2 ${isDark ? "border-white/15 bg-white/5" : "border-indigo-100 bg-white/70"}`}>
       <p className={`mb-2 text-[10px] font-semibold uppercase tracking-widest ${isDark ? "text-white/50" : "text-indigo-500"}`}>
-        Filtro rapido particelle
+        Filtro particelle sempre attive
       </p>
       <div className="flex flex-wrap gap-1.5">
         {PARTICELLE_QUICK_FILTERS.map((option) => {
@@ -1032,9 +1027,8 @@ export default function CatastoGisPage() {
           );
         })}
       </div>
-      <div className={`mt-2 flex items-center gap-2 text-[11px] ${isDark ? "text-white/60" : "text-slate-500"}`}>
-        <span className="h-2 w-2 rounded-full bg-fuchsia-500" />
-        <span>Fucsia: record GIS incompleti in cat_particelle</span>
+      <div className={`mt-1 text-[11px] ${isDark ? "text-white/55" : "text-slate-500"}`}>
+        I contorni delle particelle restano sempre disponibili in mappa.
       </div>
     </div>
   );
@@ -1086,16 +1080,16 @@ export default function CatastoGisPage() {
           </div>
           <button
             type="button"
-            onClick={() => setShowParticelle((value) => !value)}
+            onClick={() => setShowParticelleFill((value) => !value)}
             className={`mt-2 w-full rounded-lg border px-3 py-1.5 text-xs font-semibold transition ${
-              showParticelle
+              showParticelleFill
                 ? "border-indigo-200 bg-indigo-50 text-indigo-700"
                 : isDark
                   ? "border-white/15 bg-white/10 text-white/70 hover:bg-white/15"
                   : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
             }`}
           >
-            {showParticelle ? "Nascondi particelle del distretto" : "Mostra particelle del distretto"}
+            {showParticelleFill ? "Nascondi riempimento particelle" : "Mostra riempimento particelle"}
           </button>
         </div>
       ) : null}
@@ -1635,7 +1629,6 @@ export default function CatastoGisPage() {
                   mapLayers={{
                     showDistretti,
                     showDistrettiFill,
-                    showParticelle,
                     showParticelleFill,
                     distrettiOpacity,
                     particelleOpacity,
@@ -2002,7 +1995,7 @@ export default function CatastoGisPage() {
                     </div>
                     {renderBasemapControl(false)}
                     <div>
-                      <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-gray-400">Layer visibili</p>
+                      <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-gray-400">Layer e dettaglio particelle</p>
                       <div className="flex flex-wrap gap-1.5">
                         <div className="group relative">
                           <button
@@ -2050,31 +2043,19 @@ export default function CatastoGisPage() {
                         <div className="group relative">
                           <button
                             type="button"
-                            onClick={() => setShowParticelle((v) => !v)}
+                            onClick={() => setShowParticelleFill((v) => !v)}
                             className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all ${
-                              showParticelle
+                              showParticelleFill
                                 ? "border-indigo-200 bg-indigo-50 text-indigo-700"
-                                : "border-gray-200 bg-white text-gray-400 hover:border-gray-300 hover:text-gray-600"
+                                : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:text-gray-700"
                             }`}
                           >
-                            <span className={`h-1.5 w-1.5 rounded-full transition-colors ${showParticelle ? "bg-indigo-400" : "bg-gray-300"}`} />
-                            Particelle
+                            <span className={`h-1.5 w-1.5 rounded-full transition-colors ${showParticelleFill ? "bg-indigo-400" : "bg-gray-300"}`} />
+                            Riempimento particelle
                           </button>
                           <div className="pointer-events-none absolute left-0 top-full z-10 w-52 translate-y-1 rounded-2xl border border-indigo-100 bg-white/95 p-3 pt-5 opacity-0 shadow-xl ring-1 ring-black/5 backdrop-blur transition-all duration-150 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100">
-                            <button
-                              type="button"
-                              onClick={() => setShowParticelleFill((v) => !v)}
-                              className={`mb-3 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium transition-all ${
-                                showParticelleFill
-                                  ? "border-violet-200 bg-violet-50 text-violet-700"
-                                  : "border-gray-200 bg-white text-gray-500 hover:border-violet-100 hover:text-violet-700"
-                              }`}
-                            >
-                              <span className={`h-1.5 w-1.5 rounded-full transition-colors ${showParticelleFill ? "bg-violet-400" : "bg-gray-300"}`} />
-                              Riempimento
-                            </button>
                             <div className="flex items-center justify-between text-[11px]">
-                              <span className="font-medium text-indigo-900/75">Opacità bordo + fill</span>
+                              <span className="font-medium text-indigo-900/75">Opacità particelle</span>
                               <span className="rounded-full bg-indigo-50 px-2 py-0.5 font-semibold text-indigo-700">
                                 {Math.round(particelleOpacity * 100)}%
                               </span>
@@ -2139,7 +2120,7 @@ export default function CatastoGisPage() {
                 {/* Layer toggles */}
                 <div className="flex flex-col gap-4">
                   {renderBasemapControl(false)}
-                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-gray-400">Layer visibili</p>
+                  <p className="mb-2 text-[10px] font-semibold uppercase tracking-widest text-gray-400">Layer e dettaglio particelle</p>
                   <div className="flex flex-wrap gap-1.5">
                     <div className="group relative">
                       <button
@@ -2187,31 +2168,19 @@ export default function CatastoGisPage() {
                     <div className="group relative">
                       <button
                         type="button"
-                        onClick={() => setShowParticelle((v) => !v)}
+                        onClick={() => setShowParticelleFill((v) => !v)}
                         className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-all ${
-                          showParticelle
+                          showParticelleFill
                             ? "border-indigo-200 bg-indigo-50 text-indigo-700"
-                            : "border-gray-200 bg-white text-gray-400 hover:border-gray-300 hover:text-gray-600"
+                            : "border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:text-gray-700"
                         }`}
                       >
-                        <span className={`h-1.5 w-1.5 rounded-full transition-colors ${showParticelle ? "bg-indigo-400" : "bg-gray-300"}`} />
-                        Particelle
+                        <span className={`h-1.5 w-1.5 rounded-full transition-colors ${showParticelleFill ? "bg-indigo-400" : "bg-gray-300"}`} />
+                        Riempimento particelle
                       </button>
                       <div className="pointer-events-none absolute left-0 top-full z-10 w-52 translate-y-1 rounded-2xl border border-indigo-100 bg-white/95 p-3 pt-5 opacity-0 shadow-xl ring-1 ring-black/5 backdrop-blur transition-all duration-150 group-hover:pointer-events-auto group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:translate-y-0 group-focus-within:opacity-100">
-                        <button
-                          type="button"
-                          onClick={() => setShowParticelleFill((v) => !v)}
-                          className={`mb-3 inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[11px] font-medium transition-all ${
-                            showParticelleFill
-                              ? "border-violet-200 bg-violet-50 text-violet-700"
-                              : "border-gray-200 bg-white text-gray-500 hover:border-violet-100 hover:text-violet-700"
-                          }`}
-                        >
-                          <span className={`h-1.5 w-1.5 rounded-full transition-colors ${showParticelleFill ? "bg-violet-400" : "bg-gray-300"}`} />
-                          Riempimento
-                        </button>
                         <div className="flex items-center justify-between text-[11px]">
-                          <span className="font-medium text-indigo-900/75">Opacità bordo + fill</span>
+                          <span className="font-medium text-indigo-900/75">Opacità particelle</span>
                           <span className="rounded-full bg-indigo-50 px-2 py-0.5 font-semibold text-indigo-700">
                             {Math.round(particelleOpacity * 100)}%
                           </span>
