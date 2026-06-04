@@ -73,3 +73,4 @@ postgres:
         superficie_grafica_mq: numeric
         ha_anomalie: bool
         ha_ruolo: bool
+        ha_ruolo_inferito: bool
