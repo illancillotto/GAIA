@@ -16,12 +16,22 @@ import { exportInazXlsm, listInazCollaborators, listInazDailyRecords } from "@/l
 import { getStoredAccessToken } from "@/lib/auth";
 import type { InazCollaborator, InazDailyRecord } from "@/types/api";
 
-function monthStartInputValue(): string {
+function currentMonthValue(): string {
   const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
-function monthBoundsFromStart(value: string): { start: string; end: string } {
+function shiftMonth(monthValue: string, delta: number): string {
+  const [year, month] = monthValue.split("-").map(Number);
+  const shifted = new Date(year, month - 1 + delta, 1);
+  return `${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function formatMonthLabel(monthValue: string): string {
+  return new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric" }).format(new Date(`${monthValue}-01T00:00:00`));
+}
+
+function monthBoundsFromValue(value: string): { start: string; end: string } {
   const [year, month] = value.split("-").map(Number);
   const end = new Date(year, month, 0).getDate();
   return {
@@ -34,7 +44,7 @@ export default function InazExportPage() {
   const [collaborators, setCollaborators] = useState<InazCollaborator[]>([]);
   const [records, setRecords] = useState<InazDailyRecord[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [periodStart, setPeriodStart] = useState(monthStartInputValue());
+  const [selectedMonth, setSelectedMonth] = useState(currentMonthValue());
   const [employeeKind, setEmployeeKind] = useState("AVVENTIZI");
   const [templatePath, setTemplatePath] = useState("");
   const [isLoading, setIsLoading] = useState(true);
@@ -54,14 +64,14 @@ export default function InazExportPage() {
 
   useEffect(() => {
     const token = getStoredAccessToken();
-    if (!token || !periodStart) return;
-    const bounds = monthBoundsFromStart(periodStart);
+    if (!token || !selectedMonth) return;
+    const bounds = monthBoundsFromValue(selectedMonth);
     setIsLoadingPreview(true);
     listInazDailyRecords(token, { dateFrom: bounds.start, dateTo: bounds.end, page: 1, pageSize: 200 })
       .then((response) => setRecords(response.items))
       .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Errore caricamento preview export"))
       .finally(() => setIsLoadingPreview(false));
-  }, [periodStart]);
+  }, [selectedMonth]);
 
   const mappedCount = useMemo(() => collaborators.filter((item) => item.application_user_id != null).length, [collaborators]);
   const selectedCollaborators = useMemo(
@@ -87,8 +97,9 @@ export default function InazExportPage() {
     setError(null);
     setSuccess(null);
     try {
+      const { start } = monthBoundsFromValue(selectedMonth);
       const blob = await exportInazXlsm(token, {
-        periodStart,
+        periodStart: start,
         collaboratorIds: selectedIds,
         employeeKind,
         templatePath: templatePath.trim() || undefined,
@@ -96,7 +107,7 @@ export default function InazExportPage() {
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `inaz_giornaliere_${periodStart}.xlsm`;
+      link.download = `inaz_giornaliere_${selectedMonth}.xlsm`;
       document.body.appendChild(link);
       link.click();
       link.remove();
@@ -160,8 +171,27 @@ export default function InazExportPage() {
 
           <div className="grid gap-4 lg:grid-cols-3">
             <label className="block text-sm font-medium text-gray-700">
-              Mese di riferimento
-              <input className="form-control mt-1" type="date" value={periodStart} onChange={(event) => setPeriodStart(event.target.value)} />
+              <span>Mese di riferimento</span>
+              <div className="mt-1 flex items-center gap-2">
+                <button
+                  type="button"
+                  className="btn-secondary px-3"
+                  aria-label="Mese precedente"
+                  onClick={() => setSelectedMonth((current) => shiftMonth(current, -1))}
+                >
+                  ‹
+                </button>
+                <input className="form-control flex-1" type="month" value={selectedMonth} onChange={(event) => setSelectedMonth(event.target.value)} />
+                <button
+                  type="button"
+                  className="btn-secondary px-3"
+                  aria-label="Mese successivo"
+                  onClick={() => setSelectedMonth((current) => shiftMonth(current, 1))}
+                >
+                  ›
+                </button>
+              </div>
+              <p className="mt-1 text-xs capitalize text-gray-400">{formatMonthLabel(selectedMonth)}</p>
             </label>
             <label className="block text-sm font-medium text-gray-700">
               Tipo personale
@@ -223,7 +253,7 @@ export default function InazExportPage() {
               <p className="section-copy">
                 {isLoadingPreview
                   ? "Caricamento giornaliere del mese selezionato..."
-                  : `Periodo ${monthBoundsFromStart(periodStart).start} / ${monthBoundsFromStart(periodStart).end}. La preview usa le giornaliere gia persistite in GAIA.`}
+                  : `Periodo ${monthBoundsFromValue(selectedMonth).start} / ${monthBoundsFromValue(selectedMonth).end}. La preview usa le giornaliere gia persistite in GAIA.`}
               </p>
               <div className="mt-4 grid gap-3 md:grid-cols-3">
                 <div className="rounded-xl border border-white bg-white px-3 py-3">
@@ -270,7 +300,7 @@ export default function InazExportPage() {
           </div>
 
           <div className="flex justify-end">
-            <button className="btn-primary" type="button" onClick={() => void handleExport()} disabled={isExporting || !periodStart}>
+            <button className="btn-primary" type="button" onClick={() => void handleExport()} disabled={isExporting || !selectedMonth}>
               {isExporting ? "Generazione..." : "Scarica XLSM"}
             </button>
           </div>
