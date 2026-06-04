@@ -144,6 +144,19 @@ function buildParticelleFillOpacity(
   ] as maplibregl.ExpressionSpecification;
 }
 
+function buildParticelleOutlineColor(
+  basemap: GisBasemap | null | undefined,
+): string | maplibregl.ExpressionSpecification {
+  const regularColor = basemap === "satellite" || basemap === "google_satellite" ? "#FACC15" : "#4F46E5";
+  const incompleteColor = basemap === "satellite" || basemap === "google_satellite" ? "#EAB308" : "#C4008E";
+  return [
+    "case",
+    PARTICELLA_INCOMPLETE_KEY_EXPRESSION,
+    incompleteColor,
+    regularColor,
+  ] as maplibregl.ExpressionSpecification;
+}
+
 function getGeometryRings(geom: GeoJSON.Geometry): PolygonCoords {
   if (geom.type === "Polygon") return geom.coordinates as unknown as PolygonCoords;
   if (geom.type === "MultiPolygon") return (geom.coordinates as unknown as MultiPolygonCoords).flat();
@@ -477,18 +490,20 @@ export default function MapContainer({
         "source-layer": "cat_distretti_boundaries",
         minzoom: 7,
         paint: {
-          "line-color": "#1D4E35",
+          // Keep district boundaries understated so parcel outlines remain dominant.
+          "line-color": "#64748B",
           "line-width": [
             "interpolate",
             ["linear"],
             ["zoom"],
             7,
-            1.6,
+            0.8,
             11,
-            2,
+            1,
             15,
-            2.6,
+            1.4,
           ],
+          "line-opacity": 0.22,
         },
       });
 
@@ -529,17 +544,12 @@ export default function MapContainer({
         "source-layer": "cat_particelle_current",
         minzoom: 14,
         paint: {
-          "line-color": [
-            "case",
-            PARTICELLA_INCOMPLETE_KEY_EXPRESSION,
-            "#C4008E",
-            "#4338CA",
-          ],
+          "line-color": buildParticelleOutlineColor(basemap),
           "line-width": [
             "case",
             PARTICELLA_INCOMPLETE_KEY_EXPRESSION,
-            1.2,
-            0.5,
+            0.9,
+            0.35,
           ],
         },
       });
@@ -759,8 +769,8 @@ export default function MapContainer({
     }
     if (map.getLayer("distretti-outline")) {
       map.setLayoutProperty("distretti-outline", "visibility", showDistretti && !showDistrettiFill ? "visible" : "none");
-      map.setPaintProperty("distretti-outline", "line-color", distrettoColor);
-      map.setPaintProperty("distretti-outline", "line-opacity", Math.min(1, distrettiOpacity + 0.15));
+      map.setPaintProperty("distretti-outline", "line-color", "#64748B");
+      map.setPaintProperty("distretti-outline", "line-opacity", Math.min(0.32, distrettiOpacity * 0.55 + 0.08));
     }
     if (map.getLayer("particelle-fill")) {
       map.setLayoutProperty("particelle-fill", "visibility", showParticelleFill ? "visible" : "none");
@@ -768,7 +778,8 @@ export default function MapContainer({
     }
     if (map.getLayer("particelle-outline")) {
       map.setLayoutProperty("particelle-outline", "visibility", "visible");
-      map.setPaintProperty("particelle-outline", "line-opacity", Math.min(1, particelleOpacity + 0.2));
+      map.setPaintProperty("particelle-outline", "line-color", buildParticelleOutlineColor(basemap));
+      map.setPaintProperty("particelle-outline", "line-opacity", Math.min(0.65, particelleOpacity * 0.7 + 0.08));
     }
     if (map.getLayer("particelle-hitbox")) {
       // Keep the transparent hitbox queryable even when the visual parcel layer is disabled.
@@ -805,7 +816,7 @@ export default function MapContainer({
         selectedIds.length > 0 ? ["in", ["get", "id"], ["literal", selectedIds]] : ["in", ["get", "id"], ["literal", []]],
       );
     }
-  }, [filters.num_distretto, mapLayers, mapReadyVersion, selectedIds]);
+  }, [basemap, filters.num_distretto, mapLayers, mapReadyVersion, selectedIds]);
 
   useEffect(() => {
     const map = mapRef.current;

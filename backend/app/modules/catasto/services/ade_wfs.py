@@ -24,6 +24,33 @@ DEFAULT_COUNT = 1000
 DEFAULT_MAX_PAGES = 20
 ADE_APPLY_CATEGORIES = {"nuove_in_ade", "geometrie_variate", "mancanti_in_ade"}
 ADE_SYNC_ACTIVE_STATUSES = {"queued", "processing"}
+ADE_SECTION_MATCH_SQL = """
+(
+    COALESCE(p.sezione_catastale, '') = COALESCE(a.sezione_catastale, '')
+    OR COALESCE(p.sezione_catastale, '') = ''
+    OR COALESCE(a.sezione_catastale, '') = ''
+)
+"""
+ADE_RUN_SCOPE_SQL = """
+SELECT DISTINCT ON (
+    codice_catastale,
+    COALESCE(sezione_catastale, ''),
+    foglio,
+    particella
+)
+    *
+FROM cat_ade_particelle
+WHERE source_run_id = :run_id
+ORDER BY
+    codice_catastale,
+    COALESCE(sezione_catastale, ''),
+    foglio,
+    particella,
+    CASE WHEN allegato IS NULL THEN 0 ELSE 1 END,
+    CASE WHEN sviluppo IS NULL THEN 0 ELSE 1 END,
+    fetched_at DESC,
+    id DESC
+"""
 
 NS = {
     "wfs": "http://www.opengis.net/wfs/2.0",
@@ -719,15 +746,11 @@ def get_ade_alignment_report(db: Session, run_id: str, *, geometry_threshold_m: 
     }
     counters = db.execute(
         text(
-            """
+            f"""
             WITH scope AS (
                 SELECT ST_MakeEnvelope(:min_lon, :min_lat, :max_lon, :max_lat, 4326) AS geom
             ),
-            ade AS (
-                SELECT *
-                FROM cat_ade_particelle
-                WHERE source_run_id = :run_id
-            ),
+            ade AS ({ADE_RUN_SCOPE_SQL}),
             ade_matches AS (
                 SELECT
                     a.id AS ade_id,
@@ -737,7 +760,7 @@ def get_ade_alignment_report(db: Session, run_id: str, *, geometry_threshold_m: 
                 LEFT JOIN cat_particelle p
                   ON p.is_current IS TRUE
                  AND p.codice_catastale = a.codice_catastale
-                 AND COALESCE(p.sezione_catastale, '') = COALESCE(a.sezione_catastale, '')
+                 AND {ADE_SECTION_MATCH_SQL}
                  AND p.foglio = a.foglio
                  AND p.particella = a.particella
                 GROUP BY a.id
@@ -768,7 +791,7 @@ def get_ade_alignment_report(db: Session, run_id: str, *, geometry_threshold_m: 
                       SELECT 1
                       FROM ade a
                       WHERE a.codice_catastale = p.codice_catastale
-                        AND COALESCE(a.sezione_catastale, '') = COALESCE(p.sezione_catastale, '')
+                        AND {ADE_SECTION_MATCH_SQL}
                         AND a.foglio = p.foglio
                         AND a.particella = p.particella
                   )
@@ -787,12 +810,8 @@ def get_ade_alignment_report(db: Session, run_id: str, *, geometry_threshold_m: 
     ).one()
     samples = db.execute(
         text(
-            """
-            WITH ade AS (
-                SELECT *
-                FROM cat_ade_particelle
-                WHERE source_run_id = :run_id
-            ),
+            f"""
+            WITH ade AS ({ADE_RUN_SCOPE_SQL}),
             ade_matches AS (
                 SELECT
                     a.id AS ade_id,
@@ -802,7 +821,7 @@ def get_ade_alignment_report(db: Session, run_id: str, *, geometry_threshold_m: 
                 LEFT JOIN cat_particelle p
                   ON p.is_current IS TRUE
                  AND p.codice_catastale = a.codice_catastale
-                 AND COALESCE(p.sezione_catastale, '') = COALESCE(a.sezione_catastale, '')
+                 AND {ADE_SECTION_MATCH_SQL}
                  AND p.foglio = a.foglio
                  AND p.particella = a.particella
                 GROUP BY a.id
@@ -844,15 +863,11 @@ def get_ade_alignment_report(db: Session, run_id: str, *, geometry_threshold_m: 
     ).mappings().all()
     geojson_row = db.execute(
         text(
-            """
+            f"""
             WITH scope AS (
                 SELECT ST_MakeEnvelope(:min_lon, :min_lat, :max_lon, :max_lat, 4326) AS geom
             ),
-            ade AS (
-                SELECT *
-                FROM cat_ade_particelle
-                WHERE source_run_id = :run_id
-            ),
+            ade AS ({ADE_RUN_SCOPE_SQL}),
             ade_matches AS (
                 SELECT
                     a.id AS ade_id,
@@ -862,7 +877,7 @@ def get_ade_alignment_report(db: Session, run_id: str, *, geometry_threshold_m: 
                 LEFT JOIN cat_particelle p
                   ON p.is_current IS TRUE
                  AND p.codice_catastale = a.codice_catastale
-                 AND COALESCE(p.sezione_catastale, '') = COALESCE(a.sezione_catastale, '')
+                 AND {ADE_SECTION_MATCH_SQL}
                  AND p.foglio = a.foglio
                  AND p.particella = a.particella
                 GROUP BY a.id
@@ -931,7 +946,7 @@ def get_ade_alignment_report(db: Session, run_id: str, *, geometry_threshold_m: 
                       SELECT 1
                       FROM ade a
                       WHERE a.codice_catastale = p.codice_catastale
-                        AND COALESCE(a.sezione_catastale, '') = COALESCE(p.sezione_catastale, '')
+                        AND {ADE_SECTION_MATCH_SQL}
                         AND a.foglio = p.foglio
                         AND a.particella = p.particella
                   )
@@ -1047,15 +1062,11 @@ def preview_ade_alignment_apply(
 
     summary = db.execute(
         text(
-            """
+            f"""
             WITH scope AS (
                 SELECT ST_MakeEnvelope(:min_lon, :min_lat, :max_lon, :max_lat, 4326) AS geom
             ),
-            ade AS (
-                SELECT *
-                FROM cat_ade_particelle
-                WHERE source_run_id = :run_id
-            ),
+            ade AS ({ADE_RUN_SCOPE_SQL}),
             ade_matches AS (
                 SELECT
                     a.id AS ade_id,
@@ -1065,7 +1076,7 @@ def preview_ade_alignment_apply(
                 LEFT JOIN cat_particelle p
                   ON p.is_current IS TRUE
                  AND p.codice_catastale = a.codice_catastale
-                 AND COALESCE(p.sezione_catastale, '') = COALESCE(a.sezione_catastale, '')
+                 AND {ADE_SECTION_MATCH_SQL}
                  AND p.foglio = a.foglio
                  AND p.particella = a.particella
                 GROUP BY a.id
@@ -1097,7 +1108,7 @@ def preview_ade_alignment_apply(
                       SELECT 1
                       FROM ade a
                       WHERE a.codice_catastale = p.codice_catastale
-                        AND COALESCE(a.sezione_catastale, '') = COALESCE(p.sezione_catastale, '')
+                        AND {ADE_SECTION_MATCH_SQL}
                         AND a.foglio = p.foglio
                         AND a.particella = p.particella
                   )
@@ -1167,15 +1178,11 @@ def preview_ade_alignment_apply(
 
     samples = db.execute(
         text(
-            """
+            f"""
             WITH scope AS (
                 SELECT ST_MakeEnvelope(:min_lon, :min_lat, :max_lon, :max_lat, 4326) AS geom
             ),
-            ade AS (
-                SELECT *
-                FROM cat_ade_particelle
-                WHERE source_run_id = :run_id
-            ),
+            ade AS ({ADE_RUN_SCOPE_SQL}),
             ade_matches AS (
                 SELECT
                     a.id AS ade_id,
@@ -1185,7 +1192,7 @@ def preview_ade_alignment_apply(
                 LEFT JOIN cat_particelle p
                   ON p.is_current IS TRUE
                  AND p.codice_catastale = a.codice_catastale
-                 AND COALESCE(p.sezione_catastale, '') = COALESCE(a.sezione_catastale, '')
+                 AND {ADE_SECTION_MATCH_SQL}
                  AND p.foglio = a.foglio
                  AND p.particella = a.particella
                 GROUP BY a.id
@@ -1232,7 +1239,7 @@ def preview_ade_alignment_apply(
                       SELECT 1
                       FROM ade a
                       WHERE a.codice_catastale = p.codice_catastale
-                        AND COALESCE(a.sezione_catastale, '') = COALESCE(p.sezione_catastale, '')
+                        AND {ADE_SECTION_MATCH_SQL}
                         AND a.foglio = p.foglio
                         AND a.particella = p.particella
                   )
@@ -1323,15 +1330,11 @@ def apply_ade_alignment(
         "max_lon": bbox["max_lon"],
         "max_lat": bbox["max_lat"],
     }
-    cte = """
+    cte = f"""
         WITH scope AS (
             SELECT ST_MakeEnvelope(:min_lon, :min_lat, :max_lon, :max_lat, 4326) AS geom
         ),
-        ade AS (
-            SELECT *
-            FROM cat_ade_particelle
-            WHERE source_run_id = :run_id
-        ),
+        ade AS ({ADE_RUN_SCOPE_SQL}),
         ade_matches AS (
             SELECT
                 a.id AS ade_id,
@@ -1341,7 +1344,7 @@ def apply_ade_alignment(
             LEFT JOIN cat_particelle p
               ON p.is_current IS TRUE
              AND p.codice_catastale = a.codice_catastale
-             AND COALESCE(p.sezione_catastale, '') = COALESCE(a.sezione_catastale, '')
+             AND {ADE_SECTION_MATCH_SQL}
              AND p.foglio = a.foglio
              AND p.particella = a.particella
             GROUP BY a.id
@@ -1373,7 +1376,7 @@ def apply_ade_alignment(
                   SELECT 1
                   FROM ade a
                   WHERE a.codice_catastale = p.codice_catastale
-                    AND COALESCE(a.sezione_catastale, '') = COALESCE(p.sezione_catastale, '')
+                    AND {ADE_SECTION_MATCH_SQL}
                     AND a.foglio = p.foglio
                     AND a.particella = p.particella
               )
@@ -1482,7 +1485,7 @@ def apply_ade_alignment(
         inserted_new = db.execute(
             text(
                 cte
-                + """
+                + f"""
                 INSERT INTO cat_particelle (
                   id,
                   comune_id,
@@ -1543,7 +1546,7 @@ def apply_ade_alignment(
                       FROM cat_particelle p
                       WHERE p.is_current IS TRUE
                         AND p.codice_catastale = a.codice_catastale
-                        AND COALESCE(p.sezione_catastale, '') = COALESCE(a.sezione_catastale, '')
+                        AND {ADE_SECTION_MATCH_SQL}
                         AND p.foglio = a.foglio
                         AND p.particella = a.particella
                   )

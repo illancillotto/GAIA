@@ -168,6 +168,9 @@ def _insert_ade_particella(
     particella: str,
     wkt: str,
     codice_catastale: str = "A357",
+    sezione_catastale: str | None = None,
+    allegato: str | None = None,
+    sviluppo: str | None = None,
 ) -> None:
     db.execute(
         text(
@@ -178,8 +181,11 @@ def _insert_ade_particella(
                 national_cadastral_reference,
                 administrative_unit,
                 codice_catastale,
+                sezione_catastale,
                 foglio,
                 foglio_raw,
+                allegato,
+                sviluppo,
                 particella,
                 particella_raw,
                 geometry,
@@ -194,8 +200,11 @@ def _insert_ade_particella(
                 CAST(:national_ref AS varchar),
                 CAST(:codice_catastale AS varchar),
                 CAST(:codice_catastale AS varchar),
+                CAST(:sezione_catastale AS varchar),
                 CAST(:foglio AS varchar),
                 LPAD(CAST(:foglio AS text), 4, '0'),
+                CAST(:allegato AS varchar),
+                CAST(:sviluppo AS varchar),
                 CAST(:particella AS varchar),
                 CAST(:particella AS varchar),
                 ST_GeomFromText(:wkt, 4326),
@@ -210,7 +219,10 @@ def _insert_ade_particella(
             "run_id": run_id,
             "national_ref": national_ref,
             "codice_catastale": codice_catastale,
+            "sezione_catastale": sezione_catastale,
             "foglio": foglio,
+            "allegato": allegato,
+            "sviluppo": sviluppo,
             "particella": particella,
             "wkt": wkt,
             "payload": "{}",
@@ -226,6 +238,7 @@ def _insert_particella(
     particella: str,
     wkt: str,
     suffix: str,
+    sezione_catastale: str | None = None,
 ) -> str:
     particella_id = str(uuid4())
     db.execute(
@@ -238,6 +251,7 @@ def _insert_particella(
                 cod_comune_capacitas,
                 codice_catastale,
                 nome_comune,
+                sezione_catastale,
                 foglio,
                 particella,
                 superficie_mq,
@@ -259,6 +273,7 @@ def _insert_particella(
                 c.cod_comune_capacitas,
                 c.codice_catastale,
                 c.nome_comune,
+                :sezione_catastale,
                 :foglio,
                 :particella,
                 1000,
@@ -279,6 +294,7 @@ def _insert_particella(
         {
             "id": particella_id,
             "national_code": f"A357TEST{suffix}",
+            "sezione_catastale": sezione_catastale,
             "foglio": foglio,
             "particella": particella,
             "wkt": wkt,
@@ -542,6 +558,145 @@ def test_apply_ade_alignment_updates_geometry_in_place_and_preserves_fk(db_sessi
         report_after = get_ade_alignment_report(db_session, run_id, geometry_threshold_m=1)
         assert report_after["counters"]["geometrie_variate"] == 0
         assert report_after["counters"]["allineate"] == 1
+    finally:
+        _cleanup(db_session, suffix=suffix, run_ids=run_ids)
+
+
+def test_apply_ade_alignment_matches_when_gaia_section_is_missing_and_ade_has_value(db_session: Session) -> None:
+    suffix = uuid4().hex[:8]
+    foglio = f"8{suffix[:2]}"
+    particella = f"1{suffix[2:5]}"
+    run_ids: list[str] = []
+
+    _ensure_comune_arborea(db_session)
+    _cleanup(db_session, suffix=suffix)
+    old_wkt = _polygon_wkt(8.21, 39.21)
+    new_wkt = _polygon_wkt(8.22, 39.22)
+    try:
+        particella_id = _insert_particella(
+            db_session,
+            foglio=foglio,
+            particella=particella,
+            wkt=old_wkt,
+            suffix=suffix,
+            sezione_catastale=None,
+        )
+        run_id = _create_run(db_session, min_lon=8.2, min_lat=39.2, max_lon=8.24, max_lat=39.24)
+        run_ids.append(run_id)
+        _insert_ade_particella(
+            db_session,
+            run_id=run_id,
+            national_ref=f"A357A{foglio.zfill(4)}00.{particella}",
+            foglio=foglio,
+            particella=particella,
+            wkt=new_wkt,
+            sezione_catastale="A",
+        )
+        db_session.commit()
+
+        report_before = get_ade_alignment_report(db_session, run_id, geometry_threshold_m=1)
+        preview = preview_ade_alignment_apply(
+            db_session,
+            run_id,
+            categories=["geometrie_variate"],
+            geometry_threshold_m=1,
+        )
+        result = apply_ade_alignment(
+            db_session,
+            run_id,
+            categories=["geometrie_variate"],
+            geometry_threshold_m=1,
+            confirm=True,
+        )
+        db_session.expire_all()
+
+        current = db_session.get(CatParticella, particella_id)
+        is_new_geometry = db_session.execute(
+            text(
+                """
+                SELECT ST_Equals(geometry, ST_GeomFromText(:new_wkt, 4326))
+                FROM cat_particelle
+                WHERE id = :id
+                """
+            ),
+            {"id": particella_id, "new_wkt": new_wkt},
+        ).scalar_one()
+        report_after = get_ade_alignment_report(db_session, run_id, geometry_threshold_m=1)
+
+        assert report_before["counters"]["geometrie_variate"] == 1
+        assert report_before["counters"]["nuove_in_ade"] == 0
+        assert preview["counters"]["update_geometry"] == 1
+        assert preview["counters"]["insert_new"] == 0
+        assert result["counters"]["updated_geometry"] == 1
+        assert result["counters"]["inserted_new"] == 0
+        assert current is not None
+        assert current.sezione_catastale is None
+        assert current.source_type == "ade_wfs"
+        assert is_new_geometry is True
+        assert report_after["counters"]["geometrie_variate"] == 0
+        assert report_after["counters"]["allineate"] == 1
+    finally:
+        _cleanup(db_session, suffix=suffix, run_ids=run_ids)
+
+
+def test_ade_alignment_report_dedupes_duplicate_ade_keys_preferring_base_reference(db_session: Session) -> None:
+    suffix = uuid4().hex[:8]
+    foglio = f"8{suffix[:2]}"
+    particella = f"STRADA{suffix[:3].upper()}"
+    run_ids: list[str] = []
+
+    _ensure_comune_arborea(db_session)
+    _cleanup(db_session, suffix=suffix)
+    canonical_wkt = _polygon_wkt(8.31, 39.31)
+    duplicate_wkt = _polygon_wkt(8.33, 39.33)
+    try:
+        _insert_particella(
+            db_session,
+            foglio=foglio,
+            particella=particella,
+            wkt=canonical_wkt,
+            suffix=suffix,
+            sezione_catastale="A",
+        )
+        run_id = _create_run(db_session, min_lon=8.3, min_lat=39.3, max_lon=8.34, max_lat=39.34)
+        run_ids.append(run_id)
+        _insert_ade_particella(
+            db_session,
+            run_id=run_id,
+            national_ref=f"A357A{foglio.zfill(4)}00.{particella}",
+            foglio=foglio,
+            particella=particella,
+            wkt=canonical_wkt,
+            sezione_catastale="A",
+            allegato=None,
+            sviluppo=None,
+        )
+        _insert_ade_particella(
+            db_session,
+            run_id=run_id,
+            national_ref=f"A357A{foglio.zfill(4)}A0.{particella}",
+            foglio=foglio,
+            particella=particella,
+            wkt=duplicate_wkt,
+            sezione_catastale="A",
+            allegato="A",
+            sviluppo=None,
+        )
+        db_session.commit()
+
+        report = get_ade_alignment_report(db_session, run_id, geometry_threshold_m=1)
+        preview = preview_ade_alignment_apply(
+            db_session,
+            run_id,
+            categories=["geometrie_variate"],
+            geometry_threshold_m=1,
+        )
+
+        assert report["counters"]["staged_particelle"] == 1
+        assert report["counters"]["allineate"] == 1
+        assert report["counters"]["geometrie_variate"] == 0
+        assert report["counters"]["match_ambiguo"] == 0
+        assert preview["counters"]["update_geometry"] == 0
     finally:
         _cleanup(db_session, suffix=suffix, run_ids=run_ids)
 

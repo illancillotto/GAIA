@@ -279,9 +279,9 @@ export default function CatastoGisPage() {
   const [gisInfo, setGisInfo] = useState<string | null>(null);
   const [showDistretti, setShowDistretti] = useState(true);
   const [showDistrettiFill, setShowDistrettiFill] = useState(true);
-  const [showParticelleFill, setShowParticelleFill] = useState(true);
+  const [showParticelleFill, setShowParticelleFill] = useState(false);
   const [particelleQuickFilter, setParticelleQuickFilter] = useState<ParticelleQuickFilter>("all");
-  const [basemap, setBasemap] = useState<GisBasemap>("osm");
+  const [basemap, setBasemap] = useState<GisBasemap>("satellite");
   const [highlightSelected, setHighlightSelected] = useState(true);
   const [distrettiOpacity, setDistrettiOpacity] = useState(0.34);
   const [particelleOpacity, setParticelleOpacity] = useState(0.5);
@@ -439,11 +439,6 @@ export default function CatastoGisPage() {
         if (latestRun?.status === "completed") {
           const report = await catastoGisGetAdeAlignmentReport(token, latestRun.run_id, { geometryThresholdM: 1 });
           setAdeReport(report);
-          const previewLayer = buildAdePreviewLayer(report);
-          setOverlayLayers((layers) => [
-            ...layers.filter((layer) => !layer.layer_key.startsWith("ade-preview-")),
-            ...(previewLayer ? [previewLayer] : []),
-          ]);
         } else {
           setAdeReport(null);
         }
