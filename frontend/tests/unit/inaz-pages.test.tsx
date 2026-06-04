@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   getCurrentUser: vi.fn(),
   listApplicationUsers: vi.fn(),
   listInazCollaborators: vi.fn(),
+  listInazDailyRecords: vi.fn(),
   mapInazCollaboratorApplicationUser: vi.fn(),
   listInazImportJobs: vi.fn(),
   previewInazImport: vi.fn(),
@@ -36,6 +37,7 @@ vi.mock("@/lib/api", () => ({
   getCurrentUser: mocks.getCurrentUser,
   listApplicationUsers: mocks.listApplicationUsers,
   listInazCollaborators: mocks.listInazCollaborators,
+  listInazDailyRecords: mocks.listInazDailyRecords,
   mapInazCollaboratorApplicationUser: mocks.mapInazCollaboratorApplicationUser,
   listInazImportJobs: mocks.listInazImportJobs,
   previewInazImport: mocks.previewInazImport,
@@ -62,7 +64,7 @@ vi.mock("@/components/app/protected-page", () => ({
 }));
 
 vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: mocks.push }),
+  useRouter: () => ({ push: mocks.push, replace: mocks.push }),
 }));
 
 describe("Inaz pages", () => {
@@ -125,6 +127,58 @@ describe("Inaz pages", () => {
           last_seen_at: "2026-05-29T09:00:00Z",
           created_at: "2026-05-29T09:00:00Z",
           updated_at: "2026-05-29T09:00:00Z",
+        },
+      ],
+      total: 1,
+      page: 1,
+      page_size: 200,
+    });
+    mocks.listInazDailyRecords.mockResolvedValue({
+      items: [
+        {
+          id: "record-1",
+          collaborator_id: "collab-1",
+          owner_user_id: 1,
+          application_user_id: null,
+          work_date: "2026-05-01",
+          schedule_code: "OPE0714",
+          teo_minutes: 420,
+          ordinary_minutes: 420,
+          absence_minutes: 0,
+          justified_minutes: 0,
+          maggiorazione_minutes: 0,
+          mpe_minutes: 0,
+          straordinario_minutes: 0,
+          km_value: null,
+          override_straordinario_minutes: null,
+          override_mpe_minutes: null,
+          manual_note: null,
+          effective_straordinario_minutes: null,
+          effective_mpe_minutes: null,
+          effective_extra_minutes: null,
+          stato: "Giornata regolare",
+          evidenze: null,
+          raw_weekday: "V",
+          detail_title: null,
+          detail_status: "Giornata regolare",
+          detail_programmed_schedule: "OPE0714",
+          detail_effective_schedule: null,
+          detail_time_slots: "07:00 - 14:00",
+          detail_schedule_type: null,
+          detail_theoretical_hours: "07:00",
+          detail_absence_hours: "00:00",
+          detail_day_summary: {},
+          detail_day_totals: {},
+          detail_requests: [],
+          detail_anomalies: [],
+          detail_text: null,
+          detail_error: null,
+          special_day: false,
+          raw_payload_json: {},
+          source_job_id: null,
+          created_at: "2026-05-29T09:00:00Z",
+          updated_at: "2026-05-29T09:00:00Z",
+          punches: [],
         },
       ],
       total: 1,
@@ -199,7 +253,7 @@ describe("Inaz pages", () => {
       attempt_count: 0,
       max_attempts: 3,
       error_detail: null,
-      params_json: { cdp_endpoint: "http://127.0.0.1:9224", year: 2026, month: 5 },
+      params_json: { year: 2026, month: 5 },
       created_at: "2026-05-29T09:00:00Z",
       started_at: null,
       finished_at: null,
@@ -236,7 +290,7 @@ describe("Inaz pages", () => {
       attempt_count: 1,
       max_attempts: 3,
       error_detail: "Sync job cancelled by user",
-      params_json: { cdp_endpoint: "http://127.0.0.1:9224", year: 2026, month: 5 },
+      params_json: { year: 2026, month: 5 },
       created_at: "2026-05-29T09:00:00Z",
       started_at: "2026-05-29T09:01:00Z",
       finished_at: "2026-05-29T09:02:00Z",
@@ -247,7 +301,8 @@ describe("Inaz pages", () => {
     render(<InazCollaboratoriPage />);
 
     await screen.findAllByText("AMADU SALVATORE");
-    fireEvent.change(screen.getByRole("combobox", { name: "" }), { target: { value: "7" } });
+    const selects = screen.getAllByRole("combobox");
+    fireEvent.change(selects[selects.length - 1], { target: { value: "7" } });
     fireEvent.click(screen.getByText("Salva"));
 
     await waitFor(() => {
@@ -255,25 +310,23 @@ describe("Inaz pages", () => {
     });
   });
 
-  test("renders import preview after file selection", async () => {
+  test("redirects import page to sync", async () => {
     render(<InazImportPage />);
 
-    const file = new File(['{"demo":true}'], "giornaliere.json", { type: "application/json" });
-    const fileInput = document.querySelector('input[type="file"]') as HTMLInputElement;
-    fireEvent.change(fileInput, { target: { files: [file] } });
-    fireEvent.click(screen.getByText("Esegui preview"));
-
     await waitFor(() => {
-      expect(screen.getByText("31")).toBeInTheDocument();
-      expect(screen.getByText(/AMADU SALVATORE/)).toBeInTheDocument();
+      expect(mocks.push).toHaveBeenCalledWith("/inaz/sync");
     });
   });
 
   test("creates a live sync job", async () => {
     render(<InazSyncPage />);
 
-    fireEvent.change(screen.getByDisplayValue(String(new Date().getFullYear())), { target: { value: "2026" } });
-    fireEvent.change(screen.getByDisplayValue(String(new Date().getMonth() + 1).padStart(2, "0")), { target: { value: "05" } });
+    await waitFor(() => {
+      expect(screen.getByLabelText("Credenziale Inaz")).toHaveValue("4");
+    });
+    fireEvent.change(screen.getByLabelText("Anno"), { target: { value: "2026" } });
+    fireEvent.change(screen.getByLabelText("Mese"), { target: { value: "05" } });
+    fireEvent.change(screen.getByLabelText("Credenziale Inaz"), { target: { value: "4" } });
     fireEvent.change(screen.getByPlaceholderText("Vuoto = tutti"), { target: { value: "2" } });
     fireEvent.click(screen.getByText("Avvia sync live"));
 
@@ -281,9 +334,8 @@ describe("Inaz pages", () => {
       expect(mocks.createInazSyncJob).toHaveBeenCalledWith("token", {
         year: 2026,
         month: 5,
-        credential_id: null,
+        credential_id: 4,
         collaborator_limit: 2,
-        cdp_endpoint: "http://127.0.0.1:9224",
       });
       expect(screen.getByText(/Job live sync creato/)).toBeInTheDocument();
     });
@@ -309,7 +361,7 @@ describe("Inaz pages", () => {
         attempt_count: 1,
         max_attempts: 3,
         error_detail: null,
-        params_json: { auth_mode: "cdp" },
+        params_json: { auth_mode: "credential" },
         created_at: "2026-05-29T09:00:00Z",
         started_at: "2026-05-29T09:01:00Z",
         finished_at: "2026-05-29T09:02:00Z",
@@ -352,7 +404,7 @@ describe("Inaz pages", () => {
         attempt_count: 1,
         max_attempts: 3,
         error_detail: null,
-        params_json: { auth_mode: "cdp" },
+        params_json: { auth_mode: "credential" },
         created_at: "2026-05-29T09:00:00Z",
         started_at: "2026-05-29T09:01:00Z",
         finished_at: null,

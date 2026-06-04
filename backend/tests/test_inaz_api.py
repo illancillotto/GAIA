@@ -18,6 +18,8 @@ from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.modules.inaz.models import InazCredential, InazSyncJob
+from app.modules.inaz.services.import_jobs import run_import_job
+from app.modules.inaz.services.parser import load_json_payload, parse_import_payload
 
 
 engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
@@ -316,7 +318,7 @@ def test_inaz_can_map_collaborator_to_application_user() -> None:
     assert calendar.json()["items"][0]["application_user_id"] == mapped_user.id
 
 
-def test_inaz_non_admin_sees_only_own_mapped_data() -> None:
+def test_inaz_non_admin_does_not_see_data_only_because_of_application_mapping() -> None:
     admin = _create_user("scope_admin")
     viewer = _create_user("scope_viewer", role=ApplicationUserRole.VIEWER.value)
     other_viewer = _create_user("scope_other", role=ApplicationUserRole.VIEWER.value)
@@ -342,7 +344,7 @@ def test_inaz_non_admin_sees_only_own_mapped_data() -> None:
 
     own_collaborators = client.get("/inaz/collaborators", headers={"Authorization": f"Bearer {viewer_token}"})
     assert own_collaborators.status_code == 200
-    assert own_collaborators.json()["total"] == 1
+    assert own_collaborators.json()["total"] == 0
 
     other_collaborators = client.get("/inaz/collaborators", headers={"Authorization": f"Bearer {other_token}"})
     assert other_collaborators.status_code == 200
@@ -350,13 +352,64 @@ def test_inaz_non_admin_sees_only_own_mapped_data() -> None:
 
     own_records = client.get("/inaz/giornaliere", headers={"Authorization": f"Bearer {viewer_token}"})
     assert own_records.status_code == 200
-    assert own_records.json()["total"] == 1
+    assert own_records.json()["total"] == 0
 
     denied_calendar = client.get(
         f"/inaz/collaborators/{collab_id}/calendar?date_from=2026-05-01&date_to=2026-05-31",
         headers={"Authorization": f"Bearer {other_token}"},
     )
     assert denied_calendar.status_code == 404
+
+    denied_for_mapped_viewer = client.get(
+        f"/inaz/collaborators/{collab_id}/calendar?date_from=2026-05-01&date_to=2026-05-31",
+        headers={"Authorization": f"Bearer {viewer_token}"},
+    )
+    assert denied_for_mapped_viewer.status_code == 404
+
+
+def test_inaz_non_admin_sees_own_imported_data_by_owner_scope_without_mapping() -> None:
+    viewer = _create_user("owner_scope_viewer", role=ApplicationUserRole.VIEWER.value)
+    other_viewer = _create_user("owner_scope_other", role=ApplicationUserRole.VIEWER.value)
+    viewer_token = _login(viewer.username)
+    other_token = _login(other_viewer.username)
+
+    db = TestingSessionLocal()
+    try:
+        parsed = parse_import_payload(load_json_payload(_sample_payload()))
+        run_import_job(
+            db,
+            parsed=parsed,
+            requested_by_user_id=viewer.id,
+            filename="giornaliere.json",
+            params_json={"format": "collaboratori-json", "origin": "owner-scope-test"},
+        )
+    finally:
+        db.close()
+
+    own_collaborators = client.get("/inaz/collaborators", headers={"Authorization": f"Bearer {viewer_token}"})
+    assert own_collaborators.status_code == 200
+    assert own_collaborators.json()["total"] == 1
+    collaborator = own_collaborators.json()["items"][0]
+    assert collaborator["owner_user_id"] == viewer.id
+    assert collaborator["application_user_id"] is None
+
+    own_records = client.get("/inaz/giornaliere", headers={"Authorization": f"Bearer {viewer_token}"})
+    assert own_records.status_code == 200
+    assert own_records.json()["total"] == 1
+    record = own_records.json()["items"][0]
+    assert record["owner_user_id"] == viewer.id
+    assert record["application_user_id"] is None
+
+    other_collaborators = client.get("/inaz/collaborators", headers={"Authorization": f"Bearer {other_token}"})
+    assert other_collaborators.status_code == 200
+    assert other_collaborators.json()["total"] == 0
+
+    other_records = client.get("/inaz/giornaliere", headers={"Authorization": f"Bearer {other_token}"})
+    assert other_records.status_code == 200
+    assert other_records.json()["total"] == 0
+
+    denied_record = client.get(f"/inaz/giornaliere/{record['id']}", headers={"Authorization": f"Bearer {other_token}"})
+    assert denied_record.status_code == 404
 
 
 def test_inaz_summary_normalizes_event_minutes() -> None:

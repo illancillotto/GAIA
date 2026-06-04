@@ -48,17 +48,23 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
 - dashboard `/inaz`;
 - pagina `/inaz/settings` per gestione credenziali Inaz;
 - lista `/inaz/collaboratori`;
+- lista `/inaz/collaboratori` con suggerimento automatico di mapping verso utenti GAIA;
 - apertura dettaglio collaboratore in modale embedded dalla lista, con fallback alla pagina completa;
 - dettaglio `/inaz/collaboratori/[id]` con:
   - cartellino periodo;
   - riepilogo eventi;
   - mapping verso utente GAIA per admin;
+  - suggerimento mapping come prima opzione del select, con preselezione automatica se il collaboratore non e ancora collegato;
 - pagina `/inaz/giornaliere`;
 - pagina `/inaz/giornaliere` con dettaglio operativo della singola giornata:
   - orario Inaz;
   - stato giornata;
   - riepilogo e totali;
   - richieste e anomalie;
+- pagina `/inaz/giornaliere` rifatta come workspace del capo settore:
+  - perimetro dati filtrato sul responsabile che ha eseguito la sync (`owner_user_id`);
+  - KPI mese, filtri anomalie/extra, tabella operativa e pannello rettifiche;
+  - modifica diretta di `KM`, straordinario override, maggior presenza override e nota operativa;
 - route `/inaz/import` mantenuta solo come redirect tecnico verso `/inaz/sync`, non piu esposta come flusso operativo utente;
 - pagina `/inaz/export` con download `.xlsm`;
 - pagina `/inaz/export` con preview dataset del mese, perimetro collaboratori e KPI di righe/giorni speciali;
@@ -74,6 +80,7 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
 - login automatico con credenziali cifrate selezionate dal vault `Inaz`;
 - ogni run live produce ancora artefatti su filesystem (`json`, `log`, `summary`, `progress`, `events`) per diagnostica;
 - il worker salva progressivamente a DB i collaboratori completati, senza aspettare piu l'import finale monolitico;
+- collaboratori, giornaliere e summary persistiti portano anche `owner_user_id`, distinto dal mapping `application_user_id` del singolo dipendente;
 - il job aggiorna un checkpoint persistito in `inaz_sync_jobs.params_json.checkpoint.completed_employee_codes`;
 - il retry riparte dai collaboratori non ancora persistiti, invece di ricominciare da `1/N`;
 - retry applicativo disponibile fino al limite configurato;
@@ -89,8 +96,12 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
   - scrittura corretta delle colonne speciali in `Archivio2`;
 - aggiunti test per la precedenza `detail Inaz > template fallback`;
 - aggiunti test frontend iniziali `frontend/tests/unit/inaz-pages.test.tsx`;
+- aggiunti test frontend sul dettaglio collaboratore e preselezione del mapping suggerito in `frontend/tests/unit/inaz-collaboratore-detail.test.tsx`;
+- aggiunti test frontend sul workspace operatore giornaliere in `frontend/tests/unit/inaz-giornaliere-page.test.tsx`;
+- aggiunto test backend sul filtro per `owner_user_id`, per garantire che un capo settore veda i dati da lui importati anche senza mapping del collaboratore verso `application_users`;
 - `pytest backend/tests/test_inaz_api.py tests/test_inaz_schedule_engine.py -q`: ok;
 - `frontend npm run typecheck`: ok;
+- `frontend npm run test:unit -- inaz-pages.test.tsx inaz-collaboratore-detail.test.tsx inaz-giornaliere-page.test.tsx`: ok;
 - verifica smoke backend eseguita su parser JSON e compilazione XLSM.
 
 ## Gap aperti
