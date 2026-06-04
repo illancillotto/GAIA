@@ -17,9 +17,9 @@ from app.models.nas_user import NasUser
 from app.models.permission_entry import PermissionEntry
 from app.models.section_permission import Section
 from app.models.share import Share
+from app.models.sync_job import SyncJob
 from app.models.snapshot import Snapshot
 from app.models.sync_run import SyncRun
-from app.services.nas_connector import NasConnectorError
 
 
 SQLALCHEMY_DATABASE_URL = "sqlite://"
@@ -230,30 +230,22 @@ def test_sync_apply_accepts_synology_acl_and_share_listing_formats() -> None:
         db.close()
 
 
-def test_sync_live_apply_uses_connector_payload(monkeypatch) -> None:
-    class FakeJobResult:
-        def __init__(self) -> None:
-            self.sync_result = {
-                "snapshot_id": 9,
-                "snapshot_checksum": "live-checksum",
-                "persisted_users": 2,
-                "persisted_groups": 2,
-                "persisted_shares": 2,
-                "persisted_permission_entries": 3,
-                "persisted_effective_permissions": 4,
-                "share_acl_pairs_used": 2,
-            }
+def test_sync_live_apply_queues_worker_job(monkeypatch) -> None:
+    monkeypatch.setattr("app.modules.accessi.routes.sync.has_running_sync_job", lambda db: False)
+    monkeypatch.setattr("app.modules.accessi.routes.sync.launch_sync_worker", lambda job: 4242)
 
-    monkeypatch.setattr(
-        "app.api.routes.sync.run_live_sync_job",
-        lambda db, trigger_type='api', initiated_by=None, source_label=None, profile="quick": FakeJobResult(),
-    )
+    response = client.post("/sync/live-apply", headers=auth_headers(), json={"profile": "quick"})
 
-    response = client.post("/sync/live-apply", headers=auth_headers())
+    assert response.status_code == 201
+    assert response.json()["profile"] == "quick"
+    assert response.json()["status"] == "pending"
+    assert response.json()["worker_pid"] == 4242
 
-    assert response.status_code == 200
-    assert response.json()["snapshot_id"] == 9
-    assert response.json()["snapshot_checksum"] == "live-checksum"
+    db = TestingSessionLocal()
+    try:
+        assert db.query(SyncJob).count() == 1
+    finally:
+        db.close()
 
 
 def test_build_live_sync_payload_quotes_share_names(monkeypatch) -> None:
@@ -289,13 +281,40 @@ def test_build_live_sync_payload_quotes_share_names(monkeypatch) -> None:
     assert client.commands[-1] == "synoacltool -get /volume1/'PROGETTO ADDUTTORE DX'"
 
 
-def test_sync_live_apply_returns_503_when_connector_fails(monkeypatch) -> None:
-    def fake_run_live_sync_job(db, trigger_type="api", initiated_by=None, source_label=None, profile="quick"):
-        raise NasConnectorError("SSH command failed: getent passwd")
+def test_sync_live_apply_returns_500_when_worker_start_fails(monkeypatch) -> None:
+    monkeypatch.setattr("app.modules.accessi.routes.sync.has_running_sync_job", lambda db: False)
 
-    monkeypatch.setattr("app.api.routes.sync.run_live_sync_job", fake_run_live_sync_job)
+    def fake_launch_sync_worker(job):
+        raise RuntimeError("fork failed")
 
-    response = client.post("/sync/live-apply", headers=auth_headers())
+    monkeypatch.setattr("app.modules.accessi.routes.sync.launch_sync_worker", fake_launch_sync_worker)
 
-    assert response.status_code == 503
-    assert response.json()["detail"] == "SSH command failed: getent passwd"
+    response = client.post("/sync/live-apply", headers=auth_headers(), json={"profile": "quick"})
+
+    assert response.status_code == 500
+    assert "Unable to start NAS sync worker" in response.json()["detail"]
+
+
+def test_sync_jobs_can_be_listed_cancelled_and_retried(monkeypatch) -> None:
+    monkeypatch.setattr("app.modules.accessi.routes.sync.has_running_sync_job", lambda db: False)
+    monkeypatch.setattr("app.modules.accessi.routes.sync.launch_sync_worker", lambda job: 1111)
+
+    create_response = client.post("/sync/jobs", headers=auth_headers(), json={"profile": "full"})
+    assert create_response.status_code == 201
+    job_id = create_response.json()["id"]
+
+    list_response = client.get("/sync/jobs", headers=auth_headers())
+    assert list_response.status_code == 200
+    assert list_response.json()[0]["id"] == job_id
+    assert list_response.json()[0]["profile"] == "full"
+
+    monkeypatch.setattr("app.modules.accessi.routes.sync.stop_sync_worker", lambda job: None)
+    cancel_response = client.post(f"/sync/jobs/{job_id}/cancel", headers=auth_headers())
+    assert cancel_response.status_code == 200
+    assert cancel_response.json()["status"] == "cancelled"
+
+    monkeypatch.setattr("app.modules.accessi.routes.sync.launch_sync_worker", lambda job: 2222)
+    retry_response = client.post(f"/sync/jobs/{job_id}/retry", headers=auth_headers())
+    assert retry_response.status_code == 200
+    assert retry_response.json()["status"] == "pending"
+    assert retry_response.json()["worker_pid"] == 2222

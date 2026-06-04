@@ -1825,7 +1825,29 @@ export type SyncApplyResult = {
   share_acl_pairs_used: number;
 };
 
-export type SyncLiveApplyResult = SyncApplyResult;
+export type SyncJob = {
+  id: number;
+  requested_by_user_id: number;
+  profile: string;
+  trigger_type: string;
+  status: string;
+  snapshot_id: number | null;
+  persisted_users: number;
+  persisted_groups: number;
+  persisted_shares: number;
+  persisted_permission_entries: number;
+  persisted_effective_permissions: number;
+  share_acl_pairs_used: number;
+  worker_log_path: string | null;
+  worker_pid: number | null;
+  attempt_count: number;
+  max_attempts: number;
+  source_label: string | null;
+  error_detail: string | null;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+};
 
 export type SyncRun = {
   id: number;

@@ -93,6 +93,7 @@ from app.models.section_permission import RoleSectionPermission, Section, UserSe
 from app.models.share import Share
 from app.models.snapshot import Snapshot
 from app.models.sync_run import SyncRun
+from app.models.sync_job import SyncJob
 from app.modules.network.models import (
     DeviceInventoryLink,
     DevicePosition,
@@ -214,4 +215,5 @@ __all__ = [
     "Share",
     "Snapshot",
     "SyncRun",
+    "SyncJob",
 ]

@@ -137,7 +137,12 @@ Le credenziali vanno cambiate tramite variabili ambiente in ambienti non locali.
   - `NAS_ACL_COMMAND_TEMPLATE`
 - endpoint runtime:
   - `GET /sync/capabilities`
-  - `POST /sync/live-apply`
+  - `POST /sync/jobs`
+  - `GET /sync/jobs`
+  - `GET /sync/jobs/{id}`
+  - `POST /sync/jobs/{id}/retry`
+  - `POST /sync/jobs/{id}/cancel`
+  - `POST /sync/live-apply` come alias compatibile verso la creazione job
   - `GET /sync-runs`
 - script operativo:
   - `make live-sync`
@@ -150,12 +155,15 @@ Le credenziali vanno cambiate tramite variabili ambiente in ambienti non locali.
   - `SYNC_LIVE_BACKOFF_MAX_DELAY_SECONDS`
   - `SYNC_LIVE_BACKOFF_JITTER_ENABLED`
   - `SYNC_LIVE_BACKOFF_JITTER_RATIO`
+  - `SYNC_LIVE_WORKER_ARTIFACTS_PATH`
+  - `SYNC_LIVE_PENDING_TIMEOUT_MINUTES`
 - scheduling configurabile:
   - `SYNC_SCHEDULE_ENABLED`
   - `SYNC_SCHEDULE_INTERVAL_SECONDS`
   - `SYNC_SCHEDULE_MAX_CYCLES`
-- se il NAS non e raggiungibile o i comandi falliscono, il backend restituisce `503`
-- ogni esecuzione sync applicata viene registrata in `sync_runs`
+- la pagina `/nas-control/sync` non esegue piu la scansione dentro la request HTTP: accoda un job `pending|running|succeeded|failed|cancelled`
+- il worker NAS esegue la connessione SSH, applica retry/backoff, persiste lo snapshot e registra l'audit finale in `sync_runs`
+- `sync_runs` resta lo storico consolidato delle sync completate o fallite; `sync_jobs` e la coda operativa con PID, log worker e stato runtime
 
 ## 7. Log e Troubleshooting
 

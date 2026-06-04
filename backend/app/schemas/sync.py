@@ -1,3 +1,5 @@
+from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -67,3 +69,33 @@ class SyncApplyResponse(BaseModel):
     persisted_permission_entries: int
     persisted_effective_permissions: int
     share_acl_pairs_used: int
+
+
+class SyncJobCreateRequest(BaseModel):
+    profile: str = Field(default="quick")
+
+
+class SyncJobResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    requested_by_user_id: int
+    profile: str
+    trigger_type: str
+    status: str
+    snapshot_id: int | None = None
+    persisted_users: int
+    persisted_groups: int
+    persisted_shares: int
+    persisted_permission_entries: int
+    persisted_effective_permissions: int
+    share_acl_pairs_used: int
+    worker_log_path: str | None = None
+    worker_pid: int | None = None
+    attempt_count: int
+    max_attempts: int
+    source_label: str | None = None
+    error_detail: str | None = None
+    created_at: datetime
+    started_at: datetime | None = None
+    finished_at: datetime | None = None

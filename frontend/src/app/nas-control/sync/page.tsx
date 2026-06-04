@@ -8,18 +8,26 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { MetricCard } from "@/components/ui/metric-card";
 import { SyncButton } from "@/components/ui/sync-button";
 import { SearchIcon } from "@/components/ui/icons";
-import { applyLiveSync, getSyncCapabilities, getSyncRuns } from "@/lib/api";
+import { cancelSyncJob, createSyncJob, getSyncCapabilities, getSyncJobs, getSyncRuns, retrySyncJob } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import { formatDateTime, formatDuration } from "@/lib/presentation";
-import type { SyncApplyResult, SyncCapabilities, SyncRun } from "@/types/api";
+import type { SyncCapabilities, SyncJob, SyncRun } from "@/types/api";
 
 function getSyncStatusBadge(status: string) {
   if (status === "succeeded") {
     return <Badge variant="success">Completato</Badge>;
   }
 
+  if (status === "pending") {
+    return <Badge variant="warning">In coda</Badge>;
+  }
+
   if (status === "running") {
     return <Badge className="animate-pulse" variant="info">In corso</Badge>;
+  }
+
+  if (status === "cancelled") {
+    return <Badge variant="neutral">Annullato</Badge>;
   }
 
   return <Badge variant="danger">Errore</Badge>;
@@ -29,7 +37,7 @@ export default function SyncPage() {
   const [capabilities, setCapabilities] = useState<SyncCapabilities | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
-  const [applyResult, setApplyResult] = useState<SyncApplyResult | null>(null);
+  const [syncJobs, setSyncJobs] = useState<SyncJob[]>([]);
   const [syncRuns, setSyncRuns] = useState<SyncRun[]>([]);
   const [activeProfile, setActiveProfile] = useState<"quick" | "full" | null>(null);
 
@@ -37,17 +45,29 @@ export default function SyncPage() {
     void loadSyncContext();
   }, []);
 
+  useEffect(() => {
+    if (!syncJobs.some((job) => job.status === "pending" || job.status === "running")) {
+      return;
+    }
+    const handle = window.setInterval(() => {
+      void loadSyncContext();
+    }, 5000);
+    return () => window.clearInterval(handle);
+  }, [syncJobs]);
+
   async function loadSyncContext(): Promise<void> {
     const token = getStoredAccessToken();
     if (!token) return;
 
     try {
-      const [capabilitiesResult, syncRunsResult] = await Promise.all([
+      const [capabilitiesResult, syncRunsResult, syncJobsResult] = await Promise.all([
         getSyncCapabilities(token),
         getSyncRuns(token),
+        getSyncJobs(token),
       ]);
       setCapabilities(capabilitiesResult);
       setSyncRuns(syncRunsResult);
+      setSyncJobs(syncJobsResult);
       setError(null);
     } catch (loadError) {
       setError(loadError instanceof Error ? loadError.message : "Errore caricamento sync");
@@ -60,14 +80,12 @@ export default function SyncPage() {
 
     setActiveProfile(profile);
     try {
-      const result = await applyLiveSync(token, profile);
-      const syncRunsResult = await getSyncRuns(token);
-      setApplyResult(result);
-      setSyncRuns(syncRunsResult);
+      const job = await createSyncJob(token, profile);
+      await loadSyncContext();
       setStatusMessage(
         profile === "full"
-          ? "Sincronizzazione completa terminata con scansione estesa dell'albero NAS."
-          : "Sincronizzazione rapida completata leggendo dati reali dal NAS.",
+          ? `Job #${job.id} accodato per full scan del NAS.`
+          : `Job #${job.id} accodato per sincronizzazione rapida.`,
       );
       setError(null);
     } catch (requestError) {
@@ -77,6 +95,34 @@ export default function SyncPage() {
       setActiveProfile(null);
     }
   }
+
+  async function handleRetry(jobId: number): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) return;
+    try {
+      await retrySyncJob(token, jobId);
+      await loadSyncContext();
+      setStatusMessage(`Job #${jobId} rimesso in coda.`);
+      setError(null);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Errore riavvio job NAS");
+    }
+  }
+
+  async function handleCancel(jobId: number): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) return;
+    try {
+      await cancelSyncJob(token, jobId);
+      await loadSyncContext();
+      setStatusMessage(`Job #${jobId} annullato.`);
+      setError(null);
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Errore annullamento job NAS");
+    }
+  }
+
+  const latestJob = syncJobs[0] ?? null;
 
   return (
     <ProtectedPage
@@ -163,33 +209,104 @@ export default function SyncPage() {
         )}
       </article>
 
-      {statusMessage && applyResult ? (
+      {statusMessage ? (
         <article className="panel-card">
           <div className="mb-4">
-            <p className="section-title">Ultima sincronizzazione</p>
+            <p className="section-title">Ultimo aggiornamento</p>
             <p className="section-copy">{statusMessage}</p>
           </div>
-          <div className="surface-grid">
-            <MetricCard label="Snapshot" value={applyResult.snapshot_id} sub={applyResult.snapshot_checksum.slice(0, 12)} />
-            <MetricCard label="Utenti" value={applyResult.persisted_users} sub="Persistiti nella run corrente" />
-            <MetricCard label="Gruppi" value={applyResult.persisted_groups} sub="Persistiti nella run corrente" />
-            <MetricCard label="Share" value={applyResult.persisted_shares} sub="Persistite nella run corrente" />
-          </div>
+          {latestJob ? (
+            <div className="surface-grid">
+              <MetricCard label="Job" value={`#${latestJob.id}`} sub={`${latestJob.profile} · ${latestJob.status}`} />
+              <MetricCard label="Snapshot" value={latestJob.snapshot_id ?? "—"} sub="Disponibile a completamento job" />
+              <MetricCard label="Utenti" value={latestJob.persisted_users} sub="Persistiti nell'ultimo job" />
+              <MetricCard label="Share" value={latestJob.persisted_shares} sub="Persistite nell'ultimo job" />
+            </div>
+          ) : null}
         </article>
       ) : null}
 
       <article className="panel-card overflow-hidden p-0">
         <div className="border-b border-gray-100 px-5 py-4">
-          <p className="section-title">Storico snapshot</p>
-          <p className="section-copy">Esecuzioni in ordine cronologico inverso con stato, durata e snapshot associato.</p>
+          <p className="section-title">Coda e storico job</p>
+          <p className="section-copy">Job asincroni eseguiti dal worker NAS con stato, durata e snapshot associato.</p>
         </div>
-        {syncRuns.length === 0 ? (
+        {syncJobs.length === 0 ? (
           <div className="p-5">
             <EmptyState
               icon={SearchIcon}
-              title="Nessuna sincronizzazione registrata"
-              description="Avvia una sincronizzazione per popolare lo storico delle run."
+              title="Nessun job registrato"
+              description="Avvia una sincronizzazione per popolare la coda e lo storico dei job."
             />
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Job</th>
+                  <th>Data avvio</th>
+                  <th>Stato</th>
+                  <th>Durata</th>
+                  <th>Modalità</th>
+                  <th>Trigger</th>
+                  <th>Source</th>
+                  <th>Snapshot</th>
+                  <th>Dettaglio</th>
+                  <th>Azioni</th>
+                </tr>
+              </thead>
+              <tbody>
+                {syncJobs.map((job) => {
+                  const durationMs =
+                    job.started_at && job.finished_at
+                      ? new Date(job.finished_at).getTime() - new Date(job.started_at).getTime()
+                      : null;
+                  return (
+                  <tr key={job.id}>
+                    <td>#{job.id}</td>
+                    <td>{formatDateTime(job.started_at ?? job.created_at)}</td>
+                    <td>{getSyncStatusBadge(job.status)}</td>
+                    <td>{formatDuration(durationMs)}</td>
+                    <td>{job.profile}</td>
+                    <td>{job.trigger_type}</td>
+                    <td>{job.source_label ?? "—"}</td>
+                    <td>{job.snapshot_id ?? "—"}</td>
+                    <td className="text-xs text-gray-400">
+                      Tentativi {job.attempt_count}/{job.max_attempts}
+                      <br />
+                      {job.error_detail ?? "Nessun errore"}
+                    </td>
+                    <td className="text-xs">
+                      <div className="flex flex-wrap gap-2">
+                        {(job.status === "pending" || job.status === "running") ? (
+                          <button className="btn-secondary !px-2 !py-1" type="button" onClick={() => void handleCancel(job.id)}>
+                            Annulla
+                          </button>
+                        ) : null}
+                        {(job.status === "failed" || job.status === "cancelled" || job.status === "succeeded") ? (
+                          <button className="btn-secondary !px-2 !py-1" type="button" onClick={() => void handleRetry(job.id)}>
+                            Riprova
+                          </button>
+                        ) : null}
+                      </div>
+                    </td>
+                  </tr>
+                )})}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </article>
+
+      <article className="panel-card overflow-hidden p-0">
+        <div className="border-b border-gray-100 px-5 py-4">
+          <p className="section-title">Storico audit snapshot</p>
+          <p className="section-copy">Run consolidate persistite a completamento del job worker.</p>
+        </div>
+        {syncRuns.length === 0 ? (
+          <div className="p-5">
+            <EmptyState icon={SearchIcon} title="Nessuna run audit registrata" description="Le run vengono registrate quando un job termina." />
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -203,7 +320,6 @@ export default function SyncPage() {
                   <th>Trigger</th>
                   <th>Source</th>
                   <th>Snapshot</th>
-                  <th>Dettaglio</th>
                 </tr>
               </thead>
               <tbody>
@@ -216,11 +332,6 @@ export default function SyncPage() {
                     <td>{syncRun.trigger_type}</td>
                     <td>{syncRun.source_label ?? "—"}</td>
                     <td>{syncRun.snapshot_id ?? "—"}</td>
-                    <td className="text-xs text-gray-400">
-                      Tentativi {syncRun.attempts_used}
-                      <br />
-                      {syncRun.error_detail ?? "Nessun errore"}
-                    </td>
                   </tr>
                 ))}
               </tbody>

@@ -45,6 +45,8 @@ Lo scenario attuale presenta:
 - connessione SSH configurabile
 - lettura di utenti, gruppi, membership e share
 - acquisizione ACL con persistenza raw
+- esecuzione manuale `quick` e `full` tramite job asincroni presi in carico da worker dedicato
+- storico job distinto dallo storico audit `sync_runs`
 
 ### 6.2 Audit e Consultazione
 

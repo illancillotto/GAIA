@@ -140,7 +140,7 @@ import type {
   Share,
   SyncApplyResult,
   SyncCapabilities,
-  SyncLiveApplyResult,
+  SyncJob,
   SyncPreview,
   SyncPreviewRequest,
   SyncRun,
@@ -2283,11 +2283,37 @@ export async function applySync(
   });
 }
 
-export async function applyLiveSync(
+export async function createSyncJob(
   token: string,
   profile: "quick" | "full" = "quick",
-): Promise<SyncLiveApplyResult> {
-  return request<SyncLiveApplyResult>(`/sync/live-apply?profile=${profile}`, {
+): Promise<SyncJob> {
+  return request<SyncJob>("/sync/jobs", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ profile }),
+  });
+}
+
+export async function getSyncRuns(token: string): Promise<SyncRun[]> {
+  return request<SyncRun[]>("/sync-runs", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getSyncJobs(token: string): Promise<SyncJob[]> {
+  return request<SyncJob[]>("/sync/jobs", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function retrySyncJob(token: string, jobId: number): Promise<SyncJob> {
+  return request<SyncJob>(`/sync/jobs/${jobId}/retry`, {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -2295,8 +2321,9 @@ export async function applyLiveSync(
   });
 }
 
-export async function getSyncRuns(token: string): Promise<SyncRun[]> {
-  return request<SyncRun[]>("/sync-runs", {
+export async function cancelSyncJob(token: string, jobId: number): Promise<SyncJob> {
+  return request<SyncJob>(`/sync/jobs/${jobId}/cancel`, {
+    method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
     },

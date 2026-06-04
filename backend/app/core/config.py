@@ -201,6 +201,14 @@ class Settings(BaseSettings):
         default=0.2,
         alias="SYNC_LIVE_BACKOFF_JITTER_RATIO",
     )
+    sync_live_worker_artifacts_path: str = Field(
+        default="/data/sync/live-jobs",
+        alias="SYNC_LIVE_WORKER_ARTIFACTS_PATH",
+    )
+    sync_live_pending_timeout_minutes: int = Field(
+        default=10,
+        alias="SYNC_LIVE_PENDING_TIMEOUT_MINUTES",
+    )
     sync_schedule_enabled: bool = Field(default=False, alias="SYNC_SCHEDULE_ENABLED")
     sync_schedule_interval_seconds: int = Field(default=900, alias="SYNC_SCHEDULE_INTERVAL_SECONDS")
     sync_schedule_max_cycles: int = Field(default=0, alias="SYNC_SCHEDULE_MAX_CYCLES")
