@@ -12,11 +12,10 @@ from typing import Any
 
 from app.core.database import SessionLocal
 from app.models.application_user import ApplicationUser
-from app.modules.inaz.models import InazSyncJob
+from app.modules.inaz.models import InazImportJob, InazSyncJob
 from app.modules.inaz.services.credentials import mark_credential_error, mark_credential_used, pick_credential
-from app.modules.inaz.services.import_jobs import run_import_job
+from app.modules.inaz.services.import_jobs import create_import_job, finalize_import_job, import_collaborator_payload, parsed_collaborator_from_jsonable
 from app.modules.inaz.services.live_login import run_scrape_with_credentials
-from app.modules.inaz.services.parser import load_json_payload, parse_import_payload
 from app.modules.inaz.services.sync_runtime import get_sync_artifact_dir
 
 CURRENT_JOB_ID: str | None = None
@@ -29,6 +28,28 @@ def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
 
 def _write_progress(path: Path, payload: dict[str, Any]) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _load_completed_employee_codes(job: InazSyncJob) -> list[str]:
+    checkpoint = dict((job.params_json or {}).get("checkpoint") or {})
+    completed = checkpoint.get("completed_employee_codes")
+    if not isinstance(completed, list):
+        return []
+    return [str(item).strip() for item in completed if str(item).strip()]
+
+
+def _update_checkpoint(job: InazSyncJob, *, employee_code: str | None = None) -> None:
+    params = dict(job.params_json or {})
+    checkpoint = dict(params.get("checkpoint") or {})
+    completed = [str(item).strip() for item in checkpoint.get("completed_employee_codes", []) if str(item).strip()]
+    if employee_code and employee_code not in completed:
+        completed.append(employee_code)
+    checkpoint["completed_employee_codes"] = completed
+    checkpoint["completed_count"] = len(completed)
+    checkpoint["last_completed_employee_code"] = employee_code or checkpoint.get("last_completed_employee_code")
+    checkpoint["updated_at"] = datetime.now(UTC).isoformat()
+    params["checkpoint"] = checkpoint
+    job.params_json = params
 
 
 def _mark_job_cancelled(job_id: str) -> None:
@@ -77,6 +98,8 @@ def main() -> int:
         progress_path = artifact_dir / "progress.json"
         events_path = artifact_dir / "events.ndjson"
 
+        completed_employee_codes = _load_completed_employee_codes(job)
+
         job.status = "running"
         job.started_at = datetime.now(UTC)
         job.finished_at = None
@@ -91,15 +114,46 @@ def main() -> int:
             "job_id": str(job.id),
             "attempt_count": job.attempt_count,
             "started_at": job.started_at.isoformat(),
-            "completed_collaborators": 0,
+            "completed_collaborators": len(completed_employee_codes),
             "failed_collaborators": 0,
             "total_collaborators": None,
             "last_event": "worker_started",
             "last_event_at": datetime.now(UTC).isoformat(),
+            "resumed": bool(completed_employee_codes),
+            "pending_collaborators": None,
         }
         job.params_json = base_params
         db.add(job)
         db.commit()
+
+        import_job = db.get(InazImportJob, job.import_job_id) if job.import_job_id is not None else None
+        if import_job is None:
+            placeholder_parsed = type(
+                "SyncPlaceholderParsedPayload",
+                (),
+                {
+                    "period_start": job.period_start,
+                    "period_end": job.period_end,
+                    "collaborators": [],
+                    "errors": [],
+                },
+            )()
+            import_job = create_import_job(
+                db,
+                parsed=placeholder_parsed,
+                requested_by_user_id=job.requested_by_user_id,
+                filename=json_output.name,
+                params_json={"format": "collaboratori-json", "source": "live-sync", "sync_job_id": str(job.id)},
+            )
+            job.import_job_id = import_job.id
+            db.add(job)
+            db.commit()
+        else:
+            import_job.status = "running"
+            import_job.error_detail = None
+            import_job.finished_at = None
+            db.add(import_job)
+            db.commit()
 
         _append_jsonl(
             events_path,
@@ -111,6 +165,21 @@ def main() -> int:
             },
         )
         _write_progress(progress_path, job.params_json["progress"])
+
+        def persist_timesheet(item: dict[str, Any]) -> None:
+            payload = parsed_collaborator_from_jsonable(
+                item,
+                default_period_start=job.period_start,
+                default_period_end=job.period_end,
+            )
+            import_collaborator_payload(db, payload=payload, job=import_job)
+            employee_code = str(payload.collaborator.get("employee_code") or "").strip()
+            _update_checkpoint(job, employee_code=employee_code or None)
+            job.records_imported = import_job.records_imported
+            job.records_skipped = import_job.records_skipped
+            job.records_errors = import_job.records_errors
+            db.add(job)
+            db.commit()
 
         def on_progress(event: dict[str, Any]) -> None:
             event_time = datetime.now(UTC).isoformat()
@@ -168,7 +237,9 @@ def main() -> int:
                     period_end=job.period_end,
                     json_output=json_output,
                     limit=job.collaborator_limit,
+                    completed_employee_codes=completed_employee_codes,
                     progress_callback=on_progress,
+                    completed_timesheet_callback=persist_timesheet,
                 )
                 mark_credential_used(db, credential.id, scrape_result.get("authenticated_url"))
             except Exception as exc:
@@ -177,19 +248,11 @@ def main() -> int:
         else:
             raise RuntimeError("Legacy Inaz sync mode is disabled. Create a new sync job with a saved credential.")
 
-        parsed = parse_import_payload(load_json_payload(json_output.read_bytes()))
-        import_result = run_import_job(
-            db,
-            parsed=parsed,
-            requested_by_user_id=job.requested_by_user_id,
-            filename=json_output.name,
-            params_json={"format": "collaboratori-json", "source": "live-sync", "sync_job_id": str(job.id)},
-        )
-
-        job.import_job_id = import_result.job.id
-        job.records_imported = import_result.job.records_imported
-        job.records_skipped = import_result.job.records_skipped
-        job.records_errors = import_result.job.records_errors
+        finalize_import_job(db, job=import_job, status="completed")
+        job.import_job_id = import_job.id
+        job.records_imported = import_job.records_imported
+        job.records_skipped = import_job.records_skipped
+        job.records_errors = import_job.records_errors
         job.status = "completed"
         job.error_detail = None
         job.finished_at = datetime.now(UTC)
@@ -213,7 +276,7 @@ def main() -> int:
             json.dumps(
                 {
                     "sync_job_id": str(job.id),
-                    "import_job_id": str(import_result.job.id),
+                    "import_job_id": str(import_job.id),
                     "status": job.status,
                     "records_imported": job.records_imported,
                     "records_skipped": job.records_skipped,
@@ -259,6 +322,13 @@ def main() -> int:
                 }
                 failed_job.params_json = failed_params
                 rollback_db.add(failed_job)
+                if failed_job.import_job_id is not None:
+                    failed_import_job = rollback_db.get(InazImportJob, failed_job.import_job_id)
+                    if failed_import_job is not None and failed_import_job.status != "completed":
+                        failed_import_job.status = "failed"
+                        failed_import_job.error_detail = str(exc)
+                        failed_import_job.finished_at = failed_job.finished_at
+                        rollback_db.add(failed_import_job)
                 rollback_db.commit()
         finally:
             rollback_db.close()

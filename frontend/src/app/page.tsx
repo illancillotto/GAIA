@@ -357,11 +357,17 @@ export default function HomePage() {
         const hasUtenze = user.enabled_modules.includes("utenze");
         const hasCatasto = user.enabled_modules.includes("catasto");
 
-        const [networkDashboard, utenzeStats, documents] = await Promise.all([
+        const [networkDashboardResult, utenzeStatsResult, documentsResult] = await Promise.allSettled([
           hasNetwork ? getNetworkDashboard(token) : Promise.resolve(emptyNetworkSummary),
           hasUtenze ? getUtenzeStats(token) : Promise.resolve(emptyUtenzeSummary),
           hasCatasto ? getCatastoDocuments(token) : Promise.resolve([]),
         ]);
+
+        const networkDashboard =
+          networkDashboardResult.status === "fulfilled" ? networkDashboardResult.value : emptyNetworkSummary;
+        const utenzeStats =
+          utenzeStatsResult.status === "fulfilled" ? utenzeStatsResult.value : emptyUtenzeSummary;
+        const documents = documentsResult.status === "fulfilled" ? documentsResult.value : [];
 
         setCurrentUser(user);
         setSummary(dashboardSummary);
@@ -370,6 +376,19 @@ export default function HomePage() {
         setCatastoDocuments(documents);
         setGrantedSectionKeys(permissionSummary.granted_keys);
         setLoadError(null);
+
+        if (
+          networkDashboardResult.status === "rejected" ||
+          utenzeStatsResult.status === "rejected" ||
+          documentsResult.status === "rejected"
+        ) {
+          console.warn("Home dashboard loaded with partial module data", {
+            networkError:
+              networkDashboardResult.status === "rejected" ? networkDashboardResult.reason : null,
+            utenzeError: utenzeStatsResult.status === "rejected" ? utenzeStatsResult.reason : null,
+            catastoError: documentsResult.status === "rejected" ? documentsResult.reason : null,
+          });
+        }
       } catch (error) {
         setLoadError(error instanceof Error ? error.message : "Errore imprevisto");
         if (isAuthError(error)) {

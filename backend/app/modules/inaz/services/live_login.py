@@ -6,11 +6,12 @@ import sys
 from datetime import date
 from pathlib import Path
 from time import monotonic
-from typing import Any, Callable
+from typing import Any, Callable, Iterable
 
 from app.core.config import settings
 
 ProgressCallback = Callable[[dict[str, Any]], None]
+CompletedTimesheetCallback = Callable[[dict[str, Any]], None]
 
 
 def _ensure_scraper_src_on_path() -> None:
@@ -58,7 +59,9 @@ async def scrape_with_credentials(
     period_end: date,
     json_output: Path,
     limit: int | None = None,
+    completed_employee_codes: Iterable[str] | None = None,
     progress_callback: ProgressCallback | None = None,
+    completed_timesheet_callback: CompletedTimesheetCallback | None = None,
     employee_timeout_seconds: int = 150,
 ) -> dict[str, Any]:
     _ensure_scraper_src_on_path()
@@ -163,18 +166,20 @@ async def scrape_with_credentials(
 
             results, errors = load_checkpoint()
             completed_codes = {item.collaborator.employee_code for item in results}
+            completed_codes.update(str(code).strip() for code in (completed_employee_codes or []) if str(code).strip())
+            already_completed_count = len(completed_codes)
             pending_collaborators = [item for item in collaborators if item.employee_code not in completed_codes]
 
             emit(
                 "resume_state",
                 total_collaborators=len(collaborators),
-                completed_collaborators=len(results),
+                completed_collaborators=already_completed_count,
                 pending_collaborators=len(pending_collaborators),
                 error_count=len(errors),
-                resumed=bool(results or errors),
+                resumed=bool(already_completed_count or errors),
             )
 
-            for index, collaborator in enumerate(pending_collaborators, start=len(results) + 1):
+            for index, collaborator in enumerate(pending_collaborators, start=already_completed_count + 1):
                 print(f"[{index}/{len(collaborators)}] {collaborator.employee_code} {collaborator.name}", flush=True)
                 emit(
                     "collaborator_started",
@@ -193,6 +198,8 @@ async def scrape_with_credentials(
                     completed_codes.add(collaborator.employee_code)
                     errors = remove_error(errors, collaborator.employee_code)
                     write_timesheets_json(json_output, period_start, period_end, results, errors)
+                    if completed_timesheet_callback is not None:
+                        completed_timesheet_callback(timesheet_to_jsonable(timesheet))
                     emit(
                         "collaborator_completed",
                         index=index,
@@ -200,7 +207,7 @@ async def scrape_with_credentials(
                         employee_code=collaborator.employee_code,
                         name=collaborator.name,
                         elapsed_seconds=round(monotonic() - started_at, 2),
-                        completed_collaborators=len(results),
+                        completed_collaborators=len(completed_codes),
                         error_count=len(errors),
                         daily_rows=len(timesheet.daily_rows),
                         summary_rows=len(timesheet.summary_rows),
@@ -220,7 +227,7 @@ async def scrape_with_credentials(
                         employee_code=collaborator.employee_code,
                         name=collaborator.name,
                         elapsed_seconds=round(monotonic() - started_at, 2),
-                        completed_collaborators=len(results),
+                        completed_collaborators=len(completed_codes),
                         error_count=len(errors),
                         error=error_text,
                     )
@@ -233,9 +240,9 @@ async def scrape_with_credentials(
                 "authenticated_url": page.url,
                 "errors": errors,
                 "total_collaborators": len(collaborators),
-                "completed_collaborators": len(results),
+                "completed_collaborators": len(completed_codes),
                 "failed_collaborators": len(errors),
-                "resumed_from_checkpoint": bool(completed_codes or errors),
+                "resumed_from_checkpoint": bool(already_completed_count or errors),
                 "employees": [timesheet_to_jsonable(item) for item in results],
             }
         finally:
