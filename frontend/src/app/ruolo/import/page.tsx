@@ -16,6 +16,72 @@ import { getStoredAccessToken } from "@/lib/auth";
 import { detectRuoloImportYear, getImportJob, listImportJobs, uploadRuoloFile } from "@/lib/ruolo-api";
 import type { RuoloImportJobParams, RuoloImportJobResponse } from "@/types/ruolo";
 
+function formatRuoloJobLabel(job: RuoloImportJobResponse): string {
+  const raw = (job.filename ?? "").trim();
+  if (!raw) {
+    return `Import ruolo ${job.anno_tributario}`;
+  }
+
+  const normalized = raw.toLowerCase();
+  const yearFromName = normalized.match(/(20\d{2})/)?.[1] ?? String(job.anno_tributario);
+
+  if (normalized.includes("incass_backfill")) {
+    return `Recupero storico InCass ${yearFromName}`;
+  }
+  if (normalized.includes("ruolo_harvest") || normalized.includes("ruolo-harvest")) {
+    return `Raccolta partitario InCass ${yearFromName}`;
+  }
+  if (normalized.includes("backfill") && normalized.includes("ruolo")) {
+    return `Completamento dati ruolo ${yearFromName}`;
+  }
+  if (normalized.includes("repair") && normalized.includes("ruolo")) {
+    return `Bonifica collegamenti ruolo ${yearFromName}`;
+  }
+  if (normalized.endsWith(".dmp")) {
+    return `Import file ruolo ${yearFromName}`;
+  }
+  if (normalized.endsWith(".pdf")) {
+    return `Import PDF ruolo ${yearFromName}`;
+  }
+  return raw.replace(/[_-]+/g, " ");
+}
+
+function formatRuoloJobStatus(status: string): string {
+  const labels: Record<string, string> = {
+    pending: "In attesa",
+    running: "In corso",
+    completed: "Completato",
+    failed: "Con errori",
+  };
+  return labels[status] ?? status;
+}
+
+function formatRuoloJobDescription(job: RuoloImportJobResponse): string {
+  const raw = (job.filename ?? "").trim().toLowerCase();
+  if (!raw) {
+    return "Caricamento del ruolo senza nome file disponibile.";
+  }
+  if (raw.includes("incass_backfill")) {
+    return "Recupero storico degli avvisi e del partitario da InCass.";
+  }
+  if (raw.includes("ruolo_harvest") || raw.includes("ruolo-harvest")) {
+    return "Raccolta massiva del partitario dagli avvisi a ruolo.";
+  }
+  if (raw.includes("backfill") && raw.includes("ruolo")) {
+    return "Completamento del dataset ruolo a partire da dati gia raccolti.";
+  }
+  if (raw.includes("repair") && raw.includes("ruolo")) {
+    return "Bonifica dei collegamenti catastali del ruolo.";
+  }
+  if (raw.endsWith(".dmp")) {
+    return "Import del dump ruolo originale.";
+  }
+  if (raw.endsWith(".pdf")) {
+    return "Import del PDF testuale del ruolo.";
+  }
+  return "Elaborazione tecnica del modulo ruolo.";
+}
+
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, string> = {
     pending: "bg-yellow-100 text-yellow-700",
@@ -25,7 +91,7 @@ function StatusBadge({ status }: { status: string }) {
   };
   return (
     <span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ${colors[status] ?? "bg-gray-100 text-gray-600"}`}>
-      {status}
+      {formatRuoloJobStatus(status)}
     </span>
   );
 }
@@ -180,7 +246,7 @@ export default function RuoloImportPage() {
                 title={latestJob ? `Ultimo job: ${latestJob.anno_tributario}` : "Nessun job eseguito"}
                 description={
                   latestJob
-                    ? `${latestJob.filename ?? "File senza nome"} · stato ${latestJob.status}.`
+                    ? `${formatRuoloJobLabel(latestJob)} · stato ${formatRuoloJobStatus(latestJob.status)}.`
                     : "Il workspace è pronto per il primo caricamento."
                 }
                 tone={latestJob ? (latestJob.status === "failed" ? "danger" : latestJob.status === "completed" ? "success" : "warning") : "warning"}
@@ -323,7 +389,7 @@ export default function RuoloImportPage() {
               <ModuleWorkspaceMiniStat
                 eyebrow="Ultimo anno"
                 value={latestJob?.anno_tributario ?? "—"}
-                description={latestJob ? `${latestJob.filename ?? "File senza nome"} è l'ultimo job registrato.` : "Nessun import disponibile."}
+                description={latestJob ? `${formatRuoloJobLabel(latestJob)} è l'ultimo job registrato.` : "Nessun import disponibile."}
                 compact
               />
               <ModuleWorkspaceMiniStat
@@ -378,10 +444,11 @@ export default function RuoloImportPage() {
                       </div>
                       <StatusBadge status={job.status} />
                     </div>
-                    <p className="mt-4 line-clamp-2 text-sm font-medium text-gray-900">{job.filename ?? "Import senza filename"}</p>
+                    <p className="mt-4 line-clamp-2 text-sm font-medium text-gray-900">{formatRuoloJobLabel(job)}</p>
                     <p className="mt-1 text-sm text-gray-500">
                       Avviato il {new Date(job.started_at).toLocaleDateString("it-IT")}
                     </p>
+                    <p className="mt-1 text-sm text-gray-600">{formatRuoloJobDescription(job)}</p>
                     <div className="mt-5 grid grid-cols-3 gap-3 text-sm">
                       <div className="rounded-xl border border-white bg-white px-3 py-2">
                         <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Importati</p>
@@ -488,10 +555,11 @@ function RuoloImportReportModal({
         <div className="flex items-start justify-between gap-4 border-b border-gray-100 px-6 py-5">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1D4E35]">Report import</p>
-            <h2 className="mt-2 text-2xl font-semibold text-gray-900">{job.filename ?? "Job Ruolo"}</h2>
+            <h2 className="mt-2 text-2xl font-semibold text-gray-900">{formatRuoloJobLabel(job)}</h2>
             <p className="mt-1 text-sm text-gray-500">
-              Anno {job.anno_tributario} · stato {job.status} · avviato il {new Date(job.started_at).toLocaleString("it-IT")}
+              Anno {job.anno_tributario} · stato {formatRuoloJobStatus(job.status)} · avviato il {new Date(job.started_at).toLocaleString("it-IT")}
             </p>
+            <p className="mt-2 text-sm text-gray-600">{formatRuoloJobDescription(job)}</p>
           </div>
           <button className="btn-secondary" type="button" onClick={onClose}>
             Chiudi

@@ -3,12 +3,16 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import RuoloAvvisiPage from "@/app/ruolo/avvisi/page";
 import RuoloParticellePage from "@/app/ruolo/particelle/page";
+import RuoloDashboardPage from "@/app/ruolo/page";
+import RuoloImportPage from "@/app/ruolo/import/page";
 import RuoloStatsPage from "@/app/ruolo/stats/page";
 
 const mocks = vi.hoisted(() => ({
   getStoredAccessToken: vi.fn(),
   getRuoloStats: vi.fn(),
   getRuoloStatsAnalytics: vi.fn(),
+  getRuoloParticelleSummary: vi.fn(),
+  listImportJobs: vi.fn(),
   listAvvisi: vi.fn(),
   listRuoloParticelle: vi.fn(),
   push: vi.fn(),
@@ -23,9 +27,14 @@ vi.mock("@/lib/auth", () => ({
 vi.mock("@/lib/ruolo-api", () => ({
   getRuoloStats: mocks.getRuoloStats,
   getRuoloStatsAnalytics: mocks.getRuoloStatsAnalytics,
+  getRuoloParticelleSummary: mocks.getRuoloParticelleSummary,
+  listImportJobs: mocks.listImportJobs,
   listAvvisi: mocks.listAvvisi,
   listRuoloParticelle: mocks.listRuoloParticelle,
   buildExportCsvUrl: vi.fn(() => "/api/ruolo/avvisi/export"),
+  detectRuoloImportYear: vi.fn(),
+  getImportJob: vi.fn(),
+  uploadRuoloFile: vi.fn(),
 }));
 
 vi.mock("@/components/app/protected-page", () => ({
@@ -51,6 +60,7 @@ vi.mock("recharts", () => {
     ResponsiveContainer: Wrapper,
     ComposedChart: Wrapper,
     BarChart: Wrapper,
+    LineChart: Wrapper,
     PieChart: Wrapper,
     CartesianGrid: () => <div />,
     XAxis: () => <div />,
@@ -72,8 +82,108 @@ describe("Ruolo pages", () => {
     mocks.replace.mockReset();
     mocks.getRuoloStats.mockReset();
     mocks.getRuoloStatsAnalytics.mockReset();
+    mocks.getRuoloParticelleSummary.mockReset();
+    mocks.listImportJobs.mockReset();
     mocks.listAvvisi.mockReset();
     mocks.listRuoloParticelle.mockReset();
+  });
+
+  test("ruolo dashboard renders readable backfill labels and trend section", async () => {
+    mocks.getRuoloStats.mockResolvedValue({
+      items: [
+        {
+          anno_tributario: 2024,
+          total_avvisi: 10,
+          avvisi_collegati: 9,
+          avvisi_non_collegati: 1,
+          totale_0648: 800,
+          totale_0985: 100,
+          totale_0668: 100,
+          totale_euro: 1000,
+        },
+        {
+          anno_tributario: 2025,
+          total_avvisi: 12,
+          avvisi_collegati: 10,
+          avvisi_non_collegati: 2,
+          totale_0648: 1000,
+          totale_0985: 300,
+          totale_0668: 200,
+          totale_euro: 1500,
+        },
+      ],
+    });
+    mocks.getRuoloParticelleSummary.mockResolvedValue({
+      anno_tributario: null,
+      total_particelle: 120,
+      collegate_catasto: 90,
+      non_collegate_catasto: 30,
+      soppresse_ade: 4,
+    });
+    mocks.listImportJobs.mockResolvedValue({
+      items: [
+        {
+          id: "job-1",
+          anno_tributario: 2023,
+          filename: "incass_backfill_2023",
+          status: "completed",
+          started_at: "2026-06-04T10:00:00Z",
+          finished_at: "2026-06-04T10:30:00Z",
+          total_partite: 100,
+          records_imported: 95,
+          records_skipped: 5,
+          records_errors: 0,
+          error_detail: null,
+          triggered_by: 1,
+          params_json: null,
+          created_at: "2026-06-04T10:00:00Z",
+        },
+      ],
+      total: 1,
+      page: 1,
+      page_size: 5,
+    });
+
+    render(<RuoloDashboardPage />);
+
+    await waitFor(() => expect(screen.getByText("Trend ruolo")).toBeInTheDocument());
+    expect(screen.getByText("Recupero storico InCass 2023")).toBeInTheDocument();
+    expect(screen.getByText("Recupero storico degli avvisi e del partitario da InCass.")).toBeInTheDocument();
+    expect(screen.getByText("Completato")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Apri analisi completa" })).toHaveAttribute("href", "/ruolo/stats");
+    expect(screen.getByText("Avvisi orfani per annualità")).toBeInTheDocument();
+  });
+
+  test("ruolo import renders readable job labels and statuses", async () => {
+    mocks.listImportJobs.mockResolvedValue({
+      items: [
+        {
+          id: "job-2",
+          anno_tributario: 2023,
+          filename: "incass_backfill_2023",
+          status: "completed",
+          started_at: "2026-06-04T10:00:00Z",
+          finished_at: "2026-06-04T10:30:00Z",
+          total_partite: 100,
+          records_imported: 95,
+          records_skipped: 5,
+          records_errors: 0,
+          error_detail: null,
+          triggered_by: 1,
+          params_json: null,
+          created_at: "2026-06-04T10:00:00Z",
+        },
+      ],
+      total: 1,
+      page: 1,
+      page_size: 20,
+    });
+
+    render(<RuoloImportPage />);
+
+    await waitFor(() => expect(screen.getByText("Recupero storico InCass 2023")).toBeInTheDocument());
+    expect(screen.getAllByText("Completato").length).toBeGreaterThan(0);
+    expect(screen.getByText("Recupero storico degli avvisi e del partitario da InCass.")).toBeInTheDocument();
   });
 
   test("ruolo stats renders analytics links for selected anno and top comune", async () => {

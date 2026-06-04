@@ -2,6 +2,17 @@
 
 import { useMemo, useEffect, useState } from "react";
 import Link from "next/link";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 import {
   ModuleWorkspaceHero,
@@ -23,6 +34,86 @@ function formatEuro(value: number | null): string {
   return new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR" }).format(value);
 }
 
+function formatCompactEuro(value: number | null): string {
+  if (value == null) return "—";
+  return new Intl.NumberFormat("it-IT", {
+    style: "currency",
+    currency: "EUR",
+    notation: "compact",
+    maximumFractionDigits: 1,
+  }).format(value);
+}
+
+function formatInteger(value: number): string {
+  return new Intl.NumberFormat("it-IT").format(value);
+}
+
+function formatRuoloJobLabel(job: RuoloImportJobResponse): string {
+  const raw = (job.filename ?? "").trim();
+  if (!raw) {
+    return `Import ruolo ${job.anno_tributario}`;
+  }
+
+  const normalized = raw.toLowerCase();
+  const yearFromName = normalized.match(/(20\d{2})/)?.[1] ?? String(job.anno_tributario);
+
+  if (normalized.includes("incass_backfill")) {
+    return `Recupero storico InCass ${yearFromName}`;
+  }
+  if (normalized.includes("ruolo_harvest") || normalized.includes("ruolo-harvest")) {
+    return `Raccolta partitario InCass ${yearFromName}`;
+  }
+  if (normalized.includes("backfill") && normalized.includes("ruolo")) {
+    return `Completamento dati ruolo ${yearFromName}`;
+  }
+  if (normalized.includes("repair") && normalized.includes("ruolo")) {
+    return `Bonifica collegamenti ruolo ${yearFromName}`;
+  }
+  if (normalized.endsWith(".dmp")) {
+    return `Import file ruolo ${yearFromName}`;
+  }
+  if (normalized.endsWith(".pdf")) {
+    return `Import PDF ruolo ${yearFromName}`;
+  }
+  return raw.replace(/[_-]+/g, " ");
+}
+
+function formatRuoloJobStatus(status: string): string {
+  const labels: Record<string, string> = {
+    pending: "In attesa",
+    running: "In corso",
+    completed: "Completato",
+    failed: "Con errori",
+  };
+  return labels[status] ?? status;
+}
+
+function formatRuoloJobDescription(job: RuoloImportJobResponse): string {
+  const raw = (job.filename ?? "").trim().toLowerCase();
+  if (!raw) {
+    return "Caricamento del ruolo senza nome file disponibile.";
+  }
+  if (raw.includes("incass_backfill")) {
+    return "Recupero storico degli avvisi e del partitario da InCass.";
+  }
+  if (raw.includes("ruolo_harvest") || raw.includes("ruolo-harvest")) {
+    return "Raccolta massiva del partitario dagli avvisi a ruolo.";
+  }
+  if (raw.includes("backfill") && raw.includes("ruolo")) {
+    return "Completamento del dataset ruolo a partire da dati gia raccolti.";
+  }
+  if (raw.includes("repair") && raw.includes("ruolo")) {
+    return "Bonifica dei collegamenti catastali del ruolo.";
+  }
+  if (raw.endsWith(".dmp")) {
+    return "Import del dump ruolo originale.";
+  }
+  if (raw.endsWith(".pdf")) {
+    return "Import del PDF testuale del ruolo.";
+  }
+  return "Elaborazione tecnica del modulo ruolo.";
+}
+
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, string> = {
     pending: "bg-yellow-100 text-yellow-800",
@@ -32,7 +123,7 @@ function StatusBadge({ status }: { status: string }) {
   };
   return (
     <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${colors[status] ?? "bg-gray-100 text-gray-700"}`}>
-      {status}
+      {formatRuoloJobStatus(status)}
     </span>
   );
 }
@@ -86,6 +177,25 @@ export default function RuoloDashboardPage() {
 
   const runningJobs = recentJobs.filter((job) => job.status === "running" || job.status === "pending");
   const failedJobs = recentJobs.filter((job) => job.status === "failed");
+  const annualTrendData = useMemo(
+    () => [...stats]
+      .sort((left, right) => left.anno_tributario - right.anno_tributario)
+      .map((item) => ({
+        anno: String(item.anno_tributario),
+        avvisi: item.total_avvisi,
+        orfani: item.avvisi_non_collegati,
+        totaleEuro: item.totale_euro ?? 0,
+      })),
+    [stats],
+  );
+  const latestCoverage = useMemo(() => {
+    if (!latestYearStats || latestYearStats.total_avvisi === 0) return 0;
+    return Math.round((latestYearStats.avvisi_collegati / latestYearStats.total_avvisi) * 100);
+  }, [latestYearStats]);
+  const catastoCoverage = useMemo(() => {
+    if (!particelleSummary || particelleSummary.total_particelle === 0) return 0;
+    return Math.round((particelleSummary.collegate_catasto / particelleSummary.total_particelle) * 100);
+  }, [particelleSummary]);
 
   function openWorkspaceModal(href: string, title: string, description?: string): void {
     setWorkspaceModal({ href, title, description });
@@ -270,6 +380,123 @@ export default function RuoloDashboardPage() {
                 <div className="border-b border-[#edf1eb] bg-[linear-gradient(135deg,_rgba(29,78,53,0.06),_rgba(255,255,255,0.92))] px-6 py-5">
                   <p className="inline-flex items-center gap-2 rounded-full bg-[#e8f2ec] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#1D4E35]">
                     <CalendarIcon className="h-3.5 w-3.5" />
+                    Trend ruolo
+                  </p>
+                  <p className="mt-3 text-lg font-semibold text-gray-900">Andamento di avvisi e importi nel tempo.</p>
+                  <p className="mt-2 max-w-2xl text-sm leading-6 text-gray-600">
+                    Due letture immediate per l&apos;operatore: quanto pesa ogni annualità e dove restano avvisi orfani da collegare.
+                  </p>
+                </div>
+                <div className="grid gap-6 p-6 lg:grid-cols-2">
+                  <div>
+                    <p className="mb-3 text-sm font-semibold text-gray-900">Totale economico per annualità</p>
+                    {annualTrendData.length === 0 ? (
+                      <EmptyState
+                        icon={CalendarIcon}
+                        title="Nessun trend disponibile"
+                        description="Il grafico apparirà dopo il primo caricamento del ruolo."
+                      />
+                    ) : (
+                      <div className="h-[240px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={annualTrendData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#edf1eb" />
+                            <XAxis dataKey="anno" tick={{ fontSize: 12 }} />
+                            <YAxis tick={{ fontSize: 12 }} />
+                            <Tooltip formatter={(value: number | string) => [formatEuro(Number(value)), "Totale euro"]} />
+                            <Line type="monotone" dataKey="totaleEuro" stroke="#1D4E35" strokeWidth={2.5} dot />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <p className="mb-3 text-sm font-semibold text-gray-900">Avvisi orfani per annualità</p>
+                    {annualTrendData.length === 0 ? (
+                      <EmptyState
+                        icon={AlertTriangleIcon}
+                        title="Nessun dato disponibile"
+                        description="L&apos;indicatore sarà disponibile dopo il primo import."
+                      />
+                    ) : (
+                      <div className="h-[240px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={annualTrendData} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#edf1eb" />
+                            <XAxis dataKey="anno" tick={{ fontSize: 12 }} />
+                            <YAxis tick={{ fontSize: 12 }} />
+                            <Tooltip formatter={(value: number | string) => [formatInteger(Number(value)), "Avvisi orfani"]} />
+                            <Bar dataKey="orfani" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </article>
+
+              <article className="rounded-[28px] border border-[#d8dfd3] bg-white p-6 shadow-panel">
+                <div>
+                  <p className="inline-flex items-center gap-2 rounded-full bg-[#eef3ec] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#1D4E35]">
+                    <FolderIcon className="h-3.5 w-3.5" />
+                    Lettura rapida
+                  </p>
+                  <p className="mt-3 text-lg font-semibold text-gray-900">Indicatori utili per partire da qui.</p>
+                  <p className="mt-2 text-sm leading-6 text-gray-600">
+                    Sintesi leggibile dell&apos;ultimo anno disponibile e della qualità del dominio corrente.
+                  </p>
+                </div>
+                <div className="mt-6 grid gap-3">
+                  <ModuleWorkspaceMiniStat
+                    eyebrow="Ultimo anno"
+                    value={latestYearStats?.anno_tributario ?? "—"}
+                    description={latestYearStats ? `${formatInteger(latestYearStats.total_avvisi)} avvisi per ${formatCompactEuro(latestYearStats.totale_euro)}.` : "Nessun anno disponibile."}
+                    compact
+                  />
+                  <ModuleWorkspaceMiniStat
+                    eyebrow="Copertura anagrafica"
+                    value={`${latestCoverage}%`}
+                    description={latestYearStats ? `${formatInteger(latestYearStats.avvisi_non_collegati)} avvisi da collegare nell&apos;anno piu recente.` : "Indicatore non disponibile."}
+                    tone={latestCoverage < 100 ? "warning" : "success"}
+                    compact
+                  />
+                  <ModuleWorkspaceMiniStat
+                    eyebrow="Copertura catasto"
+                    value={`${catastoCoverage}%`}
+                    description={particelleSummary ? `${formatInteger(particelleSummary.non_collegate_catasto)} particelle storiche senza match sul catasto corrente.` : "Indicatore non disponibile."}
+                    tone={catastoCoverage < 100 ? "warning" : "success"}
+                    compact
+                  />
+                  <ModuleWorkspaceMiniStat
+                    eyebrow="Residuo AdE"
+                    value={particelleSummary ? formatInteger(particelleSummary.soppresse_ade) : "—"}
+                    description="Particelle classificate come soppresse nella scansione AdE."
+                    tone={(particelleSummary?.soppresse_ade ?? 0) > 0 ? "warning" : "default"}
+                    compact
+                  />
+                </div>
+                <div className="mt-6 flex flex-wrap gap-3">
+                  <Link
+                    href="/ruolo/stats"
+                    className="rounded-xl border border-[#d6e5db] bg-white px-4 py-2 text-sm font-medium text-[#1D4E35] transition hover:bg-[#f3f8f5]"
+                  >
+                    Apri analisi completa
+                  </Link>
+                  <Link
+                    href={latestYearStats ? `/ruolo/avvisi?anno=${latestYearStats.anno_tributario}&unlinked=true` : "/ruolo/avvisi?unlinked=true"}
+                    className="rounded-xl border border-[#d6e5db] bg-white px-4 py-2 text-sm font-medium text-[#1D4E35] transition hover:bg-[#f3f8f5]"
+                  >
+                    Apri avvisi da collegare
+                  </Link>
+                </div>
+              </article>
+            </section>
+
+            <section className="grid gap-4 xl:grid-cols-[1.05fr,0.95fr]">
+              <article className="rounded-[28px] border border-[#d8dfd3] bg-white shadow-panel">
+                <div className="border-b border-[#edf1eb] bg-[linear-gradient(135deg,_rgba(29,78,53,0.06),_rgba(255,255,255,0.92))] px-6 py-5">
+                  <p className="inline-flex items-center gap-2 rounded-full bg-[#e8f2ec] px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#1D4E35]">
+                    <CalendarIcon className="h-3.5 w-3.5" />
                     Riepilogo per anno
                   </p>
                   <p className="mt-3 text-lg font-semibold text-gray-900">Andamento degli import per annualità.</p>
@@ -354,10 +581,11 @@ export default function RuoloDashboardPage() {
                         <div key={job.id} className="rounded-2xl border border-[#e3e9e0] bg-[#fbfcfb] p-4">
                           <div className="flex flex-wrap items-start justify-between gap-3">
                             <div>
-                              <p className="text-sm font-semibold text-gray-900">{job.filename ?? "Import senza filename"}</p>
+                              <p className="text-sm font-semibold text-gray-900">{formatRuoloJobLabel(job)}</p>
                               <p className="mt-1 text-sm text-gray-500">
                                 Anno {job.anno_tributario} · avviato il {new Date(job.started_at).toLocaleDateString("it-IT")}
                               </p>
+                              <p className="mt-1 text-sm text-gray-600">{formatRuoloJobDescription(job)}</p>
                             </div>
                             <StatusBadge status={job.status} />
                           </div>
