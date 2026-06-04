@@ -6,6 +6,7 @@ import { useEffect, useMemo, useState } from "react";
 import { NetworkModulePage } from "@/components/network/network-module-page";
 import { NetworkStatusBadge } from "@/components/network/network-status-badge";
 import { getNetworkScan, getNetworkScanDiff, getNetworkScans } from "@/lib/api";
+import { formatIpWithReference } from "@/lib/network-device-utils";
 import type { NetworkScan, NetworkScanDetail, NetworkScanDiff } from "@/types/api";
 
 function ScanDetailContent({ token, scanId }: { token: string; scanId: number }) {
@@ -177,10 +178,10 @@ function ScanDetailContent({ token, scanId }: { token: string; scanId: number })
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <div>
                         <p className="text-sm font-medium text-gray-900">
-                          {reference.display_name || reference.hostname || reference.ip_address}
+                          {reference.resolved_label || reference.display_name || reference.hostname || reference.ip_address}
                         </p>
                         <p className="mt-1 text-xs text-gray-500">
-                          {reference.ip_address} · {reference.mac_address || "MAC n/d"}
+                          {formatIpWithReference(reference)} · {reference.mac_address || "MAC n/d"}
                         </p>
                       </div>
                       <NetworkStatusBadge status={change.change_type} />
@@ -206,10 +207,10 @@ function ScanDetailContent({ token, scanId }: { token: string; scanId: number })
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                   <p className="text-sm font-medium text-gray-900">
-                    {device.display_name || device.hostname || device.ip_address}
+                    {device.resolved_label || device.display_name || device.hostname || device.ip_address}
                   </p>
                   <p className="mt-1 text-xs text-gray-500">
-                    {device.ip_address} · {device.mac_address || "MAC n/d"} · {device.open_ports || "porte n/d"}
+                    {formatIpWithReference(device)} · {device.mac_address || "MAC n/d"} · {device.open_ports || "porte n/d"}
                   </p>
                 </div>
                 <NetworkStatusBadge status={device.status} />

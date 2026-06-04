@@ -17,7 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { AlertTriangleIcon, RefreshIcon, ServerIcon } from "@/components/ui/icons";
 import { getNetworkAlerts, getNetworkDashboard, getNetworkDevices, getNetworkFirewalls, getNetworkFirewallMetrics, triggerNetworkScan } from "@/lib/api";
-import { getNetworkDeviceAdminUrl } from "@/lib/network-device-utils";
+import { formatIpWithReference, getNetworkDeviceAdminUrl } from "@/lib/network-device-utils";
 import type { NetworkAlert, NetworkDashboardSummary, NetworkDevice, NetworkFirewall, NetworkFirewallMetric } from "@/types/api";
 
 const emptySummary: NetworkDashboardSummary = {
@@ -332,9 +332,7 @@ function DashboardContent({ token }: { token: string }) {
                 >
                   <div>
                     <p className="text-sm font-medium text-gray-900">{device.resolved_label || device.display_name || device.hostname || device.ip_address}</p>
-                    <p className="mt-1 text-xs text-gray-500">
-                      {device.ip_address} · {device.mac_address || "MAC n/d"}
-                    </p>
+                    <p className="mt-1 text-xs text-gray-500">{formatIpWithReference(device)} · {device.mac_address || "MAC n/d"}</p>
                     <div className="mt-2 flex flex-wrap gap-2">
                       {device.assigned_user?.is_placeholder_profile ? <Badge variant="warning">Profilo placeholder</Badge> : null}
                       {device.lifecycle_state === "retired" ? <Badge variant="neutral">Rotamato</Badge> : null}
@@ -380,9 +378,7 @@ function DashboardContent({ token }: { token: string }) {
                 >
                   <div>
                     <p className="text-sm font-medium text-gray-900">{device.resolved_label || device.display_name || device.hostname || device.ip_address}</p>
-                    <p className="mt-1 text-xs text-gray-500">
-                      {device.ip_address} · {device.device_type || "tipo n/d"}
-                    </p>
+                    <p className="mt-1 text-xs text-gray-500">{formatIpWithReference(device)} · {device.device_type || "tipo n/d"}</p>
                     <div className="mt-2 flex flex-wrap gap-2">
                       <Badge variant="warning">Senza utente</Badge>
                       {device.is_known_device ? <Badge variant="info">Conosciuto</Badge> : null}
@@ -484,9 +480,7 @@ function DashboardContent({ token }: { token: string }) {
                 >
                   <div>
                     <p className="text-sm font-medium text-gray-900">{device.resolved_label || device.display_name || device.hostname || device.ip_address}</p>
-                    <p className="mt-1 text-xs text-gray-500">
-                      {device.ip_address} · {device.mac_address || "MAC n/d"} · {device.device_type || "tipo n/d"}
-                    </p>
+                    <p className="mt-1 text-xs text-gray-500">{formatIpWithReference(device)} · {device.mac_address || "MAC n/d"} · {device.device_type || "tipo n/d"}</p>
                     <div className="mt-2 flex flex-wrap gap-2">
                       {device.assigned_user?.is_placeholder_profile ? <Badge variant="warning">Profilo placeholder</Badge> : null}
                       {device.lifecycle_state === "retired" ? <Badge variant="neutral">Rotamato</Badge> : null}

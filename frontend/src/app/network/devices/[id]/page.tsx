@@ -7,7 +7,7 @@ import { NetworkModulePage } from "@/components/network/network-module-page";
 import { NetworkStatusBadge } from "@/components/network/network-status-badge";
 import { Badge } from "@/components/ui/badge";
 import { getNetworkDevice, listNetworkDeviceAssignees, updateNetworkDevice } from "@/lib/api";
-import { getNetworkDeviceAdminUrl } from "@/lib/network-device-utils";
+import { formatIpWithReference, getNetworkDeviceAdminUrl } from "@/lib/network-device-utils";
 import type { NetworkAssignedUserSummary, NetworkDevice } from "@/types/api";
 
 function DeviceDetailContent({ token, deviceId }: { token: string; deviceId: number }) {
@@ -141,7 +141,7 @@ function DeviceDetailContent({ token, deviceId }: { token: string; deviceId: num
         <dl className="mt-5 grid gap-4 md:grid-cols-2">
           <div>
             <dt className="label-caption">IP</dt>
-            <dd className="mt-1 text-sm text-gray-800">{device.ip_address}</dd>
+            <dd className="mt-1 text-sm text-gray-800">{formatIpWithReference(device)}</dd>
           </div>
           <div>
             <dt className="label-caption">Nome assegnato</dt>
@@ -321,7 +321,7 @@ function DeviceDetailContent({ token, deviceId }: { token: string; deviceId: num
                     <NetworkStatusBadge status={entry.status} />
                   </div>
                   <p className="mt-1 text-xs text-gray-500">{new Date(entry.observed_at).toLocaleString("it-IT")}</p>
-                  <p className="mt-2 text-xs text-gray-500">{entry.hostname || entry.ip_address} · {entry.open_ports || "porte n/d"}</p>
+                  <p className="mt-2 text-xs text-gray-500">{entry.resolved_label || entry.assigned_user_label || entry.hostname || entry.ip_address} · {entry.ip_address} · {entry.open_ports || "porte n/d"}</p>
                 </div>
               ))}
               {device.scan_history.length === 0 ? <p className="text-sm text-gray-500">Nessuno snapshot disponibile.</p> : null}

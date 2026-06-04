@@ -7,7 +7,7 @@ import { NetworkStatusBadge } from "@/components/network/network-status-badge";
 import { Badge } from "@/components/ui/badge";
 import { ChevronRightIcon } from "@/components/ui/icons";
 import { getNetworkDevice, listNetworkDeviceAssignees, updateNetworkDevice } from "@/lib/api";
-import { getNetworkDeviceAdminUrl } from "@/lib/network-device-utils";
+import { formatIpWithReference, getNetworkDeviceAdminUrl } from "@/lib/network-device-utils";
 import type { NetworkAssignedUserSummary, NetworkDevice } from "@/types/api";
 
 type NetworkDeviceModalProps = {
@@ -42,6 +42,14 @@ function formatEventType(eventType: string) {
     action: toTitleCase(action),
     actionTone,
   };
+}
+
+function formatTrafficEndpoint(ipAddress: string | null, peerIp: string | null, peerLabel: string | null) {
+  const base = ipAddress || "n/d";
+  if (ipAddress && peerIp && ipAddress === peerIp && peerLabel && peerLabel !== ipAddress) {
+    return `${ipAddress} · ${peerLabel}`;
+  }
+  return base;
 }
 
 export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }: NetworkDeviceModalProps) {
@@ -223,7 +231,7 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
                     <dl className="mt-5 grid gap-x-8 gap-y-4 md:grid-cols-2 xl:grid-cols-3">
                       <div>
                         <dt className="label-caption">IP</dt>
-                        <dd className="mt-1 text-sm text-gray-800">{selectedDevice.ip_address}</dd>
+                        <dd className="mt-1 text-sm text-gray-800">{formatIpWithReference(selectedDevice)}</dd>
                       </div>
                       <div>
                         <dt className="label-caption">MAC</dt>
@@ -506,8 +514,7 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
                             <div className="flex items-center justify-between gap-3">
                               <div>
                                 <p className="text-sm font-medium text-gray-900">
-                                  {peer.ip_address}
-                                  {peer.label ? ` -> ${peer.label}` : ""}
+                                  {peer.label && peer.label !== peer.ip_address ? `${peer.ip_address} · ${peer.label}` : peer.ip_address}
                                 </p>
                               </div>
                               <p className="text-xs text-gray-500">{peer.events_count} eventi</p>
@@ -546,8 +553,9 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
                               </div>
                             </div>
                             <p className="mt-2 text-xs text-gray-500">
-                              {event.src_ip || "n/d"} → {event.dst_ip || "n/d"}
-                              {event.peer_label ? ` · ${event.peer_label}` : ""}
+                              {formatTrafficEndpoint(event.src_ip, event.peer_ip, event.peer_label)}
+                              {" → "}
+                              {formatTrafficEndpoint(event.dst_ip, event.peer_ip, event.peer_label)}
                               {" · "}In {formatBytes(event.bytes_in)} · Out {formatBytes(event.bytes_out)}
                             </p>
                           </div>
@@ -600,7 +608,7 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
                               <NetworkStatusBadge status={entry.status} />
                             </div>
                             <p className="mt-1 text-xs text-gray-500">{new Date(entry.observed_at).toLocaleString("it-IT")}</p>
-                            <p className="mt-2 text-xs text-gray-500">{entry.hostname || entry.ip_address} · {entry.open_ports || "porte n/d"}</p>
+                            <p className="mt-2 text-xs text-gray-500">{entry.resolved_label || entry.assigned_user_label || entry.hostname || entry.ip_address} · {entry.ip_address} · {entry.open_ports || "porte n/d"}</p>
                           </div>
                         ))}
                         {selectedDevice.scan_history.length === 0 ? <p className="text-sm text-gray-500">Nessuno snapshot disponibile.</p> : null}

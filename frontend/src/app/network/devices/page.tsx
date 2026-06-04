@@ -10,6 +10,7 @@ import { NetworkStatusBadge } from "@/components/network/network-status-badge";
 import { DataTable } from "@/components/table/data-table";
 import { Badge } from "@/components/ui/badge";
 import { getNetworkDevices } from "@/lib/api";
+import { formatIpWithReference } from "@/lib/network-device-utils";
 import type { NetworkDevice } from "@/types/api";
 
 const DEFAULT_SORTING: SortingState = [
@@ -60,7 +61,7 @@ const columns: ColumnDef<NetworkDevice>[] = [
               : row.original.hostname || row.original.dns_name || "Host non risolto"}
           </span>
         </div>
-        <p className="text-xs text-gray-500">{row.original.ip_address}</p>
+        <p className="text-xs text-gray-500">{formatIpWithReference(row.original)}</p>
       </div>
     ),
   },
@@ -76,7 +77,12 @@ const columns: ColumnDef<NetworkDevice>[] = [
     accessorFn: (row) => toComparableIp(row.ip_address),
     header: "IP",
     sortingFn: (left, right) => toComparableIp(left.original.ip_address) - toComparableIp(right.original.ip_address),
-    cell: ({ row }) => row.original.ip_address,
+    cell: ({ row }) => (
+      <div>
+        <p className="text-sm text-gray-900">{row.original.ip_address}</p>
+        <p className="text-xs text-gray-500">{row.original.assigned_user?.full_name || row.original.assigned_user?.username || row.original.resolved_label}</p>
+      </div>
+    ),
   },
   {
     accessorKey: "mac_address",

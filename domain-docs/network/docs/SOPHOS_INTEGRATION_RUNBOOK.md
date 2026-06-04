@@ -178,6 +178,30 @@ Per i peer esterni GAIA prova a mostrare una label leggibile con questa preceden
 2. reverse DNS
 3. fallback RDAP/organizzazione
 
+## Convenzione IP leggibili
+
+Nel modulo rete, quando GAIA conosce il device o il detentore associato, gli IP vengono mostrati come:
+
+- `192.168.1.13 · Simona Frau`
+- `192.168.1.83 · PC Ubuntu Server`
+
+La precedenza del riferimento e:
+
+1. `application_users.full_name`
+2. `application_users.username`
+3. `network_devices.display_name`
+4. `network_devices.hostname`
+
+La convenzione e applicata nelle viste operative principali:
+
+- dashboard rete
+- lista e dettaglio dispositivi
+- modal rapida dispositivo
+- planimetria
+- dettaglio scansioni
+- statistiche
+- eventi firewall Sophos per `src_ip` e `dst_ip` quando l'IP e correlato a un device noto
+
 ## Import censimento Excel
 
 Per popolare l’anagrafica operativa dei device dal file di censimento:

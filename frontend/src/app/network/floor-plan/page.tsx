@@ -14,6 +14,7 @@ import {
   getNetworkFloorPlans,
   updateNetworkDevicePosition,
 } from "@/lib/api";
+import { formatIpWithReference } from "@/lib/network-device-utils";
 import type { NetworkDevice, NetworkFloorPlan, NetworkFloorPlanDetail } from "@/types/api";
 
 function FloorPlanContent({ token }: { token: string }) {
@@ -226,7 +227,7 @@ function FloorPlanContent({ token }: { token: string }) {
                         <span className="sr-only">{device.resolved_label || device.hostname || device.ip_address}</span>
                         <div className="pointer-events-none absolute left-7 top-1/2 hidden w-56 -translate-y-1/2 rounded-lg border border-gray-200 bg-white p-3 text-xs shadow-lg group-hover:block">
                           <p className="font-medium text-gray-900">{device.resolved_label || device.display_name || device.hostname || device.ip_address}</p>
-                          <p className="mt-1 text-gray-500">{device.ip_address}</p>
+                          <p className="mt-1 text-gray-500">{formatIpWithReference(device)}</p>
                           <p className="mt-1 text-gray-500">{position.label || "Posizione non etichettata"}</p>
                           {isSavingPosition === position.device_id ? <p className="mt-2 text-[#1D4E35]">Salvataggio…</p> : null}
                         </div>
@@ -250,7 +251,7 @@ function FloorPlanContent({ token }: { token: string }) {
                       <p className="text-sm font-medium text-gray-900">{device.resolved_label || device.display_name || device.hostname || device.ip_address}</p>
                       <NetworkStatusBadge status={device.status} />
                     </div>
-                    <p className="mt-1 text-xs text-gray-500">{device.ip_address}</p>
+                    <p className="mt-1 text-xs text-gray-500">{formatIpWithReference(device)}</p>
                     <p className="mt-2 text-xs text-gray-500">{position.label || "Posizione non etichettata"}</p>
                   </div>
                 );
@@ -268,7 +269,7 @@ function FloorPlanContent({ token }: { token: string }) {
                     onClick={() => void handleAddDevice(device.id)}
                   >
                     <p className="text-sm font-medium text-gray-900">{device.resolved_label || device.display_name || device.hostname || device.ip_address}</p>
-                    <p className="mt-1 text-xs text-gray-500">{device.ip_address}</p>
+                    <p className="mt-1 text-xs text-gray-500">{formatIpWithReference(device)}</p>
                   </button>
                 ))}
                 {unpositionedDevices.length === 0 ? (

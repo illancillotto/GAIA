@@ -154,6 +154,15 @@ def _serialize_assigned_user(user: ApplicationUser) -> NetworkAssignedUserSummar
     )
 
 
+def _resolve_label_for_ip(db: Session, ip_address: str | None) -> str | None:
+    if not ip_address:
+        return None
+    device = db.scalar(select(NetworkDevice).where(NetworkDevice.ip_address == ip_address))
+    if device is None:
+        return None
+    return _resolve_device_label(device)[0]
+
+
 def _extract_event_traffic(event: NetworkFirewallEvent, *, device_ip: str) -> tuple[int, int, str | None]:
     raw_payload = metadata_sources_to_dict(event.raw_payload) or {}
     parsed = raw_payload.get("parsed") if isinstance(raw_payload, dict) else None
@@ -581,7 +590,17 @@ def _serialize_scan(scan_id: int, scan: object, db: Session) -> NetworkScanRespo
     return NetworkScanResponse(**payload)
 
 
-def _serialize_scan_device(device: NetworkScanDevice) -> NetworkScanDeviceResponse:
+def _serialize_scan_device(device: NetworkScanDevice, db: Session) -> NetworkScanDeviceResponse:
+    reference_device = None
+    if device.device_id:
+        reference_device = db.get(NetworkDevice, device.device_id)
+    if reference_device is None and device.ip_address:
+        reference_device = db.scalar(select(NetworkDevice).where(NetworkDevice.ip_address == device.ip_address))
+    resolved_label, label_source = (
+        _resolve_device_label(reference_device)
+        if reference_device is not None
+        else (device.display_name or device.hostname or device.ip_address, None)
+    )
     payload = {
         "id": device.id,
         "scan_id": device.scan_id,
@@ -591,6 +610,9 @@ def _serialize_scan_device(device: NetworkScanDevice) -> NetworkScanDeviceRespon
         "hostname": device.hostname,
         "hostname_source": device.hostname_source,
         "display_name": device.display_name,
+        "resolved_label": resolved_label,
+        "label_source": label_source,
+        "assigned_user_label": resolved_label if reference_device and reference_device.assigned_user_id else None,
         "asset_label": device.asset_label,
         "vendor": device.vendor,
         "model_name": device.model_name,
@@ -623,7 +645,7 @@ def _serialize_firewall(firewall: object) -> NetworkFirewallResponse:
     return NetworkFirewallResponse.model_validate(payload)
 
 
-def _serialize_firewall_event(event: object) -> NetworkFirewallEventResponse:
+def _serialize_firewall_event(event: object, db: Session) -> NetworkFirewallEventResponse:
     payload = {
         "id": event.id,
         "firewall_id": event.firewall_id,
@@ -634,7 +656,9 @@ def _serialize_firewall_event(event: object) -> NetworkFirewallEventResponse:
         "log_id": event.log_id,
         "message": event.message,
         "src_ip": event.src_ip,
+        "src_device_label": _resolve_label_for_ip(db, event.src_ip),
         "dst_ip": event.dst_ip,
+        "dst_device_label": _resolve_label_for_ip(db, event.dst_ip),
         "protocol": event.protocol,
         "raw_payload": metadata_sources_to_dict(event.raw_payload),
         "observed_at": event.observed_at,
@@ -832,7 +856,7 @@ def get_firewall_events(
     limit: int = Query(default=100, ge=1, le=500),
 ) -> list[NetworkFirewallEventResponse]:
     _require_network_module(current_user)
-    return [_serialize_firewall_event(item) for item in list_network_firewall_events(db, firewall_id=firewall_id, severity=severity, limit=limit)]
+    return [_serialize_firewall_event(item, db) for item in list_network_firewall_events(db, firewall_id=firewall_id, severity=severity, limit=limit)]
 
 
 @router.get("/firewalls/{firewall_id}/metrics", response_model=list[NetworkFirewallMetricResponse])
@@ -874,7 +898,7 @@ def post_sophos_syslog(
         management_ip=payload.management_ip,
         observed_at=payload.observed_at,
     )
-    return _serialize_firewall_event(event)
+    return _serialize_firewall_event(event, db)
 
 
 @router.patch("/alerts/{alert_id}", response_model=NetworkAlertResponse)
@@ -912,7 +936,7 @@ def get_scan(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Scan not found")
     payload = NetworkScanResponse.model_validate(scan).model_dump()
     payload["delta"] = delta
-    payload["devices"] = [_serialize_scan_device(item) for item in devices]
+    payload["devices"] = [_serialize_scan_device(item, db) for item in devices]
     return NetworkScanDetailResponse(**payload)
 
 
@@ -936,8 +960,8 @@ def get_scan_diff_endpoint(
         changes=[
             NetworkScanDiffEntry(
                 key=item["key"],
-                before=_serialize_scan_device(item["before"]) if item["before"] else None,
-                after=_serialize_scan_device(item["after"]) if item["after"] else None,
+                before=_serialize_scan_device(item["before"], db) if item["before"] else None,
+                after=_serialize_scan_device(item["after"], db) if item["after"] else None,
                 change_type=item["change_type"],
             )
             for item in changes

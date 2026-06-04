@@ -892,6 +892,9 @@ export type NetworkDevice = {
     status: string;
     hostname: string | null;
     ip_address: string;
+    resolved_label: string | null;
+    label_source: string | null;
+    assigned_user_label: string | null;
     open_ports: string | null;
   }[];
   traffic_summary: {
@@ -987,7 +990,9 @@ export type NetworkFirewallEvent = {
   log_id: string | null;
   message: string | null;
   src_ip: string | null;
+  src_device_label: string | null;
   dst_ip: string | null;
+  dst_device_label: string | null;
   protocol: string | null;
   raw_payload: Record<string, unknown> | null;
   observed_at: string;
@@ -1079,6 +1084,9 @@ export type NetworkScanDevice = {
   hostname: string | null;
   hostname_source: string | null;
   display_name: string | null;
+  resolved_label: string | null;
+  label_source: string | null;
+  assigned_user_label: string | null;
   asset_label: string | null;
   vendor: string | null;
   model_name: string | null;

@@ -37,6 +37,16 @@ function formatBytes(value: number) {
   return `${size >= 100 || unitIndex === 0 ? size.toFixed(0) : size.toFixed(1)} ${units[unitIndex]}`;
 }
 
+function formatIpWithLabel(ipAddress: string | null, label: string) {
+  if (!ipAddress) {
+    return null;
+  }
+  if (label && label !== ipAddress) {
+    return `${ipAddress} · ${label}`;
+  }
+  return ipAddress;
+}
+
 function CountList({ title, items }: { title: string; items: NetworkStatisticsCountItem[] }) {
   const maxCount = Math.max(...items.map((item) => item.count), 1);
 
@@ -77,7 +87,7 @@ function TrafficList({ title, items }: { title: string; items: NetworkStatistics
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                   <p className="truncate text-sm font-medium text-gray-900">{item.label}</p>
-                  {item.ip_address ? <p className="mt-1 text-xs text-gray-500">{item.ip_address}</p> : null}
+                  {item.ip_address ? <p className="mt-1 text-xs text-gray-500">{formatIpWithLabel(item.ip_address, item.label)}</p> : null}
                 </div>
                 <Badge variant="info">{item.events_count} eventi</Badge>
               </div>

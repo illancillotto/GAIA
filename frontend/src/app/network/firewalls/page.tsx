@@ -90,6 +90,16 @@ function parseEventDetails(event: NetworkFirewallEvent) {
   };
 }
 
+function formatEventEndpoint(ipAddress: string | null, label: string | null, fallback: string) {
+  if (!ipAddress) {
+    return fallback;
+  }
+  if (label && label !== ipAddress) {
+    return `${ipAddress} · ${label}`;
+  }
+  return ipAddress;
+}
+
 function FirewallsContent({ token }: { token: string }) {
   const [firewalls, setFirewalls] = useState<NetworkFirewall[]>([]);
   const [selectedFirewallId, setSelectedFirewallId] = useState<number | null>(null);
@@ -281,7 +291,10 @@ function FirewallsContent({ token }: { token: string }) {
                           </span>
                         </div>
                         <p className="mt-1 text-xs text-gray-500">
-                          {event.src_ip || "src n/d"} → {event.dst_ip || "dst n/d"}{event.protocol ? ` · ${event.protocol}` : ""}
+                          {formatEventEndpoint(event.src_ip, event.src_device_label, "src n/d")}
+                          {" → "}
+                          {formatEventEndpoint(event.dst_ip, event.dst_device_label, "dst n/d")}
+                          {event.protocol ? ` · ${event.protocol}` : ""}
                           {details.srcZone || details.dstZone ? ` · ${details.srcZone || "?"} → ${details.dstZone || "?"}` : ""}
                         </p>
                       </div>

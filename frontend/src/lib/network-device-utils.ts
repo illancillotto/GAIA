@@ -1,4 +1,4 @@
-import type { NetworkDevice } from "@/types/api";
+import type { NetworkDevice, NetworkScanDevice } from "@/types/api";
 
 function hasPort(openPorts: string | null, port: number): boolean {
   if (!openPorts) {
@@ -40,4 +40,25 @@ export function getNetworkDeviceAdminUrl(device: Pick<NetworkDevice, "ip_address
   }
 
   return null;
+}
+
+type DeviceLike = Pick<NetworkDevice, "ip_address" | "resolved_label" | "display_name" | "hostname" | "assigned_user">;
+type ScanDeviceLike = Pick<NetworkScanDevice, "ip_address" | "resolved_label" | "display_name" | "hostname" | "assigned_user_label">;
+
+export function getDeviceReferenceLabel(device: DeviceLike | ScanDeviceLike): string | null {
+  if ("assigned_user" in device && device.assigned_user) {
+    return device.assigned_user.full_name || device.assigned_user.username;
+  }
+  if ("assigned_user_label" in device && device.assigned_user_label) {
+    return device.assigned_user_label;
+  }
+  return device.resolved_label || device.display_name || device.hostname || null;
+}
+
+export function formatIpWithReference(device: DeviceLike | ScanDeviceLike): string {
+  const reference = getDeviceReferenceLabel(device);
+  if (reference && reference !== device.ip_address) {
+    return `${device.ip_address} · ${reference}`;
+  }
+  return device.ip_address;
 }

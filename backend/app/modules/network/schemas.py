@@ -260,6 +260,9 @@ class NetworkScanDeviceResponse(BaseModel):
     hostname: str | None
     hostname_source: str | None
     display_name: str | None
+    resolved_label: str | None = None
+    label_source: str | None = None
+    assigned_user_label: str | None = None
     asset_label: str | None
     vendor: str | None
     model_name: str | None
@@ -366,7 +369,9 @@ class NetworkFirewallEventResponse(BaseModel):
     log_id: str | None = None
     message: str | None = None
     src_ip: str | None = None
+    src_device_label: str | None = None
     dst_ip: str | None = None
+    dst_device_label: str | None = None
     protocol: str | None = None
     raw_payload: dict[str, Any] | None = None
     observed_at: datetime

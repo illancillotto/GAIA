@@ -264,6 +264,18 @@ Formato `NETWORK_SNMP_COMMUNITY_PROFILES`:
   - salva `retired_at`
   - lo esclude dai conteggi operativi di dashboard
 
+### 5.2G Convenzione di leggibilita IP
+
+- nelle viste operative del modulo rete, quando disponibile, un IP viene mostrato come `IP · riferimento`
+- il riferimento usa la stessa gerarchia del label operativo:
+  1. `application_users.full_name`
+  2. `application_users.username`
+  3. `network_devices.display_name`
+  4. `network_devices.hostname`
+  5. nessun riferimento aggiuntivo
+- la convenzione si applica a dashboard, lista dispositivi, dettaglio dispositivo, modal rapida, planimetria, dettaglio scansioni e statistiche
+- negli eventi firewall Sophos vengono esposti anche `src_device_label` e `dst_device_label` per mostrare `src_ip` e `dst_ip` con il relativo riferimento dispositivo/utente quando GAIA riesce a correlare l'IP a `network_devices`
+
 ### 5.3 Struttura cartelle
 
 ```
@@ -306,11 +318,11 @@ I path legacy `app/api/routes/network.py`, `app/models/network.py`, `app/schemas
 |-------|-----------|
 | `/network` | Dashboard: dispositivi online/offline, alert attivi, ultima scan, pulsante scan manuale |
 | `/network/devices` | Tabella dispositivi con filtri stato, piano, vendor, ricerca hostname/IP/MAC |
-| `/network/devices/[id]` | Dettaglio: info, storico visto, posizione planimetria, link Inventario |
-| `/network/floor-plan` | Selezione piano + planimetria interattiva con badge dispositivi |
+| `/network/devices/[id]` | Dettaglio: info, storico visto, posizione planimetria, link Inventario, IP con riferimento utente |
+| `/network/floor-plan` | Selezione piano + planimetria interattiva con badge dispositivi e riferimenti IP leggibili |
 | `/network/alerts` | Lista alert con filtro tipo/severità, azione risolvi/ignora |
 | `/network/scans` | Storico scansioni con delta e confronto snapshot |
-| `/network/scans/[id]` | Dettaglio snapshot: lista completa dispositivi |
+| `/network/scans/[id]` | Dettaglio snapshot: lista completa dispositivi con label e IP arricchiti |
 
 ---
 
