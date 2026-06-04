@@ -527,6 +527,8 @@ def test_network_firewall_events_are_listed() -> None:
     assert len(payload) == 1
     assert payload[0]["event_type"] == "firewall.firewall_rule.drop"
     assert payload[0]["device_id"] == 1
+    assert payload[0]["src_device_label"] == "Operatore CED"
+    assert payload[0]["dst_device_label"] is None
 
 
 def test_network_firewall_metrics_are_listed() -> None:

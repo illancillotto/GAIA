@@ -163,6 +163,30 @@ def _resolve_label_for_ip(db: Session, ip_address: str | None) -> str | None:
     return _resolve_device_label(device)[0]
 
 
+def _resolve_firewall_event_endpoint_labels(
+    db: Session,
+    *,
+    device_id: int | None,
+    src_ip: str | None,
+    dst_ip: str | None,
+) -> tuple[str | None, str | None]:
+    src_label = _resolve_label_for_ip(db, src_ip)
+    dst_label = _resolve_label_for_ip(db, dst_ip)
+    if device_id is None or (src_label and dst_label):
+        return src_label, dst_label
+
+    linked_device = db.get(NetworkDevice, device_id)
+    if linked_device is None:
+        return src_label, dst_label
+
+    linked_label = _resolve_device_label(linked_device)[0]
+    if not src_label and src_ip and src_ip == linked_device.ip_address:
+        src_label = linked_label
+    if not dst_label and dst_ip and dst_ip == linked_device.ip_address:
+        dst_label = linked_label
+    return src_label, dst_label
+
+
 def _extract_event_traffic(event: NetworkFirewallEvent, *, device_ip: str) -> tuple[int, int, str | None]:
     raw_payload = metadata_sources_to_dict(event.raw_payload) or {}
     parsed = raw_payload.get("parsed") if isinstance(raw_payload, dict) else None
@@ -646,6 +670,12 @@ def _serialize_firewall(firewall: object) -> NetworkFirewallResponse:
 
 
 def _serialize_firewall_event(event: object, db: Session) -> NetworkFirewallEventResponse:
+    src_label, dst_label = _resolve_firewall_event_endpoint_labels(
+        db,
+        device_id=event.device_id,
+        src_ip=event.src_ip,
+        dst_ip=event.dst_ip,
+    )
     payload = {
         "id": event.id,
         "firewall_id": event.firewall_id,
@@ -656,9 +686,9 @@ def _serialize_firewall_event(event: object, db: Session) -> NetworkFirewallEven
         "log_id": event.log_id,
         "message": event.message,
         "src_ip": event.src_ip,
-        "src_device_label": _resolve_label_for_ip(db, event.src_ip),
+        "src_device_label": src_label,
         "dst_ip": event.dst_ip,
-        "dst_device_label": _resolve_label_for_ip(db, event.dst_ip),
+        "dst_device_label": dst_label,
         "protocol": event.protocol,
         "raw_payload": metadata_sources_to_dict(event.raw_payload),
         "observed_at": event.observed_at,
