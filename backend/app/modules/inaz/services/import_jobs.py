@@ -14,6 +14,7 @@ from app.modules.inaz.services.parser import (
     duration_to_minutes,
     parse_clock,
     parse_portal_date,
+    extract_punch_terminal_labels,
     resolve_absence_minutes,
     resolve_absence_cause,
     resolve_evidenze,
@@ -135,13 +136,26 @@ def import_collaborator_payload(db: Session, *, payload: ParsedCollaboratorPaylo
         record.raw_weekday = clean(payload=daily_row.get("raw_weekday"))
         record.raw_payload_json = daily_row
         db.query(InazDailyPunch).filter(InazDailyPunch.daily_record_id == record.id).delete()
+        terminal_rows = extract_punch_terminal_labels(daily_row)
         for index, punch in enumerate(daily_row.get("punches", []), start=1):
+            entry = clean(payload=punch.get("entry"))
+            exit_value = clean(payload=punch.get("exit"))
+            terminal_label = next(
+                (
+                    item["terminal_label"]
+                    for item in terminal_rows
+                    if (item["direction"] == "E" and item["time"] == entry)
+                    or (item["direction"] == "U" and item["time"] == exit_value)
+                ),
+                None,
+            )
             db.add(
                 InazDailyPunch(
                     daily_record_id=record.id,
                     sequence=index,
                     entry_time=parse_clock(punch.get("entry")),
                     exit_time=parse_clock(punch.get("exit")),
+                    terminal_label=terminal_label,
                 )
             )
 

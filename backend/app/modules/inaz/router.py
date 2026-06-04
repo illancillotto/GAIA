@@ -73,6 +73,7 @@ from app.modules.inaz.services.credentials import (
 from app.modules.inaz.services.import_jobs import build_preview, run_import_job
 from app.modules.inaz.services.parser import (
     detail_indicates_special_day,
+    extract_punch_terminal_labels,
     extract_detail_payload,
     load_json_payload,
     parse_import_payload,
@@ -949,6 +950,32 @@ def _serialize_daily_record(db: Session, record: InazDailyRecord) -> InazDailyRe
         select(InazDailyPunch).where(InazDailyPunch.daily_record_id == record.id).order_by(InazDailyPunch.sequence.asc())
     ).scalars().all()
     detail = extract_detail_payload(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else {}
+    terminal_rows = extract_punch_terminal_labels(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else []
+    serialized_punches = []
+    for punch in punches:
+        terminal_label = punch.terminal_label
+        if terminal_label is None:
+            entry = punch.entry_time.strftime("%H:%M") if punch.entry_time else None
+            exit_value = punch.exit_time.strftime("%H:%M") if punch.exit_time else None
+            terminal_label = next(
+                (
+                    item["terminal_label"]
+                    for item in terminal_rows
+                    if (item["direction"] == "E" and item["time"] == entry)
+                    or (item["direction"] == "U" and item["time"] == exit_value)
+                ),
+                None,
+            )
+        serialized_punches.append(
+            {
+                "id": punch.id,
+                "daily_record_id": punch.daily_record_id,
+                "sequence": punch.sequence,
+                "entry_time": punch.entry_time,
+                "exit_time": punch.exit_time,
+                "terminal_label": terminal_label,
+            }
+        )
     effective_straordinario = (
         record.override_straordinario_minutes
         if record.override_straordinario_minutes is not None
@@ -958,7 +985,7 @@ def _serialize_daily_record(db: Session, record: InazDailyRecord) -> InazDailyRe
     return InazDailyRecordResponse.model_validate(
         {
             **record.__dict__,
-            "punches": punches,
+            "punches": serialized_punches,
             "effective_straordinario_minutes": effective_straordinario,
             "effective_mpe_minutes": effective_mpe,
             "effective_extra_minutes": (effective_straordinario or 0) + (effective_mpe or 0) or None,

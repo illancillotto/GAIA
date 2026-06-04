@@ -131,6 +131,7 @@ export type InazDailyPunch = {
   sequence: number;
   entry_time: string | null;
   exit_time: string | null;
+  terminal_label: string | null;
 };
 
 export type InazDailyRecord = {

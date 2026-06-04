@@ -256,6 +256,7 @@ class InazDailyPunch(Base):
     sequence: Mapped[int] = mapped_column(Integer, nullable=False)
     entry_time: Mapped[time | None] = mapped_column(Time, nullable=True)
     exit_time: Mapped[time | None] = mapped_column(Time, nullable=True)
+    terminal_label: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
 
 class InazEventSummary(Base):

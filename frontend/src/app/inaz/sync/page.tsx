@@ -37,6 +37,50 @@ function formatElapsed(seconds: number | null | undefined): string {
   return `${minutes}m ${remainingSeconds}s`;
 }
 
+function safeProgressText(value: unknown, fallback = "n/d"): string {
+  if (value == null) return fallback;
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    if (typeof record.name === "string" && typeof record.employee_code === "string") {
+      return `${record.employee_code} · ${record.name}`;
+    }
+    if (typeof record.phase === "string") {
+      return record.phase;
+    }
+    if (typeof record.type === "string") {
+      return record.type;
+    }
+    try {
+      return JSON.stringify(record);
+    } catch {
+      return fallback;
+    }
+  }
+  return fallback;
+}
+
+function normalizeSyncJob(job: InazSyncJob): InazSyncJob {
+  const progress = job.params_json?.progress;
+  if (!progress) return job;
+  return {
+    ...job,
+    params_json: {
+      ...job.params_json,
+      progress: {
+        ...progress,
+        state: safeProgressText(progress.state),
+        employee_code: safeProgressText(progress.employee_code, ""),
+        name: safeProgressText(progress.name, ""),
+        last_event: safeProgressText(progress.last_event),
+        error: safeProgressText(progress.error, ""),
+      },
+    },
+  };
+}
+
 export default function InazSyncPage() {
   const today = new Date();
   const [year, setYear] = useState(String(today.getFullYear()));
@@ -58,7 +102,7 @@ export default function InazSyncPage() {
     if (!token) return;
     try {
       const [items, credentialsResult] = await Promise.all([listInazSyncJobs(token), listInazCredentials(token)]);
-      setJobs(items);
+      setJobs(items.map(normalizeSyncJob));
       setCredentials(credentialsResult);
       setCredentialId((current) => {
         const selectedCredential = credentialsResult.find((credential) => String(credential.id) === current && credential.active);
@@ -291,14 +335,19 @@ export default function InazSyncPage() {
                     const hasResumeCheckpoint = Array.isArray(checkpoint?.completed_employee_codes) && checkpoint.completed_employee_codes.length > 0;
                     const currentIndex = progress?.index ?? null;
                     const totalCollaborators = progress?.total ?? progress?.total_collaborators ?? null;
-                    const currentEmployee = progress?.employee_code && progress?.name ? `${progress.employee_code} · ${progress.name}` : null;
+                    const currentEmployee =
+                      progress?.employee_code && progress?.name
+                        ? `${safeProgressText(progress.employee_code)} · ${safeProgressText(progress.name)}`
+                        : progress
+                          ? safeProgressText((progress as Record<string, unknown>).current_collaborator, "")
+                          : "";
                     const completedCollaborators = progress?.completed_collaborators ?? 0;
                     const failedCollaborators = progress?.failed_collaborators ?? progress?.error_count ?? 0;
                     const progressSummary =
                       currentIndex && totalCollaborators
                         ? `Avanzamento ${currentIndex}/${totalCollaborators}`
                         : progress?.last_event
-                          ? `Evento ${progress.last_event}`
+                          ? `Evento ${safeProgressText(progress.last_event)}`
                           : null;
 
                     return (
@@ -387,7 +436,7 @@ export default function InazSyncPage() {
                       <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                         <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
                           <p className="text-[11px] uppercase tracking-[0.18em] text-gray-500">Stato worker</p>
-                          <p className="mt-1 text-sm font-medium text-gray-900">{progress.state ?? job.status}</p>
+                          <p className="mt-1 text-sm font-medium text-gray-900">{safeProgressText(progress.state ?? job.status)}</p>
                           <p className="text-xs text-gray-500">PID {job.worker_pid ?? "n/d"}</p>
                         </div>
                         <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
@@ -401,7 +450,7 @@ export default function InazSyncPage() {
                         </div>
                         <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
                           <p className="text-[11px] uppercase tracking-[0.18em] text-gray-500">Collaboratore</p>
-                          <p className="mt-1 text-sm font-medium text-gray-900">{currentEmployee ?? "n/d"}</p>
+                          <p className="mt-1 text-sm font-medium text-gray-900">{currentEmployee || "n/d"}</p>
                           <p className="text-xs text-gray-500">
                             righe giorno {progress.daily_rows ?? "n/d"} · summary {progress.summary_rows ?? "n/d"}
                           </p>
@@ -409,7 +458,7 @@ export default function InazSyncPage() {
                         <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
                           <p className="text-[11px] uppercase tracking-[0.18em] text-gray-500">Tempo / ultimo evento</p>
                           <p className="mt-1 text-sm font-medium text-gray-900">{formatElapsed(progress.elapsed_seconds)}</p>
-                          <p className="text-xs text-gray-500">{progress.last_event ?? "n/d"} · {formatDateTime(progress.last_event_at)}</p>
+                          <p className="text-xs text-gray-500">{safeProgressText(progress.last_event)} · {formatDateTime(progress.last_event_at)}</p>
                         </div>
                       </div>
                       <div className="mt-3 grid gap-3 md:grid-cols-2">
@@ -423,7 +472,7 @@ export default function InazSyncPage() {
                         <div className="rounded-lg border border-gray-100 bg-gray-50 p-3">
                           <p className="text-[11px] uppercase tracking-[0.18em] text-gray-500">Ultimo errore</p>
                           <p className="mt-1 text-xs text-gray-700 whitespace-pre-wrap">
-                            {progress.error ?? job.error_detail ?? "Nessun errore registrato"}
+                            {safeProgressText(progress.error ?? job.error_detail ?? "Nessun errore registrato")}
                           </p>
                         </div>
                       </div>

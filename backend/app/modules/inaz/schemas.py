@@ -175,6 +175,7 @@ class InazDailyPunchResponse(BaseModel):
     sequence: int
     entry_time: time | None = None
     exit_time: time | None = None
+    terminal_label: str | None = None
 
 
 class InazCollaboratorResponse(BaseModel):

@@ -8,6 +8,7 @@ import {
   ModuleWorkspaceHero,
   ModuleWorkspaceKpiRow,
   ModuleWorkspaceKpiTile,
+  ModuleWorkspaceMiniStat,
   ModuleWorkspaceNoticeCard,
 } from "@/components/layout/module-workspace-hero";
 import { listInazCollaborators, listInazDailyRecords, listInazSyncJobs } from "@/lib/api";
@@ -23,6 +24,57 @@ function currentMonthBounds(): { start: string; end: string } {
   return { start: format(start), end: format(end) };
 }
 
+function formatMonthLabelFromIso(isoDate: string): string {
+  return new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric" }).format(new Date(`${isoDate}T00:00:00`));
+}
+
+function formatHours(minutes: number): string {
+  return `${(minutes / 60).toFixed(1)} h`;
+}
+
+function safeDisplay(value: unknown, fallback = "n/d"): string {
+  if (value == null) return fallback;
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    if (typeof record.name === "string" && record.name.trim()) {
+      return record.name;
+    }
+    if (typeof record.employee_code === "string" && record.employee_code.trim()) {
+      return record.employee_code;
+    }
+  }
+  return fallback;
+}
+
+async function listAllInazCollaborators(token: string): Promise<InazCollaborator[]> {
+  const items: InazCollaborator[] = [];
+  let page = 1;
+  let total = 0;
+  do {
+    const response = await listInazCollaborators(token, { page, pageSize: 200 });
+    items.push(...response.items);
+    total = response.total;
+    page += 1;
+  } while (items.length < total);
+  return items;
+}
+
+async function listAllInazDailyRecordsForMonth(token: string, dateFrom: string, dateTo: string): Promise<InazDailyRecord[]> {
+  const items: InazDailyRecord[] = [];
+  let page = 1;
+  let total = 0;
+  do {
+    const response = await listInazDailyRecords(token, { dateFrom, dateTo, page, pageSize: 200 });
+    items.push(...response.items);
+    total = response.total;
+    page += 1;
+  } while (items.length < total);
+  return items;
+}
+
 export default function InazPage() {
   const [collaborators, setCollaborators] = useState<InazCollaborator[]>([]);
   const [records, setRecords] = useState<InazDailyRecord[]>([]);
@@ -34,23 +86,76 @@ export default function InazPage() {
     if (!token) return;
     const { start, end } = currentMonthBounds();
     Promise.all([
-      listInazCollaborators(token, { page: 1, pageSize: 6 }),
-      listInazDailyRecords(token, { dateFrom: start, dateTo: end, page: 1, pageSize: 8 }),
+      listAllInazCollaborators(token),
+      listAllInazDailyRecordsForMonth(token, start, end),
       listInazSyncJobs(token),
     ])
-      .then(([collaboratorResponse, recordResponse, jobsResponse]) => {
-        setCollaborators(collaboratorResponse.items);
-        setRecords(recordResponse.items);
+      .then(([allCollaborators, allRecords, jobsResponse]) => {
+        setCollaborators(allCollaborators);
+        setRecords(allRecords);
         setJobs(jobsResponse.slice(0, 6));
       })
       .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Errore caricamento modulo Inaz"));
   }, []);
 
   const mappedCount = useMemo(() => collaborators.filter((item) => item.application_user_id != null).length, [collaborators]);
-  const ordinaryHours = useMemo(
-    () => (records.reduce((sum, item) => sum + (item.ordinary_minutes ?? 0), 0) / 60).toFixed(1),
+  const dashboardMonthLabel = useMemo(() => formatMonthLabelFromIso(currentMonthBounds().start), []);
+  const recentCollaborators = useMemo(() => collaborators.slice(0, 6), [collaborators]);
+  const ordinaryMinutes = useMemo(() => records.reduce((sum, item) => sum + (item.ordinary_minutes ?? 0), 0), [records]);
+  const absenceMinutes = useMemo(() => records.reduce((sum, item) => sum + (item.absence_minutes ?? 0), 0), [records]);
+  const extraMinutes = useMemo(() => records.reduce((sum, item) => sum + (item.effective_extra_minutes ?? 0), 0), [records]);
+  const straordinarioMinutes = useMemo(
+    () => records.reduce((sum, item) => sum + (item.effective_straordinario_minutes ?? item.straordinario_minutes ?? 0), 0),
     [records],
   );
+  const maggiorPresenzaMinutes = useMemo(
+    () => records.reduce((sum, item) => sum + (item.effective_mpe_minutes ?? item.mpe_minutes ?? 0), 0),
+    [records],
+  );
+  const kmTotal = useMemo(() => records.reduce((sum, item) => sum + (item.km_value ?? 0), 0), [records]);
+  const anomalyCount = useMemo(
+    () =>
+      records.filter(
+        (item) =>
+          (item.detail_anomalies?.length ?? 0) > 0 ||
+          Boolean(item.detail_status?.toLowerCase().includes("anom")) ||
+          Boolean(item.stato?.toLowerCase().includes("anom")),
+      ).length,
+    [records],
+  );
+  const specialDayCount = useMemo(() => records.filter((item) => Boolean(item.special_day)).length, [records]);
+  const workedDaysCount = useMemo(() => records.filter((item) => (item.ordinary_minutes ?? 0) > 0).length, [records]);
+  const absenceDaysCount = useMemo(() => records.filter((item) => (item.absence_minutes ?? 0) > 0).length, [records]);
+  const justifiedDaysCount = useMemo(() => records.filter((item) => (item.justified_minutes ?? 0) > 0).length, [records]);
+  const activeCollaboratorsCount = useMemo(() => {
+    return new Set(records.map((item) => item.collaborator_id)).size;
+  }, [records]);
+  const causeStats = useMemo(() => {
+    return records.reduce(
+      (accumulator, item) => {
+        const cause = (item.resolved_absence_cause ?? "").trim().toLowerCase();
+        if (!cause) return accumulator;
+        accumulator[cause] = (accumulator[cause] ?? 0) + 1;
+        return accumulator;
+      },
+      {} as Record<string, number>,
+    );
+  }, [records]);
+  const scheduleStats = useMemo(() => {
+    return Object.entries(
+      records.reduce(
+        (accumulator, item) => {
+          const code = (item.schedule_code ?? item.detail_programmed_schedule?.split(" - ")[0] ?? "").trim();
+          if (!code) return accumulator;
+          accumulator[code] = (accumulator[code] ?? 0) + 1;
+          return accumulator;
+        },
+        {} as Record<string, number>,
+      ),
+    )
+      .sort((left, right) => right[1] - left[1])
+      .slice(0, 4);
+  }, [records]);
   const latestJob = jobs[0] ?? null;
   const latestJobProgress = latestJob?.params_json?.progress;
   const latestJobTitle = latestJob
@@ -93,20 +198,110 @@ export default function InazPage() {
           }
         >
           <ModuleWorkspaceKpiRow>
-            <ModuleWorkspaceKpiTile label="Collaboratori" value={collaborators.length} hint="Estratti recenti" />
+            <ModuleWorkspaceKpiTile label="Collaboratori" value={collaborators.length} hint="Importati a database" />
             <ModuleWorkspaceKpiTile label="Mappati GAIA" value={mappedCount} hint="Con application_user_id" variant="emerald" />
-            <ModuleWorkspaceKpiTile label="Giornaliere mese" value={records.length} hint="Periodo corrente" />
-            <ModuleWorkspaceKpiTile label="Ore ordinarie" value={`${ordinaryHours} h`} hint="Campione dashboard" />
+            <ModuleWorkspaceKpiTile label="Collaboratori attivi mese" value={activeCollaboratorsCount} hint={dashboardMonthLabel} />
+            <ModuleWorkspaceKpiTile label="Giornaliere mese" value={records.length} hint="Righe cartellino persistite" />
+            <ModuleWorkspaceKpiTile label="Ore ordinarie" value={formatHours(ordinaryMinutes)} hint="Totale mese" variant="emerald" />
+            <ModuleWorkspaceKpiTile label="Extra effettivi" value={formatHours(extraMinutes)} hint="Straordinario + maggior presenza" variant="amber" />
           </ModuleWorkspaceKpiRow>
         </ModuleWorkspaceHero>
 
         {error ? <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div> : null}
 
+        <div className="grid gap-6 xl:grid-cols-4">
+          <ModuleWorkspaceMiniStat eyebrow="Presenze" value={workedDaysCount} description="Giornate con ore ordinarie registrate nel mese." tone="success" />
+          <ModuleWorkspaceMiniStat eyebrow="Assenze" value={absenceDaysCount} description={`Totale ore assenza ${formatHours(absenceMinutes)}.`} tone="warning" />
+          <ModuleWorkspaceMiniStat eyebrow="Anomalie" value={anomalyCount} description="Giornate con stato anomalo o rilievi nel dettaglio Inaz." tone="warning" />
+          <ModuleWorkspaceMiniStat eyebrow="KM carburante" value={kmTotal} description="Chilometri registrati sulle giornaliere del mese." />
+        </div>
+
+        <div className="grid gap-6 xl:grid-cols-3">
+          <article className="panel-card">
+            <div className="mb-4">
+              <p className="section-title">Presenze mese</p>
+              <p className="section-copy">Quadro macro del cartellino mensile importato in GAIA.</p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+                <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Ore ordinarie</p>
+                <p className="mt-2 text-2xl font-semibold text-gray-900">{formatHours(ordinaryMinutes)}</p>
+              </div>
+              <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+                <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Ore assenza</p>
+                <p className="mt-2 text-2xl font-semibold text-gray-900">{formatHours(absenceMinutes)}</p>
+              </div>
+              <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+                <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Straordinario</p>
+                <p className="mt-2 text-2xl font-semibold text-emerald-700">{formatHours(straordinarioMinutes)}</p>
+              </div>
+              <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+                <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Maggior presenza</p>
+                <p className="mt-2 text-2xl font-semibold text-emerald-700">{formatHours(maggiorPresenzaMinutes)}</p>
+              </div>
+            </div>
+            <div className="mt-4 grid gap-3 sm:grid-cols-3">
+              <div className="rounded-2xl border border-gray-100 bg-white p-3 text-sm text-gray-700">
+                Giorni speciali
+                <p className="mt-1 text-lg font-semibold text-gray-900">{specialDayCount}</p>
+              </div>
+              <div className="rounded-2xl border border-gray-100 bg-white p-3 text-sm text-gray-700">
+                Assenze giustificate
+                <p className="mt-1 text-lg font-semibold text-gray-900">{justifiedDaysCount}</p>
+              </div>
+              <div className="rounded-2xl border border-gray-100 bg-white p-3 text-sm text-gray-700">
+                Extra effettivi
+                <p className="mt-1 text-lg font-semibold text-gray-900">{formatHours(extraMinutes)}</p>
+              </div>
+            </div>
+          </article>
+
+          <article className="panel-card">
+            <div className="mb-4">
+              <p className="section-title">Causali assenza</p>
+              <p className="section-copy">Distribuzione delle principali causali normalizzate lette da Inaz.</p>
+            </div>
+            <div className="space-y-3">
+              {[
+                ["ferie", causeStats.ferie ?? 0, "Ferie"],
+                ["permesso", causeStats.permesso ?? 0, "Permessi"],
+                ["malattia", causeStats.malattia ?? 0, "Malattia"],
+              ].map(([key, value, label]) => (
+                <div key={key} className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-medium text-gray-700">{label}</p>
+                    <p className="text-lg font-semibold text-gray-900">{value}</p>
+                  </div>
+                </div>
+              ))}
+              {Object.keys(causeStats).length === 0 ? <p className="text-sm text-gray-500">Nessuna causale assenza rilevata nel mese.</p> : null}
+            </div>
+          </article>
+
+          <article className="panel-card">
+            <div className="mb-4">
+              <p className="section-title">Orari prevalenti</p>
+              <p className="section-copy">Codici turno o orario piu frequenti sulle giornaliere del mese.</p>
+            </div>
+            <div className="space-y-3">
+              {scheduleStats.map(([code, count]) => (
+                <div key={code} className="rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="font-medium text-gray-900">{code}</p>
+                    <span className="rounded-full bg-white px-2.5 py-1 text-xs font-medium text-gray-600">{count} gg</span>
+                  </div>
+                </div>
+              ))}
+              {scheduleStats.length === 0 ? <p className="text-sm text-gray-500">Nessun codice orario disponibile.</p> : null}
+            </div>
+          </article>
+        </div>
+
         <div className="grid gap-6 xl:grid-cols-3">
           <article className="panel-card xl:col-span-2">
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
-                <p className="section-title">Collaboratori recenti</p>
+                <p className="section-title">Collaboratori del mese</p>
                 <p className="section-copy">Stato mapping e accesso rapido al dettaglio calendario/eventi.</p>
               </div>
               <Link className="btn-secondary" href="/inaz/collaboratori">
@@ -114,12 +309,12 @@ export default function InazPage() {
               </Link>
             </div>
             <div className="space-y-3">
-              {collaborators.map((item) => (
+              {recentCollaborators.map((item) => (
                 <Link key={item.id} href={`/inaz/collaboratori/${item.id}`} className="flex items-center justify-between gap-3 rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 transition hover:bg-white">
                   <div>
-                    <p className="font-medium text-gray-900">{item.name}</p>
+                    <p className="font-medium text-gray-900">{safeDisplay(item.name)}</p>
                     <p className="text-xs text-gray-500">
-                      Matricola {item.employee_code} · Azienda {item.company_code ?? "n/d"} · {item.birth_date ?? "Data nascita n/d"}
+                      Matricola {safeDisplay(item.employee_code)} · Azienda {safeDisplay(item.company_code)} · {safeDisplay(item.birth_date, "Data nascita n/d")}
                     </p>
                   </div>
                   <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${item.application_user_id ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
@@ -127,7 +322,7 @@ export default function InazPage() {
                   </span>
                 </Link>
               ))}
-              {collaborators.length === 0 ? <p className="text-sm text-gray-500">Nessun collaboratore disponibile.</p> : null}
+              {recentCollaborators.length === 0 ? <p className="text-sm text-gray-500">Nessun collaboratore disponibile.</p> : null}
             </div>
           </article>
 

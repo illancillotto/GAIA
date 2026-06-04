@@ -43,6 +43,10 @@ function formatMonthLabel(monthValue: string): string {
   return new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric" }).format(new Date(`${monthValue}-01T00:00:00`));
 }
 
+function formatWeekdayLabel(isoDate: string): string {
+  return new Intl.DateTimeFormat("it-IT", { weekday: "long" }).format(new Date(`${isoDate}T00:00:00`));
+}
+
 function todayIso(): string {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
@@ -192,6 +196,25 @@ function formatRequestDescription(value: string | null | undefined): string {
   if (!value) return "—";
   if (value.includes(" - ")) {
     const [, right] = value.split(" - ", 2);
+    if (right?.trim()) return right.trim();
+  }
+  return value;
+}
+
+function requestBadgeLabel(record: InazDailyRecord): string | null {
+  if (record.resolved_absence_cause) {
+    return formatAbsenceCause(record.resolved_absence_cause);
+  }
+  if (record.request_description) {
+    return formatRequestDescription(record.request_description);
+  }
+  return null;
+}
+
+function formatPunchTerminalLabel(value: string | null | undefined): string | null {
+  if (!value) return null;
+  if (value.includes("-")) {
+    const [, right] = value.split("-", 2);
     if (right?.trim()) return right.trim();
   }
   return value;
@@ -733,7 +756,7 @@ export default function InazGiornalierePage() {
             <div className="flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 px-6 py-5">
               <div>
                 <p className="section-title">
-                  {selectedRecord.work_date} · {collaboratorMap.get(selectedRecord.collaborator_id)?.name ?? selectedRecord.collaborator_id}
+                  {selectedRecord.work_date} · {formatWeekdayLabel(selectedRecord.work_date)} · {collaboratorMap.get(selectedRecord.collaborator_id)?.name ?? selectedRecord.collaborator_id}
                 </p>
                 <p className="section-copy">
                   {selectedRecord.detail_programmed_schedule ?? selectedRecord.schedule_code ?? "Orario non disponibile"}
@@ -744,6 +767,7 @@ export default function InazGiornalierePage() {
                 <Badge variant={detailBadgeVariant(selectedRecord)}>
                   {selectedRecord.detail_status ?? selectedRecord.stato ?? "n/d"}
                 </Badge>
+                {requestBadgeLabel(selectedRecord) ? <Badge variant="warning">{requestBadgeLabel(selectedRecord)}</Badge> : null}
                 {selectedRecord.effective_extra_minutes ? <Badge variant="success">extra {formatHours(selectedRecord.effective_extra_minutes)}</Badge> : null}
                 <button type="button" className="text-sm text-gray-400 hover:text-gray-700" onClick={() => setSelectedRecordId("")}>
                   Chiudi ✕
@@ -766,7 +790,7 @@ export default function InazGiornalierePage() {
                   <p className="text-xs uppercase tracking-[0.16em] text-amber-500">Aggiungi KM carburante</p>
                   <div className="mt-2 flex flex-wrap items-end gap-3">
                     <label className="block text-sm font-medium text-amber-900">
-                      Chilometri (auto)
+                      <span className="inline-block pb-1">Chilometri (auto)</span>
                       <input
                         className="form-control mt-1 w-40"
                         inputMode="numeric"
@@ -822,6 +846,24 @@ export default function InazGiornalierePage() {
                 </div>
               ) : null}
 
+              {selectedRecord.punches.length > 0 ? (
+                <div className="mt-4 rounded-2xl border border-gray-100 bg-white p-4">
+                  <p className="section-title">Timbrature</p>
+                  <div className="mt-3 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                    {selectedRecord.punches.map((punch) => (
+                      <div key={punch.id} className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-3 text-sm text-gray-700">
+                        <p className="font-medium text-gray-900">Timbratura {punch.sequence}</p>
+                        <p className="mt-1">Entrata: <span className="font-medium text-gray-900">{punch.entry_time ?? "—"}</span></p>
+                        <p>Uscita: <span className="font-medium text-gray-900">{punch.exit_time ?? "—"}</span></p>
+                        {formatPunchTerminalLabel(punch.terminal_label) ? (
+                          <p className="mt-1 text-xs text-gray-500">Terminale: {formatPunchTerminalLabel(punch.terminal_label)}</p>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
               <div className="mt-4 rounded-2xl border border-gray-100 bg-white p-4">
                 <div className="mb-3">
                   <p className="section-title">Rettifiche operatore</p>
@@ -849,7 +891,12 @@ export default function InazGiornalierePage() {
                   <button className="btn-primary" type="button" onClick={() => void handleSaveEditor()} disabled={!canEdit || isSaving}>
                     {isSaving ? "Salvataggio..." : "Salva rettifiche"}
                   </button>
-                  <Link className="btn-secondary" href={`/inaz/collaboratori/${selectedRecord.collaborator_id}`}>
+                  <Link
+                    className="btn-secondary"
+                    href={`/inaz/collaboratori/${selectedRecord.collaborator_id}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
                     Apri dettaglio collaboratore
                   </Link>
                 </div>

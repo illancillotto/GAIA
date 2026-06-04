@@ -63,6 +63,25 @@ function formatRequestDescription(value: string | null | undefined): string {
   return value;
 }
 
+function requestBadgeLabel(record: InazDailyRecord): string | null {
+  if (record.resolved_absence_cause) {
+    return formatAbsenceCause(record.resolved_absence_cause);
+  }
+  if (record.request_description) {
+    return formatRequestDescription(record.request_description);
+  }
+  return null;
+}
+
+function formatPunchTerminalLabel(value: string | null | undefined): string | null {
+  if (!value) return null;
+  if (value.includes("-")) {
+    const [, right] = value.split("-", 2);
+    if (right?.trim()) return right.trim();
+  }
+  return value;
+}
+
 function formatDetailEntries(values: Record<string, string>): Array<[string, string]> {
   return Object.entries(values);
 }
@@ -468,6 +487,7 @@ export default function InazCollaboratoreDetailPage() {
                           <span className="rounded-full bg-white px-2.5 py-1 text-gray-700">Ass. {formatHours(record.absence_minutes)}</span>
                           <span className="rounded-full bg-white px-2.5 py-1 text-gray-700">Straord. {formatHours(record.straordinario_minutes)}</span>
                           <span className="rounded-full bg-white px-2.5 py-1 text-gray-700">MPE {formatHours(record.mpe_minutes)}</span>
+                          {requestBadgeLabel(record) ? <span className="rounded-full bg-sky-100 px-2.5 py-1 text-sky-800">{requestBadgeLabel(record)}</span> : null}
                           {record.special_day ? <span className="rounded-full bg-amber-100 px-2.5 py-1 text-amber-800">Giorno speciale</span> : null}
                         </div>
                       </div>

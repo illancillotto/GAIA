@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 import json
 from datetime import date, datetime, time
+import re
 from typing import Any
 
 
@@ -85,6 +86,11 @@ def extract_detail_payload(daily_row: dict[str, Any]) -> dict[str, Any]:
         "anomalies": [
             {str(key): normalize_portal_text(value) or "" for key, value in item.items() if normalize_portal_text(value)}
             for item in (daily_row.get("detail_anomalies") or [])
+            if isinstance(item, dict)
+        ],
+        "punch_rows": [
+            {str(key): normalize_portal_text(value) or "" for key, value in item.items() if normalize_portal_text(value)}
+            for item in (daily_row.get("detail_punch_rows") or [])
             if isinstance(item, dict)
         ],
         "text": normalize_portal_text(daily_row.get("detail_text")),
@@ -293,6 +299,41 @@ def detail_has_authoritative_classification(daily_row: dict[str, Any]) -> bool:
             detail["absence_hours"],
         )
     )
+
+
+def extract_punch_terminal_labels(daily_row: dict[str, Any]) -> list[dict[str, str]]:
+    detail = extract_detail_payload(daily_row)
+    rows = detail.get("punch_rows") or []
+    extracted: list[dict[str, str]] = []
+    for row in rows:
+        time_value = normalize_portal_text(row.get("Ora") or row.get("ora") or row.get("col_1"))
+        direction = normalize_portal_text(row.get("EU") or row.get("eu") or row.get("col_2"))
+        terminal = normalize_portal_text(row.get("Term") or row.get("term") or row.get("col_4"))
+        if time_value and direction and terminal:
+            extracted.append({"time": time_value, "direction": direction, "terminal_label": terminal})
+    if extracted:
+        return extracted
+
+    detail_text = detail.get("text") or ""
+    if not detail_text:
+        return []
+    match = re.search(r"Timbrature\s+.+?(?=(?:Anomalie|Riepilogo Giornata|Totali Giornata|Richieste)\b)", detail_text, re.IGNORECASE)
+    if not match:
+        return []
+    chunk = match.group(0)
+    pattern = re.compile(
+        r"(?P<time>\d{2}:\d{2})\s+(?P<direction>[EU])\s+\S+\s+(?P<terminal>.+?)\s+\d{2}:\d{2}(?=\s+\d{2}:\d{2}\s+[EU]\s+\S+|\s*$)",
+        re.IGNORECASE,
+    )
+    for item in pattern.finditer(chunk):
+        extracted.append(
+            {
+                "time": item.group("time"),
+                "direction": item.group("direction").upper(),
+                "terminal_label": normalize_portal_text(item.group("terminal")) or "",
+            }
+        )
+    return [item for item in extracted if item["terminal_label"]]
 
 
 @dataclass
