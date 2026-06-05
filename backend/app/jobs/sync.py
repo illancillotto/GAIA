@@ -77,7 +77,7 @@ def run_live_sync_job(
     for attempt in range(1, settings.sync_live_max_attempts + 1):
         try:
             emit(f"Attempt {attempt}/{settings.sync_live_max_attempts}: collecting NAS payload via SSH")
-            sync_result = apply_live_sync(db, client, profile=profile)
+            sync_result = apply_live_sync(db, client, profile=profile, progress_callback=emit)
             emit(
                 "Attempt "
                 f"{attempt}: sync payload persisted "

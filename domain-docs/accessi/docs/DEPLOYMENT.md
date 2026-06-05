@@ -163,6 +163,9 @@ Le credenziali vanno cambiate tramite variabili ambiente in ambienti non locali.
   - `SYNC_SCHEDULE_MAX_CYCLES`
 - la pagina `/nas-control/sync` non esegue piu la scansione dentro la request HTTP: accoda un job `pending|running|succeeded|failed|cancelled`
 - il worker NAS esegue la connessione SSH, applica retry/backoff, persiste lo snapshot e registra l'audit finale in `sync_runs`
+- ogni job scrive un log append-only in `${SYNC_LIVE_WORKER_ARTIFACTS_PATH}/<job_id>/worker.log`
+- il `worker.log` espone avanzamento per fase: passwd, group, share root, subpath, ACL e persistenza finale
+- alla ripartenza del backend, i job `pending` scaduti e i `running` senza processo o senza `worker_pid` oltre timeout vengono marcati `failed`
 - `sync_runs` resta lo storico consolidato delle sync completate o fallite; `sync_jobs` e la coda operativa con PID, log worker e stato runtime
 
 ## 7. Log e Troubleshooting

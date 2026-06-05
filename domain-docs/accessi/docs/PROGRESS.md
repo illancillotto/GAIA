@@ -46,12 +46,13 @@ Il repository e in una fase di bootstrap avanzato: la base documentale, il backe
 - servizio di sync persistente minimale da input testuale
 - connector SSH live con `paramiko` e comandi configurabili
 - coda persistente `sync_jobs` con worker subprocess dedicato
-- job backend di live sync con retry configurabile e script dedicato
+- job backend di live sync con retry configurabile, script dedicato e tracing fase-per-fase nel `worker.log`
 - modello persistente `sync_runs` con migration dedicata
 - modello persistente `sync_jobs` con migration dedicata
 - metadata `duration_ms`, `initiated_by`, `source_label` sui sync run
 - runner schedulato configurabile via env e script dedicato
 - backoff retry configurabile `fixed` o `exponential`
+- riconciliazione dei job `running` stale anche quando il `worker_pid` viene perso
 - struttura Alembic presente con migration iniziale `snapshots`
 - seconda migration per `application_users`
 - terza migration per il dominio audit minimo
@@ -109,6 +110,7 @@ Verifica runtime:
 - `POST /sync/jobs/{id}/retry` verificato via test API
 - `app.services.sync_runtime` verificato con test unitari su spawn worker, stop PID, stale reconciliation e check job concorrenti
 - `app.services.sync_worker` verificato con test unitari sui percorsi `success`, `failure`, `main` con job mancante e job esistente
+- `app.services.sync` verificato con test unitari sul tracing delle fasi NAS: utenti, gruppi, share, subpath e ACL
 - script `python scripts/live_sync.py` verificato contro stack locale con fallimento controllato
 - `POST /sync/apply` verificato con creazione record audit in `sync_runs`
 - `GET /sync-runs` verificato contro stack locale
@@ -127,6 +129,8 @@ Copertura attuale:
 - job di live sync con retry testato
 - coda job NAS persistente testata
 - runtime worker NAS e lifecycle dei job testati in modo isolato
+- worker NAS con log operativo leggibile e progressione per tentativo/fase
+- recupero automatico dei job zombie `running` senza `worker_pid`
 - audit trail sync persistente esposto via API
 - metadata e scheduling operativo minimale verificati
 - policy di backoff verificata

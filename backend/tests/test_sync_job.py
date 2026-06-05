@@ -105,6 +105,7 @@ def test_run_live_sync_job_retries_and_then_succeeds(monkeypatch) -> None:
 
     db = SessionLocal()
     sleep_calls: list[float] = []
+    progress_messages: list[str] = []
     try:
         db.add(
             ApplicationUser(
@@ -121,6 +122,7 @@ def test_run_live_sync_job_retries_and_then_succeeds(monkeypatch) -> None:
             db,
             client=FlakyNasClient(failures_before_success=1),
             sleep_fn=lambda seconds: sleep_calls.append(seconds),
+            progress_callback=progress_messages.append,
         )
     finally:
         db.close()
@@ -135,6 +137,10 @@ def test_run_live_sync_job_retries_and_then_succeeds(monkeypatch) -> None:
     assert sync_run.attempts_used == 2
     assert sync_run.duration_ms is not None
     assert sync_run.started_at <= sync_run.completed_at
+    assert progress_messages[0].startswith("Starting NAS live sync profile=quick")
+    assert any(message == "Attempt 1/3 failed: temporary ssh failure" for message in progress_messages)
+    assert any(message.startswith("Retry scheduled in 0.00s") for message in progress_messages)
+    assert any(message.startswith("Sync completed successfully after 2 attempt(s)") for message in progress_messages)
 
 
 def test_run_live_sync_job_raises_after_max_attempts(monkeypatch) -> None:

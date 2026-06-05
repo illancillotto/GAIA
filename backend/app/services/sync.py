@@ -1,6 +1,7 @@
 import shlex
 from logging import getLogger
 from hashlib import sha256
+from collections.abc import Callable
 
 from sqlalchemy.orm import Session
 
@@ -49,24 +50,36 @@ def build_sync_preview(payload: SyncPreviewRequest) -> SyncPreviewResponse:
 def build_live_sync_payload(
     client: NasSSHClient | None = None,
     profile: str = "quick",
+    progress_callback: Callable[[str], None] | None = None,
 ) -> SyncPreviewRequest:
+    emit = progress_callback or (lambda _message: None)
     active_client = client or get_nas_client()
+    emit("Fetching NAS users via passwd command")
     passwd_text = active_client.run_command(settings.nas_passwd_command)
+    emit(f"Fetched passwd payload ({len(passwd_text.splitlines())} lines)")
+    emit("Fetching NAS groups via group command")
     group_text = active_client.run_command(settings.nas_group_command)
+    emit(f"Fetched group payload ({len(group_text.splitlines())} lines)")
+    emit("Fetching top-level NAS shares")
     root_shares_text = active_client.run_command(settings.nas_shares_command)
     parsed_shares = parse_share_listing(root_shares_text)
+    emit(f"Fetched {len(parsed_shares)} top-level shares")
     subpaths_command = _get_subpaths_command(profile)
 
     if subpaths_command.strip():
         try:
+            emit(f"Enumerating NAS subpaths with profile={profile}")
             parsed_shares = _merge_shares(
                 parsed_shares,
-                _collect_subpath_shares(active_client, parsed_shares, subpaths_command),
+                _collect_subpath_shares(active_client, parsed_shares, subpaths_command, progress_callback=emit),
             )
+            emit(f"Share inventory after subpaths: {len(parsed_shares)} entries")
         except Exception:
             logger.warning("Unable to enumerate NAS subpaths, continuing with root shares only", exc_info=True)
+            emit("Subpath enumeration failed; continuing with root shares only")
 
-    parsed_shares, acl_texts = _collect_share_acls(active_client, parsed_shares)
+    parsed_shares, acl_texts = _collect_share_acls(active_client, parsed_shares, progress_callback=emit)
+    emit(f"Collected ACL payloads for {len(acl_texts)} shares")
     shares_text = _serialize_share_listing(parsed_shares)
     return SyncPreviewRequest(
         passwd_text=passwd_text,
@@ -113,18 +126,24 @@ def _collect_subpath_shares(
     client: NasSSHClient,
     root_shares: list[ParsedShare],
     command_template: str,
+    progress_callback: Callable[[str], None] | None = None,
 ) -> list[ParsedShare]:
+    emit = progress_callback or (lambda _message: None)
     subpath_shares: list[ParsedShare] = []
 
     for share in root_shares:
+        emit(f"Enumerating subpaths for share={share.name}")
         command = command_template.format(share=shlex.quote(share.name))
         try:
             subpath_output = client.run_command(command)
         except Exception:
             logger.warning("Unable to enumerate NAS subpaths for %s", share.name, exc_info=True)
+            emit(f"Subpath enumeration failed for share={share.name}")
             continue
 
-        subpath_shares = _merge_shares(subpath_shares, parse_share_listing(subpath_output))
+        parsed_subpaths = parse_share_listing(subpath_output)
+        emit(f"Enumerated {len(parsed_subpaths)} subpaths for share={share.name}")
+        subpath_shares = _merge_shares(subpath_shares, parsed_subpaths)
 
     return subpath_shares
 
@@ -132,21 +151,26 @@ def _collect_subpath_shares(
 def _collect_share_acls(
     client: NasSSHClient,
     shares: list[ParsedShare],
+    progress_callback: Callable[[str], None] | None = None,
 ) -> tuple[list[ParsedShare], list[str]]:
+    emit = progress_callback or (lambda _message: None)
     successful_shares: list[ParsedShare] = []
     acl_texts: list[str] = []
 
     for share in shares:
+        emit(f"Fetching ACL for share={share.name}")
         command = settings.nas_acl_command_template.format(share=shlex.quote(share.name))
 
         try:
             acl_output = client.run_command(command)
         except Exception:
             logger.warning("Unable to fetch ACL for %s", share.name, exc_info=True)
+            emit(f"ACL fetch failed for share={share.name}")
             continue
 
         successful_shares.append(share)
         acl_texts.append(acl_output)
+        emit(f"Fetched ACL for share={share.name} ({len(acl_output.splitlines())} lines)")
 
     return successful_shares, acl_texts
 
@@ -419,5 +443,22 @@ def apply_live_sync(
     db: Session,
     client: NasSSHClient | None = None,
     profile: str = "quick",
+    progress_callback: Callable[[str], None] | None = None,
 ) -> SyncApplyResponse:
-    return apply_sync_payload(db, build_live_sync_payload(client, profile=profile))
+    emit = progress_callback or (lambda _message: None)
+    emit("Building live sync payload")
+    payload = build_live_sync_payload(client, profile=profile, progress_callback=emit)
+    emit(
+        "Applying sync payload "
+        f"users={len((payload.passwd_text or '').splitlines())} "
+        f"groups={len((payload.group_text or '').splitlines())} "
+        f"shares={len((payload.shares_text or '').splitlines())} "
+        f"acl_payloads={len(payload.acl_texts)}"
+    )
+    result = apply_sync_payload(db, payload)
+    emit(
+        "Sync payload applied "
+        f"snapshot_id={result.snapshot_id} users={result.persisted_users} "
+        f"groups={result.persisted_groups} shares={result.persisted_shares}"
+    )
+    return result

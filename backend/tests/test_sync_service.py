@@ -75,6 +75,30 @@ def test_build_live_sync_payload_fetches_base_and_acl_commands(monkeypatch) -> N
     ]
 
 
+def test_build_live_sync_payload_emits_progress(monkeypatch) -> None:
+    monkeypatch.setattr("app.services.sync.settings.nas_passwd_command", "getent passwd")
+    monkeypatch.setattr("app.services.sync.settings.nas_group_command", "getent group")
+    monkeypatch.setattr("app.services.sync.settings.nas_shares_command", "ls /volume1")
+    monkeypatch.setattr(
+        "app.services.sync.settings.nas_share_subpaths_command",
+        "find /volume1/{share} \\( -name '@*' -o -name '#recycle' \\) -prune -o -mindepth 1 -type d -print 2>/dev/null || true",
+    )
+    monkeypatch.setattr(
+        "app.services.sync.settings.nas_acl_command_template",
+        "synoacltool -get /volume1/{share}",
+    )
+
+    messages: list[str] = []
+    payload = build_live_sync_payload(FakeNasClient(), progress_callback=messages.append)
+
+    assert isinstance(payload, SyncPreviewRequest)
+    assert "Fetching NAS users via passwd command" in messages
+    assert "Fetching NAS groups via group command" in messages
+    assert "Fetching top-level NAS shares" in messages
+    assert "Enumerating subpaths for share=contabilita" in messages
+    assert "Fetched ACL for share=contabilita/reporting (1 lines)" in messages
+
+
 def test_apply_live_sync_persists_snapshot_from_live_payload(monkeypatch) -> None:
     monkeypatch.setattr("app.services.sync.settings.nas_passwd_command", "getent passwd")
     monkeypatch.setattr("app.services.sync.settings.nas_group_command", "getent group")
@@ -119,6 +143,50 @@ def test_apply_live_sync_persists_snapshot_from_live_payload(monkeypatch) -> Non
         assert db.query(SyncRun).count() == 0
     finally:
         db.close()
+
+
+def test_apply_live_sync_emits_progress(monkeypatch) -> None:
+    monkeypatch.setattr("app.services.sync.settings.nas_passwd_command", "getent passwd")
+    monkeypatch.setattr("app.services.sync.settings.nas_group_command", "getent group")
+    monkeypatch.setattr("app.services.sync.settings.nas_shares_command", "ls /volume1")
+    monkeypatch.setattr(
+        "app.services.sync.settings.nas_share_subpaths_command",
+        "find /volume1/{share} \\( -name '@*' -o -name '#recycle' \\) -prune -o -mindepth 1 -type d -print 2>/dev/null || true",
+    )
+    monkeypatch.setattr(
+        "app.services.sync.settings.nas_acl_command_template",
+        "synoacltool -get /volume1/{share}",
+    )
+
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+    Base.metadata.create_all(bind=engine)
+
+    db = SessionLocal()
+    messages: list[str] = []
+    try:
+        reviewer = ApplicationUser(
+            username="reviewer",
+            email="reviewer@example.local",
+            password_hash=hash_password("secret123"),
+            role=ApplicationUserRole.ADMIN.value,
+            is_active=True,
+        )
+        db.add(reviewer)
+        db.commit()
+
+        result = apply_live_sync(db, FakeNasClient(), progress_callback=messages.append)
+        assert result.persisted_shares == 3
+    finally:
+        db.close()
+
+    assert messages[0] == "Building live sync payload"
+    assert any(message.startswith("Applying sync payload users=") for message in messages)
+    assert any(message.startswith("Sync payload applied snapshot_id=") for message in messages)
 
 
 def test_build_live_sync_payload_skips_shares_with_unreadable_acl(monkeypatch) -> None:
