@@ -9,6 +9,7 @@ import {
   ModuleWorkspaceKpiTile,
   ModuleWorkspaceNoticeCard,
 } from "@/components/layout/module-workspace-hero";
+import { FilterPillGroup } from "@/components/network/filter-pill-group";
 import { NetworkModulePage } from "@/components/network/network-module-page";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -236,6 +237,13 @@ function StatisticsContent({ token }: { token: string }) {
               </option>
             ))}
           </select>
+        </div>
+        <div className="mt-4">
+          <FilterPillGroup
+            options={WINDOW_OPTIONS.map((value) => ({ value: String(value), label: `Ultime ${value}h` }))}
+            value={String(windowHours)}
+            onChange={(value) => setWindowHours(Number(value))}
+          />
         </div>
         {loadError ? <p className="mt-4 text-sm text-red-600">{loadError}</p> : null}
       </article>

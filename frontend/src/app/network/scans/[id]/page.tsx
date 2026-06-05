@@ -3,11 +3,25 @@
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
+import { FilterPillGroup } from "@/components/network/filter-pill-group";
 import { NetworkModulePage } from "@/components/network/network-module-page";
 import { NetworkStatusBadge } from "@/components/network/network-status-badge";
 import { getNetworkScan, getNetworkScanDiff, getNetworkScans } from "@/lib/api";
 import { formatIpWithReference } from "@/lib/network-device-utils";
 import type { NetworkScan, NetworkScanDetail, NetworkScanDiff } from "@/types/api";
+
+const DIFF_FILTER_OPTIONS = [
+  { value: "all", label: "Tutti" },
+  { value: "new", label: "Nuovi" },
+  { value: "missing", label: "Scomparsi" },
+  { value: "changed", label: "Modificati" },
+] as const;
+
+const DEVICE_STATUS_FILTER_OPTIONS = [
+  { value: "all", label: "Tutti" },
+  { value: "online", label: "Online" },
+  { value: "offline", label: "Offline" },
+] as const;
 
 function ScanDetailContent({ token, scanId }: { token: string; scanId: number }) {
   const [scan, setScan] = useState<NetworkScanDetail | null>(null);
@@ -15,6 +29,10 @@ function ScanDetailContent({ token, scanId }: { token: string; scanId: number })
   const [comparisonScanId, setComparisonScanId] = useState<number | null>(null);
   const [diff, setDiff] = useState<NetworkScanDiff | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [deviceSearch, setDeviceSearch] = useState("");
+  const [deviceStatusFilter, setDeviceStatusFilter] = useState<"all" | "online" | "offline">("all");
+  const [diffTypeFilter, setDiffTypeFilter] = useState<"all" | "new" | "missing" | "changed">("all");
+  const [diffSearch, setDiffSearch] = useState("");
 
   useEffect(() => {
     async function loadScan() {
@@ -56,6 +74,78 @@ function ScanDetailContent({ token, scanId }: { token: string; scanId: number })
     () => scans.filter((item) => item.id !== scanId),
     [scanId, scans],
   );
+
+  const filteredDiffChanges = useMemo(() => {
+    if (!diff) {
+      return [];
+    }
+
+    const normalizedSearch = diffSearch.trim().toLowerCase();
+
+    return diff.changes.filter((change) => {
+      const reference = change.after || change.before;
+      if (!reference) {
+        return false;
+      }
+
+      if (diffTypeFilter !== "all" && change.change_type !== diffTypeFilter) {
+        return false;
+      }
+
+      if (!normalizedSearch) {
+        return true;
+      }
+
+      const haystack = [
+        reference.resolved_label,
+        reference.display_name,
+        reference.hostname,
+        reference.ip_address,
+        reference.mac_address,
+        reference.vendor,
+        reference.model_name,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(normalizedSearch);
+    });
+  }, [diff, diffSearch, diffTypeFilter]);
+
+  const filteredSnapshotDevices = useMemo(() => {
+    if (!scan) {
+      return [];
+    }
+
+    const normalizedSearch = deviceSearch.trim().toLowerCase();
+
+    return scan.devices.filter((device) => {
+      if (deviceStatusFilter !== "all" && device.status !== deviceStatusFilter) {
+        return false;
+      }
+
+      if (!normalizedSearch) {
+        return true;
+      }
+
+      const haystack = [
+        device.resolved_label,
+        device.display_name,
+        device.hostname,
+        device.ip_address,
+        device.mac_address,
+        device.vendor,
+        device.model_name,
+        device.open_ports,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(normalizedSearch);
+    });
+  }, [deviceSearch, deviceStatusFilter, scan]);
 
   if (loadError) {
     return (
@@ -138,18 +228,36 @@ function ScanDetailContent({ token, scanId }: { token: string; scanId: number })
             <p className="section-title">Confronto snapshot</p>
             <p className="section-copy">Delta reale tra due scansioni salvate nello storico.</p>
           </div>
-          <select
-            className="form-control w-full max-w-56"
-            value={comparisonScanId ?? ""}
-            onChange={(event) => setComparisonScanId(event.target.value ? Number(event.target.value) : null)}
-          >
-            <option value="">Nessun confronto</option>
-            {comparisonCandidates.map((candidate) => (
-              <option key={candidate.id} value={candidate.id}>
-                Snapshot #{candidate.id}
-              </option>
-            ))}
-          </select>
+          <div className="flex w-full flex-wrap justify-end gap-3 xl:w-auto">
+            <input
+              className="form-control w-full xl:w-72"
+              value={diffSearch}
+              onChange={(event) => setDiffSearch(event.target.value)}
+              placeholder="Cerca nel diff per IP, MAC o nome"
+            />
+            <select
+              className="form-control w-full xl:w-44"
+              value={diffTypeFilter}
+              onChange={(event) => setDiffTypeFilter(event.target.value as "all" | "new" | "missing" | "changed")}
+            >
+              <option value="all">Tutte le variazioni</option>
+              <option value="new">Nuovi</option>
+              <option value="missing">Scomparsi</option>
+              <option value="changed">Modificati</option>
+            </select>
+            <select
+              className="form-control w-full xl:w-56"
+              value={comparisonScanId ?? ""}
+              onChange={(event) => setComparisonScanId(event.target.value ? Number(event.target.value) : null)}
+            >
+              <option value="">Nessun confronto</option>
+              {comparisonCandidates.map((candidate) => (
+                <option key={candidate.id} value={candidate.id}>
+                  Snapshot #{candidate.id}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
         {diff ? (
           <>
@@ -167,8 +275,14 @@ function ScanDetailContent({ token, scanId }: { token: string; scanId: number })
                 <p className="mt-1 text-sm text-gray-800">{diff.summary.changed_devices_count}</p>
               </div>
             </div>
+            <div className="mt-4">
+              <FilterPillGroup options={DIFF_FILTER_OPTIONS} value={diffTypeFilter} onChange={setDiffTypeFilter} />
+            </div>
+            <div className="mt-4 flex items-center justify-between gap-3 text-xs text-gray-500">
+              <span>{filteredDiffChanges.length} variazioni mostrate</span>
+            </div>
             <div className="mt-4 space-y-3">
-              {diff.changes.map((change) => {
+              {filteredDiffChanges.map((change) => {
                 const reference = change.after || change.before;
                 if (!reference) {
                   return null;
@@ -190,6 +304,11 @@ function ScanDetailContent({ token, scanId }: { token: string; scanId: number })
                 );
               })}
             </div>
+            {filteredDiffChanges.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-gray-200 px-4 py-6 text-sm text-gray-500">
+                Nessuna variazione corrisponde ai filtri selezionati.
+              </div>
+            ) : null}
           </>
         ) : (
           <p className="mt-4 text-sm text-gray-500">Seleziona un altro snapshot per calcolare il diff.</p>
@@ -197,12 +316,35 @@ function ScanDetailContent({ token, scanId }: { token: string; scanId: number })
       </article>
 
       <article className="panel-card">
-        <div className="mb-4">
-          <p className="section-title">Dispositivi presenti nello snapshot</p>
-          <p className="section-copy">Fotografia coerente dello stato devices al termine della scansione.</p>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="section-title">Dispositivi presenti nello snapshot</p>
+            <p className="section-copy">Fotografia coerente dello stato devices al termine della scansione.</p>
+          </div>
+          <div className="flex w-full flex-wrap justify-end gap-3 xl:w-auto">
+            <input
+              className="form-control w-full xl:w-80"
+              value={deviceSearch}
+              onChange={(event) => setDeviceSearch(event.target.value)}
+              placeholder="Cerca per IP, MAC, nome o porte"
+            />
+            <select
+              className="form-control w-full xl:w-44"
+              value={deviceStatusFilter}
+              onChange={(event) => setDeviceStatusFilter(event.target.value as "all" | "online" | "offline")}
+            >
+              <option value="all">Tutti gli stati</option>
+              <option value="online">Online</option>
+              <option value="offline">Offline</option>
+            </select>
+          </div>
         </div>
+        <div className="mb-4">
+          <FilterPillGroup options={DEVICE_STATUS_FILTER_OPTIONS} value={deviceStatusFilter} onChange={setDeviceStatusFilter} />
+        </div>
+        <p className="mb-4 text-xs text-gray-500">{filteredSnapshotDevices.length} dispositivi mostrati</p>
         <div className="space-y-3">
-          {scan.devices.map((device) => (
+          {filteredSnapshotDevices.map((device) => (
             <div key={device.id} className="rounded-lg border border-gray-100 px-4 py-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -218,6 +360,11 @@ function ScanDetailContent({ token, scanId }: { token: string; scanId: number })
             </div>
           ))}
         </div>
+        {filteredSnapshotDevices.length === 0 ? (
+          <div className="mt-4 rounded-lg border border-dashed border-gray-200 px-4 py-6 text-sm text-gray-500">
+            Nessun dispositivo corrisponde ai filtri selezionati.
+          </div>
+        ) : null}
       </article>
     </div>
   );

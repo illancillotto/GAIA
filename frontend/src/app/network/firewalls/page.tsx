@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { FilterPillGroup } from "@/components/network/filter-pill-group";
 import { NetworkModulePage } from "@/components/network/network-module-page";
 import { NetworkStatusBadge } from "@/components/network/network-status-badge";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -13,6 +14,14 @@ import {
   pollNetworkFirewallMetrics,
 } from "@/lib/api";
 import type { NetworkFirewall, NetworkFirewallEvent, NetworkFirewallMetric } from "@/types/api";
+
+const SEVERITY_FILTER_OPTIONS = [
+  { value: "", label: "Tutte" },
+  { value: "critical", label: "Critical" },
+  { value: "danger", label: "Danger" },
+  { value: "warning", label: "Warning" },
+  { value: "info", label: "Info" },
+] as const;
 
 const METRIC_LABELS: Record<string, string> = {
   if_number: "Interfacce",
@@ -106,6 +115,7 @@ function FirewallsContent({ token }: { token: string }) {
   const [events, setEvents] = useState<NetworkFirewallEvent[]>([]);
   const [metrics, setMetrics] = useState<NetworkFirewallMetric[]>([]);
   const [severityFilter, setSeverityFilter] = useState("");
+  const [eventSearch, setEventSearch] = useState("");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isPolling, setIsPolling] = useState(false);
 
@@ -173,6 +183,37 @@ function FirewallsContent({ token }: { token: string }) {
     }
     return Array.from(map.values());
   }, [metrics]);
+
+  const filteredEvents = useMemo(() => {
+    const normalizedSearch = eventSearch.trim().toLowerCase();
+    if (!normalizedSearch) {
+      return events;
+    }
+
+    return events.filter((event) => {
+      const details = parseEventDetails(event);
+      const haystack = [
+        event.event_type,
+        event.message,
+        event.src_ip,
+        event.dst_ip,
+        event.src_device_label,
+        event.dst_device_label,
+        event.protocol,
+        event.severity,
+        details.ruleName,
+        details.domain,
+        details.url,
+        details.srcZone,
+        details.dstZone,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(normalizedSearch);
+    });
+  }, [eventSearch, events]);
 
   return (
     <div className="page-stack">
@@ -258,16 +299,28 @@ function FirewallsContent({ token }: { token: string }) {
                 <p className="section-title">Eventi recenti</p>
                 <p className="section-copy">Log syslog Sophos correlati nel modulo rete.</p>
               </div>
-              <select className="form-control max-w-[220px]" value={severityFilter} onChange={(event) => setSeverityFilter(event.target.value)}>
-                <option value="">Tutte le severita</option>
-                <option value="critical">Critical</option>
-                <option value="danger">Danger</option>
-                <option value="warning">Warning</option>
-                <option value="info">Info</option>
-              </select>
+              <div className="flex w-full flex-wrap justify-end gap-3 xl:w-auto">
+                <input
+                  className="form-control w-full xl:w-80"
+                  value={eventSearch}
+                  onChange={(event) => setEventSearch(event.target.value)}
+                  placeholder="Cerca per IP, utente, dominio, regola"
+                />
+                <select className="form-control w-full xl:w-52" value={severityFilter} onChange={(event) => setSeverityFilter(event.target.value)}>
+                  <option value="">Tutte le severita</option>
+                  <option value="critical">Critical</option>
+                  <option value="danger">Danger</option>
+                  <option value="warning">Warning</option>
+                  <option value="info">Info</option>
+                </select>
+              </div>
             </div>
+            <div className="mb-4">
+              <FilterPillGroup options={SEVERITY_FILTER_OPTIONS} value={severityFilter} onChange={setSeverityFilter} />
+            </div>
+            <p className="mb-4 text-xs text-gray-500">{filteredEvents.length} eventi mostrati</p>
 
-            {events.length === 0 ? (
+            {filteredEvents.length === 0 ? (
               <EmptyState
                 icon={ServerIcon}
                 title="Nessun evento disponibile"
@@ -275,7 +328,7 @@ function FirewallsContent({ token }: { token: string }) {
               />
             ) : (
               <div className="space-y-3">
-                {events.map((event) => {
+                {filteredEvents.map((event) => {
                   const details = parseEventDetails(event);
                   const eventType = formatEventType(event.event_type);
                   return (
