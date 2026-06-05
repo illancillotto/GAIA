@@ -14,7 +14,8 @@ from app.core.config import settings
 from app.models.sync_job import SyncJob
 
 
-BACKEND_ROOT = Path(__file__).resolve().parents[3]
+# /.../backend/app/services/sync_runtime.py -> backend root is parents[2]
+BACKEND_ROOT = Path(__file__).resolve().parents[2]
 
 
 def get_sync_job_artifact_dir(job_id: int) -> Path:
@@ -73,6 +74,18 @@ def reconcile_stale_sync_jobs(db: Session) -> None:
             job.status = "failed"
             job.finished_at = now
             job.error_detail = "Worker process not found; sync job marked stale after restart or crash"
+            db.add(job)
+            changed = True
+            continue
+        started_at = job.started_at
+        if started_at and started_at.tzinfo is None:
+            started_at = started_at.replace(tzinfo=UTC)
+        if job.status == "running" and job.worker_pid is None and started_at and now - started_at > timedelta(
+            minutes=settings.sync_live_pending_timeout_minutes
+        ):
+            job.status = "failed"
+            job.finished_at = now
+            job.error_detail = "Running sync job lost worker PID and exceeded stale timeout"
             db.add(job)
             changed = True
             continue

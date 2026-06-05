@@ -39,6 +39,7 @@ def run_scheduled_live_sync_cycle(
     db: Session,
     client: NasSSHClient | None = None,
     sleep_fn: Callable[[float], None] = time.sleep,
+    progress_callback: Callable[[str], None] | None = None,
 ) -> LiveSyncJobResult:
     return run_live_sync_job(
         db,
@@ -48,6 +49,7 @@ def run_scheduled_live_sync_cycle(
         source_label="scheduler:ssh:quick",
         profile="quick",
         sleep_fn=sleep_fn,
+        progress_callback=progress_callback,
     )
 
 
@@ -59,14 +61,30 @@ def run_live_sync_job(
     source_label: str | None = None,
     profile: str = "quick",
     sleep_fn: Callable[[float], None] = time.sleep,
+    progress_callback: Callable[[str], None] | None = None,
 ) -> LiveSyncJobResult:
     last_error: NasConnectorError | None = None
     started_at = time.monotonic()
     started_wall_clock = datetime.now(timezone.utc)
+    emit = progress_callback or (lambda _message: None)
+
+    emit(
+        "Starting NAS live sync "
+        f"profile={profile} trigger={trigger_type} source={source_label or f'ssh:{profile}'} "
+        f"max_attempts={settings.sync_live_max_attempts}"
+    )
 
     for attempt in range(1, settings.sync_live_max_attempts + 1):
         try:
+            emit(f"Attempt {attempt}/{settings.sync_live_max_attempts}: collecting NAS payload via SSH")
             sync_result = apply_live_sync(db, client, profile=profile)
+            emit(
+                "Attempt "
+                f"{attempt}: sync payload persisted "
+                f"snapshot_id={sync_result.snapshot_id} users={sync_result.persisted_users} "
+                f"groups={sync_result.persisted_groups} shares={sync_result.persisted_shares} "
+                f"acl_pairs={sync_result.share_acl_pairs_used}"
+            )
             create_sync_run(
                 db,
                 mode="live",
@@ -80,12 +98,16 @@ def run_live_sync_job(
                 started_at=started_wall_clock,
                 completed_at=datetime.now(timezone.utc),
             )
+            emit(f"Sync completed successfully after {attempt} attempt(s)")
             return LiveSyncJobResult(attempts_used=attempt, sync_result=sync_result)
         except NasConnectorError as exc:
             last_error = exc
+            emit(f"Attempt {attempt}/{settings.sync_live_max_attempts} failed: {exc}")
             if attempt >= settings.sync_live_max_attempts:
                 break
-            sleep_fn(compute_retry_delay(attempt))
+            delay = compute_retry_delay(attempt)
+            emit(f"Retry scheduled in {delay:.2f}s")
+            sleep_fn(delay)
 
     assert last_error is not None
     create_sync_run(
@@ -101,4 +123,5 @@ def run_live_sync_job(
         started_at=started_wall_clock,
         completed_at=datetime.now(timezone.utc),
     )
+    emit(f"Sync failed after {settings.sync_live_max_attempts} attempt(s): {last_error}")
     raise last_error

@@ -38,6 +38,7 @@ def _create_user_and_job(
     profile: str = "quick",
     worker_pid: int | None = None,
     created_at: datetime | None = None,
+    started_at: datetime | None = None,
 ) -> int:
     db = TestingSessionLocal()
     try:
@@ -60,6 +61,7 @@ def _create_user_and_job(
             status=status,
             worker_pid=worker_pid,
             created_at=created_at or datetime.now(UTC),
+            started_at=started_at,
             max_attempts=3,
             source_label=f"api:ssh:{profile}",
         )
@@ -158,6 +160,11 @@ def test_pid_exists_maps_process_and_permission_errors(monkeypatch) -> None:
 
 def test_reconcile_stale_sync_jobs_marks_running_and_pending_jobs_failed(monkeypatch) -> None:
     running_job_id = _create_user_and_job(status="running", worker_pid=3333)
+    running_without_pid_job_id = _create_user_and_job(
+        status="running",
+        worker_pid=None,
+        started_at=(datetime.now(UTC) - timedelta(minutes=30)).replace(tzinfo=None),
+    )
     pending_job_id = _create_user_and_job(
         status="pending",
         created_at=(datetime.now(UTC) - timedelta(minutes=30)).replace(tzinfo=None),
@@ -171,12 +178,17 @@ def test_reconcile_stale_sync_jobs_marks_running_and_pending_jobs_failed(monkeyp
         sync_runtime.reconcile_stale_sync_jobs(db)
 
         running_job = db.get(SyncJob, running_job_id)
+        running_without_pid_job = db.get(SyncJob, running_without_pid_job_id)
         pending_job = db.get(SyncJob, pending_job_id)
         assert running_job is not None
+        assert running_without_pid_job is not None
         assert pending_job is not None
         assert running_job.status == "failed"
         assert "Worker process not found" in (running_job.error_detail or "")
         assert running_job.finished_at is not None
+        assert running_without_pid_job.status == "failed"
+        assert running_without_pid_job.error_detail == "Running sync job lost worker PID and exceeded stale timeout"
+        assert running_without_pid_job.finished_at is not None
         assert pending_job.status == "failed"
         assert pending_job.error_detail == "Pending sync job expired without worker start"
         assert pending_job.finished_at is not None
@@ -262,7 +274,36 @@ def test_worker_run_job_marks_success_and_persists_counters(monkeypatch) -> None
     assert job.worker_pid is None
 
 
-def test_worker_run_job_marks_failure_on_exception(monkeypatch) -> None:
+def test_worker_run_job_emits_progress_logs_on_success(monkeypatch, capsys) -> None:
+    job_id = _create_user_and_job(status="pending", profile="full")
+    db = TestingSessionLocal()
+    try:
+        job = db.get(SyncJob, job_id)
+        assert job is not None
+
+        def fake_run_live_sync_job(session, **kwargs):
+            kwargs["progress_callback"]("Attempt 1/3: collecting NAS payload via SSH")
+            kwargs["progress_callback"]("Attempt 1: sync payload persisted snapshot_id=99 users=5 groups=4 shares=3 acl_pairs=2")
+            kwargs["progress_callback"]("Sync completed successfully after 2 attempt(s)")
+            return _FakeJobResult(sync_result=_FakeSyncResult(), attempts_used=2)
+
+        monkeypatch.setattr(sync_worker, "run_live_sync_job", fake_run_live_sync_job)
+
+        exit_code = sync_worker._run_job(db, job)
+        output = capsys.readouterr().out
+    finally:
+        db.close()
+
+    assert exit_code == 0
+    assert "[sync-job:" in output
+    assert "Worker picked up job profile=full trigger=api" in output
+    assert "Job marked as running" in output
+    assert "Attempt 1/3: collecting NAS payload via SSH" in output
+    assert "Sync completed successfully after 2 attempt(s)" in output
+    assert "Job marked as succeeded" in output
+
+
+def test_worker_run_job_marks_failure_on_exception(monkeypatch, capsys) -> None:
     job_id = _create_user_and_job(status="pending")
     db = TestingSessionLocal()
     try:
@@ -276,6 +317,7 @@ def test_worker_run_job_marks_failure_on_exception(monkeypatch) -> None:
 
         exit_code = sync_worker._run_job(db, job)
         db.refresh(job)
+        output = capsys.readouterr().out
     finally:
         db.close()
 
@@ -284,16 +326,19 @@ def test_worker_run_job_marks_failure_on_exception(monkeypatch) -> None:
     assert job.finished_at is not None
     assert job.attempt_count == job.max_attempts
     assert job.error_detail == "ssh down"
+    assert "Job failed: ssh down" in output
 
 
-def test_worker_main_returns_2_for_missing_job_and_creates_artifact_dir(tmp_path, monkeypatch) -> None:
+def test_worker_main_returns_2_for_missing_job_and_creates_artifact_dir(tmp_path, monkeypatch, capsys) -> None:
     monkeypatch.setattr(sync_worker, "SessionLocal", TestingSessionLocal)
     monkeypatch.setattr(sync_worker, "get_sync_job_artifact_dir", lambda job_id: tmp_path / str(job_id))
 
     exit_code = sync_worker.main(["--job-id", "404"])
+    output = capsys.readouterr().out
 
     assert exit_code == 2
     assert (tmp_path / "404").exists()
+    assert "Job not found" in output
 
 
 def test_worker_main_executes_existing_job(monkeypatch, tmp_path) -> None:
