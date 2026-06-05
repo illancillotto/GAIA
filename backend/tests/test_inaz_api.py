@@ -164,6 +164,37 @@ def _create_template(path: Path) -> None:
     wb.save(path)
 
 
+def _create_template_with_operai_fallback(path: Path) -> None:
+    wb = Workbook()
+    archive2 = wb.active
+    archive2.title = "Archivio2"
+    operai = wb.create_sheet("Operai")
+    giornaliera = wb.create_sheet("Giornaliera")
+
+    operai.cell(1, 4).value = "MATRICOLA"
+    operai.cell(1, 6).value = "MANSIONI"
+    operai.cell(1, 7).value = "INQ."
+    operai.cell(1, 8).value = "DAL"
+    operai.cell(1, 9).value = "AL"
+    operai.cell(1, 10).value = "PROROGA"
+    operai.cell(1, 11).value = "RIASS_DAL"
+    operai.cell(1, 12).value = "RIASS_AL"
+    operai.cell(1, 16).value = "CF"
+
+    operai.cell(2, 4).value = 120
+    operai.cell(2, 6).value = "ESCAVATORISTA"
+    operai.cell(2, 7).value = "D116"
+    operai.cell(2, 8).value = date(2022, 3, 1)
+    operai.cell(2, 9).value = date(2022, 12, 31)
+    operai.cell(2, 10).value = date(2023, 1, 31)
+    operai.cell(2, 11).value = date(2023, 2, 15)
+    operai.cell(2, 12).value = date(2023, 11, 30)
+    operai.cell(2, 16).value = "CDNMRC80A01H501Z"
+
+    giornaliera["A1"] = "template"
+    wb.save(path)
+
+
 def _create_inaz_credential(user: ApplicationUser, *, label: str = "Test", username: str = "test.inaz") -> int:
     db = TestingSessionLocal()
     try:
@@ -509,6 +540,16 @@ def test_inaz_export_generates_xlsm(tmp_path: Path) -> None:
     )
     assert imported.status_code == 200
 
+    listing = client.get("/inaz/giornaliere", headers={"Authorization": f"Bearer {token}"})
+    assert listing.status_code == 200
+    record_id = listing.json()["items"][0]["id"]
+    updated = client.patch(
+        f"/inaz/giornaliere/{record_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"km_value": 24},
+    )
+    assert updated.status_code == 200
+
     response = client.get(
         f"/inaz/export/giornaliere.xlsm?period_start=2026-05-01&template_path={template_path}",
         headers={"Authorization": f"Bearer {token}"},
@@ -528,8 +569,91 @@ def test_inaz_export_generates_xlsm(tmp_path: Path) -> None:
     assert archive2.cell(6, 7).value == "01/01/2000"
     # giorno 16 => colonna 8 + 15, blocco ordinary_ferial
     assert archive2.cell(6, 23).value == 5.5
+    # giorno 16 => colonna 8 + 15, blocco KM AUTO +279
+    assert archive2.cell(6, 302).value == 24
     # giorno 16 => colonna 8 + 15, blocco codice assenza +436
     assert archive2.cell(6, 459).value == "Permesso ordinario"
+
+
+def test_inaz_export_uses_operai_sheet_when_archive_history_is_missing(tmp_path: Path) -> None:
+    admin = _create_user("operai_export_admin")
+    token = _login(admin.username)
+    template_path = tmp_path / "template_operai.xlsm"
+    _create_template_with_operai_fallback(template_path)
+
+    payload = (
+        _sample_payload(employee_code="120")
+        .decode("utf-8")
+        .replace("AMADU SALVATORE", "CADONI MARCO")
+        .encode("utf-8")
+    )
+    imported = client.post(
+        "/inaz/import/json",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("giornaliere.json", payload, "application/json")},
+    )
+    assert imported.status_code == 200
+
+    response = client.get(
+        f"/inaz/export/giornaliere.xlsm?period_start=2026-05-01&template_path={template_path}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+
+    output_path = tmp_path / "out_operai.xlsm"
+    output_path.write_bytes(response.content)
+    workbook = load_workbook(output_path, keep_vba=True)
+    archive2 = workbook["Archivio2"]
+    assert archive2.cell(5, 1).value == "5/2026-CDNMRC80A01H501Z"
+    assert archive2.cell(5, 2).value == 120
+    assert archive2.cell(5, 3).value == "AVVENTIZI_maggio-2026"
+    assert archive2.cell(5, 4).value == "CADONI MARCO"
+    assert archive2.cell(5, 5).value == "ESCAVATORISTA"
+    assert archive2.cell(5, 6).value == "D116"
+    assert archive2.cell(5, 7).value == "Dal 01-03-22 al 31-12-22        Proroga al 31-01-23                            Riass.dal 15-02-23 al 30-11-23"
+
+
+def test_inaz_export_leaves_metadata_empty_when_missing_in_archive_and_operai(tmp_path: Path) -> None:
+    admin = _create_user("missing_meta_admin")
+    token = _login(admin.username)
+    template_path = tmp_path / "template_missing_meta.xlsm"
+    wb = Workbook()
+    archive2 = wb.active
+    archive2.title = "Archivio2"
+    wb.create_sheet("Operai")
+    wb.create_sheet("Giornaliera")
+    wb.save(template_path)
+
+    payload = (
+        _sample_payload(employee_code="120")
+        .decode("utf-8")
+        .replace("AMADU SALVATORE", "CADONI MARCO")
+        .encode("utf-8")
+    )
+    imported = client.post(
+        "/inaz/import/json",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("giornaliere.json", payload, "application/json")},
+    )
+    assert imported.status_code == 200
+
+    response = client.get(
+        f"/inaz/export/giornaliere.xlsm?period_start=2026-05-01&template_path={template_path}",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 200
+
+    output_path = tmp_path / "out_missing_meta.xlsm"
+    output_path.write_bytes(response.content)
+    workbook = load_workbook(output_path, keep_vba=True)
+    archive2 = workbook["Archivio2"]
+    assert archive2.cell(5, 1).value == "5/2026-120"
+    assert archive2.cell(5, 2).value == 120
+    assert archive2.cell(5, 3).value == "AVVENTIZI_maggio-2026"
+    assert archive2.cell(5, 4).value == "CADONI MARCO"
+    assert archive2.cell(5, 5).value is None
+    assert archive2.cell(5, 6).value is None
+    assert archive2.cell(5, 7).value is None
 
 
 def test_inaz_sync_job_can_be_created(monkeypatch: pytest.MonkeyPatch) -> None:

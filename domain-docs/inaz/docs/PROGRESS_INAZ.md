@@ -44,6 +44,11 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
 - endpoint admin per bootstrap festivita locali/mobili e assegnazione template orari ai collaboratori;
 - export `.xlsm` dal DB con preservazione macro via `openpyxl(..., keep_vba=True)`;
 - export `.xlsm` che usa la causale assenza normalizzata / descrizione richiesta (`Ferie`, `Permesso ordinario`, ecc.) nel blocco `absence_code`, prima del fallback su `evidenze`.
+- export `.xlsm` allineato meglio al tracciato HR di `Archivio2`:
+  - metadata riga (`A/E/F/G`) ereditati dallo storico del dipendente nel template;
+  - fallback metadati da foglio `Operai` del template se per il dipendente manca una riga storica in `Archivio2`;
+  - `OPESAB` trattato come ordinario previsto nel caso base;
+  - `KM AUTO` valorizzato dal campo operatore `km_value`;
 - classificazione export `.xlsm` non piu solo `sabato/domenica`: adesso usa festivita, sabati alternati, primo sabato del mese e rientri stagionali se presenti nei template.
 - precedenza logica classificazione giornaliera:
   - `detail` Inaz se presente e strutturato;
@@ -124,6 +129,10 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
   - sabato alternato operai catasto;
   - rientro del lunedi stagionale;
   - scrittura corretta delle colonne speciali in `Archivio2`;
+- aggiunta verifica backend dell'export `.xlsm` su:
+  - causale assenza nel blocco corretto di `Archivio2`;
+  - metadata riga ereditati dal template;
+  - `KM AUTO` esportato dal valore manuale operatore;
 - aggiunti test per la precedenza `detail Inaz > template fallback`;
 - aggiunti test frontend iniziali `frontend/tests/unit/inaz-pages.test.tsx`;
 - aggiunti test frontend sul dettaglio collaboratore e preselezione del mapping suggerito in `frontend/tests/unit/inaz-collaboratore-detail.test.tsx`;
@@ -151,6 +160,9 @@ Implementato un MVP collaboratori/giornaliere coerente con il documento
   - il "tipo di contratto" e oggi un proxy basato sul template orario (`schedule_code`): manca il dato contrattuale reale (tag manuale GAIA o estrazione da Inaz);
 - la dashboard macro mese e stata arricchita, ma i KPI sono ancora calcolati in frontend da tutte le giornaliere del mese; un endpoint aggregato backend dedicato resta un miglioramento utile per performance;
 - manca ancora la UI dedicata per gestione festivita/template orari e assegnazioni collaboratore;
+- `Trasferte` e `Reperibilita` non sono ancora esportate automaticamente: il payload `Inaz` oggi importato non espone questi dati in forma strutturata, quindi servono campi manuali dedicati o un'estensione dello scraper se il portale li espone altrove;
+- per i dipendenti assenti sia nello storico `Archivio2` sia nel foglio `Operai` del template HR, restano ancora non determinabili automaticamente i metadati anagrafici tecnici (`mansione`, `inquadramento`, testo periodo);
+- questi metadati mancanti sono quindi **ancora da implementare** tramite una fonte esterna affidabile (altro archivio GAIA, estensione dello scraper Inaz, oppure tabella manuale di completamento gestita in GAIA);
 - sync live ancora minimale:
   - nessuna policy di retry automatica schedulata;
   - nessuna orchestrazione multi-worker o schedulazione periodica;
