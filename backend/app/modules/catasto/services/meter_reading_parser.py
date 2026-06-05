@@ -19,6 +19,8 @@ HEADER_ALIASES: dict[str, str] = {
     "PUNTO_CONS": "punto_consegna",
     "PUNTO DI CONSEGNA": "punto_consegna",
     "PUNTO CONSEGNA": "punto_consegna",
+    "PUNTO CONSEGNA PRECEDENTE": "punto_consegna",
+    "PUNTO CONSEGNA NUOVO": "punto_consegna",
     "NOME": "punto_consegna",
     "COD_CONT": "matricola",
     "MATRIC.": "matricola",
@@ -356,8 +358,14 @@ def parse_meter_readings_excel(file_bytes: bytes, filename: str) -> ParsedMeterR
     parsed_rows: list[ParsedMeterReadingRow] = []
 
     for sheet in workbook.worksheets:
+        if sheet.max_row is None or sheet.max_row < 1:
+            continue
         header_row = _detect_header_row(sheet)
-        header_values = next(sheet.iter_rows(min_row=header_row, max_row=header_row, values_only=True))
+        header_iter = sheet.iter_rows(min_row=header_row, max_row=header_row, values_only=True)
+        try:
+            header_values = next(header_iter)
+        except StopIteration:
+            continue
         if anno is None:
             anno = _infer_year_from_headers(header_values)
         mapped_headers: dict[int, str] = {}

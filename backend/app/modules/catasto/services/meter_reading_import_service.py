@@ -12,6 +12,11 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.models.catasto_phase1 import CatAnomalia, CatDistretto, CatMeterReading, CatMeterReadingImport
+from app.modules.catasto.services.meter_reading_manual_service import (
+    apply_manual_corrections,
+    build_import_payload_snapshot,
+    revalidate_meter_reading,
+)
 from app.modules.catasto.services.meter_reading_parser import ParsedMeterReadingsFile, parse_meter_readings_excel
 from app.modules.catasto.services.meter_reading_validation import (
     ValidationMessage,
@@ -100,6 +105,56 @@ def _normalize_meter_serial(value: Any) -> str:
     if isinstance(value, float) and value.is_integer():
         return str(int(value))
     return str(value).strip().upper()
+
+
+def _find_existing_meter_reading(
+    db: Session,
+    *,
+    anno: int,
+    distretto_id: UUID | None,
+    punto_consegna: str,
+    matricola: Any,
+) -> CatMeterReading | None:
+    normalized_serial = _normalize_meter_serial(matricola)
+    exact_match = db.execute(
+        select(CatMeterReading).where(
+            CatMeterReading.anno == anno,
+            CatMeterReading.distretto_id == distretto_id,
+            CatMeterReading.punto_consegna == punto_consegna,
+            func.coalesce(CatMeterReading.matricola, "") == normalized_serial,
+        )
+    ).scalar_one_or_none()
+    if exact_match is not None:
+        return exact_match
+
+    # Backfill legacy rows created before the matricola-aware key existed.
+    if normalized_serial:
+        legacy_candidates = db.execute(
+            select(CatMeterReading).where(
+                CatMeterReading.anno == anno,
+                CatMeterReading.distretto_id == distretto_id,
+                CatMeterReading.punto_consegna == punto_consegna,
+            )
+        ).scalars().all()
+        if len(legacy_candidates) == 1 and not _normalize_meter_serial(legacy_candidates[0].matricola):
+            return legacy_candidates[0]
+
+    return None
+
+
+def _meter_reading_cache_key(
+    *,
+    anno: int,
+    distretto_id: UUID | None,
+    punto_consegna: str,
+    matricola: Any,
+) -> tuple[int, UUID | None, str, str]:
+    return (
+        anno,
+        distretto_id,
+        punto_consegna,
+        _normalize_meter_serial(matricola),
+    )
 
 
 def resolve_distretto(
@@ -371,16 +426,25 @@ def import_meter_readings(
     db.add(import_record)
     db.flush()
 
+    cached_targets: dict[tuple[int, UUID | None, str, str], CatMeterReading] = {}
     for item in prepared.items:
         if item.validation_status == "error":
             continue
-        existing = db.execute(
-            select(CatMeterReading).where(
-                CatMeterReading.anno == prepared.anno,
-                CatMeterReading.distretto_id == (prepared.distretto.id if prepared.distretto else None),
-                CatMeterReading.punto_consegna == item.payload["punto_consegna"],
+        cache_key = _meter_reading_cache_key(
+            anno=prepared.anno,
+            distretto_id=prepared.distretto.id if prepared.distretto else None,
+            punto_consegna=item.payload["punto_consegna"],
+            matricola=item.payload.get("matricola"),
+        )
+        existing = cached_targets.get(cache_key)
+        if existing is None:
+            existing = _find_existing_meter_reading(
+                db,
+                anno=prepared.anno,
+                distretto_id=prepared.distretto.id if prepared.distretto else None,
+                punto_consegna=item.payload["punto_consegna"],
+                matricola=item.payload.get("matricola"),
             )
-        ).scalar_one_or_none()
 
         target = existing or CatMeterReading(
             anno=prepared.anno,
@@ -419,8 +483,13 @@ def import_meter_readings(
         target.validation_status = item.validation_status
         target.validation_messages = [message.__dict__ for message in item.validation_messages]
         target.source = "excel"
+        target.import_payload_json = build_import_payload_snapshot(item.payload)
         if existing is None:
             db.add(target)
+        if isinstance(target.manual_corrections, dict) and target.manual_corrections:
+            apply_manual_corrections(target, target.manual_corrections)
+            revalidate_meter_reading(db, target)
+        cached_targets[cache_key] = target
 
     _sync_meter_reading_anomalies(db, prepared=prepared, import_record=import_record)
     db.commit()

@@ -8092,6 +8092,31 @@ def test_meter_reading_parser_supports_real_world_aliases_and_dot_dates() -> Non
     assert row["record_type"] == "CONT_NO_TES"
 
 
+def test_meter_reading_parser_supports_previous_and_new_delivery_point_headers() -> None:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(
+        [
+            "ID",
+            "punto consegna precedente",
+            "punto consegna nuovo",
+            "tipologia idrante",
+            "Matricola",
+            "lettura finale 2025",
+        ]
+    )
+    sheet.append([1, "M2A1_1", "M2A1_1.1", "AcquaPass NICOTRA bi_flangia dn. 100", 682490, 2])
+    output = BytesIO()
+    workbook.save(output)
+
+    parsed = parse_meter_readings_excel(output.getvalue(), "D31-Sant'Anna 2025.xlsx")
+
+    row = parsed.rows[0].data
+    assert row["punto_consegna"] == "M2A1_1.1"
+    assert row["matricola"] == "682490"
+    assert row["record_type"] == "CONT_NO_TES"
+
+
 def test_meter_reading_parser_merges_multiple_sheets_when_headers_are_supported() -> None:
     workbook = Workbook()
     first_sheet = workbook.active
@@ -8113,6 +8138,24 @@ def test_meter_reading_parser_merges_multiple_sheets_when_headers_are_supported(
     assert parsed.rows[1].data["matricola"] == "6378"
     assert parsed.rows[1].data["lettura_finale"] == Decimal("311")
     assert parsed.rows[1].data["record_type"] == "CONT_NO_TES"
+
+
+def test_meter_reading_parser_ignores_empty_aux_sheets() -> None:
+    workbook = Workbook()
+    first_sheet = workbook.active
+    first_sheet.title = "Foglio1"
+    first_sheet.append(["ID", "PUNTO DI CONSEGNA", "TIPOLOGIA IDRANTE", "MATRIC.", "LETTURA FINALE 2025"])
+    first_sheet.append([1, "A1", "Idrovalvola TECNIDRO DN100", "1001", 45])
+    workbook.create_sheet("Foglio2")
+    workbook.create_sheet("Foglio3")
+    output = BytesIO()
+    workbook.save(output)
+
+    parsed = parse_meter_readings_excel(output.getvalue(), "D24-Lotto Sud Arborea 2025.xlsx")
+
+    assert len(parsed.rows) == 1
+    assert parsed.rows[0].data["punto_consegna"] == "A1"
+    assert parsed.rows[0].data["record_type"] == "IDROVALVOLA"
 
 
 def test_meter_reading_parser_classifies_predisposizione_as_operator_activity() -> None:
@@ -8214,6 +8257,54 @@ def test_meter_reading_import_endpoint_keeps_shared_meter_unassigned() -> None:
         db.commit()
     finally:
         db.close()
+
+
+def test_meter_reading_validate_extracts_multiple_tax_codes_separated_by_underscore() -> None:
+    headers = [
+        "ID",
+        "PUNTO_CONS",
+        "COD_CONT",
+        "TIPO",
+        "LETTURA FINALE 2024",
+        "LETTURA FINALE 2025",
+        "TOTALE m3 2025",
+        "COD. FISC",
+    ]
+    rows = [
+        [
+            1,
+            "BRT-304",
+            "MTR-304",
+            "CONT_NO_TES",
+            100,
+            130,
+            30,
+            "SPNLGU70L12G113E_PRSGLN55L21M153Z_PRSSVT64S07F208A",
+        ],
+    ]
+    response = client.post(
+        "/catasto/meter-readings/import/validate?anno=2025",
+        headers=auth_headers(),
+        files={
+            "file": (
+                "D07-Baratili 2025.xlsx",
+                _build_meter_readings_workbook(rows=rows, headers=headers),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["items"][0]["data"]["codice_fiscale_normalizzato"] is None
+    assert payload["items"][0]["data"]["tax_code_candidates"] == [
+        "SPNLGU70L12G113E",
+        "PRSGLN55L21M153Z",
+        "PRSSVT64S07F208A",
+    ]
+    codes = {item["code"] for item in payload["items"][0]["validation_messages"]}
+    assert "CONTATORE_CONDIVISO" in codes
+    assert "CF_ANOMALO" not in codes
 
 
 def test_meter_reading_import_endpoint_multiplies_final_reading_for_hydropass_dn_150() -> None:
@@ -8419,6 +8510,85 @@ def test_meter_reading_detail_and_import_routes() -> None:
     assert detail_response.json()["punto_consegna"] == "PC-DET"
 
 
+def test_meter_reading_patch_endpoint_updates_manual_correction_and_audit() -> None:
+    response = client.post(
+        "/catasto/meter-readings/import?mode=upsert&anno=2025",
+        headers=auth_headers(),
+        files={"file": ("D01-Sinis 2025.xlsx", _build_meter_readings_workbook(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+    )
+    assert response.status_code == 201
+
+    db = TestingSessionLocal()
+    try:
+        reading = db.execute(select(CatMeterReading).where(CatMeterReading.punto_consegna == "C51A_1")).scalar_one()
+        reading_id = str(reading.id)
+    finally:
+        db.close()
+
+    patch_response = client.patch(
+        f"/catasto/meter-readings/{reading_id}",
+        headers=auth_headers(),
+        json={
+            "punto_consegna": "C51A_1A",
+            "note": "Correzione test operatore",
+            "change_note": "Aggiornato punto dopo verifica campo",
+        },
+    )
+    assert patch_response.status_code == 200
+    payload = patch_response.json()
+    assert payload["punto_consegna"] == "C51A_1A"
+    assert payload["note"] == "Correzione test operatore"
+    assert payload["manual_corrections"] == {"punto_consegna": "C51A_1A", "note": "Correzione test operatore"}
+    assert payload["manual_override_updated_at"] is not None
+    assert len(payload["manual_audits"]) == 1
+    assert payload["manual_audits"][0]["change_note"] == "Aggiornato punto dopo verifica campo"
+    assert payload["manual_audits"][0]["new_values"]["punto_consegna"] == "C51A_1A"
+
+
+def test_meter_reading_reimport_preserves_manual_corrections() -> None:
+    response = client.post(
+        "/catasto/meter-readings/import?mode=upsert&anno=2025",
+        headers=auth_headers(),
+        files={"file": ("D01-Sinis 2025.xlsx", _build_meter_readings_workbook(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+    )
+    assert response.status_code == 201
+
+    db = TestingSessionLocal()
+    try:
+        reading = db.execute(select(CatMeterReading).where(CatMeterReading.punto_consegna == "C51A_1")).scalar_one()
+        reading_id = str(reading.id)
+    finally:
+        db.close()
+
+    patch_response = client.patch(
+        f"/catasto/meter-readings/{reading_id}",
+        headers=auth_headers(),
+        json={"punto_consegna": "C51A_1A", "change_note": "Persistenza override"},
+    )
+    assert patch_response.status_code == 200
+
+    reimport_response = client.post(
+        "/catasto/meter-readings/import?mode=upsert&anno=2025",
+        headers=auth_headers(),
+        files={"file": ("D01-Sinis 2025.xlsx", _build_meter_readings_workbook(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+    )
+    assert reimport_response.status_code == 201
+
+    db = TestingSessionLocal()
+    try:
+        preserved = db.execute(select(CatMeterReading).where(CatMeterReading.punto_consegna == "C51A_1A")).scalar_one()
+        assert preserved.manual_corrections == {"punto_consegna": "C51A_1A"}
+        assert preserved.import_payload_json is not None
+    finally:
+        db.close()
+
+    detail_response = client.get(f"/catasto/meter-readings/{reading_id}", headers=auth_headers())
+    assert detail_response.status_code == 200
+    detail_payload = detail_response.json()
+    assert len(detail_payload["manual_audits"]) == 1
+    assert detail_payload["manual_audits"][0]["change_note"] == "Persistenza override"
+
+
 def test_meter_reading_import_mode_rejects_existing_rows() -> None:
     db = TestingSessionLocal()
     try:
@@ -8556,7 +8726,59 @@ def test_meter_reading_validate_allows_same_point_with_different_meter_serials()
     assert all("DUPLICATO_FILE" not in codes for codes in row_codes)
 
 
+def test_meter_reading_import_upserts_duplicate_operator_activity_without_serial_in_same_file() -> None:
+    db = TestingSessionLocal()
+    try:
+        db.add(CatDistretto(num_distretto="25", nome_distretto="Arborea"))
+        db.commit()
+    finally:
+        db.close()
+
+    headers = [
+        "ID",
+        "PUNTO_CONS",
+        "TIPO",
+        "TIPOLOGIA",
+        "NOTE",
+    ]
+    rows = [
+        [1, "7E_1", "DIRAMATORE", "diramatore punti di consegna", None],
+        [2, "7E_1", "DIRAMATORE", "diramatore punti di consegna", "possibile dismesso"],
+    ]
+    response = client.post(
+        "/catasto/meter-readings/import?mode=upsert&anno=2025",
+        headers=auth_headers(),
+        files={
+            "file": (
+                "D25 CENSIMENTO IDROVALVOLE 2025.xlsx",
+                _build_meter_readings_workbook(rows=rows, headers=headers),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert response.status_code == 201
+
+    db = TestingSessionLocal()
+    try:
+        readings = db.execute(
+            select(CatMeterReading).where(CatMeterReading.anno == 2025, CatMeterReading.punto_consegna == "7E_1")
+        ).scalars().all()
+        assert len(readings) == 1
+        assert readings[0].record_kind == "dismissed_point"
+        assert readings[0].note == "possibile dismesso"
+    finally:
+        db.close()
+
+
 def test_meter_reading_import_allows_same_point_with_different_meter_serials() -> None:
+    db = TestingSessionLocal()
+    try:
+        db.add(CatDistretto(num_distretto="292", nome_distretto="3 Distretto Terralba - Zona Morimenta"))
+        db.commit()
+    finally:
+        db.close()
+
     headers = [
         "ID",
         "PUNTO_CONS",
@@ -8796,6 +9018,31 @@ def test_meter_reading_validate_marks_blank_type_dismesso_as_dismissed_point() -
     payload = response.json()
     assert payload["items"][0]["data"]["record_kind"] == "dismissed_point"
     codes = {item["code"] for item in payload["items"][0]["validation_messages"]}
+    assert "PUNTO_DISMESSO" in codes
+
+
+def test_meter_reading_validate_rejects_dismissed_point_without_delivery_point() -> None:
+    headers = ["TIPOLOGIA", "TIPO", "NOTE"]
+    rows = [
+        ["punto dismesso", "", "tratto di condotta dismesso"],
+    ]
+    response = client.post(
+        "/catasto/meter-readings/import/validate?anno=2025",
+        headers=auth_headers(),
+        files={
+            "file": (
+                "D20-Fenosu 2025.xlsx",
+                _build_meter_readings_workbook(rows=rows, headers=headers),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["items"][0]["validation_status"] == "error"
+    codes = {item["code"] for item in payload["items"][0]["validation_messages"]}
+    assert "PUNTO_CONSEGNA_MANCANTE" in codes
     assert "PUNTO_DISMESSO" in codes
 
 

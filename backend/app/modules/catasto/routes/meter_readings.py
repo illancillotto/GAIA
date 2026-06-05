@@ -9,17 +9,20 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_active_user
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
-from app.models.catasto_phase1 import CatMeterReading, CatMeterReadingImport
+from app.models.catasto_phase1 import CatMeterReading, CatMeterReadingImport, CatMeterReadingManualAudit
 from app.modules.catasto.services.meter_reading_import_service import import_meter_readings, prepare_meter_readings_import
+from app.modules.catasto.services.meter_reading_manual_service import update_meter_reading_manual_corrections
 from app.modules.catasto.services.meter_reading_parser import MeterReadingsParseError
 from app.modules.utenze.models import AnagraficaCompany, AnagraficaPerson
 from app.schemas.catasto_phase1 import (
+    CatMeterReadingPatchRequest,
     CatMeterReadingImportDetailResponse,
     CatMeterReadingImportListResponse,
     CatMeterReadingImportPreviewItemResponse,
     CatMeterReadingImportPreviewResponse,
     CatMeterReadingImportRunResponse,
     CatMeterReadingListResponse,
+    CatMeterReadingManualAuditResponse,
     CatMeterReadingResponse,
     CatMeterReadingValidationMessageResponse,
 )
@@ -40,8 +43,27 @@ def _subject_preview_map(db: Session, subject_ids: list[UUID]) -> dict[UUID, str
     return result
 
 
-def _serialize_reading(item: CatMeterReading, subject_display_name: str | None = None) -> CatMeterReadingResponse:
+def _audit_user_map(db: Session, audits: list[CatMeterReadingManualAudit]) -> dict[int, str]:
+    user_ids = sorted({audit.changed_by for audit in audits if audit.changed_by is not None})
+    if not user_ids:
+        return {}
+    users = db.execute(select(ApplicationUser).where(ApplicationUser.id.in_(user_ids))).scalars().all()
+    return {
+        user.id: (user.full_name or user.username or user.email)
+        for user in users
+    }
+
+
+def _serialize_reading(
+    db: Session,
+    item: CatMeterReading,
+    subject_display_name: str | None = None,
+    *,
+    include_audits: bool = False,
+) -> CatMeterReadingResponse:
     raw_messages = item.validation_messages if isinstance(item.validation_messages, list) else []
+    raw_audits = list(item.manual_audits or []) if include_audits else []
+    audit_user_map = _audit_user_map(db, raw_audits) if raw_audits else {}
     return CatMeterReadingResponse(
         id=item.id,
         import_id=item.import_id,
@@ -89,6 +111,22 @@ def _serialize_reading(item: CatMeterReading, subject_display_name: str | None =
         sync_status=item.sync_status,
         device_id=item.device_id,
         mobile_operator_id=item.mobile_operator_id,
+        manual_corrections=item.manual_corrections if isinstance(item.manual_corrections, dict) else None,
+        manual_override_updated_at=item.manual_override_updated_at,
+        manual_override_updated_by=item.manual_override_updated_by,
+        manual_audits=[
+            CatMeterReadingManualAuditResponse(
+                id=audit.id,
+                meter_reading_id=audit.meter_reading_id,
+                changed_by=audit.changed_by,
+                changed_by_display_name=audit_user_map.get(audit.changed_by) if audit.changed_by is not None else None,
+                change_note=audit.change_note,
+                previous_values=audit.previous_values,
+                new_values=audit.new_values,
+                changed_at=audit.changed_at,
+            )
+            for audit in sorted(raw_audits, key=lambda value: value.changed_at, reverse=True)
+        ],
         created_at=item.created_at,
         updated_at=item.updated_at,
     )
@@ -246,7 +284,7 @@ def list_meter_readings(
     ).scalars().all()
     preview_map = _subject_preview_map(db, [item.subject_id for item in rows if item.subject_id is not None])
     return CatMeterReadingListResponse(
-        items=[_serialize_reading(item, preview_map.get(item.subject_id) if item.subject_id else None) for item in rows],
+        items=[_serialize_reading(db, item, preview_map.get(item.subject_id) if item.subject_id else None) for item in rows],
         total=total,
         page=page,
         page_size=page_size,
@@ -265,7 +303,33 @@ def get_meter_readings_by_subject(
         .order_by(CatMeterReading.anno.desc(), CatMeterReading.punto_consegna.asc())
     ).scalars().all()
     preview_map = _subject_preview_map(db, [subject_id])
-    return [_serialize_reading(item, preview_map.get(subject_id)) for item in rows]
+    return [_serialize_reading(db, item, preview_map.get(subject_id)) for item in rows]
+
+
+@router.patch("/{reading_id}", response_model=CatMeterReadingResponse)
+def patch_meter_reading(
+    reading_id: UUID,
+    payload: CatMeterReadingPatchRequest,
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(require_active_user),
+) -> CatMeterReadingResponse:
+    item = db.get(CatMeterReading, reading_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Lettura contatore non trovata")
+    try:
+        subject_display_name = update_meter_reading_manual_corrections(
+            db,
+            reading=item,
+            payload=payload.model_dump(exclude_unset=True),
+            current_user=current_user,
+        )
+        db.add(item)
+        db.commit()
+        db.refresh(item)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _serialize_reading(db, item, subject_display_name, include_audits=True)
 
 
 @router.get("/{reading_id}", response_model=CatMeterReadingResponse)
@@ -278,4 +342,4 @@ def get_meter_reading(
     if item is None:
         raise HTTPException(status_code=404, detail="Lettura contatore non trovata")
     preview_map = _subject_preview_map(db, [item.subject_id] if item.subject_id else [])
-    return _serialize_reading(item, preview_map.get(item.subject_id) if item.subject_id else None)
+    return _serialize_reading(db, item, preview_map.get(item.subject_id) if item.subject_id else None, include_audits=True)

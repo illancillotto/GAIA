@@ -611,7 +611,7 @@ class CatCapacitasIntestatario(Base):
     )
     idxana: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
     idxesa: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
-    codice_fiscale: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    codice_fiscale: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     denominazione: Mapped[str | None] = mapped_column(String(500), nullable=True)
     data_nascita: Mapped[date | None] = mapped_column(Date, nullable=True)
     luogo_nascita: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -733,7 +733,7 @@ class CatMeterReading(Base):
     operatore_intervento: Mapped[str | None] = mapped_column(String(255), nullable=True)
     data_intervento: Mapped[date | None] = mapped_column(Date, nullable=True)
     dui: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    codice_fiscale: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
+    codice_fiscale: Mapped[str | None] = mapped_column(String(255), nullable=True, index=True)
     codice_fiscale_normalizzato: Mapped[str | None] = mapped_column(String(32), nullable=True, index=True)
     subject_id: Mapped[uuid.UUID | None] = mapped_column(
         ForeignKey("ana_subjects.id", ondelete="SET NULL"), nullable=True, index=True
@@ -755,6 +755,10 @@ class CatMeterReading(Base):
     sync_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
     device_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     mobile_operator_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    import_payload_json: Mapped[dict | list | None] = mapped_column(JSON, nullable=True)
+    manual_corrections: Mapped[dict | list | None] = mapped_column(JSON, nullable=True)
+    manual_override_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    manual_override_updated_by: Mapped[int | None] = mapped_column(ForeignKey("application_users.id"), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
@@ -762,6 +766,25 @@ class CatMeterReading(Base):
 
     import_record: Mapped["CatMeterReadingImport | None"] = relationship(back_populates="readings")
     distretto: Mapped["CatDistretto | None"] = relationship(back_populates="meter_readings")
+    manual_audits: Mapped[list["CatMeterReadingManualAudit"]] = relationship(
+        back_populates="meter_reading", cascade="all, delete-orphan"
+    )
+
+
+class CatMeterReadingManualAudit(Base):
+    __tablename__ = "catasto_meter_reading_manual_audits"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
+    meter_reading_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("catasto_meter_readings.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    changed_by: Mapped[int | None] = mapped_column(ForeignKey("application_users.id"), nullable=True)
+    change_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    previous_values: Mapped[dict | list | None] = mapped_column(JSON, nullable=True)
+    new_values: Mapped[dict | list | None] = mapped_column(JSON, nullable=True)
+    changed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+
+    meter_reading: Mapped["CatMeterReading"] = relationship(back_populates="manual_audits")
 
 
 class CatCapacitasTerrenoDetail(Base):
@@ -821,6 +844,9 @@ __all__ = [
     "CatDistretto",
     "CatDistrettoGeometryVersion",
     "CatDistrettoCoefficiente",
+    "CatMeterReading",
+    "CatMeterReadingImport",
+    "CatMeterReadingManualAudit",
     "CatGisSavedSelection",
     "CatGisSavedSelectionItem",
     "CatConsorzioOccupancy",

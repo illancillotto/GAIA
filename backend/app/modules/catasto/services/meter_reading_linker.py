@@ -34,7 +34,15 @@ class MeterReadingSubjectCandidate:
 def extract_tax_code_candidates(value: str | None) -> list[str]:
     if value is None:
         return []
-    raw_candidates = re.findall(r"\b[A-Za-z0-9]{11,16}\b", value.upper())
+    raw_candidates: list[str] = []
+    for token in re.split(r"[^A-Za-z0-9]+", value.upper()):
+        if not token:
+            continue
+        if 11 <= len(token) <= 16:
+            raw_candidates.append(token)
+            continue
+        if len(token) > 16 and len(token) % 16 == 0:
+            raw_candidates.extend(token[index:index + 16] for index in range(0, len(token), 16))
     results: list[str] = []
     seen: set[str] = set()
     for candidate in raw_candidates:

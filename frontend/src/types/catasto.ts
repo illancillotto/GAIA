@@ -41,6 +41,17 @@ export type CatMeterReadingValidationMessage = {
   field: string | null;
 };
 
+export type CatMeterReadingManualAudit = {
+  id: UUID;
+  meter_reading_id: UUID;
+  changed_by: number | null;
+  changed_by_display_name: string | null;
+  change_note: string | null;
+  previous_values: Record<string, unknown> | Array<unknown> | null;
+  new_values: Record<string, unknown> | Array<unknown> | null;
+  changed_at: string;
+};
+
 export type CatMeterReadingImport = {
   id: UUID;
   distretto_id: UUID;
@@ -105,6 +116,10 @@ export type CatMeterReading = {
   sync_status: string | null;
   device_id: string | null;
   mobile_operator_id: string | null;
+  manual_corrections: Record<string, unknown> | null;
+  manual_override_updated_at: string | null;
+  manual_override_updated_by: number | null;
+  manual_audits: CatMeterReadingManualAudit[];
   created_at: string;
   updated_at: string;
 };

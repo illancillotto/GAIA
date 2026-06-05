@@ -107,7 +107,7 @@ def validate_meter_reading_row(
     is_dismissed_or_inactive = operational_state in {"inactive", "dismissed_point"}
 
     punto_consegna = (row_data.get("punto_consegna") or "").strip() if row_data.get("punto_consegna") else ""
-    if is_meter_reading and not punto_consegna:
+    if not punto_consegna:
         messages.append(ValidationMessage(level="error", code="PUNTO_CONSEGNA_MANCANTE", message="Punto consegna mancante.", field="punto_consegna"))
     if anno is None:
         messages.append(ValidationMessage(level="error", code="ANNO_MANCANTE", message="Anno mancante.", field="anno"))

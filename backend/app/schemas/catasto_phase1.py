@@ -123,6 +123,10 @@ class CatMeterReadingResponse(BaseModel):
     sync_status: str | None
     device_id: str | None
     mobile_operator_id: str | None
+    manual_corrections: dict[str, Any] | None = None
+    manual_override_updated_at: datetime | None = None
+    manual_override_updated_by: int | None = None
+    manual_audits: list["CatMeterReadingManualAuditResponse"] = []
     created_at: datetime
     updated_at: datetime
 
@@ -168,6 +172,28 @@ class CatMeterReadingImportRunResponse(BaseModel):
     righe_importate: int
     righe_con_warning: int
     righe_scartate: int
+
+
+class CatMeterReadingPatchRequest(BaseModel):
+    punto_consegna: str | None = None
+    matricola: str | None = None
+    record_type: str | None = None
+    tipologia_idrante: str | None = None
+    codice_fiscale: str | None = None
+    note: str | None = None
+    intervento_da_eseguire: str | None = None
+    change_note: str | None = None
+
+
+class CatMeterReadingManualAuditResponse(BaseModel):
+    id: UUID
+    meter_reading_id: UUID
+    changed_by: int | None = None
+    changed_by_display_name: str | None = None
+    change_note: str | None = None
+    previous_values: dict[str, Any] | list[Any] | None = None
+    new_values: dict[str, Any] | list[Any] | None = None
+    changed_at: datetime
 
 
 class CatAnomaliaResponse(BaseModel):

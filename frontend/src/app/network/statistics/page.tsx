@@ -11,15 +11,18 @@ import {
 } from "@/components/layout/module-workspace-hero";
 import { FilterPillGroup } from "@/components/network/filter-pill-group";
 import { NetworkModulePage } from "@/components/network/network-module-page";
+import { NetworkTrackToggle } from "@/components/network/network-track-toggle";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { AlertTriangleIcon, CalendarIcon, GridIcon, ServerIcon } from "@/components/ui/icons";
-import { getNetworkStatistics } from "@/lib/api";
+import { createNetworkTrackedSubject, getNetworkStatistics, listNetworkTrackedSubjects } from "@/lib/api";
+import { buildDeviceTrackingKey, buildNetworkTrackingKey } from "@/lib/network-device-utils";
 import type {
   NetworkStatisticsCountItem,
   NetworkStatisticsSummary,
   NetworkStatisticsTimelinePoint,
   NetworkStatisticsTrafficItem,
+  NetworkTrackedSubject,
 } from "@/types/api";
 
 const WINDOW_OPTIONS = [24, 72, 168];
@@ -75,7 +78,26 @@ function CountList({ title, items }: { title: string; items: NetworkStatisticsCo
   );
 }
 
-function TrafficList({ title, items }: { title: string; items: NetworkStatisticsTrafficItem[] }) {
+function TrafficList({
+  title,
+  items,
+  onTrack,
+  trackingBusyKey,
+  trackedSubjectMap,
+  entityType,
+}: {
+  title: string;
+  items: NetworkStatisticsTrafficItem[];
+  onTrack: (
+    key: string,
+    payload:
+      | { entity_type: "device"; device_id: number; label?: string | null }
+      | { entity_type: "ip" | "domain" | "url"; value: string; label?: string | null },
+  ) => void;
+  trackingBusyKey: string | null;
+  trackedSubjectMap: Map<string, NetworkTrackedSubject>;
+  entityType: "device" | "ip" | "domain";
+}) {
   return (
     <article className="panel-card">
       <p className="section-title">{title}</p>
@@ -90,7 +112,53 @@ function TrafficList({ title, items }: { title: string; items: NetworkStatistics
                   <p className="truncate text-sm font-medium text-gray-900">{item.label}</p>
                   {item.ip_address ? <p className="mt-1 text-xs text-gray-500">{formatIpWithLabel(item.ip_address, item.label)}</p> : null}
                 </div>
-                <Badge variant="info">{item.events_count} eventi</Badge>
+                <div className="flex items-center gap-2">
+                  {entityType === "device" && item.device_id ? (
+                    <NetworkTrackToggle
+                      compact
+                      tracked={Boolean(item.tracked_subject_id || trackedSubjectMap.get(buildDeviceTrackingKey(item.device_id)))}
+                      label="Traccia"
+                      busy={trackingBusyKey === buildDeviceTrackingKey(item.device_id)}
+                      onClick={() =>
+                        onTrack(buildDeviceTrackingKey(item.device_id!), {
+                          entity_type: "device",
+                          device_id: item.device_id!,
+                          label: item.label,
+                        })
+                      }
+                    />
+                  ) : null}
+                  {entityType === "ip" && item.ip_address ? (
+                    <NetworkTrackToggle
+                      compact
+                      tracked={Boolean(item.tracked_subject_id || trackedSubjectMap.get(buildNetworkTrackingKey("ip", item.ip_address)))}
+                      label="Traccia"
+                      busy={trackingBusyKey === buildNetworkTrackingKey("ip", item.ip_address)}
+                      onClick={() =>
+                        onTrack(buildNetworkTrackingKey("ip", item.ip_address!), {
+                          entity_type: "ip",
+                          value: item.ip_address!,
+                          label: item.label !== item.ip_address ? item.label : null,
+                        })
+                      }
+                    />
+                  ) : null}
+                  {entityType === "domain" ? (
+                    <NetworkTrackToggle
+                      compact
+                      tracked={Boolean(item.tracked_subject_id || trackedSubjectMap.get(buildNetworkTrackingKey("domain", item.label)))}
+                      label="Traccia"
+                      busy={trackingBusyKey === buildNetworkTrackingKey("domain", item.label)}
+                      onClick={() =>
+                        onTrack(buildNetworkTrackingKey("domain", item.label), {
+                          entity_type: "domain",
+                          value: item.label,
+                        })
+                      }
+                    />
+                  ) : null}
+                  <Badge variant="info">{item.events_count} eventi</Badge>
+                </div>
               </div>
               <div className="mt-2 flex flex-wrap gap-3 text-xs text-gray-500">
                 <span>In {formatBytes(item.bytes_in)}</span>
@@ -152,6 +220,9 @@ function StatisticsContent({ token }: { token: string }) {
   });
   const [stats, setStats] = useState<NetworkStatisticsSummary | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [trackingError, setTrackingError] = useState<string | null>(null);
+  const [trackedSubjects, setTrackedSubjects] = useState<NetworkTrackedSubject[]>([]);
+  const [trackingBusyKey, setTrackingBusyKey] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -172,6 +243,20 @@ function StatisticsContent({ token }: { token: string }) {
   }, [token, windowHours]);
 
   useEffect(() => {
+    async function loadTracking() {
+      try {
+        const subjects = await listNetworkTrackedSubjects(token, { windowHours });
+        setTrackedSubjects(subjects);
+        setTrackingError(null);
+      } catch (error) {
+        setTrackingError(error instanceof Error ? error.message : "Errore caricamento tracking");
+      }
+    }
+
+    void loadTracking();
+  }, [token, windowHours]);
+
+  useEffect(() => {
     const params = new URLSearchParams(searchParams.toString());
     if (windowHours !== 24) {
       params.set("window", String(windowHours));
@@ -188,6 +273,34 @@ function StatisticsContent({ token }: { token: string }) {
     }
     return `${stats.total_events} eventi Sophos, ${stats.unique_domains} domini e ${stats.unique_external_peers} peer esterni nella finestra selezionata.`;
   }, [stats]);
+
+  const trackedSubjectMap = useMemo(
+    () =>
+      new Map<string, NetworkTrackedSubject>(
+        trackedSubjects
+          .filter((subject) => subject.is_active)
+          .map((subject) => [`${subject.entity_type}:${subject.normalized_value}`, subject] as const),
+      ),
+    [trackedSubjects],
+  );
+
+  async function handleTrack(
+    key: string,
+    payload:
+      | { entity_type: "device"; device_id: number; label?: string | null }
+      | { entity_type: "ip" | "domain" | "url"; value: string; label?: string | null },
+  ) {
+    setTrackingBusyKey(key);
+    setTrackingError(null);
+    try {
+      const subject = await createNetworkTrackedSubject(token, payload);
+      setTrackedSubjects((current) => [subject, ...current.filter((item) => item.id !== subject.id)]);
+    } catch (error) {
+      setTrackingError(error instanceof Error ? error.message : "Errore durante l'attivazione del tracking");
+    } finally {
+      setTrackingBusyKey(null);
+    }
+  }
 
   return (
     <div className="page-stack">
@@ -228,7 +341,7 @@ function StatisticsContent({ token }: { token: string }) {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="section-title">Contesto analisi</p>
-            <p className="section-copy">Scegli l'orizzonte temporale per ricalcolare navigazione, top device e timeline traffico.</p>
+            <p className="section-copy">Scegli l&apos;orizzonte temporale per ricalcolare navigazione, top device e timeline traffico.</p>
           </div>
           <select className="form-control min-w-[220px]" value={windowHours} onChange={(event) => setWindowHours(Number(event.target.value))}>
             {WINDOW_OPTIONS.map((value) => (
@@ -246,6 +359,7 @@ function StatisticsContent({ token }: { token: string }) {
           />
         </div>
         {loadError ? <p className="mt-4 text-sm text-red-600">{loadError}</p> : null}
+        {trackingError ? <p className="mt-2 text-sm text-red-600">{trackingError}</p> : null}
       </article>
 
       {isLoading ? (
@@ -300,9 +414,30 @@ function StatisticsContent({ token }: { token: string }) {
           </section>
 
           <section className="grid gap-6 xl:grid-cols-3">
-            <TrafficList title="Top domini navigati" items={stats.top_domains} />
-            <TrafficList title="Top destinazioni esterne" items={stats.top_destinations} />
-            <TrafficList title="Top sorgenti interne" items={stats.top_source_devices} />
+            <TrafficList
+              title="Top domini navigati"
+              items={stats.top_domains}
+              entityType="domain"
+              onTrack={handleTrack}
+              trackedSubjectMap={trackedSubjectMap}
+              trackingBusyKey={trackingBusyKey}
+            />
+            <TrafficList
+              title="Top destinazioni esterne"
+              items={stats.top_destinations}
+              entityType="ip"
+              onTrack={handleTrack}
+              trackedSubjectMap={trackedSubjectMap}
+              trackingBusyKey={trackingBusyKey}
+            />
+            <TrafficList
+              title="Top sorgenti interne"
+              items={stats.top_source_devices}
+              entityType="device"
+              onTrack={handleTrack}
+              trackedSubjectMap={trackedSubjectMap}
+              trackingBusyKey={trackingBusyKey}
+            />
           </section>
 
           <TimelineCard items={stats.hourly_timeline} />
