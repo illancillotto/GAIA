@@ -98,6 +98,23 @@ def test_run_nmap_scan_keeps_hosts_without_open_ports(monkeypatch) -> None:
     assert hosts[1].vendor == "Dell"
 
 
+def test_run_nmap_arp_scan_discovers_hosts_with_mac_addresses(monkeypatch) -> None:
+    _FakePortScanner.scan_calls = []
+    monkeypatch.setattr(services, "nmap", type("FakeNmapModule", (), {"PortScanner": _FakePortScanner}))
+    monkeypatch.setattr(services.shutil, "which", lambda value: "/usr/bin/nmap" if value == "nmap" else None)
+    monkeypatch.setattr(services, "_collect_enrichment", lambda ip_address, open_ports: services.EnrichmentMetadata())
+
+    hosts = services._run_nmap_arp_scan("192.168.1.0/24")
+
+    assert len(hosts) == 2
+    assert hosts[0].ip_address == "192.168.1.10"
+    assert hosts[0].mac_address == "aa:bb:cc:dd:ee:10"
+    assert hosts[0].device_type == "unknown-host"
+    assert hosts[1].ip_address == "192.168.1.20"
+    assert hosts[1].mac_address == "aa:bb:cc:dd:ee:20"
+    assert _FakePortScanner.scan_calls == [("192.168.1.0/24", f"-sn -PR -n --host-timeout {services.settings.network_scan_ping_timeout_ms}ms")]
+
+
 def test_parse_netbios_name_returns_active_workstation_name() -> None:
     output = """
 Looking up status of 192.168.1.50
@@ -273,6 +290,34 @@ def test_run_network_scan_creates_unknown_device_alert_for_unregistered_host(mon
     Base.metadata.drop_all(bind=engine)
 
 
+def test_run_network_scan_persists_arp_scan_type_and_discovery_metadata(monkeypatch) -> None:
+    db = _build_session()
+    monkeypatch.setattr(services, "_collect_enrichment", lambda ip_address, open_ports: services.EnrichmentMetadata(metadata_sources={"dns": "pc-ufficio.local"}))
+
+    result = services.run_network_scan(
+        db,
+        initiated_by="tester",
+        scan_type="arp",
+        discovered_hosts=[
+            services.DiscoveredHost(
+                ip_address="192.168.1.77",
+                mac_address="AA-BB-CC-DD-EE-77",
+                hostname="pc-ufficio",
+                open_ports=[],
+            )
+        ],
+    )
+
+    device = db.scalar(select(NetworkDevice).where(NetworkDevice.ip_address == "192.168.1.77"))
+
+    assert result.scan.scan_type == "arp"
+    assert device is not None
+    assert services.metadata_sources_to_dict(device.metadata_sources) == {"dns": "pc-ufficio.local", "discovery": "arp"}
+
+    db.close()
+    Base.metadata.drop_all(bind=engine)
+
+
 def test_parse_sophos_syslog_message_extracts_key_values() -> None:
     parsed = parse_sophos_syslog_message(
         'device_name="XGS87" log_type="Firewall" log_component="Firewall Rule" log_subtype="Drop" priority="Error" src_ip=192.168.1.50 dst_ip=8.8.8.8 message="Blocked by policy"'
@@ -331,6 +376,7 @@ def test_sophos_syslog_listener_handles_message_with_client_ip() -> None:
     db = _build_session()
     db.close()
 
+    services.settings.network_sophos_firewall_management_ip = None
     listener = SophosSyslogListener(session_factory=TestingSessionLocal, firewall_name="Sophos XGS87")
     listener.handle_message(
         '<134>2026-06-04T09:20:00+02:00 xgs87 log_type="Firewall" log_component="Firewall Rule" log_subtype="Drop" priority="Critical" src_ip=192.168.1.99 dst_ip=8.8.8.8 message="Drop test"',

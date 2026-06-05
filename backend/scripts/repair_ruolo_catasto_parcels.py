@@ -32,6 +32,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--apply", action="store_true", help="Esegue le modifiche. Senza flag fa solo dry-run.")
     parser.add_argument("--batch-size", type=int, default=500)
     parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument("--from-year", type=int, default=None)
+    parser.add_argument("--to-year", type=int, default=None)
     parser.add_argument(
         "--cleanup-dirty-orphans",
         action="store_true",
@@ -55,10 +57,24 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def normalize_ruolo_partite(*, apply: bool) -> int:
+def _year_filters(args: argparse.Namespace, anno_column) -> list:
+    filters = []
+    if args.from_year is not None:
+        filters.append(anno_column >= args.from_year)
+    if args.to_year is not None:
+        filters.append(anno_column <= args.to_year)
+    return filters
+
+
+def normalize_ruolo_partite(*, apply: bool, args: argparse.Namespace) -> int:
     changed = 0
     with SessionLocal() as db:
-        partite = db.scalars(select(RuoloPartita)).all()
+        query = select(RuoloPartita)
+        if args.from_year is not None or args.to_year is not None:
+            query = query.join(RuoloParticella, RuoloParticella.partita_id == RuoloPartita.id).where(
+                *_year_filters(args, RuoloParticella.anno_tributario)
+            ).distinct()
+        partite = db.scalars(query).all()
         for partita in partite:
             normalized = _normalize_partita_comune_nome(partita.comune_nome)
             if normalized != partita.comune_nome:
@@ -72,7 +88,7 @@ def normalize_ruolo_partite(*, apply: bool) -> int:
     return changed
 
 
-def repair_unresolved_rows(*, apply: bool, batch_size: int, limit: int | None) -> Counter[str]:
+def repair_unresolved_rows(*, apply: bool, batch_size: int, limit: int | None, args: argparse.Namespace) -> Counter[str]:
     stats: Counter[str] = Counter()
     processed = 0
     last_id = None
@@ -93,6 +109,7 @@ def repair_unresolved_rows(*, apply: bool, batch_size: int, limit: int | None) -
                             RuoloParticella.catasto_parcel_id.is_(None),
                             RuoloParticella.cat_particella_match_reason == "catasto_parcel_not_resolved",
                         ),
+                        *_year_filters(args, RuoloParticella.anno_tributario),
                         RuoloParticella.id > last_id if last_id is not None else True,
                     )
                 )
@@ -215,7 +232,7 @@ def cleanup_dirty_orphans(*, apply: bool) -> int:
         return count
 
 
-def repair_comune_mismatch(*, apply: bool, batch_size: int, limit: int | None) -> Counter[str]:
+def repair_comune_mismatch(*, apply: bool, batch_size: int, limit: int | None, args: argparse.Namespace) -> Counter[str]:
     stats: Counter[str] = Counter()
     processed = 0
     last_id = None
@@ -231,7 +248,10 @@ def repair_comune_mismatch(*, apply: bool, batch_size: int, limit: int | None) -
                 select(RuoloParticella, RuoloPartita, CatastoParcel)
                 .join(RuoloPartita, RuoloPartita.id == RuoloParticella.partita_id)
                 .join(CatastoParcel, CatastoParcel.id == RuoloParticella.catasto_parcel_id)
-                .where(RuoloParticella.id > last_id if last_id is not None else True)
+                .where(
+                    *_year_filters(args, RuoloParticella.anno_tributario),
+                    RuoloParticella.id > last_id if last_id is not None else True,
+                )
                 .order_by(RuoloParticella.id)
                 .limit(current_batch_size)
             ).all()
@@ -308,7 +328,7 @@ def repair_comune_mismatch(*, apply: bool, batch_size: int, limit: int | None) -
     return stats
 
 
-def repair_unlinked_matches(*, apply: bool, batch_size: int, limit: int | None) -> Counter[str]:
+def repair_unlinked_matches(*, apply: bool, batch_size: int, limit: int | None, args: argparse.Namespace) -> Counter[str]:
     stats: Counter[str] = Counter()
     processed = 0
     last_id = None
@@ -327,6 +347,7 @@ def repair_unlinked_matches(*, apply: bool, batch_size: int, limit: int | None) 
                 .where(
                     and_(
                         RuoloParticella.cat_particella_id.is_(None),
+                        *_year_filters(args, RuoloParticella.anno_tributario),
                         RuoloParticella.id > last_id if last_id is not None else True,
                     )
                 )
@@ -379,7 +400,7 @@ def repair_unlinked_matches(*, apply: bool, batch_size: int, limit: int | None) 
     return stats
 
 
-def repair_oristano_frazione_sections(*, apply: bool, batch_size: int, limit: int | None) -> Counter[str]:
+def repair_oristano_frazione_sections(*, apply: bool, batch_size: int, limit: int | None, args: argparse.Namespace) -> Counter[str]:
     stats: Counter[str] = Counter()
     processed = 0
     last_id = None
@@ -399,6 +420,7 @@ def repair_oristano_frazione_sections(*, apply: bool, batch_size: int, limit: in
                 .where(
                     and_(
                         func.upper(func.trim(RuoloPartita.comune_nome)).in_(frazioni),
+                        *_year_filters(args, RuoloParticella.anno_tributario),
                         RuoloParticella.id > last_id if last_id is not None else True,
                     )
                 )
@@ -480,13 +502,14 @@ def main() -> None:
     mode = "APPLY" if args.apply else "DRY-RUN"
     print(f"mode={mode}")
 
-    changed_partite = normalize_ruolo_partite(apply=args.apply)
+    changed_partite = normalize_ruolo_partite(apply=args.apply, args=args)
     print(f"ruolo_partite_normalizzate={changed_partite}")
 
     stats = repair_unresolved_rows(
         apply=args.apply,
         batch_size=args.batch_size,
         limit=args.limit,
+        args=args,
     )
     if args.repair_comune_mismatch:
         stats.update(
@@ -494,6 +517,7 @@ def main() -> None:
                 apply=args.apply,
                 batch_size=args.batch_size,
                 limit=args.limit,
+                args=args,
             )
         )
     if args.repair_unlinked_matches:
@@ -502,6 +526,7 @@ def main() -> None:
                 apply=args.apply,
                 batch_size=args.batch_size,
                 limit=args.limit,
+                args=args,
             )
         )
     if args.repair_oristano_frazione_sections:
@@ -510,6 +535,7 @@ def main() -> None:
                 apply=args.apply,
                 batch_size=args.batch_size,
                 limit=args.limit,
+                args=args,
             )
         )
     for key in sorted(stats):

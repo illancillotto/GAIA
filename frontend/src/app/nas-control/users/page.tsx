@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { Suspense, useDeferredValue, useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 
 import { ProtectedPage } from "@/components/app/protected-page";
@@ -36,7 +36,7 @@ type UserRow = {
   lastSeenSnapshotId: number | null;
 };
 
-export default function UsersPage() {
+function UsersPageContent() {
   const searchParams = useSearchParams();
   const [users, setUsers] = useState<NasUser[]>([]);
   const [groups, setGroups] = useState<NasGroup[]>([]);
@@ -343,5 +343,13 @@ export default function UsersPage() {
         </div>
       ) : null}
     </ProtectedPage>
+  );
+}
+
+export default function UsersPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-gray-500">Caricamento utenti NAS...</div>}>
+      <UsersPageContent />
+    </Suspense>
   );
 }

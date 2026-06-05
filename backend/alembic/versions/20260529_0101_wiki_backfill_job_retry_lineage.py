@@ -1,7 +1,7 @@
 """wiki backfill job retry lineage
 
-Revision ID: 20260529_0101
-Revises: 20260529_0100
+Revision ID: 20260529_0104
+Revises: 20260529_0103
 Create Date: 2026-05-29 12:55:00.000000
 """
 
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 
-revision: str = "20260529_0101"
-down_revision: str | Sequence[str] | None = "20260529_0100"
+revision: str = "20260529_0104"
+down_revision: str | Sequence[str] | None = "20260529_0103"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

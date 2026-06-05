@@ -1,7 +1,7 @@
 """wiki conversation backfill jobs
 
-Revision ID: 20260529_0100
-Revises: 20260529_0099
+Revision ID: 20260529_0103
+Revises: 20260529_0102
 Create Date: 2026-05-29 12:30:00.000000
 """
 
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 
-revision: str = "20260529_0100"
-down_revision: str | Sequence[str] | None = "20260529_0099"
+revision: str = "20260529_0103"
+down_revision: str | Sequence[str] | None = "20260529_0102"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

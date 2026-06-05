@@ -9,7 +9,7 @@ import { NetworkModulePage } from "@/components/network/network-module-page";
 import { NetworkStatusBadge } from "@/components/network/network-status-badge";
 import { DataTable } from "@/components/table/data-table";
 import { Badge } from "@/components/ui/badge";
-import { getNetworkDevices } from "@/lib/api";
+import { bulkUpdateNetworkDevices, getNetworkDevices } from "@/lib/api";
 import { formatIpWithReference } from "@/lib/network-device-utils";
 import type { NetworkDevice } from "@/types/api";
 
@@ -18,7 +18,7 @@ const DEFAULT_SORTING: SortingState = [
   { id: "ip_address_order", desc: false },
 ];
 
-type DeviceKnowledgeFilter = "all" | "known" | "unknown";
+type DeviceKnowledgeFilter = "all" | "known" | "unknown" | "arp_unknown";
 type DeviceLifecycleFilter = "all" | "active" | "retired";
 type DeviceAssignmentFilter = "all" | "assigned" | "unassigned";
 
@@ -55,6 +55,9 @@ const columns: ColumnDef<NetworkDevice>[] = [
         <p className="font-medium text-gray-900">{row.original.resolved_label || row.original.display_name || row.original.hostname || row.original.ip_address}</p>
         <div className="mt-1 flex flex-wrap items-center gap-2">
           {row.original.lifecycle_state === "retired" ? <Badge variant="neutral">Rotamato</Badge> : null}
+          {row.original.metadata_sources?.discovery === "arp" && !row.original.is_known_device ? (
+            <Badge variant="warning">Da ARP</Badge>
+          ) : null}
           <span className="text-xs text-gray-500">
             {row.original.assigned_user?.username
               ? `Utente ${row.original.assigned_user.username}`
@@ -128,7 +131,7 @@ function DevicesContent({ token }: { token: string }) {
   const [search, setSearch] = useState(searchParams.get("search") ?? "");
   const [knowledgeFilter, setKnowledgeFilter] = useState<DeviceKnowledgeFilter>(() => {
     const initialValue = searchParams.get("known");
-    if (initialValue === "known" || initialValue === "unknown") {
+    if (initialValue === "known" || initialValue === "unknown" || initialValue === "arp_unknown") {
       return initialValue;
     }
     return "all";
@@ -152,6 +155,11 @@ function DevicesContent({ token }: { token: string }) {
   const [vendor, setVendor] = useState(searchParams.get("vendor") ?? "");
   const [loadError, setLoadError] = useState<string | null>(null);
   const [selectedDeviceId, setSelectedDeviceId] = useState<number | null>(null);
+  const [selectedIds, setSelectedIds] = useState<number[]>([]);
+  const [bulkLocation, setBulkLocation] = useState("");
+  const [bulkNote, setBulkNote] = useState("");
+  const [isBulkSaving, setIsBulkSaving] = useState(false);
+  const [bulkMessage, setBulkMessage] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadDevices() {
@@ -172,6 +180,41 @@ function DevicesContent({ token }: { token: string }) {
 
   function handleDeviceUpdated(updatedDevice: NetworkDevice) {
     setItems((currentItems) => currentItems.map((item) => (item.id === updatedDevice.id ? { ...item, ...updatedDevice } : item)));
+  }
+
+  function toggleSelected(deviceId: number) {
+    setSelectedIds((current) => (current.includes(deviceId) ? current.filter((value) => value !== deviceId) : [...current, deviceId]));
+  }
+
+  async function applyBulkUpdate(payload: { is_known_device?: boolean | null; location_hint?: string | null; notes_append?: string | null }) {
+    if (selectedIds.length === 0) {
+      return;
+    }
+    setIsBulkSaving(true);
+    setBulkMessage(null);
+    setLoadError(null);
+    try {
+      const response = await bulkUpdateNetworkDevices(token, {
+        device_ids: selectedIds,
+        ...payload,
+      });
+      setItems((currentItems) => {
+        const updatedById = new Map(response.items.map((item) => [item.id, item]));
+        return currentItems.map((item) => updatedById.get(item.id) ?? item);
+      });
+      setBulkMessage(`${response.updated_count} dispositivi aggiornati.`);
+      setSelectedIds([]);
+      if (payload.location_hint !== undefined) {
+        setBulkLocation("");
+      }
+      if (payload.notes_append !== undefined) {
+        setBulkNote("");
+      }
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Errore aggiornamento massivo dispositivi");
+    } finally {
+      setIsBulkSaving(false);
+    }
   }
 
   const normalizedSearch = search.trim().toLowerCase();
@@ -203,6 +246,9 @@ function DevicesContent({ token }: { token: string }) {
     if (knowledgeFilter === "unknown" && item.is_known_device) {
       return false;
     }
+    if (knowledgeFilter === "arp_unknown" && (item.is_known_device || item.metadata_sources?.discovery !== "arp")) {
+      return false;
+    }
     if (status && item.status !== status) {
       return false;
     }
@@ -229,6 +275,7 @@ function DevicesContent({ token }: { token: string }) {
 
   const knownDevicesCount = items.filter((item) => item.is_known_device).length;
   const unknownDevicesCount = items.length - knownDevicesCount;
+  const arpUnknownDevicesCount = items.filter((item) => !item.is_known_device && item.metadata_sources?.discovery === "arp").length;
   const activeDevicesCount = items.filter((item) => item.lifecycle_state === "active").length;
   const retiredDevicesCount = items.filter((item) => item.lifecycle_state === "retired").length;
   const assignedDevicesCount = items.filter((item) => Boolean(item.assigned_user_id)).length;
@@ -236,9 +283,88 @@ function DevicesContent({ token }: { token: string }) {
 
   const availableDeviceTypes = Array.from(new Set(items.map((item) => item.device_type).filter(Boolean))).sort((left, right) => (left || "").localeCompare(right || "", "it"));
   const availableVendors = Array.from(new Set(items.map((item) => item.vendor).filter(Boolean))).sort((left, right) => (left || "").localeCompare(right || "", "it"));
+  const selectedDevicesCount = selectedIds.length;
+  const columnsWithSelection: ColumnDef<NetworkDevice>[] = [
+    {
+      id: "select",
+      header: "",
+      cell: ({ row }) => (
+        <input
+          type="checkbox"
+          checked={selectedIds.includes(row.original.id)}
+          onChange={() => toggleSelected(row.original.id)}
+          onClick={(event) => event.stopPropagation()}
+          className="h-4 w-4 rounded border-gray-300"
+          aria-label={`Seleziona dispositivo ${row.original.resolved_label || row.original.ip_address}`}
+        />
+      ),
+      enableSorting: false,
+    },
+    ...columns,
+  ];
 
   return (
     <div className="page-stack">
+      <article className="panel-card">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="section-title">Azioni massive</p>
+            <p className="section-copy">Seleziona piu device per accelerare la presa in carico di host sconosciuti, soprattutto quelli emersi da ARP.</p>
+          </div>
+          <Badge variant={selectedDevicesCount > 0 ? "warning" : "neutral"}>{selectedDevicesCount} selezionati</Badge>
+        </div>
+        <div className="mt-4 grid gap-4 xl:grid-cols-[auto_auto_minmax(0,260px)_minmax(0,320px)]">
+          <button
+            className="btn-secondary"
+            type="button"
+            disabled={selectedDevicesCount === 0 || isBulkSaving}
+            onClick={() => void applyBulkUpdate({ is_known_device: true })}
+          >
+            Segna come noti
+          </button>
+          <button
+            className="btn-secondary"
+            type="button"
+            disabled={selectedDevicesCount === 0 || isBulkSaving}
+            onClick={() => setSelectedDeviceId(selectedIds[0] ?? null)}
+          >
+            Apri primo selezionato
+          </button>
+          <div className="flex gap-2">
+            <input
+              className="form-control"
+              value={bulkLocation}
+              onChange={(event) => setBulkLocation(event.target.value)}
+              placeholder="Location comune"
+            />
+            <button
+              className="btn-secondary whitespace-nowrap"
+              type="button"
+              disabled={selectedDevicesCount === 0 || isBulkSaving || !bulkLocation.trim()}
+              onClick={() => void applyBulkUpdate({ location_hint: bulkLocation.trim() })}
+            >
+              Imposta location
+            </button>
+          </div>
+          <div className="flex gap-2">
+            <input
+              className="form-control"
+              value={bulkNote}
+              onChange={(event) => setBulkNote(event.target.value)}
+              placeholder="Nota operativa da aggiungere"
+            />
+            <button
+              className="btn-secondary whitespace-nowrap"
+              type="button"
+              disabled={selectedDevicesCount === 0 || isBulkSaving || !bulkNote.trim()}
+              onClick={() => void applyBulkUpdate({ notes_append: bulkNote.trim() })}
+            >
+              Aggiungi nota
+            </button>
+          </div>
+        </div>
+        {bulkMessage ? <p className="mt-3 text-sm text-emerald-700">{bulkMessage}</p> : null}
+      </article>
       <article className="panel-card">
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="inline-flex rounded-xl border border-gray-200 bg-gray-50 p-1">
@@ -269,8 +395,17 @@ function DevicesContent({ token }: { token: string }) {
             >
               Sconosciuti ({unknownDevicesCount})
             </button>
+            <button
+              className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
+                knowledgeFilter === "arp_unknown" ? "bg-white text-orange-700 shadow-sm" : "text-gray-600 hover:text-gray-900"
+              }`}
+              type="button"
+              onClick={() => setKnowledgeFilter("arp_unknown")}
+            >
+              Da ARP ({arpUnknownDevicesCount})
+            </button>
           </div>
-          <p className="text-xs text-gray-500">Filtra rapidamente l&apos;inventario tra dispositivi censiti e dispositivi da classificare.</p>
+          <p className="text-xs text-gray-500">Filtra rapidamente l&apos;inventario tra dispositivi censiti, sconosciuti e host emersi dalla discovery ARP da censire.</p>
         </div>
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-[minmax(0,1.4fr)_180px_190px_190px_220px_220px_auto]">
           <input
@@ -320,7 +455,7 @@ function DevicesContent({ token }: { token: string }) {
 
       <DataTable
         data={filteredItems}
-        columns={columns}
+        columns={columnsWithSelection}
         initialPageSize={63}
         initialSorting={DEFAULT_SORTING}
         onRowClick={(row) => setSelectedDeviceId(row.id)}

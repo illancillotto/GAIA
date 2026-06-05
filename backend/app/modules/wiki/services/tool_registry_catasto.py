@@ -79,7 +79,7 @@ def _find_particella_by_id(db: Session, current_user: ApplicationUser, question:
         "Lookup particella Catasto: "
         f"{payload['nome_comune'] or payload['codice_catastale'] or 'Comune n/d'} "
         f"foglio {payload['foglio']}, particella {payload['particella']}"
-        f"{f' subalterno {payload['subalterno']}' if payload['subalterno'] else ''}. "
+        f"{(' subalterno ' + str(payload['subalterno'])) if payload['subalterno'] else ''}. "
         f"Distretto {payload['num_distretto'] or 'n/d'}, anagrafica {'presente' if payload['ha_anagrafica'] else 'assente'}, "
         f"fuori distretto {'sì' if payload['fuori_distretto'] else 'no'}."
     )

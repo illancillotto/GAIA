@@ -13,7 +13,7 @@ import { ElaborazioneOperationMessage } from "@/components/elaborazioni/operatio
 import { ElaborazioneStatusBadge } from "@/components/elaborazioni/status-badge";
 import { ElaborazioneWorkspaceModal } from "@/components/elaborazioni/workspace-modal";
 import { EmptyState } from "@/components/ui/empty-state";
-import { FolderIcon, GridIcon, LockIcon, RefreshIcon, SearchIcon, UsersIcon } from "@/components/ui/icons";
+import { ChevronRightIcon, FolderIcon, GridIcon, LockIcon, RefreshIcon, SearchIcon, UsersIcon } from "@/components/ui/icons";
 import {
   downloadCatastoDocumentBlob,
   downloadElaborazioneRequestArtifactsBlob,
@@ -142,6 +142,16 @@ type DashboardRunningOperation = {
   };
 };
 
+function formatRunRecordEsito(value: string): string {
+  if (value === "alive") return "Vivo";
+  if (value === "deceased") return "Deceduto";
+  if (value === "not_found") return "Non trovato";
+  if (value === "cancelled") return "Cancellato";
+  if (value === "error") return "Errore";
+  if (value === "anpr_id_found") return "idANPR trovato";
+  return value;
+}
+
 function isParticelleSyncJobResult(value: CapacitasParticelleSyncJob["result_json"]): value is CapacitasParticelleSyncJobResult {
   return value != null && !Array.isArray(value) && typeof value === "object" && "progress_percent" in value;
 }
@@ -227,6 +237,7 @@ export default function ElaborazioniPage() {
   const [credentialStatus, setCredentialStatus] = useState<ElaborazioneCredentialStatus | null>(null);
   const [captchaSummary, setCaptchaSummary] = useState<ElaborazioneCaptchaSummary | null>(null);
   const [anprSummary, setAnprSummary] = useState<ElaborazioneAnprSummary | null>(null);
+  const [expandedAnprRuns, setExpandedAnprRuns] = useState<Record<string, boolean>>({});
   const [runtimeMetrics, setRuntimeMetrics] = useState<ElaborazioneRuntimeMetrics | null>(null);
   const [capacitasCredentials, setCapacitasCredentials] = useState<CapacitasCredential[]>([]);
   const [incassJobs, setIncassJobs] = useState<CapacitasInCassSyncJob[]>([]);
@@ -1009,13 +1020,60 @@ export default function ElaborazioniPage() {
             ) : null}
             {anprSummary?.recent_runs.length ? (
               <div className="mt-3 space-y-1.5">
-                {anprSummary.recent_runs.slice(0, 3).map((run) => (
-                  <div key={run.id} className="flex items-center justify-between gap-3 rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-600">
-                    <span className="truncate">{formatDateTime(run.started_at)}</span>
-                    <span className="shrink-0">{run.calls_used} call</span>
-                    <span className="shrink-0 font-medium text-gray-800">{run.status}</span>
-                  </div>
-                ))}
+                {anprSummary.recent_runs.slice(0, 3).map((run) => {
+                  const isExpanded = Boolean(expandedAnprRuns[run.id]);
+                  const latestErrors = run.records
+                    .filter((record) => record.final_esito === "error" || Boolean(record.error_detail))
+                    .slice(0, 5);
+
+                  return (
+                    <div key={run.id} className="rounded-xl border border-gray-100 bg-gray-50">
+                      <button
+                        type="button"
+                        className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-xs text-gray-600"
+                        onClick={() => setExpandedAnprRuns((current) => ({ ...current, [run.id]: !current[run.id] }))}
+                        aria-expanded={isExpanded}
+                        aria-controls={`anpr-run-${run.id}`}
+                      >
+                        <span className="inline-flex items-center gap-2 truncate">
+                          <span className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-[#d9dfd6] bg-white text-gray-500">
+                            <ChevronRightIcon className={["h-3.5 w-3.5 transition-transform", isExpanded ? "rotate-90" : ""].join(" ")} />
+                          </span>
+                          <span className="truncate">{formatDateTime(run.started_at)}</span>
+                        </span>
+                        <span className="shrink-0">{run.calls_used} call</span>
+                        <span className="shrink-0 font-medium text-gray-800">{run.status}</span>
+                      </button>
+                      {isExpanded ? (
+                        <div id={`anpr-run-${run.id}`} className="border-t border-gray-100 bg-white px-3 py-3">
+                          {latestErrors.length ? (
+                            <div className="space-y-2">
+                              {latestErrors.map((record) => (
+                                <div key={record.id} className="rounded-lg border border-red-100 bg-red-50/60 px-3 py-2">
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0">
+                                      <p className="truncate text-xs font-semibold text-gray-900">{record.display_name}</p>
+                                      <p className="mt-0.5 font-mono text-[11px] text-gray-500">{record.codice_fiscale}</p>
+                                    </div>
+                                    <span className="shrink-0 rounded-full bg-white px-2 py-1 text-[10px] font-semibold text-red-700">
+                                      {formatRunRecordEsito(record.final_esito)}
+                                    </span>
+                                  </div>
+                                  <p className="mt-2 text-[11px] leading-5 text-gray-700">{record.error_detail || "Errore senza dettaglio disponibile."}</p>
+                                  <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-gray-400">
+                                    {formatDateTime(record.last_event_at)} · {record.calls_made} call
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-[11px] text-gray-500">Nessun errore registrato in questo run.</p>
+                          )}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
               </div>
             ) : (
               <p className="mt-3 text-xs text-gray-500">Nessun run registrato.</p>

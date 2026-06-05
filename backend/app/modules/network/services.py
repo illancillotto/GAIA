@@ -92,6 +92,13 @@ class EnrichmentMetadata:
     http_server: str | None = None
 
 
+def _merge_metadata_sources(existing_raw: str | None, additional: dict[str, Any] | None) -> str | None:
+    existing = metadata_sources_to_dict(existing_raw) or {}
+    if additional:
+        existing.update({key: value for key, value in additional.items() if value not in (None, "")})
+    return _json_dumps(existing or None)
+
+
 def _normalize_mac(value: str | None) -> str | None:
     if value is None:
         return None
@@ -693,6 +700,38 @@ def _fallback_hosts() -> list[DiscoveredHost]:
     return hosts
 
 
+def _run_nmap_arp_scan(network_range: str) -> list[DiscoveredHost]:
+    if nmap is None or shutil.which("nmap") is None:
+        return []
+
+    scanner = nmap.PortScanner()
+    scanner.scan(hosts=network_range, arguments=f"-sn -PR -n --host-timeout {settings.network_scan_ping_timeout_ms}ms")
+
+    discovered: list[DiscoveredHost] = []
+    for host in scanner.all_hosts():
+        host_state = scanner[host]
+        if host_state.state() != "up":
+            continue
+
+        addresses = scanner._scan_result.get("scan", {}).get(host, {}).get("addresses") or {}
+        vendor_map = scanner._scan_result.get("scan", {}).get(host, {}).get("vendor", {}) or {}
+        hostname_entries = scanner._scan_result.get("scan", {}).get(host, {}).get("hostnames") or []
+        enrichment = _collect_enrichment(host, [])
+
+        discovered.append(
+            DiscoveredHost(
+                ip_address=host,
+                mac_address=_normalize_mac(addresses.get("mac")),
+                hostname=_preferred_hostname(next(iter(hostname_entries), {}).get("name"), enrichment),
+                vendor=(next(iter(vendor_map.values()), None) if isinstance(vendor_map, dict) else None) or enrichment.vendor,
+                device_type="unknown-host",
+                operating_system=enrichment.operating_system,
+                open_ports=[],
+            )
+        )
+    return discovered
+
+
 def _run_nmap_scan(network_range: str, ports: str) -> list[DiscoveredHost]:
     if nmap is None or shutil.which("nmap") is None:
         return _fallback_hosts()
@@ -746,7 +785,12 @@ def _run_scapy_scan(network_range: str) -> list[DiscoveredHost]:
     ]
 
 
-def discover_hosts(network_range: str | None = None, ports: str | None = None) -> list[DiscoveredHost]:
+def discover_hosts(
+    network_range: str | None = None,
+    ports: str | None = None,
+    *,
+    scan_type: str = "incremental",
+) -> list[DiscoveredHost]:
     resolved_range = network_range or settings.network_range
     resolved_ports = ports or settings.network_scan_ports
 
@@ -754,6 +798,17 @@ def discover_hosts(network_range: str | None = None, ports: str | None = None) -
         ipaddress.ip_network(resolved_range, strict=False)
     except ValueError:
         raise ValueError(f"Invalid network range: {resolved_range}") from None
+
+    if scan_type == "arp":
+        discovered = _run_nmap_arp_scan(resolved_range)
+        if discovered:
+            return discovered
+
+        discovered = _run_scapy_scan(resolved_range)
+        if discovered:
+            return discovered
+
+        return _fallback_hosts()
 
     discovered = _run_nmap_scan(resolved_range, resolved_ports)
     if discovered:
@@ -962,15 +1017,21 @@ def run_network_scan(
     initiated_by: str | None = None,
     network_range: str | None = None,
     discovered_hosts: list[DiscoveredHost] | None = None,
+    scan_type: str = "incremental",
 ) -> NetworkScanResult:
     resolved_range = network_range or settings.network_range
     started_at = datetime.now(UTC)
     previous_scan_id = db.scalar(select(NetworkScan.id).order_by(NetworkScan.id.desc()).limit(1))
-    discovered = discovered_hosts if discovered_hosts is not None else discover_hosts(resolved_range)
+    resolved_scan_type = scan_type if scan_type in {"incremental", "arp"} else "incremental"
+    discovered = (
+        discovered_hosts
+        if discovered_hosts is not None
+        else discover_hosts(resolved_range, scan_type=resolved_scan_type)
+    )
 
     scan = NetworkScan(
         network_range=resolved_range,
-        scan_type="incremental",
+        scan_type=resolved_scan_type,
         status="completed",
         hosts_scanned=max(len(discovered), 1),
         active_hosts=len(discovered),
@@ -993,6 +1054,8 @@ def run_network_scan(
         enrichment = _collect_enrichment(host.ip_address, host.open_ports or [])
 
         if device is None:
+            metadata_sources = dict(enrichment.metadata_sources or {})
+            metadata_sources["discovery"] = resolved_scan_type
             device = NetworkDevice(
                 ip_address=host.ip_address,
                 mac_address=_resolve_mac_address(host.ip_address, host.mac_address),
@@ -1001,7 +1064,7 @@ def run_network_scan(
                 dns_name=enrichment.dns_name or enrichment.mdns_name,
                 vendor=host.vendor or enrichment.vendor,
                 model_name=enrichment.model_name,
-                metadata_sources=_json_dumps(enrichment.metadata_sources),
+                metadata_sources=_json_dumps(metadata_sources),
                 device_type=host.device_type or _guess_device_type(host.open_ports or []),
                 operating_system=host.operating_system
                 or enrichment.operating_system
@@ -1024,7 +1087,9 @@ def run_network_scan(
             device.dns_name = enrichment.dns_name or enrichment.mdns_name or device.dns_name
             device.vendor = host.vendor or enrichment.vendor or device.vendor
             device.model_name = enrichment.model_name or device.model_name
-            device.metadata_sources = _json_dumps(enrichment.metadata_sources) or device.metadata_sources
+            metadata_sources = dict(enrichment.metadata_sources or {})
+            metadata_sources["discovery"] = resolved_scan_type
+            device.metadata_sources = _merge_metadata_sources(device.metadata_sources, metadata_sources) or device.metadata_sources
             device.device_type = host.device_type or device.device_type or _guess_device_type(host.open_ports or [])
             device.operating_system = (
                 host.operating_system

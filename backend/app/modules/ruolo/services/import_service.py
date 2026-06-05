@@ -397,6 +397,15 @@ def _upsert_catasto_parcel(
             CatastoParcel.valid_to.is_(None),
         )
     )
+    same_from = db.scalar(
+        select(CatastoParcel).where(
+            CatastoParcel.comune_codice == comune_codice,
+            CatastoParcel.foglio == foglio,
+            CatastoParcel.particella == particella,
+            CatastoParcel.subalterno == subalterno,
+            CatastoParcel.valid_from == anno,
+        )
+    )
 
     if existing is not None:
         if existing.valid_from == anno:
@@ -421,6 +430,22 @@ def _upsert_catasto_parcel(
         existing.valid_to = anno - 1
         existing.updated_at = datetime.now(timezone.utc)
         db.flush()
+
+        if same_from is not None:
+            if same_from.sup_catastale_are is None and sup_catastale_are is not None:
+                same_from.sup_catastale_are = float(sup_catastale_are)
+                same_from.sup_catastale_ha = float(sup_catastale_are / Decimal("100"))
+                same_from.updated_at = datetime.now(timezone.utc)
+                db.flush()
+            return same_from.id
+
+    if same_from is not None:
+        if same_from.sup_catastale_are is None and sup_catastale_are is not None:
+            same_from.sup_catastale_are = float(sup_catastale_are)
+            same_from.sup_catastale_ha = float(sup_catastale_are / Decimal("100"))
+            same_from.updated_at = datetime.now(timezone.utc)
+            db.flush()
+        return same_from.id
 
     # Crea nuovo record
     sup_ha = (sup_catastale_are / Decimal("100")) if sup_catastale_are else None

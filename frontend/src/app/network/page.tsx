@@ -142,10 +142,10 @@ function DashboardContent({ token }: { token: string }) {
     searchParams,
   ]);
 
-  async function handleScanTrigger() {
+  async function handleScanTrigger(scanType: "incremental" | "arp" = "incremental") {
     setIsTriggeringScan(true);
     try {
-      await triggerNetworkScan(token);
+      await triggerNetworkScan(token, { scan_type: scanType });
       await loadData();
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : "Errore durante la scansione");
@@ -241,13 +241,19 @@ function DashboardContent({ token }: { token: string }) {
             ) : (
               <ModuleWorkspaceNoticeCard
                 title="Scansione manuale"
-                description="Avvia un nuovo giro di rilevamento quando serve aggiornare subito la vista senza attendere i job schedulati."
+                description="Puoi lanciare una scansione completa oppure una discovery ARP rapida per far emergere i device ancora non classificati sul segmento locale."
               />
             )}
-            <button className="btn-primary w-fit" onClick={handleScanTrigger} type="button" disabled={isTriggeringScan}>
-              <RefreshIcon className="h-4 w-4" />
-              {isTriggeringScan ? "Scansione in corso" : "Avvia scansione"}
-            </button>
+            <div className="flex flex-wrap gap-3">
+              <button className="btn-secondary w-fit" onClick={() => void handleScanTrigger("arp")} type="button" disabled={isTriggeringScan}>
+                <RefreshIcon className="h-4 w-4" />
+                {isTriggeringScan ? "Discovery in corso" : "Discovery ARP"}
+              </button>
+              <button className="btn-primary w-fit" onClick={() => void handleScanTrigger("incremental")} type="button" disabled={isTriggeringScan}>
+                <RefreshIcon className="h-4 w-4" />
+                {isTriggeringScan ? "Scansione in corso" : "Scansione completa"}
+              </button>
+            </div>
           </>
         }
       >

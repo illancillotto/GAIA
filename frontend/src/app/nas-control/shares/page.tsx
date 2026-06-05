@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { Suspense, useDeferredValue, useEffect, useMemo, useState } from "react";
 
 import { ProtectedPage } from "@/components/app/protected-page";
 import { ShareDetailPanel } from "@/components/app/share-detail-panel";
@@ -22,7 +22,7 @@ type ShareRow = Share & {
   denyCount: number;
 };
 
-export default function SharesPage() {
+function SharesPageContent() {
   const searchParams = useSearchParams();
   const [shares, setShares] = useState<Share[]>([]);
   const [permissions, setPermissions] = useState<EffectivePermission[]>([]);
@@ -223,5 +223,13 @@ export default function SharesPage() {
         </div>
       ) : null}
     </ProtectedPage>
+  );
+}
+
+export default function SharesPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-sm text-gray-500">Caricamento cartelle NAS...</div>}>
+      <SharesPageContent />
+    </Suspense>
   );
 }
