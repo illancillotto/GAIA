@@ -584,6 +584,71 @@ def test_network_tracked_subject_can_be_created_for_device() -> None:
     assert payload["device_id"] == 1
     assert payload["value"] == "192.168.1.10"
     assert payload["resolved_label"] == "Monitoraggio core"
+    assert payload["scan_history"]
+    assert payload["scan_history"][0]["ip_address"] == "192.168.1.10"
+
+
+def test_network_tracking_list_reconciles_legacy_private_ip_subjects_to_device() -> None:
+    db = TestingSessionLocal()
+    legacy_subject = NetworkTrackedSubject(
+        entity_type="ip",
+        normalized_value="192.168.1.10",
+        value="192.168.1.10",
+        label="Legacy core",
+        notes="Device interno associato a Operatore CED",
+        is_active=True,
+    )
+    db.add(legacy_subject)
+    db.commit()
+    legacy_subject_id = legacy_subject.id
+    db.close()
+
+    response = client.get("/network/tracking", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 1
+    assert payload[0]["id"] == legacy_subject_id
+    assert payload[0]["entity_type"] == "device"
+    assert payload[0]["device_id"] == 1
+    assert payload[0]["value"] == "192.168.1.10"
+    assert payload[0]["scan_history"]
+
+
+def test_network_tracked_subject_create_for_device_reuses_legacy_ip_subject_without_duplicates() -> None:
+    db = TestingSessionLocal()
+    legacy_subject = NetworkTrackedSubject(
+        entity_type="ip",
+        normalized_value="192.168.1.10",
+        value="192.168.1.10",
+        notes="Device interno associato a Operatore CED",
+        is_active=False,
+    )
+    db.add(legacy_subject)
+    db.commit()
+    legacy_subject_id = legacy_subject.id
+    db.close()
+
+    response = client.post(
+        "/network/tracking",
+        headers=auth_headers(),
+        json={"entity_type": "device", "device_id": 1, "label": "Core definitivo"},
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["id"] == legacy_subject_id
+    assert payload["entity_type"] == "device"
+    assert payload["device_id"] == 1
+    assert payload["label"] == "Core definitivo"
+    assert payload["is_active"] is True
+
+    db = TestingSessionLocal()
+    subjects = db.query(NetworkTrackedSubject).all()
+    db.close()
+    assert len(subjects) == 1
+    assert subjects[0].entity_type == "device"
+    assert subjects[0].device_id == 1
 
 
 def test_network_tracked_subject_list_and_activity_summary_are_returned() -> None:

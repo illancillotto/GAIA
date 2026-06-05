@@ -196,6 +196,65 @@ def _normalize_tracked_value(entity_type: str, value: str) -> str:
     return normalized
 
 
+def _find_matching_device_for_legacy_ip_subject(db: Session, subject: NetworkTrackedSubject) -> NetworkDevice | None:
+    if subject.entity_type != "ip" or subject.device_id is not None or not subject.value:
+        return None
+    try:
+        parsed_ip = ipaddress.ip_address(subject.value)
+    except ValueError:
+        return None
+    if not parsed_ip.is_private:
+        return None
+    return db.scalar(select(NetworkDevice).where(NetworkDevice.ip_address == subject.value))
+
+
+def _reconcile_legacy_ip_tracked_subject(db: Session, subject: NetworkTrackedSubject) -> tuple[NetworkTrackedSubject, bool]:
+    device = _find_matching_device_for_legacy_ip_subject(db, subject)
+    if device is None:
+        return subject, False
+
+    canonical = db.scalar(
+        select(NetworkTrackedSubject).where(
+            NetworkTrackedSubject.entity_type == "device",
+            NetworkTrackedSubject.normalized_value == str(device.id),
+            NetworkTrackedSubject.id != subject.id,
+        )
+    )
+    if canonical is not None:
+        if not canonical.label and subject.label:
+            canonical.label = subject.label
+        if not canonical.notes and subject.notes:
+            canonical.notes = subject.notes
+        canonical.is_active = canonical.is_active or subject.is_active
+        canonical.device_id = device.id
+        canonical.value = device.ip_address
+        db.add(canonical)
+        db.delete(subject)
+        return canonical, True
+
+    subject.entity_type = "device"
+    subject.device_id = device.id
+    subject.normalized_value = str(device.id)
+    subject.value = device.ip_address
+    db.add(subject)
+    return subject, True
+
+
+def _reconcile_legacy_ip_tracked_subjects(db: Session) -> None:
+    legacy_subjects = db.scalars(
+        select(NetworkTrackedSubject).where(
+            NetworkTrackedSubject.entity_type == "ip",
+            NetworkTrackedSubject.device_id.is_(None),
+        )
+    ).all()
+    changed = False
+    for subject in legacy_subjects:
+        _, subject_changed = _reconcile_legacy_ip_tracked_subject(db, subject)
+        changed = changed or subject_changed
+    if changed:
+        db.commit()
+
+
 def _tracked_subject_key(entity_type: str, normalized_value: str) -> tuple[str, str]:
     return entity_type, normalized_value
 
@@ -388,6 +447,7 @@ def _serialize_tracked_subject(
 ) -> NetworkTrackedSubjectResponse:
     device = db.get(NetworkDevice, subject.device_id) if subject.device_id else None
     created_by = db.get(ApplicationUser, subject.created_by_user_id) if subject.created_by_user_id else None
+    scan_history = get_device_scan_history(db, subject.device_id, limit=8) if subject.device_id else []
     return NetworkTrackedSubjectResponse(
         id=subject.id,
         entity_type=subject.entity_type,
@@ -404,6 +464,17 @@ def _serialize_tracked_subject(
         created_at=subject.created_at,
         updated_at=subject.updated_at,
         activity_summary=_build_tracked_subject_activity_summary(db, subject, window_hours=window_hours) if include_activity_summary else None,
+        scan_history=[
+            {
+                "scan_id": item.scan_id,
+                "observed_at": item.observed_at,
+                "status": item.status,
+                "hostname": item.hostname,
+                "ip_address": item.ip_address,
+                "open_ports": item.open_ports,
+            }
+            for item in scan_history
+        ],
     )
 
 
@@ -1198,6 +1269,7 @@ def get_tracked_subjects(
     entity_type: str | None = Query(default=None),
 ) -> list[NetworkTrackedSubjectResponse]:
     _require_network_module(current_user)
+    _reconcile_legacy_ip_tracked_subjects(db)
     query = select(NetworkTrackedSubject).order_by(NetworkTrackedSubject.updated_at.desc(), NetworkTrackedSubject.id.desc())
     if not include_inactive:
         query = query.where(NetworkTrackedSubject.is_active.is_(True))
@@ -1233,6 +1305,26 @@ def create_tracked_subject(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
         normalized_value = str(device.id)
         value = device.ip_address
+        legacy_subject = db.scalar(
+            select(NetworkTrackedSubject).where(
+                NetworkTrackedSubject.entity_type == "ip",
+                NetworkTrackedSubject.device_id.is_(None),
+                NetworkTrackedSubject.value == device.ip_address,
+            )
+        )
+        if legacy_subject is not None:
+            reconciled_subject, _ = _reconcile_legacy_ip_tracked_subject(db, legacy_subject)
+            db.commit()
+            db.refresh(reconciled_subject)
+            if payload.label is not None:
+                reconciled_subject.label = payload.label or None
+            if payload.notes is not None:
+                reconciled_subject.notes = payload.notes or None
+            reconciled_subject.is_active = True
+            db.add(reconciled_subject)
+            db.commit()
+            db.refresh(reconciled_subject)
+            return _serialize_tracked_subject(db, reconciled_subject, include_activity_summary=False)
     else:
         if value is None:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Missing tracking value")

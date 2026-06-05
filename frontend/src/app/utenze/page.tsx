@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useCallback, useDeferredValue, useEffect, useState } from "react";
 
 import { UtenzeModulePage } from "@/components/utenze/utenze-module-page";
@@ -51,10 +52,11 @@ function badgeTone(value: string): string {
 }
 
 function DashboardContent({ token }: { token: string }) {
+  const searchParams = useSearchParams();
   const [stats, setStats] = useState<UtenzeStats>(emptyStats);
   const [subjects, setSubjects] = useState<UtenzeSubjectListItem[]>([]);
   const [jobs, setJobs] = useState<UtenzeImportJob[]>([]);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchTerm, setSearchTerm] = useState(() => searchParams.get("search")?.trim() ?? "");
   const [searchResults, setSearchResults] = useState<UtenzeSubjectListItem[]>([]);
   const [searchTotal, setSearchTotal] = useState(0);
   const [searchError, setSearchError] = useState<string | null>(null);
@@ -69,6 +71,11 @@ function DashboardContent({ token }: { token: string }) {
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const normalizedSearchTerm = deferredSearchTerm.trim();
   const canSearch = normalizedSearchTerm.length >= 3;
+
+  useEffect(() => {
+    const nextSearch = searchParams.get("search")?.trim() ?? "";
+    setSearchTerm((current) => (current === nextSearch ? current : nextSearch));
+  }, [searchParams]);
 
   const loadDashboardData = useCallback(async () => {
     try {

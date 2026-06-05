@@ -64,6 +64,10 @@ function formatTrafficEndpoint(ipAddress: string | null, peerIp: string | null, 
   return base;
 }
 
+function getIpInfoUrl(ipAddress: string) {
+  return `https://www.whatismyip.com/ip/${encodeURIComponent(ipAddress)}/`;
+}
+
 export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }: NetworkDeviceModalProps) {
   const [selectedDevice, setSelectedDevice] = useState<NetworkDevice | null>(null);
   const [applicationUsers, setApplicationUsers] = useState<NetworkAssignedUserSummary[]>([]);
@@ -73,6 +77,7 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
   const [displayName, setDisplayName] = useState("");
   const [lifecycleState, setLifecycleState] = useState<"active" | "retired">("active");
   const [assignedUserId, setAssignedUserId] = useState("");
+  const [assignedUserSearch, setAssignedUserSearch] = useState("");
   const [assetLabel, setAssetLabel] = useState("");
   const [notes, setNotes] = useState("");
   const [isKnownDevice, setIsKnownDevice] = useState(false);
@@ -131,6 +136,7 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
         setDisplayName(response.display_name || "");
         setLifecycleState(response.lifecycle_state);
         setAssignedUserId(response.assigned_user_id ? String(response.assigned_user_id) : "");
+        setAssignedUserSearch("");
         setAssetLabel(response.asset_label || "");
         setNotes(response.notes || "");
         setIsKnownDevice(response.is_known_device);
@@ -242,7 +248,25 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
     const rightLabel = (right.full_name || right.username).toLowerCase();
     return leftLabel.localeCompare(rightLabel, "it");
   });
+  const normalizedAssignedUserSearch = assignedUserSearch.trim().toLowerCase();
+  const filteredUsers =
+    normalizedAssignedUserSearch.length >= 3
+      ? sortedUsers.filter((user) => {
+          const label = `${user.full_name || ""} ${user.username || ""}`.toLowerCase();
+          return label.includes(normalizedAssignedUserSearch);
+        })
+      : sortedUsers;
   const trackedDeviceSubject = selectedDevice ? trackedSubjectMap.get(buildDeviceTrackingKey(selectedDevice.id)) : null;
+  const selectedDetentore =
+    assignedUserId && assignedUserId !== ""
+      ? applicationUsers.find((user) => String(user.id) === assignedUserId) ?? null
+      : null;
+  const currentAssignedUserLabel =
+    selectedDetentore?.full_name ||
+    selectedDetentore?.username ||
+    selectedDevice?.assigned_user?.full_name ||
+    selectedDevice?.assigned_user?.username ||
+    null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6 backdrop-blur-sm">
@@ -315,7 +339,19 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
                     <dl className="mt-5 grid gap-x-8 gap-y-4 md:grid-cols-2 xl:grid-cols-3">
                       <div>
                         <dt className="label-caption">IP</dt>
-                        <dd className="mt-1 text-sm text-gray-800">{formatIpWithReference(selectedDevice)}</dd>
+                        <dd className="mt-1 flex flex-wrap items-center gap-2 text-sm text-gray-800">
+                          <span>{formatIpWithReference(selectedDevice)}</span>
+                          {selectedDevice.ip_address ? (
+                            <a
+                              href={getIpInfoUrl(selectedDevice.ip_address)}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="rounded-full border border-[#d6e5db] bg-white px-3 py-1 text-xs font-medium text-[#1D4E35] transition hover:bg-[#f3f8f5]"
+                            >
+                              Info IP
+                            </a>
+                          ) : null}
+                        </dd>
                       </div>
                       <div>
                         <dt className="label-caption">MAC</dt>
@@ -443,19 +479,76 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
                   <div className="space-y-4">
                     <label className="block text-sm font-medium text-gray-700">
                       Detentore
-                      <select
+                      <input
                         className="form-control mt-1"
-                        value={assignedUserId}
-                        onChange={(event) => setAssignedUserId(event.target.value)}
+                        value={assignedUserSearch}
+                        onChange={(event) => setAssignedUserSearch(event.target.value)}
+                        placeholder="Cerca detentore per nome o username"
                         disabled={lifecycleState === "retired"}
-                      >
-                        <option value="">Nessun utente assegnato</option>
-                        {sortedUsers.map((user) => (
-                          <option key={user.id} value={user.id}>
-                            {(user.full_name || user.username) + (user.is_active ? "" : " · inattivo")}
-                          </option>
-                        ))}
-                      </select>
+                      />
+                      <div className="mt-2 rounded-2xl border border-gray-200 bg-[#FAFBF8] p-3">
+                        <div className="flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-gray-400">Selezione corrente</p>
+                            <p className="mt-1 text-sm font-medium text-gray-900">{currentAssignedUserLabel || "Nessun utente assegnato"}</p>
+                          </div>
+                          <button
+                            className="rounded-full border border-[#d6e5db] bg-white px-3 py-1 text-xs font-medium text-[#1D4E35] transition hover:bg-[#f3f8f5] disabled:cursor-not-allowed disabled:opacity-50"
+                            type="button"
+                            onClick={() => {
+                              setAssignedUserId("");
+                              setAssignedUserSearch("");
+                            }}
+                            disabled={lifecycleState === "retired" || !assignedUserId}
+                          >
+                            Rimuovi
+                          </button>
+                        </div>
+
+                        {normalizedAssignedUserSearch.length >= 3 ? (
+                          <div className="mt-3 max-h-56 space-y-2 overflow-y-auto pr-1">
+                            {filteredUsers.length ? (
+                              filteredUsers.map((user) => {
+                                const isSelected = assignedUserId === String(user.id);
+                                return (
+                                  <button
+                                    key={user.id}
+                                    type="button"
+                                    onClick={() => {
+                                      setAssignedUserId(String(user.id));
+                                      setAssignedUserSearch(user.full_name || user.username);
+                                    }}
+                                    disabled={lifecycleState === "retired"}
+                                    className={`flex w-full items-center justify-between rounded-xl border px-3 py-2 text-left transition ${
+                                      isSelected
+                                        ? "border-emerald-200 bg-emerald-50/70"
+                                        : "border-gray-200 bg-white hover:border-[#b9d2c1] hover:bg-[#f7faf6]"
+                                    }`}
+                                  >
+                                    <div className="min-w-0">
+                                      <p className="truncate text-sm font-medium text-gray-900">{user.full_name || user.username}</p>
+                                      <p className="mt-0.5 truncate text-xs text-gray-500">
+                                        {user.username}
+                                        {user.is_active ? "" : " · inattivo"}
+                                      </p>
+                                    </div>
+                                    {isSelected ? (
+                                      <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-[#1D4E35]">Selezionato</span>
+                                    ) : null}
+                                  </button>
+                                );
+                              })
+                            ) : (
+                              <p className="text-xs text-gray-500">Nessun detentore corrisponde alla ricerca.</p>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="mt-3 text-xs text-gray-500">Digita almeno 3 caratteri per vedere i risultati.</p>
+                        )}
+                      </div>
+                      {normalizedAssignedUserSearch.length > 0 && normalizedAssignedUserSearch.length < 3 ? (
+                        <span className="mt-1 block text-xs text-gray-500">Digita almeno 3 caratteri per filtrare l’elenco.</span>
+                      ) : null}
                       <span className="mt-1 block text-xs text-gray-500">
                         Usa `Nessun utente assegnato` quando il PC cambia detentore o è in transizione.
                       </span>
@@ -603,6 +696,14 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
                                 </p>
                               </div>
                               <div className="flex items-center gap-2">
+                                <a
+                                  href={getIpInfoUrl(peer.ip_address)}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="rounded-full border border-[#d6e5db] bg-white px-3 py-1 text-xs font-medium text-[#1D4E35] transition hover:bg-[#f3f8f5]"
+                                >
+                                  Info IP
+                                </a>
                                 <NetworkTrackToggle
                                   compact
                                   tracked={Boolean(peer.tracked_subject_id || trackedSubjectMap.get(buildNetworkTrackingKey("ip", peer.ip_address)))}
@@ -662,19 +763,29 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
                             </p>
                             <div className="mt-3 flex flex-wrap gap-2">
                               {event.peer_ip ? (
-                                <NetworkTrackToggle
-                                  compact
-                                  tracked={Boolean(event.tracked_peer_ip_subject_id || trackedSubjectMap.get(peerTrackKey!))}
-                                  label="Traccia IP"
-                                  busy={trackingBusyKey === peerTrackKey}
-                                  onClick={() =>
-                                    void handleTrackSubject(peerTrackKey!, {
-                                      entity_type: "ip",
-                                      value: event.peer_ip!,
-                                      label: event.peer_label && event.peer_label !== event.peer_ip ? event.peer_label : null,
-                                    })
-                                  }
-                                />
+                                <>
+                                  <a
+                                    href={getIpInfoUrl(event.peer_ip)}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="rounded-full border border-[#d6e5db] bg-white px-3 py-1 text-xs font-medium text-[#1D4E35] transition hover:bg-[#f3f8f5]"
+                                  >
+                                    Info IP
+                                  </a>
+                                  <NetworkTrackToggle
+                                    compact
+                                    tracked={Boolean(event.tracked_peer_ip_subject_id || trackedSubjectMap.get(peerTrackKey!))}
+                                    label="Traccia IP"
+                                    busy={trackingBusyKey === peerTrackKey}
+                                    onClick={() =>
+                                      void handleTrackSubject(peerTrackKey!, {
+                                        entity_type: "ip",
+                                        value: event.peer_ip!,
+                                        label: event.peer_label && event.peer_label !== event.peer_ip ? event.peer_label : null,
+                                      })
+                                    }
+                                  />
+                                </>
                               ) : null}
                               {event.peer_label ? (
                                 <NetworkTrackToggle

@@ -475,6 +475,7 @@ class NetworkTrackedSubjectResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     activity_summary: NetworkTrackedSubjectActivitySummary | None = None
+    scan_history: list[NetworkDeviceHistoryEntry] = Field(default_factory=list)
 
 
 class NetworkTrackedSubjectCreateRequest(BaseModel):

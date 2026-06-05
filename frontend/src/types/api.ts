@@ -909,6 +909,14 @@ export type NetworkTrackedSubject = {
   created_at: string;
   updated_at: string;
   activity_summary: NetworkTrackedSubjectActivitySummary | null;
+  scan_history: {
+    scan_id: number;
+    observed_at: string;
+    status: string;
+    hostname: string | null;
+    ip_address: string;
+    open_ports: string | null;
+  }[];
 };
 
 export type NetworkDevice = {
