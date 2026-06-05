@@ -63,16 +63,22 @@ def _latest_imported_anno(db: Session) -> int | None:
     return int(value) if value is not None else None
 
 
+def _empty_ade_alignment_summary(message: str = "Controllo allineamento AdE non ancora caricato.") -> CatDashboardAdeAlignmentSummary:
+    return CatDashboardAdeAlignmentSummary(
+        checked=False,
+        has_disallineamenti=False,
+        staged_particelle=0,
+        nuove_in_ade=0,
+        geometrie_variate=0,
+        mancanti_in_ade=0,
+        latest_fetched_at=None,
+        message=message,
+    )
+
+
 def _get_ade_alignment_summary(db: Session) -> CatDashboardAdeAlignmentSummary:
     if db.bind is None or db.bind.dialect.name != "postgresql":
-        return CatDashboardAdeAlignmentSummary(
-            checked=False,
-            has_disallineamenti=False,
-            staged_particelle=0,
-            nuove_in_ade=0,
-            geometrie_variate=0,
-            mancanti_in_ade=0,
-            latest_fetched_at=None,
+        return _empty_ade_alignment_summary(
             message="Controllo allineamento AdE disponibile su PostgreSQL/PostGIS.",
         )
 
@@ -86,14 +92,7 @@ def _get_ade_alignment_summary(db: Session) -> CatDashboardAdeAlignmentSummary:
         )
     ).one()
     if not tables_exist.particelle_exists or not tables_exist.runs_exists:
-        return CatDashboardAdeAlignmentSummary(
-            checked=False,
-            has_disallineamenti=False,
-            staged_particelle=0,
-            nuove_in_ade=0,
-            geometrie_variate=0,
-            mancanti_in_ade=0,
-            latest_fetched_at=None,
+        return _empty_ade_alignment_summary(
             message="Staging AdE non ancora inizializzato.",
         )
 
@@ -109,14 +108,7 @@ def _get_ade_alignment_summary(db: Session) -> CatDashboardAdeAlignmentSummary:
         )
     ).first()
     if latest_run is None:
-        return CatDashboardAdeAlignmentSummary(
-            checked=False,
-            has_disallineamenti=False,
-            staged_particelle=0,
-            nuove_in_ade=0,
-            geometrie_variate=0,
-            mancanti_in_ade=0,
-            latest_fetched_at=None,
+        return _empty_ade_alignment_summary(
             message="Nessun download AdE completato.",
         )
 
@@ -195,6 +187,14 @@ def _get_ade_alignment_summary(db: Session) -> CatDashboardAdeAlignmentSummary:
         latest_fetched_at=row.latest_fetched_at or latest_run.completed_at,
         message=message,
     )
+
+
+@router.get("/ade-alignment", response_model=CatDashboardAdeAlignmentSummary)
+def get_dashboard_ade_alignment(
+    db: Session = Depends(get_db),
+    _: ApplicationUser = Depends(require_active_user),
+) -> CatDashboardAdeAlignmentSummary:
+    return _get_ade_alignment_summary(db)
 
 
 @router.get("/summary", response_model=CatDashboardSummaryResponse)
@@ -358,7 +358,6 @@ def get_dashboard_summary(
 
     importo_totale_0648 = _to_float(utenze_row[3])
     importo_totale_0985 = _to_float(utenze_row[4])
-    ade_alignment = _get_ade_alignment_summary(db)
     return CatDashboardSummaryResponse(
         anno=effective_anno,
         generated_at=datetime.now(timezone.utc),
@@ -403,5 +402,5 @@ def get_dashboard_summary(
             ],
         ),
         distretti=distretti,
-        ade_alignment=ade_alignment,
+        ade_alignment=_empty_ade_alignment_summary(),
     )

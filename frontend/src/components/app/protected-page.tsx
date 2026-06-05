@@ -61,17 +61,22 @@ export function ProtectedPage({
       }
 
       try {
-        const [user, dashboardSummary, permissionSummary] = await Promise.all([
+        const [user, permissionSummary] = await Promise.all([
           getCurrentUser(token),
-          getDashboardSummary(token),
           getMyPermissions(token),
         ]);
 
         setCurrentUser(user);
-        setSummary(dashboardSummary);
         setGrantedSectionKeys(permissionSummary.granted_keys);
         setLoadError(null);
         setStatusMessage("Sessione backend attiva.");
+        void getDashboardSummary(token)
+          .then((dashboardSummary) => {
+            setSummary(dashboardSummary);
+          })
+          .catch(() => {
+            // The shell badges are useful but non-blocking for page rendering.
+          });
       } catch (error) {
         setLoadError(error instanceof Error ? error.message : "Errore imprevisto");
         if (isAuthError(error)) {

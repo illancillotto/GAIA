@@ -252,7 +252,7 @@ export default function CatastoDashboardPage() {
             tone="success"
           />
           <StatCard
-            label="Utenze ruolo"
+            label="Particelle a ruolo"
             value={isLoading ? "—" : formatNumber(summary?.utenze.totale_utenze)}
             sub={`Anno ${activeYear ?? "—"} · ${formatNumber(summary?.utenze.particelle_collegate)} particelle`}
           />
@@ -297,6 +297,58 @@ export default function CatastoDashboardPage() {
               <div className="rounded-2xl bg-slate-50 p-4">
                 <p className="text-xs uppercase tracking-[0.16em] text-slate-400">Senza geometria</p>
                 <p className="mt-2 text-2xl font-semibold text-slate-900">{formatNumber(summary?.particelle.senza_geometria)}</p>
+              </div>
+            </div>
+            <div className="mt-6 grid gap-4 lg:grid-cols-[0.95fr_1.05fr]">
+              <div className="rounded-[1.5rem] border border-emerald-100 bg-emerald-50/70 p-5">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-700">Lettura rapida</p>
+                <h3 className="mt-2 text-lg font-semibold text-slate-950">Quanto è completa la copertura</h3>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-2xl bg-white/80 p-4">
+                    <p className="text-xs uppercase tracking-[0.16em] text-slate-400">In distretto</p>
+                    <p className="mt-2 text-2xl font-semibold text-slate-950">
+                      {percent(summary?.particelle.in_distretto ?? 0, summary?.particelle.totale_correnti ?? 0)}%
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">particelle già assegnate a un distretto</p>
+                  </div>
+                  <div className="rounded-2xl bg-white/80 p-4">
+                    <p className="text-xs uppercase tracking-[0.16em] text-slate-400">A ruolo</p>
+                    <p className="mt-2 text-2xl font-semibold text-slate-950">
+                      {percent(summary?.utenze.particelle_collegate ?? 0, summary?.particelle.totale_correnti ?? 0)}%
+                    </p>
+                    <p className="mt-1 text-xs text-slate-500">particelle già collegate ai dati ruolo</p>
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-[1.5rem] border border-amber-100 bg-amber-50/70 p-5">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-amber-700">Dati tecnici del comprensorio</p>
+                <h3 className="mt-2 text-lg font-semibold text-slate-950">Quadro numerico fuori dal ruolo</h3>
+                <p className="mt-2 text-sm text-slate-600">
+                  Questi valori includono le aree catastali del comprensorio. Se una particella non va a ruolo, qui resta come evidenza numerica e tecnica, non come carico operativo automatico.
+                </p>
+                <div className="mt-4 space-y-3">
+                  <div className="flex items-center justify-between rounded-2xl bg-white/80 px-4 py-3">
+                    <div>
+                      <p className="text-sm font-medium text-slate-800">Particelle senza distretto</p>
+                      <p className="text-xs text-slate-500">voce tecnica utile a leggere il perimetro</p>
+                    </div>
+                    <span className="text-lg font-semibold text-slate-950">{formatNumber(summary?.particelle.senza_distretto)}</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-2xl bg-white/80 px-4 py-3">
+                    <div>
+                      <p className="text-sm font-medium text-slate-800">Particelle fuori distretto</p>
+                      <p className="text-xs text-slate-500">presenti nel catasto ma fuori dal perimetro atteso</p>
+                    </div>
+                    <span className="text-lg font-semibold text-slate-950">{formatNumber(summary?.particelle.fuori_distretto)}</span>
+                  </div>
+                  <div className="flex items-center justify-between rounded-2xl bg-white/80 px-4 py-3">
+                    <div>
+                      <p className="text-sm font-medium text-slate-800">Particelle senza geometria</p>
+                      <p className="text-xs text-slate-500">mancano forme GIS per sola lettura cartografica</p>
+                    </div>
+                    <span className="text-lg font-semibold text-slate-950">{formatNumber(summary?.particelle.senza_geometria)}</span>
+                  </div>
+                </div>
               </div>
             </div>
           </article>

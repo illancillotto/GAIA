@@ -14,6 +14,7 @@ import { ModuleWorkspaceKpiRow } from "@/components/layout/module-workspace-hero
 import { EmptyState } from "@/components/ui/empty-state";
 import { GridIcon, RefreshIcon, SearchIcon } from "@/components/ui/icons";
 import {
+  catastoGetDashboardAdeAlignment,
   catastoGetDashboardSummary,
   catastoGetDistrettoGeojson,
   catastoGisApplyAdeAlignment,
@@ -148,6 +149,13 @@ export function ElaborazioniAdeAlignmentWorkspace({ embedded = false }: { embedd
       ]);
       setDashboard(dashboardResult);
       setDistretti(distrettiResult);
+      void catastoGetDashboardAdeAlignment(token)
+        .then((adeAlignment) => {
+          setDashboard((current) => (current ? { ...current, ade_alignment: adeAlignment } : current));
+        })
+        .catch(() => {
+          // Keep the lightweight placeholder if the dedicated request fails.
+        });
 
       try {
         const latestRun = await catastoGisGetLatestAdeWfsRunStatus(token);

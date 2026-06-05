@@ -9,6 +9,7 @@ import type {
   CatAnagraficaBulkSearchResponse,
   CatAnagraficaBulkJobDetail,
   CatAnagraficaBulkJobListResponse,
+  CatDashboardAdeAlignmentSummary,
   CatDashboardSummary,
   CatAnomaliaComuneWizardApplyResponse,
   CatAnomaliaComuneWizardListResponse,
@@ -477,6 +478,27 @@ export async function catastoGetMeterReading(token: string, id: UUID): Promise<C
   });
 }
 
+export async function catastoPatchMeterReading(
+  token: string,
+  id: UUID,
+  payload: {
+    punto_consegna?: string | null;
+    matricola?: string | null;
+    record_type?: string | null;
+    tipologia_idrante?: string | null;
+    codice_fiscale?: string | null;
+    note?: string | null;
+    intervento_da_eseguire?: string | null;
+    change_note?: string | null;
+  },
+): Promise<CatMeterReading> {
+  return request<CatMeterReading>(`/catasto/meter-readings/${id}`, {
+    method: "PATCH",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function catastoGetMeterReadingsBySubject(token: string, subjectId: UUID): Promise<CatMeterReading[]> {
   return request<CatMeterReading[]>(`/catasto/meter-readings/by-subject/${subjectId}`, {
     headers: authHeaders(token),
@@ -527,6 +549,12 @@ export async function catastoGetDistrettoGeojson(token: string, id: UUID): Promi
 export async function catastoGetDashboardSummary(token: string, params?: { anno?: number }): Promise<CatDashboardSummary> {
   const query = createQueryString({ anno: params?.anno != null ? String(params.anno) : undefined });
   return request<CatDashboardSummary>(`/catasto/dashboard/summary${query}`, {
+    headers: authHeaders(token),
+  });
+}
+
+export async function catastoGetDashboardAdeAlignment(token: string): Promise<CatDashboardAdeAlignmentSummary> {
+  return request<CatDashboardAdeAlignmentSummary>("/catasto/dashboard/ade-alignment", {
     headers: authHeaders(token),
   });
 }
