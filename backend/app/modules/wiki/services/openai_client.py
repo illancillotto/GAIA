@@ -1,53 +1,50 @@
-"""Client codex-lb — proxy OpenAI-compatibile locale su porta 2455."""
+"""Client codex-lb per il Wiki Agent."""
 
 from __future__ import annotations
 
 import logging
-import os
+import urllib.request
+
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-# URL del proxy codex-lb.
-# Da Docker: host.docker.internal:2455  |  Da host: 127.0.0.1:2455
-CODEX_LB_URL = os.environ.get("CODEX_LB_URL", "http://host.docker.internal:2455/v1")
-
-# Chiave API: codex-lb disabilita l'auth per richieste locali,
-# quindi qualsiasi stringa non vuota va bene.
-CODEX_LB_API_KEY = os.environ.get("CODEX_LB_API_KEY", "sk-codex-lb-local")
-
-CHAT_MODEL = os.environ.get("WIKI_CHAT_MODEL", "gpt-5.4-mini")
-TOP_K = int(os.environ.get("WIKI_TOP_K", "5"))
-
-SYSTEM_PROMPT = """Sei l'assistente tecnico di GAIA, la piattaforma IT governance del Consorzio di Bonifica dell'Oristanese.
-
-Il tuo compito è rispondere alle domande degli utenti basandoti esclusivamente sui documenti forniti come contesto.
-Rispondi in italiano, in modo chiaro e conciso. Se la risposta non è nei documenti forniti, dillo esplicitamente.
-
-Quando citi informazioni, indica il documento di origine (es. "Secondo ARCHITECTURE.md...").
-Non inventare funzionalità non documentate.
-Se ti viene chiesta una funzionalità non ancora implementata, indicalo chiaramente e suggerisci all'utente di registrare una richiesta."""
+CHAT_MODEL = settings.wiki_chat_model
+TOP_K = settings.wiki_top_k
+SYSTEM_PROMPT = (
+    "Sei l'assistente documentale di GAIA. Rispondi usando prima il contesto recuperato, "
+    "mantieni un tono operativo e sintetico, e segnala quando il contesto non basta."
+)
 
 _client = None
 
 
+def _models_url() -> str:
+    return settings.codex_lb_url.rstrip("/").replace("/v1", "/v1/models")
+
+
 def get_openai_client():
-    """Restituisce il client puntato a codex-lb, inizializzandolo al primo accesso."""
+    """Restituisce il client OpenAI-compatibile puntato al servizio wiki configurato."""
     global _client
     if _client is None:
         from openai import OpenAI
-        _client = OpenAI(base_url=CODEX_LB_URL, api_key=CODEX_LB_API_KEY)
-        logger.info("Wiki client inizializzato → %s (model: %s)", CODEX_LB_URL, CHAT_MODEL)
+
+        _client = OpenAI(
+            base_url=settings.codex_lb_url,
+            api_key=settings.codex_lb_api_key,
+        )
+        logger.info("Wiki client inizializzato → %s (model: %s)", settings.codex_lb_url, CHAT_MODEL)
     return _client
 
 
 def is_wiki_available() -> bool:
-    """
-    True se codex-lb è raggiungibile.
-    Non richiede OPENAI_API_KEY — usa il proxy locale.
-    """
-    import urllib.request
+    """True se il servizio wiki risponde al probe modelli con la API key configurata."""
+    request = urllib.request.Request(
+        _models_url(),
+        headers={"Authorization": f"Bearer {settings.codex_lb_api_key}"},
+    )
     try:
-        urllib.request.urlopen(CODEX_LB_URL.replace("/v1", "/v1/models"), timeout=2)
-        return True
+        with urllib.request.urlopen(request, timeout=2):
+            return True
     except Exception:
         return False
