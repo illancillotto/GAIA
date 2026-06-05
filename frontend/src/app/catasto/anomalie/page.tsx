@@ -14,7 +14,6 @@ import { ElaborazioneOperationMessage } from "@/components/elaborazioni/operatio
 import { ElaborazioneStatusBadge } from "@/components/elaborazioni/status-badge";
 import { DataTable } from "@/components/table/data-table";
 import { Pagination } from "@/components/table/pagination";
-import { TableFilters } from "@/components/table/table-filters";
 import { AlertBanner } from "@/components/ui/alert-banner";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SearchIcon } from "@/components/ui/icons";
@@ -63,6 +62,7 @@ type ParticellaFilterMode = "all" | "without_candidates";
 type ManualQueueFilterMode = "all" | "without_wizard" | "unworked";
 type SortDirection = "asc" | "desc";
 type WorkspaceMode = "cf" | "comune" | "particella" | null;
+type TabId = "manuale" | "cf" | "comune" | "particella" | "ade";
 type BatchWorkspaceState = {
   href: string;
   title: string;
@@ -211,10 +211,20 @@ function CatastoAnomaliePageContent() {
   const [summaryTotal, setSummaryTotal] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [wizardMode, setWizardMode] = useState<WorkspaceMode>(() => {
-    const parsed = parseWorkspaceMode(searchParams.get("workspace"));
-    return parsed ?? "cf";
+  const [tab, setTab] = useState<TabId>(() => {
+    const fromTab = searchParams.get("tab");
+    if (
+      fromTab === "manuale"
+      || fromTab === "cf"
+      || fromTab === "comune"
+      || fromTab === "particella"
+      || fromTab === "ade"
+    ) {
+      return fromTab;
+    }
+    return parseWorkspaceMode(searchParams.get("workspace")) ?? "cf";
   });
+  const wizardMode: WorkspaceMode = tab === "cf" || tab === "comune" || tab === "particella" ? tab : null;
   const [cfItems, setCfItems] = useState<CatAnomaliaCfWizardItem[]>([]);
   const [cfTotal, setCfTotal] = useState(0);
   const [cfPage, setCfPage] = useState(1);
@@ -881,6 +891,23 @@ function CatastoAnomaliePageContent() {
     }
   }
 
+  const handleSelectTab = useCallback((next: TabId, tipo?: string | null): void => {
+    setTab(next);
+    if (tipo !== undefined) {
+      setFilters((current) => ({ ...current, tipo: tipo ?? "" }));
+    }
+    setOverviewPage(1);
+    setCfPage(1);
+    setComunePage(1);
+    setParticellaPage(1);
+    setCfMessage(null);
+    setCfError(null);
+    setComuneMessage(null);
+    setComuneError(null);
+    setParticellaMessage(null);
+    setParticellaError(null);
+  }, []);
+
   const columns = useMemo<ColumnDef<CatAnomalia>[]>(
     () => [
       {
@@ -1028,18 +1055,31 @@ function CatastoAnomaliePageContent() {
     ];
   }, [summaryBuckets, summaryTotal]);
 
-  const activeQueue = useMemo(
-    () => workQueues.find((queue) => queue.mode === wizardMode) ?? workQueues.find((queue) => queue.id === "manual") ?? null,
-    [wizardMode, workQueues],
-  );
   const manualQueueCount = workQueues.find((queue) => queue.id === "manual")?.count ?? 0;
+  const correggibiliCount = useMemo(
+    () => workQueues.filter((queue) => queue.id !== "manual").reduce((acc, queue) => acc + queue.count, 0),
+    [workQueues],
+  );
+  const tabs = useMemo<Array<{ id: TabId; label: string; count: number | null; tipo?: string | null }>>(() => {
+    const byId = new Map(workQueues.map((queue) => [queue.id, queue]));
+    return [
+      { id: "manuale", label: "Triage manuale", count: byId.get("manual")?.count ?? 0, tipo: "" },
+      { id: "cf", label: "CF / P.IVA", count: byId.get("cf")?.count ?? 0, tipo: "VAL-02-cf_invalido" },
+      { id: "comune", label: "Comuni", count: byId.get("comune")?.count ?? 0, tipo: "VAL-04-comune_invalido" },
+      { id: "particella", label: "Particelle", count: byId.get("particella")?.count ?? 0, tipo: "VAL-05-particella_assente" },
+      { id: "ade", label: "Scansione AdE", count: adeScanSummary?.total_unmatched ?? null, tipo: undefined },
+    ];
+  }, [adeScanSummary, workQueues]);
+  const activeTabLabel = tabs.find((entry) => entry.id === tab)?.label ?? "Registro manuale";
   const activeWorkspaceCount = wizardMode === "cf"
     ? cfTotal
     : wizardMode === "comune"
       ? comuneTotal
       : wizardMode === "particella"
         ? particellaTotal
-        : manualQueueCount;
+        : tab === "ade"
+          ? adeScanSummary?.total_unmatched ?? 0
+          : total;
   const overviewPageCount = getPageCount(total, OVERVIEW_PAGE_SIZE);
   const cfPageCount = getPageCount(cfTotal, WIZARD_PAGE_SIZE);
   const comunePageCount = getPageCount(comuneTotal, WIZARD_PAGE_SIZE);
@@ -1106,7 +1146,7 @@ function CatastoAnomaliePageContent() {
     if (filters.anno) params.set("anno", filters.anno);
     if (filters.distretto) params.set("distretto", filters.distretto);
     if (overviewPage > 1) params.set("page", String(overviewPage));
-    if (wizardMode) params.set("workspace", wizardMode);
+    if (tab !== "cf") params.set("tab", tab);
     if (manualSearch.trim()) params.set("q", manualSearch.trim());
     if (manualFilterMode !== "all") params.set("manual", manualFilterMode);
     if (manualSortBy !== "created_at") params.set("sort_by", manualSortBy);
@@ -1125,7 +1165,7 @@ function CatastoAnomaliePageContent() {
     overviewPage,
     router,
     searchParams,
-    wizardMode,
+    tab,
   ]);
 
   return (
@@ -1146,9 +1186,9 @@ function CatastoAnomaliePageContent() {
         <article className="panel-card">
           <div className="flex items-start justify-between gap-4">
             <div>
-              <p className="section-title">Panoramica anomalie</p>
+              <p className="section-title">Console anomalie Catasto</p>
               <p className="section-copy mt-1">
-                La pagina resta il punto di triage generale, ma apre workspace dedicati quando una famiglia di anomalie ha una correzione guidata disponibile.
+                Scegli una coda di lavoro qui sotto: ogni scheda apre il workspace dedicato. Anno e distretto restano il contesto condiviso tra tutte le code.
               </p>
             </div>
             <Link className="text-sm font-medium text-[#1D4E35] underline underline-offset-2" href="/catasto/import">
@@ -1156,132 +1196,115 @@ function CatastoAnomaliePageContent() {
             </Link>
           </div>
 
-          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            {summaryBuckets.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-4 py-5 text-sm text-gray-500 md:col-span-2 xl:col-span-4">
-                Nessuna anomalia aggregata per i filtri correnti.
-              </div>
-            ) : (
-              summaryBuckets.map((bucket) => (
-                <button
-                  key={bucket.tipo}
-                  type="button"
-                  onClick={() => {
-                    setFilters((current) => ({ ...current, tipo: bucket.tipo }));
-                    setWizardMode(resolveWizardMode(bucket.tipo));
-                    setOverviewPage(1);
-                    setCfPage(1);
-                    setComunePage(1);
-                    setParticellaPage(1);
-                    setCfMessage(null);
-                    setCfError(null);
-                    setComuneMessage(null);
-                    setComuneError(null);
-                    setParticellaMessage(null);
-                    setParticellaError(null);
-                  }}
-                  className="rounded-2xl border border-[#d9dfd6] bg-white p-4 text-left shadow-sm transition hover:border-[#1D4E35] hover:shadow-md"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">{bucket.tipo}</p>
-                      <p className="mt-2 text-base font-semibold text-gray-900">{bucket.label}</p>
-                    </div>
-                    <AnomaliaStatusBadge severita={bucket.severita} />
-                  </div>
-                  <p className="mt-4 text-3xl font-semibold text-[#1D4E35]">{bucket.count}</p>
-                  <p className="mt-2 text-sm text-gray-500">
-                    {canOpenCfWizard(bucket.tipo)
-                      ? "Apri wizard CF"
-                      : canOpenComuneWizard(bucket.tipo)
-                        ? "Apri wizard comune"
-                      : canOpenParticellaWizard(bucket.tipo)
-                        ? "Apri wizard particella"
-                        : "Solo triage manuale per ora"}
-                  </p>
-                </button>
-              ))
-            )}
-          </div>
-
-          <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-gray-500">
-            <span>{busy ? "Aggiornamento in corso..." : `${summaryTotal} anomalie aggregate`}</span>
-            <span>{busy ? "..." : `${items.length} righe caricate su ${total} totali`}</span>
+          <div className="mt-5 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-2xl border border-[#d9dfd6] bg-white p-4 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Anomalie aggregate</p>
+              <p className="mt-2 text-3xl font-semibold text-[#1D4E35]">{busy ? "…" : summaryTotal}</p>
+              <p className="mt-1 text-xs text-gray-400">sui filtri di contesto correnti</p>
+            </div>
+            <div className="rounded-2xl border border-[#d9dfd6] bg-white p-4 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Code correggibili</p>
+              <p className="mt-2 text-3xl font-semibold text-[#1D4E35]">{correggibiliCount}</p>
+              <p className="mt-1 text-xs text-gray-400">CF · comuni · particelle</p>
+            </div>
+            <div className="rounded-2xl border border-[#d9dfd6] bg-white p-4 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Triage manuale</p>
+              <p className="mt-2 text-3xl font-semibold text-[#1D4E35]">{manualQueueCount}</p>
+              <p className="mt-1 text-xs text-gray-400">senza wizard dedicato</p>
+            </div>
+            <div className="rounded-2xl border border-[#d9dfd6] bg-white p-4 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-500">Registro caricato</p>
+              <p className="mt-2 text-3xl font-semibold text-[#1D4E35]">{busy ? "…" : total}</p>
+              <p className="mt-1 text-xs text-gray-400">{items.length} righe nella pagina corrente</p>
+            </div>
           </div>
         </article>
+
+        <nav className="flex flex-wrap gap-2" aria-label="Code anomalie">
+          {tabs.map((entry) => {
+            const isActive = tab === entry.id;
+            return (
+              <button
+                key={entry.id}
+                type="button"
+                onClick={() => handleSelectTab(entry.id, entry.tipo)}
+                aria-pressed={isActive}
+                className={`flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition ${
+                  isActive
+                    ? "border-[#1D4E35] bg-[#1D4E35] text-white shadow-sm"
+                    : "border-[#d9dfd6] bg-white text-gray-700 hover:border-[#1D4E35]"
+                }`}
+              >
+                <span>{entry.label}</span>
+                {entry.count != null ? (
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
+                      isActive ? "bg-white/20 text-white" : "bg-gray-100 text-gray-600"
+                    }`}
+                  >
+                    {entry.count}
+                  </span>
+                ) : null}
+              </button>
+            );
+          })}
+        </nav>
 
         <article className="panel-card">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="section-title">Code di lavoro</p>
-              <p className="section-copy mt-1">
-                Vista operativa delle famiglie correggibili: ogni coda apre direttamente il workspace più adatto invece di costringere l&apos;operatore a partire dalla tabella completa.
-              </p>
-            </div>
-            <div className="rounded-full bg-[#f4f1e8] px-3 py-1 text-sm font-medium text-[#7a5b1f]">
-              {workQueues.filter((queue) => queue.available).length} code attive
-            </div>
-          </div>
-
-          <div className="mt-5 grid gap-4 xl:grid-cols-2">
-            {workQueues.map((queue) => (
-              <div
-                key={queue.id}
-                className={`rounded-2xl border p-4 shadow-sm ${wizardMode === queue.mode ? "border-[#1D4E35] bg-[#f6faf6]" : "border-[#d9dfd6] bg-white"}`}
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-semibold text-gray-900">{queue.title}</p>
-                    <p className="mt-2 text-sm text-gray-500">{queue.description}</p>
-                  </div>
-                  <AnomaliaStatusBadge severita={queue.severity} />
-                </div>
-                <div className="mt-4 flex items-end justify-between gap-4">
-                  <div>
-                    <p className="text-3xl font-semibold text-[#1D4E35]">{queue.count}</p>
-                    <p className="mt-1 text-xs uppercase tracking-[0.16em] text-gray-400">
-                      {queue.mode === wizardMode ? "workspace attivo" : queue.available ? "da lavorare" : "nessuna riga aperta"}
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    className="btn-secondary"
-                    disabled={!queue.available}
-                    onClick={() => {
-                      setFilters((current) => ({ ...current, tipo: queue.tipo ?? "" }));
-                      setWizardMode(queue.mode);
-                      setOverviewPage(1);
-                      setCfPage(1);
-                      setComunePage(1);
-                      setParticellaPage(1);
-                      setCfMessage(null);
-                      setCfError(null);
-                      setComuneMessage(null);
-                      setComuneError(null);
-                      setParticellaMessage(null);
-                      setParticellaError(null);
-                    }}
-                  >
-                    {queue.cta}
-                  </button>
-                </div>
-              </div>
-            ))}
+          <div className="flex flex-wrap items-end gap-4">
+            <label className="text-sm font-medium text-gray-700">
+              Anno
+              <input
+                className="form-control mt-1"
+                inputMode="numeric"
+                value={filters.anno}
+                onChange={(event) => {
+                  setOverviewPage(1);
+                  setCfPage(1);
+                  setComunePage(1);
+                  setParticellaPage(1);
+                  setFilters((current) => ({ ...current, anno: event.target.value }));
+                }}
+                placeholder="Tutti"
+              />
+            </label>
+            <label className="text-sm font-medium text-gray-700">
+              Distretto
+              <input
+                className="form-control mt-1"
+                inputMode="numeric"
+                value={filters.distretto}
+                onChange={(event) => {
+                  setOverviewPage(1);
+                  setCfPage(1);
+                  setComunePage(1);
+                  setParticellaPage(1);
+                  setFilters((current) => ({ ...current, distretto: event.target.value }));
+                }}
+                placeholder="Tutti"
+              />
+            </label>
+            <button
+              className="btn-secondary"
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                setFilters(buildDefaultFilters());
+                setOverviewPage(1);
+                setCfPage(1);
+                setComunePage(1);
+                setParticellaPage(1);
+              }}
+            >
+              Reset contesto
+            </button>
+            <span className="text-sm text-gray-500">
+              Scheda attiva: <span className="font-medium text-gray-900">{activeTabLabel}</span> · {activeWorkspaceCount} righe
+            </span>
           </div>
         </article>
 
-        <AlertBanner
-          variant="info"
-          title="Percorso rapido"
-          action={activeQueue ? <span className="rounded-full bg-white/70 px-3 py-1 text-xs font-semibold text-blue-800">Workspace attivo: {activeQueue.title}</span> : undefined}
-        >
-          <div className="space-y-2">
-            <p>1. Scegli una coda di lavoro dalla panoramica o dalle card qui sopra.</p>
-            <p>2. Correggi le righe del workspace attivo oppure passa al registro manuale se non esiste un wizard dedicato.</p>
-            <p>3. Usa il registro completo solo per audit, chiusura e casi fuori workflow guidato.</p>
-          </div>
-        </AlertBanner>
-
+        {tab === "ade" ? (
         <article className="panel-card border-emerald-100 bg-gradient-to-br from-white via-[#f7fbf7] to-[#eef8f2]">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div>
@@ -1434,154 +1457,7 @@ function CatastoAnomaliePageContent() {
             )}
           </div>
         </article>
-
-        <article className="panel-card">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-sm font-medium text-gray-900">Filtri e contesto</p>
-              <p className="mt-1 text-sm text-gray-500">
-                Mantieni il focus su anno, distretto e stato. Il workspace attivo usa questi filtri e il registro completo scorre su pagine backend reali.
-              </p>
-            </div>
-            <button
-              className="btn-secondary"
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                const next = buildDefaultFilters();
-                setFilters(next);
-                setWizardMode("cf");
-                setOverviewPage(1);
-                setCfPage(1);
-                setComunePage(1);
-                setParticellaPage(1);
-                setCfMessage(null);
-                setCfError(null);
-                setComuneMessage(null);
-                setComuneError(null);
-                setParticellaMessage(null);
-                setParticellaError(null);
-              }}
-            >
-              Reset completo
-            </button>
-          </div>
-
-          <div className="mt-4">
-            <TableFilters>
-              <label className="text-sm font-medium text-gray-700">
-                Tipo
-                <input
-                  className="form-control mt-1"
-                  value={filters.tipo}
-                  onChange={(event) => {
-                    setOverviewPage(1);
-                    setFilters((current) => ({ ...current, tipo: event.target.value }));
-                  }}
-                  placeholder="Es. VAL-02-cf_invalido"
-                />
-              </label>
-              <label className="text-sm font-medium text-gray-700">
-                Severità
-                <select
-                  className="form-control mt-1"
-                  value={filters.severita}
-                  onChange={(event) => {
-                    setOverviewPage(1);
-                    setFilters((current) => ({ ...current, severita: event.target.value }));
-                  }}
-                >
-                  <option value="">Tutte</option>
-                  <option value="error">Error</option>
-                  <option value="warning">Warning</option>
-                  <option value="info">Info</option>
-                </select>
-              </label>
-              <label className="text-sm font-medium text-gray-700">
-                Stato
-                <select
-                  className="form-control mt-1"
-                  value={filters.status}
-                  onChange={(event) => {
-                    setOverviewPage(1);
-                    setFilters((current) => ({ ...current, status: event.target.value }));
-                  }}
-                >
-                  <option value="">Tutti</option>
-                  <option value="aperta">Aperta</option>
-                  <option value="chiusa">Chiusa</option>
-                  <option value="ignora">Ignorata</option>
-                </select>
-              </label>
-              <label className="text-sm font-medium text-gray-700">
-                Distretto
-                <input
-                  className="form-control mt-1"
-                  inputMode="numeric"
-                  value={filters.distretto}
-                  onChange={(event) => {
-                    setOverviewPage(1);
-                    setFilters((current) => ({ ...current, distretto: event.target.value }));
-                  }}
-                  placeholder="Es. 10"
-                />
-              </label>
-              <label className="text-sm font-medium text-gray-700">
-                Anno
-                <input
-                  className="form-control mt-1"
-                  inputMode="numeric"
-                  value={filters.anno}
-                  onChange={(event) => {
-                    setOverviewPage(1);
-                    setFilters((current) => ({ ...current, anno: event.target.value }));
-                  }}
-                />
-              </label>
-            </TableFilters>
-          </div>
-
-          <div className="mt-4 flex flex-wrap items-center gap-3">
-            <button className="btn-primary" type="button" disabled={busy} onClick={() => void loadOverview()}>
-              {busy ? "Caricamento..." : "Applica filtri"}
-            </button>
-            <button
-              className="btn-secondary"
-              type="button"
-              disabled={cfBusy || comuneBusy || particellaBusy}
-              onClick={() => Promise.all([loadCfWizard(), loadComuneWizard(), loadParticellaWizard()])}
-            >
-              {cfBusy || comuneBusy || particellaBusy ? "Aggiornamento workspace..." : "Aggiorna workspace"}
-            </button>
-            <button
-              className="btn-secondary"
-              type="button"
-              onClick={() => {
-                setOverviewPage(1);
-                setCfPage(1);
-                setComunePage(1);
-                setParticellaPage(1);
-                setFilters((current) => ({ ...current, status: "aperta" }));
-              }}
-            >
-              Solo aperte
-            </button>
-            <button
-              className="btn-secondary"
-              type="button"
-              onClick={() => {
-                setOverviewPage(1);
-                setFilters((current) => ({ ...current, tipo: "" }));
-                setWizardMode(null);
-              }}
-            >
-              Vai al manuale
-            </button>
-            <span className="text-sm text-gray-500">
-              Focus attuale: <span className="font-medium text-gray-900">{activeQueue?.title ?? "Registro manuale"}</span> · {activeWorkspaceCount} righe nel workspace
-            </span>
-          </div>
-        </article>
+        ) : null}
 
         {wizardMode === "cf" ? (
         <article className="panel-card">
@@ -2086,23 +1962,7 @@ function CatastoAnomaliePageContent() {
         </article>
         ) : null}
 
-        {wizardMode === null ? (
-          <article className="panel-card">
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="section-title">Triage manuale attivo</p>
-                <p className="section-copy mt-1">
-                  Sei fuori dai wizard guidati. Qui l&apos;operatore chiude, ignora o riapre le anomalie che non hanno ancora un flusso assistito.
-                </p>
-              </div>
-              <div className="rounded-full bg-[#f4f1e8] px-3 py-1 text-sm font-medium text-[#7a5b1f]">
-                {manualQueueCount} righe fuori wizard
-              </div>
-            </div>
-          </article>
-        ) : null}
-
-        {selectedManualAnomalia ? (
+        {tab === "manuale" && selectedManualAnomalia ? (
           <article className="panel-card border-[#d9dfd6] bg-[#fbfdfb]">
             <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
               <div>
@@ -2341,6 +2201,7 @@ function CatastoAnomaliePageContent() {
           </article>
         ) : null}
 
+        {tab === "manuale" ? (
         <article className="panel-card">
           <div className="mb-4 flex items-start justify-between gap-4">
             <div>
@@ -2352,6 +2213,52 @@ function CatastoAnomaliePageContent() {
             <div className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600">
               Pagina {overviewPageCount === 0 ? 0 : overviewPage} di {overviewPageCount}
             </div>
+          </div>
+          <div className="mb-4 grid gap-3 md:grid-cols-3">
+            <label className="text-sm font-medium text-gray-700">
+              Tipo
+              <input
+                className="form-control mt-1"
+                value={filters.tipo}
+                onChange={(event) => {
+                  setOverviewPage(1);
+                  setFilters((current) => ({ ...current, tipo: event.target.value }));
+                }}
+                placeholder="Es. VAL-02-cf_invalido"
+              />
+            </label>
+            <label className="text-sm font-medium text-gray-700">
+              Severità
+              <select
+                className="form-control mt-1"
+                value={filters.severita}
+                onChange={(event) => {
+                  setOverviewPage(1);
+                  setFilters((current) => ({ ...current, severita: event.target.value }));
+                }}
+              >
+                <option value="">Tutte</option>
+                <option value="error">Error</option>
+                <option value="warning">Warning</option>
+                <option value="info">Info</option>
+              </select>
+            </label>
+            <label className="text-sm font-medium text-gray-700">
+              Stato
+              <select
+                className="form-control mt-1"
+                value={filters.status}
+                onChange={(event) => {
+                  setOverviewPage(1);
+                  setFilters((current) => ({ ...current, status: event.target.value }));
+                }}
+              >
+                <option value="">Tutti</option>
+                <option value="aperta">Aperta</option>
+                <option value="chiusa">Chiusa</option>
+                <option value="ignora">Ignorata</option>
+              </select>
+            </label>
           </div>
           <div className="mb-4 grid gap-3 xl:grid-cols-[minmax(0,1fr)_240px_auto]">
             <label className="text-sm font-medium text-gray-700">
@@ -2455,6 +2362,7 @@ function CatastoAnomaliePageContent() {
             />
           )}
         </article>
+        ) : null}
       </div>
       <ElaborazioneWorkspaceModal
         open={Boolean(adeScanWorkspace)}
