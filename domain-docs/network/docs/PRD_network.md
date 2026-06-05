@@ -45,6 +45,7 @@ Il backend esegue scansioni periodiche della rete locale e salva i risultati com
 | Requisito | Priorità | Descrizione |
 |-----------|----------|-------------|
 | RF-NET-01 | MUST | Scansione LAN tramite nmap con rilevamento IP, MAC, hostname, porte aperte e classificazione iniziale |
+| RF-NET-01B | MUST | Modalita manuale `ARP discovery` per rilevare host presenti sul segmento locale anche senza porte aperte, con focus su IP, MAC e naming best-effort |
 | RF-NET-02 | MUST | Scansione schedulata configurabile (default: ogni 15 minuti) |
 | RF-NET-03 | MUST | Salvataggio snapshot con timestamp e delta rispetto alla scan precedente |
 | RF-NET-04 | SHOULD | Lettura alternativa via tabella ARP del gateway (fallback senza privilegi root) |
@@ -116,6 +117,7 @@ L'interfaccia presenta i dispositivi rilevati su una mappa interattiva organizza
 | `network_firewalls` | Anagrafica firewall gestiti: `id, vendor, name, model_name, management_ip, status, last_seen_at` |
 | `network_firewall_events` | Eventi ricevuti da firewall: `id, firewall_id, device_id, source, event_type, severity, src_ip, dst_ip, observed_at` |
 | `network_firewall_metrics` | Metriche puntuali firewall: `id, firewall_id, metric_key, metric_value, severity, observed_at` |
+| `network_tracked_subjects` | Target tracciati dall’operatore: `id, entity_type(device/ip/domain/url), normalized_value, value, label, notes, is_active, device_id` |
 | `floor_plans` | Planimetria: `id, name, floor_number, building, image_path, created_at` |
 | `device_positions` | Posizione su planimetria: `device_id, floor_plan_id, x, y, updated_at` |
 | `device_inventory_links` | Collegamento rete-inventario: `network_device_id, inventory_device_id, match_type (auto/manual)` |
@@ -137,13 +139,17 @@ L'interfaccia presenta i dispositivi rilevati su una mappa interattiva organizza
 | Endpoint | Descrizione |
 |----------|-------------|
 | `GET /network/scans` | Lista snapshot scansioni con paginazione |
-| `POST /network/scans` | Avvia nuova scansione manuale |
+| `POST /network/scans` | Avvia nuova scansione manuale (`incremental` o `arp`) |
 | `GET /network/scans/{id}` | Dettaglio snapshot con lista dispositivi |
 | `GET /network/scans/{id}/diff/{id2}` | Confronto tra due snapshot |
 | `GET /network/statistics` | Vista aggregata su rete, dispositivi e navigazione firewall |
 | `GET /network/devices` | Lista dispositivi con filtri (stato, piano, vendor) |
 | `GET /network/devices/{id}` | Dettaglio dispositivo con storico, posizione e riepilogo traffico Sophos ultime 24h |
 | `PATCH /network/devices/{id}` | Aggiorna naming operativo, detentore, ciclo di vita e metadati manuali del dispositivo |
+| `GET /network/tracking` | Elenco dei target tracciati con riepilogo attività recenti |
+| `POST /network/tracking` | Registra o riattiva un target tracciato (`device`, `ip`, `domain`, `url`) |
+| `PATCH /network/tracking/{id}` | Aggiorna label/note o attiva-disattiva il tracking |
+| `GET /network/tracking/{id}/activities` | Dettaglio attività correlate a un target tracciato |
 | `GET /network/alerts` | Lista alert attivi e risolti |
 | `PATCH /network/alerts/{id}` | Aggiorna stato alert (risolto/ignorato) |
 | `GET /network/firewalls` | Lista firewall registrati nel modulo rete |
@@ -163,6 +169,18 @@ L'interfaccia presenta i dispositivi rilevati su una mappa interattiva organizza
 > **Configurazione Docker consigliata**  
 > Il container dello scanner richiede `NET_RAW` capability per nmap in modalità SYN scan.  
 > In alternativa, usare nmap in modalità ping scan (`-sn`) che non richiede root, oppure leggere la tabella ARP tramite SSH sul gateway.
+
+Modalita operative supportate:
+
+- `incremental`: discovery via `nmap`, port scan sulle porte configurate e enrichment successivo
+- `arp`: discovery L2 via ARP ping scan (`nmap -PR`, fallback `scapy`) per far emergere anche host che non espongono porte ma risultano presenti sul segmento locale
+
+Uso previsto della modalita `arp`:
+
+- identificare device sconosciuti non ancora censiti
+- ottenere rapidamente coppie `IP + MAC`
+- raccogliere hostname best-effort via `dns`, `mdns` e `netbios`
+- classificare piu facilmente host presenti ma non ancora assegnati a utenti o asset
 
 ```yaml
 # docker-compose.yml — servizio scanner
@@ -234,6 +252,20 @@ Formato `NETWORK_SNMP_COMMUNITY_PROFILES`:
 - include top list per domini navigati, destinazioni esterne e device sorgente piu attivi
 - include timeline per fascia oraria degli eventi e del volume di traffico
 
+### 5.2D-ter Tracking operativo device e target di navigazione
+
+- l’operatore puo marcare come `tracked` un dispositivo, un IP, un dominio o un URL dalle viste operative principali
+- i punti di ingresso UI previsti sono:
+  - dettaglio dispositivo
+  - pagina firewall sugli endpoint `src_ip` / `dst_ip` e sui campi `domain` / `url`
+  - statistiche rete su top domini, top destinazioni e top device sorgente
+- la sezione `/network/tracking` centralizza i target monitorati, con stato attivo/disattivo, label operativa, note e riepilogo attività
+- per ogni target tracciato GAIA correla gli eventi `network_firewall_events` delle ultime 168 ore e mostra:
+  - volume traffico ingresso/uscita
+  - conteggio eventi allowed / blocked
+  - ultimi eventi correlati
+- il tracking e idempotente: se l’operatore marca due volte lo stesso target, GAIA riusa il record esistente e lo riattiva se era stato disattivato
+
 ### 5.2E Import censimento dispositivi
 
 - script operativo: `backend/scripts/import_network_census_xlsx.py`
@@ -258,6 +290,12 @@ Formato `NETWORK_SNMP_COMMUNITY_PROFILES`:
   4. `network_devices.hostname`
   5. `network_devices.ip_address`
 - i device possono assumere `lifecycle_state=active|retired`
+- `metadata_sources.discovery` traccia la strategia con cui il device e stato visto piu recentemente, ad esempio `incremental` o `arp`
+- la lista dispositivi espone anche azioni massive per la presa in carico rapida:
+  - `Segna come noti`
+  - `Imposta location`
+  - `Aggiungi nota`
+  - apertura rapida del primo device selezionato
 - quando un device viene marcato `retired`, GAIA:
   - azzera `assigned_user_id`
   - disattiva `is_monitored`
@@ -275,6 +313,7 @@ Formato `NETWORK_SNMP_COMMUNITY_PROFILES`:
   5. nessun riferimento aggiuntivo
 - la convenzione si applica a dashboard, lista dispositivi, dettaglio dispositivo, modal rapida, planimetria, dettaglio scansioni e statistiche
 - negli eventi firewall Sophos vengono esposti anche `src_device_label` e `dst_device_label` per mostrare `src_ip` e `dst_ip` con il relativo riferimento dispositivo/utente quando GAIA riesce a correlare l'IP a `network_devices`
+- gli eventi firewall e i riepiloghi traffico espongono anche gli ID dei target tracciati (`tracked_*_subject_id`) per rendere i flag UI consistenti e riutilizzabili lato frontend
 
 ### 5.3 Struttura cartelle
 
@@ -316,12 +355,12 @@ I path legacy `app/api/routes/network.py`, `app/models/network.py`, `app/schemas
 
 | Route | Contenuto |
 |-------|-----------|
-| `/network` | Dashboard: dispositivi online/offline, alert attivi, ultima scan, pulsante scan manuale |
-| `/network/devices` | Tabella dispositivi con filtri stato, piano, vendor, ricerca hostname/IP/MAC |
+| `/network` | Dashboard: dispositivi online/offline, alert attivi, ultima scan, pulsanti per scansione completa e discovery ARP |
+| `/network/devices` | Tabella dispositivi con filtri stato, piano, vendor, ricerca hostname/IP/MAC e vista `Da ARP` per host sconosciuti da censire |
 | `/network/devices/[id]` | Dettaglio: info, storico visto, posizione planimetria, link Inventario, IP con riferimento utente |
 | `/network/floor-plan` | Selezione piano + planimetria interattiva con badge dispositivi e riferimenti IP leggibili |
 | `/network/alerts` | Lista alert con filtro tipo/severità, azione risolvi/ignora |
-| `/network/scans` | Storico scansioni con delta e confronto snapshot |
+| `/network/scans` | Storico scansioni con delta, confronto snapshot e avvio esplicito di scansione completa o discovery ARP |
 | `/network/scans/[id]` | Dettaglio snapshot: lista completa dispositivi con label e IP arricchiti |
 
 ---

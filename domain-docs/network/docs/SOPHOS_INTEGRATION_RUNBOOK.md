@@ -202,6 +202,85 @@ La convenzione e applicata nelle viste operative principali:
 - statistiche
 - eventi firewall Sophos per `src_ip` e `dst_ip` quando l'IP e correlato a un device noto
 
+## Tracking operativo di device, IP, domini e URL
+
+GAIA permette all’operatore di marcare come `tracciato` un target di interesse e seguirne poi le attivita nella sezione dedicata `/network/tracking`.
+
+Punti UI abilitati:
+
+- dettaglio dispositivo: tracking del device e dei peer IP osservati
+- pagina `/network/firewalls`: tracking rapido di `src_ip`, `dst_ip`, `domain` e `url`
+- pagina `/network/statistics`: tracking di top domini, top destinazioni e top device sorgente
+
+Tipi supportati:
+
+- `device`
+- `ip`
+- `domain`
+- `url`
+
+Comportamento operativo:
+
+- se un target e gia presente, il flag non crea duplicati ma riattiva il record esistente
+- la pagina `/network/tracking` mostra:
+  - stato attivo/disattivo
+  - label e note operative
+  - volume traffico in/out delle ultime 168 ore
+  - conteggio eventi `allowed` e `blocked`
+  - ultimi eventi correlati
+
+API utili:
+
+```bash
+curl -H "Authorization: Bearer <TOKEN>" http://localhost:8080/api/network/tracking
+```
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  http://localhost:8080/api/network/tracking \
+  -d '{"entity_type":"ip","value":"8.8.8.8","label":"Google DNS"}'
+```
+
+```bash
+curl -H "Authorization: Bearer <TOKEN>" \
+  http://localhost:8080/api/network/tracking/1/activities
+```
+
+## Discovery ARP per device sconosciuti
+
+Quando serve identificare host presenti sul segmento locale ma non ancora censiti o senza porte aperte evidenti, usare la modalita `ARP discovery` del modulo rete.
+
+Caratteristiche:
+
+- focus su presenza reale L2/LAN
+- raccolta di `ip_address` e `mac_address`
+- hostname best-effort via `dns`, `mdns` e `netbios`
+- nessun intento di spoofing o MITM: il modulo invia solo richieste ARP di discovery
+
+Uso applicativo:
+
+- dashboard rete: pulsante `Discovery ARP`
+- pagina `/network/scans`: pulsante `Discovery ARP`
+
+API:
+
+```bash
+curl -X POST \
+  -H "Authorization: Bearer <TOKEN>" \
+  -H "Content-Type: application/json" \
+  http://localhost:8080/api/network/scans \
+  -d '{"scan_type":"arp"}'
+```
+
+Risultato atteso:
+
+- nuovo snapshot con `scan_type=arp`
+- aggiornamento di `network_devices` con i device presenti sul segmento
+- valorizzazione di `metadata_sources.discovery=arp`
+- comparsa piu rapida dei device sconosciuti nella lista rete e nelle statistiche
+
 ## Import censimento Excel
 
 Per popolare l’anagrafica operativa dei device dal file di censimento:

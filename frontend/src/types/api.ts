@@ -798,10 +798,12 @@ export type NetworkStatisticsCountItem = {
 export type NetworkStatisticsTrafficItem = {
   label: string;
   ip_address: string | null;
+  device_id: number | null;
   events_count: number;
   bytes_in: number;
   bytes_out: number;
   bytes_total: number;
+  tracked_subject_id: number | null;
 };
 
 export type NetworkStatisticsTimelinePoint = {
@@ -858,6 +860,55 @@ export type NetworkAssignedUserSummary = {
   office_location: string | null;
   phone_extension: string | null;
   is_placeholder_profile: boolean;
+};
+
+export type NetworkTrackedSubjectActivityEvent = {
+  id: number;
+  firewall_id: number;
+  device_id: number | null;
+  event_type: string;
+  severity: string;
+  protocol: string | null;
+  src_ip: string | null;
+  src_device_label: string | null;
+  dst_ip: string | null;
+  dst_device_label: string | null;
+  domain: string | null;
+  url: string | null;
+  bytes_in: number;
+  bytes_out: number;
+  matched_on: string;
+  matched_value: string;
+  observed_at: string;
+};
+
+export type NetworkTrackedSubjectActivitySummary = {
+  window_hours: number;
+  total_events: number;
+  allowed_events: number;
+  blocked_events: number;
+  bytes_in: number;
+  bytes_out: number;
+  last_observed_at: string | null;
+  recent_events: NetworkTrackedSubjectActivityEvent[];
+};
+
+export type NetworkTrackedSubject = {
+  id: number;
+  entity_type: "device" | "ip" | "domain" | "url";
+  normalized_value: string;
+  value: string;
+  label: string | null;
+  resolved_label: string;
+  notes: string | null;
+  is_active: boolean;
+  device_id: number | null;
+  device_label: string | null;
+  created_by_user_id: number | null;
+  created_by_username: string | null;
+  created_at: string;
+  updated_at: string;
+  activity_summary: NetworkTrackedSubjectActivitySummary | null;
 };
 
 export type NetworkDevice = {
@@ -917,6 +968,7 @@ export type NetworkDevice = {
       events_count: number;
       bytes_in: number;
       bytes_out: number;
+      tracked_subject_id: number | null;
     }[];
     recent_events: {
       id: number;
@@ -930,6 +982,9 @@ export type NetworkDevice = {
       bytes_in: number;
       bytes_out: number;
       observed_at: string;
+      tracked_peer_ip_subject_id: number | null;
+      tracked_peer_label_subject_id: number | null;
+      tracked_url_subject_id: number | null;
     }[];
   } | null;
 };
@@ -946,6 +1001,18 @@ export type NetworkDeviceUpdateInput = {
   assigned_user_id?: number | null;
   is_known_device?: boolean;
   is_monitored?: boolean;
+};
+
+export type NetworkDeviceBulkUpdateInput = {
+  device_ids: number[];
+  is_known_device?: boolean | null;
+  location_hint?: string | null;
+  notes_append?: string | null;
+};
+
+export type NetworkDeviceBulkUpdateResponse = {
+  updated_count: number;
+  items: NetworkDevice[];
 };
 
 export type NetworkDeviceListResponse = {
@@ -1002,6 +1069,24 @@ export type NetworkFirewallEvent = {
   protocol: string | null;
   raw_payload: Record<string, unknown> | null;
   observed_at: string;
+  tracked_src_ip_subject_id: number | null;
+  tracked_dst_ip_subject_id: number | null;
+  tracked_domain_subject_id: number | null;
+  tracked_url_subject_id: number | null;
+};
+
+export type NetworkTrackedSubjectCreateInput = {
+  entity_type: "device" | "ip" | "domain" | "url";
+  value?: string | null;
+  device_id?: number | null;
+  label?: string | null;
+  notes?: string | null;
+};
+
+export type NetworkTrackedSubjectUpdateInput = {
+  label?: string | null;
+  notes?: string | null;
+  is_active?: boolean;
 };
 
 export type NetworkFirewallMetric = {
@@ -1041,6 +1126,11 @@ export type NetworkScanTriggerResponse = {
   scan: NetworkScan;
   devices_upserted: number;
   alerts_created: number;
+};
+
+export type NetworkScanTriggerInput = {
+  scan_type?: "incremental" | "arp";
+  network_range?: string;
 };
 
 export type BonificaUserStaging = {

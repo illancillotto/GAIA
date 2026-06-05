@@ -9,6 +9,7 @@ from app.modules.network.models import (
     NetworkFirewallMetric,
     NetworkScan,
     NetworkScanDevice,
+    NetworkTrackedSubject,
 )
 
 __all__ = [
@@ -22,4 +23,5 @@ __all__ = [
     "NetworkFirewallMetric",
     "NetworkScan",
     "NetworkScanDevice",
+    "NetworkTrackedSubject",
 ]

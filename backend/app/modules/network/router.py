@@ -16,7 +16,15 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_active_user
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
-from app.modules.network.models import DevicePosition, FloorPlan, NetworkDevice, NetworkFirewallEvent, NetworkScan, NetworkScanDevice
+from app.modules.network.models import (
+    DevicePosition,
+    FloorPlan,
+    NetworkDevice,
+    NetworkFirewallEvent,
+    NetworkScan,
+    NetworkScanDevice,
+    NetworkTrackedSubject,
+)
 from app.modules.network.schemas import (
     DevicePositionResponse,
     DevicePositionUpdateRequest,
@@ -28,6 +36,8 @@ from app.modules.network.schemas import (
     NetworkAlertUpdateRequest,
     NetworkDashboardSummary,
     NetworkDeviceListResponse,
+    NetworkDeviceBulkUpdateRequest,
+    NetworkDeviceBulkUpdateResponse,
     NetworkAssignedUserSummary,
     NetworkDeviceTrafficEventSummary,
     NetworkDeviceTrafficPeerSummary,
@@ -41,11 +51,17 @@ from app.modules.network.schemas import (
     NetworkStatisticsSummary,
     NetworkStatisticsTimelinePoint,
     NetworkStatisticsTrafficItem,
+    NetworkTrackedSubjectActivityEvent,
+    NetworkTrackedSubjectActivitySummary,
+    NetworkTrackedSubjectCreateRequest,
+    NetworkTrackedSubjectResponse,
+    NetworkTrackedSubjectUpdateRequest,
     NetworkScanDetailResponse,
     NetworkScanDeviceResponse,
     NetworkScanDiffEntry,
     NetworkScanDiffResponse,
     NetworkScanResponse,
+    NetworkScanTriggerRequest,
     NetworkScanTriggerResponse,
     SophosSyslogIngestRequest,
 )
@@ -151,6 +167,243 @@ def _serialize_assigned_user(user: ApplicationUser) -> NetworkAssignedUserSummar
         office_location=user.office_location,
         phone_extension=user.phone_extension,
         is_placeholder_profile=((not user.is_active) and user.email.endswith("@users.local")),
+    )
+
+
+def _extract_firewall_event_parsed(event: NetworkFirewallEvent) -> dict[str, Any]:
+    raw_payload = metadata_sources_to_dict(event.raw_payload) or {}
+    parsed = raw_payload.get("parsed") if isinstance(raw_payload, dict) else None
+    return parsed if isinstance(parsed, dict) else {}
+
+
+def _normalize_tracked_value(entity_type: str, value: str) -> str:
+    normalized = value.strip()
+    if entity_type == "ip":
+        try:
+            return str(ipaddress.ip_address(normalized))
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Invalid IP address: {value}") from exc
+    if entity_type == "domain":
+        parsed_hostname = urlparse(normalized).hostname if "://" in normalized else normalized
+        hostname = (parsed_hostname or normalized).strip().rstrip(".").lower()
+        if not hostname:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid domain value")
+        return hostname
+    if entity_type == "url":
+        if not normalized:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Invalid URL value")
+        return normalized
+    return normalized
+
+
+def _tracked_subject_key(entity_type: str, normalized_value: str) -> tuple[str, str]:
+    return entity_type, normalized_value
+
+
+def _get_active_tracked_subject_map(db: Session) -> dict[tuple[str, str], NetworkTrackedSubject]:
+    subjects = db.scalars(
+        select(NetworkTrackedSubject)
+        .where(NetworkTrackedSubject.is_active.is_(True))
+        .order_by(NetworkTrackedSubject.id.asc())
+    ).all()
+    return {_tracked_subject_key(item.entity_type, item.normalized_value): item for item in subjects}
+
+
+def _resolve_tracked_subject_label(subject: NetworkTrackedSubject, db: Session) -> str:
+    if subject.label:
+        return subject.label
+    if subject.device_id:
+        device = db.get(NetworkDevice, subject.device_id)
+        if device is not None:
+            return _resolve_device_label(device)[0]
+    return subject.value
+
+
+def _find_tracked_subject(
+    tracked_subjects: dict[tuple[str, str], NetworkTrackedSubject],
+    *,
+    entity_type: str,
+    value: str | None,
+) -> NetworkTrackedSubject | None:
+    if not value:
+        return None
+    try:
+        normalized_value = _normalize_tracked_value(entity_type, value)
+    except HTTPException:
+        return None
+    return tracked_subjects.get(_tracked_subject_key(entity_type, normalized_value))
+
+
+def _match_tracked_subject_against_event(
+    subject: NetworkTrackedSubject,
+    event: NetworkFirewallEvent,
+    *,
+    parsed: dict[str, Any],
+) -> tuple[str, str] | None:
+    if subject.entity_type == "device":
+        if subject.device_id and (event.device_id == subject.device_id or event.src_ip == subject.value or event.dst_ip == subject.value):
+            return "device", subject.value
+        return None
+    if subject.entity_type == "ip":
+        if event.src_ip == subject.normalized_value:
+            return "src_ip", subject.normalized_value
+        if event.dst_ip == subject.normalized_value:
+            return "dst_ip", subject.normalized_value
+        return None
+    if subject.entity_type == "domain":
+        domain = parsed.get("domain")
+        candidate = None
+        if isinstance(domain, str) and domain.strip():
+            candidate = domain.strip().lower()
+        else:
+            raw_url = parsed.get("url")
+            if isinstance(raw_url, str) and raw_url.strip():
+                candidate = (urlparse(raw_url.strip()).hostname or "").lower()
+        if candidate and candidate == subject.normalized_value:
+            return "domain", candidate
+        return None
+    if subject.entity_type == "url":
+        raw_url = parsed.get("url")
+        if isinstance(raw_url, str) and raw_url.strip() == subject.normalized_value:
+            return "url", raw_url.strip()
+    return None
+
+
+def _build_tracked_subject_activity_summary(
+    db: Session,
+    subject: NetworkTrackedSubject,
+    *,
+    window_hours: int = 168,
+    limit: int = 25,
+) -> NetworkTrackedSubjectActivitySummary:
+    window_start = datetime.now(timezone.utc) - timedelta(hours=window_hours)
+    event_query = select(NetworkFirewallEvent).where(NetworkFirewallEvent.observed_at >= window_start)
+    if subject.entity_type == "device" and subject.device_id and subject.value:
+        event_query = event_query.where(
+            or_(
+                NetworkFirewallEvent.device_id == subject.device_id,
+                NetworkFirewallEvent.src_ip == subject.value,
+                NetworkFirewallEvent.dst_ip == subject.value,
+            )
+        )
+    elif subject.entity_type == "ip":
+        event_query = event_query.where(
+            or_(
+                NetworkFirewallEvent.src_ip == subject.normalized_value,
+                NetworkFirewallEvent.dst_ip == subject.normalized_value,
+            )
+        )
+    elif subject.entity_type in {"domain", "url"}:
+        event_query = event_query.where(NetworkFirewallEvent.raw_payload.ilike(f"%{subject.normalized_value}%"))
+
+    events = db.scalars(event_query.order_by(NetworkFirewallEvent.observed_at.desc())).all()
+
+    matched_events: list[NetworkTrackedSubjectActivityEvent] = []
+    total_events = 0
+    allowed_events = 0
+    blocked_events = 0
+    total_bytes_in = 0
+    total_bytes_out = 0
+    last_observed_at: datetime | None = None
+
+    for event in events:
+        parsed = _extract_firewall_event_parsed(event)
+        match = _match_tracked_subject_against_event(subject, event, parsed=parsed)
+        if not match:
+            continue
+        total_events += 1
+        matched_on, matched_value = match
+        bytes_in = 0
+        bytes_out = 0
+        if subject.entity_type == "device" and subject.value:
+            bytes_in, bytes_out, _ = _extract_event_traffic(event, device_ip=subject.value)
+        else:
+            try:
+                bytes_out = max(int(str(parsed.get("bytes_sent", 0)).strip()), 0)
+            except (TypeError, ValueError):
+                bytes_out = 0
+            try:
+                bytes_in = max(int(str(parsed.get("bytes_received", 0)).strip()), 0)
+            except (TypeError, ValueError):
+                bytes_in = 0
+
+        total_bytes_in += bytes_in
+        total_bytes_out += bytes_out
+        if last_observed_at is None:
+            last_observed_at = event.observed_at
+
+        lowered_type = event.event_type.lower()
+        if "allow" in lowered_type:
+            allowed_events += 1
+        if "deny" in lowered_type or "block" in lowered_type or "drop" in lowered_type:
+            blocked_events += 1
+
+        if len(matched_events) < limit:
+            src_label, dst_label = _resolve_firewall_event_endpoint_labels(
+                db,
+                device_id=event.device_id,
+                src_ip=event.src_ip,
+                dst_ip=event.dst_ip,
+            )
+            matched_events.append(
+                NetworkTrackedSubjectActivityEvent(
+                    id=event.id,
+                    firewall_id=event.firewall_id,
+                    device_id=event.device_id,
+                    event_type=event.event_type,
+                    severity=event.severity,
+                    protocol=event.protocol,
+                    src_ip=event.src_ip,
+                    src_device_label=src_label,
+                    dst_ip=event.dst_ip,
+                    dst_device_label=dst_label,
+                    domain=parsed.get("domain") if isinstance(parsed.get("domain"), str) else None,
+                    url=parsed.get("url") if isinstance(parsed.get("url"), str) else None,
+                    bytes_in=bytes_in,
+                    bytes_out=bytes_out,
+                    matched_on=matched_on,
+                    matched_value=matched_value,
+                    observed_at=event.observed_at,
+                )
+            )
+
+    return NetworkTrackedSubjectActivitySummary(
+        window_hours=window_hours,
+        total_events=total_events,
+        allowed_events=allowed_events,
+        blocked_events=blocked_events,
+        bytes_in=total_bytes_in,
+        bytes_out=total_bytes_out,
+        last_observed_at=last_observed_at,
+        recent_events=matched_events,
+    )
+
+
+def _serialize_tracked_subject(
+    db: Session,
+    subject: NetworkTrackedSubject,
+    *,
+    include_activity_summary: bool = True,
+    window_hours: int = 168,
+) -> NetworkTrackedSubjectResponse:
+    device = db.get(NetworkDevice, subject.device_id) if subject.device_id else None
+    created_by = db.get(ApplicationUser, subject.created_by_user_id) if subject.created_by_user_id else None
+    return NetworkTrackedSubjectResponse(
+        id=subject.id,
+        entity_type=subject.entity_type,
+        normalized_value=subject.normalized_value,
+        value=subject.value,
+        label=subject.label,
+        resolved_label=_resolve_tracked_subject_label(subject, db),
+        notes=subject.notes,
+        is_active=subject.is_active,
+        device_id=subject.device_id,
+        device_label=_resolve_device_label(device)[0] if device is not None else None,
+        created_by_user_id=subject.created_by_user_id,
+        created_by_username=created_by.username if created_by is not None else None,
+        created_at=subject.created_at,
+        updated_at=subject.updated_at,
+        activity_summary=_build_tracked_subject_activity_summary(db, subject, window_hours=window_hours) if include_activity_summary else None,
     )
 
 
@@ -284,6 +537,7 @@ def _resolve_peer_label(ip_address: str | None) -> str | None:
 
 def _build_device_traffic_summary(db: Session, device: NetworkDevice, *, window_hours: int = 24) -> NetworkDeviceTrafficSummary:
     window_start = datetime.now(timezone.utc) - timedelta(hours=window_hours)
+    tracked_subjects = _get_active_tracked_subject_map(db)
     events = db.scalars(
         select(NetworkFirewallEvent)
         .where(
@@ -311,6 +565,15 @@ def _build_device_traffic_summary(db: Session, device: NetworkDevice, *, window_
 
     for event in events:
         bytes_in, bytes_out, peer_ip = _extract_event_traffic(event, device_ip=device.ip_address)
+        parsed = _extract_firewall_event_parsed(event)
+        tracked_peer_ip_subject = _find_tracked_subject(tracked_subjects, entity_type="ip", value=peer_ip)
+        peer_label_hint = _extract_peer_hint(event, peer_ip=peer_ip)
+        tracked_domain_subject = _find_tracked_subject(tracked_subjects, entity_type="domain", value=peer_label_hint)
+        tracked_url_subject = _find_tracked_subject(
+            tracked_subjects,
+            entity_type="url",
+            value=parsed.get("url") if isinstance(parsed.get("url"), str) else None,
+        )
         total_bytes_in += bytes_in
         total_bytes_out += bytes_out
 
@@ -325,12 +588,10 @@ def _build_device_traffic_summary(db: Session, device: NetworkDevice, *, window_
             peer_entry["events_count"] += 1
             peer_entry["bytes_in"] += bytes_in
             peer_entry["bytes_out"] += bytes_out
-            peer_label_hint = _extract_peer_hint(event, peer_ip=peer_ip)
             if peer_label_hint:
                 peer_entry["labels"][peer_label_hint] += 1
 
         if len(recent_events) < 8:
-            peer_label = _extract_peer_hint(event, peer_ip=peer_ip)
             recent_events.append(
                 NetworkDeviceTrafficEventSummary(
                     id=event.id,
@@ -340,10 +601,13 @@ def _build_device_traffic_summary(db: Session, device: NetworkDevice, *, window_
                     src_ip=event.src_ip,
                     dst_ip=event.dst_ip,
                     peer_ip=peer_ip,
-                    peer_label=peer_label,
+                    peer_label=peer_label_hint,
                     bytes_in=bytes_in,
                     bytes_out=bytes_out,
                     observed_at=event.observed_at,
+                    tracked_peer_ip_subject_id=tracked_peer_ip_subject.id if tracked_peer_ip_subject else None,
+                    tracked_peer_label_subject_id=tracked_domain_subject.id if tracked_domain_subject else None,
+                    tracked_url_subject_id=tracked_url_subject.id if tracked_url_subject else None,
                 )
             )
 
@@ -354,6 +618,11 @@ def _build_device_traffic_summary(db: Session, device: NetworkDevice, *, window_
             events_count=values["events_count"],
             bytes_in=values["bytes_in"],
             bytes_out=values["bytes_out"],
+            tracked_subject_id=(
+                tracked_subject.id
+                if (tracked_subject := _find_tracked_subject(tracked_subjects, entity_type="ip", value=ip_address))
+                else None
+            ),
         )
         for ip_address, values in sorted(
             peer_totals.items(),
@@ -400,10 +669,12 @@ def _traffic_map_to_items(
             NetworkStatisticsTrafficItem(
                 label=payload.get("label") or key,
                 ip_address=payload.get("ip_address"),
+                device_id=payload.get("device_id"),
                 events_count=payload["events_count"],
                 bytes_in=payload["bytes_in"],
                 bytes_out=payload["bytes_out"],
                 bytes_total=payload["bytes_total"],
+                tracked_subject_id=payload.get("tracked_subject_id"),
             )
         )
     return items
@@ -412,6 +683,7 @@ def _traffic_map_to_items(
 def _build_network_statistics_summary(db: Session, *, window_hours: int = 24) -> NetworkStatisticsSummary:
     now = datetime.now(UTC)
     window_start = now - timedelta(hours=window_hours)
+    tracked_subjects = _get_active_tracked_subject_map(db)
 
     devices = db.scalars(select(NetworkDevice)).all()
     device_by_ip = {device.ip_address: device for device in devices}
@@ -529,6 +801,8 @@ def _build_network_statistics_summary(db: Session, *, window_hours: int = 24) ->
             domains_entry["bytes_in"] += bytes_in
             domains_entry["bytes_out"] += bytes_out
             domains_entry["bytes_total"] += bytes_in + bytes_out
+            tracked_domain_subject = _find_tracked_subject(tracked_subjects, entity_type="domain", value=normalized_domain)
+            domains_entry["tracked_subject_id"] = tracked_domain_subject.id if tracked_domain_subject else None
 
         peer_ip = event.dst_ip or event.src_ip
         if peer_ip:
@@ -546,15 +820,20 @@ def _build_network_statistics_summary(db: Session, *, window_hours: int = 24) ->
             destinations_entry["bytes_in"] += bytes_in
             destinations_entry["bytes_out"] += bytes_out
             destinations_entry["bytes_total"] += bytes_in + bytes_out
+            tracked_destination_subject = _find_tracked_subject(tracked_subjects, entity_type="ip", value=peer_ip)
+            destinations_entry["tracked_subject_id"] = tracked_destination_subject.id if tracked_destination_subject else None
 
         if source_label:
             source_entry = sources_map[source_device.ip_address]
             source_entry["label"] = source_label
             source_entry["ip_address"] = source_device.ip_address
+            source_entry["device_id"] = source_device.id
             source_entry["events_count"] += 1
             source_entry["bytes_in"] += bytes_in
             source_entry["bytes_out"] += bytes_out
             source_entry["bytes_total"] += bytes_in + bytes_out
+            tracked_device_subject = _find_tracked_subject(tracked_subjects, entity_type="device", value=str(source_device.id))
+            source_entry["tracked_subject_id"] = tracked_device_subject.id if tracked_device_subject else None
 
         bucket = event.observed_at.astimezone(timezone.utc).strftime("%d/%m %H:00")
         timeline_map[bucket]["events_count"] += 1
@@ -670,11 +949,25 @@ def _serialize_firewall(firewall: object) -> NetworkFirewallResponse:
 
 
 def _serialize_firewall_event(event: object, db: Session) -> NetworkFirewallEventResponse:
+    tracked_subjects = _get_active_tracked_subject_map(db)
     src_label, dst_label = _resolve_firewall_event_endpoint_labels(
         db,
         device_id=event.device_id,
         src_ip=event.src_ip,
         dst_ip=event.dst_ip,
+    )
+    parsed = _extract_firewall_event_parsed(event)
+    tracked_src = _find_tracked_subject(tracked_subjects, entity_type="ip", value=event.src_ip)
+    tracked_dst = _find_tracked_subject(tracked_subjects, entity_type="ip", value=event.dst_ip)
+    tracked_domain = _find_tracked_subject(
+        tracked_subjects,
+        entity_type="domain",
+        value=parsed.get("domain") if isinstance(parsed.get("domain"), str) else None,
+    )
+    tracked_url = _find_tracked_subject(
+        tracked_subjects,
+        entity_type="url",
+        value=parsed.get("url") if isinstance(parsed.get("url"), str) else None,
     )
     payload = {
         "id": event.id,
@@ -692,6 +985,10 @@ def _serialize_firewall_event(event: object, db: Session) -> NetworkFirewallEven
         "protocol": event.protocol,
         "raw_payload": metadata_sources_to_dict(event.raw_payload),
         "observed_at": event.observed_at,
+        "tracked_src_ip_subject_id": tracked_src.id if tracked_src else None,
+        "tracked_dst_ip_subject_id": tracked_dst.id if tracked_dst else None,
+        "tracked_domain_subject_id": tracked_domain.id if tracked_domain else None,
+        "tracked_url_subject_id": tracked_url.id if tracked_url else None,
     }
     return NetworkFirewallEventResponse.model_validate(payload)
 
@@ -832,6 +1129,40 @@ def patch_device(
     )
 
 
+@router.post("/devices/bulk-update", response_model=NetworkDeviceBulkUpdateResponse)
+def bulk_update_devices(
+    payload: NetworkDeviceBulkUpdateRequest,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> NetworkDeviceBulkUpdateResponse:
+    _require_network_module(current_user)
+    devices = db.scalars(
+        select(NetworkDevice).where(NetworkDevice.id.in_(payload.device_ids)).order_by(NetworkDevice.ip_address.asc())
+    ).all()
+    if not devices:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No devices found for bulk update")
+
+    notes_append = payload.notes_append.strip() if payload.notes_append else None
+    for device in devices:
+        if payload.is_known_device is not None:
+            device.is_known_device = payload.is_known_device
+        if payload.location_hint is not None:
+            device.location_hint = payload.location_hint or None
+        if notes_append:
+            device.notes = f"{device.notes}\n{notes_append}".strip() if device.notes else notes_append
+        sync_network_device_alert_state(db, device)
+        db.add(device)
+
+    db.commit()
+    for device in devices:
+        db.refresh(device)
+
+    return NetworkDeviceBulkUpdateResponse(
+        updated_count=len(devices),
+        items=[_serialize_device(device) for device in devices],
+    )
+
+
 @router.put("/devices/{device_id}/position", response_model=DevicePositionResponse)
 def put_device_position(
     device_id: int,
@@ -855,6 +1186,127 @@ def put_device_position(
         label=payload.label,
     )
     return DevicePositionResponse.model_validate(position)
+
+
+@router.get("/tracking", response_model=list[NetworkTrackedSubjectResponse])
+def get_tracked_subjects(
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+    include_inactive: bool = Query(default=False),
+    window_hours: int = Query(default=168, ge=1, le=24 * 30),
+    search: str | None = Query(default=None),
+    entity_type: str | None = Query(default=None),
+) -> list[NetworkTrackedSubjectResponse]:
+    _require_network_module(current_user)
+    query = select(NetworkTrackedSubject).order_by(NetworkTrackedSubject.updated_at.desc(), NetworkTrackedSubject.id.desc())
+    if not include_inactive:
+        query = query.where(NetworkTrackedSubject.is_active.is_(True))
+    if entity_type:
+        query = query.where(NetworkTrackedSubject.entity_type == entity_type)
+    if search:
+        normalized_search = f"%{search.strip()}%"
+        query = query.where(
+            or_(
+                NetworkTrackedSubject.value.ilike(normalized_search),
+                NetworkTrackedSubject.label.ilike(normalized_search),
+                NetworkTrackedSubject.notes.ilike(normalized_search),
+            )
+        )
+    subjects = db.scalars(query).all()
+    return [_serialize_tracked_subject(db, subject, window_hours=window_hours) for subject in subjects]
+
+
+@router.post("/tracking", response_model=NetworkTrackedSubjectResponse, status_code=status.HTTP_201_CREATED)
+def create_tracked_subject(
+    payload: NetworkTrackedSubjectCreateRequest,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> NetworkTrackedSubjectResponse:
+    _require_network_module(current_user)
+
+    device: NetworkDevice | None = None
+    value = payload.value.strip() if payload.value else None
+    normalized_value = value
+    if payload.entity_type == "device":
+        device = db.get(NetworkDevice, payload.device_id)
+        if device is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Device not found")
+        normalized_value = str(device.id)
+        value = device.ip_address
+    else:
+        if value is None:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Missing tracking value")
+        normalized_value = _normalize_tracked_value(payload.entity_type, value)
+
+    existing = db.scalar(
+        select(NetworkTrackedSubject).where(
+            NetworkTrackedSubject.entity_type == payload.entity_type,
+            NetworkTrackedSubject.normalized_value == normalized_value,
+        )
+    )
+    if existing is not None:
+        if payload.label is not None:
+            existing.label = payload.label or None
+        if payload.notes is not None:
+            existing.notes = payload.notes or None
+        existing.is_active = True
+        if device is not None:
+            existing.device_id = device.id
+            existing.value = device.ip_address
+        db.add(existing)
+        db.commit()
+        db.refresh(existing)
+        return _serialize_tracked_subject(db, existing, include_activity_summary=False)
+
+    subject = NetworkTrackedSubject(
+        entity_type=payload.entity_type,
+        normalized_value=normalized_value or "",
+        value=value or "",
+        label=payload.label or None,
+        notes=payload.notes or None,
+        is_active=True,
+        device_id=device.id if device is not None else None,
+        created_by_user_id=current_user.id,
+    )
+    db.add(subject)
+    db.commit()
+    db.refresh(subject)
+    return _serialize_tracked_subject(db, subject, include_activity_summary=False)
+
+
+@router.patch("/tracking/{subject_id}", response_model=NetworkTrackedSubjectResponse)
+def patch_tracked_subject(
+    subject_id: int,
+    payload: NetworkTrackedSubjectUpdateRequest,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> NetworkTrackedSubjectResponse:
+    _require_network_module(current_user)
+    subject = db.get(NetworkTrackedSubject, subject_id)
+    if subject is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tracked subject not found")
+    updates = payload.model_dump(exclude_unset=True)
+    for field_name, field_value in updates.items():
+        setattr(subject, field_name, field_value)
+    db.add(subject)
+    db.commit()
+    db.refresh(subject)
+    return _serialize_tracked_subject(db, subject, include_activity_summary=False)
+
+
+@router.get("/tracking/{subject_id}/activities", response_model=NetworkTrackedSubjectActivitySummary)
+def get_tracked_subject_activities(
+    subject_id: int,
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    db: Annotated[Session, Depends(get_db)],
+    window_hours: int = Query(default=168, ge=1, le=24 * 30),
+    limit: int = Query(default=25, ge=1, le=200),
+) -> NetworkTrackedSubjectActivitySummary:
+    _require_network_module(current_user)
+    subject = db.get(NetworkTrackedSubject, subject_id)
+    if subject is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tracked subject not found")
+    return _build_tracked_subject_activity_summary(db, subject, window_hours=window_hours, limit=limit)
 
 
 @router.get("/alerts", response_model=list[NetworkAlertResponse])
@@ -1003,9 +1455,16 @@ def get_scan_diff_endpoint(
 def create_scan(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     db: Annotated[Session, Depends(get_db)],
+    payload: NetworkScanTriggerRequest | None = None,
 ) -> NetworkScanTriggerResponse:
     _require_network_module(current_user)
-    result = run_network_scan(db, initiated_by=current_user.username)
+    request_payload = payload or NetworkScanTriggerRequest()
+    result = run_network_scan(
+        db,
+        initiated_by=current_user.username,
+        network_range=request_payload.network_range,
+        scan_type=request_payload.scan_type,
+    )
     scan_payload = NetworkScanResponse.model_validate(result.scan).model_dump()
     scan_payload["delta"] = getattr(
         result,

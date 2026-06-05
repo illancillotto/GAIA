@@ -1,5 +1,7 @@
 import type { NetworkDevice, NetworkScanDevice } from "@/types/api";
 
+export type NetworkTrackingEntityType = "device" | "ip" | "domain" | "url";
+
 function hasPort(openPorts: string | null, port: number): boolean {
   if (!openPorts) {
     return false;
@@ -61,4 +63,28 @@ export function formatIpWithReference(device: DeviceLike | ScanDeviceLike): stri
     return `${device.ip_address} · ${reference}`;
   }
   return device.ip_address;
+}
+
+export function normalizeNetworkTrackingValue(entityType: NetworkTrackingEntityType, value: string): string {
+  const normalized = value.trim();
+  if (entityType === "domain") {
+    try {
+      const parsed = normalized.includes("://") ? new URL(normalized) : null;
+      return (parsed?.hostname || normalized).trim().replace(/\.$/, "").toLowerCase();
+    } catch {
+      return normalized.replace(/\.$/, "").toLowerCase();
+    }
+  }
+  if (entityType === "url") {
+    return normalized;
+  }
+  return normalized;
+}
+
+export function buildNetworkTrackingKey(entityType: NetworkTrackingEntityType, value: string): string {
+  return `${entityType}:${normalizeNetworkTrackingValue(entityType, value)}`;
+}
+
+export function buildDeviceTrackingKey(deviceId: number): string {
+  return `device:${deviceId}`;
 }

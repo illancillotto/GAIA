@@ -5,15 +5,19 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { FilterPillGroup } from "@/components/network/filter-pill-group";
 import { NetworkModulePage } from "@/components/network/network-module-page";
 import { NetworkStatusBadge } from "@/components/network/network-status-badge";
+import { NetworkTrackToggle } from "@/components/network/network-track-toggle";
 import { EmptyState } from "@/components/ui/empty-state";
 import { RefreshIcon, ServerIcon } from "@/components/ui/icons";
 import {
+  createNetworkTrackedSubject,
   getNetworkFirewalls,
   getNetworkFirewallEvents,
   getNetworkFirewallMetrics,
+  listNetworkTrackedSubjects,
   pollNetworkFirewallMetrics,
 } from "@/lib/api";
-import type { NetworkFirewall, NetworkFirewallEvent, NetworkFirewallMetric } from "@/types/api";
+import { buildNetworkTrackingKey } from "@/lib/network-device-utils";
+import type { NetworkFirewall, NetworkFirewallEvent, NetworkFirewallMetric, NetworkTrackedSubject } from "@/types/api";
 
 const SEVERITY_FILTER_OPTIONS = [
   { value: "", label: "Tutte" },
@@ -114,10 +118,13 @@ function FirewallsContent({ token }: { token: string }) {
   const [selectedFirewallId, setSelectedFirewallId] = useState<number | null>(null);
   const [events, setEvents] = useState<NetworkFirewallEvent[]>([]);
   const [metrics, setMetrics] = useState<NetworkFirewallMetric[]>([]);
+  const [trackedSubjects, setTrackedSubjects] = useState<NetworkTrackedSubject[]>([]);
   const [severityFilter, setSeverityFilter] = useState("");
   const [eventSearch, setEventSearch] = useState("");
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [trackingError, setTrackingError] = useState<string | null>(null);
   const [isPolling, setIsPolling] = useState(false);
+  const [trackingBusyKey, setTrackingBusyKey] = useState<string | null>(null);
 
   const loadFirewalls = useCallback(async () => {
     try {
@@ -150,6 +157,20 @@ function FirewallsContent({ token }: { token: string }) {
   }, [loadFirewalls]);
 
   useEffect(() => {
+    async function loadTracking() {
+      try {
+        const subjects = await listNetworkTrackedSubjects(token, { windowHours: 168 });
+        setTrackedSubjects(subjects);
+        setTrackingError(null);
+      } catch (error) {
+        setTrackingError(error instanceof Error ? error.message : "Errore caricamento tracking");
+      }
+    }
+
+    void loadTracking();
+  }, [token]);
+
+  useEffect(() => {
     if (selectedFirewallId === null) {
       setEvents([]);
       setMetrics([]);
@@ -174,6 +195,15 @@ function FirewallsContent({ token }: { token: string }) {
   }
 
   const selectedFirewall = firewalls.find((item) => item.id === selectedFirewallId) ?? null;
+  const trackedSubjectMap = useMemo(
+    () =>
+      new Map<string, NetworkTrackedSubject>(
+        trackedSubjects
+          .filter((subject) => subject.is_active)
+          .map((subject) => [`${subject.entity_type}:${subject.normalized_value}`, subject] as const),
+      ),
+    [trackedSubjects],
+  );
   const latestMetricByKey = useMemo(() => {
     const map = new Map<string, NetworkFirewallMetric>();
     for (const metric of metrics) {
@@ -214,6 +244,23 @@ function FirewallsContent({ token }: { token: string }) {
       return haystack.includes(normalizedSearch);
     });
   }, [eventSearch, events]);
+
+  async function handleTrack(
+    key: string,
+    payload:
+      | { entity_type: "ip" | "domain" | "url"; value: string; label?: string | null; notes?: string | null },
+  ) {
+    setTrackingBusyKey(key);
+    setTrackingError(null);
+    try {
+      const subject = await createNetworkTrackedSubject(token, payload);
+      setTrackedSubjects((current) => [subject, ...current.filter((item) => item.id !== subject.id)]);
+    } catch (error) {
+      setTrackingError(error instanceof Error ? error.message : "Errore durante l'attivazione del tracking");
+    } finally {
+      setTrackingBusyKey(null);
+    }
+  }
 
   return (
     <div className="page-stack">
@@ -315,6 +362,7 @@ function FirewallsContent({ token }: { token: string }) {
                 </select>
               </div>
             </div>
+            {trackingError ? <p className="mb-4 text-sm text-red-600">{trackingError}</p> : null}
             <div className="mb-4">
               <FilterPillGroup options={SEVERITY_FILTER_OPTIONS} value={severityFilter} onChange={setSeverityFilter} />
             </div>
@@ -331,6 +379,10 @@ function FirewallsContent({ token }: { token: string }) {
                 {filteredEvents.map((event) => {
                   const details = parseEventDetails(event);
                   const eventType = formatEventType(event.event_type);
+                  const srcTrackKey = event.src_ip ? buildNetworkTrackingKey("ip", event.src_ip) : null;
+                  const dstTrackKey = event.dst_ip ? buildNetworkTrackingKey("ip", event.dst_ip) : null;
+                  const domainTrackKey = details.domain ? buildNetworkTrackingKey("domain", details.domain) : null;
+                  const urlTrackKey = details.url ? buildNetworkTrackingKey("url", details.url) : null;
                   return (
                   <div key={event.id} className="rounded-2xl border border-gray-100 bg-white px-5 py-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -350,6 +402,38 @@ function FirewallsContent({ token }: { token: string }) {
                           {event.protocol ? ` · ${event.protocol}` : ""}
                           {details.srcZone || details.dstZone ? ` · ${details.srcZone || "?"} → ${details.dstZone || "?"}` : ""}
                         </p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {event.src_ip ? (
+                            <NetworkTrackToggle
+                              compact
+                              tracked={Boolean(event.tracked_src_ip_subject_id || trackedSubjectMap.get(srcTrackKey!))}
+                              label="Traccia src"
+                              busy={trackingBusyKey === srcTrackKey}
+                              onClick={() =>
+                                void handleTrack(srcTrackKey!, {
+                                  entity_type: "ip",
+                                  value: event.src_ip!,
+                                  label: event.src_device_label && event.src_device_label !== event.src_ip ? event.src_device_label : null,
+                                })
+                              }
+                            />
+                          ) : null}
+                          {event.dst_ip ? (
+                            <NetworkTrackToggle
+                              compact
+                              tracked={Boolean(event.tracked_dst_ip_subject_id || trackedSubjectMap.get(dstTrackKey!))}
+                              label="Traccia dst"
+                              busy={trackingBusyKey === dstTrackKey}
+                              onClick={() =>
+                                void handleTrack(dstTrackKey!, {
+                                  entity_type: "ip",
+                                  value: event.dst_ip!,
+                                  label: event.dst_device_label && event.dst_device_label !== event.dst_ip ? event.dst_device_label : null,
+                                })
+                              }
+                            />
+                          ) : null}
+                        </div>
                       </div>
                       <NetworkStatusBadge status={event.severity} />
                     </div>
@@ -368,8 +452,40 @@ function FirewallsContent({ token }: { token: string }) {
                       </div>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2 text-sm text-gray-600">
-                      <span><span className="text-gray-400">Dominio:</span> {details.domain || "n/d"}</span>
-                      <span><span className="text-gray-400">URL:</span> {details.url || "n/d"}</span>
+                      <span className="inline-flex flex-wrap items-center gap-2">
+                        <span><span className="text-gray-400">Dominio:</span> {details.domain || "n/d"}</span>
+                        {details.domain ? (
+                          <NetworkTrackToggle
+                            compact
+                            tracked={Boolean(event.tracked_domain_subject_id || trackedSubjectMap.get(domainTrackKey!))}
+                            label="Traccia"
+                            busy={trackingBusyKey === domainTrackKey}
+                            onClick={() =>
+                              void handleTrack(domainTrackKey!, {
+                                entity_type: "domain",
+                                value: details.domain!,
+                              })
+                            }
+                          />
+                        ) : null}
+                      </span>
+                      <span className="inline-flex flex-wrap items-center gap-2">
+                        <span><span className="text-gray-400">URL:</span> {details.url || "n/d"}</span>
+                        {details.url ? (
+                          <NetworkTrackToggle
+                            compact
+                            tracked={Boolean(event.tracked_url_subject_id || trackedSubjectMap.get(urlTrackKey!))}
+                            label="Traccia"
+                            busy={trackingBusyKey === urlTrackKey}
+                            onClick={() =>
+                              void handleTrack(urlTrackKey!, {
+                                entity_type: "url",
+                                value: details.url!,
+                              })
+                            }
+                          />
+                        ) : null}
+                      </span>
                     </div>
                     <div className="mt-3 flex items-center justify-between gap-3">
                       <p className="text-xs text-gray-400">{new Date(event.observed_at).toLocaleString("it-IT")}</p>

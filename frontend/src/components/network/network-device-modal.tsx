@@ -1,14 +1,26 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
+import { NetworkTrackToggle } from "@/components/network/network-track-toggle";
 import { NetworkStatusBadge } from "@/components/network/network-status-badge";
 import { Badge } from "@/components/ui/badge";
 import { ChevronRightIcon } from "@/components/ui/icons";
-import { getNetworkDevice, listNetworkDeviceAssignees, updateNetworkDevice } from "@/lib/api";
-import { formatIpWithReference, getNetworkDeviceAdminUrl } from "@/lib/network-device-utils";
-import type { NetworkAssignedUserSummary, NetworkDevice } from "@/types/api";
+import {
+  createNetworkTrackedSubject,
+  getNetworkDevice,
+  listNetworkDeviceAssignees,
+  listNetworkTrackedSubjects,
+  updateNetworkDevice,
+} from "@/lib/api";
+import {
+  buildDeviceTrackingKey,
+  buildNetworkTrackingKey,
+  formatIpWithReference,
+  getNetworkDeviceAdminUrl,
+} from "@/lib/network-device-utils";
+import type { NetworkAssignedUserSummary, NetworkDevice, NetworkTrackedSubject } from "@/types/api";
 
 type NetworkDeviceModalProps = {
   token: string;
@@ -56,6 +68,7 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
   const [selectedDevice, setSelectedDevice] = useState<NetworkDevice | null>(null);
   const [applicationUsers, setApplicationUsers] = useState<NetworkAssignedUserSummary[]>([]);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [trackingError, setTrackingError] = useState<string | null>(null);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
   const [displayName, setDisplayName] = useState("");
   const [lifecycleState, setLifecycleState] = useState<"active" | "retired">("active");
@@ -64,9 +77,20 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
   const [notes, setNotes] = useState("");
   const [isKnownDevice, setIsKnownDevice] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [trackedSubjects, setTrackedSubjects] = useState<NetworkTrackedSubject[]>([]);
+  const [trackingBusyKey, setTrackingBusyKey] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const adminUrl = selectedDevice ? getNetworkDeviceAdminUrl(selectedDevice) : null;
+  const trackedSubjectMap = useMemo(
+    () =>
+      new Map<string, NetworkTrackedSubject>(
+        trackedSubjects
+          .filter((subject) => subject.is_active)
+          .map((subject) => [`${subject.entity_type}:${subject.normalized_value}`, subject] as const),
+      ),
+    [trackedSubjects],
+  );
 
   function formatBytes(value: number) {
     if (!Number.isFinite(value) || value <= 0) {
@@ -80,6 +104,14 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
       unitIndex += 1;
     }
     return `${size >= 100 || unitIndex === 0 ? size.toFixed(0) : size.toFixed(1)} ${units[unitIndex]}`;
+  }
+
+  function upsertTrackedSubject(subject: NetworkTrackedSubject) {
+    setTrackedSubjects((current) => {
+      const next = current.filter((item) => item.id !== subject.id);
+      next.unshift(subject);
+      return next;
+    });
   }
 
   useEffect(() => {
@@ -130,6 +162,25 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
     void loadUsers();
   }, [open, token]);
 
+  useEffect(() => {
+    async function loadTrackedSubjects() {
+      if (!open) {
+        setTrackedSubjects([]);
+        setTrackingError(null);
+        return;
+      }
+      try {
+        const subjects = await listNetworkTrackedSubjects(token, { windowHours: 168 });
+        setTrackedSubjects(subjects);
+        setTrackingError(null);
+      } catch (error) {
+        setTrackingError(error instanceof Error ? error.message : "Errore caricamento tracking");
+      }
+    }
+
+    void loadTrackedSubjects();
+  }, [open, token]);
+
   async function handleSave() {
     if (!selectedDevice) {
       return;
@@ -164,6 +215,24 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
     }
   }
 
+  async function handleTrackSubject(
+    key: string,
+    payload:
+      | { entity_type: "device"; device_id: number; label?: string | null; notes?: string | null }
+      | { entity_type: "ip" | "domain" | "url"; value: string; label?: string | null; notes?: string | null },
+  ) {
+    setTrackingBusyKey(key);
+    setTrackingError(null);
+    try {
+      const subject = await createNetworkTrackedSubject(token, payload);
+      upsertTrackedSubject(subject);
+    } catch (error) {
+      setTrackingError(error instanceof Error ? error.message : "Errore durante l'attivazione del tracking");
+    } finally {
+      setTrackingBusyKey(null);
+    }
+  }
+
   if (!open || !deviceId) {
     return null;
   }
@@ -173,6 +242,7 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
     const rightLabel = (right.full_name || right.username).toLowerCase();
     return leftLabel.localeCompare(rightLabel, "it");
   });
+  const trackedDeviceSubject = selectedDevice ? trackedSubjectMap.get(buildDeviceTrackingKey(selectedDevice.id)) : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 px-4 py-6 backdrop-blur-sm">
@@ -226,7 +296,21 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
                           </a>
                         ) : null}
                       </div>
-                      <NetworkStatusBadge status={selectedDevice.status} />
+                      <div className="flex flex-wrap items-center justify-end gap-2">
+                        <NetworkTrackToggle
+                          tracked={Boolean(trackedDeviceSubject)}
+                          label={trackedDeviceSubject ? "Device tracciato" : "Traccia device"}
+                          busy={trackingBusyKey === buildDeviceTrackingKey(selectedDevice.id)}
+                          onClick={() =>
+                            void handleTrackSubject(buildDeviceTrackingKey(selectedDevice.id), {
+                              entity_type: "device",
+                              device_id: selectedDevice.id,
+                              label: selectedDevice.resolved_label,
+                            })
+                          }
+                        />
+                        <NetworkStatusBadge status={selectedDevice.status} />
+                      </div>
                     </div>
                     <dl className="mt-5 grid gap-x-8 gap-y-4 md:grid-cols-2 xl:grid-cols-3">
                       <div>
@@ -353,6 +437,7 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
                     <p className="section-title">Label e note operative</p>
                     <p className="section-copy">Riconoscimento rapido e annotazioni contestuali.</p>
                   </div>
+                  {trackingError ? <p className="mb-3 text-sm text-red-600">{trackingError}</p> : null}
                   {saveError ? <p className="mb-3 text-sm text-red-600">{saveError}</p> : null}
                   {saveMessage ? <p className="mb-3 text-sm text-[#1D4E35]">{saveMessage}</p> : null}
                   <div className="space-y-4">
@@ -517,7 +602,22 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
                                   {peer.label && peer.label !== peer.ip_address ? `${peer.ip_address} · ${peer.label}` : peer.ip_address}
                                 </p>
                               </div>
-                              <p className="text-xs text-gray-500">{peer.events_count} eventi</p>
+                              <div className="flex items-center gap-2">
+                                <NetworkTrackToggle
+                                  compact
+                                  tracked={Boolean(peer.tracked_subject_id || trackedSubjectMap.get(buildNetworkTrackingKey("ip", peer.ip_address)))}
+                                  label="Traccia IP"
+                                  busy={trackingBusyKey === buildNetworkTrackingKey("ip", peer.ip_address)}
+                                  onClick={() =>
+                                    void handleTrackSubject(buildNetworkTrackingKey("ip", peer.ip_address), {
+                                      entity_type: "ip",
+                                      value: peer.ip_address,
+                                      label: peer.label && peer.label !== peer.ip_address ? peer.label : null,
+                                    })
+                                  }
+                                />
+                                <p className="text-xs text-gray-500">{peer.events_count} eventi</p>
+                              </div>
                             </div>
                             <div className="mt-2 flex flex-wrap gap-3 text-xs text-gray-500">
                               <span>In: {formatBytes(peer.bytes_in)}</span>
@@ -536,6 +636,8 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
                       {selectedDevice.traffic_summary?.recent_events.length ? (
                         selectedDevice.traffic_summary.recent_events.map((event) => {
                           const eventType = formatEventType(event.event_type);
+                          const peerTrackKey = event.peer_ip ? buildNetworkTrackingKey("ip", event.peer_ip) : null;
+                          const domainTrackKey = event.peer_label ? buildNetworkTrackingKey("domain", event.peer_label) : null;
                           return (
                           <div key={event.id} className="rounded-lg border border-gray-100 px-4 py-3">
                             <div className="flex flex-wrap items-center justify-between gap-3">
@@ -558,6 +660,37 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
                               {formatTrafficEndpoint(event.dst_ip, event.peer_ip, event.peer_label)}
                               {" · "}In {formatBytes(event.bytes_in)} · Out {formatBytes(event.bytes_out)}
                             </p>
+                            <div className="mt-3 flex flex-wrap gap-2">
+                              {event.peer_ip ? (
+                                <NetworkTrackToggle
+                                  compact
+                                  tracked={Boolean(event.tracked_peer_ip_subject_id || trackedSubjectMap.get(peerTrackKey!))}
+                                  label="Traccia IP"
+                                  busy={trackingBusyKey === peerTrackKey}
+                                  onClick={() =>
+                                    void handleTrackSubject(peerTrackKey!, {
+                                      entity_type: "ip",
+                                      value: event.peer_ip!,
+                                      label: event.peer_label && event.peer_label !== event.peer_ip ? event.peer_label : null,
+                                    })
+                                  }
+                                />
+                              ) : null}
+                              {event.peer_label ? (
+                                <NetworkTrackToggle
+                                  compact
+                                  tracked={Boolean(event.tracked_peer_label_subject_id || trackedSubjectMap.get(domainTrackKey!))}
+                                  label="Traccia dominio"
+                                  busy={trackingBusyKey === domainTrackKey}
+                                  onClick={() =>
+                                    void handleTrackSubject(domainTrackKey!, {
+                                      entity_type: "domain",
+                                      value: event.peer_label!,
+                                    })
+                                  }
+                                />
+                              ) : null}
+                            </div>
                           </div>
                         )})
                       ) : (

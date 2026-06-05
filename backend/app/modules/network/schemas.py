@@ -24,10 +24,12 @@ class NetworkStatisticsCountItem(BaseModel):
 class NetworkStatisticsTrafficItem(BaseModel):
     label: str
     ip_address: str | None = None
+    device_id: int | None = None
     events_count: int
     bytes_in: int = 0
     bytes_out: int = 0
     bytes_total: int = 0
+    tracked_subject_id: int | None = None
 
 
 class NetworkStatisticsTimelinePoint(BaseModel):
@@ -103,6 +105,7 @@ class NetworkDeviceTrafficPeerSummary(BaseModel):
     events_count: int
     bytes_in: int
     bytes_out: int
+    tracked_subject_id: int | None = None
 
 
 class NetworkDeviceTrafficEventSummary(BaseModel):
@@ -117,6 +120,9 @@ class NetworkDeviceTrafficEventSummary(BaseModel):
     bytes_in: int = 0
     bytes_out: int = 0
     observed_at: datetime
+    tracked_peer_ip_subject_id: int | None = None
+    tracked_peer_label_subject_id: int | None = None
+    tracked_url_subject_id: int | None = None
 
 
 class NetworkDeviceTrafficSummary(BaseModel):
@@ -194,6 +200,18 @@ class NetworkDeviceUpdateRequest(BaseModel):
     is_monitored: bool | None = None
 
 
+class NetworkDeviceBulkUpdateRequest(BaseModel):
+    device_ids: list[int] = Field(min_length=1)
+    is_known_device: bool | None = None
+    location_hint: str | None = None
+    notes_append: str | None = None
+
+
+class NetworkDeviceBulkUpdateResponse(BaseModel):
+    updated_count: int
+    items: list[NetworkDeviceResponse]
+
+
 class NetworkDeviceListResponse(BaseModel):
     items: list[NetworkDeviceResponse]
     total: int
@@ -247,6 +265,11 @@ class NetworkScanTriggerResponse(BaseModel):
     scan: NetworkScanResponse
     devices_upserted: int
     alerts_created: int
+
+
+class NetworkScanTriggerRequest(BaseModel):
+    scan_type: str = Field(default="incremental", pattern="^(incremental|arp)$")
+    network_range: str | None = Field(default=None, max_length=64)
 
 
 class NetworkScanDeviceResponse(BaseModel):
@@ -375,6 +398,10 @@ class NetworkFirewallEventResponse(BaseModel):
     protocol: str | None = None
     raw_payload: dict[str, Any] | None = None
     observed_at: datetime
+    tracked_src_ip_subject_id: int | None = None
+    tracked_dst_ip_subject_id: int | None = None
+    tracked_domain_subject_id: int | None = None
+    tracked_url_subject_id: int | None = None
 
 
 class NetworkFirewallMetricResponse(BaseModel):
@@ -397,3 +424,78 @@ class SophosSyslogIngestRequest(BaseModel):
     firewall_name: str | None = Field(default=None, max_length=255)
     management_ip: str | None = Field(default=None, max_length=64)
     observed_at: datetime | None = None
+
+
+class NetworkTrackedSubjectActivityEvent(BaseModel):
+    id: int
+    firewall_id: int
+    device_id: int | None = None
+    event_type: str
+    severity: str
+    protocol: str | None = None
+    src_ip: str | None = None
+    src_device_label: str | None = None
+    dst_ip: str | None = None
+    dst_device_label: str | None = None
+    domain: str | None = None
+    url: str | None = None
+    bytes_in: int = 0
+    bytes_out: int = 0
+    matched_on: str
+    matched_value: str
+    observed_at: datetime
+
+
+class NetworkTrackedSubjectActivitySummary(BaseModel):
+    window_hours: int = 168
+    total_events: int = 0
+    allowed_events: int = 0
+    blocked_events: int = 0
+    bytes_in: int = 0
+    bytes_out: int = 0
+    last_observed_at: datetime | None = None
+    recent_events: list[NetworkTrackedSubjectActivityEvent] = Field(default_factory=list)
+
+
+class NetworkTrackedSubjectResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    entity_type: str
+    normalized_value: str
+    value: str
+    label: str | None = None
+    resolved_label: str
+    notes: str | None = None
+    is_active: bool
+    device_id: int | None = None
+    device_label: str | None = None
+    created_by_user_id: int | None = None
+    created_by_username: str | None = None
+    created_at: datetime
+    updated_at: datetime
+    activity_summary: NetworkTrackedSubjectActivitySummary | None = None
+
+
+class NetworkTrackedSubjectCreateRequest(BaseModel):
+    entity_type: str = Field(pattern="^(device|ip|domain|url)$")
+    value: str | None = Field(default=None, min_length=1, max_length=1024)
+    device_id: int | None = None
+    label: str | None = Field(default=None, max_length=255)
+    notes: str | None = None
+
+    @model_validator(mode="after")
+    def validate_target(self) -> "NetworkTrackedSubjectCreateRequest":
+        if self.entity_type == "device":
+            if self.device_id is None:
+                raise ValueError("device_id is required when entity_type=device")
+            return self
+        if not self.value or not self.value.strip():
+            raise ValueError("value is required for ip, domain and url tracking")
+        return self
+
+
+class NetworkTrackedSubjectUpdateRequest(BaseModel):
+    label: str | None = Field(default=None, max_length=255)
+    notes: str | None = None
+    is_active: bool | None = None

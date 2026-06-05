@@ -116,12 +116,18 @@ import type {
   NetworkDashboardSummary,
   NetworkAssignedUserSummary,
   NetworkDevice,
+  NetworkDeviceBulkUpdateInput,
+  NetworkDeviceBulkUpdateResponse,
   NetworkDeviceListResponse,
   NetworkStatisticsSummary,
   NetworkDeviceUpdateInput,
   NetworkFirewall,
   NetworkFirewallEvent,
   NetworkFirewallMetric,
+  NetworkTrackedSubject,
+  NetworkTrackedSubjectActivitySummary,
+  NetworkTrackedSubjectCreateInput,
+  NetworkTrackedSubjectUpdateInput,
   DevicePositionUpdateInput,
   DevicePosition,
   NetworkFloorPlan,
@@ -131,6 +137,7 @@ import type {
   NetworkScan,
   NetworkScanDetail,
   NetworkScanDiff,
+  NetworkScanTriggerInput,
   NetworkScanTriggerResponse,
   NasGroup,
   NasUser,
@@ -1587,6 +1594,78 @@ export async function listNetworkDeviceAssignees(token: string): Promise<Network
   });
 }
 
+export async function listNetworkTrackedSubjects(
+  token: string,
+  params?: { includeInactive?: boolean; windowHours?: number; search?: string; entityType?: string },
+): Promise<NetworkTrackedSubject[]> {
+  const query = new URLSearchParams();
+  if (params?.includeInactive) {
+    query.set("include_inactive", "true");
+  }
+  if (params?.windowHours != null) {
+    query.set("window_hours", String(params.windowHours));
+  }
+  if (params?.search) {
+    query.set("search", params.search);
+  }
+  if (params?.entityType) {
+    query.set("entity_type", params.entityType);
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<NetworkTrackedSubject[]>(`/network/tracking${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function createNetworkTrackedSubject(
+  token: string,
+  payload: NetworkTrackedSubjectCreateInput,
+): Promise<NetworkTrackedSubject> {
+  return request<NetworkTrackedSubject>("/network/tracking", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateNetworkTrackedSubject(
+  token: string,
+  subjectId: number,
+  payload: NetworkTrackedSubjectUpdateInput,
+): Promise<NetworkTrackedSubject> {
+  return request<NetworkTrackedSubject>(`/network/tracking/${subjectId}`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getNetworkTrackedSubjectActivities(
+  token: string,
+  subjectId: number,
+  params?: { windowHours?: number; limit?: number },
+): Promise<NetworkTrackedSubjectActivitySummary> {
+  const query = new URLSearchParams();
+  if (params?.windowHours != null) {
+    query.set("window_hours", String(params.windowHours));
+  }
+  if (params?.limit != null) {
+    query.set("limit", String(params.limit));
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<NetworkTrackedSubjectActivitySummary>(`/network/tracking/${subjectId}/activities${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
 export async function updateNetworkDevice(
   token: string,
   deviceId: number,
@@ -1594,6 +1673,19 @@ export async function updateNetworkDevice(
 ): Promise<NetworkDevice> {
   return request<NetworkDevice>(`/network/devices/${deviceId}`, {
     method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function bulkUpdateNetworkDevices(
+  token: string,
+  payload: NetworkDeviceBulkUpdateInput,
+): Promise<NetworkDeviceBulkUpdateResponse> {
+  return request<NetworkDeviceBulkUpdateResponse>("/network/devices/bulk-update", {
+    method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -1704,12 +1796,16 @@ export async function getNetworkScanDiff(token: string, scanId: number, otherSca
   });
 }
 
-export async function triggerNetworkScan(token: string): Promise<NetworkScanTriggerResponse> {
+export async function triggerNetworkScan(
+  token: string,
+  payload?: NetworkScanTriggerInput,
+): Promise<NetworkScanTriggerResponse> {
   return request<NetworkScanTriggerResponse>("/network/scans", {
     method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
     },
+    body: payload ? JSON.stringify(payload) : undefined,
   });
 }
 

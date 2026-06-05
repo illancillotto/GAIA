@@ -22,6 +22,7 @@ from app.models.network import (
     NetworkFirewallMetric,
     NetworkScan,
     NetworkScanDevice,
+    NetworkTrackedSubject,
 )
 
 
@@ -242,10 +243,15 @@ def setup_database(monkeypatch: pytest.MonkeyPatch) -> Generator[None, None, Non
     db.commit()
     db.close()
 
-    def fake_run_network_scan(db: Session, initiated_by: str | None = None):
+    def fake_run_network_scan(
+        db: Session,
+        initiated_by: str | None = None,
+        network_range: str | None = None,
+        scan_type: str = "incremental",
+    ):
         new_scan = NetworkScan(
-            network_range="192.168.1.0/24",
-            scan_type="incremental",
+            network_range=network_range or "192.168.1.0/24",
+            scan_type=scan_type,
             status="completed",
             hosts_scanned=1,
             active_hosts=1,
@@ -409,6 +415,27 @@ def test_network_device_can_be_marked_retired() -> None:
     assert dashboard_payload["offline_devices"] == 0
 
 
+def test_network_devices_can_be_bulk_updated() -> None:
+    response = client.post(
+        "/network/devices/bulk-update",
+        headers=auth_headers(),
+        json={
+            "device_ids": [1, 2],
+            "is_known_device": True,
+            "location_hint": "Censimento ARP",
+            "notes_append": "Verifica operatore CED",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["updated_count"] == 2
+    assert len(payload["items"]) == 2
+    assert all(item["is_known_device"] is True for item in payload["items"])
+    assert all(item["location_hint"] == "Censimento ARP" for item in payload["items"])
+    assert all("Verifica operatore CED" in (item["notes"] or "") for item in payload["items"])
+
+
 def test_network_device_can_toggle_known_state_and_create_unknown_alert() -> None:
     response = client.patch(
         "/network/devices/1",
@@ -509,6 +536,19 @@ def test_network_scan_can_be_triggered() -> None:
     assert "delta" in payload["scan"]
 
 
+def test_network_arp_scan_can_be_triggered() -> None:
+    response = client.post(
+        "/network/scans",
+        headers=auth_headers(),
+        json={"scan_type": "arp", "network_range": "192.168.1.0/24"},
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["scan"]["scan_type"] == "arp"
+    assert payload["scan"]["network_range"] == "192.168.1.0/24"
+
+
 def test_network_firewalls_are_listed() -> None:
     response = client.get("/network/firewalls", headers=auth_headers())
 
@@ -529,6 +569,97 @@ def test_network_firewall_events_are_listed() -> None:
     assert payload[0]["device_id"] == 1
     assert payload[0]["src_device_label"] == "Operatore CED"
     assert payload[0]["dst_device_label"] is None
+
+
+def test_network_tracked_subject_can_be_created_for_device() -> None:
+    response = client.post(
+        "/network/tracking",
+        headers=auth_headers(),
+        json={"entity_type": "device", "device_id": 1, "label": "Monitoraggio core"},
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["entity_type"] == "device"
+    assert payload["device_id"] == 1
+    assert payload["value"] == "192.168.1.10"
+    assert payload["resolved_label"] == "Monitoraggio core"
+
+
+def test_network_tracked_subject_list_and_activity_summary_are_returned() -> None:
+    db = TestingSessionLocal()
+    db.add(
+        NetworkTrackedSubject(
+            entity_type="domain",
+            normalized_value="google.com",
+            value="google.com",
+            label="Google",
+            is_active=True,
+        )
+    )
+    db.add(
+        NetworkTrackedSubject(
+            entity_type="ip",
+            normalized_value="8.8.8.8",
+            value="8.8.8.8",
+            is_active=True,
+        )
+    )
+    db.commit()
+    db.close()
+
+    response = client.get("/network/tracking", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 2
+    assert {item["entity_type"] for item in payload} == {"domain", "ip"}
+    assert all("activity_summary" in item for item in payload)
+
+
+def test_network_tracked_subject_activities_match_firewall_events() -> None:
+    db = TestingSessionLocal()
+    subject = NetworkTrackedSubject(
+        entity_type="ip",
+        normalized_value="8.8.8.8",
+        value="8.8.8.8",
+        is_active=True,
+    )
+    db.add(subject)
+    db.commit()
+    db.refresh(subject)
+    subject_id = subject.id
+    db.close()
+
+    response = client.get(f"/network/tracking/{subject_id}/activities", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total_events"] == 1
+    assert payload["blocked_events"] == 1
+    assert payload["recent_events"][0]["matched_on"] == "dst_ip"
+    assert payload["recent_events"][0]["dst_ip"] == "8.8.8.8"
+
+
+def test_network_firewall_events_include_tracked_subject_ids() -> None:
+    db = TestingSessionLocal()
+    tracked_ip = NetworkTrackedSubject(
+        entity_type="ip",
+        normalized_value="8.8.8.8",
+        value="8.8.8.8",
+        is_active=True,
+    )
+    db.add(tracked_ip)
+    db.commit()
+    db.refresh(tracked_ip)
+    tracked_ip_id = tracked_ip.id
+    db.close()
+
+    response = client.get("/network/firewalls/1/events", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload[0]["tracked_dst_ip_subject_id"] == tracked_ip_id
 
 
 def test_network_firewall_metrics_are_listed() -> None:
