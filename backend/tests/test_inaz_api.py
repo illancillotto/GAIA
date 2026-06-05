@@ -153,6 +153,13 @@ def _create_template(path: Path) -> None:
     wb = Workbook()
     ws = wb.active
     ws.title = "Archivio2"
+    ws.cell(5, 1).value = "1/2026-MDASVT67B26B314W"
+    ws.cell(5, 2).value = 1854
+    ws.cell(5, 3).value = "FISSI_gennaio-2026"
+    ws.cell(5, 4).value = "AMADU SALVATORE"
+    ws.cell(5, 5).value = "MANOVALE DI MAGAZZINO"
+    ws.cell(5, 6).value = "D107"
+    ws.cell(5, 7).value = "01/01/2000"
     wb.create_sheet("Giornaliera")
     wb.save(path)
 
@@ -515,8 +522,14 @@ def test_inaz_export_generates_xlsm(tmp_path: Path) -> None:
     assert "Archivio2" in workbook.sheetnames
     assert "Giornaliera" in workbook.sheetnames
     archive2 = workbook["Archivio2"]
-    # giorno 16 => colonna 8 + 15, blocco absence_code +435
-    assert archive2.cell(5, 458).value == "Permesso ordinario"
+    assert archive2.cell(6, 1).value == "5/2026-MDASVT67B26B314W"
+    assert archive2.cell(6, 5).value == "MANOVALE DI MAGAZZINO"
+    assert archive2.cell(6, 6).value == "D107"
+    assert archive2.cell(6, 7).value == "01/01/2000"
+    # giorno 16 => colonna 8 + 15, blocco ordinary_ferial
+    assert archive2.cell(6, 23).value == 5.5
+    # giorno 16 => colonna 8 + 15, blocco codice assenza +436
+    assert archive2.cell(6, 459).value == "Permesso ordinario"
 
 
 def test_inaz_sync_job_can_be_created(monkeypatch: pytest.MonkeyPatch) -> None:

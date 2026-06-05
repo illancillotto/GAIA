@@ -5,6 +5,7 @@ from datetime import date
 from pathlib import Path
 
 from openpyxl import load_workbook
+from openpyxl.worksheet.worksheet import Worksheet
 
 from app.modules.inaz.models import InazCollaborator, InazDailyPunch, InazDailyRecord
 from app.modules.inaz.services.parser import detail_indicates_special_day
@@ -77,12 +78,31 @@ def is_festive(row: InazDailyRecord) -> bool:
     raw_payload = row.raw_payload_json if isinstance(row.raw_payload_json, dict) else None
     return (
         row.raw_weekday in {"S", "D"}
-        or row.schedule_code in {"SAB", "DOM", "OPESAB"}
+        or row.schedule_code in {"SAB", "DOM"}
         or (raw_payload is not None and detail_indicates_special_day(raw_payload))
     )
 
 
-def upsert_archive2_row(ws, collaborator: InazCollaborator, period_label: str) -> int:
+def build_archive_record_key(source_value: object | None, *, period_start: date, employee_code: str) -> str:
+    source_text = str(source_value).strip() if source_value is not None else ""
+    if "-" in source_text:
+        _, suffix = source_text.split("-", 1)
+        suffix = suffix.strip()
+        if suffix:
+            return f"{period_start.month}/{period_start.year}-{suffix}"
+    return f"{period_start.month}/{period_start.year}-{employee_code}"
+
+
+def find_metadata_source_row(ws: Worksheet, employee_code: int, *, exclude_row: int | None = None) -> int | None:
+    for row in range(5, ws.max_row + 1):
+        if exclude_row is not None and row == exclude_row:
+            continue
+        if ws.cell(row, 2).value == employee_code:
+            return row
+    return None
+
+
+def upsert_archive2_row(ws, collaborator: InazCollaborator, period_label: str, *, period_start: date) -> int:
     employee_code = int(collaborator.employee_code)
     existing_row = None
     for row in range(5, ws.max_row + 1):
@@ -91,10 +111,19 @@ def upsert_archive2_row(ws, collaborator: InazCollaborator, period_label: str) -
             break
     if existing_row is None:
         existing_row = max(5, ws.max_row + 1)
-        ws.cell(existing_row, 1).value = existing_row - 4
+    source_row = find_metadata_source_row(ws, employee_code, exclude_row=existing_row)
+    source_record_key = ws.cell(source_row, 1).value if source_row is not None else None
+    ws.cell(existing_row, 1).value = build_archive_record_key(
+        source_record_key,
+        period_start=period_start,
+        employee_code=collaborator.employee_code,
+    )
     ws.cell(existing_row, 2).value = employee_code
     ws.cell(existing_row, 3).value = period_label
     ws.cell(existing_row, 4).value = collaborator.name
+    if source_row is not None:
+        for source_col in (5, 6, 7):
+            ws.cell(existing_row, source_col).value = ws.cell(source_row, source_col).value
     return existing_row
 
 
@@ -108,33 +137,31 @@ def write_archive2_daily_values(
     offsets = {
         "ordinary_ferial": 0,
         "ordinary_festive": 31,
-        "justified": 93,
         "straordinario_ferial": 155,
         "straordinario_festive": 186,
-        "maggiorazione": 342,
-        "absence_code": 435,
-        "absence_hours": 436,
+        "km_auto": 279,
+        "absence_code": 436,
     }
     for daily in export_row.daily_rows:
         col = first_day_column + daily.work_date.day - 1
         classification = resolve_day_classification(export_row, daily, schedule_context)
         festive = classification.special_day
         ordinary = minutes_to_excel_hours(classification.ordinary_minutes)
-        justified = minutes_to_excel_hours(daily.justified_minutes)
         extra = minutes_to_excel_hours(classification.extra_minutes)
-        maggiorazione = minutes_to_excel_hours(daily.maggiorazione_minutes)
-        absence = minutes_to_excel_hours(daily.absence_minutes)
+        km_auto = daily.km_value
 
+        ws.cell(row_index, col + offsets["ordinary_ferial"]).value = None
+        ws.cell(row_index, col + offsets["ordinary_festive"]).value = None
+        ws.cell(row_index, col + offsets["straordinario_ferial"]).value = None
+        ws.cell(row_index, col + offsets["straordinario_festive"]).value = None
+        ws.cell(row_index, col + offsets["km_auto"]).value = None
+        ws.cell(row_index, col + offsets["absence_code"]).value = None
         if ordinary is not None:
             ws.cell(row_index, col + offsets["ordinary_festive" if festive else "ordinary_ferial"]).value = ordinary
-        if justified is not None:
-            ws.cell(row_index, col + offsets["justified"]).value = justified
         if extra is not None:
             ws.cell(row_index, col + offsets["straordinario_festive" if festive else "straordinario_ferial"]).value = extra
-        if maggiorazione is not None:
-            ws.cell(row_index, col + offsets["maggiorazione"]).value = maggiorazione
-        if absence is not None:
-            ws.cell(row_index, col + offsets["absence_hours"]).value = absence
+        if km_auto is not None:
+            ws.cell(row_index, col + offsets["km_auto"]).value = km_auto
         absence_code = resolve_export_absence_code(daily)
         if absence_code:
             ws.cell(row_index, col + offsets["absence_code"]).value = absence_code
@@ -159,7 +186,7 @@ def compile_workbook(
     period_label = f"{employee_kind}_{month_name}-{period_start.year}"
 
     for item in rows:
-        row_index = upsert_archive2_row(archive2, item.collaborator, period_label)
+        row_index = upsert_archive2_row(archive2, item.collaborator, period_label, period_start=period_start)
         write_archive2_daily_values(archive2, row_index, item, schedule_context)
 
     workbook.save(output)

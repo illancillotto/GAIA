@@ -95,7 +95,11 @@ def classify_daily_record(
     holiday = resolve_holiday(record.work_date, collaborator, context)
     raw_payload = record.raw_payload_json if isinstance(record.raw_payload_json, dict) else None
     imported_special_day = raw_payload is not None and detail_indicates_special_day(raw_payload)
+    schedule_code = (record.schedule_code or "").strip().upper()
     special_day = record.work_date.weekday() >= 5 or (holiday is not None and not holiday.is_workday_override) or imported_special_day
+    if schedule_code == "OPESAB" and holiday is None:
+        # Inaz already marked this Saturday as a scheduled workday for the collaborator.
+        special_day = False
     effective_straordinario = (
         record.override_straordinario_minutes
         if record.override_straordinario_minutes is not None
@@ -104,6 +108,18 @@ def classify_daily_record(
     effective_mpe = record.override_mpe_minutes if record.override_mpe_minutes is not None else record.mpe_minutes
     imported_extra = (effective_straordinario or 0) + (effective_mpe or 0)
     imported_extra_value = imported_extra or None
+    assignment = resolve_assignment(collaborator, record.work_date, context) if context is not None else None
+    template = context.templates_by_id.get(assignment.template_id) if assignment is not None and context is not None else None
+    rules = context.rules_by_template_id.get(template.id, []) if template is not None and context is not None else []
+    matched_rules = [
+        rule
+        for rule in rules
+        if rule_matches_date(rule, record.work_date, holiday_day=holiday is not None) and template_matches_date(template, record.work_date)
+    ] if template is not None and template.is_active else []
+    if matched_rules and holiday is None:
+        # A scheduled Saturday/weekday should be exported as ordinary ferial, not festive.
+        special_day = False
+
     if raw_payload is not None and detail_has_authoritative_classification(raw_payload):
         return DayClassification(
             special_day=special_day,
@@ -120,7 +136,6 @@ def classify_daily_record(
             source="imported",
         )
 
-    assignment = resolve_assignment(collaborator, record.work_date, context)
     if assignment is None:
         return DayClassification(
             special_day=special_day,
@@ -129,7 +144,6 @@ def classify_daily_record(
             source="imported",
         )
 
-    template = context.templates_by_id.get(assignment.template_id)
     if template is None or not template.is_active:
         return DayClassification(
             special_day=special_day,
@@ -138,12 +152,6 @@ def classify_daily_record(
             source="imported",
         )
 
-    rules = context.rules_by_template_id.get(template.id, [])
-    matched_rules = [
-        rule
-        for rule in rules
-        if rule_matches_date(rule, record.work_date, holiday_day=holiday is not None) and template_matches_date(template, record.work_date)
-    ]
     if not matched_rules:
         actual_minutes = compute_punch_minutes(punches)
         return DayClassification(

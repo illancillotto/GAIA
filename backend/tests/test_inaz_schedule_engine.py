@@ -64,7 +64,7 @@ def test_alternating_saturday_template_distinguishes_ordinary_and_extra() -> Non
     second_punches = [InazDailyPunch(daily_record_id=second_record.id, sequence=1, entry_time=time(7, 0), exit_time=time(13, 0))]
     second_result = classify_daily_record(collaborator, second_record, second_punches, context)
 
-    assert first_result.special_day is True
+    assert first_result.special_day is False
     assert first_result.ordinary_minutes == 360
     assert first_result.extra_minutes == 0
     assert second_result.special_day is True
@@ -158,10 +158,10 @@ def test_xlsm_export_uses_template_classification_for_special_days() -> None:
     ws.title = "Archivio2"
     write_archive2_daily_values(ws, 5, export_row, context)
 
-    ordinary_festive_col = 8 + (16 - 1) + 31
+    ordinary_ferial_col = 8 + (16 - 1)
     extra_festive_col = 8 + (23 - 1) + 186
 
-    assert ws.cell(5, ordinary_festive_col).value == 6
+    assert ws.cell(5, ordinary_ferial_col).value == 6
     assert ws.cell(5, extra_festive_col).value == 6
 
 
