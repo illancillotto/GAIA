@@ -228,6 +228,7 @@ Comportamento operativo:
   - volume traffico in/out delle ultime 168 ore
   - conteggio eventi `allowed` e `blocked`
   - ultimi eventi correlati
+  - per i target `device`, ultimi snapshot storici del PC/apparato monitorato
 
 API utili:
 

@@ -259,7 +259,7 @@ Formato `NETWORK_SNMP_COMMUNITY_PROFILES`:
   - dettaglio dispositivo
   - pagina firewall sugli endpoint `src_ip` / `dst_ip` e sui campi `domain` / `url`
   - statistiche rete su top domini, top destinazioni e top device sorgente
-- la sezione `/network/tracking` centralizza i target monitorati, con stato attivo/disattivo, label operativa, note e riepilogo attività
+- la sezione `/network/tracking` centralizza i target monitorati, con stato attivo/disattivo, label operativa, note, riepilogo attività e storico snapshot per i target di tipo `device`
 - per ogni target tracciato GAIA correla gli eventi `network_firewall_events` delle ultime 168 ore e mostra:
   - volume traffico ingresso/uscita
   - conteggio eventi allowed / blocked
