@@ -3523,6 +3523,85 @@ def test_gis_popup_returns_latest_visible_titolare() -> None:
     }
 
 
+def test_gis_popup_falls_back_to_live_capacitas_for_missing_titolare(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    db = TestingSessionLocal()
+    try:
+        particella = db.query(CatParticella).filter(CatParticella.cod_comune_capacitas == 165).one()
+        batch = CatImportBatch(filename="utenze-popup-live.xlsx", tipo="capacitas", status="completed")
+        db.add(batch)
+        db.flush()
+        db.add(
+            CatUtenzaIrrigua(
+                import_batch_id=batch.id,
+                anno_campagna=2026,
+                particella_id=particella.id,
+                cod_comune_capacitas=particella.cod_comune_capacitas,
+                foglio=particella.foglio,
+                particella=particella.particella,
+                cco="UT-GIS-LIVE-2026",
+                denominazione=None,
+                codice_fiscale=None,
+            )
+        )
+        db.commit()
+        particella_id = str(particella.id)
+    finally:
+        db.close()
+
+    async def fake_enrich_match(self, p: CatParticella, match: CatAnagraficaMatch) -> CatAnagraficaMatch:
+        match.intestatari = [
+            CatIntestatarioResponse(
+                id=uuid4(),
+                codice_fiscale="RSSMRA80A01H501U",
+                denominazione="Rossi Mario",
+                tipo="PF",
+                cognome="Rossi",
+                nome="Mario",
+                data_nascita=date(1980, 1, 1),
+                luogo_nascita="Oristano",
+                indirizzo="Via Roma 1",
+                comune_residenza="Oristano",
+                cap="09170",
+                email=None,
+                telefono=None,
+                ragione_sociale=None,
+                source="capacitas",
+                last_verified_at=None,
+                deceduto=None,
+            )
+        ]
+        return match
+
+    async def fake_close(self) -> None:
+        return None
+
+    monkeypatch.setattr(
+        "app.modules.catasto.routes.anagrafica._CapacitasLiveResolver.enrich_match",
+        fake_enrich_match,
+    )
+    monkeypatch.setattr(
+        "app.modules.catasto.routes.anagrafica._CapacitasLiveResolver.close",
+        fake_close,
+    )
+
+    response = client.get(
+        f"/catasto/gis/particella/{particella_id}/popup",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["titolare"] == {
+        "codice_fiscale": "RSSMRA80A01H501U",
+        "partita_iva": None,
+        "denominazione": "Rossi Mario",
+        "titoli": None,
+        "source": "capacitas",
+    }
+
+
 def test_gis_popup_rejects_incomplete_gis_particella() -> None:
     db = TestingSessionLocal()
     try:
@@ -8475,6 +8554,50 @@ def test_meter_reading_validate_allows_same_point_with_different_meter_serials()
     payload = response.json()
     row_codes = [{item["code"] for item in row["validation_messages"]} for row in payload["items"]]
     assert all("DUPLICATO_FILE" not in codes for codes in row_codes)
+
+
+def test_meter_reading_import_allows_same_point_with_different_meter_serials() -> None:
+    headers = [
+        "ID",
+        "PUNTO_CONS",
+        "COD_CONT",
+        "TIPO",
+        "LETTURA FINALE 2024",
+        "LETTURA FINALE 2025",
+        "TOTALE m3 2025",
+        "COD. FISC",
+    ]
+    rows = [
+        [1, "C_53_4", "930", "CONT_NO_TES", 13498, 14486, 988, "FLRTRS67P51F272Z"],
+        [2, "C_53_4", "171", "CONT_TESSER", 19710, 32146, 12436, "FLRTRS67P51F272Z"],
+    ]
+    response = client.post(
+        "/catasto/meter-readings/import?mode=upsert&anno=2025",
+        headers=auth_headers(),
+        files={
+            "file": (
+                "D29-2 Morimenta letture 2025.xlsx",
+                _build_meter_readings_workbook(rows=rows, headers=headers),
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["righe_importate"] == 2
+    assert payload["righe_scartate"] == 0
+
+    db = TestingSessionLocal()
+    try:
+        readings = db.execute(
+            select(CatMeterReading)
+            .where(CatMeterReading.anno == 2025, CatMeterReading.punto_consegna == "C_53_4")
+            .order_by(CatMeterReading.matricola.asc())
+        ).scalars().all()
+        assert [reading.matricola for reading in readings] == ["171", "930"]
+    finally:
+        db.close()
 
 
 def test_meter_reading_validate_normalizes_cont_tes_alias() -> None:

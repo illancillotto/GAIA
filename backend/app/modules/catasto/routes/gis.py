@@ -323,12 +323,12 @@ def export_selection(
     summary="Dati popup particella",
     description="Dati essenziali per il popup mappa, senza geometria.",
 )
-def get_particella_popup(
+async def get_particella_popup(
     particella_id: str,
     db: Session = Depends(get_db),
     _: ApplicationUser = Depends(require_active_user),
 ) -> ParticellaPopupData:
-    return gis_service.get_popup_data(db, particella_id)
+    return await gis_service.get_popup_data(db, particella_id)
 
 
 @router.post(

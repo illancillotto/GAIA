@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import logging
 import re
 import uuid
 from datetime import datetime
@@ -52,6 +53,8 @@ from app.models.catasto_phase1 import (
 from app.models.catasto import CatastoParcel
 from app.modules.ruolo.models import RuoloAvviso, RuoloParticella, RuoloPartita
 
+
+logger = logging.getLogger(__name__)
 
 SARDINIA_BBOX = {
     "min_lon": 7.8,
@@ -745,6 +748,59 @@ def _load_popup_titolare(db: Session, particella_uuid: uuid.UUID) -> ParticellaP
     return None
 
 
+def _popup_titolare_from_anagrafica_owner(owner: Any) -> ParticellaPopupTitolare | None:
+    codice_fiscale = _norm_str(getattr(owner, "codice_fiscale", None))
+    denominazione = _norm_str(getattr(owner, "denominazione", None))
+    ragione_sociale = _norm_str(getattr(owner, "ragione_sociale", None))
+    cognome = _norm_str(getattr(owner, "cognome", None))
+    nome = _norm_str(getattr(owner, "nome", None))
+    display_name = denominazione or ragione_sociale or " ".join(part for part in [cognome, nome] if part).strip() or None
+    if not (codice_fiscale or display_name):
+        return None
+    return ParticellaPopupTitolare(
+        codice_fiscale=codice_fiscale,
+        partita_iva=codice_fiscale if codice_fiscale and len(codice_fiscale) == 11 and codice_fiscale.isdigit() else None,
+        denominazione=display_name,
+        titoli=None,
+        source=_norm_str(getattr(owner, "source", None)) or "capacitas",
+    )
+
+
+async def _load_popup_titolare_capacitas_live(
+    db: Session,
+    particella: CatParticella,
+) -> ParticellaPopupTitolare | None:
+    from app.modules.catasto.routes.anagrafica import (
+        _CapacitasLiveResolver,
+        _build_match,
+        _load_consorzio_presence_by_particella_ids,
+    )
+
+    resolver = _CapacitasLiveResolver(db)
+    try:
+        match = _build_match(
+            db,
+            particella,
+            presente_in_catasto_consorzio=(particella.id in _load_consorzio_presence_by_particella_ids(db, {particella.id})),
+        )
+        match = await resolver.enrich_match(particella, match)
+        if resolver.dirty:
+            db.commit()
+            resolver.dirty = False
+        for owner in match.intestatari:
+            titolare = _popup_titolare_from_anagrafica_owner(owner)
+            if titolare is not None:
+                return titolare
+    except Exception as exc:
+        if resolver.dirty:
+            db.rollback()
+            resolver.dirty = False
+        logger.warning("Capacitas live popup fallback failed: particella_id=%s err=%s", particella.id, exc)
+    finally:
+        await resolver.close()
+    return None
+
+
 def _ruolo_parcel_match_condition(particella: CatParticella):
     subalterno = _norm_str(particella.subalterno)
     legacy_conditions = [
@@ -1103,7 +1159,7 @@ def _has_valid_gis_key(particella: CatParticella) -> bool:
     )
 
 
-def get_popup_data(db: Session, particella_id: str) -> ParticellaPopupData:
+async def get_popup_data(db: Session, particella_id: str) -> ParticellaPopupData:
     particella_uuid = _parse_uuid(particella_id, field_name="particella_id")
     particella = db.get(CatParticella, particella_uuid)
     if particella is None or not particella.is_current:
@@ -1126,6 +1182,8 @@ def get_popup_data(db: Session, particella_id: str) -> ParticellaPopupData:
     has_exact_ruolo_match = ruolo_summary is not None and ruolo_summary.source_mode == "exact"
     has_inferred_ruolo_match = ruolo_summary is not None and ruolo_summary.source_mode != "exact"
     titolare = _load_popup_titolare(db, particella_uuid)
+    if titolare is None:
+        titolare = await _load_popup_titolare_capacitas_live(db, particella)
     swapped_capacitas = _load_popup_swapped_capacitas(db, particella_uuid)
     missing_fields: list[str] = []
     if _norm_str(particella.nome_comune) is None:

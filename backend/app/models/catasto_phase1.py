@@ -4,7 +4,7 @@ import uuid
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, JSON, Numeric, String, Text, Uuid, UniqueConstraint, func
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Index, Integer, JSON, Numeric, String, Text, Uuid, UniqueConstraint, func, text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import TypeDecorator
 
@@ -694,7 +694,14 @@ class CatMeterReadingImport(Base):
 class CatMeterReading(Base):
     __tablename__ = "catasto_meter_readings"
     __table_args__ = (
-        UniqueConstraint("anno", "distretto_id", "punto_consegna", name="uq_catasto_meter_readings_ref"),
+        Index(
+            "ux_catasto_meter_readings_ref_meter",
+            "anno",
+            "distretto_id",
+            "punto_consegna",
+            text("coalesce(matricola, '')"),
+            unique=True,
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(Uuid, primary_key=True, default=uuid.uuid4)
