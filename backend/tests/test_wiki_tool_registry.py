@@ -8,6 +8,43 @@ def test_find_matching_tool_prefers_share_lookup_over_accessi_summary() -> None:
     assert tool.meta.name == "find_share_by_name"
 
 
+def test_find_matching_tool_prefers_module_hint_when_available() -> None:
+    tool = find_matching_tool(
+        "Mostrami il riepilogo review e share",
+        "live_data",
+        preferred_module_key="accessi",
+    )
+
+    assert tool is not None
+    assert tool.meta.module_key == "accessi"
+
+
+def test_find_matching_tool_supports_network_alias_module_hint() -> None:
+    tool = find_matching_tool(
+        "Show me the network dashboard summary",
+        "live_data",
+        preferred_module_key="network",
+    )
+
+    assert tool is not None
+    assert tool.meta.module_key == "rete"
+    assert tool.meta.name == "get_network_dashboard_summary"
+
+
+def test_find_matching_tool_matches_network_firewall_summary() -> None:
+    tool = find_matching_tool("Mostrami il riepilogo firewall Sophos della rete", "live_data")
+
+    assert tool is not None
+    assert tool.meta.name == "get_network_firewall_summary"
+
+
+def test_find_matching_tool_matches_network_device_lookup_by_ip() -> None:
+    tool = find_matching_tool("Mostrami il dispositivo 192.168.1.13 in rete", "live_data")
+
+    assert tool is not None
+    assert tool.meta.name == "find_network_device"
+
+
 def test_find_matching_tool_matches_ruolo_subject_lookup() -> None:
     tool = find_matching_tool("Trova soggetto ruolo con codice fiscale RSSMRA80A01H501U", "live_data")
 

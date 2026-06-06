@@ -40,13 +40,31 @@ def _match_access_logic(question: str) -> int:
         "permess",
         "autorizz",
         "abilitat",
-        "accessi",
         "sezione",
         "posso vedere",
         "non vedo",
+        "section",
+        "permission",
+        "authorized",
+        "enabled",
+        "can i see",
+        "i can't see",
     ):
         return 0
-    return 6 + score_terms(question, "permess", "accessi", "sezione", "posso vedere", "non vedo")
+    return 6 + score_terms(
+        question,
+        "permess",
+        "autorizz",
+        "abilitat",
+        "sezione",
+        "posso vedere",
+        "non vedo",
+        "permission",
+        "authorized",
+        "enabled",
+        "can i see",
+        "i can't see",
+    )
 
 
 def _accessi_summary(db: Session, current_user: ApplicationUser, question: str) -> WikiChatResponse:

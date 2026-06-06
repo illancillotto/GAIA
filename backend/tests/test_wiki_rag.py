@@ -91,17 +91,28 @@ def test_build_context_chunk_without_section_title() -> None:
 
 # ── retrieve_chunks ───────────────────────────────────────────────────────────
 
-def test_retrieve_chunks_empty_fts_uses_fallback() -> None:
-    """FTS non trova nulla → fallback alla query recenti (lista vuota se DB vuoto)."""
+def test_retrieve_chunks_empty_fts_returns_empty_without_fallback() -> None:
+    """FTS non trova nulla → nessun fallback implicito ai chunk recenti."""
     mock_db = MagicMock()
     mock_db.execute.return_value.fetchall.return_value = []
-    mock_db.query.return_value.order_by.return_value.limit.return_value.all.return_value = []
 
     result = retrieve_chunks(mock_db, "Cos'è GAIA?")
 
     assert isinstance(result, list)
     assert len(result) == 0
     mock_db.execute.assert_called_once()
+    mock_db.query.assert_not_called()
+
+
+def test_retrieve_chunks_empty_fts_can_use_recent_fallback_when_enabled() -> None:
+    mock_db = MagicMock()
+    mock_db.execute.return_value.fetchall.return_value = []
+    mock_db.query.return_value.order_by.return_value.limit.return_value.all.return_value = []
+
+    result = retrieve_chunks(mock_db, "Cos'è GAIA?", allow_recent_fallback=True)
+
+    assert result == []
+    mock_db.query.assert_called_once()
 
 
 def test_retrieve_chunks_fts_returns_ordered_results() -> None:

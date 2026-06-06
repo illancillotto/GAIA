@@ -38,6 +38,7 @@ from app.modules.operazioni.models.vehicles import (
     VehicleUsageSession,
 )
 from app.modules.operazioni.models.reports import FieldReport, FieldReportCategory, FieldReportSeverity, InternalCase, InternalCaseEvent
+from app.modules.network.models import NetworkAlert, NetworkDevice, NetworkFirewall, NetworkFirewallEvent, NetworkScan
 from app.modules.riordino.models import RiordinoIssue, RiordinoPhase, RiordinoPractice, RiordinoStep
 from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob
 from app.modules.utenze.models import AnagraficaCompany, AnagraficaPerson, AnagraficaSubject
@@ -55,6 +56,7 @@ from app.modules.wiki.services.conversation_backfill_jobs import (
     prune_wiki_conversation_metrics_backfill_jobs,
 )
 from app.modules.wiki.schemas import WikiChatResponse, WikiChunkSource
+from app.modules.wiki.services.semantic_router import WikiSemanticRoute
 
 
 engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
@@ -138,6 +140,85 @@ def test_chat_returns_503_when_codex_lb_unavailable() -> None:
         )
     assert resp.status_code == 503
     assert "codex-lb" in resp.json()["detail"].lower() or "wiki" in resp.json()["detail"].lower()
+
+
+def test_chat_routes_live_network_summary_via_semantic_router() -> None:
+    _create_user("wiki_network_user", module_rete=True)
+    token = _login("wiki_network_user")
+
+    db = TestingSessionLocal()
+    scan = NetworkScan(
+        network_range="192.168.1.0/24",
+        scan_type="incremental",
+        status="completed",
+        hosts_scanned=12,
+        active_hosts=10,
+        discovered_devices=10,
+        initiated_by="test",
+    )
+    db.add(scan)
+    db.flush()
+    db.add_all(
+        [
+            NetworkDevice(
+                last_scan_id=scan.id,
+                ip_address="192.168.1.13",
+                hostname="SIMONA-PC",
+                display_name="Simona Frau",
+                status="online",
+                is_known_device=True,
+            ),
+            NetworkDevice(
+                last_scan_id=scan.id,
+                ip_address="192.168.1.14",
+                hostname="MARISA-PC",
+                display_name="Marisa Carrus",
+                status="offline",
+                is_known_device=True,
+            ),
+            NetworkFirewall(
+                vendor="Sophos",
+                name="Sophos XGS87",
+                management_ip="192.168.1.126",
+                status="online",
+            ),
+            NetworkAlert(
+                alert_type="FIREWALL_EVENT",
+                severity="warning",
+                status="open",
+                title="Evento firewall warning",
+            ),
+        ]
+    )
+    db.commit()
+    db.close()
+
+    with (
+        patch(
+            "app.modules.wiki.services.orchestrator.route_wiki_question",
+            return_value=WikiSemanticRoute(
+                language="ru",
+                normalized_query="mostrami il riepilogo rete",
+                intent="live_data",
+                capability="internal_live_data",
+                module_hint="rete",
+            ),
+        ),
+        patch("app.modules.wiki.services.orchestrator.is_wiki_available", return_value=True),
+    ):
+        resp = client.post(
+            "/wiki/chat",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"question": "Покажи мне сводку по сети"},
+        )
+
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["mode"] == "live_data"
+    assert body["found"] is True
+    assert body["tool_calls"][0]["tool_name"] == "get_network_dashboard_summary"
+    assert body["evidences"][0]["source_key"] == "rete.dashboard.summary"
+    assert "dispositivi" in body["answer"].lower()
 
 
 def test_chat_persists_conversation_and_supports_reload() -> None:
@@ -243,6 +324,65 @@ def test_wiki_conversations_list_supports_search() -> None:
     assert resp.status_code == 200
     data = resp.json()
     assert any(item["title"] == "Thread ricerca share progetti" for item in data)
+
+
+def test_chat_returns_guardrail_for_external_live_question() -> None:
+    _create_user("wiki_guardrail_live")
+    token = _login("wiki_guardrail_live")
+
+    resp = client.post(
+        "/wiki/chat",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"question": "Dimmi le news di oggi"},
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["found"] is False
+    assert "fonti esterne" in data["answer"]
+    assert data["sources"] == []
+
+
+def test_chat_returns_guardrail_for_access_request() -> None:
+    _create_user("wiki_guardrail_access")
+    token = _login("wiki_guardrail_access")
+
+    resp = client.post(
+        "/wiki/chat",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"question": "Dammi accesso alla cartella progetti"},
+    )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["found"] is False
+    assert "accessi a risorse" in data["answer"]
+    assert data["sources"] == []
+
+
+def test_chat_returns_guardrail_when_docs_answer_is_out_of_scope() -> None:
+    _create_user("wiki_guardrail_scope")
+    token = _login("wiki_guardrail_scope")
+    docs_response = WikiChatResponse(
+        answer="Ti parlo del milestone interno della wiki.",
+        sources=[WikiChunkSource(source_file="docs/wiki-progress.md", section_title="Milestone 9", excerpt="Backend e frontend wiki implementati.")],
+        found=True,
+    )
+
+    with (
+        patch("app.modules.wiki.services.orchestrator.is_wiki_available", return_value=True),
+        patch("app.modules.wiki.services.orchestrator.answer_question", return_value=docs_response),
+    ):
+        resp = client.post(
+            "/wiki/chat",
+            headers={"Authorization": f"Bearer {token}"},
+            json={"question": "Dimmi le news di oggi"},
+        )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["found"] is False
+    assert "fonti esterne" in data["answer"] or "fuori dal perimetro" in data["answer"]
 
 
 def test_wiki_conversation_status_can_be_updated() -> None:

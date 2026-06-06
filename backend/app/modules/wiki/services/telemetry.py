@@ -115,7 +115,7 @@ def refresh_wiki_daily_metrics(
 
         query = (
             select(*select_columns)
-            .where(day_expr >= start_date.isoformat(), day_expr <= end_date.isoformat())
+            .where(day_expr >= start_date, day_expr <= end_date)
             .group_by(day_expr, *( [dimension_expr] if dimension_expr is not None else [] ))
             .order_by(day_expr)
         )
@@ -430,7 +430,7 @@ def prune_wiki_telemetry_data(
     period_cutoff = date.today() - timedelta(days=max(period_retention_days, 1))
 
     deleted_audit_rows = db.execute(
-        delete(WikiToolAuditLog).where(func.date(WikiToolAuditLog.created_at) < audit_cutoff.isoformat())
+        delete(WikiToolAuditLog).where(func.date(WikiToolAuditLog.created_at) < audit_cutoff)
     ).rowcount or 0
     deleted_daily_rows = db.execute(
         delete(WikiTelemetryDailyMetric).where(WikiTelemetryDailyMetric.metric_date < daily_cutoff)

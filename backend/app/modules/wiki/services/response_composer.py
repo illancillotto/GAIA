@@ -58,6 +58,12 @@ def _infer_payload_kind(source_key: str) -> str | None:
         return "operazioni_unresolved_transaction_detail"
     if source_key.startswith("operazioni.autodoc-sync."):
         return "operazioni_autodoc_sync_status"
+    if source_key == "rete.dashboard.summary":
+        return "rete_dashboard_summary"
+    if source_key == "rete.firewalls.summary":
+        return "rete_firewall_summary"
+    if source_key.startswith("rete.devices."):
+        return "rete_device_detail"
     return None
 
 

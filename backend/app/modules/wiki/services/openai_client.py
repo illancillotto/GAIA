@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import urllib.error
 import urllib.request
 
 from app.core.config import settings
@@ -46,5 +47,21 @@ def is_wiki_available() -> bool:
     try:
         with urllib.request.urlopen(request, timeout=2):
             return True
+    except urllib.error.HTTPError as exc:
+        # Una risposta HTTP dal codex-lb indica che il servizio e' raggiungibile
+        # anche se la chiave non autorizza il listing dei modelli.
+        if 400 <= exc.code < 500:
+            logger.warning(
+                "Wiki availability probe reached codex-lb but got HTTP %s on %s",
+                exc.code,
+                _models_url(),
+            )
+            return True
+        logger.warning(
+            "Wiki availability probe failed with HTTP %s on %s",
+            exc.code,
+            _models_url(),
+        )
+        return False
     except Exception:
         return False

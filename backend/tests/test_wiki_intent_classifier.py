@@ -87,3 +87,11 @@ def test_classify_intent_prefers_docs_for_documentation_request() -> None:
 
 def test_classify_intent_prefers_logic_when_explanation_and_live_terms_coexist() -> None:
     assert classify_intent("Spiega perché la sessione operazioni 123e4567-e89b-12d3-a456-426614174000 è validated") == "logic"
+
+
+def test_classify_intent_prefers_docs_for_module_overview_question() -> None:
+    assert classify_intent("Come funziona il modulo accessi?") == "docs_only"
+
+
+def test_classify_intent_supports_basic_english_docs_question() -> None:
+    assert classify_intent("What does the wiki module do?") == "docs_only"

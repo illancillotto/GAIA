@@ -68,6 +68,34 @@ Il modulo **Wiki Agent** aggiunge a GAIA un assistente LLM sempre disponibile, c
 - Admin può vedere la lista in `/wiki/requests` (endpoint protetto)
 - Status: `pending` → `reviewed` → `planned` → `done`
 
+### 4.5 Router semantico e guardrail strutturali
+
+- Il Wiki usa un **semantic router multilingua** prima del retrieval
+- La domanda viene:
+  - classificata per capacità (`docs_supported`, `internal_live_data`, `internal_explanation`, `unsupported_*`, `out_of_scope`)
+  - normalizzata in italiano per retrieval e tool matching
+  - associata a un `module_hint` coerente con i moduli GAIA
+- Le richieste fuori perimetro vengono bloccate in modo strutturale, non keyword-only:
+  - news live / meteo / mercati / fonti esterne
+  - concessione accessi o sblocco risorse
+  - azioni operative o modifiche di stato
+- La risposta finale viene restituita nella lingua dell'utente quando il router entra in blocco o fallback
+
+### 4.6 Tool live interni
+
+- Oltre alla documentazione, il Wiki può interrogare tool read-only interni per risposte `live_data`
+- Copertura iniziale:
+  - `accessi`
+  - `catasto`
+  - `ruolo`
+  - `riordino`
+  - `operazioni`
+  - `rete`
+- Per il modulo `rete` sono disponibili almeno:
+  - riepilogo dashboard rete
+  - riepilogo firewall Sophos
+  - lookup dispositivo rete per IP o identificatore riconoscibile
+
 ---
 
 ## 5. Architettura tecnica
@@ -98,6 +126,9 @@ Backend (FastAPI)
         ├── rag.py                   ← retrieval + completion
         ├── indexer.py               ← document parsing + embedding
         └── openai_client.py         ← wrapper OpenAI API
+        ├── semantic_router.py       ← routing multilingua + capability classification
+        ├── guardrails.py            ← blocchi strutturali pre/post retrieval
+        └── tool_registry*.py        ← tool interni live per modulo
 ```
 
 ---
@@ -121,6 +152,8 @@ Backend (FastAPI)
 - Widget non deve bloccare la navigazione (overlay, non modale)
 - Nessun dato sensibile incluso nei chunks (no credenziali, no token)
 - Fallback graceful se codex-lb non raggiungibile (widget mostra errore 503)
+- Nessuna richiesta di accesso, modifica o news esterne deve produrre una risposta “inventata”
+- Le richieste multilingua devono essere instradate sullo stesso perimetro funzionale della variante italiana
 
 ---
 

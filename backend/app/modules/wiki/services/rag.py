@@ -19,7 +19,13 @@ from app.modules.wiki.services.openai_client import (
 logger = logging.getLogger(__name__)
 
 
-def retrieve_chunks(db: Session, question: str, top_k: int = TOP_K) -> list[WikiChunk]:
+def retrieve_chunks(
+    db: Session,
+    question: str,
+    top_k: int = TOP_K,
+    *,
+    allow_recent_fallback: bool = False,
+) -> list[WikiChunk]:
     """
     Retrieval via PostgreSQL full-text search (plainto_tsquery, config 'simple').
     Fallback: ultimi N chunk se la query non trova risultati.
@@ -36,9 +42,11 @@ def retrieve_chunks(db: Session, question: str, top_k: int = TOP_K) -> list[Wiki
     ).fetchall()
 
     if not rows:
-        # Fallback: chunk recenti per dare comunque contesto
-        logger.debug("FTS nessun risultato per '%s', uso fallback", question[:60])
-        return db.query(WikiChunk).order_by(WikiChunk.created_at.desc()).limit(top_k).all()
+        if allow_recent_fallback:
+            logger.debug("FTS nessun risultato per '%s', uso fallback recenti", question[:60])
+            return db.query(WikiChunk).order_by(WikiChunk.created_at.desc()).limit(top_k).all()
+        logger.debug("FTS nessun risultato per '%s', nessun fallback", question[:60])
+        return []
 
     ids = [row.id for row in rows]
     chunks_by_id = {c.id: c for c in db.query(WikiChunk).filter(WikiChunk.id.in_(ids)).all()}
@@ -60,9 +68,13 @@ def answer_question(
     db: Session,
     question: str,
     context_article: str | None = None,
+    *,
+    allow_recent_fallback: bool = False,
+    retrieval_query: str | None = None,
 ) -> WikiChatResponse:
     """Esegue il pipeline RAG e restituisce la risposta con le fonti."""
-    top_chunks = retrieve_chunks(db, question)
+    retrieval_text = retrieval_query or question
+    top_chunks = retrieve_chunks(db, retrieval_text, allow_recent_fallback=allow_recent_fallback)
 
     if context_article:
         article_chunks = (

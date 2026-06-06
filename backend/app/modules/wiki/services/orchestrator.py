@@ -10,11 +10,13 @@ from app.models.application_user import ApplicationUser
 from app.modules.wiki.schemas import WikiChatResponse
 from app.modules.wiki.services.audit import build_audit_context, persist_tool_audit_log
 from app.modules.wiki.services.conversations import get_or_create_wiki_conversation, persist_wiki_conversation_turn
+from app.modules.wiki.services.guardrails import has_platform_scope, postflight_docs_guardrail, preflight_capability_guardrail
 from app.modules.wiki.services.intent_classifier import classify_intent
 from app.modules.wiki.services.openai_client import is_wiki_available
 from app.modules.wiki.services.policy import evaluate_tool_access, sanitize_wiki_response
 from app.modules.wiki.services.rag import answer_question
 from app.modules.wiki.services.response_composer import build_hybrid_response, build_tool_denied_response
+from app.modules.wiki.services.semantic_router import route_wiki_question
 from app.modules.wiki.services.tool_registry import find_matching_tool
 
 logger = logging.getLogger(__name__)
@@ -70,6 +72,15 @@ def _should_attempt_docs_enrichment(question: str, context_article: str | None) 
     return context_article is not None or any(hint in normalized for hint in _HYBRID_HINTS)
 
 
+def _build_guardrail_response(answer: str) -> WikiChatResponse:
+    return WikiChatResponse(
+        answer=answer,
+        sources=[],
+        found=False,
+        mode="docs_only",
+    )
+
+
 def answer_with_orchestration(
     db: Session,
     current_user: ApplicationUser,
@@ -85,8 +96,53 @@ def answer_with_orchestration(
         context_article=context_article,
         conversation_id=conversation_id,
     )
-    intent = classify_intent(question)
-    matched_tool = find_matching_tool(question, intent) if intent in {"live_data", "logic"} else None
+    semantic_route = route_wiki_question(question)
+    normalized_question = semantic_route.normalized_query if semantic_route is not None else question
+    intent = semantic_route.intent if semantic_route is not None else classify_intent(question)
+    preferred_module_key = semantic_route.module_hint if semantic_route is not None else None
+    matched_tool = (
+        find_matching_tool(normalized_question, intent, preferred_module_key=preferred_module_key)
+        if intent in {"live_data", "logic"}
+        else None
+    )
+
+    preflight_decision = None
+    if semantic_route is not None and semantic_route.is_blocking and semantic_route.user_reply:
+        preflight_decision = type("Decision", (), {"answer": semantic_route.user_reply, "fallback_reason": semantic_route.capability})()
+    elif matched_tool is None:
+        preflight_decision = preflight_capability_guardrail(question)
+    if preflight_decision is not None:
+        elapsed_ms = round((monotonic() - started_at) * 1000, 2)
+        response = _build_guardrail_response(preflight_decision.answer)
+        response.conversation_id = conversation.id
+        persist_wiki_conversation_turn(
+            db,
+            conversation=conversation,
+            question=question,
+            response=response,
+        )
+        docs_audit_context = build_audit_context(response=response, fallback_reason=preflight_decision.fallback_reason)
+        persist_tool_audit_log(
+            db,
+            current_user=current_user,
+            question=question,
+            intent=intent,
+            mode=response.mode,
+            tool_name="guardrail",
+            module_key=None,
+            conversation_id=conversation.id,
+            success=True,
+            found=response.found,
+            latency_ms=elapsed_ms,
+            context_article=context_article,
+            entity_key=docs_audit_context.entity_key,
+            entity_label=docs_audit_context.entity_label,
+            response_excerpt=docs_audit_context.response_excerpt,
+            fallback_reason=docs_audit_context.fallback_reason,
+            docs_source_count=docs_audit_context.docs_source_count,
+            evidence_count=docs_audit_context.evidence_count,
+        )
+        return response
 
     if matched_tool is not None:
         access = evaluate_tool_access(db, current_user, matched_tool.meta)
@@ -129,7 +185,7 @@ def answer_with_orchestration(
                 response=denied_response,
             )
             return denied_response
-        response = sanitize_wiki_response(matched_tool.meta, matched_tool.handler(db, current_user, question))
+        response = sanitize_wiki_response(matched_tool.meta, matched_tool.handler(db, current_user, normalized_question))
         fallback_reason: str | None = None
         if (
             response.found
@@ -137,7 +193,7 @@ def answer_with_orchestration(
             and _should_attempt_docs_enrichment(question, context_article)
             and is_wiki_available()
         ):
-            docs_response = answer_question(db, question, context_article)
+            docs_response = answer_question(db, question, context_article, retrieval_query=normalized_question)
             if docs_response.found:
                 response = build_hybrid_response(tool_response=response, docs_response=docs_response)
                 fallback_reason = "docs_enrichment"
@@ -185,8 +241,21 @@ def answer_with_orchestration(
     if not is_wiki_available():
         raise RuntimeError("Wiki Agent non disponibile: codex-lb non raggiungibile su CODEX_LB_URL.")
 
-    response = answer_question(db, question, context_article)
+    response = answer_question(db, question, context_article, retrieval_query=normalized_question)
+    if not response.found and context_article is None and has_platform_scope(question):
+        response = answer_question(
+            db,
+            question,
+            context_article,
+            allow_recent_fallback=True,
+            retrieval_query=normalized_question,
+        )
     response.mode = "docs_only"
+    postflight_decision = postflight_docs_guardrail(question=question, response=response, context_article=context_article)
+    fallback_reason = "docs_only"
+    if postflight_decision is not None:
+        response = _build_guardrail_response(postflight_decision.answer)
+        fallback_reason = postflight_decision.fallback_reason
     elapsed_ms = round((monotonic() - started_at) * 1000, 2)
     response.conversation_id = conversation.id
     persist_wiki_conversation_turn(
@@ -195,7 +264,7 @@ def answer_with_orchestration(
         question=question,
         response=response,
     )
-    docs_audit_context = build_audit_context(response=response, fallback_reason="docs_only")
+    docs_audit_context = build_audit_context(response=response, fallback_reason=fallback_reason)
     persist_tool_audit_log(
         db,
         current_user=current_user,
@@ -217,12 +286,13 @@ def answer_with_orchestration(
         evidence_count=docs_audit_context.evidence_count,
     )
     logger.info(
-        "wiki_docs_answer user=%s role=%s intent=%s found=%s latency_ms=%s context_article=%s",
+        "wiki_docs_answer user=%s role=%s intent=%s found=%s latency_ms=%s context_article=%s fallback_reason=%s",
         current_user.username,
         current_user.role,
         intent,
         response.found,
         elapsed_ms,
         context_article or "-",
+        fallback_reason,
     )
     return response

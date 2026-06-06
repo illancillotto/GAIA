@@ -13,6 +13,22 @@ _DOCS_HINTS = [
     r"\bguida\b",
     r"\boverview\b",
     r"\bpanoramica\b",
+    r"\bwhat is\b",
+    r"\bwhat does\b",
+    r"\bhow does\b",
+    r"\bdocumentation\b",
+    r"\bguide\b",
+]
+
+_DOCS_OVERVIEW_HINTS = [
+    r"\bche cosa fa il modulo\b",
+    r"\bcosa fa il modulo\b",
+    r"\bcome funziona il modulo\b",
+    r"\bpanoramica del modulo\b",
+    r"\boverview del modulo\b",
+    r"\bwhat does the module\b",
+    r"\bhow does the module\b",
+    r"\bmodule overview\b",
 ]
 
 _LOGIC_HINTS = [
@@ -32,6 +48,12 @@ _LOGIC_HINTS = [
     r"\bposso vedere\b",
     r"\bnon vedo\b",
     r"\bcollegat[oi]\b",
+    r"\bwhy\b",
+    r"\bhow it works\b",
+    r"\bexplain\b",
+    r"\bpermission",
+    r"\bauthoriz",
+    r"\benabl",
 ]
 
 _LIVE_DATA_HINTS = [
@@ -84,6 +106,12 @@ _LIVE_DATA_HINTS = [
     r"\bdriver mismatch\b",
     r"\borphan session\b",
     r"\bunmatched refuel\b",
+    r"\bshow me\b",
+    r"\bfind\b",
+    r"\bdetails?\b",
+    r"\bcurrent status\b",
+    r"\bdashboard\b",
+    r"\bstatistics?\b",
 ]
 
 _IDENTIFIER_HINTS = [
@@ -95,6 +123,8 @@ _IDENTIFIER_HINTS = [
 
 def classify_intent(question: str) -> WikiIntent:
     normalized = question.strip().lower()
+    if any(re.search(pattern, normalized) for pattern in _DOCS_OVERVIEW_HINTS):
+        return "docs_only"
     logic_score = sum(1 for pattern in _LOGIC_HINTS if re.search(pattern, normalized))
     live_score = sum(1 for pattern in _LIVE_DATA_HINTS if re.search(pattern, normalized))
     docs_score = sum(1 for pattern in _DOCS_HINTS if re.search(pattern, normalized))
