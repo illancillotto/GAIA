@@ -67,6 +67,7 @@ from app.modules.network.schemas import (
 )
 from app.modules.network.sophos import ingest_sophos_syslog, list_network_firewall_events, list_network_firewalls
 from app.modules.network.sophos_snmp import list_network_firewall_metrics, poll_sophos_firewall_metrics
+from app.modules.network.telemetry_rollups import build_network_statistics_summary_from_rollups
 from app.modules.network.services import (
     create_floor_plan,
     get_device_positions,
@@ -394,7 +395,7 @@ def _build_tracked_subject_activity_summary(
         lowered_type = event.event_type.lower()
         if "allow" in lowered_type:
             allowed_events += 1
-        if "deny" in lowered_type or "block" in lowered_type or "drop" in lowered_type:
+        if "deny" in lowered_type or "denied" in lowered_type or "block" in lowered_type or "drop" in lowered_type:
             blocked_events += 1
 
         if len(matched_events) < limit:
@@ -760,12 +761,6 @@ def _build_network_statistics_summary(db: Session, *, window_hours: int = 24) ->
     device_by_ip = {device.ip_address: device for device in devices}
     firewalls = list_network_firewalls(db)
     alerts = list_network_alerts(db, status="open")
-    events = db.scalars(
-        select(NetworkFirewallEvent)
-        .where(NetworkFirewallEvent.observed_at >= window_start)
-        .order_by(NetworkFirewallEvent.observed_at.desc())
-    ).all()
-
     total_devices = len(devices)
     active_devices = sum(1 for device in devices if device.lifecycle_state == "active")
     retired_devices = sum(1 for device in devices if device.lifecycle_state == "retired")
@@ -818,21 +813,56 @@ def _build_network_statistics_summary(db: Session, *, window_hours: int = 24) ->
     allowed_events = 0
     blocked_events = 0
 
-    for event in events:
-        severity_counter[event.severity or "info"] += 1
-        protocol_counter[(event.protocol or "n/d").upper()] += 1
-        event_type_counter[event.event_type] += 1
+    total_events = 0
+    event_rows = db.execute(
+        select(
+            NetworkFirewallEvent.event_type,
+            NetworkFirewallEvent.severity,
+            NetworkFirewallEvent.protocol,
+            NetworkFirewallEvent.raw_payload,
+            NetworkFirewallEvent.src_ip,
+            NetworkFirewallEvent.dst_ip,
+            NetworkFirewallEvent.device_id,
+            NetworkFirewallEvent.observed_at,
+        )
+        .where(NetworkFirewallEvent.observed_at >= window_start)
+        .execution_options(stream_results=True, yield_per=1000)
+    )
 
-        raw_payload = metadata_sources_to_dict(event.raw_payload) or {}
+    for row in event_rows.mappings():
+        total_events += 1
+        event_type = row["event_type"]
+        event_severity = row["severity"] or "info"
+        event_protocol = row["protocol"]
+        src_ip = row["src_ip"]
+        dst_ip = row["dst_ip"]
+        observed_at = row["observed_at"]
+
+        severity_counter[event_severity] += 1
+        protocol_counter[(event_protocol or "n/d").upper()] += 1
+        event_type_counter[event_type] += 1
+
+        raw_payload = metadata_sources_to_dict(row["raw_payload"]) or {}
         parsed = raw_payload.get("parsed") if isinstance(raw_payload, dict) else None
         parsed = parsed if isinstance(parsed, dict) else {}
 
         bytes_in = 0
         bytes_out = 0
-        source_device = device_by_ip.get(event.src_ip or "")
+        source_device = device_by_ip.get(src_ip or "")
         source_label = None
         if source_device and source_device.lifecycle_state == "active":
-            bytes_in, bytes_out, _ = _extract_event_traffic(event, device_ip=source_device.ip_address)
+            try:
+                bytes_sent = max(int(str(parsed.get("bytes_sent", 0)).strip()), 0)
+            except (TypeError, ValueError):
+                bytes_sent = 0
+            try:
+                bytes_received = max(int(str(parsed.get("bytes_received", 0)).strip()), 0)
+            except (TypeError, ValueError):
+                bytes_received = 0
+            if src_ip == source_device.ip_address:
+                bytes_in, bytes_out = bytes_received, bytes_sent
+            elif dst_ip == source_device.ip_address:
+                bytes_in, bytes_out = bytes_sent, bytes_received
             source_label = _resolve_device_label(source_device)[0]
             source_devices_with_traffic.add(source_device.id)
         else:
@@ -848,7 +878,7 @@ def _build_network_statistics_summary(db: Session, *, window_hours: int = 24) ->
         total_bytes_in += bytes_in
         total_bytes_out += bytes_out
 
-        lowered_type = event.event_type.lower()
+        lowered_type = event_type.lower()
         if "allow" in lowered_type:
             allowed_events += 1
         if "deny" in lowered_type or "block" in lowered_type or "drop" in lowered_type:
@@ -875,7 +905,7 @@ def _build_network_statistics_summary(db: Session, *, window_hours: int = 24) ->
             tracked_domain_subject = _find_tracked_subject(tracked_subjects, entity_type="domain", value=normalized_domain)
             domains_entry["tracked_subject_id"] = tracked_domain_subject.id if tracked_domain_subject else None
 
-        peer_ip = event.dst_ip or event.src_ip
+        peer_ip = dst_ip or src_ip
         if peer_ip:
             try:
                 peer_parsed = ipaddress.ip_address(peer_ip)
@@ -883,7 +913,15 @@ def _build_network_statistics_summary(db: Session, *, window_hours: int = 24) ->
                 peer_parsed = None
             if peer_parsed and not (peer_parsed.is_private or peer_parsed.is_loopback or peer_parsed.is_link_local or peer_parsed.is_multicast):
                 external_peers.add(peer_ip)
-            peer_label = _extract_peer_hint(event, peer_ip=peer_ip) or peer_ip
+            peer_label = None
+            parsed_domain = parsed.get("domain")
+            if isinstance(parsed_domain, str) and parsed_domain.strip():
+                peer_label = parsed_domain.strip()
+            else:
+                parsed_url = parsed.get("url")
+                if isinstance(parsed_url, str) and parsed_url.strip():
+                    peer_label = urlparse(parsed_url.strip()).hostname or peer_ip
+            peer_label = peer_label or peer_ip
             destinations_entry = destinations_map[peer_ip]
             destinations_entry["label"] = peer_label
             destinations_entry["ip_address"] = peer_ip
@@ -906,7 +944,7 @@ def _build_network_statistics_summary(db: Session, *, window_hours: int = 24) ->
             tracked_device_subject = _find_tracked_subject(tracked_subjects, entity_type="device", value=str(source_device.id))
             source_entry["tracked_subject_id"] = tracked_device_subject.id if tracked_device_subject else None
 
-        bucket = event.observed_at.astimezone(timezone.utc).strftime("%d/%m %H:00")
+        bucket = observed_at.astimezone(timezone.utc).strftime("%d/%m %H:00")
         timeline_map[bucket]["events_count"] += 1
         timeline_map[bucket]["bytes_in"] += bytes_in
         timeline_map[bucket]["bytes_out"] += bytes_out
@@ -928,7 +966,7 @@ def _build_network_statistics_summary(db: Session, *, window_hours: int = 24) ->
         devices_with_traffic=len(source_devices_with_traffic),
         firewall_count=len(firewalls),
         open_alerts=len(alerts),
-        total_events=len(events),
+        total_events=total_events,
         allowed_events=allowed_events,
         blocked_events=blocked_events,
         bytes_in=total_bytes_in,
@@ -1100,6 +1138,9 @@ def get_statistics(
     window_hours: int = Query(default=24, ge=1, le=24 * 30),
 ) -> NetworkStatisticsSummary:
     _require_network_module(current_user)
+    rollup_summary = build_network_statistics_summary_from_rollups(db, window_hours=window_hours)
+    if rollup_summary is not None:
+        return rollup_summary
     return _build_network_statistics_summary(db, window_hours=window_hours)
 
 

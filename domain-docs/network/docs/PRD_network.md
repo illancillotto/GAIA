@@ -251,6 +251,9 @@ Formato `NETWORK_SNMP_COMMUNITY_PROFILES`:
 - include breakdown per tipi dispositivo, vendor, uffici, assegnatari, severita, protocolli, eventi Sophos e regole firewall
 - include top list per domini navigati, destinazioni esterne e device sorgente piu attivi
 - include timeline per fascia oraria degli eventi e del volume di traffico
+- i dati di navigazione vengono serviti prioritariamente da rollup orari persistiti in `network_firewall_hourly_rollups`
+- il raw di `network_firewall_events` resta disponibile per drilldown e tracking, ma e soggetto a retention configurabile tramite `NETWORK_FIREWALL_RAW_RETENTION_DAYS`
+- e disponibile uno script di backfill controllato dei rollup per intervalli storici, eseguito a blocchi (`chunk-days`) per evitare picchi di carico sul backend
 
 ### 5.2D-ter Tracking operativo device e target di navigazione
 

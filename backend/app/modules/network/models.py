@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import TYPE_CHECKING
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import BigInteger, Boolean, DateTime, Float, ForeignKey, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -232,6 +232,40 @@ class NetworkFirewallEvent(Base):
     protocol: Mapped[str | None] = mapped_column(String(32), nullable=True)
     raw_payload: Mapped[str | None] = mapped_column(Text, nullable=True)
     observed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False, index=True)
+
+
+class NetworkFirewallHourlyRollup(Base):
+    __tablename__ = "network_firewall_hourly_rollups"
+    __table_args__ = (UniqueConstraint("bucket_start", "category", "dimension_key", name="uq_network_firewall_hourly_rollups_bucket_category_key"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    bucket_start: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    category: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    dimension_key: Mapped[str] = mapped_column(String(512), nullable=False, index=True)
+    label: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    device_id: Mapped[int | None] = mapped_column(
+        ForeignKey("network_devices.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    tracked_subject_id: Mapped[int | None] = mapped_column(
+        ForeignKey("network_tracked_subjects.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    events_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    allowed_events: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    blocked_events: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    bytes_in: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
+    bytes_out: Mapped[int] = mapped_column(BigInteger, default=0, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        server_default=func.now(),
+        onupdate=func.now(),
+        nullable=False,
+    )
 
 
 class NetworkTrackedSubject(Base):

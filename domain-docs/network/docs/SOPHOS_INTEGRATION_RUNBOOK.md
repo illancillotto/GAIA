@@ -249,6 +249,43 @@ curl -H "Authorization: Bearer <TOKEN>" \
   http://localhost:8080/api/network/tracking/1/activities
 ```
 
+## Retention e aggregati statistiche
+
+Per sostenere volumi alti di syslog Sophos:
+
+- la pagina `/network/statistics` legge prioritariamente da rollup orari persistiti
+- il raw di `network_firewall_events` resta per drilldown, tracking e correlazione fine
+- il raw vecchio viene potato automaticamente con retention configurabile
+
+Variabili utili:
+
+- `NETWORK_TELEMETRY_ROLLUP_ENABLED`
+- `NETWORK_TELEMETRY_ROLLUP_CRON`
+- `NETWORK_TELEMETRY_ROLLUP_TIMEZONE`
+- `NETWORK_TELEMETRY_ROLLUP_LOOKBACK_HOURS`
+- `NETWORK_FIREWALL_RAW_RETENTION_DAYS`
+
+Linea guida operativa consigliata:
+
+- raw eventi Sophos: `14` giorni
+- rollup orari: conservazione lunga per statistiche e trend
+- tracking e drilldown: continuano a usare il raw finche presente nella retention
+
+Backfill storico controllato:
+
+```bash
+docker compose exec backend python backend/scripts/backfill_network_firewall_rollups.py \
+  --from 2026-06-01 \
+  --to 2026-06-06 \
+  --chunk-days 1
+```
+
+Note operative:
+
+- usare `chunk-days=1` per popolare giornate singole su volumi alti
+- aumentare a `7` solo se il carico e sostenibile
+- il backfill riscrive i rollup del range selezionato senza toccare il raw fuori finestra
+
 ## Discovery ARP per device sconosciuti
 
 Quando serve identificare host presenti sul segmento locale ma non ancora censiti o senza porte aperte evidenti, usare la modalita `ARP discovery` del modulo rete.
