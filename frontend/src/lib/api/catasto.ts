@@ -29,6 +29,7 @@ import type {
   CatMeterReadingImportRunResponse,
   CatMeterReadingListResponse,
   CatAnomaliaSummary,
+  CatCapacitasImportPreview,
   CatParticella,
   CatParticellaCapacitasSyncResponse,
   CatParticellaConsorzio,
@@ -294,6 +295,21 @@ export async function catastoUploadCapacitas(
   const forceQuery = params?.force ? "?force=true" : "";
   return requestFormDataWithUploadProgress<CatImportStartResponse>(
     `/catasto/import/capacitas${forceQuery}`,
+    formData,
+    token,
+    params?.onProgress,
+  );
+}
+
+export async function catastoPreviewCapacitas(
+  token: string,
+  file: File,
+  params?: { onProgress?: (percent: number) => void },
+): Promise<CatCapacitasImportPreview> {
+  const formData = new FormData();
+  formData.append("file", file);
+  return requestFormDataWithUploadProgress<CatCapacitasImportPreview>(
+    "/catasto/import/capacitas/preview",
     formData,
     token,
     params?.onProgress,

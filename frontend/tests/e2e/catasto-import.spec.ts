@@ -93,7 +93,69 @@ test("admin completes catasto import wizard through report step", async ({ page 
       ),
     });
   });
-  await page.route("**/api/catasto/import/capacitas**", async (route) => {
+  await page.route("**/api/catasto/import/capacitas/preview", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        filename: "capacitas-playwright.xlsx",
+        anno_campagna: 2025,
+        file_hash: "mock-preview-hash-123456",
+        is_exact_duplicate: false,
+        duplicate_batch: null,
+        active_batch: {
+          id: "00000000-0000-0000-0000-000000000300",
+          filename: "capacitas-history.xlsx",
+          tipo: "capacitas_ruolo",
+          anno_campagna: 2025,
+          hash_file: "mock-history",
+          righe_totali: 12,
+          righe_importate: 12,
+          righe_anomalie: 2,
+          status: "completed",
+          report_json: null,
+          errore: null,
+          created_at: "2026-04-30T05:30:00Z",
+          completed_at: "2026-04-30T05:31:00Z",
+          created_by: 1,
+        },
+        summary: {
+          nuove: 1,
+          modificate: 1,
+          invariate: 0,
+          rimosse: 0,
+        },
+        preview_items: [
+          {
+            key: "PW-001|165|5|120|1|DNIFSE64C01L122Y|Playwright Test",
+            change_type: "changed",
+            cco: "PW-001",
+            cod_comune_capacitas: 165,
+            foglio: "5",
+            particella: "120",
+            subalterno: "1",
+            codice_fiscale: "DNIFSE64C01L122Y",
+            denominazione: "Playwright Test",
+            changed_fields: ["importo_0985"],
+          },
+          {
+            key: "PW-002|165|6|121|1|DNIFSE64C01L122Y|Playwright Test 2",
+            change_type: "new",
+            cco: "PW-002",
+            cod_comune_capacitas: 165,
+            foglio: "6",
+            particella: "121",
+            subalterno: "1",
+            codice_fiscale: "DNIFSE64C01L122Y",
+            denominazione: "Playwright Test 2",
+            changed_fields: [],
+          },
+        ],
+        warnings: [],
+      }),
+    });
+  });
+  await page.route("**/api/catasto/import/capacitas", async (route) => {
     await route.fulfill({
       status: 202,
       contentType: "application/json",
@@ -177,7 +239,10 @@ test("admin completes catasto import wizard through report step", async ({ page 
     buffer: buildCapacitasWorkbookBuffer(),
   });
 
-  await page.getByRole("button", { name: "Avvia import" }).click();
+  await page.getByRole("button", { name: "Analizza file" }).click();
+  await expect(page.getByText("Preview import Capacitas")).toBeVisible();
+  await expect(page.getByText("Nuove")).toBeVisible();
+  await page.getByRole("button", { name: "Conferma nuovo snapshot" }).click();
 
   await expect(page.getByText("Sintesi batch")).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText("Contatori anomalie")).toBeVisible({ timeout: 45_000 });
@@ -232,7 +297,7 @@ test("catasto import wizard shows empty report state when batch has no anomalies
       ),
     });
   });
-  await page.route("**/api/catasto/import/capacitas**", async (route) => {
+  await page.route("**/api/catasto/import/capacitas", async (route) => {
     await route.fulfill({
       status: 202,
       contentType: "application/json",
@@ -307,7 +372,7 @@ test("catasto import wizard shows empty report state when batch has no anomalies
 test("catasto import wizard shows batch failure details", async ({ page }) => {
   await loginAsAdmin(page);
 
-  await page.route("**/api/catasto/import/capacitas**", async (route) => {
+  await page.route("**/api/catasto/import/capacitas", async (route) => {
     await route.fulfill({
       status: 202,
       contentType: "application/json",

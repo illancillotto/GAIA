@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import case, desc, false, func, select, text
+from sqlalchemy import case, desc, false, func, nullslast, select, text
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user
@@ -217,7 +217,7 @@ def get_dashboard_summary(
     latest_completed = db.scalars(
         select(CatImportBatch)
         .where(CatImportBatch.tipo == "capacitas_ruolo", CatImportBatch.status == "completed")
-        .order_by(desc(CatImportBatch.completed_at))
+        .order_by(nullslast(desc(CatImportBatch.completed_at)), desc(CatImportBatch.created_at))
         .limit(1)
     ).first()
     import_counts = db.execute(
@@ -225,7 +225,7 @@ def get_dashboard_summary(
             func.coalesce(func.sum(case((CatImportBatch.status == "processing", 1), else_=0)), 0),
             func.coalesce(func.sum(case((CatImportBatch.status == "failed", 1), else_=0)), 0),
             func.coalesce(func.sum(case((CatImportBatch.status == "completed", 1), else_=0)), 0),
-        )
+        ).where(CatImportBatch.tipo == "capacitas_ruolo")
     ).one()
 
     particelle_row = db.execute(

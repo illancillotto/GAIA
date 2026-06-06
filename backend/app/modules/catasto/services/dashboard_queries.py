@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
-from sqlalchemy import desc, select
+from sqlalchemy import desc, nullslast, select
 from sqlalchemy.orm import Session
 
 from app.models.catasto_phase1 import CatImportBatch
@@ -20,6 +20,6 @@ def active_capacitas_batch_id(db: Session, anno: int | None) -> UUID | None:
             CatImportBatch.status == "completed",
             CatImportBatch.anno_campagna == anno,
         )
-        .order_by(desc(CatImportBatch.completed_at), desc(CatImportBatch.created_at))
+        .order_by(nullslast(desc(CatImportBatch.completed_at)), desc(CatImportBatch.created_at))
         .limit(1)
     ).first()

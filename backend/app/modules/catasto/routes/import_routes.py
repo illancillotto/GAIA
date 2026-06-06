@@ -14,7 +14,7 @@ from app.models.catasto_phase1 import CatAnomalia, CatImportBatch, CatUtenzaIrri
 from app.modules.catasto.schemas.gis_schemas import GisSavedSelectionDetail, GisSavedSelectionCreate, GisSavedSelectionItemInput
 from app.modules.catasto.services import gis_service
 from app.modules.catasto.services.import_distretti import finalize_distretti_shapefile_import
-from app.modules.catasto.services.import_capacitas import CapacitasImportDuplicateError, import_capacitas_excel
+from app.modules.catasto.services.import_capacitas import import_capacitas_excel, preview_capacitas_excel
 from app.modules.catasto.services.import_distretti_excel import (
     analyze_distretti_excel_file,
     export_distretti_excel_analysis_xlsx,
@@ -26,6 +26,7 @@ from app.modules.catasto.services.import_shapefile import drop_staging_table, fi
 from app.schemas.catasto_phase1 import (
     CatAnomaliaListResponse,
     CatAnomaliaResponse,
+    CatCapacitasImportPreviewResponse,
     CatDistrettiExcelAnalysisItemResponse,
     CatDistrettiExcelAnalysisResponse,
     CatImportBatchResponse,
@@ -108,6 +109,16 @@ def upload_capacitas(
     db.commit()
     background_tasks.add_task(_run_import, batch_id, file_bytes, file.filename or "capacitas.xlsx", current_user.id, force)
     return CatImportStartResponse(batch_id=batch_id, status="processing")
+
+
+@router.post("/capacitas/preview", response_model=CatCapacitasImportPreviewResponse)
+def preview_capacitas(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    _: ApplicationUser = Depends(require_admin_user),
+) -> CatCapacitasImportPreviewResponse:
+    file_bytes = file.file.read()
+    return preview_capacitas_excel(db, file_bytes=file_bytes, filename=file.filename or "capacitas.xlsx")
 
 
 @router.post("/distretti/excel", response_model=CatImportStartResponse, status_code=status.HTTP_202_ACCEPTED)

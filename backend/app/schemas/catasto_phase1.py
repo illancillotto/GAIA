@@ -34,6 +34,38 @@ class CatImportStartResponse(BaseModel):
     status: str
 
 
+class CatCapacitasImportPreviewDiffSummaryResponse(BaseModel):
+    nuove: int
+    modificate: int
+    invariate: int
+    rimosse: int
+
+
+class CatCapacitasImportPreviewDiffItemResponse(BaseModel):
+    key: str
+    change_type: Literal["new", "changed", "removed"]
+    cco: str | None
+    cod_comune_capacitas: int | None
+    foglio: str | None
+    particella: str | None
+    subalterno: str | None
+    codice_fiscale: str | None
+    denominazione: str | None
+    changed_fields: list[str] = []
+
+
+class CatCapacitasImportPreviewResponse(BaseModel):
+    filename: str
+    anno_campagna: int | None
+    file_hash: str
+    is_exact_duplicate: bool
+    duplicate_batch: CatImportBatchResponse | None
+    active_batch: CatImportBatchResponse | None
+    summary: CatCapacitasImportPreviewDiffSummaryResponse
+    preview_items: list[CatCapacitasImportPreviewDiffItemResponse]
+    warnings: list[str] = []
+
+
 class CatImportSummaryResponse(BaseModel):
     tipo: str | None
     totale_batch: int

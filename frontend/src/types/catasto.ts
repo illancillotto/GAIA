@@ -24,6 +24,38 @@ export type CatImportStartResponse = {
   status: string;
 };
 
+export type CatCapacitasImportPreviewDiffSummary = {
+  nuove: number;
+  modificate: number;
+  invariate: number;
+  rimosse: number;
+};
+
+export type CatCapacitasImportPreviewDiffItem = {
+  key: string;
+  change_type: "new" | "changed" | "removed";
+  cco: string | null;
+  cod_comune_capacitas: number | null;
+  foglio: string | null;
+  particella: string | null;
+  subalterno: string | null;
+  codice_fiscale: string | null;
+  denominazione: string | null;
+  changed_fields: string[];
+};
+
+export type CatCapacitasImportPreview = {
+  filename: string;
+  anno_campagna: number | null;
+  file_hash: string;
+  is_exact_duplicate: boolean;
+  duplicate_batch: CatImportBatch | null;
+  active_batch: CatImportBatch | null;
+  summary: CatCapacitasImportPreviewDiffSummary;
+  preview_items: CatCapacitasImportPreviewDiffItem[];
+  warnings: string[];
+};
+
 export type CatImportSummary = {
   tipo: string | null;
   totale_batch: number;

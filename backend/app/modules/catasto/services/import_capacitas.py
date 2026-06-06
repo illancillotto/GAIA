@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import uuid
 from datetime import datetime, timezone
+from decimal import Decimal
 from io import BytesIO
 from typing import Any
 
@@ -21,6 +22,13 @@ from app.models.catasto_phase1 import (
     CatSchemaContributo,
     CatUtenzaIrrigua,
 )
+from app.schemas.catasto_phase1 import (
+    CatCapacitasImportPreviewDiffItemResponse,
+    CatCapacitasImportPreviewDiffSummaryResponse,
+    CatCapacitasImportPreviewResponse,
+    CatImportBatchResponse,
+)
+from app.modules.catasto.services.dashboard_queries import active_capacitas_batch_id
 from app.modules.catasto.services.validation import (
     validate_codice_fiscale,
     validate_comune,
@@ -92,37 +100,30 @@ def _clean_bool(value: Any) -> bool:
     return normalized in {"1", "true", "si", "sì", "yes", "y", "x"}
 
 
-def import_capacitas_excel(
-    db: Session,
-    file_bytes: bytes,
-    filename: str,
-    created_by: int,
-    force: bool = False,
-    batch_id: uuid.UUID | None = None,
-) -> CatImportBatch:
-    now = datetime.now(timezone.utc)
-    file_hash = hashlib.sha256(file_bytes).hexdigest()
-    existing_batch = db.execute(
-        select(CatImportBatch).where(CatImportBatch.hash_file == file_hash, CatImportBatch.status == "completed")
-    ).scalar_one_or_none()
-    if existing_batch and not force:
-        raise CapacitasImportDuplicateError(
-            f"File già importato (batch {existing_batch.id}). Usa force=True per reimportare."
+def _find_duplicate_capacitas_batch(db: Session, file_hash: str) -> CatImportBatch | None:
+    return db.execute(
+        select(CatImportBatch).where(
+            CatImportBatch.tipo == "capacitas_ruolo",
+            CatImportBatch.hash_file == file_hash,
+            CatImportBatch.status == "completed",
         )
-    if existing_batch and force:
-        existing_batch.status = "replaced"
+    ).scalar_one_or_none()
 
+
+def _load_capacitas_dataframe(file_bytes: bytes) -> tuple[pd.DataFrame, int | None, str]:
+    file_hash = hashlib.sha256(file_bytes).hexdigest()
     all_sheets = pd.read_excel(BytesIO(file_bytes), sheet_name=None, dtype=str)
     sheet_name = next((name for name in all_sheets if name.lower().startswith("ruoli")), None)
     if not sheet_name:
         raise ValueError("Sheet 'Ruoli ANNO' non trovato nel file Excel.")
-    dataframe = all_sheets[sheet_name].rename(columns={key: value for key, value in COLUMN_MAPPING.items() if key in all_sheets[sheet_name].columns})
+    source_dataframe = all_sheets[sheet_name]
+    dataframe = source_dataframe.rename(columns={key: value for key, value in COLUMN_MAPPING.items() if key in source_dataframe.columns})
 
     for column in ("foglio", "particella"):
         if column in dataframe.columns:
             dataframe[column] = dataframe[column].fillna("").astype(str).str.strip()
 
-    for column in ("subalterno", "sezione_catastale", "codice_fiscale", "nome_comune", "denominazione", "nome_distretto_loc"):
+    for column in ("subalterno", "sezione_catastale", "codice_fiscale", "nome_comune", "denominazione", "nome_distretto_loc", "cco"):
         if column in dataframe.columns:
             dataframe[column] = dataframe[column].apply(_clean_optional_string)
 
@@ -144,6 +145,235 @@ def import_capacitas_excel(
             dataframe[column] = pd.to_numeric(dataframe[column], errors="coerce")
 
     anno = int(dataframe["anno_campagna"].dropna().iloc[0]) if "anno_campagna" in dataframe.columns and not dataframe["anno_campagna"].dropna().empty else None
+    return dataframe, anno, file_hash
+
+
+def _preview_row_key_from_mapping(mapping: dict[str, Any]) -> str:
+    return "|".join(
+        [
+            str(mapping.get("cco") or ""),
+            str(mapping.get("cod_comune_capacitas") or ""),
+            str(mapping.get("foglio") or ""),
+            str(mapping.get("particella") or ""),
+            str(mapping.get("subalterno") or ""),
+            str(mapping.get("codice_fiscale") or ""),
+            str(mapping.get("denominazione") or ""),
+        ]
+    )
+
+
+def _preview_row_key_from_dataframe_row(row: pd.Series) -> str:
+    return "|".join(
+        [
+            str(_clean_optional_string(row.get("cco")) or ""),
+            str(int(row.get("cod_comune_capacitas")) if pd.notna(row.get("cod_comune_capacitas")) else ""),
+            str(row.get("foglio") or ""),
+            str(row.get("particella") or ""),
+            str(_clean_optional_string(row.get("subalterno")) or ""),
+            str(_clean_optional_string(row.get("codice_fiscale")) or ""),
+            str(_clean_optional_string(row.get("denominazione")) or ""),
+        ]
+    )
+
+
+def _preview_compare_fields_from_mapping(mapping: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "num_distretto": mapping.get("num_distretto"),
+        "sup_catastale_mq": _preview_decimal(mapping.get("sup_catastale_mq")),
+        "sup_irrigabile_mq": _preview_decimal(mapping.get("sup_irrigabile_mq")),
+        "ind_spese_fisse": _preview_decimal(mapping.get("ind_spese_fisse")),
+        "imponibile_sf": _preview_decimal(mapping.get("imponibile_sf")),
+        "aliquota_0648": _preview_decimal(mapping.get("aliquota_0648")),
+        "importo_0648": _preview_decimal(mapping.get("importo_0648")),
+        "aliquota_0985": _preview_decimal(mapping.get("aliquota_0985")),
+        "importo_0985": _preview_decimal(mapping.get("importo_0985")),
+        "codice_fiscale": mapping.get("codice_fiscale"),
+        "denominazione": mapping.get("denominazione"),
+    }
+
+
+def _preview_compare_fields_from_dataframe_row(row: pd.Series) -> dict[str, Any]:
+    return {
+        "num_distretto": int(row.get("num_distretto")) if pd.notna(row.get("num_distretto")) else None,
+        "sup_catastale_mq": _preview_decimal(row.get("sup_catastale_mq")),
+        "sup_irrigabile_mq": _preview_decimal(row.get("sup_irrigabile_mq")),
+        "ind_spese_fisse": _preview_decimal(row.get("ind_spese_fisse")),
+        "imponibile_sf": _preview_decimal(row.get("imponibile_sf")),
+        "aliquota_0648": _preview_decimal(row.get("aliquota_0648")),
+        "importo_0648": _preview_decimal(row.get("importo_0648")),
+        "aliquota_0985": _preview_decimal(row.get("aliquota_0985")),
+        "importo_0985": _preview_decimal(row.get("importo_0985")),
+        "codice_fiscale": _clean_optional_string(row.get("codice_fiscale")),
+        "denominazione": _clean_optional_string(row.get("denominazione")),
+    }
+
+
+def _preview_decimal(value: Any) -> str | None:
+    if value is None or pd.isna(value):
+        return None
+    decimal_value = value if isinstance(value, Decimal) else Decimal(str(value))
+    normalized = decimal_value.normalize()
+    return format(normalized, "f")
+
+
+def preview_capacitas_excel(
+    db: Session,
+    file_bytes: bytes,
+    filename: str,
+) -> CatCapacitasImportPreviewResponse:
+    dataframe, anno, file_hash = _load_capacitas_dataframe(file_bytes)
+    duplicate_batch = _find_duplicate_capacitas_batch(db, file_hash)
+    active_batch_id = active_capacitas_batch_id(db, anno)
+    active_batch = db.get(CatImportBatch, active_batch_id) if active_batch_id is not None else None
+
+    incoming_rows: dict[str, tuple[pd.Series, dict[str, Any]]] = {}
+    for _, row in dataframe.iterrows():
+        key = _preview_row_key_from_dataframe_row(row)
+        incoming_rows[key] = (row, _preview_compare_fields_from_dataframe_row(row))
+
+    active_rows: dict[str, tuple[CatUtenzaIrrigua, dict[str, Any]]] = {}
+    if active_batch_id is not None:
+        active_utenze = db.execute(
+            select(CatUtenzaIrrigua).where(CatUtenzaIrrigua.import_batch_id == active_batch_id)
+        ).scalars().all()
+        for utenza in active_utenze:
+            key = _preview_row_key_from_mapping(
+                {
+                    "cco": utenza.cco,
+                    "cod_comune_capacitas": utenza.cod_comune_capacitas,
+                    "foglio": utenza.foglio,
+                    "particella": utenza.particella,
+                    "subalterno": utenza.subalterno,
+                    "codice_fiscale": utenza.codice_fiscale,
+                    "denominazione": utenza.denominazione,
+                }
+            )
+            active_rows[key] = (utenza, _preview_compare_fields_from_mapping(
+                {
+                    "num_distretto": utenza.num_distretto,
+                    "sup_catastale_mq": utenza.sup_catastale_mq,
+                    "sup_irrigabile_mq": utenza.sup_irrigabile_mq,
+                    "ind_spese_fisse": utenza.ind_spese_fisse,
+                    "imponibile_sf": utenza.imponibile_sf,
+                    "aliquota_0648": utenza.aliquota_0648,
+                    "importo_0648": utenza.importo_0648,
+                    "aliquota_0985": utenza.aliquota_0985,
+                    "importo_0985": utenza.importo_0985,
+                    "codice_fiscale": utenza.codice_fiscale,
+                    "denominazione": utenza.denominazione,
+                }
+            ))
+
+    preview_items: list[CatCapacitasImportPreviewDiffItemResponse] = []
+    nuove = 0
+    modificate = 0
+    invariate = 0
+    rimosse = 0
+
+    for key, (row, incoming_payload) in incoming_rows.items():
+        active_entry = active_rows.get(key)
+        if active_entry is None:
+            nuove += 1
+            if len(preview_items) < 50:
+                preview_items.append(
+                    CatCapacitasImportPreviewDiffItemResponse(
+                        key=key,
+                        change_type="new",
+                        cco=_clean_optional_string(row.get("cco")),
+                        cod_comune_capacitas=int(row.get("cod_comune_capacitas")) if pd.notna(row.get("cod_comune_capacitas")) else None,
+                        foglio=str(row.get("foglio") or "") or None,
+                        particella=str(row.get("particella") or "") or None,
+                        subalterno=_clean_optional_string(row.get("subalterno")),
+                        codice_fiscale=_clean_optional_string(row.get("codice_fiscale")),
+                        denominazione=_clean_optional_string(row.get("denominazione")),
+                        changed_fields=[],
+                    )
+                )
+            continue
+
+        _, active_payload = active_entry
+        changed_fields = sorted(field for field, value in incoming_payload.items() if active_payload.get(field) != value)
+        if changed_fields:
+            modificate += 1
+            if len(preview_items) < 50:
+                preview_items.append(
+                    CatCapacitasImportPreviewDiffItemResponse(
+                        key=key,
+                        change_type="changed",
+                        cco=_clean_optional_string(row.get("cco")),
+                        cod_comune_capacitas=int(row.get("cod_comune_capacitas")) if pd.notna(row.get("cod_comune_capacitas")) else None,
+                        foglio=str(row.get("foglio") or "") or None,
+                        particella=str(row.get("particella") or "") or None,
+                        subalterno=_clean_optional_string(row.get("subalterno")),
+                        codice_fiscale=_clean_optional_string(row.get("codice_fiscale")),
+                        denominazione=_clean_optional_string(row.get("denominazione")),
+                        changed_fields=changed_fields,
+                    )
+                )
+        else:
+            invariate += 1
+
+    for key, (utenza, _) in active_rows.items():
+        if key in incoming_rows:
+            continue
+        rimosse += 1
+        if len(preview_items) < 50:
+            preview_items.append(
+                CatCapacitasImportPreviewDiffItemResponse(
+                    key=key,
+                    change_type="removed",
+                    cco=utenza.cco,
+                    cod_comune_capacitas=utenza.cod_comune_capacitas,
+                    foglio=utenza.foglio,
+                    particella=utenza.particella,
+                    subalterno=utenza.subalterno,
+                    codice_fiscale=utenza.codice_fiscale,
+                    denominazione=utenza.denominazione,
+                    changed_fields=[],
+                )
+            )
+
+    warnings: list[str] = []
+    if duplicate_batch is not None:
+        warnings.append("Il file selezionato coincide con un batch Capacitas già completato.")
+    if active_batch is not None and rimosse > 0:
+        warnings.append("Il file contiene meno righe dello snapshot attivo: verifica che non sia un export parziale.")
+
+    return CatCapacitasImportPreviewResponse(
+        filename=filename,
+        anno_campagna=anno,
+        file_hash=file_hash,
+        is_exact_duplicate=duplicate_batch is not None,
+        duplicate_batch=CatImportBatchResponse.model_validate(duplicate_batch) if duplicate_batch is not None else None,
+        active_batch=CatImportBatchResponse.model_validate(active_batch) if active_batch is not None else None,
+        summary=CatCapacitasImportPreviewDiffSummaryResponse(
+            nuove=nuove,
+            modificate=modificate,
+            invariate=invariate,
+            rimosse=rimosse,
+        ),
+        preview_items=preview_items,
+        warnings=warnings,
+    )
+
+
+def import_capacitas_excel(
+    db: Session,
+    file_bytes: bytes,
+    filename: str,
+    created_by: int,
+    force: bool = False,
+    batch_id: uuid.UUID | None = None,
+) -> CatImportBatch:
+    now = datetime.now(timezone.utc)
+    dataframe, anno, file_hash = _load_capacitas_dataframe(file_bytes)
+    existing_batch = _find_duplicate_capacitas_batch(db, file_hash)
+    if existing_batch and not force:
+        raise CapacitasImportDuplicateError(
+            f"File già importato (batch {existing_batch.id}). Usa force=True per reimportare."
+        )
+    if existing_batch and force:
+        existing_batch.status = "replaced"
     batch = db.get(CatImportBatch, batch_id) if batch_id is not None else None
     if batch is None:
         batch = CatImportBatch(

@@ -3162,6 +3162,107 @@ def test_import_metadata_scoped_to_capacitas_ruolo(monkeypatch: pytest.MonkeyPat
     assert payload["imports"]["latest_completed"]["id"] == str(capacitas_batch.id)
 
 
+def test_capacitas_preview_flags_exact_duplicate(monkeypatch: pytest.MonkeyPatch) -> None:
+    dataframe = build_snapshot_capacitas_dataframe(
+        rows=[
+            {
+                **build_snapshot_capacitas_dataframe().iloc[0].to_dict(),
+                "ANNO": "2026",
+                "CCO": "UT-PREVIEW-2026-001",
+                "DENOMINAZIONE": "Preview Duplicate",
+                "CODICE FISCALE": "RSSMRA80A01H501U",
+            }
+        ]
+    )
+    file_bytes = b"preview-duplicate"
+    batch = import_capacitas_snapshot(
+        monkeypatch,
+        dataframe=dataframe,
+        file_bytes=file_bytes,
+        filename="preview-duplicate.xlsx",
+    )
+
+    monkeypatch.setattr(
+        "app.modules.catasto.services.import_capacitas.pd.read_excel",
+        lambda *args, **kwargs: {"Ruoli 2026": dataframe},
+    )
+    response = client.post(
+        "/catasto/import/capacitas/preview",
+        headers=auth_headers(),
+        files={"file": ("preview-duplicate.xlsx", file_bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["is_exact_duplicate"] is True
+    assert payload["duplicate_batch"]["id"] == str(batch.id)
+    assert payload["summary"] == {"nuove": 0, "modificate": 0, "invariate": 1, "rimosse": 0}
+
+
+def test_capacitas_preview_reports_diff_against_active_snapshot(monkeypatch: pytest.MonkeyPatch) -> None:
+    initial_dataframe = build_snapshot_capacitas_dataframe(
+        rows=[
+            {
+                **build_snapshot_capacitas_dataframe().iloc[0].to_dict(),
+                "ANNO": "2026",
+                "CCO": "UT-PREVIEW-2026-100",
+                "IMPORTO 0648": "135",
+                "DENOMINAZIONE": "Preview Base",
+                "CODICE FISCALE": "RSSMRA80A01H501U",
+            }
+        ]
+    )
+    active_batch = import_capacitas_snapshot(
+        monkeypatch,
+        dataframe=initial_dataframe,
+        file_bytes=b"preview-active",
+        filename="preview-active.xlsx",
+    )
+
+    changed_dataframe = build_snapshot_capacitas_dataframe(
+        rows=[
+            {
+                **build_snapshot_capacitas_dataframe().iloc[0].to_dict(),
+                "ANNO": "2026",
+                "CCO": "UT-PREVIEW-2026-100",
+                "IMPORTO 0648": "140",
+                "DENOMINAZIONE": "Preview Base",
+                "CODICE FISCALE": "RSSMRA80A01H501U",
+            },
+            {
+                **build_snapshot_capacitas_dataframe().iloc[0].to_dict(),
+                "ANNO": "2026",
+                "CCO": "UT-PREVIEW-2026-101",
+                "FOGLIO": "6",
+                "PARTIC": "121",
+                "IMPORTO 0648": "67.5",
+                "IMPORTO 0985": "135",
+                "DENOMINAZIONE": "Preview New",
+                "CODICE FISCALE": "VRDLGI80A01H501U",
+            },
+        ]
+    )
+
+    monkeypatch.setattr(
+        "app.modules.catasto.services.import_capacitas.pd.read_excel",
+        lambda *args, **kwargs: {"Ruoli 2026": changed_dataframe},
+    )
+    response = client.post(
+        "/catasto/import/capacitas/preview",
+        headers=auth_headers(),
+        files={"file": ("preview-diff.xlsx", b"preview-diff", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["active_batch"]["id"] == str(active_batch.id)
+    assert payload["is_exact_duplicate"] is False
+    assert payload["summary"] == {"nuove": 1, "modificate": 1, "invariate": 0, "rimosse": 0}
+    assert {item["change_type"] for item in payload["preview_items"]} == {"new", "changed"}
+    changed_item = next(item for item in payload["preview_items"] if item["change_type"] == "changed")
+    assert "importo_0648" in changed_item["changed_fields"]
+
+
 def test_distretto_kpi_anomalie_counts_only_open_and_matches_dashboard(monkeypatch: pytest.MonkeyPatch) -> None:
     batch = import_capacitas_snapshot(
         monkeypatch,

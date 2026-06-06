@@ -15,13 +15,14 @@ import {
   catastoGetImportReport,
   catastoGetImportStatus,
   catastoGetImportSummary,
+  catastoPreviewCapacitas,
   catastoUploadCapacitas,
   catastoUploadDistrettiExcel,
   catastoUploadShapefile,
 } from "@/lib/api/catasto";
 import { ApiError, isAuthError } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
-import type { CatAnomaliaListResponse, CatImportBatch, CatImportSummary, UUID } from "@/types/catasto";
+import type { CatAnomaliaListResponse, CatCapacitasImportPreview, CatImportBatch, CatImportSummary, UUID } from "@/types/catasto";
 
 type StepKey = "upload" | "progress" | "report";
 type ImportType = "capacitas" | "shapefile_particelle" | "distretti_excel";
@@ -83,6 +84,8 @@ export default function CatastoImportPage() {
 
   const [batchId, setBatchId] = useState<UUID | null>(null);
   const [batch, setBatch] = useState<CatImportBatch | null>(null);
+  const [preview, setPreview] = useState<CatCapacitasImportPreview | null>(null);
+  const [isPreviewing, setIsPreviewing] = useState(false);
   const [history, setHistory] = useState<CatImportBatch[]>([]);
   const [summary, setSummary] = useState<CatImportSummary | null>(null);
   const [historyStatus, setHistoryStatus] = useState<string>("");
@@ -137,6 +140,44 @@ export default function CatastoImportPage() {
     };
   }, [reportJson]);
 
+  useEffect(() => {
+    setPreview(null);
+    setError(null);
+  }, [file, importType]);
+
+  async function runCapacitasPreview(): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) {
+      setError("Sessione non disponibile o scaduta. Accedi di nuovo.");
+      return;
+    }
+    if (!file) return;
+
+    setIsPreviewing(true);
+    setError(null);
+    setUploadProgress(0);
+    try {
+      const result = await catastoPreviewCapacitas(token, file, {
+        onProgress: (p) => setUploadProgress(p),
+      });
+      setPreview(result);
+    } catch (e) {
+      if (isAuthError(e)) {
+        setError(
+          e.status === 403
+            ? "Permessi insufficienti: l’import richiede ruolo admin/super_admin."
+            : "Sessione scaduta o non valida. Accedi di nuovo e riprova.",
+        );
+      } else if (e instanceof ApiError) {
+        setError(e.message);
+      } else {
+        setError(e instanceof Error ? e.message : "Errore preview import");
+      }
+    } finally {
+      setIsPreviewing(false);
+    }
+  }
+
   async function startUpload(): Promise<void> {
     const token = getStoredAccessToken();
     if (!token) {
@@ -144,6 +185,7 @@ export default function CatastoImportPage() {
       return;
     }
     if (!file) return;
+    if (importType === "capacitas" && !canStartCapacitasImport) return;
 
     setBusy(true);
     setError(null);
@@ -165,6 +207,7 @@ export default function CatastoImportPage() {
             });
       setBatchId(result.batch_id);
       setBatch(null);
+      setPreview(null);
       setReport(null);
       setReportTipo("");
       setReportPage(1);
@@ -295,6 +338,10 @@ export default function CatastoImportPage() {
     batch && batch.righe_totali > 0
       ? Math.min(100, Math.round((batch.righe_importate / batch.righe_totali) * 100))
       : 0;
+
+  const canStartCapacitasImport =
+    importType !== "capacitas" ||
+    (preview !== null && preview.filename === file?.name && (!preview.is_exact_duplicate || force));
 
   return (
     <>
@@ -437,21 +484,118 @@ export default function CatastoImportPage() {
             </div>
 
             {importType === "capacitas" ? (
-              <div className="mt-4 grid gap-4 md:grid-cols-2">
-                <CatastoFilePicker
-                  id="catasto-import-capacitas-file"
-                  label="File Excel"
-                  accept=".xlsx,.xls"
-                  file={file}
-                  onChange={setFile}
-                  disabled={busy}
-                  hint="Workbook Capacitas con foglio Ruoli ANNO."
-                />
-                <label className="flex items-center gap-2 rounded-xl border border-gray-100 bg-white px-4 py-3 text-sm text-gray-700">
-                  <input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} />
-                  Force re-import (sostituisce batch precedente con stesso hash)
-                </label>
-              </div>
+              <>
+                <div className="mt-4 grid gap-4 md:grid-cols-2">
+                  <CatastoFilePicker
+                    id="catasto-import-capacitas-file"
+                    label="File Excel"
+                    accept=".xlsx,.xls"
+                    file={file}
+                    onChange={setFile}
+                    disabled={busy || isPreviewing}
+                    hint="Workbook Capacitas con foglio Ruoli ANNO."
+                  />
+                  <label className="flex items-center gap-2 rounded-xl border border-gray-100 bg-white px-4 py-3 text-sm text-gray-700">
+                    <input type="checkbox" checked={force} onChange={(e) => setForce(e.target.checked)} />
+                    Force re-import se il file è identico a un batch già completato
+                  </label>
+                </div>
+
+                {preview ? (
+                  <div className="mt-4 rounded-2xl border border-gray-100 bg-white p-5">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">Preview import Capacitas</p>
+                        <p className="mt-1 text-sm text-gray-500">
+                          Anno {preview.anno_campagna ?? "—"} · hash {preview.file_hash.slice(0, 12)}
+                        </p>
+                      </div>
+                      <div className={`rounded-full px-3 py-1 text-xs font-medium ${preview.is_exact_duplicate ? "bg-amber-100 text-amber-900" : "bg-emerald-100 text-emerald-800"}`}>
+                        {preview.is_exact_duplicate ? "File già importato" : "Snapshot confrontato"}
+                      </div>
+                    </div>
+
+                    {preview.duplicate_batch ? (
+                      <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                        Il file coincide con il batch {preview.duplicate_batch.id} del {formatDateTime(preview.duplicate_batch.completed_at)}.
+                        {!force ? " Attiva force solo se vuoi registrare comunque un nuovo batch." : ""}
+                      </div>
+                    ) : null}
+
+                    {preview.warnings.length > 0 ? (
+                      <div className="mt-4 space-y-2">
+                        {preview.warnings.map((warning) => (
+                          <div key={warning} className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                            {warning}
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+
+                    <div className="mt-4 grid gap-3 md:grid-cols-4">
+                      <div className="rounded-xl border border-gray-100 bg-[#f7fbf8] p-4">
+                        <p className="text-xs uppercase tracking-wide text-gray-400">Nuove</p>
+                        <p className="mt-1 text-lg font-semibold text-gray-900">{preview.summary.nuove}</p>
+                      </div>
+                      <div className="rounded-xl border border-gray-100 bg-[#fffaf0] p-4">
+                        <p className="text-xs uppercase tracking-wide text-gray-400">Modificate</p>
+                        <p className="mt-1 text-lg font-semibold text-gray-900">{preview.summary.modificate}</p>
+                      </div>
+                      <div className="rounded-xl border border-gray-100 bg-white p-4">
+                        <p className="text-xs uppercase tracking-wide text-gray-400">Invariate</p>
+                        <p className="mt-1 text-lg font-semibold text-gray-900">{preview.summary.invariate}</p>
+                      </div>
+                      <div className="rounded-xl border border-gray-100 bg-[#fff5f5] p-4">
+                        <p className="text-xs uppercase tracking-wide text-gray-400">Rimosse</p>
+                        <p className="mt-1 text-lg font-semibold text-gray-900">{preview.summary.rimosse}</p>
+                      </div>
+                    </div>
+
+                    {preview.active_batch ? (
+                      <div className="mt-4 rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-600">
+                        Confronto eseguito contro il batch attivo {preview.active_batch.filename} del {formatDateTime(preview.active_batch.completed_at)}.
+                      </div>
+                    ) : (
+                      <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+                        Nessuno snapshot Capacitas attivo trovato per l’anno selezionato: l’import creerà il primo snapshot disponibile.
+                      </div>
+                    )}
+
+                    <div className="mt-4 overflow-x-auto">
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            <th>Esito</th>
+                            <th>CCO</th>
+                            <th>Riferimento</th>
+                            <th>Campi cambiati</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {preview.preview_items.length === 0 ? (
+                            <tr>
+                              <td colSpan={4} className="text-sm text-gray-500">
+                                Nessuna differenza campionata: il file è interamente invariato rispetto allo snapshot attivo.
+                              </td>
+                            </tr>
+                          ) : (
+                            preview.preview_items.map((item) => (
+                              <tr key={`${item.change_type}-${item.key}`}>
+                                <td className="text-sm font-medium text-gray-900">{item.change_type}</td>
+                                <td className="text-sm text-gray-600">{item.cco ?? "—"}</td>
+                                <td className="text-sm text-gray-600">
+                                  {[item.cod_comune_capacitas, item.foglio, item.particella, item.subalterno].filter(Boolean).join(" / ") || "—"}
+                                </td>
+                                <td className="text-sm text-gray-600">{item.changed_fields.join(", ") || "—"}</td>
+                              </tr>
+                            ))
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ) : null}
+              </>
             ) : importType === "shapefile_particelle" ? (
               <div className="mt-4 grid gap-4 md:grid-cols-2">
                 <CatastoFilePicker
@@ -496,11 +640,25 @@ export default function CatastoImportPage() {
             )}
 
             <div className="mt-4 flex flex-wrap items-center gap-3">
-              <button className="btn-primary" type="button" disabled={busy || !file} onClick={() => void startUpload()}>
+              {importType === "capacitas" ? (
+                <button className="btn-secondary" type="button" disabled={busy || isPreviewing || !file} onClick={() => void runCapacitasPreview()}>
+                  <SearchIcon className="h-4 w-4" />
+                  {isPreviewing ? "Analisi..." : "Analizza file"}
+                </button>
+              ) : null}
+              <button
+                className="btn-primary"
+                type="button"
+                disabled={busy || isPreviewing || !file || !canStartCapacitasImport}
+                onClick={() => void startUpload()}
+              >
                 <RefreshIcon className="h-4 w-4" />
-                {busy ? "Upload…" : "Avvia import"}
+                {busy ? "Upload…" : importType === "capacitas" ? "Conferma nuovo snapshot" : "Avvia import"}
               </button>
-              <p className="text-sm text-gray-500">{importTypeLabel(importType)} · Upload: {uploadProgress}%</p>
+              <p className="text-sm text-gray-500">
+                {importTypeLabel(importType)} · Upload: {uploadProgress}%
+                {importType === "capacitas" && preview === null ? " · esegui prima l’analisi." : ""}
+              </p>
             </div>
           </article>
         ) : null}
