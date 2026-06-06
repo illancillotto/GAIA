@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from typing import Annotated
 
@@ -69,6 +70,75 @@ def _user_display_name(user: ApplicationUser | None) -> str:
         return "Sconosciuto"
     full = f"{getattr(user, 'first_name', '') or ''} {getattr(user, 'last_name', '') or ''}".strip()
     return full or user.username or str(user.id)
+
+
+@dataclass
+class SessionAttribution:
+    key: int | str | None
+    label: str | None
+    entity_id: str | None
+
+
+@dataclass
+class SessionAttributionContext:
+    users_by_id: dict[int, ApplicationUser]
+    wc_operators_by_username: dict[str, list[WCOperator]]
+
+
+def _wc_operator_display_name(wc_operator: WCOperator) -> str:
+    return f"{wc_operator.first_name or ''} {wc_operator.last_name or ''}".strip() or wc_operator.username or str(wc_operator.id)
+
+
+def _build_session_attribution_context(db: Session, sessions: list[VehicleUsageSession]) -> SessionAttributionContext:
+    linked_user_ids = {session.actual_driver_user_id for session in sessions if session.actual_driver_user_id}
+    users_by_id: dict[int, ApplicationUser] = {}
+    if linked_user_ids:
+        for user in db.scalars(select(ApplicationUser).where(ApplicationUser.id.in_(linked_user_ids))).all():
+            users_by_id[user.id] = user
+
+    operator_names = {
+        session.operator_name
+        for session in sessions
+        if session.actual_driver_user_id is None and session.operator_name
+    }
+    wc_operators_by_username: dict[str, list[WCOperator]] = {}
+    if operator_names:
+        for wc_operator in db.scalars(select(WCOperator).where(WCOperator.username.in_(operator_names))).all():
+            if wc_operator.username is None:
+                continue
+            wc_operators_by_username.setdefault(wc_operator.username, []).append(wc_operator)
+
+    return SessionAttributionContext(
+        users_by_id=users_by_id,
+        wc_operators_by_username=wc_operators_by_username,
+    )
+
+
+def _resolve_session_attribution(
+    session: VehicleUsageSession,
+    context: SessionAttributionContext,
+) -> SessionAttribution:
+    if session.actual_driver_user_id:
+        user = context.users_by_id.get(session.actual_driver_user_id)
+        return SessionAttribution(
+            key=session.actual_driver_user_id,
+            label=_user_display_name(user),
+            entity_id=str(session.actual_driver_user_id),
+        )
+
+    if not session.operator_name:
+        return SessionAttribution(key=None, label=None, entity_id=None)
+
+    candidates = context.wc_operators_by_username.get(session.operator_name, [])
+    if len(candidates) == 1:
+        label = _wc_operator_display_name(candidates[0])
+    else:
+        label = session.operator_name
+    return SessionAttribution(
+        key=session.operator_name,
+        label=label,
+        entity_id=f"wc:{session.operator_name}",
+    )
 
 
 # ─── available periods ─────────────────────────────────────────────────────────
@@ -809,53 +879,24 @@ def km_analytics(
         for vid in top_v
     ]
 
-    # Top operators — prefer actual_driver_user_id; for WC-imported sessions
-    # without a linked user, fall back to operator_name (matched via WCOperator
-    # where possible, otherwise used as-is as a string key).
-    linked_user_ids = {s.actual_driver_user_id for s in sessions if s.actual_driver_user_id}
-    users_map: dict = {}
-    if linked_user_ids:
-        for u in db.scalars(
-            select(ApplicationUser).where(ApplicationUser.id.in_(linked_user_ids))
-        ).all():
-            users_map[u.id] = u
-
-    # Build WCOperator name→display_name map for legacy sessions
-    wc_operator_names = {
-        s.operator_name
-        for s in sessions
-        if not s.actual_driver_user_id and s.operator_name
-    }
-    wc_label_map: dict[str, str] = {}
-    if wc_operator_names:
-        for wc_op in db.scalars(
-            select(WCOperator).where(WCOperator.username.in_(wc_operator_names))
-        ).all():
-            display = f"{wc_op.first_name or ''} {wc_op.last_name or ''}".strip() or wc_op.username
-            wc_label_map[wc_op.username] = display
-
-    # Use a string key: user_id (int) for linked sessions, operator_name for WC legacy
+    attribution_context = _build_session_attribution_context(db, sessions)
     km_by_key: dict[str | int, float] = defaultdict(float)
     count_by_key: dict[str | int, int] = defaultdict(int)
+    attribution_by_key: dict[str | int, SessionAttribution] = {}
     for s in sessions:
-        if s.actual_driver_user_id:
-            key: str | int = s.actual_driver_user_id
-        elif s.operator_name:
-            key = s.operator_name
-        else:
+        attribution = _resolve_session_attribution(s, attribution_context)
+        if attribution.key is None:
             continue
-        km_by_key[key] += _session_km(s)
-        count_by_key[key] += 1
+        km_by_key[attribution.key] += _session_km(s)
+        count_by_key[attribution.key] += 1
+        attribution_by_key[attribution.key] = attribution
 
     top_keys = sorted(km_by_key, key=km_by_key.__getitem__, reverse=True)[:10]
     top_operators_out = []
     for key in top_keys:
-        if isinstance(key, int):
-            label = _user_display_name(users_map.get(key))
-            entity_id = str(key)
-        else:
-            label = wc_label_map.get(key, key)
-            entity_id = f"wc:{key}"
+        attribution = attribution_by_key[key]
+        label = attribution.label or "Sconosciuto"
+        entity_id = attribution.entity_id or "unknown"
         top_operators_out.append(KmTopItem(
             id=entity_id,
             label=label,
@@ -872,11 +913,7 @@ def km_analytics(
     avg_km = round(total_km / len(sessions), 1) if sessions else 0
 
     def _operator_label_for_session(s: VehicleUsageSession) -> str | None:
-        if s.actual_driver_user_id:
-            return _user_display_name(users_map.get(s.actual_driver_user_id))
-        if s.operator_name:
-            return wc_label_map.get(s.operator_name, s.operator_name)
-        return None
+        return _resolve_session_attribution(s, attribution_context).label
 
     def _vehicle_label_for_session(s: VehicleUsageSession) -> str:
         v = vehicles_map.get(s.vehicle_id)

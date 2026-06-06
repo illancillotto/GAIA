@@ -23,6 +23,10 @@ from app.modules.operazioni.models.vehicles import (
     VehicleUsageSession,
     WCRefuelEvent,
 )
+from app.modules.operazioni.models.wc_operator import WCOperator
+from app.modules.operazioni.services.backfill_vehicle_usage_session_drivers import (
+    backfill_vehicle_usage_session_actual_driver,
+)
 
 # ─── DB setup ─────────────────────────────────────────────────────────────────
 
@@ -62,6 +66,10 @@ def _seed_user(module_operazioni: bool = True) -> ApplicationUser:
     db = TestingSessionLocal()
     username = "analytics-admin" if module_operazioni else "analytics-noaccess"
     email = f"{username}@example.local"
+    existing = db.query(ApplicationUser).filter(ApplicationUser.username == username).one_or_none()
+    if existing is not None:
+        db.close()
+        return existing
     user = ApplicationUser(
         username=username,
         email=email,
@@ -116,6 +124,28 @@ def _make_user(db: Session, username: str) -> ApplicationUser:
     db.add(u)
     db.flush()
     return u
+
+
+def _make_wc_operator(
+    db: Session,
+    *,
+    wc_id: int,
+    username: str,
+    gaia_user_id: int | None,
+    first_name: str | None = None,
+    last_name: str | None = None,
+) -> WCOperator:
+    operator = WCOperator(
+        wc_id=wc_id,
+        username=username,
+        gaia_user_id=gaia_user_id,
+        first_name=first_name,
+        last_name=last_name,
+        enabled=True,
+    )
+    db.add(operator)
+    db.flush()
+    return operator
 
 
 def _make_session(
@@ -413,6 +443,147 @@ def test_km_top_vehicles_ordered() -> None:
     top = data["top_vehicles"]
     assert top[0]["label"] == "KM002BB"
     assert top[0]["total_km"] == pytest.approx(500.0, abs=0.5)
+
+
+def test_km_top_operators_prefers_linked_gaia_user() -> None:
+    db = TestingSessionLocal()
+    vehicle = _make_vehicle(db, "KM005EE")
+    user = _make_user(db, "driver-linked")
+    user_id = user.id
+    _make_session(db, vehicle, user.id, datetime(2026, 3, 3, 8), 100, 250)
+    db.commit()
+    db.close()
+
+    response = client.get(
+        "/operazioni/analytics/km",
+        params={"from_date": "2026-03-01", "to_date": "2026-03-31"},
+        headers=_auth_headers(),
+    )
+    assert response.status_code == 200
+    top = response.json()["top_operators"]
+    assert top[0]["id"] == str(user_id)
+    assert top[0]["label"] == "driver-linked"
+
+
+def test_km_top_operators_switches_from_legacy_string_to_gaia_user_after_backfill() -> None:
+    db = TestingSessionLocal()
+    vehicle = _make_vehicle(db, "KM006FF")
+    user = _make_user(db, "mario.rossi")
+    user_id = user.id
+    _make_wc_operator(
+        db,
+        wc_id=101,
+        username="mario.rossi",
+        gaia_user_id=user.id,
+        first_name="Mario",
+        last_name="Rossi",
+    )
+    session = VehicleUsageSession(
+        vehicle_id=vehicle.id,
+        started_by_user_id=user.id,
+        actual_driver_user_id=None,
+        started_at=datetime(2026, 3, 6, 8),
+        ended_at=datetime(2026, 3, 6, 10),
+        start_odometer_km=Decimal("1000"),
+        end_odometer_km=Decimal("1125"),
+        status="closed",
+        operator_name="mario.rossi",
+    )
+    db.add(session)
+    db.commit()
+
+    before = client.get(
+        "/operazioni/analytics/km",
+        params={"from_date": "2026-03-01", "to_date": "2026-03-31"},
+        headers=_auth_headers(),
+    )
+    assert before.status_code == 200
+    before_top = before.json()["top_operators"]
+    assert before_top[0]["id"] == "wc:mario.rossi"
+    assert before_top[0]["label"] == "Mario Rossi"
+
+    dry_run_report = backfill_vehicle_usage_session_actual_driver(db, dry_run=True)
+    db.refresh(session)
+    assert dry_run_report.matched_count == 1
+    assert session.actual_driver_user_id is None
+
+    apply_report = backfill_vehicle_usage_session_actual_driver(db, dry_run=False)
+    assert apply_report.matched_count == 1
+    db.refresh(session)
+    assert session.actual_driver_user_id == user_id
+    db.close()
+
+    after = client.get(
+        "/operazioni/analytics/km",
+        params={"from_date": "2026-03-01", "to_date": "2026-03-31"},
+        headers=_auth_headers(),
+    )
+    assert after.status_code == 200
+    after_top = after.json()["top_operators"]
+    assert after_top[0]["id"] == str(user_id)
+    assert after_top[0]["label"] == "mario.rossi"
+
+
+def test_km_top_operators_keeps_legacy_fallback_for_unlinked_wc_operator() -> None:
+    db = TestingSessionLocal()
+    vehicle = _make_vehicle(db, "KM007GG")
+    user = _make_user(db, "legacy-starter")
+    _make_wc_operator(
+        db,
+        wc_id=102,
+        username="luigi.bianchi",
+        gaia_user_id=None,
+        first_name="Luigi",
+        last_name="Bianchi",
+    )
+    session = VehicleUsageSession(
+        vehicle_id=vehicle.id,
+        started_by_user_id=user.id,
+        actual_driver_user_id=None,
+        started_at=datetime(2026, 3, 8, 8),
+        ended_at=datetime(2026, 3, 8, 9),
+        start_odometer_km=Decimal("500"),
+        end_odometer_km=Decimal("560"),
+        status="closed",
+        operator_name="luigi.bianchi",
+    )
+    db.add(session)
+
+    ambiguous_session = VehicleUsageSession(
+        vehicle_id=vehicle.id,
+        started_by_user_id=user.id,
+        actual_driver_user_id=None,
+        started_at=datetime(2026, 3, 9, 8),
+        ended_at=datetime(2026, 3, 9, 9),
+        start_odometer_km=Decimal("560"),
+        end_odometer_km=Decimal("620"),
+        status="closed",
+        operator_name="ambiguous.operator",
+    )
+    db.add(ambiguous_session)
+    _make_wc_operator(db, wc_id=201, username="ambiguous.operator", gaia_user_id=None, first_name="A", last_name="Uno")
+    _make_wc_operator(db, wc_id=202, username="ambiguous.operator", gaia_user_id=user.id, first_name="A", last_name="Due")
+    db.commit()
+
+    report = backfill_vehicle_usage_session_actual_driver(db, dry_run=False)
+    db.refresh(session)
+    db.refresh(ambiguous_session)
+    assert report.skipped_no_gaia_user_id_count == 1
+    assert report.ambiguous_count == 1
+    assert session.actual_driver_user_id is None
+    assert ambiguous_session.actual_driver_user_id is None
+    db.close()
+
+    response = client.get(
+        "/operazioni/analytics/km",
+        params={"from_date": "2026-03-01", "to_date": "2026-03-31"},
+        headers=_auth_headers(),
+    )
+    assert response.status_code == 200
+    top = response.json()["top_operators"]
+    ids = {item["id"] for item in top}
+    assert "wc:luigi.bianchi" in ids
+    assert "wc:ambiguous.operator" in ids
 
 
 def test_km_excludes_open_sessions() -> None:
