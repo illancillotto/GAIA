@@ -951,6 +951,64 @@ def seed_additional_distretto_kpi_data(db: Session) -> None:
     db.commit()
 
 
+def build_snapshot_capacitas_dataframe(
+    *,
+    year: str = "2026",
+    rows: list[dict[str, str | int | float]] | None = None,
+) -> pd.DataFrame:
+    dataframe = build_capacitas_dataframe().head(1).copy()
+    base_row = dataframe.iloc[0].to_dict()
+    default_rows = [
+        {
+            **base_row,
+            "ANNO": year,
+            "CCO": f"UT-SNAPSHOT-{year}-001",
+            "DISTRETTO": "10",
+            "Unnamed: 7": "Distretto 10",
+            "COM": "165",
+            "COMUNE": "Arborea",
+            "FOGLIO": "5",
+            "PARTIC": "120",
+            "SUB": "1",
+            "SUP.CATA.": "1000",
+            "SUP.IRRIGABILE": "900",
+            "Ind. Spese Fisse": "1.5",
+            "Imponibile s.f.": "1350",
+            "ALIQUOTA 0648": "0.1",
+            "IMPORTO 0648": "135",
+            "ALIQUOTA 0985": "0.2",
+            "IMPORTO 0985": "270",
+        }
+    ]
+    return pd.DataFrame(rows if rows is not None else default_rows)
+
+
+def import_capacitas_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    dataframe: pd.DataFrame,
+    file_bytes: bytes,
+    filename: str,
+) -> CatImportBatch:
+    monkeypatch.setattr(
+        "app.modules.catasto.services.import_capacitas.pd.read_excel",
+        lambda *args, **kwargs: {f"Ruoli {dataframe.iloc[0]['ANNO']}": dataframe},
+    )
+
+    db = TestingSessionLocal()
+    try:
+        batch = import_capacitas_excel(
+            db=db,
+            file_bytes=file_bytes,
+            filename=filename,
+            created_by=1,
+        )
+        db.refresh(batch)
+        return batch
+    finally:
+        db.close()
+
+
 def build_distretti_excel_bytes(rows: list[dict[str, object]]) -> bytes:
     buffer = BytesIO()
     dataframe = pd.DataFrame(rows)
@@ -2938,6 +2996,225 @@ def test_dashboard_and_distretto_kpi_use_only_active_capacitas_snapshot() -> Non
     assert kpi["importo_totale_0648"] == "100.00"
     assert kpi["importo_totale_0985"] == "200.00"
     assert kpi["superficie_irrigabile_mq"] == "500.00"
+
+
+def test_dashboard_summary_counts_only_latest_batch_snapshot(monkeypatch: pytest.MonkeyPatch) -> None:
+    first_dataframe = build_snapshot_capacitas_dataframe(
+        rows=[
+            {
+                **build_snapshot_capacitas_dataframe().iloc[0].to_dict(),
+                "ANNO": "2026",
+                "CCO": "UT-SNAPSHOT-2026-A1",
+                "SUP.IRRIGABILE": "800",
+                "Imponibile s.f.": "1200",
+                "IMPORTO 0648": "120",
+                "IMPORTO 0985": "240",
+            },
+            {
+                **build_snapshot_capacitas_dataframe().iloc[0].to_dict(),
+                "ANNO": "2026",
+                "CCO": "UT-SNAPSHOT-2026-A2",
+                "SUP.IRRIGABILE": "700",
+                "Imponibile s.f.": "1050",
+                "IMPORTO 0648": "105",
+                "IMPORTO 0985": "210",
+            },
+        ]
+    )
+    second_dataframe = build_snapshot_capacitas_dataframe(
+        rows=[
+            {
+                **build_snapshot_capacitas_dataframe().iloc[0].to_dict(),
+                "ANNO": "2026",
+                "CCO": "UT-SNAPSHOT-2026-B1",
+                "SUP.IRRIGABILE": "600",
+                "Imponibile s.f.": "900",
+                "IMPORTO 0648": "90",
+                "IMPORTO 0985": "180",
+            }
+        ]
+    )
+
+    first_batch = import_capacitas_snapshot(
+        monkeypatch,
+        dataframe=first_dataframe,
+        file_bytes=b"2026-v1",
+        filename="ruoli-2026-v1.xlsx",
+    )
+    second_batch = import_capacitas_snapshot(
+        monkeypatch,
+        dataframe=second_dataframe,
+        file_bytes=b"2026-v2",
+        filename="ruoli-2026-v2.xlsx",
+    )
+
+    response = client.get("/catasto/dashboard/summary?anno=2026", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["utenze"]["totale_utenze"] == 1
+    assert payload["utenze"]["superficie_irrigabile_mq"] == 600.0
+    assert payload["utenze"]["importo_totale_0648"] == 90.0
+    assert payload["utenze"]["importo_totale_0985"] == 180.0
+    assert payload["utenze"]["importo_totale"] == 270.0
+
+    db = TestingSessionLocal()
+    try:
+        persisted_first_batch = db.get(CatImportBatch, first_batch.id)
+        persisted_second_batch = db.get(CatImportBatch, second_batch.id)
+    finally:
+        db.close()
+
+    assert persisted_first_batch is not None
+    assert persisted_second_batch is not None
+    assert persisted_first_batch.status == "replaced"
+    assert persisted_second_batch.status == "completed"
+
+
+def test_distretto_kpi_counts_only_latest_batch_snapshot(monkeypatch: pytest.MonkeyPatch) -> None:
+    first_dataframe = build_snapshot_capacitas_dataframe(
+        rows=[
+            {
+                **build_snapshot_capacitas_dataframe().iloc[0].to_dict(),
+                "ANNO": "2026",
+                "CCO": "UT-SNAPSHOT-KPI-2026-A1",
+                "SUP.IRRIGABILE": "950",
+                "Imponibile s.f.": "1425",
+                "IMPORTO 0648": "142.5",
+                "IMPORTO 0985": "285",
+            },
+            {
+                **build_snapshot_capacitas_dataframe().iloc[0].to_dict(),
+                "ANNO": "2026",
+                "CCO": "UT-SNAPSHOT-KPI-2026-A2",
+                "SUP.IRRIGABILE": "400",
+                "Imponibile s.f.": "600",
+                "IMPORTO 0648": "60",
+                "IMPORTO 0985": "120",
+            },
+        ]
+    )
+    second_dataframe = build_snapshot_capacitas_dataframe(
+        rows=[
+            {
+                **build_snapshot_capacitas_dataframe().iloc[0].to_dict(),
+                "ANNO": "2026",
+                "CCO": "UT-SNAPSHOT-KPI-2026-B1",
+                "SUP.IRRIGABILE": "300",
+                "Imponibile s.f.": "450",
+                "IMPORTO 0648": "45",
+                "IMPORTO 0985": "90",
+            }
+        ]
+    )
+
+    import_capacitas_snapshot(monkeypatch, dataframe=first_dataframe, file_bytes=b"2026-kpi-v1", filename="kpi-v1.xlsx")
+    import_capacitas_snapshot(monkeypatch, dataframe=second_dataframe, file_bytes=b"2026-kpi-v2", filename="kpi-v2.xlsx")
+
+    distretti_response = client.get("/catasto/distretti/", headers=auth_headers())
+    distretto_10_id = next(item["id"] for item in distretti_response.json() if item["num_distretto"] == "10")
+    kpi_response = client.get(f"/catasto/distretti/{distretto_10_id}/kpi?anno=2026", headers=auth_headers())
+
+    assert kpi_response.status_code == 200
+    payload = kpi_response.json()
+    assert payload["totale_utenze"] == 1
+    assert payload["importo_totale_0648"] == "45.00"
+    assert payload["importo_totale_0985"] == "90.00"
+    assert payload["superficie_irrigabile_mq"] == "300.00"
+
+
+def test_import_metadata_scoped_to_capacitas_ruolo(monkeypatch: pytest.MonkeyPatch) -> None:
+    capacitas_batch = import_capacitas_snapshot(
+        monkeypatch,
+        dataframe=build_snapshot_capacitas_dataframe(),
+        file_bytes=b"2026-meta",
+        filename="meta-2026.xlsx",
+    )
+
+    db = TestingSessionLocal()
+    try:
+        db.add(
+            CatImportBatch(
+                filename="distretti-meta.xlsx",
+                tipo="distretti_excel",
+                anno_campagna=2999,
+                hash_file="distretti-meta-2999",
+                status="completed",
+                righe_totali=1,
+                righe_importate=1,
+                righe_anomalie=0,
+                created_by=1,
+                created_at=datetime(2026, 5, 1, tzinfo=timezone.utc),
+                completed_at=datetime(2026, 5, 1, 12, 0, tzinfo=timezone.utc),
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get("/catasto/dashboard/summary", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["imports"]["latest_imported_anno"] == 2026
+    assert payload["imports"]["latest_import"]["tipo"] == "capacitas_ruolo"
+    assert payload["imports"]["latest_completed"]["tipo"] == "capacitas_ruolo"
+    assert payload["imports"]["latest_completed"]["id"] == str(capacitas_batch.id)
+
+
+def test_distretto_kpi_anomalie_counts_only_open_and_matches_dashboard(monkeypatch: pytest.MonkeyPatch) -> None:
+    batch = import_capacitas_snapshot(
+        monkeypatch,
+        dataframe=build_snapshot_capacitas_dataframe(),
+        file_bytes=b"2026-anomalie",
+        filename="anomalie-2026.xlsx",
+    )
+
+    db = TestingSessionLocal()
+    try:
+        utenza = db.query(CatUtenzaIrrigua).filter(CatUtenzaIrrigua.import_batch_id == batch.id).one()
+        db.add_all(
+            [
+                CatAnomalia(
+                    particella_id=utenza.particella_id,
+                    utenza_id=utenza.id,
+                    anno_campagna=2026,
+                    tipo="VAL-OPEN-2026",
+                    severita="warning",
+                    status="aperta",
+                    descrizione="Anomalia aperta snapshot 2026",
+                ),
+                CatAnomalia(
+                    particella_id=utenza.particella_id,
+                    utenza_id=utenza.id,
+                    anno_campagna=2026,
+                    tipo="VAL-CLOSED-2026",
+                    severita="error",
+                    status="chiusa",
+                    descrizione="Anomalia chiusa snapshot 2026",
+                ),
+            ]
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    distretti_response = client.get("/catasto/distretti/", headers=auth_headers())
+    distretto_10_id = next(item["id"] for item in distretti_response.json() if item["num_distretto"] == "10")
+    kpi_response = client.get(f"/catasto/distretti/{distretto_10_id}/kpi?anno=2026", headers=auth_headers())
+    dashboard_response = client.get("/catasto/dashboard/summary?anno=2026", headers=auth_headers())
+
+    assert kpi_response.status_code == 200
+    assert dashboard_response.status_code == 200
+
+    kpi_payload = kpi_response.json()
+    dashboard_payload = dashboard_response.json()
+    distretto_10 = next(item for item in dashboard_payload["distretti"] if item["num_distretto"] == "10")
+
+    assert kpi_payload["totale_anomalie"] == 1
+    assert kpi_payload["anomalie_error"] == 0
+    assert distretto_10["totale_anomalie_aperte"] == 1
+    assert kpi_payload["totale_anomalie"] == distretto_10["totale_anomalie_aperte"]
 
 
 def test_distretto_kpi_endpoint_returns_aggregates_for_year() -> None:
@@ -7303,6 +7580,70 @@ def test_import_capacitas_excel_duplicate_and_force(monkeypatch: pytest.MonkeyPa
         db.close()
 
 
+def test_reimport_same_year_marks_previous_completed_as_replaced(monkeypatch: pytest.MonkeyPatch) -> None:
+    first_batch = import_capacitas_snapshot(
+        monkeypatch,
+        dataframe=build_snapshot_capacitas_dataframe(
+            rows=[
+                {
+                    **build_snapshot_capacitas_dataframe().iloc[0].to_dict(),
+                    "ANNO": "2026",
+                    "CCO": "UT-REIMPORT-2026-01",
+                    "SUP.IRRIGABILE": "500",
+                    "Imponibile s.f.": "750",
+                    "IMPORTO 0648": "75",
+                    "IMPORTO 0985": "150",
+                }
+            ]
+        ),
+        file_bytes=b"2026-reimport-a",
+        filename="reimport-a.xlsx",
+    )
+    second_batch = import_capacitas_snapshot(
+        monkeypatch,
+        dataframe=build_snapshot_capacitas_dataframe(
+            rows=[
+                {
+                    **build_snapshot_capacitas_dataframe().iloc[0].to_dict(),
+                    "ANNO": "2026",
+                    "CCO": "UT-REIMPORT-2026-02",
+                    "SUP.IRRIGABILE": "650",
+                    "Imponibile s.f.": "975",
+                    "IMPORTO 0648": "97.5",
+                    "IMPORTO 0985": "195",
+                }
+            ]
+        ),
+        file_bytes=b"2026-reimport-b",
+        filename="reimport-b.xlsx",
+    )
+
+    db = TestingSessionLocal()
+    try:
+        db.refresh(db.get(CatImportBatch, first_batch.id))
+        db.refresh(db.get(CatImportBatch, second_batch.id))
+        completed_batches = (
+            db.query(CatImportBatch)
+            .filter(
+                CatImportBatch.tipo == "capacitas_ruolo",
+                CatImportBatch.anno_campagna == 2026,
+                CatImportBatch.status == "completed",
+            )
+            .all()
+        )
+        persisted_first_batch = db.get(CatImportBatch, first_batch.id)
+        persisted_second_batch = db.get(CatImportBatch, second_batch.id)
+    finally:
+        db.close()
+
+    assert persisted_first_batch is not None
+    assert persisted_second_batch is not None
+    assert persisted_first_batch.status == "replaced"
+    assert persisted_second_batch.status == "completed"
+    assert len(completed_batches) == 1
+    assert completed_batches[0].id == second_batch.id
+
+
 def test_import_capacitas_excel_marks_previous_completed_snapshot_replaced(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         "app.modules.catasto.services.import_capacitas.pd.read_excel",
@@ -7330,6 +7671,77 @@ def test_import_capacitas_excel_marks_previous_completed_snapshot_replaced(monke
         assert second_batch.status == "completed"
     finally:
         db.close()
+
+
+def test_run_import_rolls_back_partial_rows_on_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(import_routes_module, "SessionLocal", TestingSessionLocal)
+
+    db = TestingSessionLocal()
+    try:
+        placeholder = CatImportBatch(
+            filename="rollback-2026.xlsx",
+            tipo="capacitas_ruolo",
+            status="processing",
+            righe_totali=0,
+            righe_importate=0,
+            righe_anomalie=0,
+            created_by=1,
+        )
+        db.add(placeholder)
+        db.commit()
+        batch_id = placeholder.id
+    finally:
+        db.close()
+
+    def failing_import_stub(
+        db: Session,
+        file_bytes: bytes,
+        filename: str,
+        created_by: int,
+        force: bool = False,
+        batch_id: UUID | None = None,
+    ) -> CatImportBatch:
+        assert batch_id is not None
+        db.bulk_insert_mappings(
+            CatUtenzaIrrigua,
+            [
+                {
+                    "id": uuid4(),
+                    "import_batch_id": batch_id,
+                    "anno_campagna": 2026,
+                    "cco": "UT-ROLLBACK-2026-001",
+                    "cod_comune_capacitas": 165,
+                    "num_distretto": 10,
+                    "nome_comune": "Arborea",
+                    "foglio": "5",
+                    "particella": "120",
+                    "subalterno": "1",
+                    "sup_irrigabile_mq": 100,
+                    "importo_0648": 10,
+                    "importo_0985": 20,
+                    "created_at": datetime.now(timezone.utc),
+                }
+            ],
+            render_nulls=True,
+        )
+        db.flush()
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(import_routes_module, "import_capacitas_excel", failing_import_stub)
+
+    import_routes_module._run_import(batch_id, b"x", "rollback-2026.xlsx", 1, False)
+
+    db = TestingSessionLocal()
+    try:
+        persisted_rows = db.query(CatUtenzaIrrigua).filter(CatUtenzaIrrigua.import_batch_id == batch_id).count()
+        batch = db.get(CatImportBatch, batch_id)
+    finally:
+        db.close()
+
+    assert persisted_rows == 0
+    assert batch is not None
+    assert batch.status == "failed"
+    assert batch.errore == "boom"
 
 
 def test_run_import_rolls_back_partial_rows_before_marking_batch_failed(monkeypatch: pytest.MonkeyPatch) -> None:
