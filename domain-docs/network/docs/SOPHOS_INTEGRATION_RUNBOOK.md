@@ -228,7 +228,10 @@ Comportamento operativo:
   - volume traffico in/out delle ultime 168 ore
   - conteggio eventi `allowed` e `blocked`
   - ultimi eventi correlati
+  - label leggibili per gli eventi Sophos piu comuni
+  - `Dettaglio IP` per IP pubblici, risolto via RDAP dal backend
   - per i target `device`, ultimi snapshot storici del PC/apparato monitorato
+  - per i target `device`, il pulsante `Analizza navigazione con Gaia Wiki`, disponibile solo a `admin` e `super_admin`
 
 API utili:
 
@@ -247,6 +250,11 @@ curl -X POST \
 ```bash
 curl -H "Authorization: Bearer <TOKEN>" \
   http://localhost:8080/api/network/tracking/1/activities
+```
+
+```bash
+curl -H "Authorization: Bearer <TOKEN>" \
+  http://localhost:8080/api/network/ip-whois/8.8.8.8
 ```
 
 ## Retention e aggregati statistiche

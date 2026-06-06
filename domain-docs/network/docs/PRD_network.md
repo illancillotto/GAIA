@@ -150,6 +150,7 @@ L'interfaccia presenta i dispositivi rilevati su una mappa interattiva organizza
 | `POST /network/tracking` | Registra o riattiva un target tracciato (`device`, `ip`, `domain`, `url`) |
 | `PATCH /network/tracking/{id}` | Aggiorna label/note o attiva-disattiva il tracking |
 | `GET /network/tracking/{id}/activities` | Dettaglio attività correlate a un target tracciato |
+| `GET /network/ip-whois/{ip_address}` | Lookup interno RDAP/WHOIS per IP pubblici osservati nel tracking |
 | `GET /network/alerts` | Lista alert attivi e risolti |
 | `PATCH /network/alerts/{id}` | Aggiorna stato alert (risolto/ignorato) |
 | `GET /network/firewalls` | Lista firewall registrati nel modulo rete |
@@ -267,6 +268,9 @@ Formato `NETWORK_SNMP_COMMUNITY_PROFILES`:
   - volume traffico ingresso/uscita
   - conteggio eventi allowed / blocked
   - ultimi eventi correlati
+- gli `Ultimi eventi` mostrano label leggibili per gli eventi Sophos piu frequenti, inclusi casi come `content_filtering.http.allowed` => `Filtro contenuti HTTP / Consentito`
+- per ogni IP pubblico osservato negli eventi, il frontend apre un pannello `Dettaglio IP` basato su lookup RDAP eseguito dal backend; gli IP privati/interni non eseguono lookup esterni
+- sui target di tipo `device`, il frontend espone un’azione `Analizza navigazione con Gaia Wiki` visibile solo ai ruoli `admin` e `super_admin`, che apre l’assistente con una richiesta precompilata per analizzare siti, domini e URL sospetti della navigazione recente
 - il tracking e idempotente: se l’operatore marca due volte lo stesso target, GAIA riusa il record esistente e lo riattiva se era stato disattivato
 
 ### 5.2E Import censimento dispositivi
