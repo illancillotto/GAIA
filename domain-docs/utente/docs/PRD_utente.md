@@ -42,8 +42,9 @@ Stato implementazione al 06/06/2026:
 
 - backend `me` attivo e registrato nel router API
 - frontend `/me` attivo con tab `Panoramica`, `Presenze`, `Operativita`, `Dotazioni`
-- storico rapido disponibile per `mese corrente` e `mese precedente`
-- export CSV leggero disponibile per presenze, operativita e dotazioni
+- frontend `/me` attivo con tab `Panoramica`, `Presenze`, `Operativita`, `Dotazioni`, `Anomalie`
+- storico rapido disponibile per `mese corrente`, `mese precedente`, `trimestre`, `anno`
+- export CSV e XLSX lato client disponibile per presenze, operativita e dotazioni
 
 ## 4. Non Obiettivi MVP
 
@@ -168,6 +169,14 @@ Stato implementato:
 - dispositivi `network` assegnati all'utente
 - assegnazioni mezzi provenienti da `operazioni`
 
+### 7.5 Anomalie
+
+Vista personale di controllo:
+
+- giornate Inaz anomale
+- pratiche ancora aperte o in carico
+- segnali di disallineamento tra presenza e operativita
+
 ## 8. Requisiti Funzionali
 
 ### 8.1 Accesso al modulo
@@ -225,6 +234,7 @@ Stato implementato:
 MVP opzionale ma raccomandato:
 
 - export riepilogo periodo almeno in CSV
+- export riepilogo periodo in CSV e XLSX lato client
 - disponibile per:
   - presenze
   - operativita personale

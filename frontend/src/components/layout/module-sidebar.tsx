@@ -90,6 +90,7 @@ export function ModuleSidebar({
         <NavItem href="/me#presenze" icon={CalendarIcon} label="Presenze" />
         <NavItem href="/me#operativita" icon={RefreshIcon} label="Operatività" />
         <NavItem href="/me#dotazioni" icon={ServerIcon} label="Dotazioni" />
+        <NavItem href="/me#anomalie" icon={AlertTriangleIcon} label="Anomalie" />
       </div>
     );
   }

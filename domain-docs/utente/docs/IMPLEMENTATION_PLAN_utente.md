@@ -184,6 +184,7 @@ Stato 06/06/2026: completata
   - mese corrente
   - mese precedente
 - export CSV client-side per presenze, operativita e dotazioni
+- export XLSX client-side per presenze, operativita e dotazioni
 - valutare PDF e XLSX in iterazione successiva
 
 Stato 06/06/2026: completata in forma leggera
@@ -206,6 +207,8 @@ Esito:
 - allineare la sidebar locale del modulo
 - rendere coerenti hash route e navigazione interna
 - aggiornare PRD e piano implementativo
+- aggiungere vista dedicata `Anomalie`
+- estendere i preset periodo a trimestre e anno
 
 Stato 06/06/2026: completata
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import * as XLSX from "xlsx";
 
 import { ProtectedPage } from "@/components/app/protected-page";
 import { Badge } from "@/components/ui/badge";
@@ -37,8 +38,8 @@ import type {
   MeVehicleUsageSession,
 } from "@/types/api";
 
-type MeTabKey = "overview" | "presenze" | "operativita" | "dotazioni";
-type PeriodPreset = "current" | "previous";
+type MeTabKey = "overview" | "presenze" | "operativita" | "dotazioni" | "anomalie";
+type PeriodPreset = "current" | "previous" | "quarter" | "year";
 type OperativitaSectionFilter = "all" | "activities" | "reports" | "cases" | "vehicles";
 
 function monthBounds(offsetMonths = 0): { start: string; end: string } {
@@ -48,6 +49,21 @@ function monthBounds(offsetMonths = 0): { start: string; end: string } {
   const format = (value: Date) =>
     `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
   return { start: format(start), end: format(end) };
+}
+
+function quarterBounds(): { start: string; end: string } {
+  const now = new Date();
+  const quarterStartMonth = Math.floor(now.getMonth() / 3) * 3;
+  const start = new Date(now.getFullYear(), quarterStartMonth, 1);
+  const end = new Date(now.getFullYear(), quarterStartMonth + 3, 0);
+  const format = (value: Date) =>
+    `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+  return { start: format(start), end: format(end) };
+}
+
+function yearBounds(): { start: string; end: string } {
+  const now = new Date();
+  return { start: `${now.getFullYear()}-01-01`, end: `${now.getFullYear()}-12-31` };
 }
 
 function formatHours(minutes: number): string {
@@ -76,6 +92,16 @@ function formatDateTimeLabel(value: string | null): string {
 
 function formatMonthLabel(isoDate: string): string {
   return new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric" }).format(new Date(`${isoDate}T00:00:00`));
+}
+
+function formatPeriodLabel(periodPreset: PeriodPreset, start: string): string {
+  if (periodPreset === "current" || periodPreset === "previous") return formatMonthLabel(start);
+  if (periodPreset === "quarter") {
+    const date = new Date(`${start}T00:00:00`);
+    const quarter = Math.floor(date.getMonth() / 3) + 1;
+    return `Q${quarter} ${date.getFullYear()}`;
+  }
+  return new Intl.DateTimeFormat("it-IT", { year: "numeric" }).format(new Date(`${start}T00:00:00`));
 }
 
 function requestBadgeLabel(record: InazDailyRecord): string | null {
@@ -111,6 +137,22 @@ function downloadCsv(filename: string, rows: string[][]): void {
   URL.revokeObjectURL(url);
 }
 
+function downloadWorkbook(filename: string, sheets: Array<{ name: string; rows: Record<string, string | number | null>[] }>): void {
+  const workbook = XLSX.utils.book_new();
+  sheets.forEach((sheet) => {
+    const worksheet = XLSX.utils.json_to_sheet(sheet.rows);
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheet.name);
+  });
+  const out = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
+  const blob = new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 function exportPresenzeCsv(records: InazDailyRecord[]): void {
   downloadCsv("me-presenze.csv", [
     ["Data", "Ordinarie minuti", "Extra minuti", "Assenza minuti", "KM", "Stato", "Richiesta"],
@@ -123,6 +165,23 @@ function exportPresenzeCsv(records: InazDailyRecord[]): void {
       record.detail_status || record.stato || "",
       requestBadgeLabel(record) || "",
     ]),
+  ]);
+}
+
+function exportPresenzeXlsx(records: InazDailyRecord[]): void {
+  downloadWorkbook("me-presenze.xlsx", [
+    {
+      name: "presenze",
+      rows: records.map((record) => ({
+        data: record.work_date,
+        stato: record.detail_status || record.stato || "",
+        ordinarie_minuti: record.ordinary_minutes ?? 0,
+        extra_minuti: record.effective_extra_minutes ?? 0,
+        assenza_minuti: record.absence_minutes ?? 0,
+        km: record.km_value ?? 0,
+        richiesta: requestBadgeLabel(record) || "",
+      })),
+    },
   ]);
 }
 
@@ -148,6 +207,57 @@ function exportOperativitaCsv(
   ]);
 }
 
+function exportOperativitaXlsx(
+  activities: MeOperazioniActivity[],
+  reports: MeOperazioniReport[],
+  cases: MeOperazioniCase[],
+  vehicleSessions: MeVehicleUsageSession[],
+): void {
+  downloadWorkbook("me-operativita.xlsx", [
+    {
+      name: "attivita",
+      rows: activities.map((item) => ({
+        nome: item.activity_name || "",
+        categoria: item.activity_category || "",
+        stato: item.status,
+        inizio: item.started_at,
+        minuti: item.duration_minutes ?? 0,
+        mezzo: item.vehicle_name || "",
+      })),
+    },
+    {
+      name: "segnalazioni",
+      rows: reports.map((item) => ({
+        numero: item.report_number,
+        titolo: item.title,
+        stato: item.status,
+        categoria: item.category_name || "",
+        creata_il: item.created_at,
+      })),
+    },
+    {
+      name: "pratiche",
+      rows: cases.map((item) => ({
+        numero: item.case_number,
+        titolo: item.title,
+        stato: item.status,
+        priorita: item.priority_rank ?? "",
+        report_origine: item.source_report_number || "",
+      })),
+    },
+    {
+      name: "mezzi",
+      rows: vehicleSessions.map((item) => ({
+        mezzo: item.vehicle_name || "",
+        targa: item.vehicle_plate_number || "",
+        stato: item.status,
+        inizio: item.started_at,
+        km: item.km,
+      })),
+    },
+  ]);
+}
+
 function exportDotazioniCsv(devices: MeAssignedDevice[], assignments: MeVehicleAssignment[]): void {
   downloadCsv("me-dotazioni.csv", [
     ["Sezione", "Etichetta", "Riferimento", "Stato", "Dettaglio"],
@@ -156,10 +266,38 @@ function exportDotazioniCsv(devices: MeAssignedDevice[], assignments: MeVehicleA
   ]);
 }
 
+function exportDotazioniXlsx(devices: MeAssignedDevice[], assignments: MeVehicleAssignment[]): void {
+  downloadWorkbook("me-dotazioni.xlsx", [
+    {
+      name: "dispositivi",
+      rows: devices.map((item) => ({
+        etichetta: item.resolved_label,
+        ip: item.ip_address,
+        stato: item.status,
+        tipo: item.device_type || "",
+        sistema_operativo: item.operating_system || "",
+        ultimo_visto: item.last_seen_at,
+      })),
+    },
+    {
+      name: "mezzi_assegnati",
+      rows: assignments.map((item) => ({
+        mezzo: item.vehicle_name,
+        targa: item.vehicle_plate_number || "",
+        tipo: item.vehicle_type,
+        attiva: item.is_active ? "si" : "no",
+        start_at: item.start_at,
+        end_at: item.end_at || "",
+      })),
+    },
+  ]);
+}
+
 function getTabFromHash(hash: string): MeTabKey {
   if (hash === "#presenze") return "presenze";
   if (hash === "#operativita") return "operativita";
   if (hash === "#dotazioni") return "dotazioni";
+  if (hash === "#anomalie") return "anomalie";
   return "overview";
 }
 
@@ -187,8 +325,13 @@ export default function MePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const bounds = useMemo(() => (periodPreset === "current" ? monthBounds(0) : monthBounds(-1)), [periodPreset]);
-  const monthLabel = useMemo(() => formatMonthLabel(bounds.start), [bounds.start]);
+  const bounds = useMemo(() => {
+    if (periodPreset === "current") return monthBounds(0);
+    if (periodPreset === "previous") return monthBounds(-1);
+    if (periodPreset === "quarter") return quarterBounds();
+    return yearBounds();
+  }, [periodPreset]);
+  const monthLabel = useMemo(() => formatPeriodLabel(periodPreset, bounds.start), [bounds.start, periodPreset]);
 
   useEffect(() => {
     const syncTab = () => {
@@ -294,6 +437,20 @@ export default function MePage() {
   const recentActivities = useMemo(() => activities.slice(0, 8), [activities]);
   const recentReports = useMemo(() => reports.slice(0, 6), [reports]);
   const activeAssignments = useMemo(() => vehicleAssignments.filter((item) => item.is_active), [vehicleAssignments]);
+  const anomalyRecords = useMemo(
+    () =>
+      inazRecords.filter(
+        (item) =>
+          (item.detail_anomalies?.length ?? 0) > 0 ||
+          Boolean(item.special_day) ||
+          Boolean((item.detail_status || item.stato || "").toLowerCase().includes("anom")),
+      ),
+    [inazRecords],
+  );
+  const openOrCriticalCases = useMemo(
+    () => cases.filter((item) => item.status !== "closed" && item.status !== "resolved"),
+    [cases],
+  );
   const operativitaStatuses = useMemo(() => {
     const values = new Set<string>();
     activities.forEach((item) => values.add(item.status));
@@ -391,6 +548,12 @@ export default function MePage() {
                     <button className={periodPreset === "previous" ? "btn-primary" : "btn-secondary"} type="button" onClick={() => setPeriodPreset("previous")}>
                       Mese precedente
                     </button>
+                    <button className={periodPreset === "quarter" ? "btn-primary" : "btn-secondary"} type="button" onClick={() => setPeriodPreset("quarter")}>
+                      Trimestre
+                    </button>
+                    <button className={periodPreset === "year" ? "btn-primary" : "btn-secondary"} type="button" onClick={() => setPeriodPreset("year")}>
+                      Anno
+                    </button>
                   </div>
                   <p className="mt-3 text-xs text-[#6b7d70]">{monthLabel} · {bounds.start} / {bounds.end}</p>
                 </div>
@@ -423,6 +586,9 @@ export default function MePage() {
             </button>
             <button className={activeTab === "dotazioni" ? "btn-primary" : "btn-secondary"} type="button" onClick={() => setHashTab("dotazioni")}>
               Dotazioni
+            </button>
+            <button className={activeTab === "anomalie" ? "btn-primary" : "btn-secondary"} type="button" onClick={() => setHashTab("anomalie")}>
+              Anomalie
             </button>
             {isLoading ? <Badge variant="warning">Caricamento</Badge> : null}
           </div>
@@ -521,9 +687,14 @@ export default function MePage() {
                   <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-400">Riepilogo periodo</p>
                   <h3 className="mt-1 text-lg font-semibold text-gray-900">Eventi e saldi Inaz</h3>
                 </div>
-                <button className="btn-secondary" type="button" onClick={() => exportPresenzeCsv(inazRecords)}>
-                  Export CSV
-                </button>
+                <div className="flex gap-2">
+                  <button className="btn-secondary" type="button" onClick={() => exportPresenzeCsv(inazRecords)}>
+                    Export CSV
+                  </button>
+                  <button className="btn-secondary" type="button" onClick={() => exportPresenzeXlsx(inazRecords)}>
+                    Export XLSX
+                  </button>
+                </div>
               </div>
               {topSummaryRows.length === 0 ? (
                 <p className="text-sm text-gray-500">Nessun riepilogo Inaz disponibile per il periodo selezionato.</p>
@@ -616,9 +787,14 @@ export default function MePage() {
                   <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-400">Export e storico</p>
                   <h3 className="mt-1 text-lg font-semibold text-gray-900">Esporta operatività personale</h3>
                 </div>
-                <button className="btn-secondary" type="button" onClick={() => exportOperativitaCsv(activities, reports, cases, vehicleSessions)}>
-                  Export CSV
-                </button>
+                <div className="flex gap-2">
+                  <button className="btn-secondary" type="button" onClick={() => exportOperativitaCsv(activities, reports, cases, vehicleSessions)}>
+                    Export CSV
+                  </button>
+                  <button className="btn-secondary" type="button" onClick={() => exportOperativitaXlsx(activities, reports, cases, vehicleSessions)}>
+                    Export XLSX
+                  </button>
+                </div>
               </div>
               <div className="grid gap-3 lg:grid-cols-[0.9fr_0.55fr_0.55fr]">
                 <label className="space-y-2">
@@ -792,9 +968,14 @@ export default function MePage() {
                   <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-400">Export e asset personali</p>
                   <h3 className="mt-1 text-lg font-semibold text-gray-900">Dispositivi e mezzi assegnati</h3>
                 </div>
-                <button className="btn-secondary" type="button" onClick={() => exportDotazioniCsv(assignedDevices, vehicleAssignments)}>
-                  Export CSV
-                </button>
+                <div className="flex gap-2">
+                  <button className="btn-secondary" type="button" onClick={() => exportDotazioniCsv(assignedDevices, vehicleAssignments)}>
+                    Export CSV
+                  </button>
+                  <button className="btn-secondary" type="button" onClick={() => exportDotazioniXlsx(assignedDevices, vehicleAssignments)}>
+                    Export XLSX
+                  </button>
+                </div>
               </div>
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
                 <MetricCard label="Dispositivi" value={assignedDevices.length} sub="Assegnati al profilo" />
@@ -849,6 +1030,71 @@ export default function MePage() {
                           <Badge variant={item.is_active ? "success" : "neutral"}>{item.is_active ? "attiva" : "chiusa"}</Badge>
                         </div>
                         {item.notes ? <p className="mt-3 text-xs text-gray-500">{item.notes}</p> : null}
+                      </div>
+                    ))
+                  )}
+                </div>
+              </article>
+            </div>
+          </div>
+        ) : null}
+
+        {activeTab === "anomalie" ? (
+          <div id="anomalie" className="space-y-6">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <MetricCard label="Giornate anomale" value={anomalyRecords.length} sub="Presenze da verificare" variant={anomalyRecords.length > 0 ? "warning" : "default"} />
+              <MetricCard label="Pratiche aperte" value={openOrCriticalCases.length} sub="Ancora in carico" variant={openOrCriticalCases.length > 0 ? "warning" : "default"} />
+              <MetricCard label="Assenze" value={formatHours(summary?.absence_minutes ?? 0)} sub="Nel periodo" variant="warning" />
+              <MetricCard label="Extra" value={formatHours(summary?.extra_minutes ?? 0)} sub="Da confrontare con attività" />
+            </div>
+
+            <div className="grid gap-6 xl:grid-cols-2">
+              <article className="panel-card">
+                <div className="mb-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-400">Anomalie presenze</p>
+                  <h3 className="mt-1 text-lg font-semibold text-gray-900">Giornate da controllare</h3>
+                </div>
+                <div className="space-y-3">
+                  {anomalyRecords.length === 0 ? (
+                    <p className="text-sm text-gray-500">Nessuna anomalia Inaz nel periodo selezionato.</p>
+                  ) : (
+                    anomalyRecords.map((record) => (
+                      <div key={record.id} className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-amber-950">{formatDateLabel(record.work_date)}</p>
+                            <p className="mt-1 text-xs text-amber-800">{record.detail_status || record.stato || "Anomalia"}</p>
+                          </div>
+                          <Badge variant="warning">Inaz</Badge>
+                        </div>
+                        <p className="mt-3 text-xs text-amber-900">{requestBadgeLabel(record) || record.evidenze || "Controllo richiesto sul cartellino"}</p>
+                        <button className="mt-3 text-xs font-medium text-[#8a5a00] transition hover:text-[#6b4500]" type="button" onClick={() => void openDailyRecordDetail(record.id)}>
+                          Apri dettaglio
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </article>
+
+              <article className="panel-card">
+                <div className="mb-4">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-400">Anomalie operative</p>
+                  <h3 className="mt-1 text-lg font-semibold text-gray-900">Pratiche e carichi aperti</h3>
+                </div>
+                <div className="space-y-3">
+                  {openOrCriticalCases.length === 0 ? (
+                    <p className="text-sm text-gray-500">Nessuna pratica aperta da seguire nel periodo selezionato.</p>
+                  ) : (
+                    openOrCriticalCases.map((item) => (
+                      <div key={item.id} className="rounded-2xl border border-rose-200 bg-rose-50/70 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-sm font-semibold text-rose-950">{item.title}</p>
+                            <p className="mt-1 text-xs text-rose-800">{item.case_number} · {item.source_report_number || "Senza report"} · {formatDateTimeLabel(item.created_at)}</p>
+                          </div>
+                          <Badge variant="danger">{item.status}</Badge>
+                        </div>
                       </div>
                     ))
                   )}
