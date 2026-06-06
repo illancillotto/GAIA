@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { ProtectedPage } from "@/components/app/protected-page";
 import { Badge } from "@/components/ui/badge";
@@ -302,6 +303,9 @@ function getTabFromHash(hash: string): MeTabKey {
 }
 
 export default function MePage() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<MeTabKey>("overview");
   const [periodPreset, setPeriodPreset] = useState<PeriodPreset>("current");
   const [meStatus, setMeStatus] = useState<MeModuleStatusResponse | null>(null);
@@ -332,6 +336,14 @@ export default function MePage() {
     return yearBounds();
   }, [periodPreset]);
   const monthLabel = useMemo(() => formatPeriodLabel(periodPreset, bounds.start), [bounds.start, periodPreset]);
+  const deltaExtraVsActivitiesMinutes = useMemo(
+    () => Math.abs((summary?.extra_minutes ?? 0) - (summary?.activity_minutes ?? 0)),
+    [summary?.activity_minutes, summary?.extra_minutes],
+  );
+  const deltaKmMinutes = useMemo(
+    () => Math.abs((summary?.km_from_inaz ?? 0) - (summary?.vehicle_km ?? 0)),
+    [summary?.km_from_inaz, summary?.vehicle_km],
+  );
 
   useEffect(() => {
     const syncTab = () => {
@@ -342,6 +354,26 @@ export default function MePage() {
     window.addEventListener("hashchange", syncTab);
     return () => window.removeEventListener("hashchange", syncTab);
   }, []);
+
+  useEffect(() => {
+    const period = searchParams.get("period");
+    const section = searchParams.get("section");
+    const status = searchParams.get("status");
+    const query = searchParams.get("q");
+
+    if (period === "current" || period === "previous" || period === "quarter" || period === "year") {
+      setPeriodPreset(period);
+    }
+    if (section === "all" || section === "activities" || section === "reports" || section === "cases" || section === "vehicles") {
+      setOperativitaSectionFilter(section);
+    }
+    if (status) {
+      setOperativitaStatusFilter(status);
+    }
+    if (query !== null) {
+      setOperativitaQuery(query);
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     const token = getStoredAccessToken();
@@ -499,9 +531,41 @@ export default function MePage() {
 
   const setHashTab = (tab: MeTabKey) => {
     const hash = tab === "overview" ? "" : `#${tab}`;
-    window.location.hash = hash;
+    const query = new URLSearchParams(searchParams.toString());
+    const target = hash ? `${pathname}?${query.toString()}${hash}` : `${pathname}${query.toString() ? `?${query.toString()}` : ""}`;
+    router.replace(target, { scroll: false });
     setActiveTab(tab);
   };
+
+  useEffect(() => {
+    const query = new URLSearchParams(searchParams.toString());
+    query.set("period", periodPreset);
+
+    if (operativitaSectionFilter !== "all") {
+      query.set("section", operativitaSectionFilter);
+    } else {
+      query.delete("section");
+    }
+
+    if (operativitaStatusFilter !== "all") {
+      query.set("status", operativitaStatusFilter);
+    } else {
+      query.delete("status");
+    }
+
+    if (operativitaQuery.trim()) {
+      query.set("q", operativitaQuery.trim());
+    } else {
+      query.delete("q");
+    }
+
+    const hash = activeTab === "overview" ? "" : `#${activeTab}`;
+    const target = `${pathname}?${query.toString()}${hash}`;
+    const current = `${pathname}?${searchParams.toString()}${typeof window !== "undefined" ? window.location.hash : ""}`;
+    if (target !== current) {
+      router.replace(target, { scroll: false });
+    }
+  }, [activeTab, operativitaQuery, operativitaSectionFilter, operativitaStatusFilter, pathname, periodPreset, router, searchParams]);
 
   async function openDailyRecordDetail(recordId: string): Promise<void> {
     const token = getStoredAccessToken();
@@ -658,6 +722,18 @@ export default function MePage() {
                   <MetricCard label="Assenze" value={formatHours(summary?.absence_minutes ?? 0)} sub="Tempo assenza totale" variant="warning" />
                   <MetricCard label="Pratiche aperte" value={summary?.open_cases_count ?? 0} sub="Attualmente in carico" />
                   <MetricCard label="Pratiche chiuse" value={summary?.closed_cases_count ?? 0} sub="Nel periodo" variant="success" />
+                </div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-400">Delta extra vs attività</p>
+                    <p className="mt-2 text-2xl font-semibold text-gray-900">{formatHours(deltaExtraVsActivitiesMinutes)}</p>
+                    <p className="mt-1 text-xs text-gray-500">Scostamento tra extra Inaz e minuti attività Operazioni.</p>
+                  </div>
+                  <div className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-400">Delta KM Inaz vs mezzi</p>
+                    <p className="mt-2 text-2xl font-semibold text-gray-900">{deltaKmMinutes.toFixed(1)} km</p>
+                    <p className="mt-1 text-xs text-gray-500">Scostamento tra KM annotati in Inaz e sessioni mezzo.</p>
+                  </div>
                 </div>
                 <div className="mt-4 rounded-2xl border border-gray-100 bg-gray-50/80 p-4">
                   <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-400">Stato mapping Inaz</p>
