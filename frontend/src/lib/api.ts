@@ -135,6 +135,7 @@ import type {
   NetworkFirewall,
   NetworkFirewallEvent,
   NetworkFirewallMetric,
+  NetworkIpWhois,
   NetworkTrackedSubject,
   NetworkTrackedSubjectActivitySummary,
   NetworkTrackedSubjectCreateInput,
@@ -162,6 +163,10 @@ import type {
   SyncPreview,
   SyncPreviewRequest,
   SyncRun,
+  WikiRequest,
+  WikiRequestAssignee,
+  WikiRequestCreateInput,
+  WikiRequestUpdateInput,
   WikiToolAuditLogListResponse,
   WikiToolAuditLogDetailResponse,
   WikiToolAuditLogRelatedResponse,
@@ -1201,6 +1206,46 @@ export async function getWikiToolAuditLogs(
   });
 }
 
+export async function getWikiRequests(token: string): Promise<WikiRequest[]> {
+  return request<WikiRequest[]>("/wiki/requests", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getWikiRequestAssignees(token: string): Promise<WikiRequestAssignee[]> {
+  return request<WikiRequestAssignee[]>("/wiki/requests/assignees", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function createWikiRequest(token: string, payload: WikiRequestCreateInput): Promise<WikiRequest> {
+  return request<WikiRequest>("/wiki/requests", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateWikiRequest(
+  token: string,
+  requestId: string,
+  payload: WikiRequestUpdateInput,
+): Promise<WikiRequest> {
+  return request<WikiRequest>(`/wiki/requests/${requestId}`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function getWikiToolAuditSummary(
   token: string,
   params: {
@@ -1835,6 +1880,14 @@ export async function updateNetworkTrackedSubject(
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(payload),
+  });
+}
+
+export async function getNetworkIpWhois(token: string, ipAddress: string): Promise<NetworkIpWhois> {
+  return request<NetworkIpWhois>(`/network/ip-whois/${encodeURIComponent(ipAddress)}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
   });
 }
 

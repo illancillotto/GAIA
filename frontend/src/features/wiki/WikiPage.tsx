@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
 import { getStoredAccessToken } from "@/lib/auth";
@@ -221,6 +221,8 @@ export function WikiPage() {
   const [loadingArticles, setLoadingArticles] = useState(true);
   const [articleQuery, setArticleQuery] = useState("");
   const initialConversationId = searchParams.get("conversation");
+  const initialQuestion = searchParams.get("q")?.trim() ?? "";
+  const autoAskedQuestionRef = useRef<string | null>(null);
 
   const [chatScope, setChatScope] = useState<"article" | "codebase">("codebase");
   const {
@@ -263,6 +265,18 @@ export function WikiPage() {
       setSelected(filteredArticles[0]);
     }
   }, [filteredArticles, selected]);
+
+  useEffect(() => {
+    if (!initialQuestion) {
+      return;
+    }
+    setChatScope("codebase");
+    if (autoAskedQuestionRef.current === initialQuestion) {
+      return;
+    }
+    autoAskedQuestionRef.current = initialQuestion;
+    void sendMessage(initialQuestion);
+  }, [initialQuestion, sendMessage]);
 
   return (
     <div className="space-y-4">

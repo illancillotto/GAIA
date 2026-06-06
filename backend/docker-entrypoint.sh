@@ -2,7 +2,7 @@
 set -eu
 
 echo "Applying Alembic migrations..."
-alembic upgrade head
+alembic upgrade heads
 
 echo "Starting service: $*"
 exec "$@"

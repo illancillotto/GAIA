@@ -1,5 +1,7 @@
 from collections.abc import Generator
 from datetime import UTC, datetime, timedelta
+import io
+import json
 
 import pytest
 from fastapi.testclient import TestClient
@@ -318,6 +320,67 @@ def test_network_device_detail_prefers_assigned_application_user_label() -> None
     assert payload["label_source"] == "application_user"
     assert payload["assigned_user"]["username"] == "operatore.ced"
     assert payload["assigned_user"]["phone_extension"] == "301"
+
+
+def test_network_ip_whois_returns_internal_scope_without_external_lookup(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fail_urlopen(*args, **kwargs):
+        raise AssertionError("urlopen should not be called for private IPs")
+
+    monkeypatch.setattr("app.modules.network.router.urllib.request.urlopen", fail_urlopen)
+
+    response = client.get("/network/ip-whois/192.168.1.10", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["scope"] == "IP privato"
+    assert payload["rdap_status"] == "not_applicable"
+    assert payload["label"] == "Rete interna GAIA/LAN privata"
+
+
+def test_network_ip_whois_returns_rdap_summary_for_public_ip(monkeypatch: pytest.MonkeyPatch) -> None:
+    rdap_payload = {
+        "name": "INFOSTRADA-CUSTOMERS-15112242",
+        "handle": "NET-151-12-242-48-1",
+        "country": "IT",
+        "startAddress": "151.12.242.48",
+        "endAddress": "151.12.242.55",
+        "entities": [
+            {
+                "vcardArray": [
+                    "vcard",
+                    [
+                        ["fn", {}, "text", "CONSORZIO DI BONIFICA DELL'ORISTANESE"],
+                    ],
+                ]
+            }
+        ],
+    }
+
+    class FakeResponse(io.StringIO):
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            self.close()
+            return False
+
+    def fake_urlopen(url: str, timeout: int = 0):
+        assert url == "https://rdap.org/ip/151.12.242.50"
+        assert timeout == 4
+        return FakeResponse(json.dumps(rdap_payload))
+
+    monkeypatch.setattr("app.modules.network.router.urllib.request.urlopen", fake_urlopen)
+
+    response = client.get("/network/ip-whois/151.12.242.50", headers=auth_headers())
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["scope"] == "IP pubblico"
+    assert payload["rdap_status"] == "ok"
+    assert payload["label"] == "CONSORZIO DI BONIFICA DELL'ORISTANESE"
+    assert payload["network_name"] == "INFOSTRADA-CUSTOMERS-15112242"
+    assert payload["country"] == "IT"
+    assert payload["cidr"] == ["151.12.242.48/29"]
 
 
 def test_network_device_assignees_endpoint_returns_assignable_users() -> None:

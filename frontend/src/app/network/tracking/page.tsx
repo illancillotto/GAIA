@@ -7,15 +7,23 @@ import { NetworkModulePage } from "@/components/network/network-module-page";
 import { NetworkTrackToggle } from "@/components/network/network-track-toggle";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
-import { BellIcon, ServerIcon } from "@/components/ui/icons";
+import { BellIcon } from "@/components/ui/icons";
 import {
   createNetworkTrackedSubject,
   getNetworkDevices,
+  getNetworkIpWhois,
   getNetworkTrackedSubjectActivities,
   listNetworkTrackedSubjects,
   updateNetworkTrackedSubject,
 } from "@/lib/api";
-import type { NetworkDevice, NetworkTrackedSubject, NetworkTrackedSubjectActivitySummary } from "@/types/api";
+import type {
+  CurrentUser,
+  NetworkDevice,
+  NetworkIpWhois,
+  NetworkTrackedSubject,
+  NetworkTrackedSubjectActivityEvent,
+  NetworkTrackedSubjectActivitySummary,
+} from "@/types/api";
 
 const ENTITY_OPTIONS = [
   { value: "", label: "Tutti" },
@@ -69,6 +77,211 @@ function formatBytes(value: number) {
   return `${size >= 100 || unitIndex === 0 ? size.toFixed(0) : size.toFixed(1)} ${units[unitIndex]}`;
 }
 
+function toTitleCase(value: string) {
+  return value
+    .split(/[_\s-]+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function formatEventType(eventType: string) {
+  const parts = eventType.split(".").filter(Boolean);
+  const action = (parts.pop() ?? eventType).toLowerCase();
+  const contextKey = parts.join(".");
+  const knownContexts: Record<string, string> = {
+    "content_filtering.http": "Filtro contenuti HTTP",
+    "content_filtering.https": "Filtro contenuti HTTPS",
+    "firewall.rule": "Regola firewall",
+    "dns.request": "Richiesta DNS",
+    "web.server": "Traffico web",
+  };
+  const knownActions: Record<string, { label: string; tone: string }> = {
+    allowed: {
+      label: "Consentito",
+      tone: "border-emerald-200 bg-emerald-50 text-emerald-800",
+    },
+    blocked: {
+      label: "Bloccato",
+      tone: "border-rose-200 bg-rose-50 text-rose-800",
+    },
+    denied: {
+      label: "Negato",
+      tone: "border-rose-200 bg-rose-50 text-rose-800",
+    },
+    dropped: {
+      label: "Scartato",
+      tone: "border-amber-200 bg-amber-50 text-amber-800",
+    },
+  };
+
+  return {
+    label: knownContexts[contextKey] || (parts.length ? parts.map(toTitleCase).join(" / ") : "Evento rete"),
+    action: knownActions[action]?.label || toTitleCase(action),
+    actionTone: knownActions[action]?.tone || "border-gray-200 bg-gray-50 text-gray-700",
+  };
+}
+
+function formatMatchedOnLabel(value: string) {
+  const labels: Record<string, string> = {
+    src_ip: "Match su IP sorgente",
+    dst_ip: "Match su IP destinazione",
+    domain: "Match su dominio",
+    url: "Match su URL",
+    device: "Match su dispositivo",
+  };
+  return labels[value] || `Match su ${toTitleCase(value)}`;
+}
+
+function describeIpAddress(ipAddress: string | null | undefined) {
+  if (!ipAddress) {
+    return { scope: "n/d", description: "IP non presente nell'evento.", isPublic: false };
+  }
+  if (ipAddress === "127.0.0.1") {
+    return { scope: "Loopback locale", description: "Indirizzo locale della macchina stessa.", isPublic: false };
+  }
+  if (ipAddress.startsWith("169.254.")) {
+    return { scope: "Link-local", description: "Autoconfigurato in LAN, non instradato su Internet.", isPublic: false };
+  }
+  if (isPrivateNetworkIp(ipAddress)) {
+    return { scope: "IP privato", description: "Appartiene alla rete interna GAIA o a una LAN privata.", isPublic: false };
+  }
+  return { scope: "IP pubblico", description: "Destinazione o sorgente raggiungibile su Internet.", isPublic: true };
+}
+
+function buildWikiQuestion(subject: NetworkTrackedSubject, event: NetworkTrackedSubjectActivityEvent) {
+  const eventInfo = formatEventType(event.event_type);
+  const target = subject.value || subject.resolved_label;
+  const url = event.url ? `, URL ${event.url}` : "";
+  const domain = event.domain ? `, dominio ${event.domain}` : "";
+  return `Nel tracking rete di GAIA vedo l'evento "${eventInfo.label} ${eventInfo.action}" associato a ${target}. Mi spieghi cos'è e cosa indicano gli IP ${event.src_ip || "n/d"} e ${event.dst_ip || "n/d"}${domain}${url}?`;
+}
+
+function buildWikiQuestionHref(subject: NetworkTrackedSubject, event: NetworkTrackedSubjectActivityEvent) {
+  return `/wiki?q=${encodeURIComponent(buildWikiQuestion(subject, event))}`;
+}
+
+function isAdminRole(role: string | null | undefined) {
+  return role === "admin" || role === "super_admin";
+}
+
+function buildDeviceBrowsingAnalysisQuestion(subject: NetworkTrackedSubject, recentEvents: NetworkTrackedSubjectActivityEvent[]) {
+  const relevantEvents = recentEvents.slice(0, 8);
+  const trafficLines = relevantEvents.map((event) => {
+    const eventInfo = formatEventType(event.event_type);
+    const destination = event.url || event.domain || event.dst_device_label || event.dst_ip || "destinazione n/d";
+    return `- ${eventInfo.label} ${eventInfo.action}: ${destination} (${event.dst_ip || "ip n/d"}) alle ${new Date(event.observed_at).toLocaleString("it-IT")}`;
+  });
+  const deviceLabel = subject.resolved_label || subject.value;
+  return [
+    `Analizza la navigazione del dispositivo ${deviceLabel} in GAIA Rete e verifica se ci sono siti, domini o URL sospetti.`,
+    `Target: ${subject.value}.`,
+    "Considera questi eventi recenti:",
+    ...trafficLines,
+    "Indicami eventuali indicatori di rischio, destinazioni anomale e priorità di verifica operativa.",
+  ].join("\n");
+}
+
+function buildDeviceBrowsingAnalysisHref(subject: NetworkTrackedSubject, recentEvents: NetworkTrackedSubjectActivityEvent[]) {
+  return `/wiki?q=${encodeURIComponent(buildDeviceBrowsingAnalysisQuestion(subject, recentEvents))}`;
+}
+
+function EventEndpointCard({
+  title,
+  ipAddress,
+  label,
+  onOpenIpDetails,
+}: {
+  title: string;
+  ipAddress: string | null;
+  label: string | null;
+  onOpenIpDetails: (ipAddress: string) => void;
+}) {
+  const ipInfo = describeIpAddress(ipAddress);
+
+  return (
+    <div className="rounded-[18px] border border-[#E8EFE9] bg-[#FAFCFA] px-3 py-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-400">{title}</p>
+          <p className="mt-1 break-all font-mono text-sm text-gray-900">{ipAddress || "n/d"}</p>
+          <p className="mt-1 text-xs text-gray-600">{label || ipInfo.scope}</p>
+        </div>
+        {ipAddress && ipInfo.isPublic ? (
+          <button
+            type="button"
+            onClick={() => onOpenIpDetails(ipAddress)}
+            className="rounded-full border border-[#d8e4da] bg-white px-2.5 py-1 text-[11px] font-medium text-[#1D4E35] transition hover:bg-[#f3f8f5]"
+          >
+            Dettaglio IP
+          </button>
+        ) : null}
+      </div>
+      <p className="mt-2 text-xs leading-5 text-gray-500">{ipInfo.description}</p>
+    </div>
+  );
+}
+
+function RecentEventCard({
+  subject,
+  event,
+  expanded = false,
+  onOpenIpDetails,
+}: {
+  subject: NetworkTrackedSubject;
+  event: NetworkTrackedSubjectActivityEvent;
+  expanded?: boolean;
+  onOpenIpDetails: (ipAddress: string) => void;
+}) {
+  const eventInfo = formatEventType(event.event_type);
+
+  return (
+    <div className="relative rounded-[22px] border border-[#E6F0EA] bg-white px-4 py-4">
+      <div className="absolute left-0 top-4 h-10 w-1 rounded-r-full bg-[#9FC7AB]" />
+      <div className="pl-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-medium text-gray-950">{eventInfo.label}</p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${eventInfo.actionTone}`}>
+                {eventInfo.action}
+              </span>
+              <span className="rounded-full bg-[#F3F8F1] px-2.5 py-1 text-[11px] font-semibold text-[#1D4E35]">
+                {event.protocol || "n/d"}
+              </span>
+              <span className="text-xs text-gray-500">{formatMatchedOnLabel(event.matched_on)}</span>
+            </div>
+          </div>
+          <a
+            href={buildWikiQuestionHref(subject, event)}
+            className="rounded-full border border-[#cfe0d4] bg-[#f4faf6] px-3 py-1.5 text-xs font-medium text-[#1D4E35] transition hover:bg-[#eaf5ee]"
+          >
+            Chiedi a Gaia Wiki
+          </a>
+        </div>
+
+        <div className={`mt-3 grid gap-3 ${expanded ? "md:grid-cols-2" : ""}`}>
+          <EventEndpointCard title="Sorgente" ipAddress={event.src_ip} label={event.src_device_label} onOpenIpDetails={onOpenIpDetails} />
+          <EventEndpointCard
+            title="Destinazione"
+            ipAddress={event.dst_ip}
+            label={event.dst_device_label || event.domain || event.url}
+            onOpenIpDetails={onOpenIpDetails}
+          />
+        </div>
+
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+          <span>In {formatBytes(event.bytes_in)}</span>
+          <span>Out {formatBytes(event.bytes_out)}</span>
+          <span>{new Date(event.observed_at).toLocaleString("it-IT")}</span>
+          {event.domain ? <span>Dominio {event.domain}</span> : null}
+          {event.url ? <span className="max-w-full break-all">URL {event.url}</span> : null}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function metricTone(label: string) {
   switch (label) {
     case "Allowed":
@@ -82,7 +295,7 @@ function metricTone(label: string) {
   }
 }
 
-function TrackingContent({ token }: { token: string }) {
+function TrackingContent({ token, currentUser }: { token: string; currentUser: CurrentUser }) {
   const [subjects, setSubjects] = useState<NetworkTrackedSubject[]>([]);
   const [deviceSuggestions, setDeviceSuggestions] = useState<NetworkDevice[]>([]);
   const [selectedSuggestedDevice, setSelectedSuggestedDevice] = useState<NetworkDevice | null>(null);
@@ -104,6 +317,10 @@ function TrackingContent({ token }: { token: string }) {
   const [expandedActivity, setExpandedActivity] = useState<NetworkTrackedSubjectActivitySummary | null>(null);
   const [expandedLoading, setExpandedLoading] = useState(false);
   const [expandedError, setExpandedError] = useState<string | null>(null);
+  const [selectedIpWhois, setSelectedIpWhois] = useState<NetworkIpWhois | null>(null);
+  const [selectedIpAddress, setSelectedIpAddress] = useState<string | null>(null);
+  const [ipWhoisLoading, setIpWhoisLoading] = useState(false);
+  const [ipWhoisError, setIpWhoisError] = useState<string | null>(null);
 
   useEffect(() => {
     async function loadSubjects() {
@@ -291,6 +508,21 @@ function TrackingContent({ token }: { token: string }) {
     }
   }
 
+  async function handleOpenIpDetails(ipAddress: string) {
+    setSelectedIpAddress(ipAddress);
+    setSelectedIpWhois(null);
+    setIpWhoisError(null);
+    setIpWhoisLoading(true);
+    try {
+      const response = await getNetworkIpWhois(token, ipAddress);
+      setSelectedIpWhois(response);
+    } catch (error) {
+      setIpWhoisError(error instanceof Error ? error.message : "Errore caricamento dettaglio IP");
+    } finally {
+      setIpWhoisLoading(false);
+    }
+  }
+
   function applySuggestion(subject: NetworkTrackedSubject) {
     setSelectedSuggestedDevice(null);
     if (subject.entity_type === "ip" || subject.entity_type === "domain" || subject.entity_type === "url") {
@@ -317,6 +549,99 @@ function TrackingContent({ token }: { token: string }) {
 
   return (
     <div className="page-stack">
+      {selectedIpAddress ? (
+        <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/45 px-4 py-6 backdrop-blur-sm md:p-8">
+          <button
+            aria-label="Chiudi dettaglio IP"
+            className="absolute inset-0"
+            onClick={() => {
+              setSelectedIpAddress(null);
+              setSelectedIpWhois(null);
+              setIpWhoisError(null);
+            }}
+            type="button"
+          />
+          <div className="relative z-10 w-full max-w-3xl rounded-[30px] border border-[#DCE7DF] bg-[linear-gradient(180deg,#FFFFFF_0%,#FBFCF9_100%)] shadow-[0_30px_80px_rgba(15,23,42,0.16)]">
+            <div className="border-b border-[#E7EFE9] bg-white/95 px-6 py-5">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#1D4E35]">Dettaglio IP</p>
+                  <p className="mt-2 break-all font-mono text-2xl font-semibold tracking-[-0.02em] text-gray-950">{selectedIpAddress}</p>
+                </div>
+                <button
+                  className="btn-secondary"
+                  type="button"
+                  onClick={() => {
+                    setSelectedIpAddress(null);
+                    setSelectedIpWhois(null);
+                    setIpWhoisError(null);
+                  }}
+                >
+                  Chiudi
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6">
+              {ipWhoisLoading ? <p className="text-sm text-gray-500">Caricamento dati RDAP/WHOIS.</p> : null}
+              {ipWhoisError ? <p className="text-sm text-red-600">{ipWhoisError}</p> : null}
+              {selectedIpWhois ? (
+                <div className="space-y-4">
+                  <div className="grid gap-3 md:grid-cols-2">
+                    <MetricCard compact label="Scope" value={selectedIpWhois.scope} />
+                    <MetricCard compact label="Stato lookup" value={selectedIpWhois.rdap_status} />
+                  </div>
+
+                  {selectedIpWhois.rdap_status === "not_applicable" ? (
+                    <div className="rounded-[22px] border border-[#E6F0EA] bg-[#F8FBF8] px-4 py-4 text-sm text-gray-700">
+                      {selectedIpWhois.label || "IP interno o locale: nessun whois esterno necessario."}
+                    </div>
+                  ) : (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      <div className="rounded-[22px] border border-[#E6F0EA] bg-white px-4 py-4">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-400">Proprietario / ente</p>
+                        <p className="mt-2 text-sm font-medium text-gray-900">{selectedIpWhois.label || "n/d"}</p>
+                        <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-400">Rete</p>
+                        <p className="mt-2 text-sm text-gray-700">{selectedIpWhois.network_name || "n/d"}</p>
+                        <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-400">Handle</p>
+                        <p className="mt-2 text-sm text-gray-700">{selectedIpWhois.handle || "n/d"}</p>
+                        <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-400">Paese</p>
+                        <p className="mt-2 text-sm text-gray-700">{selectedIpWhois.country || "n/d"}</p>
+                      </div>
+                      <div className="rounded-[22px] border border-[#E6F0EA] bg-white px-4 py-4">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-400">Range</p>
+                        <p className="mt-2 break-all font-mono text-sm text-gray-900">
+                          {selectedIpWhois.start_address && selectedIpWhois.end_address
+                            ? `${selectedIpWhois.start_address} - ${selectedIpWhois.end_address}`
+                            : "n/d"}
+                        </p>
+                        <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-400">CIDR</p>
+                        <p className="mt-2 break-all text-sm text-gray-700">{selectedIpWhois.cidr.join(", ") || "n/d"}</p>
+                        <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.12em] text-gray-400">Entity correlate</p>
+                        <p className="mt-2 text-sm text-gray-700">{selectedIpWhois.entities.join(", ") || "n/d"}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {selectedIpWhois.external_url ? (
+                    <div className="flex justify-end">
+                      <a
+                        href={selectedIpWhois.external_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="rounded-full border border-[#cfe0d4] bg-[#f4faf6] px-3 py-1.5 text-xs font-medium text-[#1D4E35] transition hover:bg-[#eaf5ee]"
+                      >
+                        Apri RDAP sorgente
+                      </a>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {expandedSubject ? (
         <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/45 px-4 py-6 backdrop-blur-sm md:p-8">
           <button
@@ -378,26 +703,13 @@ function TrackingContent({ token }: { token: string }) {
                     </div>
                     <div className="mt-4 max-h-[42rem] space-y-3 overflow-y-auto pr-1">
                       {expandedActivity?.recent_events.map((event) => (
-                        <div key={`${expandedSubject.id}-expanded-${event.id}`} className="relative rounded-[22px] border border-[#E6F0EA] bg-white px-4 py-4">
-                          <div className="absolute left-0 top-4 h-10 w-1 rounded-r-full bg-[#9FC7AB]" />
-                          <div className="pl-3">
-                            <div className="flex flex-wrap items-center justify-between gap-3">
-                              <p className="font-medium text-gray-950">{event.event_type}</p>
-                              <span className="rounded-full bg-[#F3F8F1] px-2.5 py-1 text-[11px] font-semibold text-[#1D4E35]">
-                                {event.protocol || "n/d"}
-                              </span>
-                            </div>
-                            <p className="mt-2 text-xs text-gray-500">
-                              {(event.src_device_label || event.src_ip || "src n/d")} → {(event.dst_device_label || event.dst_ip || "dst n/d")}
-                            </p>
-                            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
-                              <span>Match {event.matched_on}</span>
-                              <span>In {formatBytes(event.bytes_in)}</span>
-                              <span>Out {formatBytes(event.bytes_out)}</span>
-                              <span>{new Date(event.observed_at).toLocaleString("it-IT")}</span>
-                            </div>
-                          </div>
-                        </div>
+                        <RecentEventCard
+                          key={`${expandedSubject.id}-expanded-${event.id}`}
+                          subject={expandedSubject}
+                          event={event}
+                          expanded
+                          onOpenIpDetails={handleOpenIpDetails}
+                        />
                       ))}
                       {!expandedActivity?.recent_events.length ? (
                         <div className="rounded-[22px] border border-dashed border-[#D9E8DE] bg-white/70 px-4 py-6 text-sm text-gray-500">
@@ -705,6 +1017,7 @@ function TrackingContent({ token }: { token: string }) {
             const isDeviceLike = isDeviceLikeTrackedSubject(subject);
             const scanHistory = subject.scan_history ?? [];
             const recentEvents = subject.activity_summary?.recent_events ?? [];
+            const canAskWikiAboutBrowsing = isDeviceLike && isAdminRole(currentUser.role);
             return (
               <article
                 key={subject.id}
@@ -737,6 +1050,14 @@ function TrackingContent({ token }: { token: string }) {
                     </div>
 
                     <div className="flex flex-wrap items-center justify-end gap-2">
+                      {canAskWikiAboutBrowsing ? (
+                        <a
+                          href={buildDeviceBrowsingAnalysisHref(subject, recentEvents)}
+                          className="rounded-full border border-[#cfe0d4] bg-[#f4faf6] px-3 py-1.5 text-xs font-medium text-[#1D4E35] transition hover:bg-[#eaf5ee]"
+                        >
+                          Analizza navigazione con Gaia Wiki
+                        </a>
+                      ) : null}
                       <button
                         type="button"
                         className="rounded-full border border-[#D9E8DE] bg-white px-3 py-1.5 text-xs font-medium text-[#1D4E35] transition hover:bg-[#F4FAF6]"
@@ -788,25 +1109,7 @@ function TrackingContent({ token }: { token: string }) {
                       </div>
                       <div className="mt-4 max-h-[28rem] space-y-3 overflow-y-auto pr-1">
                         {recentEvents.slice(0, 50).map((event) => (
-                          <div key={`${subject.id}-${event.id}`} className="relative rounded-[22px] border border-[#E6F0EA] bg-white px-4 py-4">
-                            <div className="absolute left-0 top-4 h-10 w-1 rounded-r-full bg-[#9FC7AB]" />
-                            <div className="pl-3">
-                              <div className="flex flex-wrap items-center justify-between gap-3">
-                                <p className="font-medium text-gray-950">{event.event_type}</p>
-                                <span className="rounded-full bg-[#F3F8F1] px-2.5 py-1 text-[11px] font-semibold text-[#1D4E35]">
-                                  {event.protocol || "n/d"}
-                                </span>
-                              </div>
-                              <p className="mt-2 text-xs text-gray-500">
-                                {event.src_ip || "src n/d"} → {event.dst_ip || "dst n/d"}
-                              </p>
-                              <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
-                                <span>Match {event.matched_on}</span>
-                                <span>In {formatBytes(event.bytes_in)}</span>
-                                <span>Out {formatBytes(event.bytes_out)}</span>
-                              </div>
-                            </div>
-                          </div>
+                          <RecentEventCard key={`${subject.id}-${event.id}`} subject={subject} event={event} onOpenIpDetails={handleOpenIpDetails} />
                         ))}
                         {!recentEvents.length ? (
                           <div className="rounded-[22px] border border-dashed border-[#D9E8DE] bg-white/70 px-4 py-6 text-sm text-gray-500">
@@ -878,7 +1181,7 @@ export default function NetworkTrackingPage() {
       description="Target monitorati nel modulo rete: device interni, IP, domini e URL osservati dal firewall Sophos."
       breadcrumb="Tracking"
     >
-      {({ token }) => <TrackingContent token={token} />}
+      {({ token, currentUser }) => <TrackingContent token={token} currentUser={currentUser} />}
     </NetworkModulePage>
   );
 }

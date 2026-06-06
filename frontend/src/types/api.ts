@@ -717,10 +717,19 @@ export type WikiRequest = {
   agent_response: string | null;
   category: "feature_request" | "bug_report" | "question" | string;
   status: "pending" | "reviewed" | "planned" | "done";
+  priority: "low" | "medium" | "high" | "urgent" | string;
   created_by: string | null;
+  assigned_to: string | null;
+  assigned_to_name: string | null;
   admin_notes: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type WikiRequestAssignee = {
+  username: string;
+  full_name: string | null;
+  role: string;
 };
 
 export type WikiRequestCreateInput = {
@@ -730,7 +739,9 @@ export type WikiRequestCreateInput = {
 };
 
 export type WikiRequestUpdateInput = {
-  status: "pending" | "reviewed" | "planned" | "done";
+  status?: "pending" | "reviewed" | "planned" | "done";
+  priority?: "low" | "medium" | "high" | "urgent";
+  assigned_to?: string | null;
   admin_notes?: string | null;
 };
 
@@ -1125,6 +1136,25 @@ export type NetworkTrackedSubjectActivitySummary = {
   bytes_out: number;
   last_observed_at: string | null;
   recent_events: NetworkTrackedSubjectActivityEvent[];
+};
+
+export type NetworkIpWhois = {
+  ip_address: string;
+  scope: string;
+  is_private: boolean;
+  is_loopback: boolean;
+  is_link_local: boolean;
+  rdap_status: "ok" | "unavailable" | "not_applicable";
+  label: string | null;
+  network_name: string | null;
+  handle: string | null;
+  country: string | null;
+  start_address: string | null;
+  end_address: string | null;
+  cidr: string[];
+  entities: string[];
+  external_url: string | null;
+  raw: Record<string, unknown> | null;
 };
 
 export type NetworkTrackedSubject = {

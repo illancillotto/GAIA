@@ -457,6 +457,25 @@ class NetworkTrackedSubjectActivitySummary(BaseModel):
     recent_events: list[NetworkTrackedSubjectActivityEvent] = Field(default_factory=list)
 
 
+class NetworkIpWhoisResponse(BaseModel):
+    ip_address: str
+    scope: str
+    is_private: bool = False
+    is_loopback: bool = False
+    is_link_local: bool = False
+    rdap_status: str
+    label: str | None = None
+    network_name: str | None = None
+    handle: str | None = None
+    country: str | None = None
+    start_address: str | None = None
+    end_address: str | None = None
+    cidr: list[str] = Field(default_factory=list)
+    entities: list[str] = Field(default_factory=list)
+    external_url: str | None = None
+    raw: dict[str, Any] | None = None
+
+
 class NetworkTrackedSubjectResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
