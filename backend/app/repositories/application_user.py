@@ -1,3 +1,5 @@
+from datetime import UTC, datetime
+
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -79,6 +81,16 @@ def update_application_user(db: Session, user: ApplicationUser, payload: Applica
         setattr(user, key, value)
     if password:
         user.password_hash = hash_password(password)
+    db.add(user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def record_application_user_login(db: Session, user: ApplicationUser, client_ip: str | None) -> ApplicationUser:
+    user.last_login_at = datetime.now(UTC)
+    user.last_login_ip = client_ip
+    user.login_count = (user.login_count or 0) + 1
     db.add(user)
     db.commit()
     db.refresh(user)

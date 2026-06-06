@@ -73,6 +73,24 @@ def test_login_returns_bearer_token() -> None:
     assert payload["access_token"]
 
 
+def test_login_records_access_metadata() -> None:
+    create_user()
+
+    response = client.post(
+        "/auth/login",
+        json={"username": "admin", "password": "secret123"},
+    )
+
+    assert response.status_code == 200
+
+    db = TestingSessionLocal()
+    user = db.query(ApplicationUser).filter(ApplicationUser.username == "admin").one()
+    assert user.login_count == 1
+    assert user.last_login_at is not None
+    assert user.last_login_ip
+    db.close()
+
+
 def test_login_rejects_invalid_credentials() -> None:
     create_user()
 

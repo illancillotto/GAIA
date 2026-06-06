@@ -104,6 +104,9 @@ class ApplicationUserResponse(BaseModel):
     module_inaz: bool
     enabled_modules: list[str]
     created_at: datetime
+    last_login_at: datetime | None = None
+    last_login_ip: str | None = None
+    login_count: int
     updated_at: datetime
 
 

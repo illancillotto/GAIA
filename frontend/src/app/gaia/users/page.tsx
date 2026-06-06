@@ -12,7 +12,7 @@ import {
   createApplicationUser,
   deleteApplicationUser,
   getCurrentUser,
-  listApplicationUsers,
+  listAllApplicationUsers,
   updateApplicationUser,
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
@@ -25,6 +25,9 @@ type GaiaUserRow = {
   role: string;
   isActive: boolean;
   modulesLabel: string;
+  lastLoginAt: string | null;
+  lastLoginIp: string | null;
+  loginCount: number;
   item: ApplicationUser;
 };
 
@@ -68,6 +71,17 @@ const roleOptions = [
   { value: "admin", label: "Admin" },
   { value: "super_admin", label: "Super Admin" },
 ];
+
+function formatDateTimeLabel(value: string | null): string {
+  if (!value) return "Mai";
+  return new Intl.DateTimeFormat("it-IT", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date(value));
+}
 
 function formatModules(user: ApplicationUser): string {
   const labels: string[] = [];
@@ -127,8 +141,8 @@ export default function GaiaUsersPage() {
         const sessionUser = await getCurrentUser(token);
         setCurrentUser(sessionUser);
         if ((sessionUser.role === "admin" || sessionUser.role === "super_admin") && sessionUser.enabled_modules.includes("accessi")) {
-          const response = await listApplicationUsers(token);
-          setUsers(response.items);
+          const items = await listAllApplicationUsers(token);
+          setUsers(items);
         } else {
           setUsers([]);
         }
@@ -174,6 +188,9 @@ export default function GaiaUsersPage() {
         role: user.role,
         isActive: user.is_active,
         modulesLabel: formatModules(user),
+        lastLoginAt: user.last_login_at,
+        lastLoginIp: user.last_login_ip,
+        loginCount: user.login_count,
         item: user,
       })),
     [users],
@@ -239,6 +256,21 @@ export default function GaiaUsersPage() {
         accessorKey: "modulesLabel",
         cell: ({ row }) => <span className="text-sm text-gray-600">{row.original.modulesLabel}</span>,
       },
+      {
+        header: "Ultimo accesso",
+        accessorKey: "lastLoginAt",
+        cell: ({ row }) => (
+          <div className="text-sm text-gray-600">
+            <p>{formatDateTimeLabel(row.original.lastLoginAt)}</p>
+            <p className="text-xs text-gray-400">{row.original.lastLoginIp || "IP n/d"}</p>
+          </div>
+        ),
+      },
+      {
+        header: "Accessi",
+        accessorKey: "loginCount",
+        cell: ({ row }) => <span className="text-sm font-medium text-gray-700">{row.original.loginCount}</span>,
+      },
     ],
     [],
   );
@@ -254,8 +286,8 @@ export default function GaiaUsersPage() {
     const token = getStoredAccessToken();
     if (!token) return;
 
-    const response = await listApplicationUsers(token);
-    setUsers(response.items);
+    const items = await listAllApplicationUsers(token);
+    setUsers(items);
   }
 
   async function handleSubmit() {
@@ -353,6 +385,7 @@ export default function GaiaUsersPage() {
       <div className="surface-grid">
         <MetricCard label="Utenti GAIA" value={users.length} sub="Account applicativi censiti" />
         <MetricCard label="Attivi" value={users.filter((user) => user.is_active).length} sub="Account abilitati al login" variant="success" />
+        <MetricCard label="Accessi registrati" value={users.reduce((total, user) => total + user.login_count, 0)} sub="Login applicativi storicizzati" />
         <MetricCard label="Admin" value={users.filter((user) => user.role === "admin" || user.role === "super_admin").length} sub="Profili amministrativi" />
         <MetricCard label="NAS Control" value={users.filter((user) => user.module_accessi).length} sub="Utenti con modulo NAS abilitato" />
         <MetricCard label="Catasto" value={users.filter((user) => user.module_catasto).length} sub="Utenti con modulo Catasto abilitato" />
@@ -484,6 +517,26 @@ export default function GaiaUsersPage() {
                   ))}
               </select>
             </label>
+
+            {isEditMode && selectedUser ? (
+              <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
+                <p className="text-sm font-medium text-gray-800">Storico accessi</p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-3 text-sm text-gray-600">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.14em] text-gray-400">Ultimo accesso</p>
+                    <p className="mt-1 font-medium text-gray-900">{formatDateTimeLabel(selectedUser.last_login_at)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.14em] text-gray-400">IP ultimo accesso</p>
+                    <p className="mt-1 font-medium text-gray-900">{selectedUser.last_login_ip || "n/d"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.14em] text-gray-400">Numero accessi</p>
+                    <p className="mt-1 font-medium text-gray-900">{selectedUser.login_count}</p>
+                  </div>
+                </div>
+              </div>
+            ) : null}
 
             <div className="rounded-2xl border border-gray-100 bg-gray-50 p-4">
               <p className="text-sm font-medium text-gray-800">Moduli abilitati</p>

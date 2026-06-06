@@ -114,6 +114,14 @@ def test_admin_users_lifecycle_and_module_flags() -> None:
     assert update_resp.json()["office_location"] == "CED"
     assert update_resp.json()["phone_extension"] == "301"
 
+    login("alice")
+    list_after_login = client.get("/admin/users", headers={"Authorization": f"Bearer {token}"})
+    assert list_after_login.status_code == 200
+    alice = next(item for item in list_after_login.json()["items"] if item["username"] == "alice")
+    assert alice["login_count"] == 1
+    assert alice["last_login_at"] is not None
+    assert alice["last_login_ip"]
+
 
 def test_viewer_cannot_access_admin_users() -> None:
     create_user("viewer", ApplicationUserRole.VIEWER.value)

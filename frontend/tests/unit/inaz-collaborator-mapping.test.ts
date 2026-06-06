@@ -47,6 +47,9 @@ const baseUser = (id: number): ApplicationUser => ({
   module_inaz: false,
   enabled_modules: ["accessi"],
   created_at: "2026-06-04T00:00:00Z",
+  last_login_at: null,
+  last_login_ip: null,
+  login_count: 0,
   updated_at: "2026-06-04T00:00:00Z",
 });
 

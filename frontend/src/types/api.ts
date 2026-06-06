@@ -256,6 +256,9 @@ export type ApplicationUser = {
   module_inaz: boolean;
   enabled_modules: string[];
   created_at: string;
+  last_login_at: string | null;
+  last_login_ip: string | null;
+  login_count: number;
   updated_at: string;
 };
 
@@ -706,6 +709,29 @@ export type DashboardSummary = {
   reviews: number;
   snapshots: number;
   sync_runs: number;
+};
+
+export type WikiRequest = {
+  id: string;
+  user_question: string;
+  agent_response: string | null;
+  category: "feature_request" | "bug_report" | "question" | string;
+  status: "pending" | "reviewed" | "planned" | "done";
+  created_by: string | null;
+  admin_notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type WikiRequestCreateInput = {
+  user_question: string;
+  agent_response?: string | null;
+  category: "feature_request" | "bug_report" | "question";
+};
+
+export type WikiRequestUpdateInput = {
+  status: "pending" | "reviewed" | "planned" | "done";
+  admin_notes?: string | null;
 };
 
 export type WikiToolAuditLog = {

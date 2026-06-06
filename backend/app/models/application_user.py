@@ -63,6 +63,12 @@ class ApplicationUser(Base):
         server_default=func.now(),
         nullable=False,
     )
+    last_login_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    last_login_ip: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    login_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
