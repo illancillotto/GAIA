@@ -42,6 +42,11 @@ import type {
 type MeTabKey = "overview" | "presenze" | "operativita" | "dotazioni" | "anomalie";
 type PeriodPreset = "current" | "previous" | "quarter" | "year";
 type OperativitaSectionFilter = "all" | "activities" | "reports" | "cases" | "vehicles";
+type OperativitaDetailState =
+  | { kind: "activity"; item: MeOperazioniActivity }
+  | { kind: "report"; item: MeOperazioniReport }
+  | { kind: "case"; item: MeOperazioniCase }
+  | { kind: "vehicle"; item: MeVehicleUsageSession };
 
 function monthBounds(offsetMonths = 0): { start: string; end: string } {
   const now = new Date();
@@ -323,6 +328,7 @@ export default function MePage() {
   const [operativitaSectionFilter, setOperativitaSectionFilter] = useState<OperativitaSectionFilter>("all");
   const [operativitaStatusFilter, setOperativitaStatusFilter] = useState("all");
   const [operativitaQuery, setOperativitaQuery] = useState("");
+  const [selectedOperativitaDetail, setSelectedOperativitaDetail] = useState<OperativitaDetailState | null>(null);
   const [selectedDailyRecord, setSelectedDailyRecord] = useState<InazDailyRecord | null>(null);
   const [isDailyRecordLoading, setIsDailyRecordLoading] = useState(false);
   const [dailyRecordError, setDailyRecordError] = useState<string | null>(null);
@@ -582,6 +588,8 @@ export default function MePage() {
       setIsDailyRecordLoading(false);
     }
   }
+
+  const closeOperativitaDetail = () => setSelectedOperativitaDetail(null);
 
   return (
     <ProtectedPage
@@ -962,6 +970,13 @@ export default function MePage() {
                           {item.vehicle_name ? <span className="rounded-full bg-gray-50 px-2.5 py-1">{item.vehicle_name}</span> : null}
                         </div>
                         {item.text_note ? <p className="mt-3 text-xs text-gray-500">{item.text_note}</p> : null}
+                        <button
+                          className="mt-3 text-xs font-medium text-[#1D4E35] transition hover:text-[#173527]"
+                          type="button"
+                          onClick={() => setSelectedOperativitaDetail({ kind: "activity", item })}
+                        >
+                          Apri scheda attività
+                        </button>
                       </div>
                     ))
                   )}
@@ -983,6 +998,13 @@ export default function MePage() {
                         </div>
                         <Badge>{item.status}</Badge>
                       </div>
+                      <button
+                        className="mt-3 text-xs font-medium text-[#1D4E35] transition hover:text-[#173527]"
+                        type="button"
+                        onClick={() => setSelectedOperativitaDetail({ kind: "report", item })}
+                      >
+                        Apri scheda segnalazione
+                      </button>
                     </div>
                   )) : null}
                   {(operativitaSectionFilter === "all" || operativitaSectionFilter === "cases") ? filteredCases.slice(0, 8).map((item) => (
@@ -994,6 +1016,13 @@ export default function MePage() {
                         </div>
                         <Badge variant={item.status === "closed" ? "success" : "warning"}>{item.status}</Badge>
                       </div>
+                      <button
+                        className="mt-3 text-xs font-medium text-[#1D4E35] transition hover:text-[#173527]"
+                        type="button"
+                        onClick={() => setSelectedOperativitaDetail({ kind: "case", item })}
+                      >
+                        Apri scheda pratica
+                      </button>
                     </div>
                   )) : null}
                   {(operativitaSectionFilter === "all" || operativitaSectionFilter === "reports" || operativitaSectionFilter === "cases") && filteredReports.length === 0 && filteredCases.length === 0 ? (
@@ -1025,6 +1054,13 @@ export default function MePage() {
                           <p className="text-xs text-gray-500">{item.status}</p>
                         </div>
                       </div>
+                      <button
+                        className="mt-3 text-xs font-medium text-[#1D4E35] transition hover:text-[#173527]"
+                        type="button"
+                        onClick={() => setSelectedOperativitaDetail({ kind: "vehicle", item })}
+                      >
+                        Apri scheda sessione
+                      </button>
                     </div>
                   ))
                   )
@@ -1164,15 +1200,22 @@ export default function MePage() {
                   ) : (
                     openOrCriticalCases.map((item) => (
                       <div key={item.id} className="rounded-2xl border border-rose-200 bg-rose-50/70 p-4">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-semibold text-rose-950">{item.title}</p>
-                            <p className="mt-1 text-xs text-rose-800">{item.case_number} · {item.source_report_number || "Senza report"} · {formatDateTimeLabel(item.created_at)}</p>
-                          </div>
-                          <Badge variant="danger">{item.status}</Badge>
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-semibold text-rose-950">{item.title}</p>
+                          <p className="mt-1 text-xs text-rose-800">{item.case_number} · {item.source_report_number || "Senza report"} · {formatDateTimeLabel(item.created_at)}</p>
                         </div>
+                        <Badge variant="danger">{item.status}</Badge>
                       </div>
-                    ))
+                      <button
+                        className="mt-3 text-xs font-medium text-rose-700 transition hover:text-rose-900"
+                        type="button"
+                        onClick={() => setSelectedOperativitaDetail({ kind: "case", item })}
+                      >
+                        Apri scheda pratica
+                      </button>
+                    </div>
+                  ))
                   )}
                 </div>
               </article>
@@ -1251,6 +1294,152 @@ export default function MePage() {
                           <p className="text-xs text-gray-500">Nessuna richiesta o anomalia registrata.</p>
                         ) : null}
                       </div>
+                    </section>
+                  </div>
+                </div>
+              ) : null}
+            </article>
+          </div>
+        ) : null}
+
+        {selectedOperativitaDetail ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0f172aaa] p-4">
+            <button aria-label="Chiudi dettaglio operatività" className="absolute inset-0" type="button" onClick={closeOperativitaDetail} />
+            <article className="relative z-10 max-h-[85vh] w-full max-w-3xl overflow-y-auto rounded-[28px] border border-gray-200 bg-white p-6 shadow-2xl">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-400">Scheda operatività</p>
+                  <h3 className="mt-1 text-xl font-semibold text-gray-900">
+                    {selectedOperativitaDetail.kind === "activity" ? selectedOperativitaDetail.item.activity_name || "Attività" : null}
+                    {selectedOperativitaDetail.kind === "report" ? selectedOperativitaDetail.item.title : null}
+                    {selectedOperativitaDetail.kind === "case" ? selectedOperativitaDetail.item.title : null}
+                    {selectedOperativitaDetail.kind === "vehicle" ? selectedOperativitaDetail.item.vehicle_name || "Sessione mezzo" : null}
+                  </h3>
+                </div>
+                <button className="btn-secondary" type="button" onClick={closeOperativitaDetail}>
+                  Chiudi
+                </button>
+              </div>
+
+              {selectedOperativitaDetail.kind === "activity" ? (
+                <div className="mt-6 space-y-6">
+                  <div className="grid gap-3 md:grid-cols-4">
+                    <MetricCard label="Stato" value={selectedOperativitaDetail.item.status} sub="Workflow attività" />
+                    <MetricCard label="Durata" value={`${selectedOperativitaDetail.item.duration_minutes ?? 0} min`} sub="Tempo registrato" variant="success" />
+                    <MetricCard label="Inizio" value={formatDateTimeLabel(selectedOperativitaDetail.item.started_at)} sub="Timestamp" />
+                    <MetricCard label="Fine" value={formatDateTimeLabel(selectedOperativitaDetail.item.ended_at)} sub="Chiusura" />
+                  </div>
+                  <div className="grid gap-6 lg:grid-cols-2">
+                    <section className="rounded-2xl border border-gray-100 bg-gray-50/80 p-4">
+                      <h4 className="text-sm font-semibold text-gray-900">Contesto attività</h4>
+                      <div className="mt-3 space-y-2 text-sm text-gray-600">
+                        <p>Categoria: <span className="font-semibold text-gray-900">{selectedOperativitaDetail.item.activity_category || "n/d"}</span></p>
+                        <p>Mezzo: <span className="font-semibold text-gray-900">{selectedOperativitaDetail.item.vehicle_name || "nessuno"}</span></p>
+                        <p>Targa: <span className="font-semibold text-gray-900">{selectedOperativitaDetail.item.vehicle_plate_number || "n/d"}</span></p>
+                        <p>Inviata il: <span className="font-semibold text-gray-900">{formatDateTimeLabel(selectedOperativitaDetail.item.submitted_at)}</span></p>
+                      </div>
+                    </section>
+                    <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                      <h4 className="text-sm font-semibold text-gray-900">Revisione</h4>
+                      <div className="mt-3 space-y-2 text-sm text-gray-600">
+                        <p>Esito: <span className="font-semibold text-gray-900">{selectedOperativitaDetail.item.review_outcome || "non disponibile"}</span></p>
+                        <p>Nota revisione:</p>
+                        <p className="rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-600">{selectedOperativitaDetail.item.review_note || "Nessuna nota di revisione."}</p>
+                      </div>
+                    </section>
+                  </div>
+                  <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                    <h4 className="text-sm font-semibold text-gray-900">Nota operatore</h4>
+                    <p className="mt-3 rounded-xl bg-gray-50 px-3 py-3 text-sm text-gray-600">
+                      {selectedOperativitaDetail.item.text_note || "Nessuna nota testuale registrata."}
+                    </p>
+                  </section>
+                </div>
+              ) : null}
+
+              {selectedOperativitaDetail.kind === "report" ? (
+                <div className="mt-6 space-y-6">
+                  <div className="grid gap-3 md:grid-cols-4">
+                    <MetricCard label="Numero" value={selectedOperativitaDetail.item.report_number} sub="Riferimento" />
+                    <MetricCard label="Stato" value={selectedOperativitaDetail.item.status} sub="Workflow segnalazione" variant="warning" />
+                    <MetricCard label="Creata" value={formatDateTimeLabel(selectedOperativitaDetail.item.created_at)} sub="Inserimento" />
+                    <MetricCard label="Aggiornata" value={formatDateTimeLabel(selectedOperativitaDetail.item.updated_at)} sub="Ultimo update" />
+                  </div>
+                  <div className="grid gap-6 lg:grid-cols-2">
+                    <section className="rounded-2xl border border-gray-100 bg-gray-50/80 p-4">
+                      <h4 className="text-sm font-semibold text-gray-900">Classificazione</h4>
+                      <div className="mt-3 space-y-2 text-sm text-gray-600">
+                        <p>Categoria: <span className="font-semibold text-gray-900">{selectedOperativitaDetail.item.category_name || "n/d"}</span></p>
+                        <p>Severità: <span className="font-semibold text-gray-900">{selectedOperativitaDetail.item.severity_name || "n/d"}</span></p>
+                        <p>Mezzo: <span className="font-semibold text-gray-900">{selectedOperativitaDetail.item.vehicle_name || "non associato"}</span></p>
+                        <p>Targa: <span className="font-semibold text-gray-900">{selectedOperativitaDetail.item.vehicle_plate_number || "n/d"}</span></p>
+                      </div>
+                    </section>
+                    <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                      <h4 className="text-sm font-semibold text-gray-900">Descrizione</h4>
+                      <p className="mt-3 rounded-xl bg-gray-50 px-3 py-3 text-sm text-gray-600">
+                        {selectedOperativitaDetail.item.description || "Nessuna descrizione disponibile."}
+                      </p>
+                    </section>
+                  </div>
+                </div>
+              ) : null}
+
+              {selectedOperativitaDetail.kind === "case" ? (
+                <div className="mt-6 space-y-6">
+                  <div className="grid gap-3 md:grid-cols-4">
+                    <MetricCard label="Numero" value={selectedOperativitaDetail.item.case_number} sub="Riferimento pratica" />
+                    <MetricCard label="Stato" value={selectedOperativitaDetail.item.status} sub="Workflow pratica" variant={selectedOperativitaDetail.item.status === "closed" ? "success" : "warning"} />
+                    <MetricCard label="Priorità" value={selectedOperativitaDetail.item.priority_rank ?? "n/d"} sub="Rank priorità" />
+                    <MetricCard label="Report origine" value={selectedOperativitaDetail.item.source_report_number || "n/d"} sub="Collegamento" />
+                  </div>
+                  <div className="grid gap-6 lg:grid-cols-2">
+                    <section className="rounded-2xl border border-gray-100 bg-gray-50/80 p-4">
+                      <h4 className="text-sm font-semibold text-gray-900">Cronologia pratica</h4>
+                      <div className="mt-3 space-y-2 text-sm text-gray-600">
+                        <p>Categoria: <span className="font-semibold text-gray-900">{selectedOperativitaDetail.item.category_name || "n/d"}</span></p>
+                        <p>Severità: <span className="font-semibold text-gray-900">{selectedOperativitaDetail.item.severity_name || "n/d"}</span></p>
+                        <p>Creata il: <span className="font-semibold text-gray-900">{formatDateTimeLabel(selectedOperativitaDetail.item.created_at)}</span></p>
+                        <p>Presa in carico: <span className="font-semibold text-gray-900">{formatDateTimeLabel(selectedOperativitaDetail.item.started_at)}</span></p>
+                        <p>Risolta il: <span className="font-semibold text-gray-900">{formatDateTimeLabel(selectedOperativitaDetail.item.resolved_at)}</span></p>
+                        <p>Chiusa il: <span className="font-semibold text-gray-900">{formatDateTimeLabel(selectedOperativitaDetail.item.closed_at)}</span></p>
+                      </div>
+                    </section>
+                    <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                      <h4 className="text-sm font-semibold text-gray-900">Stato di presidio</h4>
+                      <p className="mt-3 rounded-xl bg-gray-50 px-3 py-3 text-sm text-gray-600">
+                        {selectedOperativitaDetail.item.status === "closed"
+                          ? "La pratica risulta chiusa nel periodo selezionato."
+                          : "La pratica richiede ancora presidio operativo o verifica dello stato finale."}
+                      </p>
+                    </section>
+                  </div>
+                </div>
+              ) : null}
+
+              {selectedOperativitaDetail.kind === "vehicle" ? (
+                <div className="mt-6 space-y-6">
+                  <div className="grid gap-3 md:grid-cols-4">
+                    <MetricCard label="KM" value={selectedOperativitaDetail.item.km} sub="Percorrenza sessione" variant="success" />
+                    <MetricCard label="Stato" value={selectedOperativitaDetail.item.status} sub="Stato sessione" />
+                    <MetricCard label="Inizio" value={formatDateTimeLabel(selectedOperativitaDetail.item.started_at)} sub="Partenza" />
+                    <MetricCard label="Fine" value={formatDateTimeLabel(selectedOperativitaDetail.item.ended_at)} sub="Chiusura" />
+                  </div>
+                  <div className="grid gap-6 lg:grid-cols-2">
+                    <section className="rounded-2xl border border-gray-100 bg-gray-50/80 p-4">
+                      <h4 className="text-sm font-semibold text-gray-900">Mezzo e operatore</h4>
+                      <div className="mt-3 space-y-2 text-sm text-gray-600">
+                        <p>Mezzo: <span className="font-semibold text-gray-900">{selectedOperativitaDetail.item.vehicle_name || "n/d"}</span></p>
+                        <p>Targa: <span className="font-semibold text-gray-900">{selectedOperativitaDetail.item.vehicle_plate_number || "n/d"}</span></p>
+                        <p>Operatore: <span className="font-semibold text-gray-900">{selectedOperativitaDetail.item.operator_name || "n/d"}</span></p>
+                        <p>Creata il: <span className="font-semibold text-gray-900">{formatDateTimeLabel(selectedOperativitaDetail.item.created_at)}</span></p>
+                      </div>
+                    </section>
+                    <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                      <h4 className="text-sm font-semibold text-gray-900">Note sessione</h4>
+                      <p className="mt-3 rounded-xl bg-gray-50 px-3 py-3 text-sm text-gray-600">
+                        {selectedOperativitaDetail.item.notes || "Nessuna nota registrata sulla sessione mezzo."}
+                      </p>
                     </section>
                   </div>
                 </div>
