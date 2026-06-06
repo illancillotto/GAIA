@@ -12,6 +12,7 @@ from app.api.deps import require_active_user
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
 from app.models.catasto_phase1 import CatAnomalia, CatDistretto, CatParticella, CatUtenzaIrrigua
+from app.modules.catasto.services.dashboard_queries import active_capacitas_batch_id
 from app.schemas.catasto_phase1 import CatDistrettoKpiResponse, CatDistrettoResponse
 
 router = APIRouter(prefix="/catasto/distretti", tags=["catasto-distretti"])
@@ -31,9 +32,15 @@ def _capacitas_distretto_num(num_distretto: str) -> int | None:
 
 def _build_kpi(db: Session, distretto: CatDistretto, anno: int | None) -> CatDistrettoKpiResponse:
     num_distretto_int = _capacitas_distretto_num(distretto.num_distretto)
-    utenze_filters = [CatUtenzaIrrigua.num_distretto == num_distretto_int] if num_distretto_int is not None else [false()]
-    if anno is not None:
-        utenze_filters.append(CatUtenzaIrrigua.anno_campagna == anno)
+    active_batch_id = active_capacitas_batch_id(db, anno)
+    utenze_filters = (
+        [
+            CatUtenzaIrrigua.num_distretto == num_distretto_int,
+            CatUtenzaIrrigua.import_batch_id == active_batch_id,
+        ]
+        if num_distretto_int is not None and active_batch_id is not None
+        else [false()]
+    )
 
     particelle_count = db.execute(
         select(func.count()).select_from(CatParticella).where(
@@ -56,7 +63,7 @@ def _build_kpi(db: Session, distretto: CatDistretto, anno: int | None) -> CatDis
         )
         .select_from(CatAnomalia)
         .join(CatUtenzaIrrigua, CatUtenzaIrrigua.id == CatAnomalia.utenza_id)
-        .where(*utenze_filters)
+        .where(*utenze_filters, CatAnomalia.status == "aperta")
     ).one()
     return CatDistrettoKpiResponse(
         distretto_id=distretto.id,

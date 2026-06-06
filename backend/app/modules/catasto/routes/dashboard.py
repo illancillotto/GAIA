@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy import case, desc, func, select, text
+from sqlalchemy import case, desc, false, func, select, text
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user
@@ -29,6 +29,7 @@ from app.schemas.catasto_phase1 import (
     CatDashboardUtenzeSummary,
     CatImportBatchResponse,
 )
+from app.modules.catasto.services.dashboard_queries import active_capacitas_batch_id
 
 router = APIRouter(prefix="/catasto/dashboard", tags=["catasto-dashboard"])
 
@@ -56,6 +57,7 @@ def _capacitas_distretto_num(num_distretto: str) -> int | None:
 def _latest_imported_anno(db: Session) -> int | None:
     value = db.scalar(
         select(func.max(CatImportBatch.anno_campagna)).where(
+            CatImportBatch.tipo == "capacitas_ruolo",
             CatImportBatch.status == "completed",
             CatImportBatch.anno_campagna.is_not(None),
         )
@@ -204,11 +206,17 @@ def get_dashboard_summary(
     _: ApplicationUser = Depends(require_active_user),
 ) -> CatDashboardSummaryResponse:
     effective_anno = anno if anno is not None else _latest_imported_anno(db)
+    active_batch_id = active_capacitas_batch_id(db, effective_anno)
 
-    latest_import = db.scalars(select(CatImportBatch).order_by(desc(CatImportBatch.created_at)).limit(1)).first()
+    latest_import = db.scalars(
+        select(CatImportBatch)
+        .where(CatImportBatch.tipo == "capacitas_ruolo")
+        .order_by(desc(CatImportBatch.created_at))
+        .limit(1)
+    ).first()
     latest_completed = db.scalars(
         select(CatImportBatch)
-        .where(CatImportBatch.status == "completed")
+        .where(CatImportBatch.tipo == "capacitas_ruolo", CatImportBatch.status == "completed")
         .order_by(desc(CatImportBatch.completed_at))
         .limit(1)
     ).first()
@@ -240,9 +248,11 @@ def get_dashboard_summary(
         ).where(CatParticella.is_current.is_(True))
     ).one()
 
-    utenze_filters = []
-    if effective_anno is not None:
-        utenze_filters.append(CatUtenzaIrrigua.anno_campagna == effective_anno)
+    utenze_filters = (
+        [CatUtenzaIrrigua.import_batch_id == active_batch_id]
+        if active_batch_id is not None
+        else [false()]
+    )
 
     titolare_exists = (
         select(CatUtenzaIntestatario.id)
@@ -281,19 +291,26 @@ def get_dashboard_summary(
         ).where(*utenze_filters)
     ).one()
 
-    anomalie_filters = [CatAnomalia.status == "aperta"]
-    if effective_anno is not None:
-        anomalie_filters.append(CatAnomalia.anno_campagna == effective_anno)
+    anomalie_filters = (
+        [CatUtenzaIrrigua.import_batch_id == active_batch_id, CatAnomalia.status == "aperta"]
+        if active_batch_id is not None
+        else [false()]
+    )
     anomalie_row = db.execute(
         select(
             func.count(),
             func.coalesce(func.sum(case((CatAnomalia.severita == "error", 1), else_=0)), 0),
             func.coalesce(func.sum(case((CatAnomalia.severita == "warning", 1), else_=0)), 0),
             func.coalesce(func.sum(case((CatAnomalia.severita == "info", 1), else_=0)), 0),
-        ).where(*anomalie_filters)
+        )
+        .select_from(CatAnomalia)
+        .join(CatUtenzaIrrigua, CatUtenzaIrrigua.id == CatAnomalia.utenza_id)
+        .where(*anomalie_filters)
     ).one()
     tipo_rows = db.execute(
         select(CatAnomalia.tipo, func.count())
+        .select_from(CatAnomalia)
+        .join(CatUtenzaIrrigua, CatUtenzaIrrigua.id == CatAnomalia.utenza_id)
         .where(*anomalie_filters)
         .group_by(CatAnomalia.tipo)
         .order_by(desc(func.count()))

@@ -816,6 +816,19 @@ def seed_phase1_lookup_data(db: Session) -> None:
 
 def seed_additional_distretto_kpi_data(db: Session) -> None:
     batch_id = db.query(CatImportBatch).filter(CatImportBatch.hash_file == "seed-hash").one().id
+    batch_2024 = CatImportBatch(
+        filename="seed-2024.xlsx",
+        tipo="capacitas_ruolo",
+        anno_campagna=2024,
+        hash_file="seed-hash-2024",
+        status="completed",
+        righe_totali=1,
+        righe_importate=1,
+        righe_anomalie=0,
+        created_by=1,
+        created_at=datetime(2026, 4, 27, tzinfo=timezone.utc),
+        completed_at=datetime(2026, 4, 27, 12, 0, tzinfo=timezone.utc),
+    )
     comune_arborea = db.query(CatComune).filter(CatComune.cod_comune_capacitas == 165).one()
     comune_cabras = db.query(CatComune).filter(CatComune.cod_comune_capacitas == 212).one()
     distretto_20 = CatDistretto(num_distretto="20", nome_distretto="Distretto 20")
@@ -832,7 +845,7 @@ def seed_additional_distretto_kpi_data(db: Session) -> None:
         is_current=True,
         superficie_mq=2500,
     )
-    db.add_all([distretto_20, particella_20])
+    db.add_all([batch_2024, distretto_20, particella_20])
     db.flush()
 
     particella_10 = db.query(CatParticella).filter(CatParticella.foglio == "5").one()
@@ -840,7 +853,7 @@ def seed_additional_distretto_kpi_data(db: Session) -> None:
     db.add_all(
         [
             CatUtenzaIrrigua(
-                import_batch_id=batch_id,
+                import_batch_id=batch_2024.id,
                 anno_campagna=2024,
                 cco="UT-SEED-010-2024",
                 comune=comune_arborea,
@@ -1601,15 +1614,14 @@ def test_distretti_endpoint_returns_seeded_items() -> None:
     response = client.get("/catasto/distretti/", headers=auth_headers())
     assert response.status_code == 200
     payload = response.json()
-    assert len(payload) == 1
-    assert payload[0]["num_distretto"] == "10"
+    assert {item["num_distretto"] for item in payload} == {"1", "10"}
 
 
 def test_distretto_geojson_endpoint_returns_feature() -> None:
     raw_conn = engine.raw_connection()
     try:
         raw_conn.create_function(
-            "AsGeoJSON",
+            "ST_AsGeoJSON",
             1,
             lambda value: '{"type":"MultiPolygon","coordinates":[]}' if value else None,
         )
@@ -2811,9 +2823,126 @@ def test_dashboard_summary_endpoint_returns_catasto_control_room() -> None:
     assert distretto_10["importo_totale"] == 405.0
 
 
+def test_dashboard_and_distretto_kpi_use_only_active_capacitas_snapshot() -> None:
+    db = TestingSessionLocal()
+    try:
+        previous_batch = db.query(CatImportBatch).filter(CatImportBatch.hash_file == "seed-hash").one()
+        previous_batch.completed_at = datetime(2026, 4, 28, tzinfo=timezone.utc)
+        comune = db.query(CatComune).filter(CatComune.cod_comune_capacitas == 165).one()
+        particella = db.query(CatParticella).filter(CatParticella.foglio == "5", CatParticella.particella == "120").one()
+
+        current_batch = CatImportBatch(
+            filename="seed-new.xlsx",
+            tipo="capacitas_ruolo",
+            anno_campagna=2025,
+            hash_file="seed-hash-new",
+            status="completed",
+            righe_totali=1,
+            righe_importate=1,
+            righe_anomalie=1,
+            created_by=1,
+            created_at=datetime(2026, 4, 29, tzinfo=timezone.utc),
+            completed_at=datetime(2026, 4, 29, 12, 0, tzinfo=timezone.utc),
+        )
+        db.add(current_batch)
+        db.flush()
+
+        current_utenza = CatUtenzaIrrigua(
+            import_batch_id=current_batch.id,
+            anno_campagna=2025,
+            cco="UT-SNAPSHOT-2025",
+            comune_id=comune.id,
+            cod_comune_capacitas=165,
+            num_distretto=10,
+            nome_comune="Arborea",
+            foglio="5",
+            particella="120",
+            subalterno="1",
+            particella_id=particella.id,
+            sup_catastale_mq=1000,
+            sup_irrigabile_mq=500,
+            imponibile_sf=1000,
+            ind_spese_fisse=2,
+            aliquota_0648=0.1,
+            importo_0648=100,
+            aliquota_0985=0.2,
+            importo_0985=200,
+            codice_fiscale="RSSMRA80A01H501U",
+            codice_fiscale_raw="RSSMRA80A01H501U",
+        )
+        db.add(current_utenza)
+        db.flush()
+
+        db.add_all(
+            [
+                CatAnomalia(
+                    particella_id=particella.id,
+                    utenza_id=current_utenza.id,
+                    anno_campagna=2025,
+                    tipo="VAL-SNAPSHOT-OPEN",
+                    severita="warning",
+                    status="aperta",
+                    descrizione="Anomalia aperta batch attivo",
+                ),
+                CatAnomalia(
+                    particella_id=particella.id,
+                    utenza_id=current_utenza.id,
+                    anno_campagna=2025,
+                    tipo="VAL-SNAPSHOT-CLOSED",
+                    severita="error",
+                    status="chiusa",
+                    descrizione="Anomalia chiusa batch attivo",
+                ),
+                CatAnomalia(
+                    particella_id=particella.id,
+                    utenza_id=db.query(CatUtenzaIrrigua).filter(CatUtenzaIrrigua.cco == "UT-SEED-001").one().id,
+                    anno_campagna=2025,
+                    tipo="VAL-SNAPSHOT-OLD",
+                    severita="error",
+                    status="aperta",
+                    descrizione="Anomalia batch precedente",
+                ),
+            ]
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    dashboard_response = client.get("/catasto/dashboard/summary?anno=2025", headers=auth_headers())
+    assert dashboard_response.status_code == 200
+    dashboard = dashboard_response.json()
+
+    distretti_response = client.get("/catasto/distretti/", headers=auth_headers())
+    distretto_10_id = next(item["id"] for item in distretti_response.json() if item["num_distretto"] == "10")
+    kpi_response = client.get(f"/catasto/distretti/{distretto_10_id}/kpi?anno=2025", headers=auth_headers())
+    assert kpi_response.status_code == 200
+    kpi = kpi_response.json()
+
+    assert dashboard["utenze"]["totale_utenze"] == 1
+    assert dashboard["utenze"]["importo_totale_0648"] == 100.0
+    assert dashboard["utenze"]["importo_totale_0985"] == 200.0
+    assert dashboard["utenze"]["importo_totale"] == 300.0
+    assert dashboard["anomalie"]["aperte"] == 1
+    assert dashboard["anomalie"]["error"] == 0
+    assert dashboard["anomalie"]["warning"] == 1
+    assert dashboard["anomalie"]["by_tipo"][0] == {"key": "VAL-SNAPSHOT-OPEN", "label": "VAL-SNAPSHOT-OPEN", "count": 1}
+
+    distretto_10 = next(item for item in dashboard["distretti"] if item["num_distretto"] == "10")
+    assert distretto_10["totale_utenze"] == 1
+    assert distretto_10["totale_anomalie_aperte"] == 1
+    assert distretto_10["importo_totale"] == 300.0
+
+    assert kpi["totale_utenze"] == distretto_10["totale_utenze"]
+    assert kpi["totale_anomalie"] == distretto_10["totale_anomalie_aperte"]
+    assert kpi["anomalie_error"] == 0
+    assert kpi["importo_totale_0648"] == "100.00"
+    assert kpi["importo_totale_0985"] == "200.00"
+    assert kpi["superficie_irrigabile_mq"] == "500.00"
+
+
 def test_distretto_kpi_endpoint_returns_aggregates_for_year() -> None:
     response = client.get("/catasto/distretti/", headers=auth_headers())
-    distretto_id = response.json()[0]["id"]
+    distretto_id = next(item["id"] for item in response.json() if item["num_distretto"] == "10")
 
     kpi_response = client.get(f"/catasto/distretti/{distretto_id}/kpi?anno=2025", headers=auth_headers())
 
@@ -2854,10 +2983,11 @@ def test_distretto_kpi_endpoint_filters_multi_year_data() -> None:
     assert yearly_2024.json()["superficie_irrigabile_mq"] == "700.00"
 
     assert all_years.status_code == 200
-    assert all_years.json()["totale_utenze"] == 2
-    assert all_years.json()["importo_totale_0648"] == "233.00"
-    assert all_years.json()["importo_totale_0985"] == "417.00"
-    assert all_years.json()["superficie_irrigabile_mq"] == "1600.00"
+    assert all_years.json()["totale_particelle"] == 1
+    assert all_years.json()["totale_utenze"] == 0
+    assert all_years.json()["importo_totale_0648"] == "0"
+    assert all_years.json()["importo_totale_0985"] == "0"
+    assert all_years.json()["superficie_irrigabile_mq"] == "0"
 
 
 def test_distretto_kpi_endpoint_keeps_aggregates_isolated_per_distretto() -> None:
@@ -2869,7 +2999,7 @@ def test_distretto_kpi_endpoint_keeps_aggregates_isolated_per_distretto() -> Non
 
     response = client.get("/catasto/distretti/", headers=auth_headers())
     payload = response.json()
-    assert len(payload) == 2
+    assert len(payload) == 3
     distretti = {item["num_distretto"]: item["id"] for item in payload}
 
     kpi_response = client.get(f"/catasto/distretti/{distretti['20']}/kpi?anno=2025", headers=auth_headers())
@@ -7171,6 +7301,105 @@ def test_import_capacitas_excel_duplicate_and_force(monkeypatch: pytest.MonkeyPa
         assert second_batch.id != first_batch.id
     finally:
         db.close()
+
+
+def test_import_capacitas_excel_marks_previous_completed_snapshot_replaced(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "app.modules.catasto.services.import_capacitas.pd.read_excel",
+        lambda *args, **kwargs: {"Ruoli 2025": build_capacitas_dataframe().head(1)},
+    )
+
+    db = TestingSessionLocal()
+    try:
+        first_batch = import_capacitas_excel(
+            db=db,
+            file_bytes=b"content-a",
+            filename="ruoli-2025-a.xlsx",
+            created_by=1,
+        )
+        second_batch = import_capacitas_excel(
+            db=db,
+            file_bytes=b"content-b",
+            filename="ruoli-2025-b.xlsx",
+            created_by=1,
+        )
+
+        db.refresh(first_batch)
+        db.refresh(second_batch)
+        assert first_batch.status == "replaced"
+        assert second_batch.status == "completed"
+    finally:
+        db.close()
+
+
+def test_run_import_rolls_back_partial_rows_before_marking_batch_failed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(import_routes_module, "SessionLocal", TestingSessionLocal)
+
+    db = TestingSessionLocal()
+    try:
+        placeholder = CatImportBatch(
+            filename="partial.xlsx",
+            tipo="capacitas_ruolo",
+            status="processing",
+            righe_totali=0,
+            righe_importate=0,
+            righe_anomalie=0,
+            created_by=1,
+        )
+        db.add(placeholder)
+        db.commit()
+        batch_id = placeholder.id
+    finally:
+        db.close()
+
+    def fake_import_capacitas_excel(
+        db: Session,
+        file_bytes: bytes,
+        filename: str,
+        created_by: int,
+        force: bool = False,
+        batch_id: UUID | None = None,
+    ) -> CatImportBatch:
+        batch = db.get(CatImportBatch, batch_id)
+        assert batch is not None
+        comune = db.query(CatComune).filter(CatComune.cod_comune_capacitas == 165).one()
+        particella = db.query(CatParticella).filter(CatParticella.foglio == "5", CatParticella.particella == "120").one()
+        db.add(
+            CatUtenzaIrrigua(
+                import_batch_id=batch.id,
+                anno_campagna=2025,
+                cco="UT-PARTIAL-001",
+                comune_id=comune.id,
+                cod_comune_capacitas=165,
+                num_distretto=10,
+                nome_comune="Arborea",
+                foglio="5",
+                particella="120",
+                subalterno="1",
+                particella_id=particella.id,
+                sup_irrigabile_mq=100,
+                importo_0648=10,
+                importo_0985=20,
+            )
+        )
+        db.flush()
+        raise RuntimeError("errore dopo flush parziale")
+
+    monkeypatch.setattr(import_routes_module, "import_capacitas_excel", fake_import_capacitas_excel)
+
+    import_routes_module._run_import(batch_id, b"fake-xlsx", "partial.xlsx", 1, False)
+
+    db = TestingSessionLocal()
+    try:
+        batch = db.get(CatImportBatch, batch_id)
+        persisted_rows = db.query(CatUtenzaIrrigua).filter(CatUtenzaIrrigua.import_batch_id == batch_id).count()
+    finally:
+        db.close()
+
+    assert batch is not None
+    assert batch.status == "failed"
+    assert batch.errore == "errore dopo flush parziale"
+    assert persisted_rows == 0
 
 
 def test_import_capacitas_excel_reads_real_workbook_bytes() -> None:

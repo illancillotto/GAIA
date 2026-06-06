@@ -48,6 +48,7 @@ def _run_import(batch_id: uuid.UUID, file_bytes: bytes, filename: str, created_b
             batch_id=batch_id,
         )
     except Exception as exc:
+        db.rollback()
         batch = db.get(CatImportBatch, batch_id)
         if batch is not None:
             batch.status = "failed"

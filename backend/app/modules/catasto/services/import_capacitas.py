@@ -388,6 +388,16 @@ def import_capacitas_excel(
     batch.righe_anomalie = righe_con_anomalie
     batch.status = "completed"
     batch.completed_at = now
+    if batch.anno_campagna is not None:
+        for replaced_batch in db.execute(
+            select(CatImportBatch).where(
+                CatImportBatch.tipo == "capacitas_ruolo",
+                CatImportBatch.anno_campagna == batch.anno_campagna,
+                CatImportBatch.status == "completed",
+                CatImportBatch.id != batch.id,
+            )
+        ).scalars():
+            replaced_batch.status = "replaced"
     batch.report_json = {
         "anno_campagna": anno,
         "righe_totali": len(dataframe),

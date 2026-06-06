@@ -48,11 +48,130 @@ async function loginAsAdmin(page: Page) {
 
 test("admin completes catasto import wizard through report step", async ({ page }) => {
   await loginAsAdmin(page);
+
+  await page.route("**/api/catasto/import/summary**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        tipo: "capacitas_ruolo",
+        totale_batch: 9,
+        processing_batch: 0,
+        completed_batch: 8,
+        failed_batch: 1,
+        replaced_batch: 4,
+        ultimo_completed_at: "2026-04-30T05:49:06Z",
+      }),
+    });
+  });
+  await page.route("**/api/catasto/import/history**", async (route) => {
+    const status = new URL(route.request().url()).searchParams.get("status");
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(
+        status === "failed"
+          ? []
+          : [
+              {
+                id: "00000000-0000-0000-0000-000000000300",
+                filename: "capacitas-history.xlsx",
+                tipo: "capacitas_ruolo",
+                anno_campagna: 2025,
+                hash_file: "mock-history",
+                righe_totali: 12,
+                righe_importate: 12,
+                righe_anomalie: 2,
+                status: "completed",
+                report_json: null,
+                errore: null,
+                created_at: "2026-04-30T05:30:00Z",
+                completed_at: "2026-04-30T05:31:00Z",
+                created_by: 1,
+              },
+            ],
+      ),
+    });
+  });
+  await page.route("**/api/catasto/import/capacitas**", async (route) => {
+    await route.fulfill({
+      status: 202,
+      contentType: "application/json",
+      body: JSON.stringify({ batch_id: "00000000-0000-0000-0000-000000000301", status: "processing" }),
+    });
+  });
+  await page.route("**/api/catasto/import/00000000-0000-0000-0000-000000000301/status", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        id: "00000000-0000-0000-0000-000000000301",
+        filename: "capacitas-playwright.xlsx",
+        tipo: "capacitas_ruolo",
+        anno_campagna: 2025,
+        hash_file: "mock-success",
+        righe_totali: 2,
+        righe_importate: 2,
+        righe_anomalie: 2,
+        status: "completed",
+        report_json: {
+          anno_campagna: 2025,
+          righe_totali: 2,
+          righe_importate: 2,
+          righe_con_anomalie: 2,
+          anomalie: {
+            "VAL-02-cf_invalido": { count: 1 },
+            "VAL-07-importi": { count: 1 },
+          },
+          preview_anomalie: [
+            { riga: 2, tipo: "VAL-02-cf_invalido", cf_raw: "AAAAAA00A00A000A" },
+            { riga: 3, tipo: "VAL-07-importi", expected: 300, found: 330 },
+          ],
+          distretti_rilevati: [10],
+          comuni_rilevati: ["Arborea"],
+        },
+        errore: null,
+        created_at: "2026-04-30T05:49:00Z",
+        completed_at: "2026-04-30T05:49:06Z",
+        created_by: 1,
+      }),
+    });
+  });
+  await page.route("**/api/catasto/import/00000000-0000-0000-0000-000000000301/report**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        items: [
+          {
+            id: "00000000-0000-0000-0000-000000000401",
+            particella_id: null,
+            utenza_id: "00000000-0000-0000-0000-000000000501",
+            anno_campagna: 2025,
+            tipo: "VAL-02-cf_invalido",
+            severita: "error",
+            descrizione: "Codice fiscale non valido",
+            dati_json: { cf_raw: "AAAAAA00A00A000A" },
+            status: "aperta",
+            note_operatore: null,
+            assigned_to: null,
+            segnalazione_id: null,
+            created_at: "2026-04-30T05:49:05Z",
+            updated_at: "2026-04-30T05:49:05Z",
+          },
+        ],
+        total: 1,
+        page: 1,
+        page_size: 50,
+      }),
+    });
+  });
+
   await page.goto("/catasto/import");
 
   await expect(page.getByText("Wizard import Catasto/GIS con polling stato, audit batch e report di finalizzazione.")).toBeVisible();
 
-  await page.getByLabel("File Excel").setInputFiles({
+  await page.locator('input[type="file"]').first().setInputFiles({
     name: "capacitas-playwright.xlsx",
     mimeType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     buffer: buildCapacitasWorkbookBuffer(),
@@ -60,7 +179,7 @@ test("admin completes catasto import wizard through report step", async ({ page 
 
   await page.getByRole("button", { name: "Avvia import" }).click();
 
-  await expect(page.getByText("Elaborazione in corso").or(page.getByText("Sintesi batch"))).toBeVisible({ timeout: 20_000 });
+  await expect(page.getByText("Sintesi batch")).toBeVisible({ timeout: 20_000 });
   await expect(page.getByText("Contatori anomalie")).toBeVisible({ timeout: 45_000 });
   await expect(page.getByText("Preview (prime 50)")).toBeVisible();
   await expect(page.getByText("Lista anomalie", { exact: true })).toBeVisible();
