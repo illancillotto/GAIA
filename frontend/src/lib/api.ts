@@ -110,6 +110,17 @@ import type {
   InazSyncJobCreateInput,
   InazSyncJobListResponse,
   LoginResponse,
+  MeInazStatusResponse,
+  MeInazSummaryResponse,
+  MeModuleStatusResponse,
+  MeOperazioniActivityListResponse,
+  MeOperazioniCaseListResponse,
+  MeOperazioniReportListResponse,
+  MeOperazioniSummaryResponse,
+  MeSummaryResponse,
+  MeAssignedDeviceListResponse,
+  MeVehicleAssignmentListResponse,
+  MeVehicleUsageSessionListResponse,
   MyPermissionsResponse,
   NetworkAlert,
   NetworkAlertUpdateInput,
@@ -382,6 +393,187 @@ export async function login(username: string, password: string): Promise<LoginRe
 
 export async function getCurrentUser(token: string): Promise<CurrentUser> {
   return request<CurrentUser>("/auth/me", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getMeStatus(token: string): Promise<MeModuleStatusResponse> {
+  return request<MeModuleStatusResponse>("/me", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getMeInazStatus(token: string): Promise<MeInazStatusResponse> {
+  return request<MeInazStatusResponse>("/me/inaz", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function listMeInazDailyRecords(
+  token: string,
+  params: {
+    collaboratorId?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    q?: string;
+    page?: number;
+    pageSize?: number;
+  } = {},
+): Promise<InazDailyRecordListResponse> {
+  const query = new URLSearchParams();
+  if (params.collaboratorId) {
+    query.set("collaborator_id", params.collaboratorId);
+  }
+  if (params.dateFrom) {
+    query.set("date_from", params.dateFrom);
+  }
+  if (params.dateTo) {
+    query.set("date_to", params.dateTo);
+  }
+  if (params.q) {
+    query.set("q", params.q);
+  }
+  if (params.page) {
+    query.set("page", String(params.page));
+  }
+  if (params.pageSize) {
+    query.set("page_size", String(params.pageSize));
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<InazDailyRecordListResponse>(`/me/inaz/daily-records${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getMeInazDailyRecord(token: string, recordId: string): Promise<import("@/types/api").InazDailyRecord> {
+  return request<import("@/types/api").InazDailyRecord>(`/me/inaz/daily-records/${recordId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getMeInazSummary(token: string, periodStart: string, periodEnd: string): Promise<MeInazSummaryResponse> {
+  const query = new URLSearchParams({ period_start: periodStart, period_end: periodEnd });
+  return request<MeInazSummaryResponse>(`/me/inaz/summary?${query.toString()}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getMeSummary(
+  token: string,
+  params?: { periodStart?: string; periodEnd?: string },
+): Promise<MeSummaryResponse> {
+  const query = new URLSearchParams();
+  if (params?.periodStart) query.set("period_start", params.periodStart);
+  if (params?.periodEnd) query.set("period_end", params.periodEnd);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<MeSummaryResponse>(`/me/summary${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getMeOperazioniSummary(
+  token: string,
+  params?: { periodStart?: string; periodEnd?: string },
+): Promise<MeOperazioniSummaryResponse> {
+  const query = new URLSearchParams();
+  if (params?.periodStart) query.set("period_start", params.periodStart);
+  if (params?.periodEnd) query.set("period_end", params.periodEnd);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<MeOperazioniSummaryResponse>(`/me/operazioni/summary${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function listMeOperazioniActivities(
+  token: string,
+  params?: { periodStart?: string; periodEnd?: string; page?: number; pageSize?: number },
+): Promise<MeOperazioniActivityListResponse> {
+  const query = new URLSearchParams();
+  if (params?.periodStart) query.set("period_start", params.periodStart);
+  if (params?.periodEnd) query.set("period_end", params.periodEnd);
+  if (params?.page) query.set("page", String(params.page));
+  if (params?.pageSize) query.set("page_size", String(params.pageSize));
+  return request<MeOperazioniActivityListResponse>(`/me/operazioni/activities?${query.toString()}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function listMeOperazioniReports(
+  token: string,
+  params?: { periodStart?: string; periodEnd?: string; page?: number; pageSize?: number },
+): Promise<MeOperazioniReportListResponse> {
+  const query = new URLSearchParams();
+  if (params?.periodStart) query.set("period_start", params.periodStart);
+  if (params?.periodEnd) query.set("period_end", params.periodEnd);
+  if (params?.page) query.set("page", String(params.page));
+  if (params?.pageSize) query.set("page_size", String(params.pageSize));
+  return request<MeOperazioniReportListResponse>(`/me/operazioni/reports?${query.toString()}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function listMeOperazioniCases(
+  token: string,
+  params?: { periodStart?: string; periodEnd?: string; page?: number; pageSize?: number },
+): Promise<MeOperazioniCaseListResponse> {
+  const query = new URLSearchParams();
+  if (params?.periodStart) query.set("period_start", params.periodStart);
+  if (params?.periodEnd) query.set("period_end", params.periodEnd);
+  if (params?.page) query.set("page", String(params.page));
+  if (params?.pageSize) query.set("page_size", String(params.pageSize));
+  return request<MeOperazioniCaseListResponse>(`/me/operazioni/cases?${query.toString()}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function listMeVehicleSessions(
+  token: string,
+  params?: { periodStart?: string; periodEnd?: string; page?: number; pageSize?: number },
+): Promise<MeVehicleUsageSessionListResponse> {
+  const query = new URLSearchParams();
+  if (params?.periodStart) query.set("period_start", params.periodStart);
+  if (params?.periodEnd) query.set("period_end", params.periodEnd);
+  if (params?.page) query.set("page", String(params.page));
+  if (params?.pageSize) query.set("page_size", String(params.pageSize));
+  return request<MeVehicleUsageSessionListResponse>(`/me/operazioni/vehicle-sessions?${query.toString()}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function listMeAssignedDevices(token: string): Promise<MeAssignedDeviceListResponse> {
+  return request<MeAssignedDeviceListResponse>("/me/assets/devices", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function listMeVehicleAssignments(token: string): Promise<MeVehicleAssignmentListResponse> {
+  return request<MeVehicleAssignmentListResponse>("/me/assets/vehicle-assignments", {
     headers: {
       Authorization: `Bearer ${token}`,
     },

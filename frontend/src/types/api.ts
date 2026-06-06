@@ -21,6 +21,208 @@ export type CurrentUser = {
   enabled_modules: string[];
 };
 
+export type MeCapabilities = {
+  inaz: boolean;
+  operazioni: boolean;
+  network: boolean;
+};
+
+export type MeModuleStatusResponse = {
+  module: string;
+  enabled: boolean;
+  username: string;
+  capabilities: MeCapabilities;
+  message: string;
+};
+
+export type MeInazStatusResponse = {
+  module: string;
+  enabled: boolean;
+  mapped: boolean;
+  collaborator_id: string | null;
+  collaborator_name: string | null;
+  employee_code: string | null;
+  message: string;
+};
+
+export type MeSummaryResponse = {
+  period_start: string;
+  period_end: string;
+  ordinary_minutes: number;
+  extra_minutes: number;
+  absence_minutes: number;
+  worked_days: number;
+  anomaly_days: number;
+  km_from_inaz: number;
+  activities_count: number;
+  activity_minutes: number;
+  reports_count: number;
+  assigned_cases_count: number;
+  open_cases_count: number;
+  closed_cases_count: number;
+  vehicle_sessions_count: number;
+  vehicle_km: number;
+  assigned_devices_count: number;
+  active_vehicle_assignments_count: number;
+};
+
+export type MeOperazioniSummaryStatusItem = {
+  status: string;
+  count: number;
+};
+
+export type MeOperazioniSummaryCategoryItem = {
+  category: string;
+  count: number;
+};
+
+export type MeOperazioniSummaryResponse = {
+  period_start: string;
+  period_end: string;
+  activities_count: number;
+  activity_minutes: number;
+  reports_count: number;
+  assigned_cases_count: number;
+  open_cases_count: number;
+  closed_cases_count: number;
+  vehicle_sessions_count: number;
+  vehicle_km: number;
+  distinct_vehicles_count: number;
+  activity_statuses: MeOperazioniSummaryStatusItem[];
+  activity_categories: MeOperazioniSummaryCategoryItem[];
+};
+
+export type MeOperazioniActivity = {
+  id: string;
+  activity_catalog_id: string;
+  activity_name: string | null;
+  activity_category: string | null;
+  vehicle_id: string | null;
+  vehicle_name: string | null;
+  vehicle_plate_number: string | null;
+  status: string;
+  started_at: string;
+  ended_at: string | null;
+  duration_minutes: number | null;
+  text_note: string | null;
+  review_outcome: string | null;
+  review_note: string | null;
+  submitted_at: string | null;
+  created_at: string;
+};
+
+export type MeOperazioniActivityListResponse = {
+  items: MeOperazioniActivity[];
+  total: number;
+  page: number;
+  page_size: number;
+};
+
+export type MeOperazioniReport = {
+  id: string;
+  report_number: string;
+  title: string;
+  description: string | null;
+  status: string;
+  category_name: string | null;
+  severity_name: string | null;
+  vehicle_name: string | null;
+  vehicle_plate_number: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type MeOperazioniReportListResponse = {
+  items: MeOperazioniReport[];
+  total: number;
+  page: number;
+  page_size: number;
+};
+
+export type MeOperazioniCase = {
+  id: string;
+  case_number: string;
+  title: string;
+  status: string;
+  priority_rank: number | null;
+  category_name: string | null;
+  severity_name: string | null;
+  source_report_number: string | null;
+  created_at: string;
+  updated_at: string;
+  started_at: string | null;
+  resolved_at: string | null;
+  closed_at: string | null;
+};
+
+export type MeOperazioniCaseListResponse = {
+  items: MeOperazioniCase[];
+  total: number;
+  page: number;
+  page_size: number;
+};
+
+export type MeVehicleUsageSession = {
+  id: string;
+  vehicle_id: string;
+  vehicle_name: string | null;
+  vehicle_plate_number: string | null;
+  status: string;
+  started_at: string;
+  ended_at: string | null;
+  km: number;
+  notes: string | null;
+  operator_name: string | null;
+  created_at: string;
+};
+
+export type MeVehicleUsageSessionListResponse = {
+  items: MeVehicleUsageSession[];
+  total: number;
+  page: number;
+  page_size: number;
+};
+
+export type MeAssignedDevice = {
+  id: number;
+  ip_address: string;
+  hostname: string | null;
+  display_name: string | null;
+  resolved_label: string;
+  lifecycle_state: string;
+  status: string;
+  device_type: string | null;
+  operating_system: string | null;
+  asset_label: string | null;
+  location_hint: string | null;
+  last_seen_at: string;
+  updated_at: string;
+};
+
+export type MeAssignedDeviceListResponse = {
+  items: MeAssignedDevice[];
+  total: number;
+};
+
+export type MeVehicleAssignment = {
+  id: string;
+  vehicle_id: string;
+  vehicle_name: string;
+  vehicle_plate_number: string | null;
+  vehicle_type: string;
+  assignment_target_type: string;
+  start_at: string;
+  end_at: string | null;
+  reason: string | null;
+  notes: string | null;
+  is_active: boolean;
+};
+
+export type MeVehicleAssignmentListResponse = {
+  items: MeVehicleAssignment[];
+  total: number;
+};
+
 export type ResolvedSectionPermission = {
   section_key: string;
   section_label: string;
@@ -197,6 +399,12 @@ export type InazDailyRecordListResponse = {
   total: number;
   page: number;
   page_size: number;
+};
+
+export type MeInazSummaryResponse = {
+  period_start: string;
+  period_end: string;
+  items: InazEventSummary[];
 };
 
 export type InazEventSummary = {

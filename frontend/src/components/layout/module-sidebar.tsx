@@ -11,6 +11,7 @@ import {
   RefreshIcon,
   SearchIcon,
   ServerIcon,
+  ShieldIcon,
   TruckIcon,
   UserIcon,
   UsersIcon,
@@ -20,6 +21,7 @@ import { NavItem } from "@/components/layout/nav-item";
 type ModuleSidebarProps = {
   currentModuleKey:
     | "nas_control"
+    | "me"
     | "network"
     | "inventory"
     | "catasto"
@@ -80,6 +82,18 @@ export function ModuleSidebar({
     );
   }
 
+  if (currentModuleKey === "me") {
+    return (
+      <div className="space-y-0.5 px-2 pb-3">
+        <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Self service</p>
+        <NavItem href="/me" icon={GridIcon} label="Panoramica" inactiveWhenHash="#presenze" />
+        <NavItem href="/me#presenze" icon={CalendarIcon} label="Presenze" />
+        <NavItem href="/me#operativita" icon={RefreshIcon} label="Operatività" />
+        <NavItem href="/me#dotazioni" icon={ServerIcon} label="Dotazioni" />
+      </div>
+    );
+  }
+
   if (currentModuleKey === "catasto") {
     return (
       <div className="space-y-0.5 px-2 pb-3">
@@ -134,7 +148,7 @@ export function ModuleSidebar({
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Panoramica</p>
         <NavItem href="/network" icon={GridIcon} label="Dashboard" />
         <NavItem href="/network/devices" icon={ServerIcon} label="Dispositivi" match="prefix" />
-        <NavItem href="/network/firewalls" icon={ServerIcon} label="Firewall" match="prefix" />
+        <NavItem href="/network/firewalls" icon={ShieldIcon} label="Firewall" match="prefix" />
         <NavItem href="/network/tracking" icon={AlertTriangleIcon} label="Tracking" match="prefix" />
         <NavItem href="/network/statistics" icon={SearchIcon} label="Statistiche" match="prefix" />
         <NavItem href="/network/floor-plan" icon={FolderIcon} label="Planimetria" />

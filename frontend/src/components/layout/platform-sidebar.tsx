@@ -20,6 +20,7 @@ type PlatformModule = {
 };
 
 const platformModules: PlatformModule[] = [
+  { href: "/me", label: "La mia attività", icon: UserIcon },
   { href: "/nas-control", label: "NAS Control", icon: LockIcon },
   { href: "/network", label: "Rete", icon: ServerIcon },
   { href: "/inventory", label: "Inventario", icon: SearchIcon },
@@ -38,7 +39,9 @@ export function PlatformSidebar({ currentModuleLabel, currentUser }: PlatformSid
   const [isModuleSwitcherOpen, setIsModuleSwitcherOpen] = useState(false);
   const visiblePlatformModules = platformModules.filter(({ href }) => {
     const moduleKey =
-      href === "/nas-control"
+      href === "/me"
+        ? ""
+        : href === "/nas-control"
         ? "accessi"
         : href === "/network"
           ? "rete"

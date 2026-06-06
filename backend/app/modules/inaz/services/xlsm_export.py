@@ -29,6 +29,18 @@ MONTHS_IT = [
 DEFAULT_TEMPLATE_PATH = Path("/home/cbo/CursorProjects/inaz-scraper/Giornaliere/Giornaliere_2026_803_1.xlsm")
 
 
+def close_workbook_resources(workbook: object) -> None:
+    vba_archive = getattr(workbook, "vba_archive", None)
+    if vba_archive is not None:
+        try:
+            vba_archive.close()
+        except Exception:
+            pass
+    close = getattr(workbook, "close", None)
+    if callable(close):
+        close()
+
+
 @dataclass
 class ExportTimesheetRow:
     collaborator: InazCollaborator
@@ -245,27 +257,30 @@ def compile_workbook(
     schedule_context: ScheduleContext | None = None,
 ) -> None:
     workbook = load_workbook(template, keep_vba=True)
-    archive2 = workbook["Archivio2"]
-    operai = workbook["Operai"] if "Operai" in workbook.sheetnames else None
-    giornaliera = workbook["Giornaliera2"] if "Giornaliera2" in workbook.sheetnames else workbook["Giornaliera"]
-    giornaliera["A3"] = period_start.month
-    giornaliera["C3"] = period_start.year
-    giornaliera["B2"] = employee_kind
-    month_name = MONTHS_IT[period_start.month - 1]
-    period_label = f"{employee_kind}_{month_name}-{period_start.year}"
-    operai_metadata_by_employee = load_operai_metadata(operai) if operai is not None else {}
+    try:
+        archive2 = workbook["Archivio2"]
+        operai = workbook["Operai"] if "Operai" in workbook.sheetnames else None
+        giornaliera = workbook["Giornaliera2"] if "Giornaliera2" in workbook.sheetnames else workbook["Giornaliera"]
+        giornaliera["A3"] = period_start.month
+        giornaliera["C3"] = period_start.year
+        giornaliera["B2"] = employee_kind
+        month_name = MONTHS_IT[period_start.month - 1]
+        period_label = f"{employee_kind}_{month_name}-{period_start.year}"
+        operai_metadata_by_employee = load_operai_metadata(operai) if operai is not None else {}
 
-    for item in rows:
-        row_index = upsert_archive2_row(
-            archive2,
-            item.collaborator,
-            period_label,
-            period_start=period_start,
-            operai_metadata_by_employee=operai_metadata_by_employee,
-        )
-        write_archive2_daily_values(archive2, row_index, item, schedule_context)
+        for item in rows:
+            row_index = upsert_archive2_row(
+                archive2,
+                item.collaborator,
+                period_label,
+                period_start=period_start,
+                operai_metadata_by_employee=operai_metadata_by_employee,
+            )
+            write_archive2_daily_values(archive2, row_index, item, schedule_context)
 
-    workbook.save(output)
+        workbook.save(output)
+    finally:
+        close_workbook_resources(workbook)
 
 
 def resolve_day_classification(

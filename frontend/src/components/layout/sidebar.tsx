@@ -29,6 +29,8 @@ export function Sidebar({
   const currentModuleKey =
     pathname.startsWith("/gaia/users")
       ? "gaia"
+      : pathname.startsWith("/me")
+        ? "me"
       : pathname.startsWith("/nas-control")
         ? "nas_control"
         : pathname.startsWith("/elaborazioni")
@@ -58,6 +60,8 @@ export function Sidebar({
   const currentModuleLabel =
     currentModuleKey === "gaia"
       ? "Utenti GAIA"
+      : currentModuleKey === "me"
+        ? "La mia attività"
       : currentModuleKey === "nas_control"
         ? "NAS Control"
         : currentModuleKey === "elaborazioni"

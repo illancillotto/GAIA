@@ -1,5 +1,6 @@
 from collections.abc import Generator
-from datetime import date
+from datetime import date, datetime, timezone
+from decimal import Decimal
 import io
 from pathlib import Path
 import uuid
@@ -18,6 +19,11 @@ from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
 from app.modules.inaz.models import InazCredential, InazSyncJob
+from app.modules.inaz.services.xlsm_export import close_workbook_resources
+from app.modules.network.models import NetworkDevice
+from app.modules.operazioni.models.activities import ActivityCatalog, OperatorActivity
+from app.modules.operazioni.models.reports import FieldReport, FieldReportCategory, FieldReportSeverity, InternalCase
+from app.modules.operazioni.models.vehicles import Vehicle, VehicleAssignment, VehicleUsageSession
 from app.modules.inaz.services.import_jobs import run_import_job
 from app.modules.inaz.services.parser import load_json_payload, parse_import_payload
 
@@ -52,6 +58,8 @@ def _create_user(
     *,
     role: str = ApplicationUserRole.ADMIN.value,
     module_inaz: bool = True,
+    module_operazioni: bool = False,
+    module_rete: bool = False,
 ) -> ApplicationUser:
     db = TestingSessionLocal()
     user = ApplicationUser(
@@ -61,6 +69,8 @@ def _create_user(
         role=role,
         is_active=True,
         module_accessi=True,
+        module_operazioni=module_operazioni,
+        module_rete=module_rete,
         module_inaz=module_inaz,
     )
     db.add(user)
@@ -151,48 +161,54 @@ def _sample_payload(employee_code: str = "1854") -> bytes:
 
 def _create_template(path: Path) -> None:
     wb = Workbook()
-    ws = wb.active
-    ws.title = "Archivio2"
-    ws.cell(5, 1).value = "1/2026-MDASVT67B26B314W"
-    ws.cell(5, 2).value = 1854
-    ws.cell(5, 3).value = "FISSI_gennaio-2026"
-    ws.cell(5, 4).value = "AMADU SALVATORE"
-    ws.cell(5, 5).value = "MANOVALE DI MAGAZZINO"
-    ws.cell(5, 6).value = "D107"
-    ws.cell(5, 7).value = "01/01/2000"
-    wb.create_sheet("Giornaliera")
-    wb.save(path)
+    try:
+        ws = wb.active
+        ws.title = "Archivio2"
+        ws.cell(5, 1).value = "1/2026-MDASVT67B26B314W"
+        ws.cell(5, 2).value = 1854
+        ws.cell(5, 3).value = "FISSI_gennaio-2026"
+        ws.cell(5, 4).value = "AMADU SALVATORE"
+        ws.cell(5, 5).value = "MANOVALE DI MAGAZZINO"
+        ws.cell(5, 6).value = "D107"
+        ws.cell(5, 7).value = "01/01/2000"
+        wb.create_sheet("Giornaliera")
+        wb.save(path)
+    finally:
+        wb.close()
 
 
 def _create_template_with_operai_fallback(path: Path) -> None:
     wb = Workbook()
-    archive2 = wb.active
-    archive2.title = "Archivio2"
-    operai = wb.create_sheet("Operai")
-    giornaliera = wb.create_sheet("Giornaliera")
+    try:
+        archive2 = wb.active
+        archive2.title = "Archivio2"
+        operai = wb.create_sheet("Operai")
+        giornaliera = wb.create_sheet("Giornaliera")
 
-    operai.cell(1, 4).value = "MATRICOLA"
-    operai.cell(1, 6).value = "MANSIONI"
-    operai.cell(1, 7).value = "INQ."
-    operai.cell(1, 8).value = "DAL"
-    operai.cell(1, 9).value = "AL"
-    operai.cell(1, 10).value = "PROROGA"
-    operai.cell(1, 11).value = "RIASS_DAL"
-    operai.cell(1, 12).value = "RIASS_AL"
-    operai.cell(1, 16).value = "CF"
+        operai.cell(1, 4).value = "MATRICOLA"
+        operai.cell(1, 6).value = "MANSIONI"
+        operai.cell(1, 7).value = "INQ."
+        operai.cell(1, 8).value = "DAL"
+        operai.cell(1, 9).value = "AL"
+        operai.cell(1, 10).value = "PROROGA"
+        operai.cell(1, 11).value = "RIASS_DAL"
+        operai.cell(1, 12).value = "RIASS_AL"
+        operai.cell(1, 16).value = "CF"
 
-    operai.cell(2, 4).value = 120
-    operai.cell(2, 6).value = "ESCAVATORISTA"
-    operai.cell(2, 7).value = "D116"
-    operai.cell(2, 8).value = date(2022, 3, 1)
-    operai.cell(2, 9).value = date(2022, 12, 31)
-    operai.cell(2, 10).value = date(2023, 1, 31)
-    operai.cell(2, 11).value = date(2023, 2, 15)
-    operai.cell(2, 12).value = date(2023, 11, 30)
-    operai.cell(2, 16).value = "CDNMRC80A01H501Z"
+        operai.cell(2, 4).value = 120
+        operai.cell(2, 6).value = "ESCAVATORISTA"
+        operai.cell(2, 7).value = "D116"
+        operai.cell(2, 8).value = date(2022, 3, 1)
+        operai.cell(2, 9).value = date(2022, 12, 31)
+        operai.cell(2, 10).value = date(2023, 1, 31)
+        operai.cell(2, 11).value = date(2023, 2, 15)
+        operai.cell(2, 12).value = date(2023, 11, 30)
+        operai.cell(2, 16).value = "CDNMRC80A01H501Z"
 
-    giornaliera["A1"] = "template"
-    wb.save(path)
+        giornaliera["A1"] = "template"
+        wb.save(path)
+    finally:
+        wb.close()
 
 
 def _create_inaz_credential(user: ApplicationUser, *, label: str = "Test", username: str = "test.inaz") -> int:
@@ -505,6 +521,317 @@ def test_inaz_non_admin_sees_own_imported_data_by_owner_scope_without_mapping() 
     assert denied_record.status_code == 404
 
 
+def test_me_module_exposes_capabilities_for_current_user() -> None:
+    viewer = _create_user("me_capabilities_viewer", role=ApplicationUserRole.VIEWER.value, module_inaz=False)
+    token = _login(viewer.username)
+
+    response = client.get("/me", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["module"] == "me"
+    assert body["enabled"] is True
+    assert body["username"] == viewer.username
+    assert body["capabilities"] == {"inaz": False, "operazioni": False, "network": False}
+
+
+def test_me_inaz_requires_module_flag() -> None:
+    viewer = _create_user("me_inaz_denied", role=ApplicationUserRole.VIEWER.value, module_inaz=False)
+    token = _login(viewer.username)
+
+    response = client.get("/me/inaz", headers={"Authorization": f"Bearer {token}"})
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Module access denied"
+
+
+def test_me_inaz_self_service_sees_mapped_records_by_application_user_scope() -> None:
+    admin = _create_user("me_scope_admin")
+    viewer = _create_user("me_scope_viewer", role=ApplicationUserRole.VIEWER.value)
+    other_viewer = _create_user("me_scope_other", role=ApplicationUserRole.VIEWER.value)
+    admin_token = _login(admin.username)
+    viewer_token = _login(viewer.username)
+    other_token = _login(other_viewer.username)
+
+    imported = client.post(
+        "/inaz/import/json",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        files={"file": ("giornaliere.json", _sample_payload(), "application/json")},
+    )
+    assert imported.status_code == 200
+
+    collaborators = client.get("/inaz/collaborators", headers={"Authorization": f"Bearer {admin_token}"})
+    collab_id = collaborators.json()["items"][0]["id"]
+
+    mapped = client.put(
+        f"/inaz/collaborators/{collab_id}/application-user",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"application_user_id": viewer.id},
+    )
+    assert mapped.status_code == 200
+
+    me_status = client.get("/me/inaz", headers={"Authorization": f"Bearer {viewer_token}"})
+    assert me_status.status_code == 200
+    assert me_status.json()["mapped"] is True
+    assert me_status.json()["collaborator_id"] == collab_id
+
+    own_records = client.get(
+        "/me/inaz/daily-records?date_from=2026-05-01&date_to=2026-05-31",
+        headers={"Authorization": f"Bearer {viewer_token}"},
+    )
+    assert own_records.status_code == 200
+    assert own_records.json()["total"] == 1
+    record = own_records.json()["items"][0]
+    assert record["application_user_id"] == viewer.id
+
+    own_detail = client.get(
+        f"/me/inaz/daily-records/{record['id']}",
+        headers={"Authorization": f"Bearer {viewer_token}"},
+    )
+    assert own_detail.status_code == 200
+    assert own_detail.json()["id"] == record["id"]
+    assert own_detail.json()["application_user_id"] == viewer.id
+
+    own_summary = client.get(
+        "/me/inaz/summary?period_start=2026-05-01&period_end=2026-05-31",
+        headers={"Authorization": f"Bearer {viewer_token}"},
+    )
+    assert own_summary.status_code == 200
+    assert len(own_summary.json()["items"]) == 1
+    assert own_summary.json()["items"][0]["application_user_id"] == viewer.id
+
+    other_records = client.get(
+        "/me/inaz/daily-records?date_from=2026-05-01&date_to=2026-05-31",
+        headers={"Authorization": f"Bearer {other_token}"},
+    )
+    assert other_records.status_code == 200
+    assert other_records.json()["total"] == 0
+
+    denied_other_detail = client.get(
+        f"/me/inaz/daily-records/{record['id']}",
+        headers={"Authorization": f"Bearer {other_token}"},
+    )
+    assert denied_other_detail.status_code == 404
+
+
+def test_me_operazioni_and_assets_are_scoped_to_current_user() -> None:
+    viewer = _create_user(
+        "me_operazioni_viewer",
+        role=ApplicationUserRole.VIEWER.value,
+        module_inaz=False,
+        module_operazioni=True,
+        module_rete=True,
+    )
+    other_viewer = _create_user(
+        "me_operazioni_other",
+        role=ApplicationUserRole.VIEWER.value,
+        module_inaz=False,
+        module_operazioni=True,
+        module_rete=True,
+    )
+    token = _login(viewer.username)
+
+    db = TestingSessionLocal()
+    try:
+        category = FieldReportCategory(code="GUASTO", name="Guasto", is_active=True)
+        severity = FieldReportSeverity(code="ALTA", name="Alta", rank_order=1, is_active=True)
+        activity_catalog = ActivityCatalog(code="SOPR", name="Sopralluogo", category="Territorio", is_active=True)
+        vehicle = Vehicle(code="MEZZO-01", name="Porter operativo", vehicle_type="pickup", plate_number="GA123IA")
+        db.add_all([category, severity, activity_catalog, vehicle])
+        db.flush()
+
+        own_activity = OperatorActivity(
+            activity_catalog_id=activity_catalog.id,
+            operator_user_id=viewer.id,
+            vehicle_id=vehicle.id,
+            status="submitted",
+            started_at=datetime(2026, 6, 5, 8, 0, tzinfo=timezone.utc),
+            ended_at=datetime(2026, 6, 5, 10, 0, tzinfo=timezone.utc),
+            duration_minutes_calculated=120,
+            text_note="Sopralluogo canale nord",
+        )
+        other_activity = OperatorActivity(
+            activity_catalog_id=activity_catalog.id,
+            operator_user_id=other_viewer.id,
+            status="submitted",
+            started_at=datetime(2026, 6, 5, 11, 0, tzinfo=timezone.utc),
+            duration_minutes_calculated=45,
+        )
+        db.add_all([own_activity, other_activity])
+        db.flush()
+
+        own_report = FieldReport(
+            report_number="RPT-001",
+            reporter_user_id=viewer.id,
+            category_id=category.id,
+            severity_id=severity.id,
+            vehicle_id=vehicle.id,
+            title="Cedimento sponda",
+            status="submitted",
+        )
+        other_report = FieldReport(
+            report_number="RPT-002",
+            reporter_user_id=other_viewer.id,
+            category_id=category.id,
+            severity_id=severity.id,
+            title="Segnalazione altra squadra",
+            status="submitted",
+        )
+        db.add_all([own_report, other_report])
+        db.flush()
+
+        own_case = InternalCase(
+            case_number="CAS-001",
+            source_report_id=own_report.id,
+            title="Presa in carico sponda",
+            status="open",
+            assigned_to_user_id=viewer.id,
+            category_id=category.id,
+            severity_id=severity.id,
+        )
+        other_case = InternalCase(
+            case_number="CAS-002",
+            source_report_id=other_report.id,
+            title="Caso altra squadra",
+            status="closed",
+            assigned_to_user_id=other_viewer.id,
+            category_id=category.id,
+            severity_id=severity.id,
+        )
+        db.add_all([own_case, other_case])
+        db.flush()
+
+        own_session = VehicleUsageSession(
+            vehicle_id=vehicle.id,
+            started_by_user_id=viewer.id,
+            actual_driver_user_id=viewer.id,
+            started_at=datetime(2026, 6, 5, 7, 30, tzinfo=timezone.utc),
+            ended_at=datetime(2026, 6, 5, 10, 30, tzinfo=timezone.utc),
+            start_odometer_km=Decimal("1000.000"),
+            end_odometer_km=Decimal("1018.500"),
+            route_distance_km=Decimal("18.500"),
+            status="closed",
+            operator_name="Operatore test",
+        )
+        other_session = VehicleUsageSession(
+            vehicle_id=vehicle.id,
+            started_by_user_id=other_viewer.id,
+            actual_driver_user_id=other_viewer.id,
+            started_at=datetime(2026, 6, 5, 12, 0, tzinfo=timezone.utc),
+            ended_at=datetime(2026, 6, 5, 13, 0, tzinfo=timezone.utc),
+            start_odometer_km=Decimal("1018.500"),
+            end_odometer_km=Decimal("1024.000"),
+            route_distance_km=Decimal("5.500"),
+            status="closed",
+        )
+        db.add_all([own_session, other_session])
+        db.flush()
+
+        own_assignment = VehicleAssignment(
+            vehicle_id=vehicle.id,
+            assignment_target_type="user",
+            operator_user_id=viewer.id,
+            assigned_by_user_id=viewer.id,
+            start_at=datetime(2026, 6, 1, 8, 0, tzinfo=timezone.utc),
+            notes="Assegnazione stagionale",
+        )
+        db.add(own_assignment)
+
+        own_device = NetworkDevice(
+            assigned_user_id=viewer.id,
+            ip_address="192.168.1.210",
+            hostname="tablet-campo",
+            display_name="Tablet squadra",
+            lifecycle_state="active",
+            status="online",
+            last_seen_at=datetime(2026, 6, 5, 18, 0, tzinfo=timezone.utc),
+        )
+        other_device = NetworkDevice(
+            assigned_user_id=other_viewer.id,
+            ip_address="192.168.1.211",
+            lifecycle_state="active",
+            status="online",
+            last_seen_at=datetime(2026, 6, 5, 18, 5, tzinfo=timezone.utc),
+        )
+        db.add_all([own_device, other_device])
+        db.commit()
+    finally:
+        db.close()
+
+    summary = client.get(
+        "/me/summary?period_start=2026-06-01&period_end=2026-06-30",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert summary.status_code == 200
+    summary_body = summary.json()
+    assert summary_body["activities_count"] == 1
+    assert summary_body["activity_minutes"] == 120
+    assert summary_body["reports_count"] == 1
+    assert summary_body["assigned_cases_count"] == 1
+    assert summary_body["vehicle_sessions_count"] == 1
+    assert summary_body["vehicle_km"] == 18.5
+    assert summary_body["assigned_devices_count"] == 1
+    assert summary_body["active_vehicle_assignments_count"] == 1
+
+    operazioni_summary = client.get(
+        "/me/operazioni/summary?period_start=2026-06-01&period_end=2026-06-30",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert operazioni_summary.status_code == 200
+    assert operazioni_summary.json()["activity_categories"][0]["category"] == "Territorio"
+
+    activities = client.get(
+        "/me/operazioni/activities?period_start=2026-06-01&period_end=2026-06-30",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert activities.status_code == 200
+    activities_body = activities.json()
+    assert activities_body["total"] == 1
+    assert activities_body["items"][0]["activity_name"] == "Sopralluogo"
+
+    reports = client.get(
+        "/me/operazioni/reports?period_start=2026-06-01&period_end=2026-06-30",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert reports.status_code == 200
+    assert reports.json()["items"][0]["report_number"] == "RPT-001"
+
+    cases = client.get(
+        "/me/operazioni/cases?period_start=2026-06-01&period_end=2026-06-30",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert cases.status_code == 200
+    assert cases.json()["items"][0]["case_number"] == "CAS-001"
+
+    vehicle_sessions = client.get(
+        "/me/operazioni/vehicle-sessions?period_start=2026-06-01&period_end=2026-06-30",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert vehicle_sessions.status_code == 200
+    assert vehicle_sessions.json()["items"][0]["km"] == 18.5
+
+    devices = client.get("/me/assets/devices", headers={"Authorization": f"Bearer {token}"})
+    assert devices.status_code == 200
+    devices_body = devices.json()
+    assert devices_body["total"] == 1
+    assert devices_body["items"][0]["ip_address"] == "192.168.1.210"
+
+    assignments = client.get("/me/assets/vehicle-assignments", headers={"Authorization": f"Bearer {token}"})
+    assert assignments.status_code == 200
+    assert assignments.json()["items"][0]["vehicle_name"] == "Porter operativo"
+
+
+def test_me_operazioni_and_assets_require_module_flags() -> None:
+    viewer = _create_user("me_disabled_caps", role=ApplicationUserRole.VIEWER.value, module_inaz=False)
+    token = _login(viewer.username)
+
+    operazioni = client.get("/me/operazioni/summary", headers={"Authorization": f"Bearer {token}"})
+    assert operazioni.status_code == 403
+
+    rete = client.get("/me/assets/devices", headers={"Authorization": f"Bearer {token}"})
+    assert rete.status_code == 403
+
+
 def test_inaz_summary_normalizes_event_minutes() -> None:
     admin = _create_user("summary_admin")
     token = _login(admin.username)
@@ -560,19 +887,22 @@ def test_inaz_export_generates_xlsm(tmp_path: Path) -> None:
     output_path = tmp_path / "out.xlsm"
     output_path.write_bytes(response.content)
     workbook = load_workbook(output_path, keep_vba=True)
-    assert "Archivio2" in workbook.sheetnames
-    assert "Giornaliera" in workbook.sheetnames
-    archive2 = workbook["Archivio2"]
-    assert archive2.cell(6, 1).value == "5/2026-MDASVT67B26B314W"
-    assert archive2.cell(6, 5).value == "MANOVALE DI MAGAZZINO"
-    assert archive2.cell(6, 6).value == "D107"
-    assert archive2.cell(6, 7).value == "01/01/2000"
-    # giorno 16 => colonna 8 + 15, blocco ordinary_ferial
-    assert archive2.cell(6, 23).value == 5.5
-    # giorno 16 => colonna 8 + 15, blocco KM AUTO +279
-    assert archive2.cell(6, 302).value == 24
-    # giorno 16 => colonna 8 + 15, blocco codice assenza +436
-    assert archive2.cell(6, 459).value == "Permesso ordinario"
+    try:
+        assert "Archivio2" in workbook.sheetnames
+        assert "Giornaliera" in workbook.sheetnames
+        archive2 = workbook["Archivio2"]
+        assert archive2.cell(6, 1).value == "5/2026-MDASVT67B26B314W"
+        assert archive2.cell(6, 5).value == "MANOVALE DI MAGAZZINO"
+        assert archive2.cell(6, 6).value == "D107"
+        assert archive2.cell(6, 7).value == "01/01/2000"
+        # giorno 16 => colonna 8 + 15, blocco ordinary_ferial
+        assert archive2.cell(6, 23).value == 5.5
+        # giorno 16 => colonna 8 + 15, blocco KM AUTO +279
+        assert archive2.cell(6, 302).value == 24
+        # giorno 16 => colonna 8 + 15, blocco codice assenza +436
+        assert archive2.cell(6, 459).value == "Permesso ordinario"
+    finally:
+        close_workbook_resources(workbook)
 
 
 def test_inaz_export_uses_operai_sheet_when_archive_history_is_missing(tmp_path: Path) -> None:
@@ -603,14 +933,17 @@ def test_inaz_export_uses_operai_sheet_when_archive_history_is_missing(tmp_path:
     output_path = tmp_path / "out_operai.xlsm"
     output_path.write_bytes(response.content)
     workbook = load_workbook(output_path, keep_vba=True)
-    archive2 = workbook["Archivio2"]
-    assert archive2.cell(5, 1).value == "5/2026-CDNMRC80A01H501Z"
-    assert archive2.cell(5, 2).value == 120
-    assert archive2.cell(5, 3).value == "AVVENTIZI_maggio-2026"
-    assert archive2.cell(5, 4).value == "CADONI MARCO"
-    assert archive2.cell(5, 5).value == "ESCAVATORISTA"
-    assert archive2.cell(5, 6).value == "D116"
-    assert archive2.cell(5, 7).value == "Dal 01-03-22 al 31-12-22        Proroga al 31-01-23                            Riass.dal 15-02-23 al 30-11-23"
+    try:
+        archive2 = workbook["Archivio2"]
+        assert archive2.cell(5, 1).value == "5/2026-CDNMRC80A01H501Z"
+        assert archive2.cell(5, 2).value == 120
+        assert archive2.cell(5, 3).value == "AVVENTIZI_maggio-2026"
+        assert archive2.cell(5, 4).value == "CADONI MARCO"
+        assert archive2.cell(5, 5).value == "ESCAVATORISTA"
+        assert archive2.cell(5, 6).value == "D116"
+        assert archive2.cell(5, 7).value == "Dal 01-03-22 al 31-12-22        Proroga al 31-01-23                            Riass.dal 15-02-23 al 30-11-23"
+    finally:
+        close_workbook_resources(workbook)
 
 
 def test_inaz_export_leaves_metadata_empty_when_missing_in_archive_and_operai(tmp_path: Path) -> None:
@@ -618,11 +951,14 @@ def test_inaz_export_leaves_metadata_empty_when_missing_in_archive_and_operai(tm
     token = _login(admin.username)
     template_path = tmp_path / "template_missing_meta.xlsm"
     wb = Workbook()
-    archive2 = wb.active
-    archive2.title = "Archivio2"
-    wb.create_sheet("Operai")
-    wb.create_sheet("Giornaliera")
-    wb.save(template_path)
+    try:
+        archive2 = wb.active
+        archive2.title = "Archivio2"
+        wb.create_sheet("Operai")
+        wb.create_sheet("Giornaliera")
+        wb.save(template_path)
+    finally:
+        wb.close()
 
     payload = (
         _sample_payload(employee_code="120")
@@ -646,14 +982,17 @@ def test_inaz_export_leaves_metadata_empty_when_missing_in_archive_and_operai(tm
     output_path = tmp_path / "out_missing_meta.xlsm"
     output_path.write_bytes(response.content)
     workbook = load_workbook(output_path, keep_vba=True)
-    archive2 = workbook["Archivio2"]
-    assert archive2.cell(5, 1).value == "5/2026-120"
-    assert archive2.cell(5, 2).value == 120
-    assert archive2.cell(5, 3).value == "AVVENTIZI_maggio-2026"
-    assert archive2.cell(5, 4).value == "CADONI MARCO"
-    assert archive2.cell(5, 5).value is None
-    assert archive2.cell(5, 6).value is None
-    assert archive2.cell(5, 7).value is None
+    try:
+        archive2 = workbook["Archivio2"]
+        assert archive2.cell(5, 1).value == "5/2026-120"
+        assert archive2.cell(5, 2).value == 120
+        assert archive2.cell(5, 3).value == "AVVENTIZI_maggio-2026"
+        assert archive2.cell(5, 4).value == "CADONI MARCO"
+        assert archive2.cell(5, 5).value is None
+        assert archive2.cell(5, 6).value is None
+        assert archive2.cell(5, 7).value is None
+    finally:
+        close_workbook_resources(workbook)
 
 
 def test_inaz_sync_job_can_be_created(monkeypatch: pytest.MonkeyPatch) -> None:
