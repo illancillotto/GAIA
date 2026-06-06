@@ -6,6 +6,7 @@ import { ProtectedPage } from "@/components/app/protected-page";
 import { Badge } from "@/components/ui/badge";
 import { MetricCard } from "@/components/ui/metric-card";
 import {
+  getMeInazDailyRecord,
   getMeInazStatus,
   getMeInazSummary,
   getMeOperazioniSummary,
@@ -38,6 +39,7 @@ import type {
 
 type MeTabKey = "overview" | "presenze" | "operativita" | "dotazioni";
 type PeriodPreset = "current" | "previous";
+type OperativitaSectionFilter = "all" | "activities" | "reports" | "cases" | "vehicles";
 
 function monthBounds(offsetMonths = 0): { start: string; end: string } {
   const now = new Date();
@@ -176,6 +178,12 @@ export default function MePage() {
   const [vehicleSessions, setVehicleSessions] = useState<MeVehicleUsageSession[]>([]);
   const [assignedDevices, setAssignedDevices] = useState<MeAssignedDevice[]>([]);
   const [vehicleAssignments, setVehicleAssignments] = useState<MeVehicleAssignment[]>([]);
+  const [operativitaSectionFilter, setOperativitaSectionFilter] = useState<OperativitaSectionFilter>("all");
+  const [operativitaStatusFilter, setOperativitaStatusFilter] = useState("all");
+  const [operativitaQuery, setOperativitaQuery] = useState("");
+  const [selectedDailyRecord, setSelectedDailyRecord] = useState<InazDailyRecord | null>(null);
+  const [isDailyRecordLoading, setIsDailyRecordLoading] = useState(false);
+  const [dailyRecordError, setDailyRecordError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -286,12 +294,73 @@ export default function MePage() {
   const recentActivities = useMemo(() => activities.slice(0, 8), [activities]);
   const recentReports = useMemo(() => reports.slice(0, 6), [reports]);
   const activeAssignments = useMemo(() => vehicleAssignments.filter((item) => item.is_active), [vehicleAssignments]);
+  const operativitaStatuses = useMemo(() => {
+    const values = new Set<string>();
+    activities.forEach((item) => values.add(item.status));
+    reports.forEach((item) => values.add(item.status));
+    cases.forEach((item) => values.add(item.status));
+    vehicleSessions.forEach((item) => values.add(item.status));
+    return Array.from(values).sort((left, right) => left.localeCompare(right));
+  }, [activities, reports, cases, vehicleSessions]);
+  const filteredActivities = useMemo(() => {
+    const query = operativitaQuery.trim().toLowerCase();
+    return activities.filter((item) => {
+      if (operativitaStatusFilter !== "all" && item.status !== operativitaStatusFilter) return false;
+      if (!query) return true;
+      return [
+        item.activity_name,
+        item.activity_category,
+        item.vehicle_name,
+        item.text_note,
+      ].some((value) => value?.toLowerCase().includes(query));
+    });
+  }, [activities, operativitaQuery, operativitaStatusFilter]);
+  const filteredReports = useMemo(() => {
+    const query = operativitaQuery.trim().toLowerCase();
+    return reports.filter((item) => {
+      if (operativitaStatusFilter !== "all" && item.status !== operativitaStatusFilter) return false;
+      if (!query) return true;
+      return [item.report_number, item.title, item.category_name, item.vehicle_name].some((value) => value?.toLowerCase().includes(query));
+    });
+  }, [reports, operativitaQuery, operativitaStatusFilter]);
+  const filteredCases = useMemo(() => {
+    const query = operativitaQuery.trim().toLowerCase();
+    return cases.filter((item) => {
+      if (operativitaStatusFilter !== "all" && item.status !== operativitaStatusFilter) return false;
+      if (!query) return true;
+      return [item.case_number, item.title, item.source_report_number, item.category_name].some((value) => value?.toLowerCase().includes(query));
+    });
+  }, [cases, operativitaQuery, operativitaStatusFilter]);
+  const filteredVehicleSessions = useMemo(() => {
+    const query = operativitaQuery.trim().toLowerCase();
+    return vehicleSessions.filter((item) => {
+      if (operativitaStatusFilter !== "all" && item.status !== operativitaStatusFilter) return false;
+      if (!query) return true;
+      return [item.vehicle_name, item.vehicle_plate_number, item.operator_name, item.notes].some((value) => value?.toLowerCase().includes(query));
+    });
+  }, [vehicleSessions, operativitaQuery, operativitaStatusFilter]);
 
   const setHashTab = (tab: MeTabKey) => {
     const hash = tab === "overview" ? "" : `#${tab}`;
     window.location.hash = hash;
     setActiveTab(tab);
   };
+
+  async function openDailyRecordDetail(recordId: string): Promise<void> {
+    const token = getStoredAccessToken();
+    if (!token) return;
+    setSelectedDailyRecord(null);
+    setDailyRecordError(null);
+    setIsDailyRecordLoading(true);
+    try {
+      const detail = await getMeInazDailyRecord(token, recordId);
+      setSelectedDailyRecord(detail);
+    } catch (loadError) {
+      setDailyRecordError(loadError instanceof Error ? loadError.message : "Errore caricamento dettaglio giornata");
+    } finally {
+      setIsDailyRecordLoading(false);
+    }
+  }
 
   return (
     <ProtectedPage
@@ -403,6 +472,9 @@ export default function MePage() {
                           <span className="rounded-full bg-white px-2.5 py-1">Extra {formatHours(record.effective_extra_minutes ?? 0)}</span>
                           <span className="rounded-full bg-white px-2.5 py-1">KM {record.km_value ?? 0}</span>
                         </div>
+                        <button className="mt-3 text-xs font-medium text-[#1D4E35] transition hover:text-[#173527]" type="button" onClick={() => void openDailyRecordDetail(record.id)}>
+                          Apri dettaglio giornata
+                        </button>
                         {requestBadgeLabel(record) ? <p className="mt-3 text-xs text-gray-500">{requestBadgeLabel(record)}</p> : null}
                       </div>
                     ))
@@ -484,6 +556,10 @@ export default function MePage() {
                 </div>
                 <Badge variant="info">{inazRecords.length} righe</Badge>
               </div>
+              <div className="mb-4 rounded-2xl border border-gray-100 bg-gray-50/80 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-400">Dettaglio self-service</p>
+                <p className="mt-1 text-sm text-gray-600">Ogni giornata apre il dettaglio completo con timbrature, richieste, anomalie e riepiloghi di cartellino.</p>
+              </div>
               {inazRecords.length === 0 ? (
                 <p className="text-sm text-gray-500">Nessuna giornaliera disponibile.</p>
               ) : (
@@ -512,6 +588,9 @@ export default function MePage() {
                           ))}
                         </div>
                       ) : null}
+                      <button className="mt-3 text-xs font-medium text-[#1D4E35] transition hover:text-[#173527]" type="button" onClick={() => void openDailyRecordDetail(record.id)}>
+                        Visualizza scheda completa
+                      </button>
                       {requestBadgeLabel(record) ? <p className="mt-3 text-xs text-gray-500">{requestBadgeLabel(record)}</p> : null}
                     </div>
                   ))}
@@ -540,6 +619,44 @@ export default function MePage() {
                 <button className="btn-secondary" type="button" onClick={() => exportOperativitaCsv(activities, reports, cases, vehicleSessions)}>
                   Export CSV
                 </button>
+              </div>
+              <div className="grid gap-3 lg:grid-cols-[0.9fr_0.55fr_0.55fr]">
+                <label className="space-y-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-400">Ricerca operativa</span>
+                  <input
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#8CB39D]"
+                    placeholder="attività, report, mezzo, pratica"
+                    value={operativitaQuery}
+                    onChange={(event) => setOperativitaQuery(event.target.value)}
+                  />
+                </label>
+                <label className="space-y-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-400">Sezione</span>
+                  <select
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#8CB39D]"
+                    value={operativitaSectionFilter}
+                    onChange={(event) => setOperativitaSectionFilter(event.target.value as OperativitaSectionFilter)}
+                  >
+                    <option value="all">Tutte</option>
+                    <option value="activities">Attività</option>
+                    <option value="reports">Segnalazioni</option>
+                    <option value="cases">Pratiche</option>
+                    <option value="vehicles">Mezzi</option>
+                  </select>
+                </label>
+                <label className="space-y-2">
+                  <span className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-400">Stato</span>
+                  <select
+                    className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#8CB39D]"
+                    value={operativitaStatusFilter}
+                    onChange={(event) => setOperativitaStatusFilter(event.target.value)}
+                  >
+                    <option value="all">Tutti</option>
+                    {operativitaStatuses.map((statusValue) => (
+                      <option key={statusValue} value={statusValue}>{statusValue}</option>
+                    ))}
+                  </select>
+                </label>
               </div>
               <div className="grid gap-4 lg:grid-cols-2">
                 <div className="rounded-2xl border border-gray-100 bg-gray-50/80 p-4">
@@ -572,10 +689,14 @@ export default function MePage() {
                   <h3 className="mt-1 text-lg font-semibold text-gray-900">Lavorazioni e tempi</h3>
                 </div>
                 <div className="space-y-3">
-                  {recentActivities.length === 0 ? (
+                  {filteredActivities.length === 0 || operativitaSectionFilter === "reports" || operativitaSectionFilter === "cases" || operativitaSectionFilter === "vehicles" ? (
+                    operativitaSectionFilter === "all" || operativitaSectionFilter === "activities" ? (
                     <p className="text-sm text-gray-500">Nessuna attività personale nel periodo selezionato.</p>
+                    ) : (
+                      <p className="text-sm text-gray-500">Filtro sezione attivo su un’altra area.</p>
+                    )
                   ) : (
-                    recentActivities.map((item) => (
+                    filteredActivities.slice(0, 12).map((item) => (
                       <div key={item.id} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
                         <div className="flex flex-wrap items-start justify-between gap-3">
                           <div>
@@ -601,7 +722,7 @@ export default function MePage() {
                   <h3 className="mt-1 text-lg font-semibold text-gray-900">Produzione e presa in carico</h3>
                 </div>
                 <div className="space-y-3">
-                  {recentReports.map((item) => (
+                  {(operativitaSectionFilter === "all" || operativitaSectionFilter === "reports") ? filteredReports.slice(0, 8).map((item) => (
                     <div key={item.id} className="rounded-2xl border border-gray-100 bg-gray-50/80 p-4">
                       <div className="flex items-start justify-between gap-3">
                         <div>
@@ -611,8 +732,8 @@ export default function MePage() {
                         <Badge>{item.status}</Badge>
                       </div>
                     </div>
-                  ))}
-                  {cases.slice(0, 4).map((item) => (
+                  )) : null}
+                  {(operativitaSectionFilter === "all" || operativitaSectionFilter === "cases") ? filteredCases.slice(0, 8).map((item) => (
                     <div key={item.id} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
                       <div className="flex items-start justify-between gap-3">
                         <div>
@@ -622,8 +743,10 @@ export default function MePage() {
                         <Badge variant={item.status === "closed" ? "success" : "warning"}>{item.status}</Badge>
                       </div>
                     </div>
-                  ))}
-                  {recentReports.length === 0 && cases.length === 0 ? <p className="text-sm text-gray-500">Nessuna segnalazione o pratica personale nel periodo selezionato.</p> : null}
+                  )) : null}
+                  {(operativitaSectionFilter === "all" || operativitaSectionFilter === "reports" || operativitaSectionFilter === "cases") && filteredReports.length === 0 && filteredCases.length === 0 ? (
+                    <p className="text-sm text-gray-500">Nessuna segnalazione o pratica personale coerente con i filtri selezionati.</p>
+                  ) : null}
                 </div>
               </article>
             </div>
@@ -634,10 +757,11 @@ export default function MePage() {
                 <h3 className="mt-1 text-lg font-semibold text-gray-900">Sessioni con km percorsi</h3>
               </div>
               <div className="grid gap-3">
-                {vehicleSessions.length === 0 ? (
+                {operativitaSectionFilter === "all" || operativitaSectionFilter === "vehicles" ? (
+                  filteredVehicleSessions.length === 0 ? (
                   <p className="text-sm text-gray-500">Nessuna sessione mezzo personale nel periodo selezionato.</p>
-                ) : (
-                  vehicleSessions.map((item) => (
+                  ) : (
+                  filteredVehicleSessions.map((item) => (
                     <div key={item.id} className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div>
@@ -651,6 +775,9 @@ export default function MePage() {
                       </div>
                     </div>
                   ))
+                  )
+                ) : (
+                  <p className="text-sm text-gray-500">Filtro sezione attivo su un’altra area.</p>
                 )}
               </div>
             </article>
@@ -728,6 +855,85 @@ export default function MePage() {
                 </div>
               </article>
             </div>
+          </div>
+        ) : null}
+
+        {(isDailyRecordLoading || selectedDailyRecord || dailyRecordError) ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0f172aaa] p-4">
+            <button aria-label="Chiudi dettaglio giornata" className="absolute inset-0" type="button" onClick={() => { setSelectedDailyRecord(null); setDailyRecordError(null); setIsDailyRecordLoading(false); }} />
+            <article className="relative z-10 max-h-[85vh] w-full max-w-4xl overflow-y-auto rounded-[28px] border border-gray-200 bg-white p-6 shadow-2xl">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-gray-400">Dettaglio giornata</p>
+                  <h3 className="mt-1 text-xl font-semibold text-gray-900">
+                    {selectedDailyRecord ? formatDateLabel(selectedDailyRecord.work_date) : "Caricamento scheda"}
+                  </h3>
+                </div>
+                <button className="btn-secondary" type="button" onClick={() => { setSelectedDailyRecord(null); setDailyRecordError(null); setIsDailyRecordLoading(false); }}>
+                  Chiudi
+                </button>
+              </div>
+              {isDailyRecordLoading ? <p className="mt-6 text-sm text-gray-500">Caricamento dettaglio in corso.</p> : null}
+              {dailyRecordError ? <p className="mt-6 text-sm text-red-600">{dailyRecordError}</p> : null}
+              {selectedDailyRecord ? (
+                <div className="mt-6 space-y-6">
+                  <div className="grid gap-3 md:grid-cols-4">
+                    <MetricCard label="Ordinarie" value={formatHours(selectedDailyRecord.ordinary_minutes ?? 0)} sub={selectedDailyRecord.detail_programmed_schedule || "Programma"} />
+                    <MetricCard label="Extra" value={formatHours(selectedDailyRecord.effective_extra_minutes ?? 0)} sub="Straordinario + MPE" variant="success" />
+                    <MetricCard label="Assenza" value={formatHours(selectedDailyRecord.absence_minutes ?? 0)} sub={requestBadgeLabel(selectedDailyRecord) || "Nessuna"} variant="warning" />
+                    <MetricCard label="KM" value={selectedDailyRecord.km_value ?? 0} sub="Registrati" />
+                  </div>
+                  <div className="grid gap-6 lg:grid-cols-2">
+                    <section className="rounded-2xl border border-gray-100 bg-gray-50/80 p-4">
+                      <h4 className="text-sm font-semibold text-gray-900">Timbrature</h4>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        {selectedDailyRecord.punches.length > 0 ? selectedDailyRecord.punches.map((punch) => (
+                          <span key={punch.id} className="rounded-full bg-white px-3 py-1 text-xs text-gray-600">
+                            {punch.entry_time || "--:--"} → {punch.exit_time || "--:--"}
+                          </span>
+                        )) : <span className="text-xs text-gray-500">Nessuna timbratura disponibile.</span>}
+                      </div>
+                    </section>
+                    <section className="rounded-2xl border border-gray-100 bg-gray-50/80 p-4">
+                      <h4 className="text-sm font-semibold text-gray-900">Stato e orario</h4>
+                      <div className="mt-3 space-y-2 text-sm text-gray-600">
+                        <p>Stato: <span className="font-semibold text-gray-900">{selectedDailyRecord.detail_status || selectedDailyRecord.stato || "Regolare"}</span></p>
+                        <p>Programma: <span className="font-semibold text-gray-900">{selectedDailyRecord.detail_programmed_schedule || selectedDailyRecord.schedule_code || "n/d"}</span></p>
+                        <p>Fasce: <span className="font-semibold text-gray-900">{selectedDailyRecord.detail_time_slots || "n/d"}</span></p>
+                        <p>Ore teoriche: <span className="font-semibold text-gray-900">{selectedDailyRecord.detail_theoretical_hours || "n/d"}</span></p>
+                      </div>
+                    </section>
+                  </div>
+                  <div className="grid gap-6 lg:grid-cols-2">
+                    <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                      <h4 className="text-sm font-semibold text-gray-900">Riepilogo cartellino</h4>
+                      <div className="mt-3 space-y-2">
+                        {Object.entries(selectedDailyRecord.detail_day_totals).length > 0 ? Object.entries(selectedDailyRecord.detail_day_totals).map(([key, value]) => (
+                          <div key={key} className="flex items-center justify-between gap-3 rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-600">
+                            <span>{key}</span>
+                            <span className="font-semibold text-gray-900">{value}</span>
+                          </div>
+                        )) : <p className="text-xs text-gray-500">Nessun totale disponibile.</p>}
+                      </div>
+                    </section>
+                    <section className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm">
+                      <h4 className="text-sm font-semibold text-gray-900">Richieste e anomalie</h4>
+                      <div className="mt-3 space-y-3">
+                        {selectedDailyRecord.detail_requests.map((item, index) => (
+                          <div key={`request-${index}`} className="rounded-xl bg-gray-50 px-3 py-2 text-xs text-gray-600">{Object.values(item).join(" · ")}</div>
+                        ))}
+                        {selectedDailyRecord.detail_anomalies.map((item, index) => (
+                          <div key={`anomaly-${index}`} className="rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800">{Object.values(item).join(" · ")}</div>
+                        ))}
+                        {selectedDailyRecord.detail_requests.length === 0 && selectedDailyRecord.detail_anomalies.length === 0 ? (
+                          <p className="text-xs text-gray-500">Nessuna richiesta o anomalia registrata.</p>
+                        ) : null}
+                      </div>
+                    </section>
+                  </div>
+                </div>
+              ) : null}
+            </article>
           </div>
         ) : null}
       </div>
