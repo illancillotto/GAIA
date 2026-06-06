@@ -4,11 +4,15 @@ on:
   push:
     paths:
       - "backend/**"
+      - "modules/elaborazioni/worker/**"
+      - "scripts/check_shared_deps.py"
       - "scripts/check_changed_backend_coverage.py"
       - ".github/workflows/backend.yml"
   pull_request:
     paths:
       - "backend/**"
+      - "modules/elaborazioni/worker/**"
+      - "scripts/check_shared_deps.py"
       - "scripts/check_changed_backend_coverage.py"
       - ".github/workflows/backend.yml"
 
@@ -27,6 +31,12 @@ jobs:
 
       - name: Install dependencies
         run: pip install -r backend/requirements.txt
+
+      - name: Shared dependency guardrail
+        run: |
+          python scripts/check_shared_deps.py \
+            backend/requirements.txt \
+            modules/elaborazioni/worker/requirements.txt
 
       - name: Syntax check
         working-directory: backend
