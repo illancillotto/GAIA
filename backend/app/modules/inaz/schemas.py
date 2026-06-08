@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import uuid
 from datetime import date, datetime, time
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class InazModuleStatusResponse(BaseModel):
@@ -197,6 +197,31 @@ class InazCollaboratorResponse(BaseModel):
     updated_at: datetime
 
 
+class InazAccessContextResponse(BaseModel):
+    can_view_all_data: bool
+    can_view_all_credentials: bool
+    can_manage_supervisors: bool
+    is_supervisor: bool
+    assigned_collaborators_count: int
+
+
+class InazSupervisorAssignmentUpdate(BaseModel):
+    supervisor_user_id: int | None = None
+
+
+class InazSupervisorAssignmentResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    supervisor_user_id: int
+    collaborator_id: uuid.UUID
+    assigned_by_user_id: int | None = None
+    created_at: datetime
+    updated_at: datetime
+    supervisor: dict[str, Any] | None = None
+    collaborator: InazCollaboratorResponse | None = None
+
+
 class InazCollaboratorListResponse(BaseModel):
     items: list[InazCollaboratorResponse]
     total: int
@@ -221,6 +246,8 @@ class InazDailyRecordResponse(BaseModel):
     mpe_minutes: int | None = None
     straordinario_minutes: int | None = None
     km_value: int | None = None
+    reperibilita_unit: Literal["none", "hours", "days", "shifts"]
+    reperibilita_quantity: int | None = None
     override_straordinario_minutes: int | None = None
     override_mpe_minutes: int | None = None
     manual_note: str | None = None
@@ -229,6 +256,10 @@ class InazDailyRecordResponse(BaseModel):
     request_status: str | None = None
     request_authorized_by: str | None = None
     resolved_absence_cause: str | None = None
+    validation_status: str
+    validated_by_user_id: int | None = None
+    validated_at: datetime | None = None
+    validation_note: str | None = None
     effective_straordinario_minutes: int | None = None
     effective_mpe_minutes: int | None = None
     effective_extra_minutes: int | None = None
@@ -266,9 +297,28 @@ class InazDailyRecordListResponse(BaseModel):
 
 class InazDailyRecordManualUpdate(BaseModel):
     km_value: int | None = Field(default=None, ge=0, le=5000)
+    reperibilita_unit: Literal["none", "hours", "days", "shifts"] | None = None
+    reperibilita_quantity: int | None = Field(default=None, ge=0, le=24)
     override_straordinario_minutes: int | None = Field(default=None, ge=0, le=1440)
     override_mpe_minutes: int | None = Field(default=None, ge=0, le=1440)
     manual_note: str | None = Field(default=None, max_length=1000)
+    validation_status: Literal["pending", "validated"] | None = None
+    validation_note: str | None = Field(default=None, max_length=1000)
+
+    @model_validator(mode="after")
+    def validate_reperibilita(self) -> "InazDailyRecordManualUpdate":
+        if self.reperibilita_unit is None and self.reperibilita_quantity is None:
+            return self
+        unit = self.reperibilita_unit or "none"
+        quantity = self.reperibilita_quantity
+        if unit == "none":
+            if quantity not in (None, 0):
+                raise ValueError("reperibilita_quantity must be empty when reperibilita_unit is 'none'")
+            self.reperibilita_quantity = None
+            return self
+        if quantity is None or quantity <= 0:
+            raise ValueError("reperibilita_quantity must be greater than zero when reperibilita is set")
+        return self
 
 
 class InazEventSummaryResponse(BaseModel):

@@ -306,6 +306,76 @@ export type ApplicationUserUpdateInput = {
   module_inaz?: boolean;
 };
 
+export type OrgStructureUserSummary = {
+  id: number;
+  username: string;
+  email: string;
+  full_name: string | null;
+  role: string;
+  is_active: boolean;
+};
+
+export type OrgStructureAssignment = {
+  id: string;
+  application_user_id: number;
+  manager_user_id: number | null;
+  source_mode: string;
+  title: string | null;
+  area_label: string | null;
+  notes: string | null;
+  is_active: boolean;
+  source_wc_role: string | null;
+  source_chart_summary: string | null;
+  last_synced_from_source_at: string | null;
+  created_at: string;
+  updated_at: string;
+  user: OrgStructureUserSummary;
+  manager: OrgStructureUserSummary | null;
+  direct_reports_count: number;
+  descendants_count: number;
+  depth: number;
+};
+
+export type OrgStructureSuggestion = {
+  application_user_id: number;
+  wc_operator_id: string | null;
+  username: string;
+  full_name: string | null;
+  email: string;
+  role: string;
+  wc_role: string | null;
+  chart_summary: string | null;
+  already_published: boolean;
+};
+
+export type OrgStructureMetrics = {
+  total_users: number;
+  published_nodes: number;
+  root_nodes: number;
+  unassigned_users: number;
+  linked_whitecompany_users: number;
+};
+
+export type OrgStructureWorkspace = {
+  items: OrgStructureAssignment[];
+  suggestions: OrgStructureSuggestion[];
+  metrics: OrgStructureMetrics;
+};
+
+export type OrgStructureAssignmentUpdateInput = {
+  manager_user_id?: number | null;
+  title?: string | null;
+  area_label?: string | null;
+  notes?: string | null;
+  is_active: boolean;
+};
+
+export type OrgStructureBootstrapResult = {
+  created: number;
+  updated: number;
+  skipped: number;
+};
+
 export type InazCollaborator = {
   id: string;
   owner_user_id: number | null;
@@ -382,6 +452,8 @@ export type InazDailyRecord = {
   mpe_minutes: number | null;
   straordinario_minutes: number | null;
   km_value: number | null;
+  reperibilita_unit: "none" | "hours" | "days" | "shifts";
+  reperibilita_quantity: number | null;
   override_straordinario_minutes: number | null;
   override_mpe_minutes: number | null;
   manual_note: string | null;
@@ -424,6 +496,8 @@ export type InazDailyRecord = {
 
 export type InazDailyRecordManualUpdateInput = {
   km_value?: number | null;
+  reperibilita_unit?: "none" | "hours" | "days" | "shifts" | null;
+  reperibilita_quantity?: number | null;
   override_straordinario_minutes?: number | null;
   override_mpe_minutes?: number | null;
   manual_note?: string | null;

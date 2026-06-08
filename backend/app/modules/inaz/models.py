@@ -30,6 +30,28 @@ class InazCredential(Base):
     )
 
 
+class InazSupervisorAssignment(Base):
+    __tablename__ = "inaz_supervisor_assignments"
+    __table_args__ = (
+        UniqueConstraint("collaborator_id", name="uq_inaz_supervisor_assignments_collaborator"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    supervisor_user_id: Mapped[int] = mapped_column(
+        ForeignKey("application_users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    collaborator_id: Mapped[uuid.UUID] = mapped_column(
+        ForeignKey("inaz_collaborators.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    assigned_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+
 class InazHoliday(Base):
     __tablename__ = "inaz_holidays"
     __table_args__ = (
@@ -222,6 +244,8 @@ class InazDailyRecord(Base):
     mpe_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     straordinario_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     km_value: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    reperibilita_unit: Mapped[str] = mapped_column(String(16), nullable=False, default="none")
+    reperibilita_quantity: Mapped[int | None] = mapped_column(Integer, nullable=True)
     override_straordinario_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     override_mpe_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     manual_note: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -230,6 +254,12 @@ class InazDailyRecord(Base):
     request_status: Mapped[str | None] = mapped_column(String(64), nullable=True)
     request_authorized_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
     resolved_absence_cause: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    validation_status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending", index=True)
+    validated_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    validated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    validation_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     stato: Mapped[str | None] = mapped_column(String(120), nullable=True)
     evidenze: Mapped[str | None] = mapped_column(Text, nullable=True)
     raw_weekday: Mapped[str | None] = mapped_column(String(16), nullable=True)

@@ -5,15 +5,18 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ProtectedPage } from "@/components/app/protected-page";
 import { Badge } from "@/components/ui/badge";
-import { getCurrentUser, listInazCollaborators, listInazDailyRecords, updateInazDailyRecord } from "@/lib/api";
+import { getCurrentUser, getInazAccessContext, listInazCollaborators, listInazDailyRecords, updateInazDailyRecord } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
-import type { CurrentUser, InazCollaborator, InazDailyRecord } from "@/types/api";
+import type { CurrentUser, InazAccessContext, InazCollaborator, InazDailyRecord } from "@/types/api";
 
 type DailyEditForm = {
   kmValue: string;
+  reperibilitaUnit: "none" | "hours" | "days" | "shifts";
+  reperibilitaQuantity: string;
   overrideStraordinario: string;
   overrideMpe: string;
   manualNote: string;
+  validationNote: string;
 };
 
 type DayColumn = {
@@ -108,6 +111,16 @@ function parseMinutesInput(value: string): number | null {
     return Math.max(0, Math.round(asNumber));
   }
   return null;
+}
+
+function formatReperibilitaDisplay(unit: InazDailyRecord["reperibilita_unit"], quantity: number | null): string {
+  if (unit === "none") return "Nessuna";
+  const labels: Record<Exclude<InazDailyRecord["reperibilita_unit"], "none">, string> = {
+    hours: "ore",
+    days: "giorni",
+    shifts: "turni",
+  };
+  return `${quantity ?? "—"} ${labels[unit]}`;
 }
 
 function effectiveExtraMinutes(record: InazDailyRecord): number {
@@ -220,8 +233,17 @@ function formatPunchTerminalLabel(value: string | null | undefined): string | nu
   return value;
 }
 
+function validationBadgeVariant(record: InazDailyRecord): "success" | "neutral" {
+  return record.validation_status === "validated" ? "success" : "neutral";
+}
+
+function validationLabel(record: InazDailyRecord): string {
+  return record.validation_status === "validated" ? "Validata" : "Da validare";
+}
+
 export default function InazGiornalierePage() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+  const [accessContext, setAccessContext] = useState<InazAccessContext | null>(null);
   const [records, setRecords] = useState<InazDailyRecord[]>([]);
   const [collaborators, setCollaborators] = useState<InazCollaborator[]>([]);
   const [selectedMonth, setSelectedMonth] = useState(currentMonthValue());
@@ -246,7 +268,11 @@ export default function InazGiornalierePage() {
     getCurrentUser(token)
       .then(async (sessionUser) => {
         setCurrentUser(sessionUser);
-        const collaboratorResponse = await listInazCollaborators(token, { page: 1, pageSize: 200 });
+        const [context, collaboratorResponse] = await Promise.all([
+          getInazAccessContext(token),
+          listInazCollaborators(token, { page: 1, pageSize: 200 }),
+        ]);
+        setAccessContext(context);
         setCollaborators(collaboratorResponse.items);
       })
       .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Errore caricamento giornaliere"));
@@ -433,13 +459,21 @@ export default function InazGiornalierePage() {
     }
     setEditor({
       kmValue: selectedRecord.km_value != null ? String(selectedRecord.km_value) : "",
+      reperibilitaUnit: selectedRecord.reperibilita_unit,
+      reperibilitaQuantity:
+        selectedRecord.reperibilita_quantity != null ? String(selectedRecord.reperibilita_quantity) : "",
       overrideStraordinario: formatMinutesInput(selectedRecord.override_straordinario_minutes),
       overrideMpe: formatMinutesInput(selectedRecord.override_mpe_minutes),
       manualNote: selectedRecord.manual_note ?? "",
+      validationNote: selectedRecord.validation_note ?? "",
     });
   }, [selectedRecord]);
 
   const canEdit = Boolean(currentUser);
+  const canEditOperationalData = Boolean(
+    currentUser && (accessContext?.can_view_all_data || (selectedRecord && selectedRecord.owner_user_id === currentUser.id)),
+  );
+  const canValidate = Boolean(accessContext?.is_supervisor || accessContext?.can_view_all_data);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const dragState = useRef({ active: false, startX: 0, scrollLeft: 0, moved: false });
@@ -505,14 +539,40 @@ export default function InazGiornalierePage() {
     try {
       const updated = await updateInazDailyRecord(token, selectedRecord.id, {
         km_value: editor.kmValue.trim() ? Number(editor.kmValue) : null,
+        reperibilita_unit: editor.reperibilitaUnit,
+        reperibilita_quantity:
+          editor.reperibilitaUnit === "none" || !editor.reperibilitaQuantity.trim()
+            ? null
+            : Number(editor.reperibilitaQuantity),
         override_straordinario_minutes: parseMinutesInput(editor.overrideStraordinario),
         override_mpe_minutes: parseMinutesInput(editor.overrideMpe),
         manual_note: editor.manualNote.trim() || null,
+        ...(canValidate ? { validation_note: editor.validationNote.trim() || null } : {}),
       });
       setRecords((current) => current.map((item) => (item.id === updated.id ? updated : item)));
       setSuccess(`Giornata ${updated.work_date} aggiornata.`);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Errore salvataggio giornaliera");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function handleValidation(status: "pending" | "validated") {
+    const token = getStoredAccessToken();
+    if (!token || !selectedRecord || !editor || !canValidate) return;
+    setIsSaving(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const updated = await updateInazDailyRecord(token, selectedRecord.id, {
+        validation_status: status,
+        validation_note: editor.validationNote.trim() || null,
+      });
+      setRecords((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setSuccess(status === "validated" ? `Giornata ${updated.work_date} validata.` : `Validazione rimossa per ${updated.work_date}.`);
+    } catch (saveError) {
+      setError(saveError instanceof Error ? saveError.message : "Errore validazione giornaliera");
     } finally {
       setIsSaving(false);
     }
@@ -556,14 +616,14 @@ export default function InazGiornalierePage() {
             </label>
 
             <div className="flex items-start gap-2 lg:col-span-4 lg:justify-end lg:pt-6">
-              <button
-                type="button"
-                onClick={() => setKmMode((value) => !value)}
-                className={kmMode ? "btn-primary" : "btn-secondary"}
-                disabled={!canEdit}
-              >
-                {kmMode ? "Esci da inserimento KM" : "Inserisci KM"}
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setKmMode((value) => !value)}
+                  className={kmMode ? "btn-primary" : "btn-secondary"}
+                  disabled={!canEditOperationalData}
+                >
+                  {kmMode ? "Esci da inserimento KM" : "Inserisci KM"}
+                </button>
               <Link className="btn-secondary" href="/inaz/anomalie">
                 Analisi anomalie
               </Link>
@@ -718,6 +778,7 @@ export default function InazGiornalierePage() {
                               <span className="mt-0.5 flex items-center gap-0.5 text-[9px] font-normal leading-none">
                                 {extra > 0 ? <span className="text-emerald-600">▲</span> : null}
                                 {record.km_value != null ? <span>🚗</span> : null}
+                                {record.reperibilita_unit !== "none" ? <span className="text-amber-700">R</span> : null}
                                 {record.detail_requests.length > 0 ? <span className="text-sky-600">✉</span> : null}
                               </span>
                             </button>
@@ -767,6 +828,7 @@ export default function InazGiornalierePage() {
                 <Badge variant={detailBadgeVariant(selectedRecord)}>
                   {selectedRecord.detail_status ?? selectedRecord.stato ?? "n/d"}
                 </Badge>
+                <Badge variant={validationBadgeVariant(selectedRecord)}>{validationLabel(selectedRecord)}</Badge>
                 {requestBadgeLabel(selectedRecord) ? <Badge variant="warning">{requestBadgeLabel(selectedRecord)}</Badge> : null}
                 {selectedRecord.effective_extra_minutes ? <Badge variant="success">extra {formatHours(selectedRecord.effective_extra_minutes)}</Badge> : null}
                 <button type="button" className="text-sm text-gray-400 hover:text-gray-700" onClick={() => setSelectedRecordId("")}>
@@ -787,7 +849,7 @@ export default function InazGiornalierePage() {
                 </div>
 
                 <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 lg:col-span-2">
-                  <p className="text-xs uppercase tracking-[0.16em] text-amber-500">Aggiungi KM carburante</p>
+                  <p className="text-xs uppercase tracking-[0.16em] text-amber-500">Aggiungi KM carburante e reperibilita</p>
                   <div className="mt-2 flex flex-wrap items-end gap-3">
                     <label className="block text-sm font-medium text-amber-900">
                       <span className="inline-block pb-1">Chilometri (auto)</span>
@@ -797,9 +859,56 @@ export default function InazGiornalierePage() {
                         value={editor.kmValue}
                         onChange={(event) => setEditor((current) => current ? { ...current, kmValue: event.target.value } : current)}
                         placeholder="Es. 24"
+                        disabled={!canEditOperationalData}
+                      />
+                    </label>
+                    <label className="block text-sm font-medium text-amber-900">
+                      <span className="inline-block pb-1">Tipo reperibilita</span>
+                      <select
+                        className="form-control mt-1 w-44"
+                        value={editor.reperibilitaUnit}
+                        onChange={(event) =>
+                          setEditor((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  reperibilitaUnit: event.target.value as DailyEditForm["reperibilitaUnit"],
+                                  reperibilitaQuantity: event.target.value === "none" ? "" : current.reperibilitaQuantity,
+                                }
+                              : current,
+                          )
+                        }
+                        disabled={!canEditOperationalData}
+                        aria-label="Tipo reperibilita"
+                      >
+                        <option value="none">Nessuna</option>
+                        <option value="hours">Ore</option>
+                        <option value="days">Giorni</option>
+                        <option value="shifts">Turni</option>
+                      </select>
+                    </label>
+                    <label className="block text-sm font-medium text-amber-900">
+                      <span className="inline-block pb-1">Quantita reperibilita</span>
+                      <input
+                        className="form-control mt-1 w-32"
+                        inputMode="numeric"
+                        value={editor.reperibilitaQuantity}
+                        onChange={(event) =>
+                          setEditor((current) => current ? { ...current, reperibilitaQuantity: event.target.value } : current)
+                        }
+                        placeholder="Es. 1"
+                        disabled={!canEditOperationalData || editor.reperibilitaUnit === "none"}
+                        aria-label="Quantita reperibilita"
                       />
                     </label>
                     <p className="text-xs text-amber-700">KM registrati a sistema: <span className="font-medium">{selectedRecord.km_value ?? "—"}</span></p>
+                    <p className="text-xs text-amber-700">
+                      Reperibilita attuale:{" "}
+                      <span className="font-medium">
+                        {formatReperibilitaDisplay(selectedRecord.reperibilita_unit, selectedRecord.reperibilita_quantity)}
+                      </span>
+                    </p>
+                    {!canEditOperationalData ? <p className="text-xs text-amber-800">I capisettore possono validare, ma non modificare KM e rettifiche operative.</p> : null}
                   </div>
                 </div>
               </div>
@@ -846,6 +955,53 @@ export default function InazGiornalierePage() {
                 </div>
               ) : null}
 
+              <div className="mt-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-xs uppercase tracking-[0.16em] text-emerald-600">Validazione giornaliera</p>
+                    <p className="mt-2 text-sm font-medium text-emerald-950">{validationLabel(selectedRecord)}</p>
+                    {selectedRecord.validated_at ? (
+                      <p className="mt-1 text-xs text-emerald-800">
+                        Ultima validazione: {new Intl.DateTimeFormat("it-IT", { dateStyle: "short", timeStyle: "short" }).format(new Date(selectedRecord.validated_at))}
+                      </p>
+                    ) : null}
+                  </div>
+                  {canValidate ? (
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        className="btn-primary"
+                        type="button"
+                        disabled={isSaving || selectedRecord.validation_status === "validated"}
+                        onClick={() => void handleValidation("validated")}
+                      >
+                        Valida giornaliera
+                      </button>
+                      <button
+                        className="btn-secondary"
+                        type="button"
+                        disabled={isSaving || selectedRecord.validation_status === "pending"}
+                        onClick={() => void handleValidation("pending")}
+                      >
+                        Riapri validazione
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+                {canValidate ? (
+                  <label className="mt-4 block text-sm font-medium text-emerald-950">
+                    Nota validazione
+                    <textarea
+                      className="form-control mt-1 min-h-[84px]"
+                      value={editor.validationNote}
+                      onChange={(event) => setEditor((current) => current ? { ...current, validationNote: event.target.value } : current)}
+                      placeholder="Annotazioni del caposettore o HR sulla validazione della giornata."
+                    />
+                  </label>
+                ) : selectedRecord.validation_note ? (
+                  <p className="mt-3 text-sm text-emerald-950">{selectedRecord.validation_note}</p>
+                ) : null}
+              </div>
+
               {selectedRecord.punches.length > 0 ? (
                 <div className="mt-4 rounded-2xl border border-gray-100 bg-white p-4">
                   <p className="section-title">Timbrature</p>
@@ -872,11 +1028,11 @@ export default function InazGiornalierePage() {
                 <div className="grid gap-4 md:grid-cols-2">
                   <label className="block text-sm font-medium text-gray-700">
                     Straordinario override
-                    <input className="form-control mt-1" value={editor.overrideStraordinario} onChange={(event) => setEditor((current) => current ? { ...current, overrideStraordinario: event.target.value } : current)} placeholder="HH:MM oppure minuti" />
+                    <input className="form-control mt-1" value={editor.overrideStraordinario} onChange={(event) => setEditor((current) => current ? { ...current, overrideStraordinario: event.target.value } : current)} placeholder="HH:MM oppure minuti" disabled={!canEditOperationalData} />
                   </label>
                   <label className="block text-sm font-medium text-gray-700">
                     Maggior presenza override
-                    <input className="form-control mt-1" value={editor.overrideMpe} onChange={(event) => setEditor((current) => current ? { ...current, overrideMpe: event.target.value } : current)} placeholder="HH:MM oppure minuti" />
+                    <input className="form-control mt-1" value={editor.overrideMpe} onChange={(event) => setEditor((current) => current ? { ...current, overrideMpe: event.target.value } : current)} placeholder="HH:MM oppure minuti" disabled={!canEditOperationalData} />
                   </label>
                   <div className="rounded-xl border border-gray-100 bg-gray-50 px-3 py-3 text-sm text-gray-700 md:col-span-2">
                     <p className="font-medium text-gray-900">Valori Inaz letti</p>
@@ -884,11 +1040,11 @@ export default function InazGiornalierePage() {
                   </div>
                   <label className="block text-sm font-medium text-gray-700 md:col-span-2">
                     Nota operativa
-                    <textarea className="form-control mt-1 min-h-[90px]" value={editor.manualNote} onChange={(event) => setEditor((current) => current ? { ...current, manualNote: event.target.value } : current)} placeholder="Note per giustificazioni, carburante, straordinari o verifiche da fare." />
+                    <textarea className="form-control mt-1 min-h-[90px]" value={editor.manualNote} onChange={(event) => setEditor((current) => current ? { ...current, manualNote: event.target.value } : current)} placeholder="Note per giustificazioni, carburante, straordinari o verifiche da fare." disabled={!canEditOperationalData} />
                   </label>
                 </div>
                 <div className="mt-4 flex flex-wrap gap-3">
-                  <button className="btn-primary" type="button" onClick={() => void handleSaveEditor()} disabled={!canEdit || isSaving}>
+                  <button className="btn-primary" type="button" onClick={() => void handleSaveEditor()} disabled={!canEditOperationalData || !canEdit || isSaving}>
                     {isSaving ? "Salvataggio..." : "Salva rettifiche"}
                   </button>
                   <Link

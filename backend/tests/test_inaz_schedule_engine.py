@@ -165,6 +165,30 @@ def test_xlsm_export_uses_template_classification_for_special_days() -> None:
     assert ws.cell(5, extra_festive_col).value == 6
 
 
+def test_xlsm_export_marks_reperibilita_days_with_x() -> None:
+    collaborator = InazCollaborator(id=uuid.uuid4(), employee_code="1854", company_code="53", name="Operaio")
+    record = InazDailyRecord(
+        id=uuid.uuid4(),
+        collaborator_id=collaborator.id,
+        work_date=date(2026, 5, 16),
+        reperibilita_unit="hours",
+        reperibilita_quantity=4,
+    )
+    export_row = ExportTimesheetRow(
+        collaborator=collaborator,
+        daily_rows=[record],
+        punches_by_record_id={},
+    )
+
+    workbook = Workbook()
+    ws = workbook.active
+    ws.title = "Archivio2"
+    write_archive2_daily_values(ws, 5, export_row)
+
+    reperibilita_col = 8 + (16 - 1) + 467
+    assert ws.cell(5, reperibilita_col).value == "X"
+
+
 def test_detail_classification_takes_precedence_over_template_when_present() -> None:
     collaborator = InazCollaborator(id=uuid.uuid4(), employee_code="1854", company_code="53", name="Operaio")
     template = InazScheduleTemplate(id=40, code="CATASTO_OP", label="Catasto operai", is_active=True)

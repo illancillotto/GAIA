@@ -15,6 +15,7 @@ from app.api.deps import require_active_user, require_module, require_role
 from app.core.config import settings
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
+from app.schemas.users import ApplicationUserResponse
 from app.modules.inaz.models import (
     InazCollaborator,
     InazCollaboratorScheduleAssignment,
@@ -25,9 +26,11 @@ from app.modules.inaz.models import (
     InazImportJob,
     InazScheduleRule,
     InazScheduleTemplate,
+    InazSupervisorAssignment,
     InazSyncJob,
 )
 from app.modules.inaz.schemas import (
+    InazAccessContextResponse,
     InazCollaboratorApplicationUserUpdate,
     InazCollaboratorScheduleAssignmentCreate,
     InazCollaboratorScheduleAssignmentResponse,
@@ -58,6 +61,8 @@ from app.modules.inaz.schemas import (
     InazScheduleTemplateCreate,
     InazScheduleTemplateResponse,
     InazScheduleTemplateUpdate,
+    InazSupervisorAssignmentResponse,
+    InazSupervisorAssignmentUpdate,
     InazSyncJobCreateRequest,
     InazSyncJobListResponse,
     InazSyncJobResponse,
@@ -95,6 +100,7 @@ from app.modules.inaz.services.sync_runtime import (
     stop_sync_worker,
 )
 from app.modules.inaz.services.xlsm_export import DEFAULT_TEMPLATE_PATH, ExportTimesheetRow, compile_workbook
+from app.modules.accessi.org_structure import OrgStructureAssignment
 
 router = APIRouter(prefix="/inaz", tags=["inaz"])
 RequireInazModule = Depends(require_module("inaz"))
@@ -112,6 +118,106 @@ def get_module_status(
         username=current_user.username,
         message="GAIA Inaz collaboratori module is enabled for the current user.",
     )
+
+
+@router.get("/access-context", response_model=InazAccessContextResponse)
+def get_inaz_access_context(
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    _: Annotated[ApplicationUser, RequireInazModule],
+) -> InazAccessContextResponse:
+    assigned_count = int(
+        db.scalar(
+            select(func.count(InazSupervisorAssignment.id)).where(InazSupervisorAssignment.supervisor_user_id == current_user.id)
+        )
+        or 0
+    )
+    hierarchy_scope_count = len(_hierarchy_scope_user_ids(db, current_user))
+    return InazAccessContextResponse(
+        can_view_all_data=_can_view_all_inaz_data(current_user),
+        can_view_all_credentials=current_user.is_super_admin,
+        can_manage_supervisors=_can_manage_supervisors(current_user),
+        is_supervisor=assigned_count > 0 or hierarchy_scope_count > 0,
+        assigned_collaborators_count=assigned_count + hierarchy_scope_count,
+    )
+
+
+@router.get("/application-users", response_model=list[ApplicationUserResponse])
+def list_inaz_application_users(
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[ApplicationUser, RequireInazAdmin],
+    _: Annotated[ApplicationUser, RequireInazModule],
+) -> list[ApplicationUserResponse]:
+    if not _can_manage_supervisors(current_user):
+        raise HTTPException(status_code=403, detail="Inaz user management requires admin privileges")
+    rows = db.execute(
+        select(ApplicationUser)
+        .where(ApplicationUser.is_active.is_(True), ApplicationUser.module_inaz.is_(True))
+        .order_by(ApplicationUser.full_name.asc(), ApplicationUser.username.asc())
+    ).scalars().all()
+    return [ApplicationUserResponse.model_validate(row) for row in rows]
+
+
+@router.get("/supervisor-assignments", response_model=list[InazSupervisorAssignmentResponse])
+def list_supervisor_assignments(
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[ApplicationUser, RequireInazAdmin],
+    _: Annotated[ApplicationUser, RequireInazModule],
+    supervisor_user_id: int | None = Query(default=None),
+) -> list[InazSupervisorAssignmentResponse]:
+    if not _can_manage_supervisors(current_user):
+        raise HTTPException(status_code=403, detail="Supervisor management requires admin privileges")
+    stmt = select(InazSupervisorAssignment)
+    if supervisor_user_id is not None:
+        stmt = stmt.where(InazSupervisorAssignment.supervisor_user_id == supervisor_user_id)
+    rows = db.execute(
+        stmt.order_by(InazSupervisorAssignment.supervisor_user_id.asc(), InazSupervisorAssignment.collaborator_id.asc())
+    ).scalars().all()
+    return [_serialize_supervisor_assignment(db, row) for row in rows]
+
+
+@router.put("/supervisor-assignments/{collaborator_id}", response_model=InazSupervisorAssignmentResponse | None)
+def update_supervisor_assignment(
+    collaborator_id: uuid.UUID,
+    payload: InazSupervisorAssignmentUpdate,
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[ApplicationUser, RequireInazAdmin],
+    _: Annotated[ApplicationUser, RequireInazModule],
+) -> InazSupervisorAssignmentResponse | None:
+    if not _can_manage_supervisors(current_user):
+        raise HTTPException(status_code=403, detail="Supervisor management requires admin privileges")
+    _get_collaborator_or_404(db, collaborator_id)
+    assignment = db.execute(
+        select(InazSupervisorAssignment).where(InazSupervisorAssignment.collaborator_id == collaborator_id)
+    ).scalar_one_or_none()
+
+    if payload.supervisor_user_id is None:
+        if assignment is not None:
+            db.delete(assignment)
+            db.commit()
+        return None
+
+    supervisor = db.get(ApplicationUser, payload.supervisor_user_id)
+    if supervisor is None or not supervisor.is_active:
+        raise HTTPException(status_code=404, detail="Supervisor user not found")
+    if not supervisor.module_inaz and not supervisor.is_super_admin:
+        raise HTTPException(status_code=409, detail="The selected user is not enabled for the Inaz module")
+    if supervisor.role == "operator":
+        raise HTTPException(status_code=409, detail="Operators cannot be assigned as Inaz supervisors")
+
+    if assignment is None:
+        assignment = InazSupervisorAssignment(
+            supervisor_user_id=payload.supervisor_user_id,
+            collaborator_id=collaborator_id,
+            assigned_by_user_id=current_user.id,
+        )
+    else:
+        assignment.supervisor_user_id = payload.supervisor_user_id
+        assignment.assigned_by_user_id = current_user.id
+    db.add(assignment)
+    db.commit()
+    db.refresh(assignment)
+    return _serialize_supervisor_assignment(db, assignment)
 
 
 @router.get("/holidays", response_model=list[InazHolidayResponse])
@@ -428,9 +534,19 @@ def list_collaborators(
 ) -> InazCollaboratorListResponse:
     stmt = select(InazCollaborator)
     count_stmt = select(func.count(InazCollaborator.id))
-    if not _is_admin_user(current_user):
-        stmt = stmt.where(InazCollaborator.owner_user_id == current_user.id)
-        count_stmt = count_stmt.where(InazCollaborator.owner_user_id == current_user.id)
+    if not _can_view_all_inaz_data(current_user):
+        hierarchy_scope = _hierarchy_scope_user_ids(db, current_user)
+        visible_collaborator_ids = select(InazSupervisorAssignment.collaborator_id).where(
+            InazSupervisorAssignment.supervisor_user_id == current_user.id
+        )
+        visibility_filter = or_(
+            InazCollaborator.owner_user_id == current_user.id,
+            InazCollaborator.id.in_(visible_collaborator_ids),
+            InazCollaborator.owner_user_id.in_(hierarchy_scope),
+            InazCollaborator.application_user_id.in_(hierarchy_scope),
+        )
+        stmt = stmt.where(visibility_filter)
+        count_stmt = count_stmt.where(visibility_filter)
     if q:
         term = f"%{q.strip()}%"
         condition = or_(
@@ -499,9 +615,19 @@ def list_giornaliere(
     stmt = select(InazDailyRecord)
     count_stmt = select(func.count(InazDailyRecord.id))
 
-    if not _is_admin_user(current_user):
-        stmt = stmt.where(InazDailyRecord.owner_user_id == current_user.id)
-        count_stmt = count_stmt.where(InazDailyRecord.owner_user_id == current_user.id)
+    if not _can_view_all_inaz_data(current_user):
+        hierarchy_scope = _hierarchy_scope_user_ids(db, current_user)
+        visible_collaborator_ids = select(InazSupervisorAssignment.collaborator_id).where(
+            InazSupervisorAssignment.supervisor_user_id == current_user.id
+        )
+        visibility_filter = or_(
+            InazDailyRecord.owner_user_id == current_user.id,
+            InazDailyRecord.collaborator_id.in_(visible_collaborator_ids),
+            InazDailyRecord.owner_user_id.in_(hierarchy_scope),
+            InazDailyRecord.application_user_id.in_(hierarchy_scope),
+        )
+        stmt = stmt.where(visibility_filter)
+        count_stmt = count_stmt.where(visibility_filter)
 
     if collaborator_id is not None:
         stmt = stmt.where(InazDailyRecord.collaborator_id == collaborator_id)
@@ -559,8 +685,29 @@ def update_giornaliera(
     _: Annotated[ApplicationUser, RequireInazModule],
 ) -> InazDailyRecordResponse:
     record = _get_daily_record_or_404(db, record_id, current_user)
-    for field, value in payload.model_dump(exclude_unset=True).items():
+    payload_data = payload.model_dump(exclude_unset=True)
+    validation_fields = {"validation_status", "validation_note"}
+    manual_edit_fields = {
+        "km_value",
+        "reperibilita_unit",
+        "reperibilita_quantity",
+        "override_straordinario_minutes",
+        "override_mpe_minutes",
+        "manual_note",
+    }
+    if any(field in payload_data for field in manual_edit_fields) and not _can_edit_daily_record(current_user, record):
+        raise HTTPException(status_code=403, detail="Edit privileges required for this daily record")
+    if any(field in payload_data for field in validation_fields) and not _can_validate_daily_record(db, current_user, record):
+        raise HTTPException(status_code=403, detail="Validation privileges required for this daily record")
+    for field, value in payload_data.items():
         setattr(record, field, value)
+    if "validation_status" in payload_data:
+        if record.validation_status == "validated":
+            record.validated_by_user_id = current_user.id
+            record.validated_at = datetime.now(UTC)
+        else:
+            record.validated_by_user_id = None
+            record.validated_at = None
     db.add(record)
     db.commit()
     db.refresh(record)
@@ -660,7 +807,7 @@ def list_import_jobs(
     _: Annotated[ApplicationUser, RequireInazModule],
 ) -> InazImportJobListResponse:
     stmt = select(InazImportJob)
-    if not _is_admin_user(current_user):
+    if not _can_view_all_inaz_data(current_user):
         stmt = stmt.where(InazImportJob.requested_by_user_id == current_user.id)
     jobs = db.execute(stmt.order_by(InazImportJob.created_at.desc())).scalars().all()
     return InazImportJobListResponse(items=[InazImportJobResponse.model_validate(job) for job in jobs], total=len(jobs))
@@ -674,7 +821,7 @@ def get_import_job(
     _: Annotated[ApplicationUser, RequireInazModule],
 ) -> InazImportJobResponse:
     job = db.get(InazImportJob, job_id)
-    if job is None or (not _is_admin_user(current_user) and job.requested_by_user_id != current_user.id):
+    if job is None or (not _can_view_all_inaz_data(current_user) and job.requested_by_user_id != current_user.id):
         raise HTTPException(status_code=404, detail="Import job not found")
     return InazImportJobResponse.model_validate(job)
 
@@ -741,7 +888,7 @@ def list_sync_jobs(
 ) -> InazSyncJobListResponse:
     reconcile_stale_sync_jobs(db)
     stmt = select(InazSyncJob)
-    if current_user.role not in {"admin", "super_admin"}:
+    if not _can_view_all_inaz_data(current_user):
         stmt = stmt.where(InazSyncJob.requested_by_user_id == current_user.id)
     jobs = db.execute(stmt.order_by(InazSyncJob.created_at.desc())).scalars().all()
     return InazSyncJobListResponse(items=[InazSyncJobResponse.model_validate(job) for job in jobs], total=len(jobs))
@@ -756,7 +903,7 @@ def get_sync_job(
 ) -> InazSyncJobResponse:
     reconcile_stale_sync_jobs(db)
     job = db.get(InazSyncJob, job_id)
-    if job is None or (current_user.role not in {"admin", "super_admin"} and job.requested_by_user_id != current_user.id):
+    if job is None or (not _can_view_all_inaz_data(current_user) and job.requested_by_user_id != current_user.id):
         raise HTTPException(status_code=404, detail="Sync job not found")
     return InazSyncJobResponse.model_validate(job)
 
@@ -772,7 +919,7 @@ def retry_sync_job(
         raise HTTPException(status_code=409, detail="Another Inaz sync job is already pending or running")
 
     job = db.get(InazSyncJob, job_id)
-    if job is None or (current_user.role not in {"admin", "super_admin"} and job.requested_by_user_id != current_user.id):
+    if job is None or (not _can_view_all_inaz_data(current_user) and job.requested_by_user_id != current_user.id):
         raise HTTPException(status_code=404, detail="Sync job not found")
     if job.status not in {"failed", "completed"}:
         raise HTTPException(status_code=409, detail="Sync job is not retryable in the current state")
@@ -813,7 +960,7 @@ def download_sync_job_artifact(
     _: Annotated[ApplicationUser, RequireInazModule],
 ) -> FileResponse:
     job = db.get(InazSyncJob, job_id)
-    if job is None or (current_user.role not in {"admin", "super_admin"} and job.requested_by_user_id != current_user.id):
+    if job is None or (not _can_view_all_inaz_data(current_user) and job.requested_by_user_id != current_user.id):
         raise HTTPException(status_code=404, detail="Sync job not found")
     try:
         artifact_path = resolve_sync_artifact_path(str(job.id), artifact_name)
@@ -839,7 +986,7 @@ def cancel_sync_job(
     _: Annotated[ApplicationUser, RequireInazModule],
 ) -> InazSyncJobResponse:
     job = db.get(InazSyncJob, job_id)
-    if job is None or (current_user.role not in {"admin", "super_admin"} and job.requested_by_user_id != current_user.id):
+    if job is None or (not _can_view_all_inaz_data(current_user) and job.requested_by_user_id != current_user.id):
         raise HTTPException(status_code=404, detail="Sync job not found")
     if job.status not in {"pending", "running"}:
         raise HTTPException(status_code=409, detail="Sync job cannot be cancelled in the current state")
@@ -864,7 +1011,7 @@ def delete_sync_job(
     _: Annotated[ApplicationUser, RequireInazModule],
 ) -> Response:
     job = db.get(InazSyncJob, job_id)
-    if job is None or (current_user.role not in {"admin", "super_admin"} and job.requested_by_user_id != current_user.id):
+    if job is None or (not _can_view_all_inaz_data(current_user) and job.requested_by_user_id != current_user.id):
         raise HTTPException(status_code=404, detail="Sync job not found")
     if job.status not in {"failed", "cancelled", "completed"}:
         raise HTTPException(status_code=409, detail="Only terminal sync jobs can be deleted")
@@ -1020,24 +1167,118 @@ def _serialize_daily_record(db: Session, record: InazDailyRecord) -> InazDailyRe
 
 def _get_collaborator_or_404(db: Session, collaborator_id: uuid.UUID, current_user: ApplicationUser | None = None) -> InazCollaborator:
     collaborator = db.get(InazCollaborator, collaborator_id)
-    if collaborator is None or (
-        current_user is not None and not _is_admin_user(current_user) and collaborator.owner_user_id != current_user.id
-    ):
+    if collaborator is None or (current_user is not None and not _can_access_collaborator(db, current_user, collaborator)):
         raise HTTPException(status_code=404, detail="Collaborator not found")
     return collaborator
 
 
 def _get_daily_record_or_404(db: Session, record_id: uuid.UUID, current_user: ApplicationUser | None = None) -> InazDailyRecord:
     record = db.get(InazDailyRecord, record_id)
-    if record is None or (
-        current_user is not None and not _is_admin_user(current_user) and record.owner_user_id != current_user.id
-    ):
+    if record is None or (current_user is not None and not _can_access_daily_record(db, current_user, record)):
         raise HTTPException(status_code=404, detail="Daily record not found")
     return record
 
 
 def _is_admin_user(current_user: ApplicationUser) -> bool:
     return current_user.role in {"admin", "super_admin"}
+
+
+def _is_hr_manager(current_user: ApplicationUser) -> bool:
+    return current_user.role == "hr_manager"
+
+
+def _can_view_all_inaz_data(current_user: ApplicationUser) -> bool:
+    return _is_admin_user(current_user) or _is_hr_manager(current_user)
+
+
+def _can_manage_supervisors(current_user: ApplicationUser) -> bool:
+    return _is_admin_user(current_user)
+
+
+def _has_supervisor_assignment(db: Session, current_user: ApplicationUser, collaborator_id: uuid.UUID) -> bool:
+    assignment = db.execute(
+        select(InazSupervisorAssignment.id).where(
+            InazSupervisorAssignment.supervisor_user_id == current_user.id,
+            InazSupervisorAssignment.collaborator_id == collaborator_id,
+        )
+    ).scalar_one_or_none()
+    return assignment is not None
+
+
+def _hierarchy_scope_user_ids(db: Session, current_user: ApplicationUser) -> set[int]:
+    assignments = db.scalars(select(OrgStructureAssignment)).all()
+    children_by_manager: dict[int, list[int]] = {}
+    for assignment in assignments:
+        if assignment.manager_user_id is None:
+            continue
+        children_by_manager.setdefault(assignment.manager_user_id, []).append(assignment.application_user_id)
+    scope: set[int] = set()
+    queue = list(children_by_manager.get(current_user.id, []))
+    while queue:
+        user_id = queue.pop(0)
+        if user_id in scope:
+            continue
+        scope.add(user_id)
+        queue.extend(children_by_manager.get(user_id, []))
+    return scope
+
+
+def _can_access_by_hierarchy(current_user: ApplicationUser, *, owner_user_id: int | None, application_user_id: int | None, hierarchy_scope: set[int]) -> bool:
+    if owner_user_id == current_user.id:
+        return True
+    if owner_user_id is not None and owner_user_id in hierarchy_scope:
+        return True
+    if application_user_id is not None and application_user_id in hierarchy_scope:
+        return True
+    return False
+
+
+def _can_access_collaborator(db: Session, current_user: ApplicationUser, collaborator: InazCollaborator) -> bool:
+    if _can_view_all_inaz_data(current_user):
+        return True
+    hierarchy_scope = _hierarchy_scope_user_ids(db, current_user)
+    if _can_access_by_hierarchy(
+        current_user,
+        owner_user_id=collaborator.owner_user_id,
+        application_user_id=collaborator.application_user_id,
+        hierarchy_scope=hierarchy_scope,
+    ):
+        return True
+    return _has_supervisor_assignment(db, current_user, collaborator.id)
+
+
+def _can_access_daily_record(db: Session, current_user: ApplicationUser, record: InazDailyRecord) -> bool:
+    if _can_view_all_inaz_data(current_user):
+        return True
+    hierarchy_scope = _hierarchy_scope_user_ids(db, current_user)
+    if _can_access_by_hierarchy(
+        current_user,
+        owner_user_id=record.owner_user_id,
+        application_user_id=record.application_user_id,
+        hierarchy_scope=hierarchy_scope,
+    ):
+        return True
+    return _has_supervisor_assignment(db, current_user, record.collaborator_id)
+
+
+def _can_validate_daily_record(db: Session, current_user: ApplicationUser, record: InazDailyRecord) -> bool:
+    if _can_view_all_inaz_data(current_user):
+        return True
+    hierarchy_scope = _hierarchy_scope_user_ids(db, current_user)
+    if _can_access_by_hierarchy(
+        current_user,
+        owner_user_id=record.owner_user_id,
+        application_user_id=record.application_user_id,
+        hierarchy_scope=hierarchy_scope,
+    ):
+        return True
+    return _has_supervisor_assignment(db, current_user, record.collaborator_id)
+
+
+def _can_edit_daily_record(current_user: ApplicationUser, record: InazDailyRecord) -> bool:
+    if _can_view_all_inaz_data(current_user):
+        return True
+    return record.owner_user_id == current_user.id
 
 
 def _serialize_schedule_template(db: Session, template: InazScheduleTemplate) -> InazScheduleTemplateResponse:
@@ -1056,3 +1297,28 @@ def _serialize_schedule_assignment(
     template = db.get(InazScheduleTemplate, assignment.template_id)
     serialized_template = _serialize_schedule_template(db, template) if template is not None else None
     return InazCollaboratorScheduleAssignmentResponse.model_validate({**assignment.__dict__, "template": serialized_template})
+
+
+def _serialize_supervisor_assignment(
+    db: Session,
+    assignment: InazSupervisorAssignment,
+) -> InazSupervisorAssignmentResponse:
+    collaborator = db.get(InazCollaborator, assignment.collaborator_id)
+    supervisor = db.get(ApplicationUser, assignment.supervisor_user_id)
+    supervisor_payload = None
+    if supervisor is not None:
+        supervisor_payload = {
+            "id": supervisor.id,
+            "username": supervisor.username,
+            "full_name": supervisor.full_name,
+            "email": supervisor.email,
+            "role": supervisor.role,
+            "is_active": supervisor.is_active,
+        }
+    return InazSupervisorAssignmentResponse.model_validate(
+        {
+            **assignment.__dict__,
+            "supervisor": supervisor_payload,
+            "collaborator": InazCollaboratorResponse.model_validate(collaborator) if collaborator is not None else None,
+        }
+    )

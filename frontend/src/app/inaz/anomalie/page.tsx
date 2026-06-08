@@ -47,6 +47,8 @@ type DailyRow = {
 
 type DailyEditForm = {
   kmValue: string;
+  reperibilitaUnit: "none" | "hours" | "days" | "shifts";
+  reperibilitaQuantity: string;
   overrideStraordinario: string;
   overrideMpe: string;
   manualNote: string;
@@ -78,6 +80,16 @@ function parseMinutesInput(value: string): number | null {
     return Math.max(0, Math.round(asNumber));
   }
   return null;
+}
+
+function formatReperibilitaDisplay(unit: InazDailyRecord["reperibilita_unit"], quantity: number | null): string {
+  if (unit === "none") return "Nessuna";
+  const labels: Record<Exclude<InazDailyRecord["reperibilita_unit"], "none">, string> = {
+    hours: "ore",
+    days: "giorni",
+    shifts: "turni",
+  };
+  return `${quantity ?? "—"} ${labels[unit]}`;
 }
 
 function summarizeMap(values: Record<string, string>): string {
@@ -274,6 +286,9 @@ export default function InazAnomaliePage() {
     }
     setEditor({
       kmValue: selectedRecord.km_value != null ? String(selectedRecord.km_value) : "",
+      reperibilitaUnit: selectedRecord.reperibilita_unit,
+      reperibilitaQuantity:
+        selectedRecord.reperibilita_quantity != null ? String(selectedRecord.reperibilita_quantity) : "",
       overrideStraordinario: formatMinutesInput(selectedRecord.override_straordinario_minutes),
       overrideMpe: formatMinutesInput(selectedRecord.override_mpe_minutes),
       manualNote: selectedRecord.manual_note ?? "",
@@ -299,6 +314,11 @@ export default function InazAnomaliePage() {
     try {
       const updated = await updateInazDailyRecord(token, selectedRecord.id, {
         km_value: editor.kmValue.trim() ? Number(editor.kmValue) : null,
+        reperibilita_unit: editor.reperibilitaUnit,
+        reperibilita_quantity:
+          editor.reperibilitaUnit === "none" || !editor.reperibilitaQuantity.trim()
+            ? null
+            : Number(editor.reperibilitaQuantity),
         override_straordinario_minutes: parseMinutesInput(editor.overrideStraordinario),
         override_mpe_minutes: parseMinutesInput(editor.overrideMpe),
         manual_note: editor.manualNote.trim() || null,
@@ -526,6 +546,38 @@ export default function InazAnomaliePage() {
                       <input className="form-control mt-1" value={editor.kmValue} onChange={(event) => setEditor((current) => current ? { ...current, kmValue: event.target.value } : current)} placeholder="Es. 24" />
                     </label>
                     <label className="block text-sm font-medium text-gray-700">
+                      Tipo reperibilita
+                      <select
+                        className="form-control mt-1"
+                        value={editor.reperibilitaUnit}
+                        onChange={(event) =>
+                          setEditor((current) =>
+                            current
+                              ? {
+                                  ...current,
+                                  reperibilitaUnit: event.target.value as DailyEditForm["reperibilitaUnit"],
+                                  reperibilitaQuantity: event.target.value === "none" ? "" : current.reperibilitaQuantity,
+                                }
+                              : current,
+                          )
+                        }
+                      >
+                        <option value="none">Nessuna</option>
+                        <option value="hours">Ore</option>
+                        <option value="days">Giorni</option>
+                        <option value="shifts">Turni</option>
+                      </select>
+                    </label>
+                    <label className="block text-sm font-medium text-gray-700">
+                      Quantita reperibilita
+                      <input
+                        className="form-control mt-1"
+                        value={editor.reperibilitaQuantity}
+                        onChange={(event) => setEditor((current) => current ? { ...current, reperibilitaQuantity: event.target.value } : current)}
+                        disabled={editor.reperibilitaUnit === "none"}
+                      />
+                    </label>
+                    <label className="block text-sm font-medium text-gray-700">
                       Straordinario override
                       <input className="form-control mt-1" value={editor.overrideStraordinario} onChange={(event) => setEditor((current) => current ? { ...current, overrideStraordinario: event.target.value } : current)} placeholder="HH:MM oppure minuti" />
                     </label>
@@ -538,6 +590,10 @@ export default function InazAnomaliePage() {
                       <p className="mt-2">Straordinario: {formatHours(selectedRecord.straordinario_minutes)}</p>
                       <p>Maggior presenza: {formatHours(selectedRecord.mpe_minutes)}</p>
                       <p>KM registrati: {selectedRecord.km_value ?? "—"}</p>
+                      <p>
+                        Reperibilita:{" "}
+                        {formatReperibilitaDisplay(selectedRecord.reperibilita_unit, selectedRecord.reperibilita_quantity)}
+                      </p>
                     </div>
                     <label className="block text-sm font-medium text-gray-700 md:col-span-2">
                       Nota operativa
