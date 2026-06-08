@@ -212,9 +212,9 @@ Prerequisiti:
 - immagine gia presente localmente, ad esempio dopo `docker compose build`
 - se usi `--copy-env`, verifica che il file `.env` locale sia quello corretto per il server CED
 
-### Deploy CED verso `gaia.cbo`
+### Deploy CED verso `gaia.lan`
 
-Per deployare lo stack GAIA su server CED con virtual host dedicato `gaia.cbo`, usare:
+Per deployare lo stack GAIA su server CED con virtual host dedicato `gaia.lan`, usare:
 
 - `./scripts/deploy-ced-gaia.sh`
 
@@ -226,13 +226,13 @@ File env di riferimento per il deploy:
 Azioni supportate:
 
 - `DEPLOY_ACTION=deploy`: build locale immagini GAIA, copia progetto + immagini + `.env`, `docker compose up -d`, configurazione nginx host se disponibile, smoke test finale
-- `DEPLOY_ACTION=nginx`: configura solo il virtual host host-level `gaia.cbo -> 127.0.0.1:$GAIA_PROD_NGINX_PORT`
+- `DEPLOY_ACTION=nginx`: configura solo il virtual host host-level `gaia.lan -> 127.0.0.1:$GAIA_PROD_NGINX_PORT`
 - `DEPLOY_ACTION=smoke`: verifica container e endpoint remoti senza rilanciare il deploy
 
 Esempi:
 
 - `./scripts/deploy-ced-gaia.sh`
-- `DEPLOY_ACTION=smoke CED_SSH_HOST=serverCed GAIA_DOMAIN=gaia.cbo ./scripts/deploy-ced-gaia.sh`
+- `DEPLOY_ACTION=smoke CED_SSH_HOST=serverCed GAIA_DOMAIN=gaia.lan ./scripts/deploy-ced-gaia.sh`
 - `DEPLOY_ACTION=nginx CONFIGURE_HOST_NGINX=yes ./scripts/deploy-ced-gaia.sh`
 
 Variabili operative principali:
@@ -240,8 +240,8 @@ Variabili operative principali:
 - `CED_SSH_HOST`: alias SSH del server, default `serverCed`
 - `CED_PROJECT_DIR`: directory remota progetto, default `/opt/gaia`
 - `ENV_FILE`: file env locale da trasferire, default `.env.production`
-- `GAIA_DOMAIN`: hostname pubblico, default `gaia.cbo`
-- `GAIA_MOBILE_DOMAIN`: hostname mobile opzionale, default `gaia-mobile.cbo`
+- `GAIA_DOMAIN`: hostname pubblico, default `gaia.lan`
+- `GAIA_MOBILE_DOMAIN`: hostname mobile opzionale, default `gaia-mobile.lan`
 - `GAIA_PROD_NGINX_PORT`: porta host usata dallo stack Docker GAIA, default `8080`
 - `RELEASE_ID`: release identifier, default `YYYYmmdd-HHMMSS-<gitsha>`
 - `ALLOW_NON_PRODUCTION_ENV`: default `no`; se `no`, il deploy rifiuta `.env` con `APP_ENV` diverso da `production`
@@ -260,8 +260,8 @@ Il deploy normalizza automaticamente alcune variabili nel `.env` remoto:
 
 - `NGINX_PORT=$GAIA_PROD_NGINX_PORT`
 - `NEXT_PUBLIC_API_BASE_URL=/api`
-- `BACKEND_CORS_ORIGINS` include `http://gaia.cbo` se assente
-- `BACKEND_CORS_ORIGINS` include anche `https://gaia.cbo` e, se configurato, `http(s)://gaia-mobile.cbo`
+- `BACKEND_CORS_ORIGINS` include `http://gaia.lan` se assente
+- `BACKEND_CORS_ORIGINS` include anche `https://gaia.lan` e, se configurato, `http(s)://gaia-mobile.lan`
 
 Checklist minima del `.env` di produzione prima del deploy:
 
@@ -277,8 +277,8 @@ Checklist minima del `.env` di produzione prima del deploy:
 
 Note operative:
 
-- `gaia.local` resta un dominio di sviluppo locale; per il server CED il target operativo e `gaia.cbo`
-- lo script non modifica DNS o router: `gaia.cbo` deve gia risolvere verso il server corretto
+- `gaia.local` resta un dominio di sviluppo locale; per il server CED il target operativo e `gaia.lan`
+- lo script non modifica DNS o router: `gaia.lan` deve gia risolvere verso il server corretto
 - se nginx host non e installato o `sudo` richiede password, lo script stampa i passaggi manuali da eseguire sul server
 - il deploy fallisce se mancano env critiche o se `GAIA_DOMAIN` punta a un hostname `.local`
 - dopo le normalizzazioni remote, lo script riallinea `.env.production` a `.env` e prova ad applicare `chmod 600` a entrambi

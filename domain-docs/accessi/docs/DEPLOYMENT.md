@@ -5,7 +5,7 @@
 
 ## 1. Scopo
 
-Questa guida descrive il deployment iniziale della piattaforma in ambiente locale o interno usando Docker Compose, e il deploy operativo sul server CED per l'hostname `gaia.cbo`.
+Questa guida descrive il deployment iniziale della piattaforma in ambiente locale o interno usando Docker Compose, e il deploy operativo sul server CED per l'hostname `gaia.lan`.
 
 ## 2. Prerequisiti
 
@@ -31,7 +31,7 @@ Questa guida descrive il deployment iniziale della piattaforma in ambiente local
 5. `make bootstrap-domain`
 6. verificare `http://localhost:8080`
 
-## 4.1 Deploy CED `gaia.cbo`
+## 4.1 Deploy CED `gaia.lan`
 
 Script dedicato:
 
@@ -40,15 +40,15 @@ Script dedicato:
 Modalita supportate:
 
 - `DEPLOY_ACTION=deploy`: build locale immagini, trasferimento progetto + `.env` + immagini, avvio stack remoto, configurazione nginx host se disponibile, smoke test
-- `DEPLOY_ACTION=nginx`: configura solo il virtual host host-level per `gaia.cbo`
+- `DEPLOY_ACTION=nginx`: configura solo il virtual host host-level per `gaia.lan`
 - `DEPLOY_ACTION=smoke`: verifica solo stack e endpoint remoti
 
 Variabili principali:
 
 - `CED_SSH_HOST=serverCed`
 - `CED_PROJECT_DIR=/opt/gaia`
-- `GAIA_DOMAIN=gaia.cbo`
-- `GAIA_MOBILE_DOMAIN=gaia-mobile.cbo`
+- `GAIA_DOMAIN=gaia.lan`
+- `GAIA_MOBILE_DOMAIN=gaia-mobile.lan`
 - `GAIA_PROD_NGINX_PORT=8080`
 - `ENV_FILE=.env.production`
 - `RELEASE_ID=<auto>`
@@ -69,7 +69,7 @@ Comportamento env lato server:
 - copia il file locale production sia in `/opt/gaia/.env` sia in `/opt/gaia/.env.production`
 - imposta o riallinea `NGINX_PORT=$GAIA_PROD_NGINX_PORT`
 - forza `NEXT_PUBLIC_API_BASE_URL=/api`
-- aggiunge a `BACKEND_CORS_ORIGINS` gli origin `http(s)://gaia.cbo` e, se configurato, `http(s)://gaia-mobile.cbo`
+- aggiunge a `BACKEND_CORS_ORIGINS` gli origin `http(s)://gaia.lan` e, se configurato, `http(s)://gaia-mobile.lan`
 - richiede `APP_ENV=production` salvo override esplicito `ALLOW_NON_PRODUCTION_ENV=yes`
 - dopo le normalizzazioni, riallinea `.env.production` a `.env`
 - prova ad applicare permessi restrittivi `chmod 600 .env .env.production`
@@ -86,7 +86,7 @@ Prerequisiti operativi:
 - alias SSH funzionante verso il server CED
 - Docker disponibile sul server remoto
 - file `.env.production` locale gia valorizzato per produzione
-- DNS o risoluzione interna di `gaia.cbo` gia puntata al server corretto
+- DNS o risoluzione interna di `gaia.lan` gia puntata al server corretto
 
 ## 5. Accessi di Default
 
@@ -182,7 +182,7 @@ Le credenziali vanno cambiate tramite variabili ambiente in ambienti non locali.
 - introdurre TLS terminato su proxy o load balancer interno
 - distinguere chiaramente gli hostname:
   - `gaia.local` per sviluppo locale
-  - `gaia.cbo` per ambiente CED/interno
+  - `gaia.lan` per ambiente CED/interno
 
 ## 9. Backup Dati
 
