@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { UtenzeModulePage } from "@/components/utenze/utenze-module-page";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -41,7 +41,7 @@ function BonificaStagingWorkspace({ token }: { token: string }) {
 
   const totalPages = useMemo(() => Math.max(1, Math.ceil(total / PAGE_SIZE)), [total]);
 
-  async function load(): Promise<void> {
+  const load = useCallback(async (): Promise<void> => {
     setLoading(true);
     try {
       const response = await getUtenzeBonificaStaging(token, { page, page_size: PAGE_SIZE });
@@ -54,12 +54,11 @@ function BonificaStagingWorkspace({ token }: { token: string }) {
     } finally {
       setLoading(false);
     }
-  }
+  }, [page, token]);
 
   useEffect(() => {
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page]);
+  }, [load]);
 
   function toggleRow(id: string): void {
     setSelectedIds((current) => (current.includes(id) ? current.filter((value) => value !== id) : [...current, id]));

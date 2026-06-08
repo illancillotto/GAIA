@@ -174,6 +174,8 @@ import type {
   WikiRequestEvent,
   WikiRequestFeedbackInput,
   WikiRequestMarkDuplicateInput,
+  WikiMyRequestsSummary,
+  WikiRequestReopenInput,
   WikiRequestUpdateInput,
   WikiToolAuditLogListResponse,
   WikiToolAuditLogDetailResponse,
@@ -1254,8 +1256,24 @@ export async function getWikiRequestDuplicates(token: string, requestId: string)
   });
 }
 
+export async function getWikiRequestLinkedDuplicates(token: string, requestId: string): Promise<WikiRequestDuplicateCandidate[]> {
+  return request<WikiRequestDuplicateCandidate[]>(`/wiki/requests/${requestId}/linked-duplicates`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
 export async function getMyWikiRequests(token: string): Promise<WikiRequest[]> {
   return request<WikiRequest[]>("/wiki/requests/mine", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getMyWikiRequestsSummary(token: string): Promise<WikiMyRequestsSummary> {
+  return request<WikiMyRequestsSummary>("/wiki/requests/mine/summary", {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -1268,6 +1286,20 @@ export async function markWikiRequestViewed(token: string, requestId: string): P
     headers: {
       Authorization: `Bearer ${token}`,
     },
+  });
+}
+
+export async function reopenWikiRequest(
+  token: string,
+  requestId: string,
+  payload: WikiRequestReopenInput,
+): Promise<WikiRequest> {
+  return request<WikiRequest>(`/wiki/requests/${requestId}/reopen`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
   });
 }
 
@@ -1306,6 +1338,15 @@ export async function markWikiRequestDuplicate(
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(payload),
+  });
+}
+
+export async function unlinkWikiRequestDuplicate(token: string, requestId: string): Promise<WikiRequest> {
+  return request<WikiRequest>(`/wiki/requests/${requestId}/unlink-duplicate`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
   });
 }
 
@@ -1900,7 +1941,17 @@ export async function getNetworkStatistics(
 
 export async function getNetworkDevices(
   token: string,
-  params?: { search?: string; status?: string; page?: number; pageSize?: number },
+  params?: {
+    search?: string;
+    status?: string;
+    lifecycle?: string;
+    assignment?: string;
+    known?: string;
+    vendor?: string;
+    deviceType?: string;
+    page?: number;
+    pageSize?: number;
+  },
 ): Promise<NetworkDeviceListResponse> {
   const query = new URLSearchParams();
   if (params?.search) {
@@ -1908,6 +1959,21 @@ export async function getNetworkDevices(
   }
   if (params?.status) {
     query.set("status", params.status);
+  }
+  if (params?.lifecycle) {
+    query.set("lifecycle", params.lifecycle);
+  }
+  if (params?.assignment) {
+    query.set("assignment", params.assignment);
+  }
+  if (params?.known) {
+    query.set("known", params.known);
+  }
+  if (params?.vendor) {
+    query.set("vendor", params.vendor);
+  }
+  if (params?.deviceType) {
+    query.set("device_type", params.deviceType);
   }
   if (params?.page) {
     query.set("page", String(params.page));

@@ -65,6 +65,13 @@ export function formatIpWithReference(device: DeviceLike | ScanDeviceLike): stri
   return device.ip_address;
 }
 
+export function isPrivateNetworkIp(value: string | null | undefined): boolean {
+  if (!value) {
+    return false;
+  }
+  return value.startsWith("10.") || value.startsWith("192.168.") || /^172\.(1[6-9]|2\d|3[0-1])\./.test(value);
+}
+
 export function normalizeNetworkTrackingValue(entityType: NetworkTrackingEntityType, value: string): string {
   const normalized = value.trim();
   if (entityType === "domain") {

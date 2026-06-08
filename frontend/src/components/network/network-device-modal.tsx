@@ -19,6 +19,7 @@ import {
   buildNetworkTrackingKey,
   formatIpWithReference,
   getNetworkDeviceAdminUrl,
+  isPrivateNetworkIp,
 } from "@/lib/network-device-utils";
 import type { NetworkAssignedUserSummary, NetworkDevice, NetworkTrackedSubject } from "@/types/api";
 
@@ -66,13 +67,6 @@ function formatTrafficEndpoint(ipAddress: string | null, peerIp: string | null, 
 
 function getIpInfoUrl(ipAddress: string) {
   return `https://www.whatismyip.com/ip/${encodeURIComponent(ipAddress)}/`;
-}
-
-function isPrivateNetworkIp(value: string | null | undefined) {
-  if (!value) {
-    return false;
-  }
-  return value.startsWith("10.") || value.startsWith("192.168.") || /^172\.(1[6-9]|2\d|3[0-1])\./.test(value);
 }
 
 export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }: NetworkDeviceModalProps) {

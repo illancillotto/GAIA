@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { UtenzeModulePage } from "@/components/utenze/utenze-module-page";
 import { CheckIcon, RefreshIcon } from "@/components/ui/icons";
@@ -35,7 +35,7 @@ function Detail({ token, stagingId }: { token: string; stagingId: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  async function load(): Promise<void> {
+  const load = useCallback(async (): Promise<void> => {
     setLoading(true);
     try {
       const response = await getUtenzeBonificaStagingItem(token, stagingId);
@@ -46,13 +46,12 @@ function Detail({ token, stagingId }: { token: string; stagingId: string }) {
     } finally {
       setLoading(false);
     }
-  }
+  }, [stagingId, token]);
 
   useEffect(() => {
     if (!stagingId) return;
     void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stagingId]);
+  }, [load, stagingId]);
 
   async function handleApprove(): Promise<void> {
     if (!stagingId) return;

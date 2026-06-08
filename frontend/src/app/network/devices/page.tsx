@@ -2,7 +2,7 @@
 
 import { type ColumnDef, type SortingState } from "@tanstack/react-table";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { NetworkDeviceModal } from "@/components/network/network-device-modal";
 import { NetworkModulePage } from "@/components/network/network-module-page";
@@ -17,6 +17,7 @@ const DEFAULT_SORTING: SortingState = [
   { id: "status_order", desc: false },
   { id: "ip_address_order", desc: false },
 ];
+const PAGE_SIZE = 50;
 
 type DeviceKnowledgeFilter = "all" | "known" | "unknown" | "arp_unknown";
 type DeviceLifecycleFilter = "all" | "active" | "retired";
@@ -141,6 +142,10 @@ function DevicesContent({ token }: { token: string }) {
   const searchParams = useSearchParams();
   const [items, setItems] = useState<NetworkDevice[]>([]);
   const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(() => {
+    const rawPage = Number(searchParams.get("page") ?? "1");
+    return Number.isFinite(rawPage) && rawPage > 0 ? rawPage : 1;
+  });
   const [search, setSearch] = useState(searchParams.get("search") ?? "");
   const [knowledgeFilter, setKnowledgeFilter] = useState<DeviceKnowledgeFilter>(() => {
     const initialValue = searchParams.get("known");
@@ -174,22 +179,31 @@ function DevicesContent({ token }: { token: string }) {
   const [isBulkSaving, setIsBulkSaving] = useState(false);
   const [bulkMessage, setBulkMessage] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function loadDevices() {
-      try {
-        const response = await getNetworkDevices(token, {
-          pageSize: 126,
-        });
-        setItems(response.items);
-        setTotal(Math.min(response.total, 126));
-        setLoadError(null);
-      } catch (error) {
-        setLoadError(error instanceof Error ? error.message : "Errore nel caricamento dispositivi");
-      }
+  const loadDevices = useCallback(async () => {
+    try {
+      const response = await getNetworkDevices(token, {
+        search: search.trim() || undefined,
+        status: status || undefined,
+        lifecycle: lifecycleFilter !== "all" ? lifecycleFilter : undefined,
+        assignment: assignmentFilter !== "all" ? assignmentFilter : undefined,
+        known: knowledgeFilter !== "all" ? knowledgeFilter : undefined,
+        vendor: vendor || undefined,
+        deviceType: deviceType || undefined,
+        page,
+        pageSize: PAGE_SIZE,
+      });
+      setItems(response.items);
+      setTotal(response.total);
+      setSelectedIds([]);
+      setLoadError(null);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : "Errore nel caricamento dispositivi");
     }
+  }, [assignmentFilter, deviceType, knowledgeFilter, lifecycleFilter, page, search, status, token, vendor]);
 
+  useEffect(() => {
     void loadDevices();
-  }, [token]);
+  }, [loadDevices]);
 
   function handleDeviceUpdated(updatedDevice: NetworkDevice) {
     setItems((currentItems) => currentItems.map((item) => (item.id === updatedDevice.id ? { ...item, ...updatedDevice } : item)));
@@ -230,73 +244,17 @@ function DevicesContent({ token }: { token: string }) {
     }
   }
 
-  const normalizedSearch = search.trim().toLowerCase();
-  const filteredItems = items.filter((item) => {
-    const searchHaystack = [
-      item.resolved_label,
-      item.display_name,
-      item.hostname,
-      item.ip_address,
-      item.mac_address,
-      item.asset_label,
-      item.notes,
-      item.assigned_user?.username,
-      item.assigned_user?.full_name,
-      item.vendor,
-      item.model_name,
-      item.device_type,
-    ]
-      .filter(Boolean)
-      .join(" ")
-      .toLowerCase();
-
-    if (normalizedSearch && !searchHaystack.includes(normalizedSearch)) {
-      return false;
-    }
-    if (knowledgeFilter === "known" && !item.is_known_device) {
-      return false;
-    }
-    if (knowledgeFilter === "unknown" && item.is_known_device) {
-      return false;
-    }
-    if (knowledgeFilter === "arp_unknown" && (item.is_known_device || item.metadata_sources?.discovery !== "arp")) {
-      return false;
-    }
-    if (status && item.status !== status) {
-      return false;
-    }
-    if (lifecycleFilter === "active" && item.lifecycle_state !== "active") {
-      return false;
-    }
-    if (lifecycleFilter === "retired" && item.lifecycle_state !== "retired") {
-      return false;
-    }
-    if (assignmentFilter === "assigned" && !item.assigned_user_id) {
-      return false;
-    }
-    if (assignmentFilter === "unassigned" && (item.assigned_user_id || item.lifecycle_state === "retired")) {
-      return false;
-    }
-    if (deviceType && item.device_type !== deviceType) {
-      return false;
-    }
-    if (vendor && item.vendor !== vendor) {
-      return false;
-    }
-    return true;
-  });
-
-  const knownDevicesCount = items.filter((item) => item.is_known_device).length;
-  const unknownDevicesCount = items.length - knownDevicesCount;
-  const arpUnknownDevicesCount = items.filter((item) => !item.is_known_device && item.metadata_sources?.discovery === "arp").length;
-  const activeDevicesCount = items.filter((item) => item.lifecycle_state === "active").length;
-  const retiredDevicesCount = items.filter((item) => item.lifecycle_state === "retired").length;
-  const assignedDevicesCount = items.filter((item) => Boolean(item.assigned_user_id)).length;
-  const unassignedDevicesCount = items.filter((item) => !item.assigned_user_id && item.lifecycle_state !== "retired").length;
-
   const availableDeviceTypes = Array.from(new Set(items.map((item) => item.device_type).filter(Boolean))).sort((left, right) => (left || "").localeCompare(right || "", "it"));
   const availableVendors = Array.from(new Set(items.map((item) => item.vendor).filter(Boolean))).sort((left, right) => (left || "").localeCompare(right || "", "it"));
   const selectedDevicesCount = selectedIds.length;
+  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+
+  useEffect(() => {
+    if (page > pageCount) {
+      setPage(pageCount);
+    }
+  }, [page, pageCount]);
+
   const columnsWithSelection: ColumnDef<NetworkDevice>[] = [
     {
       id: "select",
@@ -386,7 +344,10 @@ function DevicesContent({ token }: { token: string }) {
                 knowledgeFilter === "all" ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
               }`}
               type="button"
-              onClick={() => setKnowledgeFilter("all")}
+              onClick={() => {
+                setKnowledgeFilter("all");
+                setPage(1);
+              }}
             >
               Tutti
             </button>
@@ -395,27 +356,36 @@ function DevicesContent({ token }: { token: string }) {
                 knowledgeFilter === "known" ? "bg-white text-[#1D4E35] shadow-sm" : "text-gray-600 hover:text-gray-900"
               }`}
               type="button"
-              onClick={() => setKnowledgeFilter("known")}
+              onClick={() => {
+                setKnowledgeFilter("known");
+                setPage(1);
+              }}
             >
-              Conosciuti ({knownDevicesCount})
+              Conosciuti
             </button>
             <button
               className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
                 knowledgeFilter === "unknown" ? "bg-white text-amber-700 shadow-sm" : "text-gray-600 hover:text-gray-900"
               }`}
               type="button"
-              onClick={() => setKnowledgeFilter("unknown")}
+              onClick={() => {
+                setKnowledgeFilter("unknown");
+                setPage(1);
+              }}
             >
-              Sconosciuti ({unknownDevicesCount})
+              Sconosciuti
             </button>
             <button
               className={`rounded-lg px-3 py-2 text-sm font-medium transition ${
                 knowledgeFilter === "arp_unknown" ? "bg-white text-orange-700 shadow-sm" : "text-gray-600 hover:text-gray-900"
               }`}
               type="button"
-              onClick={() => setKnowledgeFilter("arp_unknown")}
+              onClick={() => {
+                setKnowledgeFilter("arp_unknown");
+                setPage(1);
+              }}
             >
-              Da ARP ({arpUnknownDevicesCount})
+              Da ARP
             </button>
           </div>
           <p className="text-xs text-gray-500">Filtra rapidamente l&apos;inventario tra dispositivi censiti, sconosciuti e host emersi dalla discovery ARP da censire.</p>
@@ -424,25 +394,40 @@ function DevicesContent({ token }: { token: string }) {
           <input
             className="form-control"
             value={search}
-            onChange={(event) => setSearch(event.target.value)}
+            onChange={(event) => {
+              setSearch(event.target.value);
+              setPage(1);
+            }}
             placeholder="Cerca per IP, hostname, MAC, label o note"
           />
-          <select className="form-control" value={status} onChange={(event) => setStatus(event.target.value)}>
+          <select className="form-control" value={status} onChange={(event) => {
+            setStatus(event.target.value);
+            setPage(1);
+          }}>
             <option value="">Tutti gli stati</option>
             <option value="online">Online</option>
             <option value="offline">Offline</option>
           </select>
-          <select className="form-control" value={lifecycleFilter} onChange={(event) => setLifecycleFilter(event.target.value as DeviceLifecycleFilter)}>
+          <select className="form-control" value={lifecycleFilter} onChange={(event) => {
+            setLifecycleFilter(event.target.value as DeviceLifecycleFilter);
+            setPage(1);
+          }}>
             <option value="all">Tutti i cicli vita</option>
-            <option value="active">Attivi ({activeDevicesCount})</option>
-            <option value="retired">Rotamati ({retiredDevicesCount})</option>
+            <option value="active">Attivi</option>
+            <option value="retired">Rotamati</option>
           </select>
-          <select className="form-control" value={assignmentFilter} onChange={(event) => setAssignmentFilter(event.target.value as DeviceAssignmentFilter)}>
+          <select className="form-control" value={assignmentFilter} onChange={(event) => {
+            setAssignmentFilter(event.target.value as DeviceAssignmentFilter);
+            setPage(1);
+          }}>
             <option value="all">Tutte le assegnazioni</option>
-            <option value="assigned">Con utente ({assignedDevicesCount})</option>
-            <option value="unassigned">Senza utente ({unassignedDevicesCount})</option>
+            <option value="assigned">Con utente</option>
+            <option value="unassigned">Senza utente</option>
           </select>
-          <select className="form-control" value={deviceType} onChange={(event) => setDeviceType(event.target.value)}>
+          <select className="form-control" value={deviceType} onChange={(event) => {
+            setDeviceType(event.target.value);
+            setPage(1);
+          }}>
             <option value="">Tutti i tipi</option>
             {availableDeviceTypes.map((value) => (
               <option key={value} value={value || ""}>
@@ -450,7 +435,10 @@ function DevicesContent({ token }: { token: string }) {
               </option>
             ))}
           </select>
-          <select className="form-control" value={vendor} onChange={(event) => setVendor(event.target.value)}>
+          <select className="form-control" value={vendor} onChange={(event) => {
+            setVendor(event.target.value);
+            setPage(1);
+          }}>
             <option value="">Tutti i vendor</option>
             {availableVendors.map((value) => (
               <option key={value} value={value || ""}>
@@ -459,19 +447,28 @@ function DevicesContent({ token }: { token: string }) {
             ))}
           </select>
           <div className="flex items-center rounded-lg bg-gray-50 px-4 text-sm text-gray-500">
-            <span>{filteredItems.length} di {total} dispositivi</span>
+            <span>{items.length} visualizzati · {total} totali</span>
           </div>
         </div>
-        <p className="mt-3 text-xs text-gray-500">La vista carica i primi 126 dispositivi e li ordina di default per stato online e indirizzo IP.</p>
+        <p className="mt-3 text-xs text-gray-500">La vista usa paginazione server-side e carica {PAGE_SIZE} dispositivi per pagina.</p>
         {loadError ? <p className="mt-4 text-sm text-red-600">{loadError}</p> : null}
       </article>
 
       <DataTable
-        data={filteredItems}
+        data={items}
         columns={columnsWithSelection}
-        initialPageSize={63}
+        initialPageSize={PAGE_SIZE}
         initialSorting={DEFAULT_SORTING}
         onRowClick={(row) => setSelectedDeviceId(row.id)}
+        pagination={{
+          pageIndex: page - 1,
+          pageCount,
+          canPreviousPage: page > 1,
+          canNextPage: page < pageCount,
+          onPreviousPage: () => setPage((current) => Math.max(1, current - 1)),
+          onNextPage: () => setPage((current) => Math.min(pageCount, current + 1)),
+        }}
+        disableSorting
       />
 
       <NetworkDeviceModal

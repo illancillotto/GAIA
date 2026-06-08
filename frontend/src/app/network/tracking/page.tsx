@@ -17,6 +17,7 @@ import {
   listNetworkTrackedSubjects,
   updateNetworkTrackedSubject,
 } from "@/lib/api";
+import { isPrivateNetworkIp } from "@/lib/network-device-utils";
 import type {
   CurrentUser,
   NetworkDevice,
@@ -44,13 +45,6 @@ const ACTIVITY_STATUS_OPTIONS = [
   { value: "allowed", label: "Allowed", icon: CheckIcon },
   { value: "blocked", label: "Blocked", icon: AlertTriangleIcon },
 ] as const;
-
-function isPrivateNetworkIp(value: string | null | undefined) {
-  if (!value) {
-    return false;
-  }
-  return value.startsWith("10.") || value.startsWith("192.168.") || /^172\.(1[6-9]|2\d|3[0-1])\./.test(value);
-}
 
 function isDeviceLikeTrackedSubject(subject: NetworkTrackedSubject) {
   if (subject.entity_type === "device") {

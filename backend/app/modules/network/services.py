@@ -16,6 +16,7 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.models.application_user import ApplicationUser
 from app.modules.network.models import (
     DevicePosition,
     FloorPlan,
@@ -1163,6 +1164,9 @@ def list_network_devices(
     page_size: int = 25,
     search: str | None = None,
     status: str | None = None,
+    lifecycle_state: str | None = None,
+    assignment: str | None = None,
+    known: str | None = None,
     vendor: str | None = None,
     device_type: str | None = None,
     floor_plan_id: int | None = None,
@@ -1172,6 +1176,8 @@ def list_network_devices(
 
     if search:
         like_value = f"%{search.strip()}%"
+        query = query.outerjoin(ApplicationUser, ApplicationUser.id == NetworkDevice.assigned_user_id)
+        count_query = count_query.outerjoin(ApplicationUser, ApplicationUser.id == NetworkDevice.assigned_user_id)
         predicate = or_(
             NetworkDevice.ip_address.ilike(like_value),
             NetworkDevice.hostname.ilike(like_value),
@@ -1180,6 +1186,11 @@ def list_network_devices(
             NetworkDevice.dns_name.ilike(like_value),
             NetworkDevice.mac_address.ilike(like_value),
             NetworkDevice.notes.ilike(like_value),
+            NetworkDevice.vendor.ilike(like_value),
+            NetworkDevice.model_name.ilike(like_value),
+            NetworkDevice.device_type.ilike(like_value),
+            ApplicationUser.username.ilike(like_value),
+            ApplicationUser.full_name.ilike(like_value),
         )
         query = query.where(predicate)
         count_query = count_query.where(predicate)
@@ -1187,6 +1198,29 @@ def list_network_devices(
     if status:
         query = query.where(NetworkDevice.status == status)
         count_query = count_query.where(NetworkDevice.status == status)
+
+    if lifecycle_state:
+        query = query.where(NetworkDevice.lifecycle_state == lifecycle_state)
+        count_query = count_query.where(NetworkDevice.lifecycle_state == lifecycle_state)
+
+    if assignment == "assigned":
+        query = query.where(NetworkDevice.assigned_user_id.is_not(None))
+        count_query = count_query.where(NetworkDevice.assigned_user_id.is_not(None))
+    elif assignment == "unassigned":
+        predicate = NetworkDevice.assigned_user_id.is_(None)
+        query = query.where(predicate, NetworkDevice.lifecycle_state != "retired")
+        count_query = count_query.where(predicate, NetworkDevice.lifecycle_state != "retired")
+
+    if known == "known":
+        query = query.where(NetworkDevice.is_known_device.is_(True))
+        count_query = count_query.where(NetworkDevice.is_known_device.is_(True))
+    elif known == "unknown":
+        query = query.where(NetworkDevice.is_known_device.is_(False))
+        count_query = count_query.where(NetworkDevice.is_known_device.is_(False))
+    elif known == "arp_unknown":
+        predicate = NetworkDevice.is_known_device.is_(False)
+        query = query.where(predicate, NetworkDevice.metadata_sources.like('%"discovery": "arp"%'))
+        count_query = count_query.where(predicate, NetworkDevice.metadata_sources.like('%"discovery": "arp"%'))
 
     if vendor:
         query = query.where(NetworkDevice.vendor == vendor)
