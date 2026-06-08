@@ -5,7 +5,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useDeferredValue, useEffect, useRef, useState } from "react";
 
 import { AnprStatusCard } from "@/components/anagrafica/AnprStatusCard";
-import { MeterReadingsTable } from "@/components/catasto/meter-readings-table";
+import { UtenzeMeterReadingsSection } from "@/components/utenze/utenze-meter-readings-section";
 import { UtenzePaymentNoticesSection } from "@/components/utenze/utenze-payment-notices-section";
 import { UtenzeModulePage } from "@/components/utenze/utenze-module-page";
 import {
@@ -51,7 +51,7 @@ type ManualUploadItem = {
   notes: string;
 };
 
-type SubjectDetailTab = "scheda" | "payment_notices";
+type SubjectDetailTab = "scheda" | "payment_notices" | "meter_readings";
 
 type SubjectVisuraRequestState = {
   identifier: string;
@@ -813,6 +813,17 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
           onClick={() => setActiveTab("scheda")}
         >
           Scheda soggetto
+        </button>
+        <button
+          className={
+            activeTab === "meter_readings"
+              ? "rounded-xl bg-[#1D4E35] px-4 py-2 text-sm font-semibold text-white"
+              : "rounded-xl px-4 py-2 text-sm font-semibold text-gray-600 transition hover:bg-gray-100"
+          }
+          type="button"
+          onClick={() => setActiveTab("meter_readings")}
+        >
+          Letture contatori
         </button>
         <button
           className={
@@ -1619,14 +1630,6 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
       </article>
 
       <article className="panel-card">
-        <div className="mb-4">
-          <p className="section-title">Letture contatori</p>
-          <p className="section-copy">Letture irrigue collegate al soggetto tramite anagrafica e codice fiscale normalizzato.</p>
-        </div>
-        <MeterReadingsTable subjectId={subject.id} />
-      </article>
-
-      <article className="panel-card">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="section-title">Override cartella NAS</p>
@@ -1778,8 +1781,10 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
         )}
       </article>
         </>
-      ) : (
+      ) : activeTab === "payment_notices" ? (
         <UtenzePaymentNoticesSection subjectId={subjectId} token={token} />
+      ) : (
+        <UtenzeMeterReadingsSection subjectId={subjectId} token={token} />
       )}
     </div>
   );
