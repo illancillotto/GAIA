@@ -401,57 +401,12 @@ describe("Inaz pages", () => {
     });
   });
 
-  test("renders capisettore assignments and saves a supervisor", async () => {
-    mocks.listInazSupervisorAssignments
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([
-        {
-          id: 1,
-          collaborator_id: "collab-1",
-          supervisor_user_id: 7,
-          assigned_by_user_id: 1,
-          created_at: "2026-05-29T09:00:00Z",
-          updated_at: "2026-05-29T09:10:00Z",
-          supervisor: {
-            id: 7,
-            username: "mrossi",
-            email: "mrossi@example.local",
-            full_name: "Mario Rossi",
-            role: "viewer",
-            is_active: true,
-          },
-          collaborator: {
-            id: "collab-1",
-            owner_user_id: 1,
-            application_user_id: null,
-            kint: "10159",
-            kkint: "{demo}",
-            employee_code: "1854",
-            company_code: "53",
-            company_label: "53 - CBO",
-            name: "AMADU SALVATORE",
-            birth_date: "1967-02-26",
-            is_active: true,
-            last_seen_at: "2026-05-29T09:00:00Z",
-            created_at: "2026-05-29T09:00:00Z",
-            updated_at: "2026-05-29T09:10:00Z",
-          },
-        },
-      ]);
-
+  test("redirects capisettore page to organigramma", async () => {
     render(<InazCapisettorePage />);
 
-    expect(await screen.findByText("Capisettore Inaz")).toBeInTheDocument();
-    expect(screen.getByText("Mario Rossi")).toBeInTheDocument();
-
-    fireEvent.change(screen.getByDisplayValue("Nessun caposettore"), { target: { value: "7" } });
-
     await waitFor(() => {
-      expect(mocks.updateInazSupervisorAssignment).toHaveBeenCalledWith("token", "collab-1", 7);
+      expect(mocks.push).toHaveBeenCalledWith("/inaz/organigramma");
     });
-
-    expect(await screen.findByText("Caposettore assegnato.")).toBeInTheDocument();
-    expect(screen.getByText("Assegnato a Mario Rossi")).toBeInTheDocument();
   });
 
   test("renders the inaz dashboard with monthly presence metrics", async () => {

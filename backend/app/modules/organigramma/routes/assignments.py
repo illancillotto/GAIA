@@ -6,9 +6,12 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_section
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
+from app.modules.organigramma.deps import (
+    require_organigramma_manage_or_inaz,
+    require_organigramma_read_or_inaz,
+)
 from app.modules.organigramma import repositories as repo
 from app.modules.organigramma.schemas import (
     OrgAssignmentCreate,
@@ -20,7 +23,7 @@ from app.modules.organigramma.services import organigramma_service as svc
 router = APIRouter(prefix="/assignments", tags=["organigramma/assignments"])
 
 
-@router.get("", response_model=list[OrgAssignmentResponse], dependencies=[Depends(require_section("organigramma.read"))])
+@router.get("", response_model=list[OrgAssignmentResponse], dependencies=[Depends(require_organigramma_read_or_inaz())])
 def list_assignments(
     db: Annotated[Session, Depends(get_db)],
     unit_id: UUID | None = Query(None),
@@ -33,7 +36,7 @@ def list_assignments(
 def create_assignment(
     payload: OrgAssignmentCreate,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[ApplicationUser, Depends(require_section("organigramma.manage"))],
+    current_user: Annotated[ApplicationUser, Depends(require_organigramma_manage_or_inaz())],
 ) -> OrgAssignmentResponse:
     if repo.get_unit(db, payload.org_unit_id) is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Org unit not found")
@@ -49,7 +52,7 @@ def update_assignment(
     assignment_id: UUID,
     payload: OrgAssignmentUpdate,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[ApplicationUser, Depends(require_section("organigramma.manage"))],
+    current_user: Annotated[ApplicationUser, Depends(require_organigramma_manage_or_inaz())],
 ) -> OrgAssignmentResponse:
     assignment = repo.get_assignment(db, assignment_id)
     if assignment is None:
@@ -68,7 +71,7 @@ def update_assignment(
 def delete_assignment(
     assignment_id: UUID,
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[ApplicationUser, Depends(require_section("organigramma.manage"))],
+    _: Annotated[ApplicationUser, Depends(require_organigramma_manage_or_inaz())],
 ) -> None:
     assignment = repo.get_assignment(db, assignment_id)
     if assignment is None:

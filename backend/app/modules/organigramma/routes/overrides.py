@@ -6,9 +6,9 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_section
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
+from app.modules.organigramma.deps import require_organigramma_manage_or_inaz
 from app.modules.organigramma import repositories as repo
 from app.modules.organigramma.schemas import (
     OrgVisibilityOverrideCreate,
@@ -17,8 +17,8 @@ from app.modules.organigramma.schemas import (
 )
 from app.modules.organigramma.services import organigramma_service as svc
 
-# Le eccezioni di visibilità sono area sensibile: gestione riservata a organigramma.manage.
-MANAGE = Depends(require_section("organigramma.manage"))
+# Le eccezioni di visibilità sono area sensibile: gestione riservata a gestione organigramma/Inaz.
+MANAGE = Depends(require_organigramma_manage_or_inaz())
 
 router = APIRouter(prefix="/overrides", tags=["organigramma/overrides"])
 
@@ -32,7 +32,7 @@ def list_overrides(db: Annotated[Session, Depends(get_db)]) -> list[OrgVisibilit
 def create_override(
     payload: OrgVisibilityOverrideCreate,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[ApplicationUser, Depends(require_section("organigramma.manage"))],
+    current_user: Annotated[ApplicationUser, Depends(require_organigramma_manage_or_inaz())],
 ) -> OrgVisibilityOverrideResponse:
     if payload.target_type == "org_unit" and repo.get_unit(db, payload.target_org_unit_id) is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Target org unit not found")
@@ -45,7 +45,7 @@ def update_override(
     override_id: UUID,
     payload: OrgVisibilityOverrideUpdate,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[ApplicationUser, Depends(require_section("organigramma.manage"))],
+    current_user: Annotated[ApplicationUser, Depends(require_organigramma_manage_or_inaz())],
 ) -> OrgVisibilityOverrideResponse:
     override = repo.get_override(db, override_id)
     if override is None:
@@ -58,7 +58,7 @@ def update_override(
 def delete_override(
     override_id: UUID,
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[ApplicationUser, Depends(require_section("organigramma.manage"))],
+    _: Annotated[ApplicationUser, Depends(require_organigramma_manage_or_inaz())],
 ) -> None:
     override = repo.get_override(db, override_id)
     if override is None:
