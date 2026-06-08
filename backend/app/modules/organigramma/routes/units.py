@@ -6,9 +6,12 @@ from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_section
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
+from app.modules.organigramma.deps import (
+    require_organigramma_manage_or_inaz,
+    require_organigramma_read_or_inaz,
+)
 from app.modules.organigramma import repositories as repo
 from app.modules.organigramma.schemas import (
     OrgUnitCreate,
@@ -19,7 +22,7 @@ from app.modules.organigramma.schemas import (
 )
 from app.modules.organigramma.services import organigramma_service as svc
 
-READ = Depends(require_section("organigramma.read"))
+READ = Depends(require_organigramma_read_or_inaz())
 
 router = APIRouter(prefix="/units", tags=["organigramma/units"])
 
@@ -52,7 +55,7 @@ def get_unit_detail(unit_id: UUID, db: Annotated[Session, Depends(get_db)]) -> U
 def create_unit(
     payload: OrgUnitCreate,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[ApplicationUser, Depends(require_section("organigramma.manage"))],
+    current_user: Annotated[ApplicationUser, Depends(require_organigramma_manage_or_inaz())],
 ) -> OrgUnitResponse:
     if payload.parent_id is not None and repo.get_unit(db, payload.parent_id) is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Parent unit not found")
@@ -65,7 +68,7 @@ def update_unit(
     unit_id: UUID,
     payload: OrgUnitUpdate,
     db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[ApplicationUser, Depends(require_section("organigramma.manage"))],
+    current_user: Annotated[ApplicationUser, Depends(require_organigramma_manage_or_inaz())],
 ) -> OrgUnitResponse:
     unit = repo.get_unit(db, unit_id)
     if unit is None:
@@ -83,7 +86,7 @@ def update_unit(
 def delete_unit(
     unit_id: UUID,
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[ApplicationUser, Depends(require_section("organigramma.manage"))],
+    _: Annotated[ApplicationUser, Depends(require_organigramma_manage_or_inaz())],
 ) -> None:
     unit = repo.get_unit(db, unit_id)
     if unit is None:

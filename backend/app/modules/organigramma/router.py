@@ -2,17 +2,18 @@
 
 from fastapi import APIRouter, Depends
 
-from app.api.deps import require_module
+from app.modules.organigramma.deps import require_organigramma_or_inaz_module
 from app.modules.organigramma.routes.assignments import router as assignments_router
 from app.modules.organigramma.routes.overrides import router as overrides_router
 from app.modules.organigramma.routes.sync import router as sync_router
 from app.modules.organigramma.routes.units import router as units_router
 from app.modules.organigramma.routes.visibility import router as visibility_router
 
+
 router = APIRouter(
     prefix="/organigramma",
     tags=["organigramma"],
-    dependencies=[Depends(require_module("organigramma"))],
+    dependencies=[Depends(require_organigramma_or_inaz_module)],
 )
 
 router.include_router(units_router)

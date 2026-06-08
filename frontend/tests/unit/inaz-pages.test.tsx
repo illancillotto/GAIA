@@ -333,6 +333,13 @@ describe("Inaz pages", () => {
     });
   });
 
+  test("redirects capisettore page to organigramma", async () => {
+    render(<InazCapisettorePage />);
+
+    await waitFor(() => {
+      expect(mocks.push).toHaveBeenCalledWith("/inaz/organigramma");
+    });
+  });
   test("renders the inaz dashboard with monthly presence metrics", async () => {
     mocks.listInazCollaborators.mockResolvedValue({
       items: [

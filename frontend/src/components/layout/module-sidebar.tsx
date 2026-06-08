@@ -250,7 +250,6 @@ export function ModuleSidebar({
         <NavItem href="/inaz/giornaliere" icon={CalendarIcon} label="Giornaliere" match="prefix" />
         <NavItem href="/inaz/collaboratori" icon={UsersIcon} label="Collaboratori" match="prefix" />
         <NavItem href="/inaz/organigramma" icon={UsersIcon} label="Organigramma" match="prefix" />
-        <NavItem href="/inaz/capisettore" icon={ShieldIcon} label="Capisettore" match="prefix" />
         <NavItem href="/inaz/anomalie" icon={AlertTriangleIcon} label="Anomalie" match="prefix" />
         <NavItem href="/inaz/export" icon={DocumentIcon} label="Export" match="prefix" />
         <NavItem href="/inaz/sync" icon={RefreshIcon} label="Sync" match="prefix" />

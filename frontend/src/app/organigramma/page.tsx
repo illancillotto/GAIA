@@ -270,7 +270,7 @@ function PersonCard({ assignment, onOpen }: { assignment: OrgAssignment; onOpen:
 // --------------------------------------------------------------------------- //
 type ViewMode = "albero" | "chi-vede-chi";
 
-function OrganigrammaWorkspace() {
+export function OrganigrammaWorkspace() {
   const token = typeof window !== "undefined" ? getStoredAccessToken() : null;
 
   const [view, setView] = useState<ViewMode>("albero");
