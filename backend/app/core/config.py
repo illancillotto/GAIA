@@ -170,6 +170,10 @@ class Settings(BaseSettings):
         default=None,
         alias="UTENZE_DOCUMENT_STORAGE_PATH",
     )
+    visure_nas_router_enabled: bool = Field(default=False, alias="VISURE_NAS_ROUTER_ENABLED")
+    visure_nas_router_cron: str = Field(default="15 */2 * * *", alias="VISURE_NAS_ROUTER_CRON")
+    visure_nas_router_timezone: str = Field(default="Europe/Rome", alias="VISURE_NAS_ROUTER_TIMEZONE")
+    visure_nas_inbox_path: str | None = Field(default=None, alias="VISURE_NAS_INBOX_PATH")
     nas_passwd_command: str = Field(default="getent passwd", alias="NAS_PASSWD_COMMAND")
     nas_group_command: str = Field(default="getent group", alias="NAS_GROUP_COMMAND")
     nas_shares_command: str = Field(default="ls /volume1", alias="NAS_SHARES_COMMAND")
