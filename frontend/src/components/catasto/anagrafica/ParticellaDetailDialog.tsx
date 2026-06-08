@@ -12,6 +12,7 @@ import type {
   CatUtenzaIrrigua,
   GeoJSONFeature,
 } from "@/types/catasto";
+import { ParticellaGisDialog } from "@/components/catasto/gis/ParticellaGisDialog";
 import { UtenzeSubjectQuickViewDialog } from "@/components/utenze/utenze-subject-quick-view-dialog";
 import { getStoredAccessToken } from "@/lib/auth";
 import { searchAnagraficaSubjects } from "@/lib/api";
@@ -46,6 +47,11 @@ function extractLonLat(feature: GeoJSONFeature | null): { lon: number; lat: numb
   const lat = Number(coords[1]);
   if (!Number.isFinite(lon) || !Number.isFinite(lat)) return null;
   return { lon, lat };
+}
+
+function formatCoordinate(value: number | null | undefined): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return value.toLocaleString("it-IT", { minimumFractionDigits: 6, maximumFractionDigits: 6 });
 }
 
 function renderResolutionLabel(mode: string | null | undefined): string {
@@ -149,6 +155,7 @@ export function ParticellaDetailDialog({
   const [subjectQuickView, setSubjectQuickView] = useState<{ id: string; label: string | null } | null>(null);
   const [subjectLookupBusyId, setSubjectLookupBusyId] = useState<string | null>(null);
   const [subjectLookupError, setSubjectLookupError] = useState<string | null>(null);
+  const [gisOpen, setGisOpen] = useState(false);
 
   const reference = useMemo(() => (match ? formatRef(match) : "Particella"), [match]);
   const centroid = useMemo(() => extractLonLat(geojson), [geojson]);
@@ -170,6 +177,7 @@ export function ParticellaDetailDialog({
       setSubjectQuickView(null);
       setSubjectLookupBusyId(null);
       setSubjectLookupError(null);
+      setGisOpen(false);
     }
   }, [open]);
 
@@ -326,7 +334,7 @@ export function ParticellaDetailDialog({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="mx-auto flex w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-2xl">
+      <div className="mx-auto flex max-h-[94vh] w-full max-w-[1400px] flex-col overflow-hidden rounded-[28px] border border-gray-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.24)]">
         <div className="border-b border-gray-100 px-6 py-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
@@ -350,8 +358,7 @@ export function ParticellaDetailDialog({
             </div>
           </div>
         </div>
-
-        <div className="max-h-[calc(100vh-7rem)] overflow-y-auto px-6 py-5">
+        <div className="min-h-0 overflow-y-auto px-6 py-5">
         <div className="rounded-xl border border-[#d9e7dc] bg-[#f5faf5] px-4 py-3 text-sm text-gray-700">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-medium text-gray-900">Ultimo aggiornamento Capacitas:</span>
@@ -422,7 +429,24 @@ export function ParticellaDetailDialog({
                   {busy ? "Caricamento…" : (geojson?.properties?.["geometry_type"] as string | undefined) ?? "—"}
                 </span>
               </p>
+              <p>
+                <span className="text-gray-500">Latitudine:</span> <span className="font-medium text-gray-900">{formatCoordinate(centroid?.lat)}</span>
+              </p>
+              <p>
+                <span className="text-gray-500">Longitudine:</span> <span className="font-medium text-gray-900">{formatCoordinate(centroid?.lon)}</span>
+              </p>
               <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="btn-secondary !px-3 !py-1.5 text-xs"
+                  disabled={!geojson}
+                  onClick={() => {
+                    if (!geojson) return;
+                    setGisOpen(true);
+                  }}
+                >
+                  Apri GeoJSON
+                </button>
                 <button
                   type="button"
                   className="btn-secondary !px-3 !py-1.5 text-xs"
@@ -431,11 +455,14 @@ export function ParticellaDetailDialog({
                     if (!geojson) return;
                     const blob = new Blob([JSON.stringify(geojson, null, 2)], { type: "application/geo+json" });
                     const url = URL.createObjectURL(blob);
-                    window.open(url, "_blank", "noopener,noreferrer");
+                    const anchor = window.document.createElement("a");
+                    anchor.href = url;
+                    anchor.download = `particella-${match.foglio}-${match.particella}${match.subalterno ? `-${match.subalterno}` : ""}.geojson`;
+                    anchor.click();
                     setTimeout(() => URL.revokeObjectURL(url), 30_000);
                   }}
                 >
-                  Apri GeoJSON
+                  Scarica GeoJSON
                 </button>
                 <a
                   className="btn-secondary !px-3 !py-1.5 text-xs"
@@ -644,6 +671,14 @@ export function ParticellaDetailDialog({
           onClose={() => setSubjectQuickView(null)}
         />
       ) : null}
+
+      <ParticellaGisDialog
+        open={gisOpen}
+        match={match}
+        geojson={geojson}
+        centroid={centroid}
+        onClose={() => setGisOpen(false)}
+      />
     </div>
   );
 }
