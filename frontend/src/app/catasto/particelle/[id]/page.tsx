@@ -4,6 +4,7 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { CatastoPage } from "@/components/catasto/catasto-page";
+import { CatastoAnomaliaExplainer } from "@/components/catasto/catasto-anomalia-explainer";
 import { UtenzeSubjectQuickViewDialog } from "@/components/utenze/utenze-subject-quick-view-dialog";
 import { AlertBanner } from "@/components/ui/alert-banner";
 import { MetricCard } from "@/components/ui/metric-card";
@@ -400,7 +401,12 @@ export default function CatastoParticellaDetailPage() {
         header: "Perche",
         id: "motivo",
         cell: ({ row }: AnomaliaCell) => (
-          <span className="text-sm text-gray-600">{describeCatastoAnomalia(row.original)}</span>
+          <div className="space-y-1.5">
+            <span className="text-sm text-gray-600">{describeCatastoAnomalia(row.original)}</span>
+            <div>
+              <CatastoAnomaliaExplainer anomalia={row.original} />
+            </div>
+          </div>
         ),
       },
       {
@@ -751,6 +757,9 @@ export default function CatastoParticellaDetailPage() {
                       <AnomaliaStatusBadge severita={anomalia.severita} />
                     </div>
                     <p className="mt-1 text-sm text-gray-600">{describeCatastoAnomalia(anomalia)}</p>
+                    <div className="mt-2">
+                      <CatastoAnomaliaExplainer anomalia={anomalia} />
+                    </div>
                     {anomalia.anno_campagna ? (
                       <p className="mt-1 text-xs font-medium text-rose-700">Anno ruolo {anomalia.anno_campagna}</p>
                     ) : null}

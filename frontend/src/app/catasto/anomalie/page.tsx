@@ -8,6 +8,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { CatastoPage } from "@/components/catasto/catasto-page";
 import { AnomaliaStatusBadge } from "@/components/catasto/AnomaliaStatusBadge";
 import { AnomaliaStatusPill } from "@/components/catasto/AnomaliaStatusPill";
+import { CatastoAnomaliaExplainer } from "@/components/catasto/catasto-anomalia-explainer";
 import { CatastoWorkspaceModal } from "@/components/catasto/workspace-modal";
 import { ElaborazioneWorkspaceModal } from "@/components/elaborazioni/workspace-modal";
 import { ElaborazioneOperationMessage } from "@/components/elaborazioni/operation-message";
@@ -929,6 +930,11 @@ function CatastoAnomaliePageContent() {
         header: "Descrizione",
         accessorKey: "descrizione",
         cell: ({ row }) => <span className="text-sm text-gray-600">{row.original.descrizione ?? "—"}</span>,
+      },
+      {
+        header: "Perche",
+        id: "motivo",
+        cell: ({ row }) => <CatastoAnomaliaExplainer anomalia={row.original} />,
       },
       {
         header: "Anno",
@@ -1994,6 +2000,9 @@ function CatastoAnomaliePageContent() {
                 <div className="rounded-2xl border border-gray-100 bg-white p-4">
                   <p className="text-sm font-semibold text-gray-900">Descrizione e note operatore</p>
                   <p className="mt-3 text-sm text-gray-700">{selectedManualAnomalia.descrizione ?? "Nessuna descrizione disponibile."}</p>
+                  <div className="mt-3">
+                    <CatastoAnomaliaExplainer anomalia={selectedManualAnomalia} buttonLabel="Approfondisci questa anomalia" />
+                  </div>
                   <div className="mt-4 space-y-3 rounded-xl border border-dashed border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600">
                     <label className="block text-sm font-medium text-gray-700">
                       Nota operatore

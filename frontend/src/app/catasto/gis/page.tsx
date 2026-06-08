@@ -7,6 +7,7 @@ import * as XLSX from "xlsx";
 
 import AnalysisPanel from "@/components/catasto/gis/AnalysisPanel";
 import { ParticellaDetailDialog } from "@/components/catasto/anagrafica/ParticellaDetailDialog";
+import { CatastoAnomaliaExplainer } from "@/components/catasto/catasto-anomalia-explainer";
 import DrawingTools from "@/components/catasto/gis/DrawingTools";
 import SelectionPanel from "@/components/catasto/gis/SelectionPanel";
 import { CatastoPage } from "@/components/catasto/catasto-page";
@@ -1802,6 +1803,12 @@ export default function CatastoGisPage() {
                                 <p className="mt-1 text-[11px] leading-4 text-rose-900">
                                   {describeCatastoAnomalia(anomalia)}
                                 </p>
+                                <div className="mt-2">
+                                  <CatastoAnomaliaExplainer
+                                    anomalia={anomalia}
+                                    buttonClassName="text-[11px] font-medium text-rose-700 underline underline-offset-2"
+                                  />
+                                </div>
                                 {anomalia.anno_campagna ? (
                                   <p className="mt-1 text-[10px] font-medium text-rose-700">Anno ruolo {anomalia.anno_campagna}</p>
                                 ) : null}

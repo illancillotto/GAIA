@@ -59,7 +59,7 @@ function describeDashboardAnomalyType(tipo: string): string {
     case "VAL-05-particella_assente":
       return "La particella indicata non trova un match nell'anagrafica catastale corrente.";
     case "VAL-06-imponibile":
-      return "L'imponibile non torna rispetto a superficie irrigabile e indice spese fisse.";
+      return "L'importo imponibile non torna con il calcolo basato su superficie irrigabile e indice spese fisse.";
     case "VAL-07-importi":
       return "Gli importi del ruolo non coincidono con i calcoli attesi.";
     default:
