@@ -11,6 +11,7 @@ import { UtenzeModulePage } from "@/components/utenze/utenze-module-page";
 import {
   createElaborazioneRichiesta,
   deleteUtenzeDocument,
+  downloadCatastoDocumentBlob,
   downloadUtenzeDocumentBlob,
   getUtenzeSubject,
   getUtenzeSubjectNasCandidates,
@@ -23,6 +24,7 @@ import {
 import { formatDateTime } from "@/lib/presentation";
 import { cn } from "@/lib/cn";
 import type {
+  AnagraficaCatastoDocument,
   AnagraficaDocument,
   AnagraficaNasFolderCandidate,
   AnprSubjectStatus,
@@ -85,6 +87,16 @@ function isPreviewableSpreadsheet(extension: string | null): boolean {
 
 function isPreviewableText(extension: string | null): boolean {
   return extension != null && TEXT_EXTENSIONS.has(extension.toLowerCase());
+}
+
+function getExtensionFromFilename(filename: string): string | null {
+  const dotIndex = filename.lastIndexOf(".");
+  if (dotIndex < 0) return null;
+  return filename.slice(dotIndex).toLowerCase();
+}
+
+function isPdfFilename(filename: string): boolean {
+  return getExtensionFromFilename(filename) === ".pdf";
 }
 
 function DetailContent({ token, subjectId, currentUser }: { token: string; subjectId: string; currentUser: CurrentUser }) {
@@ -562,17 +574,25 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
     setTextPreview(null);
   }, [previewUrl]);
 
-  async function handlePreviewDocument(document: AnagraficaDocument) {
-    if (!document.id) {
-      setSaveError("Il documento non ha un identificativo valido per la preview.");
-      return;
-    }
-
+  async function openPreviewFromBlob(
+    document: { filename: string; extension?: string | null; is_pdf?: boolean | null; doc_type?: string; classification_source?: string },
+    blobPromise: Promise<Blob>,
+  ) {
     if (previewUrl) {
       URL.revokeObjectURL(previewUrl);
     }
 
-    setPreviewDocument(document);
+    setPreviewDocument({
+      id: null,
+      filename: document.filename,
+      relative_path: "",
+      nas_path: "",
+      extension: document.extension ?? getExtensionFromFilename(document.filename),
+      is_pdf: document.is_pdf ?? isPdfFilename(document.filename),
+      doc_type: document.doc_type ?? "visura",
+      classification_source: document.classification_source ?? "preview",
+      warnings: [],
+    });
     setPreviewUrl(null);
     setPreviewError(null);
     setIsLoadingPreview(true);
@@ -582,12 +602,12 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
     setTextPreview(null);
 
     try {
-      const blob = await downloadUtenzeDocumentBlob(token, document.id);
+      const blob = await blobPromise;
       const objectUrl = URL.createObjectURL(blob);
-      const extension = document.extension?.toLowerCase() ?? null;
+      const extension = (document.extension ?? getExtensionFromFilename(document.filename))?.toLowerCase() ?? null;
       setPreviewUrl(objectUrl);
 
-      if (document.is_pdf) {
+      if (document.is_pdf ?? isPdfFilename(document.filename)) {
         setPreviewKind("pdf");
         return;
       }
@@ -640,6 +660,27 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
     } finally {
       setIsLoadingPreview(false);
     }
+  }
+
+  async function handlePreviewDocument(document: AnagraficaDocument) {
+    if (!document.id) {
+      setSaveError("Il documento non ha un identificativo valido per la preview.");
+      return;
+    }
+    await openPreviewFromBlob(document, downloadUtenzeDocumentBlob(token, document.id));
+  }
+
+  async function handlePreviewCatastoDocument(document: AnagraficaCatastoDocument) {
+    await openPreviewFromBlob(
+      {
+        filename: document.filename,
+        extension: getExtensionFromFilename(document.filename),
+        is_pdf: isPdfFilename(document.filename),
+        doc_type: "visura",
+        classification_source: "catasto",
+      },
+      downloadCatastoDocumentBlob(token, document.id),
+    );
   }
 
   useEffect(() => {
@@ -708,6 +749,14 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
 
   const readOnlyControlClassName = !isEditMode ? "bg-gray-50 text-gray-500" : "";
   const subjectVisuraRequestState = getSubjectVisuraRequestState();
+  const latestCatastoVisura = subject.catasto_documents.reduce<AnagraficaCatastoDocument | null>((latest, item) => {
+    if (!latest) {
+      return item;
+    }
+    return new Date(item.created_at).getTime() > new Date(latest.created_at).getTime() ? item : latest;
+  }, null);
+  const latestCatastoVisuraAgeMs = latestCatastoVisura ? Date.now() - new Date(latestCatastoVisura.created_at).getTime() : null;
+  const hasRecentCatastoVisura = latestCatastoVisuraAgeMs != null && latestCatastoVisuraAgeMs >= 0 && latestCatastoVisuraAgeMs < 24 * 60 * 60 * 1000;
   const canQuickImportFromNas = Boolean(
     isEmbedded &&
     nasImportStatus?.can_import_from_nas &&
@@ -1193,7 +1242,7 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
                   className="btn-primary min-w-44"
                   type="button"
                   onClick={() => void handleRequestSubjectVisura()}
-                  disabled={isRequestingSubjectVisura || !subjectVisuraRequestState}
+                  disabled={isRequestingSubjectVisura || !subjectVisuraRequestState || hasRecentCatastoVisura}
                 >
                   {isRequestingSubjectVisura ? "Richiesta in corso..." : "Richiedi visura"}
                 </button>
@@ -1219,6 +1268,11 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
               </div>
 
               {subjectVisuraError ? <p className="mt-4 text-sm text-red-600">{subjectVisuraError}</p> : null}
+              {hasRecentCatastoVisura && latestCatastoVisura ? (
+                <p className="mt-4 text-sm text-amber-700">
+                  Una visura importata dal job è già disponibile dal {formatDateTime(latestCatastoVisura.created_at)}. Per 24 ore la richiesta di una nuova visura è bloccata.
+                </p>
+              ) : null}
               {subjectVisuraResult ? (
                 <div className="mt-4 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
                   <p>Richiesta visura avviata sul batch {subjectVisuraResult.name}.</p>
@@ -1611,7 +1665,19 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
         ) : (
           <div className="space-y-3">
             {subject.catasto_documents.map((item) => (
-              <div key={item.id} className="rounded-lg border border-gray-100 px-4 py-3">
+              <div
+                key={item.id}
+                className="cursor-pointer rounded-lg border border-gray-100 px-4 py-3 transition hover:bg-gray-50"
+                onClick={() => void handlePreviewCatastoDocument(item)}
+                role="button"
+                tabIndex={0}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    void handlePreviewCatastoDocument(item);
+                  }
+                }}
+              >
                 <div className="flex items-center justify-between gap-3">
                   <p className="text-sm font-medium text-gray-900">{item.filename}</p>
                   <span className="text-xs text-gray-400">{formatDateTime(item.created_at)}</span>
@@ -1623,6 +1689,18 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
                 <p className="mt-1 text-xs text-gray-500">
                   {item.catasto} · {item.tipo_visura} · {item.codice_fiscale || "CF non disponibile"}
                 </p>
+                <div className="mt-3 flex justify-end">
+                  <button
+                    className="text-sm font-medium text-[#1D4E35] transition hover:text-[#163a29]"
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      void handlePreviewCatastoDocument(item);
+                    }}
+                  >
+                    Preview
+                  </button>
+                </div>
               </div>
             ))}
           </div>
