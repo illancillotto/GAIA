@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
+import InazCapisettorePage from "@/app/inaz/capisettore/page";
 import InazCollaboratoriPage from "@/app/inaz/collaboratori/page";
 import InazImportPage from "@/app/inaz/import/page";
 import InazPage from "@/app/inaz/page";
