@@ -247,6 +247,23 @@ Note:
 - `GET /catasto/anomalie/wizard/particella/items`
 - `POST /catasto/anomalie/wizard/particella/apply`
 
+### Letture contatori irrigui
+
+- `GET /catasto/meter-readings`
+- `GET /catasto/meter-readings/{reading_id}`
+- `GET /catasto/meter-readings/by-subject/{subject_id}`
+- `GET /catasto/meter-readings/imports`
+- `GET /catasto/meter-readings/imports/{import_id}`
+- `POST /catasto/meter-readings/import/validate`
+- `POST /catasto/meter-readings/import`
+
+Contratto operativo obbligatorio per `GET /catasto/meter-readings`:
+
+- i filtri `record_tab`, `operational_filter` e `validation_filter` devono essere applicati lato backend, non dopo la paginazione frontend
+- il campo `total` deve rappresentare il dataset completo dopo tutti i filtri applicati
+- il payload deve esporre anche `record_tab_counts`, `operational_counts` e `validation_counts` per alimentare i chip UI senza ricontare la sola pagina corrente
+- il conteggio `lowBattery` deve funzionare su PostgreSQL anche quando `validation_messages` e JSON nullo o vuoto, senza errori di `coalesce(json, varchar)`
+
 Nota UI obbligatoria per `Distretti Excel`:
 
 - l'API di analisi batch usa esiti canonici stabili (`ALREADY_ALIGNED`, `MATCHED`, `NOT_FOUND`, `COMUNE_NOT_FOUND`, `INVALID_ROW`, `DUPLICATE_CONFLICT`)

@@ -50,7 +50,7 @@ def _apply_operational_filter(query, operational_filter: str | None):
     if operational_filter == "dismissed":
         return query.where(CatMeterReading.record_kind == "dismissed_point")
     if operational_filter == "lowBattery":
-        return query.where(cast(func.coalesce(CatMeterReading.validation_messages, "[]"), String).ilike('%"code": "BATTERIA_BASSA"%'))
+        return query.where(func.coalesce(cast(CatMeterReading.validation_messages, String), "[]").ilike('%"code": "BATTERIA_BASSA"%'))
     return query
 
 
@@ -321,7 +321,7 @@ def list_meter_readings(
         "dismissed": _count_query(db, tab_query.where(CatMeterReading.record_kind == "dismissed_point")),
         "lowBattery": _count_query(
             db,
-            tab_query.where(cast(func.coalesce(CatMeterReading.validation_messages, "[]"), String).ilike('%"code": "BATTERIA_BASSA"%')),
+            tab_query.where(func.coalesce(cast(CatMeterReading.validation_messages, String), "[]").ilike('%"code": "BATTERIA_BASSA"%')),
         ),
     }
     selected_operational_filter = None if operational_filter in {None, "all"} else operational_filter
