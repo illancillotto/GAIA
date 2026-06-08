@@ -40,6 +40,10 @@ type SpreadsheetPreviewSheet = {
   rows: string[][];
 };
 
+function isMergedSubject(sourceNameRaw: string | null | undefined): boolean {
+  return typeof sourceNameRaw === "string" && sourceNameRaw.includes("[MERGED->");
+}
+
 type ManualUploadItem = {
   id: string;
   file: File;
@@ -156,6 +160,7 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
     note: "",
   });
   const deferredDocumentSearch = useDeferredValue(documentSearch);
+  const showAnprCard = subject?.person != null && subject?.company == null && !isMergedSubject(subject?.source_name_raw);
 
   useEffect(() => {
     async function loadSubject() {
@@ -1162,7 +1167,7 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
           {saveError ? <p className="mb-3 text-sm text-red-600">{saveError}</p> : null}
           {saveMessage ? <p className="mb-3 text-sm text-[#1D4E35]">{saveMessage}</p> : null}
           <div className="grid gap-4 md:grid-cols-2">
-            {subject.person ? <AnprStatusCard subjectId={subjectId} initialStatus={initialAnprStatus} /> : null}
+            {showAnprCard ? <AnprStatusCard subjectId={subjectId} initialStatus={initialAnprStatus} /> : null}
             <div className="rounded-2xl border border-[#d8e2d8] bg-[#f8fbf7] p-4 md:col-span-2">
               <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                 <div>
