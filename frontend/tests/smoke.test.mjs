@@ -135,7 +135,7 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   assert.match(read("src/components/elaborazioni/capacitas-workspace.tsx"), /CAPACITAS_SECTIONS/);
   assert.match(read("src/components/elaborazioni/capacitas-workspace.tsx"), /PREVIEW_ROWS_LIMIT/);
   assert.match(newBatchPage, /redirect\("\/elaborazioni\/new-batch"\)/);
-  assert.match(newSinglePage, /redirect\("\/elaborazioni\/new-single"\)/);
+  assert.match(newSinglePage, /redirect\("\/elaborazioni\/visure"\)/);
   assert.match(importPage, /Polling ogni 2s/);
   assert.match(importPage, /type StepKey = "upload" \| "progress" \| "report"/);
   assert.match(importPage, /catastoUploadCapacitas/);
@@ -183,7 +183,7 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   assert.match(anomaliePage, /catastoApplyComuneWizard/);
   assert.match(anomaliePage, /catastoGetParticellaWizardItems/);
   assert.match(anomaliePage, /catastoApplyParticellaWizard/);
-  assert.match(anomaliePage, /Code di lavoro/);
+  assert.match(anomaliePage, /Scegli una coda di lavoro qui sotto/);
   assert.match(anomaliePage, /Wizard codice fiscale/);
   assert.match(anomaliePage, /Wizard comune invalido/);
   assert.match(anomaliePage, /Wizard particella assente/);
@@ -201,7 +201,8 @@ test("catasto stays minimal while elaborazioni wires api client and realtime wor
   assert.match(catastoTypes, /CatAnomaliaParticellaWizardItem/);
   assert.match(anagraficaPage, /Elaborazione massiva/);
   assert.match(anagraficaPage, /AnagraficaBulkPanel/);
-  assert.match(anagraficaBulkPanel, /catastoBulkSearchAnagrafica/);
+  assert.match(anagraficaBulkPanel, /catastoUploadElaborazioneMassivaJob/);
+  assert.match(anagraficaBulkPanel, /catastoGetElaborazioneMassivaJob/);
   assert.match(particelleDetailPage, /catastoGetParticellaUtenze/);
   assert.match(particelleDetailPage, /catastoGetParticellaAnomalie/);
   assert.match(mapContainer, /\/tiles\/cat_distretti\/\{z\}\/\{x\}\/\{y\}/);
@@ -272,7 +273,8 @@ test("reviews and sync pages expose redesigned administrative views", () => {
   assert.match(reviewsPage, /Approvate/);
   assert.match(syncPage, /Sincronizzazione/);
   assert.match(syncPage, /Stato connector/);
-  assert.match(syncPage, /Storico snapshot/);
+  assert.match(syncPage, /Run registrate/);
+  assert.match(syncPage, /Storico audit delle sincronizzazioni/);
   assert.match(syncPage, /SyncButton/);
 });
 
@@ -330,36 +332,38 @@ test("utenze import page exposes bulk import progress feedback", () => {
 test("catasto anagrafica bulk export normalizes foglio+sezione and exposes ruolo/cnc before note", () => {
   const panel = read("src/components/catasto/anagrafica/AnagraficaBulkPanel.tsx");
 
-  assert.match(panel, /const FOGLIO_WITH_SEZIONE_RE =/);
-  assert.match(panel, /function normalizeFoglioSezioneInput/);
-  assert.match(panel, /stato_ruolo: m\?\.stato_ruolo \?\? ""/);
-  assert.match(panel, /stato_cnc: m\?\.stato_cnc \?\? ""/);
-  assert.match(panel, /deceduto: intestatario\.deceduto \? "si" : "",\s+note: m\?\.note \?\? ""/s);
-  assert.match(panel, /rows\.push\(\{ \.\.\.base, \.\.\.emptyInt, note: m\?\.note \?\? "" \}\)/);
+  assert.match(panel, /function inferKindFromHeaders/);
+  assert.match(panel, /CF_PIVA_PARTICELLE/);
+  assert.match(panel, /COMUNE_FOGLIO_PARTICELLA_INTESTATARI/);
+  assert.match(panel, /codice_fiscale oppure partita_iva/);
+  assert.match(panel, /Richieste: comune, foglio, particella/);
+  assert.match(panel, /catastoDownloadElaborazioneMassivaJobExport/);
 });
 
 test("catasto particelle page exposes solo a ruolo toggle", () => {
   const particellePage = read("src/app/catasto/particelle/page.tsx");
+  const particelleWorkspace = read("src/components/catasto/particelle-search-workspace.tsx");
   const catastoApi = read("src/lib/api/catasto.ts");
 
-  assert.match(particellePage, /Visualizza solo particelle con anagrafica/);
-  assert.match(particellePage, /Solo particelle con anagrafica/);
-  assert.match(particellePage, /la vedi comunque anche se manca l&apos;anagrafica/);
-  assert.match(particellePage, /Senza anagrafica/);
-  assert.match(particellePage, /Particella trovata, ma senza anagrafica collegata/);
-  assert.match(particellePage, /soloConAnagrafica: true/);
-  assert.match(particellePage, /soloConAnagrafica: nextFilters\.soloConAnagrafica/);
-  assert.match(particellePage, /Visualizza solo particelle a ruolo/);
-  assert.match(particellePage, /Solo particelle a ruolo/);
-  assert.match(particellePage, /anno piu recente, usa automaticamente l&apos;anno precedente/);
-  assert.match(particellePage, /verifica che l'archivio Ruolo sia stato importato e collegato al Catasto/);
-  assert.match(particellePage, /tracking-\[0\.16em\] text-\[#52715d\]/);
-  assert.match(particellePage, /soloARuolo: false/);
-  assert.match(particellePage, /soloARuolo: nextFilters\.soloARuolo/);
-  assert.match(particellePage, /void applyFilters\(nextFilters\)/);
-  assert.match(particellePage, /\/\^\[A-Z0-9\]\{16\}\$\/i\.test\(trimmed\)/);
-  assert.match(particellePage, /\/\^\\d\{11\}\$\/\.test\(trimmed\)/);
-  assert.match(particellePage, /CF\/P\.IVA \(es\. RSSMRA80A01H501T o 00588230953\) o nome/);
+  assert.match(particellePage, /ParticelleSearchWorkspace/);
+  assert.match(particelleWorkspace, /Visualizza solo particelle con anagrafica/);
+  assert.match(particelleWorkspace, /Solo particelle con anagrafica/);
+  assert.match(particelleWorkspace, /la vedi comunque anche se manca l&apos;anagrafica/);
+  assert.match(particelleWorkspace, /Senza anagrafica/);
+  assert.match(particelleWorkspace, /Particella trovata, ma senza anagrafica collegata/);
+  assert.match(particelleWorkspace, /soloConAnagrafica: true/);
+  assert.match(particelleWorkspace, /soloConAnagrafica: nextFilters\.soloConAnagrafica/);
+  assert.match(particelleWorkspace, /Visualizza solo particelle a ruolo/);
+  assert.match(particelleWorkspace, /Solo particelle a ruolo/);
+  assert.match(particelleWorkspace, /anno piu recente, usa automaticamente l&apos;anno precedente/);
+  assert.match(particelleWorkspace, /verifica che l'archivio Ruolo sia stato importato e collegato al Catasto/);
+  assert.match(particelleWorkspace, /tracking-\[0\.16em\] text-\[#52715d\]/);
+  assert.match(particelleWorkspace, /soloARuolo: false/);
+  assert.match(particelleWorkspace, /soloARuolo: nextFilters\.soloARuolo/);
+  assert.match(particelleWorkspace, /void applyFilters\(nextFilters\)/);
+  assert.match(particelleWorkspace, /\/\^\[A-Z0-9\]\{16\}\$\/i\.test\(trimmed\)/);
+  assert.match(particelleWorkspace, /\/\^\\d\{11\}\$\/\.test\(trimmed\)/);
+  assert.match(particelleWorkspace, /CF\/P\.IVA \(es\. RSSMRA80A01H501T o 00588230953\) o nome/);
   assert.match(catastoApi, /soloConAnagrafica\?: boolean/);
   assert.match(catastoApi, /query\.set\("solo_con_anagrafica", filters\.soloConAnagrafica \? "true" : "false"\)/);
   assert.match(catastoApi, /soloARuolo\?: boolean/);
