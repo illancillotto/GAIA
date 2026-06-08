@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
+import re
 
 from bs4 import BeautifulSoup
 
@@ -26,7 +28,54 @@ def _parse_numeric(value: str | None) -> int | None:
     return int(value) if value.isdigit() else None
 
 
+_DATASOURCE_RE = re.compile(r"datasource\s*=\s*(\{.*?\});", re.DOTALL)
+
+
+def _extract_datasource_entries(html: str, chart_type: str) -> list["BonificaOrgChartEntryRow"]:
+    match = _DATASOURCE_RE.search(html)
+    if match is None:
+        return []
+
+    try:
+        datasource = json.loads(match.group(1))
+    except json.JSONDecodeError:
+        return []
+
+    entries: list[BonificaOrgChartEntryRow] = []
+
+    def walk(node: dict, *, parent_wc_id: int | None, depth: int) -> None:
+        wc_id = node.get("id")
+        if not isinstance(wc_id, int):
+            return
+        label = clean_html_text(node.get("name"))
+        role = clean_html_text(node.get("title"))
+        source_parts = ["datasource_node", f"chart={chart_type}", f"depth={depth}"]
+        if parent_wc_id is not None:
+            source_parts.append(f"parent={parent_wc_id}")
+        entries.append(
+            BonificaOrgChartEntryRow(
+                wc_id=wc_id,
+                label=label or None,
+                role=role or None,
+                operator_wc_id=wc_id if chart_type == "user" else None,
+                area_wc_id=wc_id if chart_type == "area" else None,
+                source_field="|".join(source_parts),
+                sort_order=len(entries),
+            )
+        )
+        for child in node.get("children") or []:
+            if isinstance(child, dict):
+                walk(child, parent_wc_id=wc_id, depth=depth + 1)
+
+    walk(datasource, parent_wc_id=None, depth=0)
+    return entries
+
+
 def _extract_entries(html: str) -> list["BonificaOrgChartEntryRow"]:
+    datasource_entries = _extract_datasource_entries(html, chart_type="user")
+    if datasource_entries:
+        return datasource_entries
+
     soup = BeautifulSoup(html, "html.parser")
     entries: list[BonificaOrgChartEntryRow] = []
     seen: set[tuple[str, int, str]] = set()
@@ -170,7 +219,7 @@ class BonificaOrgChartsClient(BonificaDatatableClient):
                 continue
 
             html = await self.fetch_detail_html(app_definition.detail_path_template.format(id=wc_id))
-            entries = _extract_entries(html)
+            entries = _extract_datasource_entries(html, chart_type=chart_type) or _extract_entries(html)
             parsed.append(
                 BonificaOrgChartRow(
                     wc_id=wc_id,
