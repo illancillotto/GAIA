@@ -39,5 +39,6 @@ La funzionalità prevede:
   - `Idrovalvola ...` o `... linea sotterranea ...` -> `IDROVALVOLA`
 - per file storici senza anno nel filename, l'anno viene inferito dai nomi colonna se presente nel tracciato;
 - per `CONT_NO_TES` senza codice fiscale, e per `CONT_TESSER` senza identificativo utenza, il sistema deve aprire automaticamente un'anomalia nel registro `catasto/anomalie` per triage manuale;
+- dal drawer di dettaglio una lettura in `warning` può essere confermata manualmente con `Valida lettura`; la conferma porta il record a `valid`, chiude i warning correnti e lascia traccia nello storico `manual_audits`;
 - pagina `catasto/letture-contatori/import` riservata ad `admin` e `super_admin`;
 - predisposizione futura per GAIA Mobile.

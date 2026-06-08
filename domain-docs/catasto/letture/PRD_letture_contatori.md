@@ -279,6 +279,13 @@ La pagina deve mostrare indicatori:
 | intervento da eseguire valorizzato | warning operativo |
 | batteria bassa | warning operativo |
 
+### Gestione manuale warning
+
+- Le letture con `validation_status = warning` restano importabili e visibili nel registro operativo.
+- Dal dettaglio lettura l'operatore può usare `Valida lettura` per confermare manualmente il record dopo controllo umano.
+- La validazione manuale imposta `validation_status = valid`, rimuove i warning correnti ancora aperti e scrive un evento in `manual_audits`.
+- Le letture con errori bloccanti non sono validabili manualmente con questo flusso: devono essere corrette prima.
+
 ## 9. Requisiti non funzionali
 
 - Import robusto anche con nomi colonna leggermente diversi.
@@ -303,4 +310,5 @@ La fase 1 è completa quando:
 7. il sistema gestisce reimport e upsert;
 8. il campo `ID` Excel non viene usato come chiave primaria;
 9. vengono salvati stato validazione e messaggi anomalia;
-10. sono presenti test backend su parser, validazione, import e linking.
+10. la validazione manuale delle letture con warning è tracciata nello storico audit;
+11. sono presenti test backend su parser, validazione, import e linking.
