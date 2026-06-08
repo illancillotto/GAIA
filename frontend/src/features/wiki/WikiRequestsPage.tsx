@@ -5,9 +5,16 @@ import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { MetricCard } from "@/components/ui/metric-card";
 import { SearchIcon } from "@/components/ui/icons";
-import { getWikiRequestAssignees, getWikiRequestEvents, getWikiRequests, updateWikiRequest } from "@/lib/api";
+import {
+  getWikiRequestAssignees,
+  getWikiRequestDuplicates,
+  getWikiRequestEvents,
+  getWikiRequests,
+  markWikiRequestDuplicate,
+  updateWikiRequest,
+} from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
-import type { WikiRequest, WikiRequestAssignee, WikiRequestEvent } from "@/types/api";
+import type { WikiRequest, WikiRequestAssignee, WikiRequestDuplicateCandidate, WikiRequestEvent } from "@/types/api";
 
 type RequestStatusFilter = "all" | "new" | "triaged" | "investigating" | "waiting_user" | "planned" | "resolved" | "duplicate" | "rejected";
 type RequestCategoryFilter = "all" | "feature_request" | "bug_report" | "question" | "support_request";
@@ -178,12 +185,16 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
   const [draftPriority, setDraftPriority] = useState<WikiRequest["priority"]>("medium");
   const [draftSeverity, setDraftSeverity] = useState<WikiRequest["severity"]>("medium");
   const [draftAssignedTo, setDraftAssignedTo] = useState("");
+  const [draftResolutionMessage, setDraftResolutionMessage] = useState("");
   const [draftNotes, setDraftNotes] = useState("");
   const [assignees, setAssignees] = useState<WikiRequestAssignee[]>([]);
   const [timeline, setTimeline] = useState<WikiRequestEvent[]>([]);
+  const [duplicates, setDuplicates] = useState<WikiRequestDuplicateCandidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [timelineLoading, setTimelineLoading] = useState(false);
+  const [duplicatesLoading, setDuplicatesLoading] = useState(false);
+  const [markingDuplicateId, setMarkingDuplicateId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -283,6 +294,7 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
     setDraftPriority(selectedRequest.priority);
     setDraftSeverity(selectedRequest.severity);
     setDraftAssignedTo(selectedRequest.assigned_to ?? "");
+    setDraftResolutionMessage(selectedRequest.resolution_message ?? "");
     setDraftNotes(selectedRequest.admin_notes ?? "");
     setSuccessMessage(null);
   }, [selectedRequest, filteredItems]);
@@ -327,6 +339,30 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
     void loadTimeline();
   }, [selectedRequest]);
 
+  useEffect(() => {
+    async function loadDuplicates() {
+      if (!selectedRequest) {
+        setDuplicates([]);
+        return;
+      }
+      const token = getStoredAccessToken();
+      if (!token) {
+        setDuplicates([]);
+        return;
+      }
+      setDuplicatesLoading(true);
+      try {
+        const items = await getWikiRequestDuplicates(token, selectedRequest.id);
+        setDuplicates(items);
+      } catch {
+        setDuplicates([]);
+      } finally {
+        setDuplicatesLoading(false);
+      }
+    }
+    void loadDuplicates();
+  }, [selectedRequest]);
+
   async function handleSave() {
     if (!selectedRequest) {
       return;
@@ -345,6 +381,7 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
         priority: draftPriority as "low" | "medium" | "high" | "urgent",
         severity: draftSeverity as "low" | "medium" | "high" | "critical",
         assigned_to: draftAssignedTo || null,
+        resolution_message: draftResolutionMessage || null,
         admin_notes: draftNotes || null,
       });
       setItems((current) => current.map((item) => (item.id === updated.id ? updated : item)));
@@ -354,6 +391,40 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
       setError(saveError instanceof Error ? saveError.message : "Errore aggiornamento richiesta Wiki");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleMarkDuplicate(candidateId: string) {
+    if (!selectedRequest) {
+      return;
+    }
+    const token = getStoredAccessToken();
+    if (!token) {
+      setError("Sessione non disponibile.");
+      return;
+    }
+
+    setMarkingDuplicateId(candidateId);
+    setSuccessMessage(null);
+    try {
+      const updated = await markWikiRequestDuplicate(token, selectedRequest.id, {
+        canonical_request_id: candidateId,
+        admin_notes: draftNotes || null,
+      });
+      setItems((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setDraftStatus(updated.status);
+      setSuccessMessage("Richiesta collegata al caso canonico.");
+      const [eventsResponse, duplicatesResponse] = await Promise.all([
+        getWikiRequestEvents(token, updated.id),
+        getWikiRequestDuplicates(token, updated.id),
+      ]);
+      setTimeline(eventsResponse);
+      setDuplicates(duplicatesResponse);
+      setError(null);
+    } catch (markError) {
+      setError(markError instanceof Error ? markError.message : "Errore collegamento duplicato");
+    } finally {
+      setMarkingDuplicateId(null);
     }
   }
 
@@ -579,6 +650,86 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
                 </div>
               </div>
 
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Deduplica casi simili</p>
+                  {selectedRequest.canonical_request_id ? (
+                    <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] text-gray-600">
+                      Caso canonico collegato
+                    </span>
+                  ) : null}
+                </div>
+                {selectedRequest.canonical_request_id ? (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+                    <p className="font-medium">Questa richiesta è marcata come duplicata.</p>
+                    <p className="mt-1">
+                      Caso canonico:{" "}
+                      <a
+                        href={`/wiki/requests/${selectedRequest.canonical_request_id}`}
+                        className="font-medium underline underline-offset-2"
+                      >
+                        {selectedRequest.canonical_request_question || selectedRequest.canonical_request_id}
+                      </a>
+                      {selectedRequest.canonical_request_status ? ` · stato ${selectedRequest.canonical_request_status}` : ""}
+                    </p>
+                  </div>
+                ) : null}
+                <div className="rounded-2xl border border-gray-200 bg-[#fafaf7] p-3">
+                  {duplicatesLoading ? (
+                    <p className="text-sm text-gray-500">Sto cercando richieste simili...</p>
+                  ) : duplicates.length === 0 ? (
+                    <p className="text-sm text-gray-500">Nessun caso simile abbastanza vicino nel backlog corrente.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {duplicates.map((candidate) => (
+                        <div key={candidate.id} className="rounded-xl border border-gray-100 bg-white px-3 py-3">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="space-y-2">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${statusBadgeClasses(candidate.status as WikiRequest["status"])}`}>
+                                  {statusLabel(candidate.status as WikiRequest["status"])}
+                                </span>
+                                <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs text-gray-600">
+                                  {requestTypeLabel(candidate.request_type as WikiRequest["request_type"])}
+                                </span>
+                                <span className="text-xs text-gray-400">{Math.round(candidate.similarity_score * 100)}% match</span>
+                              </div>
+                              <p className="text-sm font-medium text-gray-900">{candidate.user_question}</p>
+                              <p className="text-xs text-gray-500">
+                                {candidate.match_reason}
+                                {candidate.module_key ? ` · modulo ${candidate.module_key}` : ""}
+                                {candidate.page_path ? ` · ${candidate.page_path}` : ""}
+                              </p>
+                              <p className="text-xs text-gray-400">
+                                {candidate.created_by || "n/d"}
+                                {candidate.assigned_to_name ? ` · assegnata a ${candidate.assigned_to_name}` : ""}
+                                {` · ${formatDateTime(candidate.created_at)}`}
+                              </p>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <a
+                                href={`/wiki/requests/${candidate.id}`}
+                                className="rounded-full border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700"
+                              >
+                                Apri caso
+                              </a>
+                              <button
+                                type="button"
+                                onClick={() => void handleMarkDuplicate(candidate.id)}
+                                disabled={markingDuplicateId === candidate.id}
+                                className="rounded-full bg-[#1D4E35] px-3 py-1.5 text-xs font-medium text-white transition hover:bg-[#163d29] disabled:opacity-50"
+                              >
+                                {markingDuplicateId === candidate.id ? "Collegamento..." : "Segna come duplicata"}
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {selectedRequest.desired_outcome || selectedRequest.observed_behavior || selectedRequest.expected_behavior ? (
                 <div className="grid gap-4 xl:grid-cols-3">
                   <div className="rounded-2xl border border-gray-200 bg-[#fafaf7] px-4 py-3 text-sm text-gray-700">
@@ -593,6 +744,17 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
                     <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Esito desiderato</p>
                     <p className="mt-2 whitespace-pre-wrap">{selectedRequest.desired_outcome || "n/d"}</p>
                   </div>
+                </div>
+              ) : null}
+
+              {selectedRequest.user_feedback_submitted_at || selectedRequest.user_feedback_notes ? (
+                <div className="rounded-2xl border border-violet-200 bg-violet-50 px-4 py-4 text-sm text-violet-950">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-violet-700">Feedback utente</p>
+                  <p className="mt-2 font-medium">
+                    {selectedRequest.user_feedback_rating === "helpful" ? "Utile / risolto" : "Non risolto / incompleto"}
+                  </p>
+                  {selectedRequest.user_feedback_notes ? <p className="mt-2 whitespace-pre-wrap">{selectedRequest.user_feedback_notes}</p> : null}
+                  <p className="mt-2 text-xs text-violet-700">Inviato {formatDateTime(selectedRequest.user_feedback_submitted_at ?? selectedRequest.updated_at)}</p>
                 </div>
               ) : null}
 
@@ -664,6 +826,17 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
                   </select>
                 </label>
               </div>
+
+              <label className="block space-y-2">
+                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Messaggio per l'utente</span>
+                <textarea
+                  value={draftResolutionMessage}
+                  onChange={(event) => setDraftResolutionMessage(event.target.value)}
+                  rows={4}
+                  placeholder="Sintetizza in modo leggibile cosa è stato verificato, deciso o risolto."
+                  className="w-full rounded-2xl border border-gray-200 px-3 py-3 text-sm text-gray-700 outline-none transition focus:border-[#1D4E35] focus:ring-2 focus:ring-[#1D4E35]/10"
+                />
+              </label>
 
               <label className="block space-y-2">
                 <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Note admin</span>

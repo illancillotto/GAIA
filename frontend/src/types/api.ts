@@ -730,9 +730,20 @@ export type WikiRequest = {
   conversation_id: string | null;
   context_article: string | null;
   context_entity_key: string | null;
+  dedupe_key: string | null;
+  canonical_request_id: string | null;
+  canonical_request_question: string | null;
+  canonical_request_status: string | null;
   desired_outcome: string | null;
   observed_behavior: string | null;
   expected_behavior: string | null;
+  resolution_message: string | null;
+  last_admin_update_at: string | null;
+  user_last_viewed_at: string | null;
+  has_unread_update: boolean;
+  user_feedback_rating: "helpful" | "not_helpful" | string | null;
+  user_feedback_notes: string | null;
+  user_feedback_submitted_at: string | null;
   admin_notes: string | null;
   created_at: string;
   updated_at: string;
@@ -747,6 +758,20 @@ export type WikiRequestEvent = {
   to_status: string | null;
   payload: Record<string, unknown> | null;
   created_at: string;
+};
+
+export type WikiRequestDuplicateCandidate = {
+  id: string;
+  user_question: string;
+  request_type: string;
+  status: string;
+  module_key: string | null;
+  page_path: string | null;
+  created_by: string | null;
+  assigned_to_name: string | null;
+  created_at: string;
+  similarity_score: number;
+  match_reason: string;
 };
 
 export type WikiRequestAssignee = {
@@ -778,7 +803,18 @@ export type WikiRequestUpdateInput = {
   priority?: "low" | "medium" | "high" | "urgent";
   severity?: "low" | "medium" | "high" | "critical";
   assigned_to?: string | null;
+  resolution_message?: string | null;
   admin_notes?: string | null;
+};
+
+export type WikiRequestMarkDuplicateInput = {
+  canonical_request_id: string;
+  admin_notes?: string | null;
+};
+
+export type WikiRequestFeedbackInput = {
+  rating: "helpful" | "not_helpful";
+  notes?: string | null;
 };
 
 export type WikiSupportAnalyticsCount = {
@@ -2033,6 +2069,33 @@ export type AnagraficaImportRunResult = {
 };
 
 export type UtenzeImportRunResult = AnagraficaImportRunResult;
+
+export type AnagraficaVisuraRoutingAnomaly = {
+  id: string;
+  source_path: string;
+  filename: string;
+  identifier: string | null;
+  identifier_kind: string | null;
+  reason: string;
+  details_json: Record<string, unknown> | unknown[] | null;
+  occurrences: number;
+  resolved_at: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type UtenzeVisuraRoutingAnomaly = AnagraficaVisuraRoutingAnomaly;
+
+export type AnagraficaVisuraRoutingAnomalyListResponse = {
+  items: AnagraficaVisuraRoutingAnomaly[];
+  total: number;
+  unresolved: number;
+  resolved: number;
+  page: number;
+  page_size: number;
+};
+
+export type UtenzeVisuraRoutingAnomalyListResponse = AnagraficaVisuraRoutingAnomalyListResponse;
 
 export type AnagraficaSubjectImportResult = {
   subject_id: string;

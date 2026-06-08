@@ -269,6 +269,62 @@ def test_admin_can_get_request_by_id() -> None:
     assert resp.json()["id"] == str(req_id)
 
 
+def test_admin_can_list_duplicate_candidates() -> None:
+    _create_user("admin_duplicates", "admin")
+    token = _login("admin_duplicates")
+    source_id = uuid.uuid4()
+    duplicate_id = uuid.uuid4()
+
+    db = TestingSessionLocal()
+    db.add(WikiRequest(
+        id=source_id,
+        user_question="La pagina rete non si apre e mostra un errore 500",
+        category="support_request",
+        request_type="bug_report",
+        status="new",
+        priority="medium",
+        severity="high",
+        created_by="alice",
+        module_key="rete",
+        page_path="/network/devices",
+        dedupe_key="bug_report|rete|network devices|unknown|pagina rete non si apre mostra errore 500",
+    ))
+    db.add(WikiRequest(
+        id=duplicate_id,
+        user_question="Errore 500 nella pagina rete dispositivi",
+        category="bug_report",
+        request_type="bug_report",
+        status="triaged",
+        priority="high",
+        severity="high",
+        created_by="mario",
+        module_key="rete",
+        page_path="/network/devices",
+        dedupe_key="bug_report|rete|network devices|unknown|errore 500 nella pagina rete dispositivi",
+    ))
+    db.add(WikiRequest(
+        id=uuid.uuid4(),
+        user_question="Richiesta senza relazione",
+        category="feature_request",
+        request_type="feature_request",
+        status="new",
+        priority="medium",
+        severity="medium",
+        created_by="other",
+        module_key="wiki",
+    ))
+    db.commit()
+    db.close()
+
+    resp = client.get(f"/wiki/requests/{source_id}/duplicates", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert len(data) == 1
+    assert data[0]["id"] == str(duplicate_id)
+    assert data[0]["status"] == "triaged"
+    assert data[0]["similarity_score"] >= 0.45
+
+
 def test_viewer_cannot_list_requests() -> None:
     _create_user("viewer_user", "viewer")
     token = _login("viewer_user")
@@ -328,7 +384,7 @@ def test_admin_can_update_request_status() -> None:
     resp = client.patch(
         f"/wiki/requests/{req_id}",
         headers={"Authorization": f"Bearer {token}"},
-        json={"status": "planned", "priority": "urgent", "severity": "critical", "assigned_to": "operator1", "admin_notes": "Pianificata per Q3."},
+        json={"status": "planned", "priority": "urgent", "severity": "critical", "assigned_to": "operator1", "resolution_message": "La richiesta è stata presa in carico e pianificata.", "admin_notes": "Pianificata per Q3."},
     )
     assert resp.status_code == 200
     data = resp.json()
@@ -336,7 +392,158 @@ def test_admin_can_update_request_status() -> None:
     assert data["priority"] == "urgent"
     assert data["severity"] == "critical"
     assert data["assigned_to"] == "operator1"
+    assert data["resolution_message"] == "La richiesta è stata presa in carico e pianificata."
     assert data["admin_notes"] == "Pianificata per Q3."
+    assert data["has_unread_update"] is True
+
+
+def test_update_request_rejects_duplicate_without_canonical_reference() -> None:
+    _create_user("admin_duplicate_guard", "admin")
+    token = _login("admin_duplicate_guard")
+    req_id = uuid.uuid4()
+
+    db = TestingSessionLocal()
+    db.add(WikiRequest(
+        id=req_id,
+        user_question="Segnalazione da deduplicare",
+        category="support_request",
+        request_type="bug_report",
+        status="new",
+        priority="medium",
+        severity="medium",
+    ))
+    db.commit()
+    db.close()
+
+    resp = client.patch(
+        f"/wiki/requests/{req_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"status": "duplicate"},
+    )
+    assert resp.status_code == 422
+    assert "caso canonico" in resp.text
+
+
+def test_admin_can_mark_request_as_duplicate_of_canonical_case() -> None:
+    _create_user("admin_mark_duplicate", "admin")
+    token = _login("admin_mark_duplicate")
+    req_id = uuid.uuid4()
+    canonical_id = uuid.uuid4()
+
+    db = TestingSessionLocal()
+    db.add(WikiRequest(
+        id=req_id,
+        user_question="Il widget wiki non si apre nella dashboard",
+        category="support_request",
+        request_type="bug_report",
+        status="new",
+        priority="medium",
+        severity="high",
+        created_by="alice",
+        module_key="wiki",
+        page_path="/dashboard",
+    ))
+    db.add(WikiRequest(
+        id=canonical_id,
+        user_question="Dashboard: widget wiki invisibile",
+        category="bug_report",
+        request_type="bug_report",
+        status="investigating",
+        priority="high",
+        severity="high",
+        created_by="mario",
+        module_key="wiki",
+        page_path="/dashboard",
+    ))
+    db.commit()
+    db.close()
+
+    resp = client.post(
+        f"/wiki/requests/{req_id}/mark-duplicate",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"canonical_request_id": str(canonical_id), "admin_notes": "Accorpata al caso principale."},
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["status"] == "duplicate"
+    assert data["canonical_request_id"] == str(canonical_id)
+    assert data["canonical_request_question"] == "Dashboard: widget wiki invisibile"
+    assert data["admin_notes"] == "Accorpata al caso principale."
+
+    events_resp = client.get(f"/wiki/requests/{req_id}/events", headers={"Authorization": f"Bearer {token}"})
+    assert events_resp.status_code == 200
+    event_types = [item["event_type"] for item in events_resp.json()]
+    assert "marked_duplicate" in event_types
+    assert "status_changed" in event_types
+
+
+def test_user_can_mark_own_request_as_viewed() -> None:
+    _create_user("viewer_mark_viewed", "viewer")
+    token = _login("viewer_mark_viewed")
+    req_id = uuid.uuid4()
+
+    db = TestingSessionLocal()
+    db.add(WikiRequest(
+        id=req_id,
+        user_question="Mi serve aggiornamento",
+        category="support_request",
+        request_type="help_request",
+        status="waiting_user",
+        priority="medium",
+        severity="medium",
+        created_by="viewer_mark_viewed",
+        last_admin_update_at=None,
+    ))
+    db.commit()
+    req = db.query(WikiRequest).filter(WikiRequest.id == req_id).first()
+    assert req is not None
+    req.last_admin_update_at = req.updated_at
+    db.commit()
+    db.close()
+
+    resp = client.post(f"/wiki/requests/{req_id}/mark-viewed", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["user_last_viewed_at"] is not None
+    assert data["has_unread_update"] is False
+
+
+def test_user_can_submit_feedback_on_own_request() -> None:
+    _create_user("viewer_feedback", "viewer")
+    token = _login("viewer_feedback")
+    req_id = uuid.uuid4()
+
+    db = TestingSessionLocal()
+    db.add(WikiRequest(
+        id=req_id,
+        user_question="Caso da chiudere",
+        category="support_request",
+        request_type="help_request",
+        status="resolved",
+        priority="medium",
+        severity="medium",
+        created_by="viewer_feedback",
+    ))
+    db.commit()
+    db.close()
+
+    resp = client.patch(
+        f"/wiki/requests/{req_id}/feedback",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"rating": "not_helpful", "notes": "Il problema si ripresenta."},
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["user_feedback_rating"] == "not_helpful"
+    assert data["user_feedback_notes"] == "Il problema si ripresenta."
+    assert data["user_feedback_submitted_at"] is not None
+
+    admin = _create_user("admin_feedback_check", "admin")
+    assert admin.username == "admin_feedback_check"
+    admin_token = _login("admin_feedback_check")
+    events_resp = client.get(f"/wiki/requests/{req_id}/events", headers={"Authorization": f"Bearer {admin_token}"})
+    assert events_resp.status_code == 200
+    assert "user_feedback_submitted" in [item["event_type"] for item in events_resp.json()]
 
 
 def test_update_request_rejects_unknown_assignee() -> None:

@@ -64,9 +64,22 @@ class WikiRequest(Base):
     conversation_id = Column(UUID(as_uuid=True), nullable=True, index=True)
     context_article = Column(String(512), nullable=True)
     context_entity_key = Column(String(512), nullable=True, index=True)
+    dedupe_key = Column(String(128), nullable=True, index=True)
+    canonical_request_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("wiki_requests.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
     desired_outcome = Column(Text, nullable=True)
     observed_behavior = Column(Text, nullable=True)
     expected_behavior = Column(Text, nullable=True)
+    resolution_message = Column(Text, nullable=True)
+    last_admin_update_at = Column(DateTime, nullable=True, index=True)
+    user_last_viewed_at = Column(DateTime, nullable=True, index=True)
+    user_feedback_rating = Column(String(16), nullable=True, index=True)
+    user_feedback_notes = Column(Text, nullable=True)
+    user_feedback_submitted_at = Column(DateTime, nullable=True, index=True)
     admin_notes = Column(Text, nullable=True)
     created_at = Column(DateTime, nullable=False, server_default=func.now())
     updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())

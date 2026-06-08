@@ -19,6 +19,8 @@ import type {
   AnagraficaSubjectImportResult,
   AnagraficaSubjectListResponse,
   AnagraficaSubjectUpdateInput,
+  AnagraficaVisuraRoutingAnomaly,
+  AnagraficaVisuraRoutingAnomalyListResponse,
   AnprJobTriggerResult,
   AnprPreviewLookupResponse,
   AnprSubjectStatus,
@@ -167,8 +169,11 @@ import type {
   WikiRequestAssignee,
   WikiSupportAnalyticsSeriesResponse,
   WikiSupportAnalyticsSummary,
+  WikiRequestDuplicateCandidate,
   WikiRequestCreateInput,
   WikiRequestEvent,
+  WikiRequestFeedbackInput,
+  WikiRequestMarkDuplicateInput,
   WikiRequestUpdateInput,
   WikiToolAuditLogListResponse,
   WikiToolAuditLogDetailResponse,
@@ -1241,8 +1246,25 @@ export async function getWikiRequestEvents(token: string, requestId: string): Pr
   });
 }
 
+export async function getWikiRequestDuplicates(token: string, requestId: string): Promise<WikiRequestDuplicateCandidate[]> {
+  return request<WikiRequestDuplicateCandidate[]>(`/wiki/requests/${requestId}/duplicates`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
 export async function getMyWikiRequests(token: string): Promise<WikiRequest[]> {
   return request<WikiRequest[]>("/wiki/requests/mine", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function markWikiRequestViewed(token: string, requestId: string): Promise<WikiRequest> {
+  return request<WikiRequest>(`/wiki/requests/${requestId}/mark-viewed`, {
+    method: "POST",
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -1265,6 +1287,34 @@ export async function updateWikiRequest(
   payload: WikiRequestUpdateInput,
 ): Promise<WikiRequest> {
   return request<WikiRequest>(`/wiki/requests/${requestId}`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function markWikiRequestDuplicate(
+  token: string,
+  requestId: string,
+  payload: WikiRequestMarkDuplicateInput,
+): Promise<WikiRequest> {
+  return request<WikiRequest>(`/wiki/requests/${requestId}/mark-duplicate`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateWikiRequestFeedback(
+  token: string,
+  requestId: string,
+  payload: WikiRequestFeedbackInput,
+): Promise<WikiRequest> {
+  return request<WikiRequest>(`/wiki/requests/${requestId}/feedback`, {
     method: "PATCH",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -2508,6 +2558,28 @@ export async function getAnagraficaImportJobs(token: string): Promise<Anagrafica
 
 export const getUtenzeImportJobs = getAnagraficaImportJobs;
 
+export async function getUtenzeVisureRoutingAnomalies(
+  token: string,
+  params?: {
+    resolved?: boolean;
+    search?: string;
+    page?: number;
+    pageSize?: number;
+  },
+): Promise<AnagraficaVisuraRoutingAnomalyListResponse> {
+  const query = new URLSearchParams();
+  if (typeof params?.resolved === "boolean") query.set("resolved", String(params.resolved));
+  if (params?.search) query.set("search", params.search);
+  if (params?.page) query.set("page", String(params.page));
+  if (params?.pageSize) query.set("page_size", String(params.pageSize));
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<AnagraficaVisuraRoutingAnomalyListResponse>(`/utenze/visure-routing-anomalies${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
 export async function getAnagraficaImportJob(token: string, jobId: string): Promise<AnagraficaImportJob> {
   return request<AnagraficaImportJob>(`/utenze/import/jobs/${jobId}`, {
     headers: {
@@ -2517,6 +2589,18 @@ export async function getAnagraficaImportJob(token: string, jobId: string): Prom
 }
 
 export const getUtenzeImportJob = getAnagraficaImportJob;
+
+export async function resolveUtenzeVisureRoutingAnomaly(
+  token: string,
+  anomalyId: string,
+): Promise<AnagraficaVisuraRoutingAnomaly> {
+  return request<AnagraficaVisuraRoutingAnomaly>(`/utenze/visure-routing-anomalies/${anomalyId}/resolve`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
 
 export async function abortUtenzeRegistryImportJob(token: string, jobId: string): Promise<AnagraficaImportJob> {
   return request<AnagraficaImportJob>(`/utenze/import/jobs/${jobId}/abort-registry`, {

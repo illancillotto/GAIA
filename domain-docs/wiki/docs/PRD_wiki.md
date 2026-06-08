@@ -238,6 +238,51 @@ Il modulo **Wiki Agent** aggiunge a GAIA un assistente LLM sempre disponibile, c
   - feature richieste nel tempo
   - bug / anomalie nel tempo
   - urgenze nel tempo
+
+### 4.12 Deduplica e caso canonico
+
+- Le richieste Wiki possono essere confrontate con casi simili già aperti o chiusi
+- Il backend calcola un segnale di similarità pragmatica su:
+  - `request_type`
+  - `module_key`
+  - `page_path`
+  - `context_entity_key`
+  - testo normalizzato della richiesta
+- La console admin mostra una sezione `Deduplica casi simili` nel dettaglio richiesta
+- L'admin può:
+  - aprire i casi suggeriti
+  - marcare la richiesta corrente come `duplicate`
+  - collegarla a un `canonical_request_id`
+- Quando un caso viene marcato come duplicato:
+  - la richiesta assume stato `duplicate`
+  - viene salvato il riferimento al caso canonico
+  - la timeline registra:
+    - `marked_duplicate`
+    - `duplicate_linked`
+  - il backlog resta leggibile senza perdere il contesto originale dell'utente
+
+### 4.13 Notifiche utente e feedback finale
+
+- Ogni richiesta Wiki mantiene un piccolo ciclo di comunicazione utente-admin
+- Il backend salva:
+  - `resolution_message`: messaggio sintetico rivolto all'utente
+  - `last_admin_update_at`: ultimo aggiornamento amministrativo visibile all'utente
+  - `user_last_viewed_at`: ultima presa visione lato utente
+  - `user_feedback_rating`: `helpful` / `not_helpful`
+  - `user_feedback_notes`
+  - `user_feedback_submitted_at`
+- La pagina utente `/wiki/support` diventa anche inbox personale:
+  - badge `aggiornamenti da leggere`
+  - messaggio admin o di risoluzione
+  - note operative visibili all'utente
+  - invio feedback finale sul caso
+- Endpoint principali:
+  - `POST /wiki/requests/{id}/mark-viewed`
+  - `PATCH /wiki/requests/{id}/feedback`
+- La console admin delle richieste espone:
+  - `Messaggio per l'utente`
+  - visibilità del feedback ricevuto
+  - timeline evento `user_feedback_submitted`
 - Nessuna nuova tabella dedicata: la vista viene derivata da `wiki_requests`
 
 ---

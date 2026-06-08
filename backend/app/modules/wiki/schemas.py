@@ -106,9 +106,20 @@ class WikiRequestRead(BaseModel):
     conversation_id: uuid.UUID | None = None
     context_article: str | None = None
     context_entity_key: str | None = None
+    dedupe_key: str | None = None
+    canonical_request_id: uuid.UUID | None = None
+    canonical_request_question: str | None = None
+    canonical_request_status: str | None = None
     desired_outcome: str | None = None
     observed_behavior: str | None = None
     expected_behavior: str | None = None
+    resolution_message: str | None = None
+    last_admin_update_at: datetime | None = None
+    user_last_viewed_at: datetime | None = None
+    has_unread_update: bool = False
+    user_feedback_rating: str | None = None
+    user_feedback_notes: str | None = None
+    user_feedback_submitted_at: datetime | None = None
     admin_notes: str | None
     created_at: datetime
     updated_at: datetime
@@ -121,7 +132,32 @@ class WikiRequestStatusUpdate(BaseModel):
     priority: Literal["low", "medium", "high", "urgent"] | None = None
     severity: Literal["low", "medium", "high", "critical"] | None = None
     assigned_to: str | None = Field(None, max_length=256)
+    resolution_message: str | None = None
     admin_notes: str | None = None
+
+
+class WikiRequestDuplicateCandidateRead(BaseModel):
+    id: uuid.UUID
+    user_question: str
+    request_type: str
+    status: str
+    module_key: str | None = None
+    page_path: str | None = None
+    created_by: str | None = None
+    assigned_to_name: str | None = None
+    created_at: datetime
+    similarity_score: float
+    match_reason: str
+
+
+class WikiRequestDuplicateMarkInput(BaseModel):
+    canonical_request_id: uuid.UUID
+    admin_notes: str | None = None
+
+
+class WikiRequestFeedbackUpdate(BaseModel):
+    rating: Literal["helpful", "not_helpful"]
+    notes: str | None = None
 
 
 class WikiRequestAssigneeRead(BaseModel):
