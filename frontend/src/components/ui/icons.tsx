@@ -111,6 +111,15 @@ export function DocumentIcon(props: IconProps) {
   );
 }
 
+export function CopyIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <rect x="9" y="9" width="11" height="11" rx="2" />
+      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+    </BaseIcon>
+  );
+}
+
 export function SearchIcon(props: IconProps) {
   return (
     <BaseIcon {...props}>
@@ -145,6 +154,15 @@ export function ServerIcon(props: IconProps) {
       <rect x="3" y="4" width="18" height="6" rx="2" />
       <rect x="3" y="14" width="18" height="6" rx="2" />
       <path d="M7 7h.01M7 17h.01M12 7h5M12 17h5" />
+    </BaseIcon>
+  );
+}
+
+export function ShieldIcon(props: IconProps) {
+  return (
+    <BaseIcon {...props}>
+      <path d="M12 3 5 6v5c0 4.55 2.9 8.74 7 10 4.1-1.26 7-5.45 7-10V6l-7-3Z" />
+      <path d="M9.5 12.5 11 14l3.5-3.5" />
     </BaseIcon>
   );
 }

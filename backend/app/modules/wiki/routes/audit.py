@@ -215,7 +215,7 @@ def summarize_tool_calls(
             for mode_key, avg_latency_ms in summary.latency_by_mode
         ],
         daily_counts=[
-            WikiAuditDailyCountRead(day=day, total=total, denied=denied)
+            WikiAuditDailyCountRead(day=day.isoformat() if hasattr(day, "isoformat") else str(day), total=total, denied=denied)
             for day, total, denied in summary.daily_counts
         ],
     )

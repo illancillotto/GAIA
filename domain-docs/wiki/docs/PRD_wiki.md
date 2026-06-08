@@ -67,6 +67,11 @@ Il modulo **Wiki Agent** aggiunge a GAIA un assistente LLM sempre disponibile, c
 - La richiesta viene salvata in `wiki_requests` con stato `pending`
 - Admin può vedere la lista in `/wiki/requests` (endpoint protetto)
 - Status: `pending` → `reviewed` → `planned` → `done`
+- Ogni richiesta può avere:
+  - `priority`: `low` / `medium` / `high` / `urgent`
+  - `assigned_to`: operatore GAIA assegnato alla presa in carico
+  - `admin_notes`: contesto operativo, ticket o decisione
+- La pagina admin consente filtro, presa in carico e aggiornamento inline
 
 ### 4.5 Router semantico e guardrail strutturali
 
@@ -96,6 +101,30 @@ Il modulo **Wiki Agent** aggiunge a GAIA un assistente LLM sempre disponibile, c
   - riepilogo firewall Sophos
   - lookup dispositivo rete per IP o identificatore riconoscibile
 
+### 4.7 Console amministrativa Wiki
+
+- La sezione admin del modulo Wiki espone viste operative dedicate:
+  - `/wiki/requests`
+  - `/wiki/audit`
+  - `/wiki/conversations/analytics`
+  - `/wiki/telemetry`
+- `Richieste`:
+  - backlog richieste registrate dal widget
+  - filtri per stato, categoria, priorità e assegnatario
+  - aggiornamento inline di `status`, `priority`, `assigned_to`, `admin_notes`
+- `Audit`:
+  - consultazione delle tool call del Wiki Agent
+  - lettura rapida di mode, intent, modulo, successo/failure e fallback
+  - filtri rapidi e pannello dettaglio per analisi operativa
+- `Analytics conversazioni`:
+  - trend backlog dei thread Wiki
+  - breakdown per stato, priorità, owner ed eventi workflow
+  - KPI su tempi review/resolve e pressione sul backlog
+- `Telemetria`:
+  - KPI storici sul comportamento del Wiki Agent
+  - top tool, moduli, fallback reason e trend giornalieri
+  - retention e stato scheduler per le metriche aggregate
+
 ---
 
 ## 5. Architettura tecnica
@@ -121,14 +150,16 @@ Backend (FastAPI)
     ├── routes/
     │   ├── chat.py                  ← POST /wiki/chat
     │   ├── articles.py              ← GET /wiki/articles
-    │   └── requests.py              ← POST/GET /wiki/requests
+    │   └── requests.py              ← POST/GET/PATCH /wiki/requests + assignees
     └── services/
         ├── rag.py                   ← retrieval + completion
         ├── indexer.py               ← document parsing + embedding
         └── openai_client.py         ← wrapper OpenAI API
         ├── semantic_router.py       ← routing multilingua + capability classification
         ├── guardrails.py            ← blocchi strutturali pre/post retrieval
-        └── tool_registry*.py        ← tool interni live per modulo
+        ├── tool_registry*.py        ← tool interni live per modulo
+        ├── conversation_metrics.py  ← metriche backlog thread Wiki
+        └── telemetry.py             ← metriche aggregate audit/fallback/mode
 ```
 
 ---

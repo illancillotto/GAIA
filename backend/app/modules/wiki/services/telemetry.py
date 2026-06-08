@@ -19,6 +19,7 @@ _DIMENSION_COLUMNS = {
     "intent": WikiToolAuditLog.intent,
     "fallback_reason": WikiToolAuditLog.fallback_reason,
 }
+_WIKI_TELEMETRY_REFRESH_LOCK_KEY = 948174
 
 
 @dataclass(slots=True, frozen=True)
@@ -82,12 +83,20 @@ def _coerce_day(value: object) -> date:
     raise TypeError(f"Unsupported day value: {value!r}")
 
 
+def _acquire_telemetry_refresh_lock(db: Session) -> None:
+    bind = db.get_bind()
+    if bind.dialect.name != "postgresql":
+        return
+    db.execute(select(func.pg_advisory_xact_lock(_WIKI_TELEMETRY_REFRESH_LOCK_KEY)))
+
+
 def refresh_wiki_daily_metrics(
     db: Session,
     *,
     start_date: date,
     end_date: date,
 ) -> None:
+    _acquire_telemetry_refresh_lock(db)
     day_expr = func.date(WikiToolAuditLog.created_at)
     db.execute(
         delete(WikiTelemetryDailyMetric).where(
@@ -158,6 +167,7 @@ def refresh_wiki_period_metrics(
     if period_type not in {"week", "month"}:
         raise ValueError(f"Unsupported period type: {period_type}")
 
+    _acquire_telemetry_refresh_lock(db)
     start_period = _start_of_week(start_date) if period_type == "week" else _start_of_month(start_date)
     end_period = _start_of_week(end_date) if period_type == "week" else _start_of_month(end_date)
     db.execute(
@@ -306,18 +316,20 @@ def _top_dimension_counts(
 ) -> list[WikiTelemetryCountReadModel]:
     end_date = date.today()
     start_date = end_date - timedelta(days=max(days - 1, 0))
+    key_expr = func.coalesce(WikiTelemetryDailyMetric.dimension_key, "n/d").label("key")
+    count_expr = func.coalesce(func.sum(WikiTelemetryDailyMetric.total), 0).label("count")
     rows = db.execute(
         select(
-            func.coalesce(WikiTelemetryDailyMetric.dimension_key, "n/d").label("key"),
-            func.coalesce(func.sum(WikiTelemetryDailyMetric.total), 0).label("count"),
+            key_expr,
+            count_expr,
         )
         .where(
             WikiTelemetryDailyMetric.metric_date >= start_date,
             WikiTelemetryDailyMetric.metric_date <= end_date,
             WikiTelemetryDailyMetric.dimension_type == dimension_type,
         )
-        .group_by(func.coalesce(WikiTelemetryDailyMetric.dimension_key, "n/d"))
-        .order_by(desc("count"), func.coalesce(WikiTelemetryDailyMetric.dimension_key, "n/d"))
+        .group_by(key_expr)
+        .order_by(desc(count_expr), key_expr)
         .limit(5)
     ).all()
     return [WikiTelemetryCountReadModel(key=row.key, count=int(row.count or 0)) for row in rows]

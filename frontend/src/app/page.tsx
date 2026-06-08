@@ -25,7 +25,7 @@ import type {
 } from "@/types/api";
 
 type ModuleStatus = "active" | "warming" | "coming";
-type ModuleId = "accessi" | "rete" | "inventario" | "catasto" | "elaborazioni" | "utenze" | "operazioni" | "riordino" | "ruolo" | "wiki" | "inaz";
+type ModuleId = "me" | "accessi" | "rete" | "inventario" | "catasto" | "elaborazioni" | "utenze" | "operazioni" | "riordino" | "ruolo" | "wiki" | "inaz";
 
 type HomeModule = {
   id: ModuleId;
@@ -49,6 +49,13 @@ type SearchRoute = {
 };
 
 const menuSearchRoutes: SearchRoute[] = [
+  // Self service
+  { label: "La mia attività · Panoramica", href: "/me", keywords: ["me", "attivita", "presenze", "self service"] },
+  { label: "La mia attività · Presenze", href: "/me#presenze", keywords: ["presenze", "inaz", "giornaliere"] },
+  { label: "La mia attività · Operatività", href: "/me#operativita", keywords: ["operativita", "attivita", "segnalazioni", "pratiche"] },
+  { label: "La mia attività · Dotazioni", href: "/me#dotazioni", keywords: ["dotazioni", "dispositivi", "mezzi"] },
+  { label: "La mia attività · Anomalie", href: "/me#anomalie", keywords: ["anomalie", "warning"] },
+
   // NAS / Accessi
   { label: "NAS Control · Dashboard", href: "/nas-control", moduleKey: "accessi", keywords: ["nas", "accessi"] },
   { label: "NAS Control · Sincronizzazione", href: "/nas-control/sync", moduleKey: "accessi", keywords: ["sync", "sincronizzazione"] },
@@ -68,6 +75,7 @@ const menuSearchRoutes: SearchRoute[] = [
 
   // Wiki
   { label: "Wiki · Documentazione e assistente", href: "/wiki", keywords: ["wiki", "documentazione", "assistente"] },
+  { label: "Wiki · Richieste", href: "/wiki/requests", keywords: ["wiki", "richieste", "feature request", "bug report"] },
 
   // Inaz
   { label: "Inaz · Dashboard", href: "/inaz", moduleKey: "inaz", keywords: ["giornaliere", "cartellino", "inaz"] },
@@ -169,6 +177,18 @@ const emptyUtenzeSummary: AnagraficaStats = {
 };
 
 const allModules: HomeModule[] = [
+  {
+    id: "me",
+    title: "La mia attività",
+    eyebrow: "Self service personale",
+    description:
+      "Presenze Inaz, attività operative, utilizzo mezzi, pratiche, segnalazioni e dotazioni personali in un unico spazio.",
+    href: "/me",
+    status: "active",
+    statusLabel: "Operativo",
+    icon: "person",
+    enabledKeys: [],
+  },
   {
     id: "catasto",
     title: "GAIA Catasto",
@@ -482,6 +502,7 @@ export default function HomePage() {
 
   const visibleModules = allModules.filter((mod) => {
     if (mod.status === "coming") return true;
+    if (mod.id === "me") return true;
     if (mod.id === "wiki") return true;
     return mod.enabledKeys.some((key) => user.enabled_modules.includes(key));
   });

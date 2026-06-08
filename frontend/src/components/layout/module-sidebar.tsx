@@ -2,6 +2,7 @@
 
 import {
   AlertTriangleIcon,
+  BellIcon,
   CalendarIcon,
   CheckIcon,
   DocumentIcon,
@@ -260,6 +261,7 @@ export function ModuleSidebar({
         <NavItem href="/wiki/conversations/settings" icon={DocumentIcon} label="Settings conversazioni" match="prefix" />
 
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Governance</p>
+        <NavItem href="/wiki/requests" icon={BellIcon} label="Richieste" match="prefix" />
         <NavItem href="/wiki/audit" icon={SearchIcon} label="Audit tool call" match="prefix" />
         <NavItem href="/wiki/telemetry" icon={GridIcon} label="Telemetria" match="prefix" />
       </div>

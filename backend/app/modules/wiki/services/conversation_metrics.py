@@ -17,6 +17,7 @@ from app.modules.wiki.services.conversations import (
 from app.modules.wiki.services.review_rules import WikiConversationReviewConfig
 
 _DIMENSION_FIELDS = ("global", "status", "priority", "assigned_to", "review_reason")
+_WIKI_CONVERSATION_METRICS_ADVISORY_LOCK_KEY = 948173
 
 
 @dataclass(slots=True, frozen=True)
@@ -114,6 +115,13 @@ def _period_label(period_type: str, period_start: date) -> str:
     return period_start.isoformat()
 
 
+def _acquire_metrics_refresh_lock(db: Session) -> None:
+    bind = db.get_bind()
+    if bind.dialect.name != "postgresql":
+        return
+    db.execute(select(func.pg_advisory_xact_lock(_WIKI_CONVERSATION_METRICS_ADVISORY_LOCK_KEY)))
+
+
 def _dimension_key(conversation: WikiConversation, review_reason: str | None, dimension_type: str) -> str | None:
     if dimension_type == "global":
         return None
@@ -144,6 +152,7 @@ def refresh_wiki_conversation_daily_metrics(
     start_date: date,
     end_date: date,
 ) -> None:
+    _acquire_metrics_refresh_lock(db)
     db.execute(
         delete(WikiConversationDailyMetric).where(
             WikiConversationDailyMetric.metric_date >= start_date,

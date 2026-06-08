@@ -81,7 +81,10 @@ class WikiRequestRead(BaseModel):
     agent_response: str | None
     category: str
     status: str
+    priority: str
     created_by: str | None
+    assigned_to: str | None
+    assigned_to_name: str | None = None
     admin_notes: str | None
     created_at: datetime
     updated_at: datetime
@@ -90,8 +93,16 @@ class WikiRequestRead(BaseModel):
 
 
 class WikiRequestStatusUpdate(BaseModel):
-    status: Literal["pending", "reviewed", "planned", "done"]
+    status: Literal["pending", "reviewed", "planned", "done"] | None = None
+    priority: Literal["low", "medium", "high", "urgent"] | None = None
+    assigned_to: str | None = Field(None, max_length=256)
     admin_notes: str | None = None
+
+
+class WikiRequestAssigneeRead(BaseModel):
+    username: str
+    full_name: str | None = None
+    role: str
 
 
 class WikiConversationMessageRead(BaseModel):

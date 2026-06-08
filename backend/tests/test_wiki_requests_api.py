@@ -85,6 +85,7 @@ def test_create_wiki_request_returns_201() -> None:
     data = resp.json()
     assert data["user_question"] == "Come si aggiunge un nuovo modulo?"
     assert data["status"] == "pending"
+    assert data["priority"] == "medium"
     assert data["category"] == "question"
     assert data["created_by"] == "alice"
 
@@ -127,6 +128,7 @@ def test_create_wiki_request_empty_question_returns_422() -> None:
 
 def test_admin_can_list_requests() -> None:
     _create_user("admin_user", "admin")
+    _create_user("mario", "reviewer")
     token = _login("admin_user")
 
     # Crea una richiesta
@@ -136,7 +138,9 @@ def test_admin_can_list_requests() -> None:
         user_question="Domanda test",
         category="question",
         status="pending",
+        priority="high",
         created_by="someone",
+        assigned_to="mario",
     ))
     db.commit()
     db.close()
@@ -147,6 +151,9 @@ def test_admin_can_list_requests() -> None:
     assert isinstance(data, list)
     assert len(data) >= 1
     assert data[0]["user_question"] == "Domanda test"
+    assert data[0]["priority"] == "high"
+    assert data[0]["assigned_to"] == "mario"
+    assert data[0]["assigned_to_name"] == "mario"
 
 
 def test_super_admin_can_list_requests() -> None:
@@ -170,10 +177,32 @@ def test_reviewer_cannot_list_requests() -> None:
     assert resp.status_code == 403
 
 
+def test_admin_can_list_request_assignees() -> None:
+    _create_user("admin_assignees", "admin")
+    _create_user("review_user", "reviewer")
+    _create_user("inactive_user", "viewer")
+    db = TestingSessionLocal()
+    inactive = db.query(ApplicationUser).filter(ApplicationUser.username == "inactive_user").first()
+    assert inactive is not None
+    inactive.is_active = False
+    db.commit()
+    db.close()
+    token = _login("admin_assignees")
+
+    resp = client.get("/wiki/requests/assignees", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 200
+    data = resp.json()
+    usernames = {item["username"] for item in data}
+    assert "admin_assignees" in usernames
+    assert "review_user" in usernames
+    assert "inactive_user" not in usernames
+
+
 # ── PATCH /wiki/requests/{id} ─────────────────────────────────────────────────
 
 def test_admin_can_update_request_status() -> None:
     _create_user("admin2", "admin")
+    _create_user("operator1", "operator")
     token = _login("admin2")
 
     req_id = uuid.uuid4()
@@ -183,6 +212,7 @@ def test_admin_can_update_request_status() -> None:
         user_question="Feature richiesta",
         category="feature_request",
         status="pending",
+        priority="medium",
     ))
     db.commit()
     db.close()
@@ -190,12 +220,38 @@ def test_admin_can_update_request_status() -> None:
     resp = client.patch(
         f"/wiki/requests/{req_id}",
         headers={"Authorization": f"Bearer {token}"},
-        json={"status": "planned", "admin_notes": "Pianificata per Q3."},
+        json={"status": "planned", "priority": "urgent", "assigned_to": "operator1", "admin_notes": "Pianificata per Q3."},
     )
     assert resp.status_code == 200
     data = resp.json()
     assert data["status"] == "planned"
+    assert data["priority"] == "urgent"
+    assert data["assigned_to"] == "operator1"
     assert data["admin_notes"] == "Pianificata per Q3."
+
+
+def test_update_request_rejects_unknown_assignee() -> None:
+    _create_user("admin_unknown", "admin")
+    token = _login("admin_unknown")
+    req_id = uuid.uuid4()
+
+    db = TestingSessionLocal()
+    db.add(WikiRequest(
+        id=req_id,
+        user_question="Feature richiesta",
+        category="feature_request",
+        status="pending",
+        priority="medium",
+    ))
+    db.commit()
+    db.close()
+
+    resp = client.patch(
+        f"/wiki/requests/{req_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"assigned_to": "missing.user"},
+    )
+    assert resp.status_code == 422
 
 
 def test_update_request_not_found_returns_404() -> None:

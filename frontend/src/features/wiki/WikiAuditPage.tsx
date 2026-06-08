@@ -5,6 +5,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { useSearchParams } from "next/navigation";
 
 import { DataTable } from "@/components/table/data-table";
+import { FilterPillGroup } from "@/components/network/filter-pill-group";
 import { Badge } from "@/components/ui/badge";
 import { EmptyState } from "@/components/ui/empty-state";
 import { MetricCard } from "@/components/ui/metric-card";
@@ -54,6 +55,20 @@ const successOptions: Array<{ value: AuditSuccessFilter; label: string }> = [
   { value: "denied", label: "Denied / failure" },
 ];
 
+const quickModeOptions = [
+  { value: "all", label: "Tutto" },
+  { value: "docs_only", label: "Docs" },
+  { value: "live_data", label: "Live" },
+  { value: "logic", label: "Logic" },
+  { value: "hybrid", label: "Hybrid" },
+] as const;
+
+const quickSuccessOptions = [
+  { value: "all", label: "Tutti" },
+  { value: "success", label: "Successi" },
+  { value: "denied", label: "Denied" },
+] as const;
+
 function modeBadgeVariant(mode: string): "success" | "info" | "warning" | "neutral" {
   if (mode === "live_data") {
     return "info";
@@ -69,6 +84,28 @@ function modeBadgeVariant(mode: string): "success" | "info" | "warning" | "neutr
 
 function successBadgeVariant(success: boolean): "success" | "danger" {
   return success ? "success" : "danger";
+}
+
+function humanizeMode(mode: string): string {
+  if (mode === "docs_only") return "Docs";
+  if (mode === "live_data") return "Live";
+  if (mode === "logic") return "Logic";
+  if (mode === "hybrid") return "Hybrid";
+  return mode;
+}
+
+function humanizeIntent(intent: string): string {
+  if (intent === "docs_only") return "Docs only";
+  if (intent === "live_data") return "Live data";
+  if (intent === "logic") return "Logic";
+  return intent;
+}
+
+function humanizeModule(moduleKey: string | null | undefined): string {
+  if (!moduleKey || moduleKey === "n/d") return "Modulo non dichiarato";
+  if (moduleKey === "rete") return "Rete";
+  if (moduleKey === "accessi") return "Accessi";
+  return moduleKey;
 }
 
 export function WikiAuditPage() {
@@ -189,6 +226,12 @@ export function WikiAuditPage() {
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
   const detailHref = resolvedContextLink?.href ?? buildWikiContextHref(selectedDetail?.entity_key ?? selectedLog?.entity_key, selectedDetail?.module_key ?? selectedLog?.module_key);
   const conversationHref = selectedDetail?.conversation_id ? `/wiki?conversation=${selectedDetail.conversation_id}` : null;
+  const topTools = summary?.top_tools ?? pageStats.topTools;
+  const topModules = summary?.top_modules ?? pageStats.topModules;
+  const topIntents = summary?.top_intents ?? pageStats.topIntents;
+  const topDeniedTools = summary?.top_denied_tools ?? pageStats.topDeniedTools;
+  const latencyByMode = summary?.latency_by_mode ?? [];
+  const dailyCounts = summary?.daily_counts ?? [];
 
   async function handleExportAudit() {
     const token = getStoredAccessToken();
@@ -300,6 +343,79 @@ export function WikiAuditPage() {
 
   return (
     <div className="space-y-6">
+      <section className="rounded-[2rem] border border-[#d9dfd4] bg-[radial-gradient(circle_at_top_left,_rgba(220,239,227,0.9),_rgba(255,255,255,0.98)_58%)] p-6 shadow-sm">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_26rem]">
+          <div className="space-y-4">
+            <div>
+              <p className="inline-flex items-center rounded-full border border-white/70 bg-white/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.22em] text-[#1D4E35]">
+                Audit operativo Wiki
+              </p>
+              <h2 className="mt-4 max-w-3xl text-3xl font-semibold tracking-tight text-gray-950">
+                Traccia tool call, fallback e tempi di risposta del Wiki Agent.
+              </h2>
+              <p className="mt-3 max-w-2xl text-sm leading-6 text-gray-600">
+                Questa vista serve a capire se il router sta instradando bene, quali moduli vengono interrogati e dove il Wiki
+                cade in fallback documentale o blocco strutturale.
+              </p>
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+              <div className="rounded-2xl border border-white/70 bg-white/80 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Tasso successo</p>
+                <p className="mt-3 text-2xl font-semibold text-gray-950">
+                  {summary?.total ? `${Math.round((summary.success_count / summary.total) * 100)}%` : "0%"}
+                </p>
+                <p className="mt-1 text-xs text-gray-500">Tool call andate a buon fine nel filtro corrente.</p>
+              </div>
+              <div className="rounded-2xl border border-white/70 bg-white/80 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Fallback docs</p>
+                <p className="mt-3 text-2xl font-semibold text-gray-950">{(summary?.docs_only_count ?? pageStats.docsCount).toLocaleString("it-IT")}</p>
+                <p className="mt-1 text-xs text-gray-500">Risposte documentali pure senza lettura live.</p>
+              </div>
+              <div className="rounded-2xl border border-white/70 bg-white/80 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">No match</p>
+                <p className="mt-3 text-2xl font-semibold text-gray-950">{(summary?.no_match_count ?? pageStats.noMatchCount).toLocaleString("it-IT")}</p>
+                <p className="mt-1 text-xs text-gray-500">Dialoghi in cui il contesto non era abbastanza forte.</p>
+              </div>
+              <div className="rounded-2xl border border-white/70 bg-white/80 p-4">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Latenza media</p>
+                <p className="mt-3 text-2xl font-semibold text-gray-950">{formatWikiAuditLatency(summary?.avg_latency_ms ?? pageStats.avgLatencyMs)}</p>
+                <p className="mt-1 text-xs text-gray-500">Tempo medio risposta sul dataset filtrato.</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="rounded-2xl border border-emerald-200 bg-white/90 p-4">
+              <p className="text-sm font-semibold text-[#1D4E35]">Perimetro osservato</p>
+              <p className="mt-2 text-sm text-gray-600">
+                {total.toLocaleString("it-IT")} record filtrati. Focus principale su{" "}
+                <span className="font-medium text-gray-900">{topTools[0]?.key ?? "n/d"}</span> e modulo{" "}
+                <span className="font-medium text-gray-900">{humanizeModule(topModules[0]?.key)}</span>.
+              </p>
+            </div>
+            <div className="rounded-2xl border border-sky-200 bg-white/90 p-4">
+              <p className="text-sm font-semibold text-sky-900">Segnale rapido</p>
+              <p className="mt-2 text-sm text-gray-600">
+                {topDeniedTools.length > 0
+                  ? `Il tool più problematico è ${topDeniedTools[0].key} con ${topDeniedTools[0].count} denied.`
+                  : "Non ci sono denied nel dataset filtrato."}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-amber-200 bg-white/90 p-4">
+              <p className="text-sm font-semibold text-amber-900">Composizione query</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {topIntents.slice(0, 3).map((item) => (
+                  <span key={item.key} className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-800">
+                    {humanizeIntent(item.key)} · {item.count}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
         <MetricCard label="Record totali" value={(summary?.total ?? total).toLocaleString("it-IT")} sub="Filtri server-side correnti" />
         <MetricCard label="Righe caricate" value={items.length.toLocaleString("it-IT")} sub={`Pagina ${page} di ${pageCount}`} />
@@ -394,7 +510,7 @@ export function WikiAuditPage() {
 
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_24rem]">
       <div className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Audit tool call</p>
             <h3 className="mt-1 text-lg font-semibold text-gray-900">Registro operativo Wiki Agent</h3>
@@ -402,6 +518,7 @@ export function WikiAuditPage() {
               Filtri esatti lato backend su utente, tool e modulo. La preview domanda resta redatta e troncata.
             </p>
           </div>
+          <div className="flex flex-wrap gap-2">
             <button
               className="btn-secondary"
               type="button"
@@ -413,6 +530,22 @@ export function WikiAuditPage() {
             <button className="btn-secondary" type="button" onClick={() => void handleExportAudit()}>
               Export CSV
             </button>
+          </div>
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl border border-[#dfe7df] bg-[#f8fbf8] px-4 py-3">
+          <div className="min-w-[12rem] flex-1">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Quick filter mode</p>
+            <div className="mt-2">
+              <FilterPillGroup options={quickModeOptions} value={modeFilter} onChange={setModeFilter} />
+            </div>
+          </div>
+          <div className="min-w-[11rem] flex-1">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Quick filter esito</p>
+            <div className="mt-2">
+              <FilterPillGroup options={quickSuccessOptions} value={successFilter} onChange={setSuccessFilter} />
+            </div>
+          </div>
         </div>
 
         <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-6">
@@ -487,6 +620,25 @@ export function WikiAuditPage() {
           </label>
         </div>
 
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+          <div className="rounded-2xl border border-gray-100 bg-[#fafcf9] p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Tool più usato</p>
+            <p className="mt-2 truncate text-sm font-semibold text-[#1D4E35]">{topTools[0]?.key ?? "n/d"}</p>
+          </div>
+          <div className="rounded-2xl border border-gray-100 bg-[#fafcf9] p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Modulo dominante</p>
+            <p className="mt-2 truncate text-sm font-semibold text-[#1D4E35]">{humanizeModule(topModules[0]?.key)}</p>
+          </div>
+          <div className="rounded-2xl border border-gray-100 bg-[#fafcf9] p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Intent dominante</p>
+            <p className="mt-2 truncate text-sm font-semibold text-[#1D4E35]">{humanizeIntent(topIntents[0]?.key ?? "n/d")}</p>
+          </div>
+          <div className="rounded-2xl border border-gray-100 bg-[#fff8f6] p-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Denied più frequente</p>
+            <p className="mt-2 truncate text-sm font-semibold text-rose-700">{topDeniedTools[0]?.key ?? "nessuno"}</p>
+          </div>
+        </div>
+
         <div className="mt-5">
           <DataTable
             data={items}
@@ -517,6 +669,17 @@ export function WikiAuditPage() {
             <div className="rounded-xl bg-[#f7f8f5] p-3">
               <p className="font-medium text-[#1D4E35]">{selectedDetail?.tool_name ?? selectedLog.tool_name}</p>
               <p className="mt-1 text-gray-600">{selectedDetail?.question_preview ?? selectedLog.question_preview}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Badge variant={modeBadgeVariant(selectedDetail?.mode ?? selectedLog.mode)}>
+                  {humanizeMode(selectedDetail?.mode ?? selectedLog.mode)}
+                </Badge>
+                <Badge variant={successBadgeVariant(selectedDetail?.success ?? selectedLog.success)}>
+                  {formatWikiAuditBoolean(selectedDetail?.success ?? selectedLog.success, "Successo", "Denied")}
+                </Badge>
+                <Badge variant={(selectedDetail?.found ?? selectedLog.found) ? "info" : "warning"}>
+                  {formatWikiAuditBoolean(selectedDetail?.found ?? selectedLog.found, "Found", "No match")}
+                </Badge>
+              </div>
               {detailHref ? (
                 <a href={detailHref} className="mt-2 inline-flex text-xs font-medium text-[#1D4E35] underline underline-offset-2">
                   {resolvedContextLink?.resolved ? "Apri record modulo" : "Apri contesto modulo"}
@@ -535,7 +698,7 @@ export function WikiAuditPage() {
               </div>
               <div className="rounded-xl border border-gray-100 p-3">
                 <p className="text-xs uppercase tracking-wide text-gray-400">Modulo</p>
-                <p className="mt-1 font-medium text-gray-900">{selectedDetail?.module_key ?? selectedLog.module_key ?? "n/d"}</p>
+                <p className="mt-1 font-medium text-gray-900">{humanizeModule(selectedDetail?.module_key ?? selectedLog.module_key)}</p>
               </div>
               <div className="rounded-xl border border-gray-100 p-3">
                 <p className="text-xs uppercase tracking-wide text-gray-400">Entity key</p>
@@ -551,7 +714,7 @@ export function WikiAuditPage() {
               </div>
               <div className="rounded-xl border border-gray-100 p-3">
                 <p className="text-xs uppercase tracking-wide text-gray-400">Fallback reason</p>
-                <p className="mt-1 font-medium text-gray-900">{selectedDetail?.fallback_reason ?? "n/d"}</p>
+                <p className="mt-1 font-medium text-gray-900">{selectedDetail?.fallback_reason ?? "nessuno"}</p>
               </div>
             </div>
             <div className="rounded-xl border border-gray-100 p-3">
