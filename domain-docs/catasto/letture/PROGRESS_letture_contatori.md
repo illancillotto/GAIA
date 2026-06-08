@@ -8,6 +8,17 @@ Stato: **implementazione base completata**
 
 La funzionalità risulta implementata nel runtime Catasto per il perimetro fase 1: validazione/import Excel, persistenza, linking anagrafico, consultazione da Catasto e sezione dedicata nel dettaglio utente.
 
+Aggiornamento operativo `2026-06-08`:
+
+- import annualità `2023` eseguito con esito positivo nel runtime locale;
+- flusso import letture irrigue hardenizzato sui casi emersi dai file reali `2023/2024`:
+  - esclusione fogli ausiliari/duplicativi (`PIVOT`, `LAVORATE`, `TOTALE`, simili);
+  - supporto ai filename composti reali tipo `D29-1_Uras_...`;
+  - normalizzazione coerente della `matricola` in upsert;
+  - serializzazione sicura di `date` nel payload snapshot;
+  - troncamento difensivo dei campi testo bounded;
+  - esclusione lato frontend dei file temporanei Excel `~$...`.
+
 ## Decisioni approvate
 
 | Decisione | Stato |
@@ -39,6 +50,7 @@ La funzionalità risulta implementata nel runtime Catasto per il perimetro fase 
 | Definizione tabelle | completato | `catasto_meter_reading_imports`, `catasto_meter_readings` |
 | Migration Alembic | completato | con vincolo unico e indici principali |
 | Parser Excel | completato | supporto alias colonne e header autodetect |
+| Hardening parser/import su file reali 2023/2024 | completato | gestione fogli ausiliari, filename composti, matricole placeholder/case-variant, payload JSON con date |
 | Validatore dati | completato | errori bloccanti e warning fase 1 |
 | Linking utenze tramite CF | completato | linking verso `ana_subjects` via CF normalizzato |
 | API import validate | completato | validazione senza salvataggio |
@@ -55,6 +67,7 @@ La funzionalità risulta implementata nel runtime Catasto per il perimetro fase 
 | API client Catasto letture | completato | integrato nel client Catasto esistente |
 | Pagina `Contatori irrigui` | completato | route Catasto dedicata |
 | Pannello import Excel | completato | upload multiplo, deduzione distretto da filename, validazione + import sequenziale |
+| Esclusione file temporanei `~$...` | completato | il frontend li ignora e mostra avviso esplicito all'operatore |
 | Report anomalie import | completato | report sintetico preview per-file |
 | Tabella letture | completato | filtri base e apertura dettaglio |
 | Drawer dettaglio lettura | completato | dati completi e validazione |
