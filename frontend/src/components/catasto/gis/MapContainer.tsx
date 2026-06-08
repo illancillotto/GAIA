@@ -1123,7 +1123,7 @@ function buildPopupHtml(data: ParticellaPopupData): string {
       <div style="margin-top:4px">${anomalie}</div>
       ${swappedHtml}
       <div style="margin-top:8px">
-        <a href="/catasto/particelle/${encodeURIComponent(data.id)}" style="color:#4F46E5;font-weight:600;text-decoration:none">
+        <a href="/catasto/particelle/${encodeURIComponent(data.id)}" target="_blank" rel="noopener noreferrer" style="color:#4F46E5;font-weight:600;text-decoration:none">
           Apri scheda completa
         </a>
       </div>
