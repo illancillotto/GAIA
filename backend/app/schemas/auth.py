@@ -28,4 +28,5 @@ class CurrentUserResponse(BaseModel):
     module_riordino: bool
     module_ruolo: bool
     module_inaz: bool
+    module_organigramma: bool
     enabled_modules: list[str]

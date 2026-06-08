@@ -57,6 +57,8 @@ DEFAULT_SECTIONS = [
     ("inaz.review", "Inaz - Review", "inaz", "reviewer"),
     ("inaz.export", "Inaz - Export", "inaz", "reviewer"),
     ("inaz.admin", "Inaz - Amministrazione", "inaz", "admin"),
+    ("organigramma.read", "Organigramma — Consultazione", "organigramma", "viewer"),
+    ("organigramma.manage", "Organigramma — Gestione", "organigramma", "admin"),
 ]
 
 

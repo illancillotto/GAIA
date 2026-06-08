@@ -376,6 +376,149 @@ export type OrgStructureBootstrapResult = {
   skipped: number;
 };
 
+// --- Organigramma (canonical layer) ---------------------------------------
+export type OrgUnitType = "direzione" | "distretto" | "settore" | "squadra";
+export type OrgSource = "manuale" | "whitecompany" | "bridge_team";
+export type OrgOverrideTargetType = "user" | "org_unit";
+export type OrgOverrideScope = "read" | "approve" | "full";
+export type OrgOverrideStatus = "attivo" | "programmato" | "scaduto" | "disattivato";
+export type OrgVisibilityVia = "gerarchia" | "override";
+
+export type OrgPersonRef = {
+  user_id: number;
+  full_name: string | null;
+  username: string;
+  email: string;
+  rbac_role: string;
+  is_active: boolean;
+};
+
+export type OrgUnit = {
+  id: string;
+  nome: string;
+  tipo: OrgUnitType;
+  parent_id: string | null;
+  is_active: boolean;
+  sort_order: number;
+  source: OrgSource;
+  wc_area_id: string | null;
+  legacy_team_id: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type OrgUnitTreeNode = {
+  id: string;
+  nome: string;
+  tipo: OrgUnitType;
+  parent_id: string | null;
+  source: OrgSource;
+  wc_area_id: string | null;
+  legacy_team_id: string | null;
+  is_active: boolean;
+  sort_order: number;
+  person_count: number;
+  child_count: number;
+  children: OrgUnitTreeNode[];
+};
+
+export type OrgAssignment = {
+  id: string;
+  user_id: number;
+  org_unit_id: string;
+  manager_user_id: number | null;
+  title: string | null;
+  is_primary: boolean;
+  active: boolean;
+  valid_from: string | null;
+  valid_to: string | null;
+  source: OrgSource;
+  wc_operator_id: string | null;
+  created_at: string;
+  updated_at: string;
+  person: OrgPersonRef | null;
+  manager: OrgPersonRef | null;
+};
+
+export type OrgUnitDetail = {
+  unit: OrgUnit;
+  path: OrgUnit[];
+  responsabile: OrgPersonRef | null;
+  responsabile_title: string | null;
+  assignments: OrgAssignment[];
+};
+
+export type OrgVisibilityOverride = {
+  id: string;
+  viewer_user_id: number;
+  target_type: OrgOverrideTargetType;
+  target_user_id: number | null;
+  target_org_unit_id: string | null;
+  scope: OrgOverrideScope;
+  motivo: string | null;
+  valid_from: string | null;
+  valid_to: string | null;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+  status: OrgOverrideStatus | null;
+  viewer: OrgPersonRef | null;
+  target_label: string | null;
+};
+
+export type OrgVisibleUnit = {
+  org_unit_id: string;
+  nome: string;
+  tipo: OrgUnitType;
+  parent_id: string | null;
+  via: OrgVisibilityVia;
+  scope: OrgOverrideScope | null;
+};
+
+export type OrgVisiblePerson = {
+  user_id: number;
+  full_name: string | null;
+  title: string | null;
+  org_unit_id: string | null;
+  via: OrgVisibilityVia;
+};
+
+export type OrgVisibilityResult = {
+  viewer: OrgPersonRef;
+  full: boolean;
+  units: OrgVisibleUnit[];
+  people: OrgVisiblePerson[];
+};
+
+export type OrgUnitCreateInput = {
+  nome: string;
+  tipo: OrgUnitType;
+  parent_id?: string | null;
+  source?: OrgSource;
+  sort_order?: number;
+};
+
+export type OrgVisibilityOverrideCreateInput = {
+  viewer_user_id: number;
+  target_type: OrgOverrideTargetType;
+  target_user_id?: number | null;
+  target_org_unit_id?: string | null;
+  scope: OrgOverrideScope;
+  motivo?: string | null;
+  valid_from?: string | null;
+  valid_to?: string | null;
+};
+
+export type OrgWhiteCompanySyncResult = {
+  units_created: number;
+  units_updated: number;
+  units_skipped_locked: number;
+  assignments_created: number;
+  assignments_updated: number;
+  assignments_skipped_locked: number;
+  message: string;
+};
+
 export type InazCollaborator = {
   id: string;
   owner_user_id: number | null;
