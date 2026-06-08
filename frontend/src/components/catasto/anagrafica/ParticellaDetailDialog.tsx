@@ -155,6 +155,7 @@ export function ParticellaDetailDialog({
   const [subjectQuickView, setSubjectQuickView] = useState<{ id: string; label: string | null } | null>(null);
   const [subjectLookupBusyId, setSubjectLookupBusyId] = useState<string | null>(null);
   const [subjectLookupError, setSubjectLookupError] = useState<string | null>(null);
+  const [copiedUtenzaId, setCopiedUtenzaId] = useState<string | null>(null);
   const [gisOpen, setGisOpen] = useState(false);
 
   const reference = useMemo(() => (match ? formatRef(match) : "Particella"), [match]);
@@ -277,6 +278,21 @@ export function ParticellaDetailDialog({
     }
   }, []);
 
+  const copyUtenzaIdentifier = useCallback(async (utenza: CatUtenzaIrrigua): Promise<void> => {
+    const identifier = normalizeIdentifier(utenza.codice_fiscale);
+    if (!identifier) return;
+
+    try {
+      await navigator.clipboard.writeText(identifier);
+      setCopiedUtenzaId(utenza.id);
+      window.setTimeout(() => {
+        setCopiedUtenzaId((current) => (current === utenza.id ? null : current));
+      }, 1800);
+    } catch {
+      setSubjectLookupError("Impossibile copiare il codice fiscale negli appunti.");
+    }
+  }, []);
+
   async function reloadCurrentParticella(): Promise<void> {
     if (!match) return;
     const token = getStoredAccessToken();
@@ -326,7 +342,7 @@ export function ParticellaDetailDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 overflow-y-auto bg-gray-900/45 px-4 py-6"
+      className="fixed inset-0 z-[70] overflow-y-auto bg-black/45 px-3 py-5 backdrop-blur-sm xl:px-5"
       role="dialog"
       aria-modal="true"
       aria-label={`Dettaglio ${reference}`}
@@ -334,7 +350,7 @@ export function ParticellaDetailDialog({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="mx-auto flex max-h-[94vh] w-full max-w-[1400px] flex-col overflow-hidden rounded-[28px] border border-gray-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.24)]">
+      <div className="mx-auto flex max-h-[95vh] w-full max-w-[min(1600px,98vw)] flex-col overflow-hidden rounded-[28px] border border-gray-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.24)]">
         <div className="border-b border-gray-100 px-6 py-5">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div className="min-w-0">
@@ -358,7 +374,7 @@ export function ParticellaDetailDialog({
             </div>
           </div>
         </div>
-        <div className="min-h-0 overflow-y-auto px-6 py-5">
+        <div className="min-h-0 overflow-y-auto bg-[#f4f7f5] px-6 py-5 xl:px-5">
         <div className="rounded-xl border border-[#d9e7dc] bg-[#f5faf5] px-4 py-3 text-sm text-gray-700">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-medium text-gray-900">Ultimo aggiornamento Capacitas:</span>
@@ -608,6 +624,7 @@ export function ParticellaDetailDialog({
                     const partita = formatUtenzaPartita(consorzio, u);
                     const label = getUtenzaSubjectLabel(u);
                     const canOpenSubject = Boolean(u.subject_id || u.codice_fiscale);
+                    const canCopyIdentifier = Boolean(normalizeIdentifier(u.codice_fiscale));
                     const isBusy = subjectLookupBusyId === u.id;
                     const blockClass =
                       "w-full max-w-[280px] rounded-xl border border-[#D9E8DF] bg-[#F5FAF7] px-3 py-2 text-left transition hover:border-[#B7D2C1] hover:bg-[#EEF6F1] disabled:cursor-wait disabled:opacity-70";
@@ -621,19 +638,41 @@ export function ParticellaDetailDialog({
                           </div>
                         </td>
                         <td className="py-2 pr-4">
-                          {canOpenSubject ? (
-                            <button type="button" className={blockClass} disabled={isBusy} onClick={() => void openSubjectQuickView(u)}>
-                              <span className="block text-sm font-semibold tracking-[0.01em] text-[#1D4E35]">
-                                {isBusy ? "Apertura…" : u.codice_fiscale ?? "—"}
-                              </span>
-                              <span className="mt-1 block text-xs font-medium text-gray-600">{label ?? "Apri dettaglio soggetto"}</span>
-                            </button>
-                          ) : (
-                            <div className="max-w-[280px] rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-left">
-                              <div className="text-sm font-semibold tracking-[0.01em] text-gray-800">{u.codice_fiscale ?? "—"}</div>
-                              <div className="mt-1 text-xs font-medium text-gray-500">{label ?? "Nessun soggetto collegato"}</div>
-                            </div>
-                          )}
+                          <div className="flex max-w-[320px] items-start gap-2">
+                            {canOpenSubject ? (
+                              <button type="button" className={blockClass} disabled={isBusy} onClick={() => void openSubjectQuickView(u)}>
+                                <span className="block text-sm font-semibold tracking-[0.01em] text-[#1D4E35]">
+                                  {isBusy ? "Apertura…" : u.codice_fiscale ?? "—"}
+                                </span>
+                                <span className="mt-1 block text-xs font-medium text-gray-600">{label ?? "Apri dettaglio soggetto"}</span>
+                              </button>
+                            ) : (
+                              <div className="max-w-[280px] rounded-xl border border-gray-200 bg-gray-50 px-3 py-2 text-left">
+                                <div className="text-sm font-semibold tracking-[0.01em] text-gray-800">{u.codice_fiscale ?? "—"}</div>
+                                <div className="mt-1 text-xs font-medium text-gray-500">{label ?? "Nessun soggetto collegato"}</div>
+                              </div>
+                            )}
+                            {canCopyIdentifier ? (
+                              <button
+                                type="button"
+                                className="mt-1 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-[#D9E8DF] bg-white text-[#1D4E35] transition hover:border-[#B7D2C1] hover:bg-[#EEF6F1]"
+                                aria-label={`Copia codice fiscale ${u.codice_fiscale ?? ""}`}
+                                title={copiedUtenzaId === u.id ? "Copiato" : "Copia CF"}
+                                onClick={() => void copyUtenzaIdentifier(u)}
+                              >
+                                {copiedUtenzaId === u.id ? (
+                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                                    <path fillRule="evenodd" d="M16.704 5.29a1 1 0 0 1 .006 1.414l-7.25 7.312a1 1 0 0 1-1.42-.005L3.29 9.17a1 1 0 1 1 1.42-1.408l4.04 4.077 6.54-6.544a1 1 0 0 1 1.414-.006Z" clipRule="evenodd" />
+                                  </svg>
+                                ) : (
+                                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="h-4 w-4">
+                                    <path d="M6 2.75A1.75 1.75 0 0 0 4.25 4.5v8c0 .966.784 1.75 1.75 1.75h6A1.75 1.75 0 0 0 13.75 12.5v-8A1.75 1.75 0 0 0 12 2.75H6Z" />
+                                    <path d="M8 15.25a.75.75 0 0 1 0-1.5h4A3.25 3.25 0 0 0 15.25 10.5v-4a.75.75 0 0 1 1.5 0v4A4.75 4.75 0 0 1 12 15.25H8Z" />
+                                  </svg>
+                                )}
+                              </button>
+                            ) : null}
+                          </div>
                         </td>
                         <td className="py-2 pr-4 text-sm text-gray-700">{u.importo_0648 ?? "—"}</td>
                         <td className="py-2 pr-4 text-sm text-gray-700">{u.importo_0985 ?? "—"}</td>

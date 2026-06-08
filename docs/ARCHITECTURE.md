@@ -235,6 +235,7 @@ Regola runtime per job monitorabili:
 - per evitare refactor distruttivi su DB e payload, il linguaggio del modulo runtime usa alias `Elaborazione*` sopra i model e gli schema legacy `catasto_*`
 - lo stesso criterio e applicato al layer UI con namespace dedicato `frontend/src/components/elaborazioni/*`
 - il dettaglio batch runtime, i componenti UI di base e i workspace operativi principali sono ora implementati direttamente sotto `elaborazioni`
+- standard UI: le modal di primo livello che aprono workspace o schede complete devono usare un formato largo condiviso (`z-[70]`, overlay `bg-black/45` con `backdrop-blur-sm`, container `max-w-[min(1600px,98vw)]`, `max-h-[95vh]`, `rounded-[28px]`, bordo chiaro e canvas interno `bg-[#f4f7f5]`) per mantenere coerenza cross-modulo tra `utenze`, `catasto`, `ruolo` ed `elaborazioni`
 - il dominio `utenze` usa anche un job schedulato ANPR con stato persistito su DB (`anpr_job_runs`, `anpr_check_log`): la coda e filtrata sui soli soggetti `a ruolo` dell'anno operativo, con hard cap giornaliero da `.env`, retry dei `not_found_anpr` governato da configurazione temporale e KPI sintetici esposti nella dashboard utenze
 - il monitor operativo di questo job vive anche nel modulo `elaborazioni` tramite route dedicata frontend `/elaborazioni/anpr` e summary backend `/elaborazioni/utenze-anpr/summary`, cosi il tracciamento esecutivo resta nel workspace dei job
 - il backend non espone piu alias runtime sotto `/catasto`; le route operative canoniche sono solo sotto `/elaborazioni`
