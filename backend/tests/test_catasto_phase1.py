@@ -9345,6 +9345,45 @@ def test_meter_reading_patch_endpoint_updates_manual_correction_and_audit() -> N
     assert payload["manual_audits"][0]["new_values"]["punto_consegna"] == "C51A_1A"
 
 
+def test_meter_reading_validate_endpoint_confirms_warning_and_tracks_audit() -> None:
+    response = client.post(
+        "/catasto/meter-readings/import?mode=upsert&anno=2025",
+        headers=auth_headers(),
+        files={"file": ("D01-Sinis 2025.xlsx", _build_meter_readings_workbook(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+    )
+    assert response.status_code == 201
+    import_id = response.json()["import_id"]
+
+    db = TestingSessionLocal()
+    try:
+        reading = db.execute(
+            select(CatMeterReading).where(
+                CatMeterReading.import_id == UUID(import_id),
+                CatMeterReading.validation_status == "warning",
+            )
+        ).scalars().first()
+        assert reading is not None
+        reading_id = str(reading.id)
+        assert any((message or {}).get("level") == "warning" for message in (reading.validation_messages or []))
+    finally:
+        db.close()
+
+    validate_response = client.post(
+        f"/catasto/meter-readings/{reading_id}/validate",
+        headers=auth_headers(),
+        json={},
+    )
+    assert validate_response.status_code == 200
+    payload = validate_response.json()
+    assert payload["validation_status"] == "valid"
+    assert all(message["level"] != "warning" for message in payload["validation_messages"])
+    assert payload["manual_override_updated_at"] is not None
+    assert len(payload["manual_audits"]) == 1
+    assert payload["manual_audits"][0]["change_note"] == "Validazione manuale lettura confermata."
+    assert payload["manual_audits"][0]["previous_values"]["validation_status"] == "warning"
+    assert payload["manual_audits"][0]["new_values"]["validation_status"] == "valid"
+
+
 def test_meter_reading_reimport_preserves_manual_corrections() -> None:
     response = client.post(
         "/catasto/meter-readings/import?mode=upsert&anno=2025",

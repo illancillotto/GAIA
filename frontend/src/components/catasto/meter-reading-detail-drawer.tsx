@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 
-import { catastoPatchMeterReading } from "@/lib/api/catasto";
+import { RiordinoConfirmDialog } from "@/components/riordino/shared/confirm-dialog";
+import { catastoPatchMeterReading, catastoValidateMeterReading } from "@/lib/api/catasto";
 import { getStoredAccessToken } from "@/lib/auth";
 import type { CatMeterReading } from "@/types/catasto";
 
@@ -76,12 +77,14 @@ export function MeterReadingDetailDrawer({
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [form, setForm] = useState<EditState | null>(null);
+  const [showValidateConfirm, setShowValidateConfirm] = useState(false);
 
   useEffect(() => {
     if (!reading) {
       setIsEditing(false);
       setForm(null);
       setSaveError(null);
+      setShowValidateConfirm(false);
       return;
     }
     setForm(buildEditState(reading));
@@ -118,6 +121,25 @@ export function MeterReadingDetailDrawer({
     }
   }
 
+  async function submitValidation() {
+    const token = getStoredAccessToken();
+    if (!token) return;
+    try {
+      setSaving(true);
+      setSaveError(null);
+      const updated = await catastoValidateMeterReading(token, currentReading.id);
+      setShowValidateConfirm(false);
+      setForm(buildEditState(updated));
+      onUpdated(updated);
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Validazione lettura fallita");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const canValidate = !isEditing && currentReading.validation_status === "warning";
+
   return (
     <div className="fixed inset-0 z-40 flex justify-end bg-slate-950/35">
       <button aria-label="Chiudi dettaglio lettura" className="flex-1" onClick={onClose} type="button" />
@@ -130,7 +152,21 @@ export function MeterReadingDetailDrawer({
             </p>
           </div>
           <div className="flex gap-2">
-            <button className="btn-secondary" onClick={() => setIsEditing((value) => !value)} type="button">
+            {canValidate ? (
+              <button
+                className="btn-primary bg-blue-600 hover:bg-blue-700 focus-visible:ring-blue-300"
+                disabled={saving}
+                onClick={() => setShowValidateConfirm(true)}
+                type="button"
+              >
+                Valida lettura
+              </button>
+            ) : null}
+            <button
+              className={isEditing ? "btn-secondary" : "btn-primary bg-sky-600 hover:bg-sky-700 focus-visible:ring-sky-300"}
+              onClick={() => setIsEditing((value) => !value)}
+              type="button"
+            >
               {isEditing ? "Annulla modifica" : "Correggi lettura"}
             </button>
             <button className="btn-secondary" onClick={onClose} type="button">
@@ -303,6 +339,15 @@ export function MeterReadingDetailDrawer({
           </div>
         ) : null}
       </aside>
+      <RiordinoConfirmDialog
+        open={showValidateConfirm}
+        title="Confermare validazione lettura?"
+        description="La lettura verrà marcata come valida e i warning correnti saranno chiusi. L'operazione resterà tracciata nello storico correzioni."
+        confirmLabel="Valida lettura"
+        busy={saving}
+        onCancel={() => setShowValidateConfirm(false)}
+        onConfirm={submitValidation}
+      />
     </div>
   );
 }

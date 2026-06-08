@@ -220,6 +220,10 @@ class CatMeterReadingPatchRequest(BaseModel):
     change_note: str | None = None
 
 
+class CatMeterReadingManualValidateRequest(BaseModel):
+    change_note: str | None = None
+
+
 class CatMeterReadingManualAuditResponse(BaseModel):
     id: UUID
     meter_reading_id: UUID

@@ -181,3 +181,44 @@ def update_meter_reading_manual_corrections(
             )
         )
     return subject_display_name
+
+
+def validate_meter_reading_manually(
+    db: Session,
+    *,
+    reading: CatMeterReading,
+    current_user: ApplicationUser,
+    change_note: str | None = None,
+) -> str | None:
+    if reading.validation_status == "error":
+        raise ValueError("Impossibile validare manualmente una lettura con errori bloccanti.")
+
+    previous_messages = reading.validation_messages if isinstance(reading.validation_messages, list) else []
+    next_messages = [message for message in previous_messages if not (isinstance(message, dict) and message.get("level") == "warning")]
+    previous_status = reading.validation_status
+    next_status = "valid"
+
+    if previous_status == next_status and previous_messages == next_messages:
+        return _subject_display_name(db, reading.subject_id)
+
+    reading.validation_status = next_status
+    reading.validation_messages = next_messages
+    reading.manual_override_updated_by = current_user.id
+    reading.manual_override_updated_at = datetime.now(timezone.utc)
+
+    db.add(
+        CatMeterReadingManualAudit(
+            meter_reading_id=reading.id,
+            changed_by=current_user.id,
+            change_note=_clean_optional_text(change_note) or "Validazione manuale lettura confermata.",
+            previous_values={
+                "validation_status": previous_status,
+                "validation_messages": previous_messages,
+            },
+            new_values={
+                "validation_status": next_status,
+                "validation_messages": next_messages,
+            },
+        )
+    )
+    return _subject_display_name(db, reading.subject_id)

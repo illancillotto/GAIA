@@ -153,6 +153,133 @@ test("catasto meter readings page shows list and opens detail drawer", async ({ 
   await expect(page.getByText("Mais")).toBeVisible();
 });
 
+test("catasto meter readings detail validates warning reading with confirmation", async ({ page }) => {
+  await loginAsAdmin(page);
+
+  const warningReading = {
+    id: "00000000-0000-0000-0000-000000000711",
+    import_id: "00000000-0000-0000-0000-000000000712",
+    distretto_id: "00000000-0000-0000-0000-000000000703",
+    anno: 2025,
+    row_number: 3,
+    excel_id: "2",
+    punto_consegna: "PC-WARN-001",
+    matricola: "MTR-WARN-001",
+    sigillo: null,
+    record_type: "CONT_NO_TES",
+    record_kind: "meter_reading",
+    operational_state: "active",
+    tipologia_idrante: "Flangia",
+    firmware_version: null,
+    battery_level: "10%",
+    lettura_iniziale: "200.000",
+    lettura_finale: "240.000",
+    consumo_mc: "40.000",
+    data_lettura: "2025-04-10",
+    operatore_lettura: "Operatore B",
+    intervento_da_eseguire: null,
+    intervento_eseguito: null,
+    operatore_intervento: null,
+    data_intervento: null,
+    dui: null,
+    codice_fiscale: "RSSMRA80A01H501U",
+    codice_fiscale_normalizzato: "RSSMRA80A01H501U",
+    subject_id: "00000000-0000-0000-0000-000000000704",
+    subject_display_name: "Rossi Mario",
+    coltura: "Mais",
+    tariffa: "T1",
+    fondo_chiuso: null,
+    telefono: null,
+    note: "ok",
+    validation_status: "warning",
+    validation_messages: [{ level: "warning", code: "BATTERIA_BASSA", message: "Batteria bassa", field: "battery_level" }],
+    source: "excel",
+    mobile_session_id: null,
+    gps_lat: null,
+    gps_lng: null,
+    photo_url: null,
+    offline_created_at: null,
+    synced_at: null,
+    sync_status: null,
+    device_id: null,
+    mobile_operator_id: null,
+    manual_corrections: null,
+    manual_override_updated_at: null,
+    manual_override_updated_by: null,
+    manual_audits: [],
+    created_at: "2026-05-15T10:00:00Z",
+    updated_at: "2026-05-15T10:00:00Z",
+  };
+
+  await page.route("**/api/catasto/meter-readings?**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        record_tab_counts: { meter: 1, other: 0 },
+        operational_counts: { all: 1, unlinked: 0, activities: 0, dismissed: 0, lowBattery: 1 },
+        validation_counts: { all: 1, valid: 0, warning: 1, error: 0 },
+        items: [warningReading],
+        total: 1,
+        page: 1,
+        page_size: 50,
+      }),
+    });
+  });
+
+  await page.route("**/api/catasto/meter-readings/00000000-0000-0000-0000-000000000711", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify(warningReading),
+    });
+  });
+
+  await page.route("**/api/catasto/meter-readings/00000000-0000-0000-0000-000000000711/validate", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ...warningReading,
+        validation_status: "valid",
+        validation_messages: [],
+        manual_override_updated_at: "2026-06-08T09:00:00Z",
+        manual_override_updated_by: 1,
+        manual_audits: [
+          {
+            id: "00000000-0000-0000-0000-000000000799",
+            meter_reading_id: warningReading.id,
+            changed_by: 1,
+            changed_by_display_name: "admin",
+            change_note: "Validazione manuale lettura confermata.",
+            previous_values: {
+              validation_status: "warning",
+              validation_messages: [{ level: "warning", code: "BATTERIA_BASSA", message: "Batteria bassa", field: "battery_level" }],
+            },
+            new_values: {
+              validation_status: "valid",
+              validation_messages: [],
+            },
+            changed_at: "2026-06-08T09:00:00Z",
+          },
+        ],
+      }),
+    });
+  });
+
+  await page.goto("/catasto/letture-contatori");
+  await page.getByText("PC-WARN-001").click();
+
+  await expect(page.getByRole("button", { name: "Valida lettura" })).toBeVisible();
+  await page.getByRole("button", { name: "Valida lettura" }).click();
+  await expect(page.getByText("Confermare validazione lettura?")).toBeVisible();
+  await page.getByRole("button", { name: "Valida lettura" }).last().click();
+
+  await expect(page.getByText("Correzione manuale presente")).toBeVisible();
+  await expect(page.getByText("Storico correzioni")).toBeVisible();
+  await expect(page.getByText("Validazione manuale lettura confermata.")).toBeVisible();
+});
+
 test("catasto meter readings import page validates and imports workbook", async ({ page }) => {
   await loginAsAdmin(page);
 

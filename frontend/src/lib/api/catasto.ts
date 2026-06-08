@@ -521,6 +521,18 @@ export async function catastoPatchMeterReading(
   });
 }
 
+export async function catastoValidateMeterReading(
+  token: string,
+  id: UUID,
+  payload?: { change_note?: string | null },
+): Promise<CatMeterReading> {
+  return request<CatMeterReading>(`/catasto/meter-readings/${id}/validate`, {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload ?? {}),
+  });
+}
+
 export async function catastoGetMeterReadingsBySubject(token: string, subjectId: UUID): Promise<CatMeterReading[]> {
   return request<CatMeterReading[]>(`/catasto/meter-readings/by-subject/${subjectId}`, {
     headers: authHeaders(token),

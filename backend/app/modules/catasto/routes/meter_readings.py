@@ -11,7 +11,10 @@ from app.core.database import get_db
 from app.models.application_user import ApplicationUser
 from app.models.catasto_phase1 import CatMeterReading, CatMeterReadingImport, CatMeterReadingManualAudit
 from app.modules.catasto.services.meter_reading_import_service import import_meter_readings, prepare_meter_readings_import
-from app.modules.catasto.services.meter_reading_manual_service import update_meter_reading_manual_corrections
+from app.modules.catasto.services.meter_reading_manual_service import (
+    update_meter_reading_manual_corrections,
+    validate_meter_reading_manually,
+)
 from app.modules.catasto.services.meter_reading_parser import MeterReadingsParseError
 from app.modules.utenze.models import AnagraficaCompany, AnagraficaPerson
 from app.schemas.catasto_phase1 import (
@@ -22,6 +25,7 @@ from app.schemas.catasto_phase1 import (
     CatMeterReadingImportPreviewResponse,
     CatMeterReadingImportRunResponse,
     CatMeterReadingListResponse,
+    CatMeterReadingManualValidateRequest,
     CatMeterReadingManualAuditResponse,
     CatMeterReadingResponse,
     CatMeterReadingValidationMessageResponse,
@@ -383,6 +387,32 @@ def patch_meter_reading(
             reading=item,
             payload=payload.model_dump(exclude_unset=True),
             current_user=current_user,
+        )
+        db.add(item)
+        db.commit()
+        db.refresh(item)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return _serialize_reading(db, item, subject_display_name, include_audits=True)
+
+
+@router.post("/{reading_id}/validate", response_model=CatMeterReadingResponse)
+def validate_meter_reading(
+    reading_id: UUID,
+    payload: CatMeterReadingManualValidateRequest,
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(require_active_user),
+) -> CatMeterReadingResponse:
+    item = db.get(CatMeterReading, reading_id)
+    if item is None:
+        raise HTTPException(status_code=404, detail="Lettura contatore non trovata")
+    try:
+        subject_display_name = validate_meter_reading_manually(
+            db,
+            reading=item,
+            current_user=current_user,
+            change_note=payload.change_note,
         )
         db.add(item)
         db.commit()
