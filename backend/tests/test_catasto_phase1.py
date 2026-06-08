@@ -9242,7 +9242,6 @@ def test_meter_reading_detail_and_import_routes() -> None:
     imports_response = client.get("/catasto/meter-readings/imports", headers=auth_headers())
     assert imports_response.status_code == 200
     assert any(item["id"] == import_id for item in imports_response.json())
-
     import_detail_response = client.get(f"/catasto/meter-readings/imports/{import_id}", headers=auth_headers())
     assert import_detail_response.status_code == 200
     assert import_detail_response.json()["filename_originale"] == "detail.xlsx"
@@ -9250,6 +9249,65 @@ def test_meter_reading_detail_and_import_routes() -> None:
     detail_response = client.get(f"/catasto/meter-readings/{reading_id}", headers=auth_headers())
     assert detail_response.status_code == 200
     assert detail_response.json()["punto_consegna"] == "PC-DET"
+
+
+def test_meter_readings_list_applies_server_side_record_operational_and_validation_filters() -> None:
+    db = TestingSessionLocal()
+    try:
+        distretto = db.execute(select(CatDistretto).where(CatDistretto.num_distretto == "1")).scalar_one()
+        db.add_all(
+            [
+                CatMeterReading(
+                    distretto_id=distretto.id,
+                    anno=2025,
+                    punto_consegna="PC-METER-VALID",
+                    record_kind="meter_reading",
+                    subject_id=None,
+                    validation_status="valid",
+                    validation_messages=[],
+                    source="excel",
+                ),
+                CatMeterReading(
+                    distretto_id=distretto.id,
+                    anno=2025,
+                    punto_consegna="PC-METER-WARN",
+                    record_kind="meter_reading",
+                    subject_id=None,
+                    validation_status="warning",
+                    validation_messages=[{"level": "warning", "code": "BATTERIA_BASSA", "message": "Batteria bassa"}],
+                    source="excel",
+                ),
+                CatMeterReading(
+                    distretto_id=distretto.id,
+                    anno=2025,
+                    punto_consegna="PC-OTHER-ERR",
+                    record_kind="operator_activity",
+                    subject_id=None,
+                    validation_status="error",
+                    validation_messages=[{"level": "error", "code": "GENERIC", "message": "Errore"}],
+                    source="excel",
+                ),
+            ]
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    response = client.get(
+        "/catasto/meter-readings?anno=2025&record_tab=meter&operational_filter=lowBattery&validation_filter=warning",
+        headers=auth_headers(),
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["total"] == 1
+    assert payload["record_tab_counts"]["meter"] == 2
+    assert payload["record_tab_counts"]["other"] == 1
+    assert payload["operational_counts"]["all"] == 2
+    assert payload["operational_counts"]["lowBattery"] == 1
+    assert payload["validation_counts"]["all"] == 1
+    assert payload["validation_counts"]["warning"] == 1
+    assert payload["items"][0]["punto_consegna"] == "PC-METER-WARN"
 
 
 def test_meter_reading_patch_endpoint_updates_manual_correction_and_audit() -> None:

@@ -35,6 +35,15 @@ const OPERATIONAL_FILTERS = [
 
 type OperationalFilterId = (typeof OPERATIONAL_FILTERS)[number]["id"];
 
+const VALIDATION_FILTERS = [
+  { id: "all", label: "Tutte" },
+  { id: "valid", label: "Valide" },
+  { id: "warning", label: "Warning" },
+  { id: "error", label: "Errori" },
+] as const;
+
+type ValidationFilterId = (typeof VALIDATION_FILTERS)[number]["id"];
+
 const RECORD_TABS = [
   { id: "meter", label: "Letture contatore", description: "Solo letture reali di contatore" },
   { id: "other", label: "Attivita e censimenti", description: "Attivita operatore, punti dismessi e altro censimento" },
@@ -87,10 +96,6 @@ function countWarnings(item: CatMeterReading): number {
   return item.validation_messages.filter((message) => message.level === "warning").length;
 }
 
-function hasMessageCode(item: CatMeterReading, code: string): boolean {
-  return item.validation_messages.some((message) => message.code === code);
-}
-
 export function MeterReadingsTable({ subjectId }: { subjectId?: string }) {
   const [data, setData] = useState<CatMeterReadingListResponse | null>(null);
   const [distretti, setDistretti] = useState<CatDistretto[]>([]);
@@ -102,6 +107,7 @@ export function MeterReadingsTable({ subjectId }: { subjectId?: string }) {
   const [codiceFiscale, setCodiceFiscale] = useState("");
   const [quickFilter, setQuickFilter] = useState<QuickFilterId>("all");
   const [operationalFilter, setOperationalFilter] = useState<OperationalFilterId>("all");
+  const [validationFilter, setValidationFilter] = useState<ValidationFilterId>("all");
   const [recordTab, setRecordTab] = useState<RecordTabId>("meter");
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -149,7 +155,7 @@ export function MeterReadingsTable({ subjectId }: { subjectId?: string }) {
 
   useEffect(() => {
     setPage(1);
-  }, [anno, distrettoId, puntoConsegna, matricola, codiceFiscale, quickFilter, recordTab, subjectId]);
+  }, [anno, distrettoId, puntoConsegna, matricola, codiceFiscale, quickFilter, operationalFilter, validationFilter, recordTab, subjectId]);
 
   useEffect(() => {
     if (!anno) return;
@@ -171,6 +177,9 @@ export function MeterReadingsTable({ subjectId }: { subjectId?: string }) {
           hasWarnings: quickFilter === "warnings",
           interventoDaEseguire: quickFilter === "interventi",
           source: quickFilter === "excel" ? "excel" : undefined,
+          recordTab,
+          operationalFilter,
+          validationFilter,
           page,
           pageSize: subjectId ? 200 : 100,
         });
@@ -183,7 +192,7 @@ export function MeterReadingsTable({ subjectId }: { subjectId?: string }) {
     }
 
     void loadReadings();
-  }, [anno, distrettoId, puntoConsegna, matricola, codiceFiscale, quickFilter, page, subjectId]);
+  }, [anno, distrettoId, puntoConsegna, matricola, codiceFiscale, quickFilter, operationalFilter, validationFilter, recordTab, page, subjectId]);
 
   async function refreshReadings() {
     if (!anno) return;
@@ -199,6 +208,9 @@ export function MeterReadingsTable({ subjectId }: { subjectId?: string }) {
       hasWarnings: quickFilter === "warnings",
       interventoDaEseguire: quickFilter === "interventi",
       source: quickFilter === "excel" ? "excel" : undefined,
+      recordTab,
+      operationalFilter,
+      validationFilter,
       page,
       pageSize: subjectId ? 200 : 100,
     });
@@ -222,41 +234,43 @@ export function MeterReadingsTable({ subjectId }: { subjectId?: string }) {
     setCodiceFiscale("");
     setQuickFilter("all");
     setOperationalFilter("all");
+    setValidationFilter("all");
     setRecordTab("meter");
   }
 
   const items = data?.items ?? [];
-  const tabItems = items.filter((item) => {
-    if (recordTab === "meter" && item.record_kind !== "meter_reading") return false;
-    if (recordTab === "other" && item.record_kind === "meter_reading") return false;
-    return true;
-  });
-  const filteredItems = tabItems.filter((item) => {
-    if (operationalFilter === "unlinked") return !item.subject_id;
-    if (operationalFilter === "activities") return item.record_kind === "operator_activity";
-    if (operationalFilter === "dismissed") return item.record_kind === "dismissed_point";
-    if (operationalFilter === "lowBattery") return hasMessageCode(item, "BATTERIA_BASSA");
-    return true;
-  });
-  const sortedItems = [...filteredItems].sort((left, right) => {
+  const sortedItems = [...items].sort((left, right) => {
     const leftRank = left.record_kind === "meter_reading" ? 0 : 1;
     const rightRank = right.record_kind === "meter_reading" ? 0 : 1;
     if (leftRank !== rightRank) return leftRank - rightRank;
     return left.punto_consegna.localeCompare(right.punto_consegna, "it");
   });
-  const linkedCount = filteredItems.filter((item) => Boolean(item.subject_id)).length;
-  const warningCount = filteredItems.filter((item) => item.validation_status === "warning").length;
-  const meterCount = filteredItems.filter((item) => item.record_kind === "meter_reading").length;
-  const activityCount = filteredItems.filter((item) => item.record_kind === "operator_activity").length;
-  const dismissedCount = filteredItems.filter((item) => item.record_kind === "dismissed_point").length;
-  const totalMeterCount = items.filter((item) => item.record_kind === "meter_reading").length;
-  const totalOtherCount = items.filter((item) => item.record_kind !== "meter_reading").length;
+  const totalCount = data?.total ?? 0;
+  const totalMeterCount = data?.record_tab_counts?.meter ?? 0;
+  const totalOtherCount = data?.record_tab_counts?.other ?? 0;
   const operationalCounts = {
-    unlinked: tabItems.filter((item) => !item.subject_id).length,
-    activities: tabItems.filter((item) => item.record_kind === "operator_activity").length,
-    dismissed: tabItems.filter((item) => item.record_kind === "dismissed_point").length,
-    lowBattery: tabItems.filter((item) => hasMessageCode(item, "BATTERIA_BASSA")).length,
+    all: data?.operational_counts?.all ?? totalCount,
+    unlinked: data?.operational_counts?.unlinked ?? 0,
+    activities: data?.operational_counts?.activities ?? 0,
+    dismissed: data?.operational_counts?.dismissed ?? 0,
+    lowBattery: data?.operational_counts?.lowBattery ?? 0,
   };
+  const validationCounts = {
+    all: data?.validation_counts?.all ?? totalCount,
+    valid: data?.validation_counts?.valid ?? 0,
+    warning: data?.validation_counts?.warning ?? 0,
+    error: data?.validation_counts?.error ?? 0,
+  };
+  const linkedCount =
+    recordTab === "meter"
+      ? Math.max(totalCount - operationalCounts.unlinked, 0)
+      : operationalFilter === "unlinked"
+        ? totalCount
+        : Math.max(totalCount - operationalCounts.unlinked, 0);
+  const warningCount = validationCounts.warning;
+  const meterCount = recordTab === "meter" ? totalCount : 0;
+  const activityCount = recordTab === "other" && operationalFilter === "activities" ? totalCount : operationalCounts.activities;
+  const dismissedCount = recordTab === "other" && operationalFilter === "dismissed" ? totalCount : operationalCounts.dismissed;
   const totalPages = data ? Math.max(1, Math.ceil(data.total / Math.max(data.page_size, 1))) : 1;
   const hasActiveFilters = Boolean(
     distrettoId ||
@@ -265,6 +279,7 @@ export function MeterReadingsTable({ subjectId }: { subjectId?: string }) {
       codiceFiscale.trim() ||
       quickFilter !== "all" ||
       operationalFilter !== "all" ||
+      validationFilter !== "all" ||
       recordTab !== "meter",
   );
   const tabOperationalFilters =
@@ -405,7 +420,7 @@ export function MeterReadingsTable({ subjectId }: { subjectId?: string }) {
       <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label={subjectId ? "Righe soggetto" : recordTab === "meter" ? "Letture in vista" : "Righe operative"}
-          value={loading || isInitializing ? "…" : filteredItems.length}
+          value={loading || isInitializing ? "…" : totalCount}
           sub={subjectId ? "Filtro sul soggetto corrente" : `Pagina ${data?.page ?? page} di ${totalPages} · ${data?.total ?? 0} server`}
           variant="default"
         />
@@ -417,7 +432,7 @@ export function MeterReadingsTable({ subjectId }: { subjectId?: string }) {
         />
         <MetricCard
           label={recordTab === "meter" ? "Soggetti collegati" : "Non collegati"}
-          value={loading ? "…" : recordTab === "meter" ? linkedCount : filteredItems.length - linkedCount}
+          value={loading ? "…" : recordTab === "meter" ? linkedCount : operationalFilter === "unlinked" ? totalCount : operationalCounts.unlinked}
           sub={recordTab === "meter" ? "Link anagrafico presente" : "Da classificare o agganciare"}
           variant={recordTab === "meter" ? "success" : "warning"}
         />
@@ -445,6 +460,11 @@ export function MeterReadingsTable({ subjectId }: { subjectId?: string }) {
               {quickFilter !== "all" ? (
                 <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-800">
                   {QUICK_FILTERS.find((filter) => filter.id === quickFilter)?.label}
+                </span>
+              ) : null}
+              {validationFilter !== "all" ? (
+                <span className="rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800">
+                  {VALIDATION_FILTERS.find((filter) => filter.id === validationFilter)?.label}
                 </span>
               ) : null}
             </div>
@@ -479,29 +499,54 @@ export function MeterReadingsTable({ subjectId }: { subjectId?: string }) {
             </div>
           ) : null}
           {!subjectId ? (
-            <div className="mt-4 flex flex-wrap gap-2">
-              {tabOperationalFilters.map((filter) => {
-                const count =
-                  filter.id === "all"
-                    ? tabItems.length
+            <>
+              <div className="mt-4 flex flex-wrap gap-2">
+                {tabOperationalFilters.map((filter) => {
+                  const count =
+                    filter.id === "all"
+                    ? operationalCounts.all
                     : operationalCounts[filter.id as Exclude<OperationalFilterId, "all">];
-                return (
-                  <button
-                    key={filter.id}
-                    type="button"
-                    onClick={() => setOperationalFilter(filter.id)}
-                    className={cn(
-                      "rounded-full border px-3 py-1.5 text-xs font-semibold transition",
-                      operationalFilter === filter.id
-                        ? "border-slate-900 bg-slate-900 text-white"
-                        : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50",
-                    )}
-                  >
-                    {filter.label} · {count}
-                  </button>
-                );
-              })}
-            </div>
+                  return (
+                    <button
+                      key={filter.id}
+                      type="button"
+                      onClick={() => setOperationalFilter(filter.id)}
+                      className={cn(
+                        "rounded-full border px-3 py-1.5 text-xs font-semibold transition",
+                        operationalFilter === filter.id
+                          ? "border-slate-900 bg-slate-900 text-white"
+                          : "border-slate-200 bg-white text-slate-700 hover:border-slate-300 hover:bg-slate-50",
+                      )}
+                    >
+                      {filter.label} · {count}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {VALIDATION_FILTERS.map((filter) => {
+                  const count =
+                    filter.id === "all"
+                      ? validationCounts.all
+                      : validationCounts[filter.id as Exclude<ValidationFilterId, "all">];
+                  return (
+                    <button
+                      key={filter.id}
+                      type="button"
+                      onClick={() => setValidationFilter(filter.id)}
+                      className={cn(
+                        "rounded-full border px-3 py-1.5 text-xs font-semibold transition",
+                        validationFilter === filter.id
+                          ? "border-amber-700 bg-amber-700 text-white"
+                          : "border-amber-200 bg-white text-amber-900 hover:border-amber-300 hover:bg-amber-50",
+                      )}
+                    >
+                      {filter.label} · {count}
+                    </button>
+                  );
+                })}
+              </div>
+            </>
           ) : null}
         </div>
 
@@ -630,7 +675,7 @@ export function MeterReadingsTable({ subjectId }: { subjectId?: string }) {
                 );
               })}
 
-              {!loading && filteredItems.length === 0 ? (
+              {!loading && sortedItems.length === 0 ? (
                 <tr>
                   <td className="px-4 py-8 text-center text-slate-500" colSpan={6}>
                     Nessuna lettura trovata con i filtri correnti.

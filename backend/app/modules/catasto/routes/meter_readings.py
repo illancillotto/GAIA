@@ -3,7 +3,7 @@ from __future__ import annotations
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
-from sqlalchemy import func, or_, select
+from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user
@@ -28,6 +28,36 @@ from app.schemas.catasto_phase1 import (
 )
 
 router = APIRouter(prefix="/catasto/meter-readings", tags=["catasto-meter-readings"])
+
+
+def _count_query(db: Session, query):
+    return int(db.execute(select(func.count()).select_from(query.subquery())).scalar_one() or 0)
+
+
+def _apply_record_tab_filter(query, record_tab: str | None):
+    if record_tab == "meter":
+        return query.where(CatMeterReading.record_kind == "meter_reading")
+    if record_tab == "other":
+        return query.where(or_(CatMeterReading.record_kind != "meter_reading", CatMeterReading.record_kind.is_(None)))
+    return query
+
+
+def _apply_operational_filter(query, operational_filter: str | None):
+    if operational_filter == "unlinked":
+        return query.where(CatMeterReading.subject_id.is_(None))
+    if operational_filter == "activities":
+        return query.where(CatMeterReading.record_kind == "operator_activity")
+    if operational_filter == "dismissed":
+        return query.where(CatMeterReading.record_kind == "dismissed_point")
+    if operational_filter == "lowBattery":
+        return query.where(cast(func.coalesce(CatMeterReading.validation_messages, "[]"), String).ilike('%"code": "BATTERIA_BASSA"%'))
+    return query
+
+
+def _apply_validation_filter(query, validation_filter: str | None):
+    if validation_filter in {"valid", "warning", "error"}:
+        return query.where(CatMeterReading.validation_status == validation_filter)
+    return query
 
 
 def _subject_preview_map(db: Session, subject_ids: list[UUID]) -> dict[UUID, str]:
@@ -245,38 +275,66 @@ def list_meter_readings(
     has_warnings: bool | None = Query(None),
     intervento_da_eseguire: bool | None = Query(None),
     source: str | None = Query(None),
+    record_tab: str | None = Query(None, pattern="^(meter|other)$"),
+    operational_filter: str | None = Query(None, pattern="^(all|unlinked|activities|dismissed|lowBattery)$"),
+    validation_filter: str | None = Query(None, pattern="^(all|valid|warning|error)$"),
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),
     db: Session = Depends(get_db),
     _: ApplicationUser = Depends(require_active_user),
 ) -> CatMeterReadingListResponse:
-    query = select(CatMeterReading)
+    base_query = select(CatMeterReading)
     if anno is not None:
-        query = query.where(CatMeterReading.anno == anno)
+        base_query = base_query.where(CatMeterReading.anno == anno)
     if distretto_id is not None:
-        query = query.where(CatMeterReading.distretto_id == distretto_id)
+        base_query = base_query.where(CatMeterReading.distretto_id == distretto_id)
     if codice_fiscale:
         like = f"%{codice_fiscale.strip().upper()}%"
-        query = query.where(
+        base_query = base_query.where(
             or_(
                 func.upper(func.coalesce(CatMeterReading.codice_fiscale, "")).like(like),
                 func.upper(func.coalesce(CatMeterReading.codice_fiscale_normalizzato, "")).like(like),
             )
         )
     if punto_consegna:
-        query = query.where(CatMeterReading.punto_consegna.ilike(f"%{punto_consegna.strip()}%"))
+        base_query = base_query.where(CatMeterReading.punto_consegna.ilike(f"%{punto_consegna.strip()}%"))
     if matricola:
-        query = query.where(CatMeterReading.matricola.ilike(f"%{matricola.strip()}%"))
+        base_query = base_query.where(CatMeterReading.matricola.ilike(f"%{matricola.strip()}%"))
     if subject_id is not None:
-        query = query.where(CatMeterReading.subject_id == subject_id)
+        base_query = base_query.where(CatMeterReading.subject_id == subject_id)
     if has_warnings is True:
-        query = query.where(CatMeterReading.validation_status == "warning")
+        base_query = base_query.where(CatMeterReading.validation_status == "warning")
     if intervento_da_eseguire is True:
-        query = query.where(func.coalesce(CatMeterReading.intervento_da_eseguire, "") != "")
+        base_query = base_query.where(func.coalesce(CatMeterReading.intervento_da_eseguire, "") != "")
     if source:
-        query = query.where(CatMeterReading.source == source)
+        base_query = base_query.where(CatMeterReading.source == source)
 
-    total = db.execute(select(func.count()).select_from(query.subquery())).scalar_one()
+    record_tab_counts = {
+        "meter": _count_query(db, base_query.where(CatMeterReading.record_kind == "meter_reading")),
+        "other": _count_query(db, base_query.where(or_(CatMeterReading.record_kind != "meter_reading", CatMeterReading.record_kind.is_(None)))),
+    }
+    tab_query = _apply_record_tab_filter(base_query, record_tab)
+    operational_counts = {
+        "all": _count_query(db, tab_query),
+        "unlinked": _count_query(db, tab_query.where(CatMeterReading.subject_id.is_(None))),
+        "activities": _count_query(db, tab_query.where(CatMeterReading.record_kind == "operator_activity")),
+        "dismissed": _count_query(db, tab_query.where(CatMeterReading.record_kind == "dismissed_point")),
+        "lowBattery": _count_query(
+            db,
+            tab_query.where(cast(func.coalesce(CatMeterReading.validation_messages, "[]"), String).ilike('%"code": "BATTERIA_BASSA"%')),
+        ),
+    }
+    selected_operational_filter = None if operational_filter in {None, "all"} else operational_filter
+    operational_query = _apply_operational_filter(tab_query, selected_operational_filter)
+    validation_counts = {
+        "all": _count_query(db, operational_query),
+        "valid": _count_query(db, operational_query.where(CatMeterReading.validation_status == "valid")),
+        "warning": _count_query(db, operational_query.where(CatMeterReading.validation_status == "warning")),
+        "error": _count_query(db, operational_query.where(CatMeterReading.validation_status == "error")),
+    }
+    selected_validation_filter = None if validation_filter in {None, "all"} else validation_filter
+    query = _apply_validation_filter(operational_query, selected_validation_filter)
+    total = _count_query(db, query)
     rows = db.execute(
         query.order_by(CatMeterReading.anno.desc(), CatMeterReading.punto_consegna.asc())
         .offset((page - 1) * page_size)
@@ -284,6 +342,9 @@ def list_meter_readings(
     ).scalars().all()
     preview_map = _subject_preview_map(db, [item.subject_id for item in rows if item.subject_id is not None])
     return CatMeterReadingListResponse(
+        record_tab_counts=record_tab_counts,
+        operational_counts=operational_counts,
+        validation_counts=validation_counts,
         items=[_serialize_reading(db, item, preview_map.get(item.subject_id) if item.subject_id else None) for item in rows],
         total=total,
         page=page,

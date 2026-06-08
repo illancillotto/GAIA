@@ -466,6 +466,9 @@ export async function catastoListMeterReadings(
     hasWarnings?: boolean;
     interventoDaEseguire?: boolean;
     source?: string;
+    recordTab?: "meter" | "other";
+    operationalFilter?: "all" | "unlinked" | "activities" | "dismissed" | "lowBattery";
+    validationFilter?: "all" | "valid" | "warning" | "error";
     page?: number;
     pageSize?: number;
   },
@@ -480,6 +483,9 @@ export async function catastoListMeterReadings(
     has_warnings: params?.hasWarnings ? "true" : undefined,
     intervento_da_eseguire: params?.interventoDaEseguire ? "true" : undefined,
     source: params?.source || undefined,
+    record_tab: params?.recordTab || undefined,
+    operational_filter: params?.operationalFilter || undefined,
+    validation_filter: params?.validationFilter || undefined,
     page: params?.page != null ? String(params.page) : undefined,
     page_size: params?.pageSize != null ? String(params.pageSize) : undefined,
   });

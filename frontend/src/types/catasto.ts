@@ -157,6 +157,9 @@ export type CatMeterReading = {
 };
 
 export type CatMeterReadingListResponse = {
+  record_tab_counts: Record<string, number>;
+  operational_counts: Record<string, number>;
+  validation_counts: Record<string, number>;
   items: CatMeterReading[];
   total: number;
   page: number;

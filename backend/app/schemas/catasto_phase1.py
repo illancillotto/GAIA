@@ -164,6 +164,9 @@ class CatMeterReadingResponse(BaseModel):
 
 
 class CatMeterReadingListResponse(BaseModel):
+    record_tab_counts: dict[str, int] = {}
+    operational_counts: dict[str, int] = {}
+    validation_counts: dict[str, int] = {}
     items: list[CatMeterReadingResponse]
     total: int
     page: int
