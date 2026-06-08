@@ -66,14 +66,89 @@ Il modulo **Wiki Agent** aggiunge a GAIA un assistente LLM sempre disponibile, c
 - Se l'utente chiede una feature non implementata, può cliccare "Registra richiesta"
 - La richiesta viene salvata in `wiki_requests` con stato `pending`
 - Admin può vedere la lista in `/wiki/requests` (endpoint protetto)
-- Status: `pending` → `reviewed` → `planned` → `done`
+- Workflow operativo richieste:
+  - `new`
+  - `triaged`
+  - `investigating`
+  - `waiting_user`
+  - `planned`
+  - `resolved`
+  - `duplicate`
+  - `rejected`
 - Ogni richiesta può avere:
   - `priority`: `low` / `medium` / `high` / `urgent`
   - `assigned_to`: operatore GAIA assegnato alla presa in carico
   - `admin_notes`: contesto operativo, ticket o decisione
-- La pagina admin consente filtro, presa in carico e aggiornamento inline
+- `severity`: `low` / `medium` / `high` / `critical`
+- Campi contestuali strutturati:
+  - `request_type`
+  - `module_key`
+  - `page_path`
+  - `source_channel`
+  - `impact_scope`
+  - `conversation_id`
+  - `context_article`
+  - `context_entity_key`
+  - `desired_outcome`
+  - `observed_behavior`
+  - `expected_behavior`
+- La pagina admin consente filtro, presa in carico, aggiornamento inline e timeline eventi del caso
 
-### 4.5 Router semantico e guardrail strutturali
+### 4.5 Supporto Wiki dedicato
+
+- Pagina utente: `/wiki/support`
+- Scopo: trasformare domande, anomalie o richieste di prodotto in casi strutturati
+- Ingressi utente principali:
+  - `Supporto operativo`
+  - `Problema / anomalia`
+  - `Nuova funzionalità`
+  - `Problema di accesso`
+  - `Problema dati`
+  - `Altro`
+- Il widget e la pagina Wiki non mostrano più solo `Registra come richiesta`, ma:
+  - `Chiedi supporto`
+  - `Segnala problema`
+  - `Richiedi funzionalità`
+  - `Apri supporto completo`
+- Il flusso precompila automaticamente il contesto:
+  - modulo GAIA
+  - pagina corrente
+  - conversazione Wiki sorgente
+  - eventuale articolo/documento di contesto
+  - risposta agente già vista dall'utente
+
+### 4.6 Inbox supporto admin
+
+- Pagina dedicata: `/wiki/support/inbox`
+- Vista focalizzata sui casi non puramente “feature request”
+- Perimetro:
+  - `help_request`
+  - `bug_report`
+  - `access_issue`
+  - `data_issue`
+  - `other_request`
+- L'admin vede:
+  - severità
+  - priorità
+  - assegnatario
+  - modulo e pagina
+  - timeline degli eventi
+  - note operative
+
+### 4.7 Timeline eventi richieste
+
+- Nuova tabella: `wiki_request_events`
+- Audit append-only generato dal backend sui casi Wiki
+- Eventi registrati:
+  - `created`
+  - `status_changed`
+  - `priority_changed`
+  - `severity_changed`
+  - `assignee_changed`
+  - `notes_updated`
+- La timeline viene esposta lato admin e aiuta triage, handoff e audit operativo
+
+### 4.8 Router semantico e guardrail strutturali
 
 - Il Wiki usa un **semantic router multilingua** prima del retrieval
 - La domanda viene:
@@ -86,7 +161,7 @@ Il modulo **Wiki Agent** aggiunge a GAIA un assistente LLM sempre disponibile, c
   - azioni operative o modifiche di stato
 - La risposta finale viene restituita nella lingua dell'utente quando il router entra in blocco o fallback
 
-### 4.6 Tool live interni
+### 4.9 Tool live interni
 
 - Oltre alla documentazione, il Wiki può interrogare tool read-only interni per risposte `live_data`
 - Copertura iniziale:
@@ -101,17 +176,29 @@ Il modulo **Wiki Agent** aggiunge a GAIA un assistente LLM sempre disponibile, c
   - riepilogo firewall Sophos
   - lookup dispositivo rete per IP o identificatore riconoscibile
 
-### 4.7 Console amministrativa Wiki
+### 4.10 Console amministrativa Wiki
 
 - La sezione admin del modulo Wiki espone viste operative dedicate:
   - `/wiki/requests`
+  - `/wiki/requests/:id`
+  - `/wiki/support/inbox`
+  - `/wiki/support/analytics`
   - `/wiki/audit`
   - `/wiki/conversations/analytics`
   - `/wiki/telemetry`
 - `Richieste`:
   - backlog richieste registrate dal widget
-  - filtri per stato, categoria, priorità e assegnatario
-  - aggiornamento inline di `status`, `priority`, `assigned_to`, `admin_notes`
+  - filtri per stato, categoria, tipo richiesta, priorità, severità e assegnatario
+  - aggiornamento inline di `status`, `priority`, `severity`, `assigned_to`, `admin_notes`
+  - timeline del caso con audit eventi
+- `Dettaglio richiesta`:
+  - URL stabile per ogni caso
+  - gestione operativa condivisibile tra admin
+  - stessa timeline ed editing del backlog con focus su un solo item
+- `Analytics supporto`:
+  - trend richieste, anomalie, problemi accesso/dati e feature request
+  - lettura per modulo, severità, impatto, assegnatario e pagina applicativa
+  - serie storiche per backlog aperto, risolti, urgenze e bisogni prodotto
 - `Audit`:
   - consultazione delle tool call del Wiki Agent
   - lettura rapida di mode, intent, modulo, successo/failure e fallback
@@ -124,6 +211,34 @@ Il modulo **Wiki Agent** aggiunge a GAIA un assistente LLM sempre disponibile, c
   - KPI storici sul comportamento del Wiki Agent
   - top tool, moduli, fallback reason e trend giornalieri
   - retention e stato scheduler per le metriche aggregate
+
+### 4.11 Analytics supporto Wiki
+
+- Pagina dedicata: `/wiki/support/analytics`
+- Scopo: trasformare richieste e segnalazioni in insight operativi per admin e prodotto
+- KPI chiave:
+  - richieste totali
+  - richieste aperte
+  - richieste assegnate
+  - richieste risolte
+  - urgenze
+  - severità alte / critiche
+- Breakdown principali:
+  - top `request_type`
+  - top moduli GAIA coinvolti
+  - top stati workflow
+  - top severità e priorità
+  - top pagine applicative
+  - top assegnatari e autori
+  - top `impact_scope`
+- Serie storiche:
+  - nuove richieste per giorno
+  - casi risolti per giorno
+  - pressione backlog aperto
+  - feature richieste nel tempo
+  - bug / anomalie nel tempo
+  - urgenze nel tempo
+- Nessuna nuova tabella dedicata: la vista viene derivata da `wiki_requests`
 
 ---
 

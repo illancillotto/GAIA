@@ -28,6 +28,7 @@ export interface WikiChatMessage {
   tool_calls?: WikiToolCallSummary[];
   mode?: "docs_only" | "live_data" | "logic" | "hybrid";
   found?: boolean;
+  conversationId?: string | null;
   timestamp: Date;
 }
 
@@ -186,17 +187,44 @@ export interface WikiArticleGroup {
 
 export interface WikiRequestCreate {
   user_question: string;
-  agent_response?: string;
-  category: "feature_request" | "bug_report" | "question";
+  agent_response?: string | null;
+  category: "feature_request" | "bug_report" | "question" | "support_request";
+  request_type?: "help_request" | "bug_report" | "feature_request" | "access_issue" | "data_issue" | "other_request";
+  module_key?: string | null;
+  page_path?: string | null;
+  source_channel?: "widget" | "wiki_page" | "support_page" | "admin_manual";
+  severity?: "low" | "medium" | "high" | "critical";
+  impact_scope?: "single_user" | "team" | "office" | "global" | null;
+  conversation_id?: string | null;
+  context_article?: string | null;
+  context_entity_key?: string | null;
+  desired_outcome?: string | null;
+  observed_behavior?: string | null;
+  expected_behavior?: string | null;
 }
 
 export interface WikiRequest {
   id: string;
   user_question: string;
   agent_response: string | null;
-  category: string;
-  status: "pending" | "reviewed" | "planned" | "done";
+  category: "feature_request" | "bug_report" | "question" | "support_request" | string;
+  request_type: "help_request" | "bug_report" | "feature_request" | "access_issue" | "data_issue" | "other_request" | string;
+  status: "new" | "triaged" | "investigating" | "waiting_user" | "planned" | "resolved" | "duplicate" | "rejected";
+  priority: "low" | "medium" | "high" | "urgent" | string;
+  severity: "low" | "medium" | "high" | "critical" | string;
   created_by: string | null;
+  assigned_to: string | null;
+  assigned_to_name: string | null;
+  module_key: string | null;
+  page_path: string | null;
+  source_channel: "widget" | "wiki_page" | "support_page" | "admin_manual" | string;
+  impact_scope: "single_user" | "team" | "office" | "global" | string | null;
+  conversation_id: string | null;
+  context_article: string | null;
+  context_entity_key: string | null;
+  desired_outcome: string | null;
+  observed_behavior: string | null;
+  expected_behavior: string | null;
   admin_notes: string | null;
   created_at: string;
   updated_at: string;

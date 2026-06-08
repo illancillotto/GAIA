@@ -3,10 +3,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
+import { createWikiRequest, getMyWikiRequests } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/cn";
+import { buildWikiRequestPayload, buildWikiSupportHref } from "./request-support";
 import { EvidenceBadge, ModeBadge, ToolCallBadge } from "./message-metadata";
-import type { WikiArticleGroup, WikiChatMessage, WikiRequestCreate } from "./types";
+import type { WikiArticleGroup, WikiChatMessage, WikiRequest } from "./types";
 import { useWikiChat } from "./useWikiChat";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -18,18 +20,6 @@ async function fetchArticles(): Promise<WikiArticleGroup[]> {
   });
   if (!res.ok) return [];
   return res.json();
-}
-
-async function saveWikiRequest(payload: WikiRequestCreate): Promise<void> {
-  const token = getStoredAccessToken();
-  await fetch(`${API_BASE}/api/wiki/requests`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify(payload),
-  });
 }
 
 function formatArticleLabel(sourceFile: string): string {
@@ -60,21 +50,27 @@ function ArticleContent({ group }: { group: WikiArticleGroup }) {
 }
 
 function ChatPanel({
+  pathname,
   contextArticle,
   scope,
   onScopeChange,
   messages,
+  conversationId,
   loading,
   error,
   onSend,
+  onQuickRequest,
 }: {
+  pathname: string;
   contextArticle: string | undefined;
   scope: "article" | "codebase";
   onScopeChange: (scope: "article" | "codebase") => void;
   messages: WikiChatMessage[];
+  conversationId: string | null;
   loading: boolean;
   error: string | null;
   onSend: (q: string) => void;
+  onQuickRequest: (intent: "help_request" | "bug_report" | "feature_request", answer: string) => void;
 }) {
   const [input, setInput] = useState("");
 
@@ -166,19 +162,39 @@ function ChatPanel({
               </div>
             ) : null}
             {msg.role === "assistant" && msg.found === false ? (
-              <button
-                onClick={() =>
-                  saveWikiRequest({
-                    user_question:
-                      [...messages].reverse().find((m: WikiChatMessage) => m.role === "user")?.content ?? "",
-                    agent_response: msg.content,
-                    category: "feature_request",
-                  })
-                }
-                className="ml-1 text-xs text-[#1D4E35] underline underline-offset-2 hover:opacity-70"
-              >
-                Registra richiesta
-              </button>
+              <div className="ml-1 flex max-w-[90%] flex-wrap gap-2 pt-1">
+                <button
+                  onClick={() => onQuickRequest("help_request", msg.content)}
+                  className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800 hover:bg-emerald-100"
+                >
+                  Chiedi supporto
+                </button>
+                <button
+                  onClick={() => onQuickRequest("bug_report", msg.content)}
+                  className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100"
+                >
+                  Segnala problema
+                </button>
+                <button
+                  onClick={() => onQuickRequest("feature_request", msg.content)}
+                  className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-800 hover:bg-sky-100"
+                >
+                  Richiedi funzionalità
+                </button>
+                <a
+                  href={buildWikiSupportHref({
+                    intent: "help_request",
+                    pathname,
+                    contextArticle,
+                    conversationId: msg.conversationId ?? conversationId,
+                    messages,
+                    assistantAnswer: msg.content,
+                  })}
+                  className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:border-[#1D4E35] hover:text-[#1D4E35]"
+                >
+                  Apri supporto completo
+                </a>
+              </div>
             ) : null}
           </div>
         ))}
@@ -216,10 +232,13 @@ function ChatPanel({
 
 export function WikiPage() {
   const searchParams = useSearchParams();
+  const pathname = "/wiki";
   const [articles, setArticles] = useState<WikiArticleGroup[]>([]);
   const [selected, setSelected] = useState<WikiArticleGroup | null>(null);
   const [loadingArticles, setLoadingArticles] = useState(true);
   const [articleQuery, setArticleQuery] = useState("");
+  const [myRequests, setMyRequests] = useState<WikiRequest[]>([]);
+  const [requestSuccessMessage, setRequestSuccessMessage] = useState<string | null>(null);
   const initialConversationId = searchParams.get("conversation");
   const initialQuestion = searchParams.get("q")?.trim() ?? "";
   const autoAskedQuestionRef = useRef<string | null>(null);
@@ -257,6 +276,21 @@ export function WikiPage() {
   }, []);
 
   useEffect(() => {
+    async function loadMyRequests() {
+      const token = getStoredAccessToken();
+      if (!token) return;
+      try {
+        const items = await getMyWikiRequests(token);
+        setMyRequests(items.slice(0, 5));
+      } catch {
+        setMyRequests([]);
+      }
+    }
+
+    void loadMyRequests();
+  }, []);
+
+  useEffect(() => {
     if (filteredArticles.length === 0) {
       return;
     }
@@ -277,6 +311,25 @@ export function WikiPage() {
     autoAskedQuestionRef.current = initialQuestion;
     void sendMessage(initialQuestion);
   }, [initialQuestion, sendMessage]);
+
+  async function handleQuickRequest(intent: "help_request" | "bug_report" | "feature_request", answer: string) {
+    const token = getStoredAccessToken();
+    if (!token) {
+      return;
+    }
+    const payload = buildWikiRequestPayload({
+      intent,
+      pathname,
+      contextArticle: chatScope === "article" ? selected?.source_file : undefined,
+      conversationId,
+      messages,
+      assistantAnswer: answer,
+      sourceChannel: "wiki_page",
+    });
+    const created = await createWikiRequest(token, payload);
+    setMyRequests((current) => [created, ...current.filter((item) => item.id !== created.id)].slice(0, 5));
+    setRequestSuccessMessage("Segnalazione registrata nel supporto Wiki.");
+  }
 
   return (
     <div className="space-y-4">
@@ -303,18 +356,55 @@ export function WikiPage() {
 
         <article className="panel-card min-w-0 xl:sticky xl:top-4">
           <ChatPanel
+            pathname={pathname}
             contextArticle={selected?.source_file}
             scope={chatScope}
             onScopeChange={setChatScope}
             messages={messages}
+            conversationId={conversationId}
             loading={loading}
             error={error}
             onSend={sendMessage}
+            onQuickRequest={handleQuickRequest}
           />
+          {requestSuccessMessage ? (
+            <p className="mt-3 text-sm font-medium text-emerald-700">{requestSuccessMessage}</p>
+          ) : null}
         </article>
       </div>
 
       <article className="panel-card">
+        <div className="mb-5 rounded-2xl border border-[#d9dfd4] bg-[#f7faf6] p-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div>
+              <p className="label-caption text-[#1D4E35]">Supporto</p>
+              <h3 className="mt-1 text-lg font-semibold text-gray-900">Hai un problema o ti serve una funzionalità?</h3>
+              <p className="mt-1 text-sm text-gray-500">
+                Trasforma una conversazione Wiki in una richiesta strutturata per supporto operativo, anomalie o bisogni di prodotto.
+              </p>
+            </div>
+            <a
+              href={`/wiki/support${conversationId ? `?conversation_id=${conversationId}` : ""}`}
+              className="rounded-full border border-[#1D4E35] px-4 py-2 text-sm font-medium text-[#1D4E35] hover:bg-[#edf5ef]"
+            >
+              Apri pagina supporto
+            </a>
+          </div>
+          <div className="mt-4 grid gap-3 md:grid-cols-3">
+            <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-4">
+              <p className="text-sm font-semibold text-emerald-900">Supporto operativo</p>
+              <p className="mt-1 text-sm text-emerald-800">Per domande d’uso, processi o passi che il Wiki non riesce a chiarire del tutto.</p>
+            </div>
+            <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
+              <p className="text-sm font-semibold text-amber-900">Problema o anomalia</p>
+              <p className="mt-1 text-sm text-amber-800">Per comportamenti inattesi, errori di accesso o dati che non tornano.</p>
+            </div>
+            <div className="rounded-2xl border border-sky-200 bg-sky-50/70 p-4">
+              <p className="text-sm font-semibold text-sky-900">Richiesta funzione</p>
+              <p className="mt-1 text-sm text-sky-800">Per bisogni ricorrenti, migliorie e funzionalità mancanti da portare in roadmap.</p>
+            </div>
+          </div>
+        </div>
         <div className="flex items-center justify-between gap-3">
           <div>
             <p className="label-caption text-[#1D4E35]">Conversazioni</p>
@@ -344,6 +434,28 @@ export function WikiPage() {
               </p>
             </button>
           )) : <p className="text-sm text-gray-400">Nessuna conversazione salvata.</p>}
+        </div>
+      </article>
+
+      <article className="panel-card">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <p className="label-caption text-[#1D4E35]">Le tue richieste</p>
+            <p className="mt-1 text-sm text-gray-500">Ultime segnalazioni registrate dal tuo account nel supporto Wiki.</p>
+          </div>
+          <a href="/wiki/support" className="text-sm font-medium text-[#1D4E35] underline underline-offset-2">Vai al supporto</a>
+        </div>
+        <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {myRequests.length > 0 ? myRequests.map((item) => (
+            <div key={item.id} className="rounded-2xl border border-gray-200 bg-[#fafaf7] px-4 py-3">
+              <div className="flex flex-wrap gap-2">
+                <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-xs font-medium text-gray-700">{item.request_type}</span>
+                <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-xs font-medium text-gray-700">{item.status}</span>
+                {item.module_key ? <span className="rounded-full border border-gray-200 bg-white px-2 py-0.5 text-xs text-gray-600">{item.module_key}</span> : null}
+              </div>
+              <p className="mt-2 text-sm font-medium text-gray-900">{item.user_question}</p>
+            </div>
+          )) : <p className="text-sm text-gray-400">Nessuna richiesta registrata dal tuo account.</p>}
         </div>
       </article>
 

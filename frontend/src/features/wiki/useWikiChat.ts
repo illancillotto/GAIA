@@ -152,6 +152,7 @@ export function useWikiChat(contextArticle?: string, initialConversationId?: str
           tool_calls: response.tool_calls,
           mode: response.mode,
           found: response.found,
+          conversationId: response.conversation_id ?? conversationId ?? null,
           timestamp: new Date(),
         };
 

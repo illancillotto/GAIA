@@ -715,15 +715,38 @@ export type WikiRequest = {
   id: string;
   user_question: string;
   agent_response: string | null;
-  category: "feature_request" | "bug_report" | "question" | string;
-  status: "pending" | "reviewed" | "planned" | "done";
+  category: "feature_request" | "bug_report" | "question" | "support_request" | string;
+  request_type: "help_request" | "bug_report" | "feature_request" | "access_issue" | "data_issue" | "other_request" | string;
+  status: "new" | "triaged" | "investigating" | "waiting_user" | "planned" | "resolved" | "duplicate" | "rejected";
   priority: "low" | "medium" | "high" | "urgent" | string;
+  severity: "low" | "medium" | "high" | "critical" | string;
   created_by: string | null;
   assigned_to: string | null;
   assigned_to_name: string | null;
+  module_key: string | null;
+  page_path: string | null;
+  source_channel: "widget" | "wiki_page" | "support_page" | "admin_manual" | string;
+  impact_scope: "single_user" | "team" | "office" | "global" | string | null;
+  conversation_id: string | null;
+  context_article: string | null;
+  context_entity_key: string | null;
+  desired_outcome: string | null;
+  observed_behavior: string | null;
+  expected_behavior: string | null;
   admin_notes: string | null;
   created_at: string;
   updated_at: string;
+};
+
+export type WikiRequestEvent = {
+  id: string;
+  request_id: string;
+  event_type: string;
+  actor_username: string | null;
+  from_status: string | null;
+  to_status: string | null;
+  payload: Record<string, unknown> | null;
+  created_at: string;
 };
 
 export type WikiRequestAssignee = {
@@ -735,14 +758,75 @@ export type WikiRequestAssignee = {
 export type WikiRequestCreateInput = {
   user_question: string;
   agent_response?: string | null;
-  category: "feature_request" | "bug_report" | "question";
+  category: "feature_request" | "bug_report" | "question" | "support_request";
+  request_type?: "help_request" | "bug_report" | "feature_request" | "access_issue" | "data_issue" | "other_request";
+  module_key?: string | null;
+  page_path?: string | null;
+  source_channel?: "widget" | "wiki_page" | "support_page" | "admin_manual";
+  severity?: "low" | "medium" | "high" | "critical";
+  impact_scope?: "single_user" | "team" | "office" | "global" | null;
+  conversation_id?: string | null;
+  context_article?: string | null;
+  context_entity_key?: string | null;
+  desired_outcome?: string | null;
+  observed_behavior?: string | null;
+  expected_behavior?: string | null;
 };
 
 export type WikiRequestUpdateInput = {
-  status?: "pending" | "reviewed" | "planned" | "done";
+  status?: "new" | "triaged" | "investigating" | "waiting_user" | "planned" | "resolved" | "duplicate" | "rejected";
   priority?: "low" | "medium" | "high" | "urgent";
+  severity?: "low" | "medium" | "high" | "critical";
   assigned_to?: string | null;
   admin_notes?: string | null;
+};
+
+export type WikiSupportAnalyticsCount = {
+  key: string;
+  count: number;
+};
+
+export type WikiSupportAnalyticsSummary = {
+  total_requests: number;
+  open_requests: number;
+  assigned_requests: number;
+  resolved_requests: number;
+  urgent_requests: number;
+  high_severity_requests: number;
+  feature_requests: number;
+  bug_reports: number;
+  access_issues: number;
+  data_issues: number;
+  help_requests: number;
+  top_request_types: WikiSupportAnalyticsCount[];
+  top_modules: WikiSupportAnalyticsCount[];
+  top_statuses: WikiSupportAnalyticsCount[];
+  top_priorities: WikiSupportAnalyticsCount[];
+  top_severities: WikiSupportAnalyticsCount[];
+  top_pages: WikiSupportAnalyticsCount[];
+  top_assignees: WikiSupportAnalyticsCount[];
+  top_creators: WikiSupportAnalyticsCount[];
+  top_impact_scopes: WikiSupportAnalyticsCount[];
+};
+
+export type WikiSupportAnalyticsSeriesPoint = {
+  metric_date: string;
+  period_label: string;
+  created_count: number;
+  resolved_count: number;
+  open_count: number;
+  feature_request_count: number;
+  bug_report_count: number;
+  help_request_count: number;
+  access_issue_count: number;
+  data_issue_count: number;
+  urgent_count: number;
+  high_severity_count: number;
+};
+
+export type WikiSupportAnalyticsSeriesResponse = {
+  days: number;
+  items: WikiSupportAnalyticsSeriesPoint[];
 };
 
 export type WikiToolAuditLog = {

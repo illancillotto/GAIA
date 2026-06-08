@@ -98,6 +98,7 @@ function humanizeIntent(intent: string): string {
   if (intent === "docs_only") return "Docs only";
   if (intent === "live_data") return "Live data";
   if (intent === "logic") return "Logic";
+  if (intent === "hybrid") return "Hybrid";
   return intent;
 }
 
@@ -105,7 +106,22 @@ function humanizeModule(moduleKey: string | null | undefined): string {
   if (!moduleKey || moduleKey === "n/d") return "Modulo non dichiarato";
   if (moduleKey === "rete") return "Rete";
   if (moduleKey === "accessi") return "Accessi";
+  if (moduleKey === "catasto") return "Catasto";
+  if (moduleKey === "operazioni") return "Operazioni";
+  if (moduleKey === "riordino") return "Riordino";
+  if (moduleKey === "ruolo") return "Ruolo";
+  if (moduleKey === "wiki") return "Wiki";
   return moduleKey;
+}
+
+function humanizeFallback(value: string | null | undefined): string {
+  if (!value || value === "n/d") return "Nessun fallback";
+  if (value === "docs_only") return "Docs only";
+  if (value === "docs_insufficient_context") return "Contesto docs insufficiente";
+  if (value === "unsupported_access_request") return "Richiesta accesso bloccata";
+  if (value === "unsupported_action_request") return "Richiesta azione bloccata";
+  if (value === "unsupported_external_live") return "Richiesta live esterna bloccata";
+  return value;
 }
 
 export function WikiAuditPage() {
@@ -232,6 +248,15 @@ export function WikiAuditPage() {
   const topDeniedTools = summary?.top_denied_tools ?? pageStats.topDeniedTools;
   const latencyByMode = summary?.latency_by_mode ?? [];
   const dailyCounts = summary?.daily_counts ?? [];
+  const activeFilters = [
+    deferredUsernameFilter ? `Utente: ${deferredUsernameFilter}` : null,
+    deferredToolFilter ? `Tool: ${deferredToolFilter}` : null,
+    deferredModuleFilter ? `Modulo: ${humanizeModule(deferredModuleFilter)}` : null,
+    intentFilter !== "all" ? `Intent: ${humanizeIntent(intentFilter)}` : null,
+    modeFilter !== "all" ? `Mode: ${humanizeMode(modeFilter)}` : null,
+    successFilter !== "all" ? `Esito: ${successFilter === "success" ? "Successo" : "Denied"}` : null,
+    conversationIdFilter ? "Filtro conversazione attivo" : null,
+  ].filter(Boolean) as string[];
 
   async function handleExportAudit() {
     const token = getStoredAccessToken();
@@ -284,7 +309,7 @@ export function WikiAuditPage() {
         cell: ({ row }) => (
           <div className="min-w-0">
             <p className="truncate text-sm font-medium text-[#1D4E35]">{row.original.tool_name}</p>
-            <p className="truncate text-xs text-gray-400">{row.original.module_key ?? "modulo non dichiarato"}</p>
+            <p className="truncate text-xs text-gray-400">{humanizeModule(row.original.module_key)}</p>
           </div>
         ),
       },
@@ -293,8 +318,8 @@ export function WikiAuditPage() {
         accessorKey: "intent",
         cell: ({ row }) => (
           <div className="flex flex-wrap items-center gap-2">
-            <Badge variant="neutral">{row.original.intent}</Badge>
-            <Badge variant={modeBadgeVariant(row.original.mode)}>{row.original.mode}</Badge>
+            <Badge variant="neutral">{humanizeIntent(row.original.intent)}</Badge>
+            <Badge variant={modeBadgeVariant(row.original.mode)}>{humanizeMode(row.original.mode)}</Badge>
           </div>
         ),
       },
@@ -533,6 +558,22 @@ export function WikiAuditPage() {
           </div>
         </div>
 
+        {activeFilters.length > 0 ? (
+          <div className="mt-4 rounded-2xl border border-[#dfe7df] bg-[#fbfcfa] px-4 py-3">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Perimetro attivo</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {activeFilters.map((item) => (
+                <span
+                  key={item}
+                  className="rounded-full border border-[#d7e5db] bg-white px-3 py-1 text-xs font-medium text-[#1D4E35]"
+                >
+                  {item}
+                </span>
+              ))}
+            </div>
+          </div>
+        ) : null}
+
         <div className="mt-4 flex flex-wrap items-center gap-3 rounded-2xl border border-[#dfe7df] bg-[#f8fbf8] px-4 py-3">
           <div className="min-w-[12rem] flex-1">
             <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Quick filter mode</p>
@@ -673,6 +714,9 @@ export function WikiAuditPage() {
                 <Badge variant={modeBadgeVariant(selectedDetail?.mode ?? selectedLog.mode)}>
                   {humanizeMode(selectedDetail?.mode ?? selectedLog.mode)}
                 </Badge>
+                <Badge variant="neutral">
+                  {humanizeIntent(selectedDetail?.intent ?? selectedLog.intent)}
+                </Badge>
                 <Badge variant={successBadgeVariant(selectedDetail?.success ?? selectedLog.success)}>
                   {formatWikiAuditBoolean(selectedDetail?.success ?? selectedLog.success, "Successo", "Denied")}
                 </Badge>
@@ -714,12 +758,28 @@ export function WikiAuditPage() {
               </div>
               <div className="rounded-xl border border-gray-100 p-3">
                 <p className="text-xs uppercase tracking-wide text-gray-400">Fallback reason</p>
-                <p className="mt-1 font-medium text-gray-900">{selectedDetail?.fallback_reason ?? "nessuno"}</p>
+                <p className="mt-1 font-medium text-gray-900">
+                  {humanizeFallback(selectedDetail?.fallback_reason)}
+                </p>
               </div>
             </div>
             <div className="rounded-xl border border-gray-100 p-3">
               <p className="text-xs uppercase tracking-wide text-gray-400">Response excerpt</p>
               <p className="mt-1 text-gray-700">{selectedDetail?.response_excerpt ?? "n/d"}</p>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <div className="rounded-xl border border-gray-100 p-3">
+                <p className="text-xs uppercase tracking-wide text-gray-400">Lat. media tool call</p>
+                <p className="mt-1 font-medium text-gray-900">
+                  {formatWikiAuditLatency(selectedDetail?.latency_ms ?? selectedLog.latency_ms)}
+                </p>
+              </div>
+              <div className="rounded-xl border border-gray-100 p-3">
+                <p className="text-xs uppercase tracking-wide text-gray-400">Timestamp</p>
+                <p className="mt-1 font-medium text-gray-900">
+                  {formatWikiAuditCreatedAt(selectedDetail?.created_at ?? selectedLog.created_at)}
+                </p>
+              </div>
             </div>
             <div className="grid gap-2 sm:grid-cols-2">
               <div className="rounded-xl border border-gray-100 p-3">

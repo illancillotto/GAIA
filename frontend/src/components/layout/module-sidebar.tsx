@@ -165,6 +165,7 @@ export function ModuleSidebar({
       <div className="space-y-0.5 px-2 pb-3">
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Amministrazione</p>
         <NavItem href="/gaia/users" icon={UserIcon} label="Utenti GAIA" match="prefix" />
+        <NavItem href="/gaia/users/operatori-cruscotto" icon={AlertTriangleIcon} label="Cruscotto operatori" match="prefix" />
       </div>
     );
   }
@@ -256,11 +257,14 @@ export function ModuleSidebar({
       <div className="space-y-0.5 px-2 pb-3">
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Panoramica</p>
         <NavItem href="/wiki" icon={DocumentIcon} label="Wiki" />
+        <NavItem href="/wiki/support" icon={AlertTriangleIcon} label="Supporto" match="prefix" />
         <NavItem href="/wiki/conversations" icon={FolderIcon} label="Conversazioni" match="prefix" />
         <NavItem href="/wiki/conversations/analytics" icon={CalendarIcon} label="Analytics conversazioni" match="prefix" />
         <NavItem href="/wiki/conversations/settings" icon={DocumentIcon} label="Settings conversazioni" match="prefix" />
 
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Governance</p>
+        <NavItem href="/wiki/support/inbox" icon={AlertTriangleIcon} label="Inbox supporto" match="prefix" />
+        <NavItem href="/wiki/support/analytics" icon={CalendarIcon} label="Analytics supporto" match="prefix" />
         <NavItem href="/wiki/requests" icon={BellIcon} label="Richieste" match="prefix" />
         <NavItem href="/wiki/audit" icon={SearchIcon} label="Audit tool call" match="prefix" />
         <NavItem href="/wiki/telemetry" icon={GridIcon} label="Telemetria" match="prefix" />

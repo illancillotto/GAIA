@@ -75,6 +75,9 @@ const menuSearchRoutes: SearchRoute[] = [
 
   // Wiki
   { label: "Wiki · Documentazione e assistente", href: "/wiki", keywords: ["wiki", "documentazione", "assistente"] },
+  { label: "Wiki · Supporto", href: "/wiki/support", keywords: ["wiki", "supporto", "anomalia", "feature", "richiesta", "bug"] },
+  { label: "Wiki · Inbox supporto", href: "/wiki/support/inbox", keywords: ["wiki", "supporto", "inbox", "triage", "anomalia", "accesso", "dati"] },
+  { label: "Wiki · Analytics supporto", href: "/wiki/support/analytics", keywords: ["wiki", "supporto", "analytics", "trend", "feature request", "bug"] },
   { label: "Wiki · Richieste", href: "/wiki/requests", keywords: ["wiki", "richieste", "feature request", "bug report"] },
 
   // Inaz

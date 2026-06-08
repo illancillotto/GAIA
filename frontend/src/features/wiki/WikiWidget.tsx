@@ -4,25 +4,13 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
 
+import { createWikiRequest } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/cn";
+import { buildWikiRequestPayload, buildWikiSupportHref } from "./request-support";
 import { EvidenceBadge, ModeBadge, ToolCallBadge } from "./message-metadata";
-import type { WikiChatMessage, WikiRequestCreate } from "./types";
+import type { WikiChatMessage } from "./types";
 import { useWikiChat } from "./useWikiChat";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
-
-async function saveWikiRequest(payload: WikiRequestCreate): Promise<void> {
-  const token = getStoredAccessToken();
-  await fetch(`${API_BASE}/api/wiki/requests`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify(payload),
-  });
-}
 
 function SourceBadge({ file }: { file: string }) {
   const short = file.split("/").pop() ?? file;
@@ -35,10 +23,12 @@ function SourceBadge({ file }: { file: string }) {
 
 function ChatMessage({
   msg,
-  onSaveRequest,
+  onQuickRequest,
+  supportHref,
 }: {
   msg: WikiChatMessage;
-  onSaveRequest: (answer: string) => void;
+  onQuickRequest: (intent: "help_request" | "bug_report" | "feature_request", answer: string) => void;
+  supportHref: string | null;
 }) {
   const isUser = msg.role === "user";
 
@@ -78,14 +68,36 @@ function ChatMessage({
         </div>
       )}
 
-      {!isUser && msg.found === false && (
-        <button
-          onClick={() => onSaveRequest(msg.content)}
-          className="ml-1 text-xs text-[#1D4E35] underline underline-offset-2 hover:opacity-70"
-        >
-          Registra come richiesta
-        </button>
-      )}
+      {!isUser && msg.found === false ? (
+        <div className="ml-1 flex max-w-[85%] flex-wrap gap-2 pt-1">
+          <button
+            onClick={() => onQuickRequest("help_request", msg.content)}
+            className="rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-medium text-emerald-800 hover:bg-emerald-100"
+          >
+            Chiedi supporto
+          </button>
+          <button
+            onClick={() => onQuickRequest("bug_report", msg.content)}
+            className="rounded-full border border-amber-200 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100"
+          >
+            Segnala problema
+          </button>
+          <button
+            onClick={() => onQuickRequest("feature_request", msg.content)}
+            className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-1 text-xs font-medium text-sky-800 hover:bg-sky-100"
+          >
+            Richiedi funzionalità
+          </button>
+          {supportHref ? (
+            <a
+              href={supportHref}
+              className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:border-[#1D4E35] hover:text-[#1D4E35]"
+            >
+              Apri supporto completo
+            </a>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -124,13 +136,23 @@ export function WikiWidget() {
     setSavedRequest(false);
   }
 
-  async function handleSaveRequest(answer: string) {
-    const lastUserMsg = [...messages].reverse().find((m) => m.role === "user");
-    await saveWikiRequest({
-      user_question: lastUserMsg?.content ?? "",
-      agent_response: answer,
-      category: "feature_request",
-    });
+  async function handleQuickRequest(intent: "help_request" | "bug_report" | "feature_request", answer: string) {
+    const token = getStoredAccessToken();
+    if (!token) {
+      return;
+    }
+    await createWikiRequest(
+      token,
+      buildWikiRequestPayload({
+        intent,
+        pathname,
+        contextArticle: undefined,
+        conversationId,
+        messages,
+        assistantAnswer: answer,
+        sourceChannel: "widget",
+      }),
+    );
     setSavedRequest(true);
   }
 
@@ -197,7 +219,22 @@ export function WikiWidget() {
               </div>
             )}
             {messages.map((msg) => (
-              <ChatMessage key={msg.id} msg={msg} onSaveRequest={handleSaveRequest} />
+              <ChatMessage
+                key={msg.id}
+                msg={msg}
+                onQuickRequest={handleQuickRequest}
+                supportHref={
+                  msg.role === "assistant" && msg.found === false
+                    ? buildWikiSupportHref({
+                        intent: "help_request",
+                        pathname,
+                        conversationId: msg.conversationId ?? conversationId,
+                        messages,
+                        assistantAnswer: msg.content,
+                      })
+                    : null
+                }
+              />
             ))}
             {loading && (
               <div className="flex items-start gap-2">

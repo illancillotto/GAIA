@@ -51,13 +51,45 @@ class WikiRequest(Base):
     user_question = Column(Text, nullable=False)
     agent_response = Column(Text, nullable=True)
     category = Column(String(64), nullable=False, default="feature_request")
+    request_type = Column(String(32), nullable=False, default="feature_request", index=True)
     status = Column(String(32), nullable=False, default="pending")
     priority = Column(String(16), nullable=False, default="medium", index=True)
+    severity = Column(String(16), nullable=False, default="medium", index=True)
     created_by = Column(String(256), nullable=True)
     assigned_to = Column(String(256), nullable=True, index=True)
+    module_key = Column(String(64), nullable=True, index=True)
+    page_path = Column(String(512), nullable=True)
+    source_channel = Column(String(32), nullable=False, default="widget", index=True)
+    impact_scope = Column(String(32), nullable=True)
+    conversation_id = Column(UUID(as_uuid=True), nullable=True, index=True)
+    context_article = Column(String(512), nullable=True)
+    context_entity_key = Column(String(512), nullable=True, index=True)
+    desired_outcome = Column(Text, nullable=True)
+    observed_behavior = Column(Text, nullable=True)
+    expected_behavior = Column(Text, nullable=True)
     admin_notes = Column(Text, nullable=True)
     created_at = Column(DateTime, nullable=False, server_default=func.now())
     updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
+
+
+class WikiRequestEvent(Base):
+    """Timeline append-only delle richieste Wiki per triage e audit operativo."""
+
+    __tablename__ = "wiki_request_events"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    request_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("wiki_requests.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    event_type = Column(String(32), nullable=False, index=True)
+    actor_username = Column(String(256), nullable=True, index=True)
+    from_status = Column(String(32), nullable=True)
+    to_status = Column(String(32), nullable=True)
+    payload_json = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=False, server_default=func.now(), index=True)
 
 
 class WikiConversation(Base):

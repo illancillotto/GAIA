@@ -165,7 +165,10 @@ import type {
   SyncRun,
   WikiRequest,
   WikiRequestAssignee,
+  WikiSupportAnalyticsSeriesResponse,
+  WikiSupportAnalyticsSummary,
   WikiRequestCreateInput,
+  WikiRequestEvent,
   WikiRequestUpdateInput,
   WikiToolAuditLogListResponse,
   WikiToolAuditLogDetailResponse,
@@ -1214,8 +1217,32 @@ export async function getWikiRequests(token: string): Promise<WikiRequest[]> {
   });
 }
 
+export async function getWikiRequest(token: string, requestId: string): Promise<WikiRequest> {
+  return request<WikiRequest>(`/wiki/requests/${requestId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
 export async function getWikiRequestAssignees(token: string): Promise<WikiRequestAssignee[]> {
   return request<WikiRequestAssignee[]>("/wiki/requests/assignees", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getWikiRequestEvents(token: string, requestId: string): Promise<WikiRequestEvent[]> {
+  return request<WikiRequestEvent[]>(`/wiki/requests/${requestId}/events`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getMyWikiRequests(token: string): Promise<WikiRequest[]> {
+  return request<WikiRequest[]>("/wiki/requests/mine", {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -1243,6 +1270,38 @@ export async function updateWikiRequest(
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(payload),
+  });
+}
+
+export async function getWikiSupportAnalyticsSummary(
+  token: string,
+  params: { days?: number | null } = {},
+): Promise<WikiSupportAnalyticsSummary> {
+  const query = new URLSearchParams();
+  if (params.days != null) {
+    query.set("days", String(params.days));
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<WikiSupportAnalyticsSummary>(`/wiki/support/analytics/summary${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getWikiSupportAnalyticsSeries(
+  token: string,
+  params: { days?: number | null } = {},
+): Promise<WikiSupportAnalyticsSeriesResponse> {
+  const query = new URLSearchParams();
+  if (params.days != null) {
+    query.set("days", String(params.days));
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<WikiSupportAnalyticsSeriesResponse>(`/wiki/support/analytics/series${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
   });
 }
 

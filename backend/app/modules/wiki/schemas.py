@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -72,7 +72,19 @@ class WikiArticleGroup(BaseModel):
 class WikiRequestCreate(BaseModel):
     user_question: str = Field(..., min_length=1, max_length=2000)
     agent_response: str | None = None
-    category: Literal["feature_request", "bug_report", "question"] = "feature_request"
+    category: Literal["feature_request", "bug_report", "question", "support_request"] = "feature_request"
+    request_type: Literal["help_request", "bug_report", "feature_request", "access_issue", "data_issue", "other_request"] | None = None
+    module_key: str | None = Field(None, max_length=64)
+    page_path: str | None = Field(None, max_length=512)
+    source_channel: Literal["widget", "wiki_page", "support_page", "admin_manual"] = "widget"
+    severity: Literal["low", "medium", "high", "critical"] = "medium"
+    impact_scope: Literal["single_user", "team", "office", "global"] | None = None
+    conversation_id: uuid.UUID | None = None
+    context_article: str | None = Field(None, max_length=512)
+    context_entity_key: str | None = Field(None, max_length=512)
+    desired_outcome: str | None = None
+    observed_behavior: str | None = None
+    expected_behavior: str | None = None
 
 
 class WikiRequestRead(BaseModel):
@@ -80,11 +92,23 @@ class WikiRequestRead(BaseModel):
     user_question: str
     agent_response: str | None
     category: str
+    request_type: str
     status: str
     priority: str
+    severity: str
     created_by: str | None
     assigned_to: str | None
     assigned_to_name: str | None = None
+    module_key: str | None = None
+    page_path: str | None = None
+    source_channel: str
+    impact_scope: str | None = None
+    conversation_id: uuid.UUID | None = None
+    context_article: str | None = None
+    context_entity_key: str | None = None
+    desired_outcome: str | None = None
+    observed_behavior: str | None = None
+    expected_behavior: str | None = None
     admin_notes: str | None
     created_at: datetime
     updated_at: datetime
@@ -93,8 +117,9 @@ class WikiRequestRead(BaseModel):
 
 
 class WikiRequestStatusUpdate(BaseModel):
-    status: Literal["pending", "reviewed", "planned", "done"] | None = None
+    status: Literal["new", "triaged", "investigating", "waiting_user", "planned", "resolved", "duplicate", "rejected"] | None = None
     priority: Literal["low", "medium", "high", "urgent"] | None = None
+    severity: Literal["low", "medium", "high", "critical"] | None = None
     assigned_to: str | None = Field(None, max_length=256)
     admin_notes: str | None = None
 
@@ -103,6 +128,65 @@ class WikiRequestAssigneeRead(BaseModel):
     username: str
     full_name: str | None = None
     role: str
+
+
+class WikiRequestEventRead(BaseModel):
+    id: uuid.UUID
+    request_id: uuid.UUID
+    event_type: str
+    actor_username: str | None = None
+    from_status: str | None = None
+    to_status: str | None = None
+    payload: dict[str, object] | None = None
+    created_at: datetime
+
+
+class WikiSupportAnalyticsCountRead(BaseModel):
+    key: str
+    count: int
+
+
+class WikiSupportAnalyticsSummaryRead(BaseModel):
+    total_requests: int
+    open_requests: int
+    assigned_requests: int
+    resolved_requests: int
+    urgent_requests: int
+    high_severity_requests: int
+    feature_requests: int
+    bug_reports: int
+    access_issues: int
+    data_issues: int
+    help_requests: int
+    top_request_types: list[WikiSupportAnalyticsCountRead] = Field(default_factory=list)
+    top_modules: list[WikiSupportAnalyticsCountRead] = Field(default_factory=list)
+    top_statuses: list[WikiSupportAnalyticsCountRead] = Field(default_factory=list)
+    top_priorities: list[WikiSupportAnalyticsCountRead] = Field(default_factory=list)
+    top_severities: list[WikiSupportAnalyticsCountRead] = Field(default_factory=list)
+    top_pages: list[WikiSupportAnalyticsCountRead] = Field(default_factory=list)
+    top_assignees: list[WikiSupportAnalyticsCountRead] = Field(default_factory=list)
+    top_creators: list[WikiSupportAnalyticsCountRead] = Field(default_factory=list)
+    top_impact_scopes: list[WikiSupportAnalyticsCountRead] = Field(default_factory=list)
+
+
+class WikiSupportAnalyticsSeriesPointRead(BaseModel):
+    metric_date: date
+    period_label: str
+    created_count: int
+    resolved_count: int
+    open_count: int
+    feature_request_count: int
+    bug_report_count: int
+    help_request_count: int
+    access_issue_count: int
+    data_issue_count: int
+    urgent_count: int
+    high_severity_count: int
+
+
+class WikiSupportAnalyticsSeriesResponse(BaseModel):
+    days: int
+    items: list[WikiSupportAnalyticsSeriesPointRead] = Field(default_factory=list)
 
 
 class WikiConversationMessageRead(BaseModel):

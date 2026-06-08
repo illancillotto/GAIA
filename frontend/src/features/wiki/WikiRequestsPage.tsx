@@ -5,20 +5,26 @@ import { useDeferredValue, useEffect, useMemo, useState } from "react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { MetricCard } from "@/components/ui/metric-card";
 import { SearchIcon } from "@/components/ui/icons";
-import { getWikiRequestAssignees, getWikiRequests, updateWikiRequest } from "@/lib/api";
+import { getWikiRequestAssignees, getWikiRequestEvents, getWikiRequests, updateWikiRequest } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
-import type { WikiRequest, WikiRequestAssignee } from "@/types/api";
+import type { WikiRequest, WikiRequestAssignee, WikiRequestEvent } from "@/types/api";
 
-type RequestStatusFilter = "all" | "pending" | "reviewed" | "planned" | "done";
-type RequestCategoryFilter = "all" | "feature_request" | "bug_report" | "question";
+type RequestStatusFilter = "all" | "new" | "triaged" | "investigating" | "waiting_user" | "planned" | "resolved" | "duplicate" | "rejected";
+type RequestCategoryFilter = "all" | "feature_request" | "bug_report" | "question" | "support_request";
 type RequestPriorityFilter = "all" | "low" | "medium" | "high" | "urgent";
+type RequestTypeFilter = "all" | "help_request" | "bug_report" | "feature_request" | "access_issue" | "data_issue" | "other_request";
+type RequestSeverityFilter = "all" | "low" | "medium" | "high" | "critical";
 
 const statusOptions: Array<{ value: RequestStatusFilter; label: string }> = [
   { value: "all", label: "Tutti gli stati" },
-  { value: "pending", label: "Pending" },
-  { value: "reviewed", label: "Reviewed" },
+  { value: "new", label: "Nuova" },
+  { value: "triaged", label: "Triaged" },
+  { value: "investigating", label: "Investigating" },
+  { value: "waiting_user", label: "Waiting user" },
   { value: "planned", label: "Planned" },
-  { value: "done", label: "Done" },
+  { value: "resolved", label: "Resolved" },
+  { value: "duplicate", label: "Duplicate" },
+  { value: "rejected", label: "Rejected" },
 ];
 
 const categoryOptions: Array<{ value: RequestCategoryFilter; label: string }> = [
@@ -26,6 +32,17 @@ const categoryOptions: Array<{ value: RequestCategoryFilter; label: string }> = 
   { value: "feature_request", label: "Feature request" },
   { value: "bug_report", label: "Bug report" },
   { value: "question", label: "Question" },
+  { value: "support_request", label: "Support request" },
+];
+
+const requestTypeOptions: Array<{ value: RequestTypeFilter; label: string }> = [
+  { value: "all", label: "Tutti i tipi" },
+  { value: "help_request", label: "Supporto operativo" },
+  { value: "bug_report", label: "Problema / anomalia" },
+  { value: "feature_request", label: "Nuova funzionalità" },
+  { value: "access_issue", label: "Problema di accesso" },
+  { value: "data_issue", label: "Problema dati" },
+  { value: "other_request", label: "Altro" },
 ];
 
 const priorityOptions: Array<{ value: RequestPriorityFilter; label: string }> = [
@@ -36,24 +53,63 @@ const priorityOptions: Array<{ value: RequestPriorityFilter; label: string }> = 
   { value: "urgent", label: "Urgente" },
 ];
 
+const severityOptions: Array<{ value: RequestSeverityFilter; label: string }> = [
+  { value: "all", label: "Tutte le severità" },
+  { value: "low", label: "Bassa" },
+  { value: "medium", label: "Media" },
+  { value: "high", label: "Alta" },
+  { value: "critical", label: "Critica" },
+];
+
 function statusBadgeClasses(status: WikiRequest["status"]): string {
   switch (status) {
-    case "done":
+    case "resolved":
       return "border-green-200 bg-green-50 text-green-700";
     case "planned":
       return "border-blue-200 bg-blue-50 text-blue-700";
-    case "reviewed":
+    case "triaged":
       return "border-amber-200 bg-amber-50 text-amber-700";
+    case "investigating":
+      return "border-orange-200 bg-orange-50 text-orange-700";
+    case "waiting_user":
+      return "border-violet-200 bg-violet-50 text-violet-700";
+    case "duplicate":
+      return "border-gray-200 bg-gray-50 text-gray-700";
+    case "rejected":
+      return "border-rose-200 bg-rose-50 text-rose-700";
     default:
-      return "border-red-200 bg-red-50 text-red-700";
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
   }
+}
+
+function statusLabel(status: WikiRequest["status"]): string {
+  if (status === "new") return "Nuova";
+  if (status === "triaged") return "Triaged";
+  if (status === "investigating") return "Investigating";
+  if (status === "waiting_user") return "Waiting user";
+  if (status === "planned") return "Planned";
+  if (status === "resolved") return "Resolved";
+  if (status === "duplicate") return "Duplicate";
+  if (status === "rejected") return "Rejected";
+  return status;
 }
 
 function categoryLabel(category: WikiRequest["category"]): string {
   if (category === "feature_request") return "Feature request";
   if (category === "bug_report") return "Bug report";
   if (category === "question") return "Question";
+  if (category === "support_request") return "Support request";
   return category;
+}
+
+function requestTypeLabel(requestType: WikiRequest["request_type"]): string {
+  if (requestType === "help_request") return "Supporto operativo";
+  if (requestType === "bug_report") return "Problema / anomalia";
+  if (requestType === "feature_request") return "Nuova funzionalità";
+  if (requestType === "access_issue") return "Problema di accesso";
+  if (requestType === "data_issue") return "Problema dati";
+  if (requestType === "other_request") return "Altro";
+  return requestType;
 }
 
 function priorityBadgeClasses(priority: WikiRequest["priority"]): string {
@@ -77,6 +133,27 @@ function priorityLabel(priority: WikiRequest["priority"]): string {
   return priority;
 }
 
+function severityBadgeClasses(severity: WikiRequest["severity"]): string {
+  switch (severity) {
+    case "critical":
+      return "border-red-200 bg-red-50 text-red-700";
+    case "high":
+      return "border-amber-200 bg-amber-50 text-amber-700";
+    case "low":
+      return "border-gray-200 bg-gray-50 text-gray-600";
+    default:
+      return "border-blue-200 bg-blue-50 text-blue-700";
+  }
+}
+
+function severityLabel(severity: WikiRequest["severity"]): string {
+  if (severity === "low") return "Bassa";
+  if (severity === "medium") return "Media";
+  if (severity === "high") return "Alta";
+  if (severity === "critical") return "Critica";
+  return severity;
+}
+
 function formatDateTime(value: string): string {
   try {
     return new Intl.DateTimeFormat("it-IT", {
@@ -88,20 +165,25 @@ function formatDateTime(value: string): string {
   }
 }
 
-export function WikiRequestsPage() {
+export function WikiRequestsPage({ supportOnly = false, initialRequestId = null }: { supportOnly?: boolean; initialRequestId?: string | null }) {
   const [items, setItems] = useState<WikiRequest[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<RequestStatusFilter>("all");
   const [categoryFilter, setCategoryFilter] = useState<RequestCategoryFilter>("all");
+  const [requestTypeFilter, setRequestTypeFilter] = useState<RequestTypeFilter>("all");
   const [priorityFilter, setPriorityFilter] = useState<RequestPriorityFilter>("all");
+  const [severityFilter, setSeverityFilter] = useState<RequestSeverityFilter>("all");
   const [query, setQuery] = useState("");
-  const [draftStatus, setDraftStatus] = useState<WikiRequest["status"]>("pending");
+  const [draftStatus, setDraftStatus] = useState<WikiRequest["status"]>("new");
   const [draftPriority, setDraftPriority] = useState<WikiRequest["priority"]>("medium");
+  const [draftSeverity, setDraftSeverity] = useState<WikiRequest["severity"]>("medium");
   const [draftAssignedTo, setDraftAssignedTo] = useState("");
   const [draftNotes, setDraftNotes] = useState("");
   const [assignees, setAssignees] = useState<WikiRequestAssignee[]>([]);
+  const [timeline, setTimeline] = useState<WikiRequestEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [timelineLoading, setTimelineLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -125,7 +207,7 @@ export function WikiRequestsPage() {
         ]);
         setItems(requestsResponse);
         setAssignees(assigneesResponse);
-        setSelectedId((current) => current ?? requestsResponse[0]?.id ?? null);
+        setSelectedId((current) => current ?? initialRequestId ?? requestsResponse[0]?.id ?? null);
         setError(null);
       } catch (loadError) {
         setItems([]);
@@ -138,17 +220,26 @@ export function WikiRequestsPage() {
     }
 
     void loadRequests();
-  }, []);
+  }, [initialRequestId]);
 
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
+      if (supportOnly && !["help_request", "bug_report", "access_issue", "data_issue", "other_request"].includes(item.request_type)) {
+        return false;
+      }
       if (statusFilter !== "all" && item.status !== statusFilter) {
         return false;
       }
       if (categoryFilter !== "all" && item.category !== categoryFilter) {
         return false;
       }
+      if (requestTypeFilter !== "all" && item.request_type !== requestTypeFilter) {
+        return false;
+      }
       if (priorityFilter !== "all" && item.priority !== priorityFilter) {
+        return false;
+      }
+      if (severityFilter !== "all" && item.severity !== severityFilter) {
         return false;
       }
       if (!deferredQuery) {
@@ -161,6 +252,11 @@ export function WikiRequestsPage() {
         item.admin_notes ?? "",
         item.assigned_to ?? "",
         item.assigned_to_name ?? "",
+        item.module_key ?? "",
+        item.request_type,
+        item.page_path ?? "",
+        item.severity,
+        item.source_channel,
         item.category,
         item.status,
         item.priority,
@@ -169,7 +265,7 @@ export function WikiRequestsPage() {
         .toLowerCase();
       return haystack.includes(deferredQuery);
     });
-  }, [items, statusFilter, categoryFilter, priorityFilter, deferredQuery]);
+  }, [items, supportOnly, statusFilter, categoryFilter, requestTypeFilter, priorityFilter, severityFilter, deferredQuery]);
 
   const selectedRequest = useMemo(
     () => filteredItems.find((item) => item.id === selectedId) ?? items.find((item) => item.id === selectedId) ?? null,
@@ -185,20 +281,51 @@ export function WikiRequestsPage() {
     }
     setDraftStatus(selectedRequest.status);
     setDraftPriority(selectedRequest.priority);
+    setDraftSeverity(selectedRequest.severity);
     setDraftAssignedTo(selectedRequest.assigned_to ?? "");
     setDraftNotes(selectedRequest.admin_notes ?? "");
     setSuccessMessage(null);
   }, [selectedRequest, filteredItems]);
 
+  const scopedItems = useMemo(
+    () => (supportOnly ? items.filter((item) => ["help_request", "bug_report", "access_issue", "data_issue", "other_request"].includes(item.request_type)) : items),
+    [items, supportOnly],
+  );
+
   const summary = useMemo(() => {
     return {
-      total: items.length,
-      pending: items.filter((item) => item.status === "pending").length,
-      planned: items.filter((item) => item.status === "planned").length,
-      urgent: items.filter((item) => item.priority === "urgent").length,
-      done: items.filter((item) => item.status === "done").length,
+      total: scopedItems.length,
+      newCount: scopedItems.filter((item) => item.status === "new").length,
+      triaged: scopedItems.filter((item) => item.status === "triaged").length,
+      planned: scopedItems.filter((item) => item.status === "planned").length,
+      urgent: scopedItems.filter((item) => item.priority === "urgent").length,
+      resolved: scopedItems.filter((item) => item.status === "resolved").length,
     };
-  }, [items]);
+  }, [scopedItems]);
+
+  useEffect(() => {
+    async function loadTimeline() {
+      if (!selectedRequest) {
+        setTimeline([]);
+        return;
+      }
+      const token = getStoredAccessToken();
+      if (!token) {
+        setTimeline([]);
+        return;
+      }
+      setTimelineLoading(true);
+      try {
+        const items = await getWikiRequestEvents(token, selectedRequest.id);
+        setTimeline(items);
+      } catch {
+        setTimeline([]);
+      } finally {
+        setTimelineLoading(false);
+      }
+    }
+    void loadTimeline();
+  }, [selectedRequest]);
 
   async function handleSave() {
     if (!selectedRequest) {
@@ -216,6 +343,7 @@ export function WikiRequestsPage() {
       const updated = await updateWikiRequest(token, selectedRequest.id, {
         status: draftStatus,
         priority: draftPriority as "low" | "medium" | "high" | "urgent",
+        severity: draftSeverity as "low" | "medium" | "high" | "critical",
         assigned_to: draftAssignedTo || null,
         admin_notes: draftNotes || null,
       });
@@ -237,22 +365,25 @@ export function WikiRequestsPage() {
     <div className="space-y-6">
       <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-5">
         <MetricCard label="Totale richieste" value={summary.total.toString()} sub="storico registrato" />
-        <MetricCard label="Pending" value={summary.pending.toString()} sub="da prendere in carico" />
+        <MetricCard label="Nuove" value={summary.newCount.toString()} sub="da prendere in carico" />
+        <MetricCard label="Triaged" value={summary.triaged.toString()} sub="qualificate" />
         <MetricCard label="Urgenti" value={summary.urgent.toString()} sub="da trattare subito" />
         <MetricCard label="Planned" value={summary.planned.toString()} sub="in roadmap" />
-        <MetricCard label="Done" value={summary.done.toString()} sub="chiuse" />
+        <MetricCard label="Resolved" value={summary.resolved.toString()} sub="chiuse" />
       </section>
 
       <section className="rounded-3xl border border-[#d9dfd4] bg-white p-5 shadow-sm">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Governance richieste</p>
-            <h2 className="mt-1 text-xl font-semibold text-gray-900">Richieste registrate dal Wiki</h2>
+            <h2 className="mt-1 text-xl font-semibold text-gray-900">{supportOnly ? "Inbox supporto Wiki" : "Richieste registrate dal Wiki"}</h2>
             <p className="mt-1 text-sm text-gray-500">
-              Le richieste vengono generate dai fallback `found=false` del widget e della pagina Wiki.
+              {supportOnly
+                ? "Coda operativa su supporto, anomalie, accesso e problemi dati generati dal Wiki."
+                : "Le richieste vengono generate dai fallback `found=false` del widget e della pagina Wiki."}
             </p>
           </div>
-          <div className="grid gap-3 md:grid-cols-4">
+          <div className="grid gap-3 md:grid-cols-6">
             <input
               value={query}
               onChange={(event) => setQuery(event.target.value)}
@@ -292,6 +423,28 @@ export function WikiRequestsPage() {
                 </option>
               ))}
             </select>
+            <select
+              value={requestTypeFilter}
+              onChange={(event) => setRequestTypeFilter(event.target.value as RequestTypeFilter)}
+              className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#1D4E35] focus:ring-2 focus:ring-[#1D4E35]/10"
+            >
+              {requestTypeOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <select
+              value={severityFilter}
+              onChange={(event) => setSeverityFilter(event.target.value as RequestSeverityFilter)}
+              className="rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#1D4E35] focus:ring-2 focus:ring-[#1D4E35]/10"
+            >
+              {severityOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
       </section>
@@ -324,14 +477,17 @@ export function WikiRequestsPage() {
                     }`}
                   >
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${statusBadgeClasses(item.status)}`}>
-                        {item.status}
+                    <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${statusBadgeClasses(item.status)}`}>
+                      {statusLabel(item.status)}
                       </span>
                       <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs text-gray-600">
-                        {categoryLabel(item.category)}
+                        {requestTypeLabel(item.request_type)}
                       </span>
                       <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${priorityBadgeClasses(item.priority)}`}>
                         {priorityLabel(item.priority)}
+                      </span>
+                      <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${severityBadgeClasses(item.severity)}`}>
+                        {severityLabel(item.severity)}
                       </span>
                       <span className="text-xs text-gray-400">{formatDateTime(item.created_at)}</span>
                     </div>
@@ -355,16 +511,27 @@ export function WikiRequestsPage() {
           {selectedRequest ? (
             <div className="space-y-5">
               <div className="space-y-2 border-b border-gray-100 pb-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${statusBadgeClasses(selectedRequest.status)}`}>
-                    {selectedRequest.status}
-                  </span>
-                  <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs text-gray-600">
-                    {categoryLabel(selectedRequest.category)}
-                  </span>
-                  <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${priorityBadgeClasses(selectedRequest.priority)}`}>
-                    Priorità {priorityLabel(selectedRequest.priority)}
-                  </span>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${statusBadgeClasses(selectedRequest.status)}`}>
+                      {statusLabel(selectedRequest.status)}
+                    </span>
+                    <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs text-gray-600">
+                      {requestTypeLabel(selectedRequest.request_type)}
+                    </span>
+                    <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${priorityBadgeClasses(selectedRequest.priority)}`}>
+                      Priorità {priorityLabel(selectedRequest.priority)}
+                    </span>
+                    <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${severityBadgeClasses(selectedRequest.severity)}`}>
+                      Severità {severityLabel(selectedRequest.severity)}
+                    </span>
+                  </div>
+                  <a
+                    href={`/wiki/requests/${selectedRequest.id}`}
+                    className="text-xs font-medium text-[#1D4E35] underline underline-offset-2"
+                  >
+                    Apri pagina richiesta
+                  </a>
                 </div>
                 <h3 className="text-lg font-semibold text-gray-900">Dettaglio richiesta</h3>
                 <p className="text-xs text-gray-500">
@@ -385,6 +552,49 @@ export function WikiRequestsPage() {
                   {selectedRequest.agent_response || "Nessuna risposta registrata."}
                 </div>
               </div>
+
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                <div className="rounded-2xl border border-gray-200 bg-[#fafaf7] px-4 py-3 text-sm text-gray-700">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Modulo</p>
+                  <p className="mt-2">{selectedRequest.module_key || "n/d"}</p>
+                </div>
+                <div className="rounded-2xl border border-gray-200 bg-[#fafaf7] px-4 py-3 text-sm text-gray-700">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Canale</p>
+                  <p className="mt-2">{selectedRequest.source_channel || "n/d"}</p>
+                </div>
+                <div className="rounded-2xl border border-gray-200 bg-[#fafaf7] px-4 py-3 text-sm text-gray-700">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Impatto</p>
+                  <p className="mt-2">{selectedRequest.impact_scope || "n/d"}</p>
+                </div>
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-2xl border border-gray-200 bg-[#fafaf7] px-4 py-3 text-sm text-gray-700">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Pagina</p>
+                  <p className="mt-2 break-all">{selectedRequest.page_path || "n/d"}</p>
+                </div>
+                <div className="rounded-2xl border border-gray-200 bg-[#fafaf7] px-4 py-3 text-sm text-gray-700">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Conversation ID</p>
+                  <p className="mt-2 break-all">{selectedRequest.conversation_id || "n/d"}</p>
+                </div>
+              </div>
+
+              {selectedRequest.desired_outcome || selectedRequest.observed_behavior || selectedRequest.expected_behavior ? (
+                <div className="grid gap-4 xl:grid-cols-3">
+                  <div className="rounded-2xl border border-gray-200 bg-[#fafaf7] px-4 py-3 text-sm text-gray-700">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Comportamento osservato</p>
+                    <p className="mt-2 whitespace-pre-wrap">{selectedRequest.observed_behavior || "n/d"}</p>
+                  </div>
+                  <div className="rounded-2xl border border-gray-200 bg-[#fafaf7] px-4 py-3 text-sm text-gray-700">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Comportamento atteso</p>
+                    <p className="mt-2 whitespace-pre-wrap">{selectedRequest.expected_behavior || "n/d"}</p>
+                  </div>
+                  <div className="rounded-2xl border border-gray-200 bg-[#fafaf7] px-4 py-3 text-sm text-gray-700">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Esito desiderato</p>
+                    <p className="mt-2 whitespace-pre-wrap">{selectedRequest.desired_outcome || "n/d"}</p>
+                  </div>
+                </div>
+              ) : null}
 
               <div className="grid gap-4 md:grid-cols-2">
                 <label className="space-y-2">
@@ -409,7 +619,7 @@ export function WikiRequestsPage() {
                 </div>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 md:grid-cols-3">
                 <label className="space-y-2">
                   <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Priorità</span>
                   <select
@@ -418,6 +628,20 @@ export function WikiRequestsPage() {
                     className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#1D4E35] focus:ring-2 focus:ring-[#1D4E35]/10"
                   >
                     {priorityOptions.filter((option) => option.value !== "all").map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="space-y-2">
+                  <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Severità</span>
+                  <select
+                    value={draftSeverity}
+                    onChange={(event) => setDraftSeverity(event.target.value as WikiRequest["severity"])}
+                    className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#1D4E35] focus:ring-2 focus:ring-[#1D4E35]/10"
+                  >
+                    {severityOptions.filter((option) => option.value !== "all").map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
                       </option>
@@ -451,6 +675,41 @@ export function WikiRequestsPage() {
                   className="w-full rounded-2xl border border-gray-200 px-3 py-3 text-sm text-gray-700 outline-none transition focus:border-[#1D4E35] focus:ring-2 focus:ring-[#1D4E35]/10"
                 />
               </label>
+
+              <div className="space-y-2">
+                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Timeline caso</span>
+                <div className="rounded-2xl border border-gray-200 bg-[#fafaf7] p-3">
+                  {timelineLoading ? (
+                    <p className="text-sm text-gray-500">Caricamento timeline...</p>
+                  ) : timeline.length === 0 ? (
+                    <p className="text-sm text-gray-500">Nessun evento registrato.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {timeline.map((event) => (
+                        <div key={event.id} className="rounded-xl border border-gray-100 bg-white px-3 py-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-sm font-medium text-gray-900">{event.event_type.replaceAll("_", " ")}</p>
+                            <span className="text-xs text-gray-400">{formatDateTime(event.created_at)}</span>
+                          </div>
+                          <p className="mt-1 text-xs text-gray-500">
+                            {event.actor_username || "sistema"}
+                            {event.from_status || event.to_status ? ` · ${event.from_status || "n/d"} → ${event.to_status || "n/d"}` : ""}
+                          </p>
+                          {event.payload ? (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {Object.entries(event.payload).map(([key, value]) => (
+                                <span key={key} className="rounded-full border border-gray-200 bg-gray-50 px-2 py-1 text-[11px] text-gray-600">
+                                  {key}: {String(value)}
+                                </span>
+                              ))}
+                            </div>
+                          ) : null}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
 
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="space-y-1 text-xs">
