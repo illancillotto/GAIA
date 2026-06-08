@@ -177,6 +177,8 @@ import type {
   WikiRequestCreateInput,
   WikiRequestEvent,
   WikiRequestFeedbackInput,
+  WikiRequestFamily,
+  WikiRequestMakeCanonicalInput,
   WikiRequestMarkDuplicateInput,
   WikiMyRequestsSummary,
   WikiRequestReopenInput,
@@ -1310,6 +1312,14 @@ export async function getWikiRequestLinkedDuplicates(token: string, requestId: s
   });
 }
 
+export async function getWikiRequestFamily(token: string, requestId: string): Promise<WikiRequestFamily> {
+  return request<WikiRequestFamily>(`/wiki/requests/${requestId}/family`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
 export async function getMyWikiRequests(token: string): Promise<WikiRequest[]> {
   return request<WikiRequest[]>("/wiki/requests/mine", {
     headers: {
@@ -1393,6 +1403,20 @@ export async function unlinkWikiRequestDuplicate(token: string, requestId: strin
     headers: {
       Authorization: `Bearer ${token}`,
     },
+  });
+}
+
+export async function makeWikiRequestCanonical(
+  token: string,
+  requestId: string,
+  payload: WikiRequestMakeCanonicalInput = {},
+): Promise<WikiRequestFamily> {
+  return request<WikiRequestFamily>(`/wiki/requests/${requestId}/make-canonical`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
   });
 }
 

@@ -16,9 +16,11 @@ from app.modules.wiki.schemas import (
     WikiRequestAssigneeRead,
     WikiRequestCreate,
     WikiRequestDuplicateCandidateRead,
+    WikiRequestFamilyRead,
     WikiRequestDuplicateMarkInput,
     WikiRequestEventRead,
     WikiRequestFeedbackUpdate,
+    WikiRequestMakeCanonicalInput,
     WikiRequestReopenInput,
     WikiRequestRead,
     WikiRequestStatusUpdate,
@@ -323,6 +325,34 @@ def _linked_duplicate_candidates(db: Session, canonical_request_id: uuid.UUID) -
     ]
 
 
+def _resolve_family_canonical(db: Session, req: WikiRequest) -> WikiRequest:
+    if req.canonical_request_id is None:
+        return req
+    canonical = db.query(WikiRequest).filter(WikiRequest.id == req.canonical_request_id).first()
+    return canonical or req
+
+
+def _build_request_family(db: Session, req: WikiRequest) -> WikiRequestFamilyRead:
+    canonical = _resolve_family_canonical(db, req)
+    linked = _linked_duplicate_candidates(db, canonical.id)
+    created_timestamps = [canonical.created_at, *[item.created_at for item in linked]]
+    affected_users = len(
+        {
+            value
+            for value in [canonical.created_by, *[item.created_by for item in linked]]
+            if value
+        }
+    )
+    latest_created_at = max(created_timestamps) if created_timestamps else None
+    return WikiRequestFamilyRead(
+        canonical_request=_serialize_wiki_request_read(db, canonical),
+        linked_duplicates=linked,
+        family_size=1 + len(linked),
+        affected_users=affected_users,
+        latest_created_at=latest_created_at,
+    )
+
+
 @router.post("/requests", response_model=WikiRequestRead, status_code=status.HTTP_201_CREATED)
 def create_wiki_request(
     payload: WikiRequestCreate,
@@ -525,6 +555,17 @@ def list_wiki_request_linked_duplicates(
     return _linked_duplicate_candidates(db, canonical_id)
 
 
+@router.get("/requests/{request_id}/family", response_model=WikiRequestFamilyRead)
+def get_wiki_request_family(
+    request_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(get_current_user),
+) -> WikiRequestFamilyRead:
+    _require_wiki_admin(current_user)
+    req = _get_request_or_404(db, request_id)
+    return _build_request_family(db, req)
+
+
 @router.get("/requests/{request_id}", response_model=WikiRequestRead)
 def get_wiki_request(
     request_id: uuid.UUID,
@@ -699,6 +740,97 @@ def unlink_wiki_request_duplicate(
     db.commit()
     db.refresh(req)
     return _serialize_wiki_request_read(db, req)
+
+
+@router.post("/requests/{request_id}/make-canonical", response_model=WikiRequestFamilyRead)
+def make_wiki_request_canonical(
+    request_id: uuid.UUID,
+    payload: WikiRequestMakeCanonicalInput,
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(get_current_user),
+) -> WikiRequestFamilyRead:
+    _require_wiki_admin(current_user)
+    target = _get_request_or_404(db, request_id)
+    current_canonical = _resolve_family_canonical(db, target)
+
+    if current_canonical.id == target.id and target.canonical_request_id is None:
+        return _build_request_family(db, target)
+
+    family_duplicates = (
+        db.query(WikiRequest)
+        .filter(WikiRequest.canonical_request_id == current_canonical.id)
+        .all()
+    )
+
+    for item in family_duplicates:
+        if item.id == target.id:
+            continue
+        item.canonical_request_id = target.id
+        _append_request_event(
+            db,
+            request_id=item.id,
+            event_type="canonical_reassigned",
+            actor_username=current_user.username,
+            payload={
+                "from_canonical_request_id": str(current_canonical.id),
+                "to_canonical_request_id": str(target.id),
+            },
+        )
+
+    previous_target_status = _legacy_status_to_workflow(target.status)
+    previous_target_canonical = target.canonical_request_id
+    target.canonical_request_id = None
+    if previous_target_status == "duplicate":
+        target.status = "triaged"
+        _append_request_event(
+            db,
+            request_id=target.id,
+            event_type="status_changed",
+            actor_username=current_user.username,
+            from_status="duplicate",
+            to_status="triaged",
+        )
+    if payload.admin_notes is not None:
+        target.admin_notes = payload.admin_notes
+    target.last_admin_update_at = _now_utc()
+    _append_request_event(
+        db,
+        request_id=target.id,
+        event_type="canonical_promoted",
+        actor_username=current_user.username,
+        payload={
+            "from_canonical_request_id": str(previous_target_canonical) if previous_target_canonical else None,
+        },
+    )
+
+    if current_canonical.id != target.id:
+        previous_canonical_status = _legacy_status_to_workflow(current_canonical.status)
+        current_canonical.canonical_request_id = target.id
+        current_canonical.status = "duplicate"
+        current_canonical.last_admin_update_at = _now_utc()
+        if previous_canonical_status != "duplicate":
+            _append_request_event(
+                db,
+                request_id=current_canonical.id,
+                event_type="status_changed",
+                actor_username=current_user.username,
+                from_status=previous_canonical_status,
+                to_status="duplicate",
+            )
+        _append_request_event(
+            db,
+            request_id=current_canonical.id,
+            event_type="canonical_demoted",
+            actor_username=current_user.username,
+            payload={
+                "new_canonical_request_id": str(target.id),
+                "new_canonical_request_question": target.user_question,
+            },
+        )
+
+    db.commit()
+    db.refresh(target)
+    return _build_request_family(db, target)
 
 
 @router.patch("/requests/{request_id}/feedback", response_model=WikiRequestRead)

@@ -313,12 +313,28 @@ Il modulo **Wiki Agent** aggiunge a GAIA un assistente LLM sempre disponibile, c
     - `duplicate_linked`
 - La console admin mostra anche i `duplicati collegati` al caso canonico:
   - elenco del gruppo già accorpato
+  - `family_size`
   - numero di utenti coinvolti
+  - ultimo caso registrato nel gruppo
   - possibilità di `sganciare` un duplicato dal canonico
+  - possibilità di promuovere un altro caso a `nuovo canonico`
 - Lo sgancio di un duplicato:
   - rimuove `canonical_request_id`
   - riporta il caso a `triaged` se era in stato `duplicate`
   - registra evento `duplicate_unlinked`
+- Il backend espone una vista famiglia dedicata:
+  - `GET /wiki/requests/{id}/family`
+  - restituisce il caso canonico attuale e i duplicati collegati
+- L'admin può promuovere un duplicato come nuovo canonico con:
+  - `POST /wiki/requests/{id}/make-canonical`
+- Quando cambia il canonico:
+  - il caso promosso diventa il riferimento del gruppo
+  - il vecchio canonico viene declassato a `duplicate`
+  - tutti i duplicati collegati vengono riallineati al nuovo canonico
+  - la timeline registra:
+    - `canonical_promoted`
+    - `canonical_demoted`
+    - `canonical_reassigned`
 
 ### 4.13 Inbox utente e feedback loop
 

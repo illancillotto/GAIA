@@ -9,14 +9,16 @@ import {
   getWikiRequestAssignees,
   getWikiRequestDuplicates,
   getWikiRequestEvents,
+  getWikiRequestFamily,
   getWikiRequestLinkedDuplicates,
   getWikiRequests,
+  makeWikiRequestCanonical,
   markWikiRequestDuplicate,
   unlinkWikiRequestDuplicate,
   updateWikiRequest,
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
-import type { WikiRequest, WikiRequestAssignee, WikiRequestDuplicateCandidate, WikiRequestEvent } from "@/types/api";
+import type { WikiRequest, WikiRequestAssignee, WikiRequestDuplicateCandidate, WikiRequestEvent, WikiRequestFamily } from "@/types/api";
 
 type RequestStatusFilter = "all" | "new" | "triaged" | "investigating" | "waiting_user" | "planned" | "resolved" | "duplicate" | "rejected";
 type RequestCategoryFilter = "all" | "feature_request" | "bug_report" | "question" | "support_request";
@@ -192,6 +194,7 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
   const [assignees, setAssignees] = useState<WikiRequestAssignee[]>([]);
   const [timeline, setTimeline] = useState<WikiRequestEvent[]>([]);
   const [duplicates, setDuplicates] = useState<WikiRequestDuplicateCandidate[]>([]);
+  const [family, setFamily] = useState<WikiRequestFamily | null>(null);
   const [linkedDuplicates, setLinkedDuplicates] = useState<WikiRequestDuplicateCandidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -199,6 +202,7 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
   const [duplicatesLoading, setDuplicatesLoading] = useState(false);
   const [linkedDuplicatesLoading, setLinkedDuplicatesLoading] = useState(false);
   const [markingDuplicateId, setMarkingDuplicateId] = useState<string | null>(null);
+  const [promotingCanonicalId, setPromotingCanonicalId] = useState<string | null>(null);
   const [unlinkingDuplicateId, setUnlinkingDuplicateId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -371,6 +375,7 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
   useEffect(() => {
     async function loadLinkedDuplicates() {
       if (!selectedRequest) {
+        setFamily(null);
         setLinkedDuplicates([]);
         return;
       }
@@ -381,9 +386,14 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
       }
       setLinkedDuplicatesLoading(true);
       try {
-        const items = await getWikiRequestLinkedDuplicates(token, selectedRequest.id);
+        const [familyResponse, items] = await Promise.all([
+          getWikiRequestFamily(token, selectedRequest.id),
+          getWikiRequestLinkedDuplicates(token, selectedRequest.id),
+        ]);
+        setFamily(familyResponse);
         setLinkedDuplicates(items);
       } catch {
+        setFamily(null);
         setLinkedDuplicates([]);
       } finally {
         setLinkedDuplicatesLoading(false);
@@ -448,9 +458,11 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
         getWikiRequestDuplicates(token, updated.id),
         getWikiRequestLinkedDuplicates(token, updated.id),
       ]);
+      const familyResponse = await getWikiRequestFamily(token, updated.id);
       setTimeline(eventsResponse);
       setDuplicates(duplicatesResponse);
       setLinkedDuplicates(linkedResponse);
+      setFamily(familyResponse);
       setError(null);
     } catch (markError) {
       setError(markError instanceof Error ? markError.message : "Errore collegamento duplicato");
@@ -479,15 +491,68 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
         selectedRequest ? getWikiRequestDuplicates(token, selectedRequest.id) : Promise.resolve([]),
         selectedRequest ? getWikiRequestLinkedDuplicates(token, selectedRequest.id) : Promise.resolve([]),
       ]);
+      const familyResponse = selectedRequest ? await getWikiRequestFamily(token, selectedRequest.id) : null;
       setTimeline(eventsResponse);
       setDuplicates(duplicatesResponse);
       setLinkedDuplicates(linkedResponse);
+      setFamily(familyResponse);
       setSuccessMessage("Duplicato sganciato dal caso canonico.");
       setError(null);
     } catch (unlinkError) {
       setError(unlinkError instanceof Error ? unlinkError.message : "Errore nello sgancio del duplicato");
     } finally {
       setUnlinkingDuplicateId(null);
+    }
+  }
+
+  async function handleMakeCanonical(requestId: string) {
+    const token = getStoredAccessToken();
+    if (!token) {
+      setError("Sessione non disponibile.");
+      return;
+    }
+
+    setPromotingCanonicalId(requestId);
+    setSuccessMessage(null);
+    try {
+      const familyResponse = await makeWikiRequestCanonical(token, requestId, {
+        admin_notes: draftNotes || null,
+      });
+      setFamily(familyResponse);
+      setLinkedDuplicates(familyResponse.linked_duplicates);
+      setItems((current) =>
+        current.map((item) => {
+          if (item.id === familyResponse.canonical_request.id) {
+            return familyResponse.canonical_request;
+          }
+          if (item.id === requestId) {
+            return familyResponse.canonical_request;
+          }
+          if (item.id === selectedRequest?.id && item.id !== familyResponse.canonical_request.id) {
+            return {
+              ...item,
+              status: "duplicate",
+              canonical_request_id: familyResponse.canonical_request.id,
+              canonical_request_question: familyResponse.canonical_request.user_question,
+              canonical_request_status: familyResponse.canonical_request.status,
+            };
+          }
+          return item;
+        }),
+      );
+      setSelectedId(familyResponse.canonical_request.id);
+      const [eventsResponse, duplicatesResponse] = await Promise.all([
+        getWikiRequestEvents(token, familyResponse.canonical_request.id),
+        getWikiRequestDuplicates(token, familyResponse.canonical_request.id),
+      ]);
+      setTimeline(eventsResponse);
+      setDuplicates(duplicatesResponse);
+      setSuccessMessage("Caso canonico aggiornato.");
+      setError(null);
+    } catch (promoteError) {
+      setError(promoteError instanceof Error ? promoteError.message : "Errore nel cambio del caso canonico");
+    } finally {
+      setPromotingCanonicalId(null);
     }
   }
 
@@ -740,15 +805,39 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
                 <div className="rounded-2xl border border-gray-200 bg-[#fafaf7] p-3">
                   <div className="mb-3 flex items-center justify-between gap-3">
                     <div>
-                      <p className="text-sm font-medium text-gray-900">Duplicati collegati al caso canonico</p>
+                      <p className="text-sm font-medium text-gray-900">Famiglia caso canonico</p>
                       <p className="text-xs text-gray-500">
-                        Vista del gruppo casi già accorpati sullo stesso filone.
+                        Vista del gruppo casi già accorpati sullo stesso filone con impatto e promotore attuale.
                       </p>
                     </div>
-                    <span className="rounded-full border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-600">
-                      {linkedDuplicates.length} collegati
-                    </span>
+                    {family ? (
+                      <div className="flex flex-wrap gap-2 text-[11px] text-gray-600">
+                        <span className="rounded-full border border-gray-200 bg-white px-2 py-1">{family.family_size} casi</span>
+                        <span className="rounded-full border border-gray-200 bg-white px-2 py-1">{family.affected_users} utenti</span>
+                      </div>
+                    ) : null}
                   </div>
+                  {family ? (
+                    <div className="mb-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-3 text-sm text-emerald-950">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Caso canonico attuale</p>
+                      <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+                        <div>
+                          <p className="font-medium">{family.canonical_request.user_question}</p>
+                          <p className="mt-1 text-xs text-emerald-800">
+                            {family.canonical_request.created_by || "n/d"}
+                            {family.canonical_request.module_key ? ` · modulo ${family.canonical_request.module_key}` : ""}
+                            {family.latest_created_at ? ` · ultimo caso ${formatDateTime(family.latest_created_at)}` : ""}
+                          </p>
+                        </div>
+                        <a
+                          href={`/wiki/requests/${family.canonical_request.id}`}
+                          className="rounded-full border border-emerald-200 bg-white px-3 py-1.5 text-xs font-medium text-emerald-800"
+                        >
+                          Apri canonico
+                        </a>
+                      </div>
+                    </div>
+                  ) : null}
                   {linkedDuplicatesLoading ? (
                     <p className="text-sm text-gray-500">Caricamento duplicati collegati...</p>
                   ) : linkedDuplicates.length === 0 ? (
@@ -794,6 +883,14 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
                                   {unlinkingDuplicateId === candidate.id ? "Sgancio..." : "Sgancia"}
                                 </button>
                               ) : null}
+                              <button
+                                type="button"
+                                onClick={() => void handleMakeCanonical(candidate.id)}
+                                disabled={promotingCanonicalId === candidate.id}
+                                className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-800 transition hover:bg-emerald-100 disabled:opacity-50"
+                              >
+                                {promotingCanonicalId === candidate.id ? "Aggiorno..." : "Rendi canonico"}
+                              </button>
                             </div>
                           </div>
                         </div>

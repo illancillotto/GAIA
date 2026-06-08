@@ -808,6 +808,14 @@ export type WikiRequestDuplicateCandidate = {
   match_reason: string;
 };
 
+export type WikiRequestFamily = {
+  canonical_request: WikiRequest;
+  linked_duplicates: WikiRequestDuplicateCandidate[];
+  family_size: number;
+  affected_users: number;
+  latest_created_at: string | null;
+};
+
 export type WikiRequestAssignee = {
   username: string;
   full_name: string | null;
@@ -843,6 +851,10 @@ export type WikiRequestUpdateInput = {
 
 export type WikiRequestMarkDuplicateInput = {
   canonical_request_id: string;
+  admin_notes?: string | null;
+};
+
+export type WikiRequestMakeCanonicalInput = {
   admin_notes?: string | null;
 };
 

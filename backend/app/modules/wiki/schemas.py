@@ -155,6 +155,10 @@ class WikiRequestDuplicateMarkInput(BaseModel):
     admin_notes: str | None = None
 
 
+class WikiRequestMakeCanonicalInput(BaseModel):
+    admin_notes: str | None = None
+
+
 class WikiRequestFeedbackUpdate(BaseModel):
     rating: Literal["helpful", "not_helpful"]
     notes: str | None = None
@@ -179,6 +183,14 @@ class WikiRequestEventRead(BaseModel):
     to_status: str | None = None
     payload: dict[str, object] | None = None
     created_at: datetime
+
+
+class WikiRequestFamilyRead(BaseModel):
+    canonical_request: WikiRequestRead
+    linked_duplicates: list[WikiRequestDuplicateCandidateRead] = Field(default_factory=list)
+    family_size: int
+    affected_users: int
+    latest_created_at: datetime | None = None
 
 
 class WikiSupportAnalyticsCountRead(BaseModel):

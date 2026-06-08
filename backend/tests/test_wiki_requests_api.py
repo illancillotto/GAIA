@@ -419,6 +419,65 @@ def test_admin_can_list_linked_duplicates_for_canonical_case() -> None:
     assert data[0]["match_reason"] == "collegata a questo caso canonico"
 
 
+def test_admin_can_get_request_family() -> None:
+    _create_user("admin_request_family", "admin")
+    token = _login("admin_request_family")
+    canonical_id = uuid.uuid4()
+    duplicate_a_id = uuid.uuid4()
+    duplicate_b_id = uuid.uuid4()
+
+    db = TestingSessionLocal()
+    db.add(
+        WikiRequest(
+            id=canonical_id,
+            user_question="Caso canonico wiki",
+            category="bug_report",
+            request_type="bug_report",
+            status="investigating",
+            priority="high",
+            severity="high",
+            created_by="alice",
+            module_key="wiki",
+        )
+    )
+    db.add(
+        WikiRequest(
+            id=duplicate_a_id,
+            user_question="Errore simile widget wiki",
+            category="support_request",
+            request_type="bug_report",
+            status="duplicate",
+            priority="medium",
+            severity="high",
+            created_by="mario",
+            canonical_request_id=canonical_id,
+        )
+    )
+    db.add(
+        WikiRequest(
+            id=duplicate_b_id,
+            user_question="Secondo caso simile widget wiki",
+            category="support_request",
+            request_type="bug_report",
+            status="duplicate",
+            priority="medium",
+            severity="high",
+            created_by="laura",
+            canonical_request_id=canonical_id,
+        )
+    )
+    db.commit()
+    db.close()
+
+    resp = client.get(f"/wiki/requests/{duplicate_a_id}/family", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["canonical_request"]["id"] == str(canonical_id)
+    assert data["family_size"] == 3
+    assert data["affected_users"] == 3
+    assert len(data["linked_duplicates"]) == 2
+
+
 def test_viewer_cannot_list_requests() -> None:
     _create_user("viewer_user", "viewer")
     token = _login("viewer_user")
@@ -613,6 +672,86 @@ def test_admin_can_unlink_duplicate_request() -> None:
     event_types = [item["event_type"] for item in events_resp.json()]
     assert "duplicate_unlinked" in event_types
     assert "status_changed" in event_types
+
+
+def test_admin_can_promote_duplicate_to_new_canonical() -> None:
+    _create_user("admin_make_canonical", "admin")
+    token = _login("admin_make_canonical")
+    canonical_id = uuid.uuid4()
+    target_id = uuid.uuid4()
+    sibling_id = uuid.uuid4()
+
+    db = TestingSessionLocal()
+    db.add(
+        WikiRequest(
+            id=canonical_id,
+            user_question="Caso canonico iniziale",
+            category="bug_report",
+            request_type="bug_report",
+            status="investigating",
+            priority="high",
+            severity="high",
+            created_by="alice",
+            module_key="wiki",
+        )
+    )
+    db.add(
+        WikiRequest(
+            id=target_id,
+            user_question="Questo dovrebbe diventare il canonico",
+            category="support_request",
+            request_type="bug_report",
+            status="duplicate",
+            priority="medium",
+            severity="high",
+            created_by="mario",
+            canonical_request_id=canonical_id,
+        )
+    )
+    db.add(
+        WikiRequest(
+            id=sibling_id,
+            user_question="Altro duplicato collegato",
+            category="support_request",
+            request_type="bug_report",
+            status="duplicate",
+            priority="medium",
+            severity="high",
+            created_by="laura",
+            canonical_request_id=canonical_id,
+        )
+    )
+    db.commit()
+    db.close()
+
+    resp = client.post(
+        f"/wiki/requests/{target_id}/make-canonical",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"admin_notes": "Promosso come riferimento corretto."},
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["canonical_request"]["id"] == str(target_id)
+    assert data["canonical_request"]["status"] == "triaged"
+    assert data["family_size"] == 3
+
+    db = TestingSessionLocal()
+    target = db.query(WikiRequest).filter(WikiRequest.id == target_id).first()
+    old_canonical = db.query(WikiRequest).filter(WikiRequest.id == canonical_id).first()
+    sibling = db.query(WikiRequest).filter(WikiRequest.id == sibling_id).first()
+    assert target is not None and old_canonical is not None and sibling is not None
+    assert target.canonical_request_id is None
+    assert old_canonical.canonical_request_id == target_id
+    assert old_canonical.status == "duplicate"
+    assert sibling.canonical_request_id == target_id
+    db.close()
+
+    target_events = client.get(f"/wiki/requests/{target_id}/events", headers={"Authorization": f"Bearer {token}"}).json()
+    old_canonical_events = client.get(f"/wiki/requests/{canonical_id}/events", headers={"Authorization": f"Bearer {token}"}).json()
+    sibling_events = client.get(f"/wiki/requests/{sibling_id}/events", headers={"Authorization": f"Bearer {token}"}).json()
+    assert "canonical_promoted" in [item["event_type"] for item in target_events]
+    assert "canonical_demoted" in [item["event_type"] for item in old_canonical_events]
+    assert "canonical_reassigned" in [item["event_type"] for item in sibling_events]
 
 
 def test_user_can_mark_own_request_as_viewed() -> None:
