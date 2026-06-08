@@ -160,6 +160,10 @@ class WikiRequestFeedbackUpdate(BaseModel):
     notes: str | None = None
 
 
+class WikiRequestReopenInput(BaseModel):
+    reason: str | None = None
+
+
 class WikiRequestAssigneeRead(BaseModel):
     username: str
     full_name: str | None = None
@@ -223,6 +227,14 @@ class WikiSupportAnalyticsSeriesPointRead(BaseModel):
 class WikiSupportAnalyticsSeriesResponse(BaseModel):
     days: int
     items: list[WikiSupportAnalyticsSeriesPointRead] = Field(default_factory=list)
+
+
+class WikiMyRequestsSummaryRead(BaseModel):
+    total_requests: int
+    open_requests: int
+    unread_updates: int
+    waiting_user_requests: int
+    resolved_feedback_pending: int
 
 
 class WikiConversationMessageRead(BaseModel):

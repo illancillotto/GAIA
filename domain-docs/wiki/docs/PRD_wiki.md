@@ -259,6 +259,42 @@ Il modulo **Wiki Agent** aggiunge a GAIA un assistente LLM sempre disponibile, c
   - la timeline registra:
     - `marked_duplicate`
     - `duplicate_linked`
+- La console admin mostra anche i `duplicati collegati` al caso canonico:
+  - elenco del gruppo già accorpato
+  - numero di utenti coinvolti
+  - possibilità di `sganciare` un duplicato dal canonico
+- Lo sgancio di un duplicato:
+  - rimuove `canonical_request_id`
+  - riporta il caso a `triaged` se era in stato `duplicate`
+  - registra evento `duplicate_unlinked`
+
+### 4.13 Inbox utente e feedback loop
+
+- La pagina `/wiki/support` non è solo form di inserimento, ma anche inbox personale delle richieste aperte dall’utente.
+- Il backend espone:
+  - `GET /wiki/requests/mine`
+  - `GET /wiki/requests/mine/summary`
+  - `POST /wiki/requests/{id}/mark-viewed`
+  - `POST /wiki/requests/{id}/reopen`
+  - `PATCH /wiki/requests/{id}/feedback`
+- Il riepilogo personale include:
+  - numero totale richieste
+  - richieste aperte
+  - aggiornamenti admin non letti
+  - casi `waiting_user`
+  - casi `resolved` in attesa di feedback
+- L’utente vede per ogni caso:
+  - stato attuale
+  - eventuale messaggio admin / risoluzione
+  - badge `Nuovo aggiornamento`
+  - possibilità di lasciare feedback finale
+  - possibilità di riaprire il caso con motivazione
+- La riapertura di un caso:
+  - sposta lo stato a `investigating`
+  - sgancia il caso dal canonico se era `duplicate`
+  - registra evento `reopened_by_user`
+  - trasforma il feedback implicito in `not_helpful` se il caso era già chiuso
+    - `duplicate_linked`
   - il backlog resta leggibile senza perdere il contesto originale dell'utente
 
 ### 4.13 Notifiche utente e feedback finale

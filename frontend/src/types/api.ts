@@ -817,6 +817,18 @@ export type WikiRequestFeedbackInput = {
   notes?: string | null;
 };
 
+export type WikiRequestReopenInput = {
+  reason?: string | null;
+};
+
+export type WikiMyRequestsSummary = {
+  total_requests: number;
+  open_requests: number;
+  unread_updates: number;
+  waiting_user_requests: number;
+  resolved_feedback_pending: number;
+};
+
 export type WikiSupportAnalyticsCount = {
   key: string;
   count: number;

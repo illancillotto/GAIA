@@ -3,9 +3,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
-import { createWikiRequest, getMyWikiRequests, markWikiRequestViewed, updateWikiRequestFeedback } from "@/lib/api";
+import { createWikiRequest, getMyWikiRequests, getMyWikiRequestsSummary, markWikiRequestViewed, reopenWikiRequest, updateWikiRequestFeedback } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
-import type { WikiRequest } from "@/types/api";
+import type { WikiMyRequestsSummary, WikiRequest } from "@/types/api";
 
 type SupportIntent = "help_request" | "bug_report" | "feature_request" | "access_issue" | "data_issue" | "other_request";
 
@@ -82,11 +82,14 @@ export function WikiSupportPage() {
   const [observedBehavior, setObservedBehavior] = useState("");
   const [expectedBehavior, setExpectedBehavior] = useState("");
   const [myRequests, setMyRequests] = useState<WikiRequest[]>([]);
+  const [summary, setSummary] = useState<WikiMyRequestsSummary | null>(null);
   const [selectedRequestId, setSelectedRequestId] = useState<string | null>(null);
   const [feedbackRating, setFeedbackRating] = useState<"helpful" | "not_helpful">("helpful");
   const [feedbackNotes, setFeedbackNotes] = useState("");
   const [saving, setSaving] = useState(false);
   const [feedbackSaving, setFeedbackSaving] = useState(false);
+  const [reopenReason, setReopenReason] = useState("");
+  const [reopening, setReopening] = useState(false);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -108,11 +111,13 @@ export function WikiSupportPage() {
       const token = getStoredAccessToken();
       if (!token) return;
       try {
-        const items = await getMyWikiRequests(token);
+        const [items, summaryResponse] = await Promise.all([getMyWikiRequests(token), getMyWikiRequestsSummary(token)]);
         setMyRequests(items);
+        setSummary(summaryResponse);
         setSelectedRequestId((current) => current ?? items[0]?.id ?? null);
       } catch {
         setMyRequests([]);
+        setSummary(null);
       }
     }
     void loadMyRequests();
@@ -191,6 +196,15 @@ export function WikiSupportPage() {
       });
       setMyRequests((current) => [created, ...current.filter((item) => item.id !== created.id)]);
       setSelectedRequestId(created.id);
+      setSummary((current) =>
+        current
+          ? {
+              ...current,
+              total_requests: current.total_requests + 1,
+              open_requests: current.open_requests + 1,
+            }
+          : current,
+      );
       setSuccessMessage("Richiesta registrata correttamente nel supporto Wiki.");
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Errore registrazione supporto Wiki");
@@ -213,16 +227,67 @@ export function WikiSupportPage() {
     setError(null);
     setSuccessMessage(null);
     try {
-      const updated = await updateWikiRequestFeedback(token, selectedRequest.id, {
-        rating: feedbackRating,
-        notes: feedbackNotes.trim() || null,
-      });
+        const updated = await updateWikiRequestFeedback(token, selectedRequest.id, {
+          rating: feedbackRating,
+          notes: feedbackNotes.trim() || null,
+        });
       setMyRequests((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setSummary((current) =>
+        current
+          ? {
+              ...current,
+              resolved_feedback_pending: Math.max(
+                0,
+                current.resolved_feedback_pending - (selectedRequest.user_feedback_submitted_at ? 0 : 1),
+              ),
+            }
+          : current,
+      );
       setSuccessMessage("Feedback registrato. Grazie.");
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "Errore invio feedback");
     } finally {
       setFeedbackSaving(false);
+    }
+  }
+
+  async function handleReopenSubmit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!selectedRequest) {
+      return;
+    }
+    const token = getStoredAccessToken();
+    if (!token) {
+      setError("Sessione non disponibile.");
+      return;
+    }
+    setReopening(true);
+    setError(null);
+    setSuccessMessage(null);
+    try {
+      const updated = await reopenWikiRequest(token, selectedRequest.id, {
+        reason: reopenReason.trim() || null,
+      });
+      setMyRequests((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setSummary((current) =>
+        current
+          ? {
+              ...current,
+              open_requests: current.open_requests + (selectedRequest.status === "resolved" || selectedRequest.status === "duplicate" || selectedRequest.status === "rejected" ? 1 : 0),
+              unread_updates: Math.max(0, current.unread_updates - (selectedRequest.has_unread_update ? 1 : 0)),
+              resolved_feedback_pending:
+                selectedRequest.status === "resolved" && !selectedRequest.user_feedback_submitted_at
+                  ? Math.max(0, current.resolved_feedback_pending - 1)
+                  : current.resolved_feedback_pending,
+            }
+          : current,
+      );
+      setReopenReason("");
+      setSuccessMessage("Richiesta riaperta correttamente.");
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "Errore riapertura richiesta");
+    } finally {
+      setReopening(false);
     }
   }
 
@@ -265,7 +330,7 @@ export function WikiSupportPage() {
         </div>
       </section>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_400px]">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_400px]">
         <section className="rounded-[28px] border border-[#e3e6dc] bg-white p-6 shadow-sm">
           <div className="space-y-2">
             <p className="text-sm font-semibold text-[#223d30]">Nuova segnalazione</p>
@@ -373,6 +438,29 @@ export function WikiSupportPage() {
         </section>
 
         <aside className="space-y-4">
+          <section className="grid grid-cols-2 gap-3">
+            <div className="rounded-[24px] border border-[#e3e6dc] bg-white p-4 shadow-sm">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Aggiornamenti</p>
+              <p className="mt-2 text-2xl font-semibold text-[#223d30]">{summary?.unread_updates ?? 0}</p>
+              <p className="mt-1 text-xs text-gray-500">da leggere</p>
+            </div>
+            <div className="rounded-[24px] border border-[#e3e6dc] bg-white p-4 shadow-sm">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Attese tue</p>
+              <p className="mt-2 text-2xl font-semibold text-[#223d30]">{summary?.waiting_user_requests ?? 0}</p>
+              <p className="mt-1 text-xs text-gray-500">in waiting user</p>
+            </div>
+            <div className="rounded-[24px] border border-[#e3e6dc] bg-white p-4 shadow-sm">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Aperte</p>
+              <p className="mt-2 text-2xl font-semibold text-[#223d30]">{summary?.open_requests ?? 0}</p>
+              <p className="mt-1 text-xs text-gray-500">casi attivi</p>
+            </div>
+            <div className="rounded-[24px] border border-[#e3e6dc] bg-white p-4 shadow-sm">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Feedback atteso</p>
+              <p className="mt-2 text-2xl font-semibold text-[#223d30]">{summary?.resolved_feedback_pending ?? 0}</p>
+              <p className="mt-1 text-xs text-gray-500">chiuse senza riscontro</p>
+            </div>
+          </section>
+
           <section className="rounded-[28px] border border-[#e3e6dc] bg-white p-5 shadow-sm">
             <p className="text-sm font-semibold text-[#223d30]">Tipi di richiesta</p>
             <div className="mt-3 space-y-2">
@@ -484,6 +572,27 @@ export function WikiSupportPage() {
                     </button>
                   </div>
                 </form>
+
+                {(selectedRequest.status === "resolved" || selectedRequest.status === "duplicate" || selectedRequest.status === "rejected" || selectedRequest.status === "planned") ? (
+                  <form onSubmit={handleReopenSubmit} className="space-y-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-4">
+                    <div>
+                      <p className="text-xs font-semibold uppercase tracking-wide text-rose-700">Riapri il caso</p>
+                      <p className="mt-1 text-sm text-rose-900">Usalo se il problema non è risolto o il caso è stato accorpato in modo non corretto.</p>
+                    </div>
+                    <textarea
+                      value={reopenReason}
+                      onChange={(event) => setReopenReason(event.target.value)}
+                      rows={3}
+                      placeholder="Spiega perché vuoi riaprire la richiesta."
+                      className="w-full rounded-2xl border border-rose-200 bg-white px-4 py-3 text-sm text-gray-700 outline-none transition focus:border-rose-400 focus:ring-2 focus:ring-rose-200"
+                    />
+                    <div className="flex justify-end">
+                      <button type="submit" disabled={reopening} className="rounded-full bg-rose-700 px-4 py-2 text-xs font-medium text-white hover:bg-rose-800 disabled:opacity-50">
+                        {reopening ? "Riapertura..." : "Riapri richiesta"}
+                      </button>
+                    </div>
+                  </form>
+                ) : null}
               </div>
             ) : (
               <p className="mt-3 text-sm text-gray-500">Seleziona una richiesta per leggere gli ultimi aggiornamenti.</p>

@@ -12,12 +12,14 @@ from app.core.database import get_db
 from app.models.application_user import ApplicationUser
 from app.modules.wiki.models import WikiRequest, WikiRequestEvent
 from app.modules.wiki.schemas import (
+    WikiMyRequestsSummaryRead,
     WikiRequestAssigneeRead,
     WikiRequestCreate,
     WikiRequestDuplicateCandidateRead,
     WikiRequestDuplicateMarkInput,
     WikiRequestEventRead,
     WikiRequestFeedbackUpdate,
+    WikiRequestReopenInput,
     WikiRequestRead,
     WikiRequestStatusUpdate,
 )
@@ -303,6 +305,24 @@ def _now_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
+def _linked_duplicate_candidates(db: Session, canonical_request_id: uuid.UUID) -> list[WikiRequestDuplicateCandidateRead]:
+    linked = (
+        db.query(WikiRequest)
+        .filter(WikiRequest.canonical_request_id == canonical_request_id)
+        .order_by(WikiRequest.updated_at.desc(), WikiRequest.created_at.desc())
+        .all()
+    )
+    return [
+        _serialize_duplicate_candidate(
+            db,
+            item,
+            similarity_score=1.0,
+            match_reason="collegata a questo caso canonico",
+        )
+        for item in linked
+    ]
+
+
 @router.post("/requests", response_model=WikiRequestRead, status_code=status.HTTP_201_CREATED)
 def create_wiki_request(
     payload: WikiRequestCreate,
@@ -371,6 +391,39 @@ def list_my_wiki_requests(
         .all()
     )
     return [_serialize_wiki_request_read(db, item) for item in items]
+
+
+@router.get("/requests/mine/summary", response_model=WikiMyRequestsSummaryRead)
+def get_my_wiki_requests_summary(
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(get_current_user),
+) -> WikiMyRequestsSummaryRead:
+    base_query = db.query(WikiRequest).filter(WikiRequest.created_by == current_user.username)
+    items = base_query.all()
+    unread_updates = sum(
+        1
+        for item in items
+        if item.last_admin_update_at is not None
+        and (item.user_last_viewed_at is None or item.last_admin_update_at > item.user_last_viewed_at)
+    )
+    waiting_user_requests = sum(1 for item in items if _legacy_status_to_workflow(item.status) == "waiting_user")
+    resolved_feedback_pending = sum(
+        1
+        for item in items
+        if _legacy_status_to_workflow(item.status) == "resolved" and item.user_feedback_submitted_at is None
+    )
+    open_requests = sum(
+        1
+        for item in items
+        if _legacy_status_to_workflow(item.status) not in {"resolved", "duplicate", "rejected"}
+    )
+    return WikiMyRequestsSummaryRead(
+        total_requests=len(items),
+        open_requests=open_requests,
+        unread_updates=unread_updates,
+        waiting_user_requests=waiting_user_requests,
+        resolved_feedback_pending=resolved_feedback_pending,
+    )
 
 
 @router.get("/requests", response_model=list[WikiRequestRead])
@@ -460,6 +513,18 @@ def list_wiki_request_duplicates(
     return [_serialize_duplicate_candidate(db, item, similarity_score=score, match_reason=reason) for item, score, reason in scored[:5]]
 
 
+@router.get("/requests/{request_id}/linked-duplicates", response_model=list[WikiRequestDuplicateCandidateRead])
+def list_wiki_request_linked_duplicates(
+    request_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(get_current_user),
+) -> list[WikiRequestDuplicateCandidateRead]:
+    _require_wiki_admin(current_user)
+    req = _get_request_or_404(db, request_id)
+    canonical_id = req.canonical_request_id or req.id
+    return _linked_duplicate_candidates(db, canonical_id)
+
+
 @router.get("/requests/{request_id}", response_model=WikiRequestRead)
 def get_wiki_request(
     request_id: uuid.UUID,
@@ -488,6 +553,46 @@ def mark_wiki_request_viewed(
         request_id=req.id,
         event_type="user_viewed_update",
         actor_username=current_user.username,
+    )
+    db.commit()
+    db.refresh(req)
+    return _serialize_wiki_request_read(db, req)
+
+
+@router.post("/requests/{request_id}/reopen", response_model=WikiRequestRead)
+def reopen_wiki_request(
+    request_id: uuid.UUID,
+    payload: WikiRequestReopenInput,
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(get_current_user),
+) -> WikiRequestRead:
+    req = _get_request_or_404(db, request_id)
+    if current_user.role not in ("admin", "super_admin") and req.created_by != current_user.username:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accesso negato.")
+
+    current_status = _legacy_status_to_workflow(req.status)
+    if current_status not in {"resolved", "duplicate", "rejected", "planned", "waiting_user"}:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Lo stato attuale non consente la riapertura.")
+
+    previous_canonical_id = req.canonical_request_id
+    req.status = "investigating"
+    req.canonical_request_id = None
+    req.user_feedback_rating = "not_helpful"
+    req.user_feedback_notes = payload.reason or req.user_feedback_notes
+    req.user_feedback_submitted_at = _now_utc()
+    req.user_last_viewed_at = req.user_feedback_submitted_at
+    req.last_admin_update_at = req.user_feedback_submitted_at
+    _append_request_event(
+        db,
+        request_id=req.id,
+        event_type="reopened_by_user",
+        actor_username=current_user.username,
+        from_status=current_status,
+        to_status="investigating",
+        payload={
+            "reason": payload.reason,
+            "previous_canonical_request_id": str(previous_canonical_id) if previous_canonical_id else None,
+        },
     )
     db.commit()
     db.refresh(req)
@@ -554,6 +659,43 @@ def mark_wiki_request_duplicate(
             "duplicate_request_question": req.user_question,
         },
     )
+    db.commit()
+    db.refresh(req)
+    return _serialize_wiki_request_read(db, req)
+
+
+@router.post("/requests/{request_id}/unlink-duplicate", response_model=WikiRequestRead)
+def unlink_wiki_request_duplicate(
+    request_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(get_current_user),
+) -> WikiRequestRead:
+    _require_wiki_admin(current_user)
+    req = _get_request_or_404(db, request_id)
+    if req.canonical_request_id is None:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="La richiesta non è collegata a un caso canonico.")
+
+    previous_canonical_id = req.canonical_request_id
+    current_status = _legacy_status_to_workflow(req.status)
+    req.canonical_request_id = None
+    if current_status == "duplicate":
+        req.status = "triaged"
+        _append_request_event(
+            db,
+            request_id=req.id,
+            event_type="status_changed",
+            actor_username=current_user.username,
+            from_status="duplicate",
+            to_status="triaged",
+        )
+    _append_request_event(
+        db,
+        request_id=req.id,
+        event_type="duplicate_unlinked",
+        actor_username=current_user.username,
+        payload={"previous_canonical_request_id": str(previous_canonical_id)},
+    )
+    req.last_admin_update_at = _now_utc()
     db.commit()
     db.refresh(req)
     return _serialize_wiki_request_read(db, req)

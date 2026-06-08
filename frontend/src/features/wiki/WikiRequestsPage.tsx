@@ -9,8 +9,10 @@ import {
   getWikiRequestAssignees,
   getWikiRequestDuplicates,
   getWikiRequestEvents,
+  getWikiRequestLinkedDuplicates,
   getWikiRequests,
   markWikiRequestDuplicate,
+  unlinkWikiRequestDuplicate,
   updateWikiRequest,
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
@@ -190,11 +192,14 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
   const [assignees, setAssignees] = useState<WikiRequestAssignee[]>([]);
   const [timeline, setTimeline] = useState<WikiRequestEvent[]>([]);
   const [duplicates, setDuplicates] = useState<WikiRequestDuplicateCandidate[]>([]);
+  const [linkedDuplicates, setLinkedDuplicates] = useState<WikiRequestDuplicateCandidate[]>([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [timelineLoading, setTimelineLoading] = useState(false);
   const [duplicatesLoading, setDuplicatesLoading] = useState(false);
+  const [linkedDuplicatesLoading, setLinkedDuplicatesLoading] = useState(false);
   const [markingDuplicateId, setMarkingDuplicateId] = useState<string | null>(null);
+  const [unlinkingDuplicateId, setUnlinkingDuplicateId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
@@ -363,6 +368,30 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
     void loadDuplicates();
   }, [selectedRequest]);
 
+  useEffect(() => {
+    async function loadLinkedDuplicates() {
+      if (!selectedRequest) {
+        setLinkedDuplicates([]);
+        return;
+      }
+      const token = getStoredAccessToken();
+      if (!token) {
+        setLinkedDuplicates([]);
+        return;
+      }
+      setLinkedDuplicatesLoading(true);
+      try {
+        const items = await getWikiRequestLinkedDuplicates(token, selectedRequest.id);
+        setLinkedDuplicates(items);
+      } catch {
+        setLinkedDuplicates([]);
+      } finally {
+        setLinkedDuplicatesLoading(false);
+      }
+    }
+    void loadLinkedDuplicates();
+  }, [selectedRequest]);
+
   async function handleSave() {
     if (!selectedRequest) {
       return;
@@ -414,17 +443,51 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
       setItems((current) => current.map((item) => (item.id === updated.id ? updated : item)));
       setDraftStatus(updated.status);
       setSuccessMessage("Richiesta collegata al caso canonico.");
-      const [eventsResponse, duplicatesResponse] = await Promise.all([
+      const [eventsResponse, duplicatesResponse, linkedResponse] = await Promise.all([
         getWikiRequestEvents(token, updated.id),
         getWikiRequestDuplicates(token, updated.id),
+        getWikiRequestLinkedDuplicates(token, updated.id),
       ]);
       setTimeline(eventsResponse);
       setDuplicates(duplicatesResponse);
+      setLinkedDuplicates(linkedResponse);
       setError(null);
     } catch (markError) {
       setError(markError instanceof Error ? markError.message : "Errore collegamento duplicato");
     } finally {
       setMarkingDuplicateId(null);
+    }
+  }
+
+  async function handleUnlinkDuplicate(requestId: string) {
+    const token = getStoredAccessToken();
+    if (!token) {
+      setError("Sessione non disponibile.");
+      return;
+    }
+
+    setUnlinkingDuplicateId(requestId);
+    setSuccessMessage(null);
+    try {
+      const updated = await unlinkWikiRequestDuplicate(token, requestId);
+      setItems((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      if (selectedRequest?.id === updated.id) {
+        setDraftStatus(updated.status);
+      }
+      const [eventsResponse, duplicatesResponse, linkedResponse] = await Promise.all([
+        selectedRequest ? getWikiRequestEvents(token, selectedRequest.id) : Promise.resolve([]),
+        selectedRequest ? getWikiRequestDuplicates(token, selectedRequest.id) : Promise.resolve([]),
+        selectedRequest ? getWikiRequestLinkedDuplicates(token, selectedRequest.id) : Promise.resolve([]),
+      ]);
+      setTimeline(eventsResponse);
+      setDuplicates(duplicatesResponse);
+      setLinkedDuplicates(linkedResponse);
+      setSuccessMessage("Duplicato sganciato dal caso canonico.");
+      setError(null);
+    } catch (unlinkError) {
+      setError(unlinkError instanceof Error ? unlinkError.message : "Errore nello sgancio del duplicato");
+    } finally {
+      setUnlinkingDuplicateId(null);
     }
   }
 
@@ -674,6 +737,70 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
                     </p>
                   </div>
                 ) : null}
+                <div className="rounded-2xl border border-gray-200 bg-[#fafaf7] p-3">
+                  <div className="mb-3 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">Duplicati collegati al caso canonico</p>
+                      <p className="text-xs text-gray-500">
+                        Vista del gruppo casi già accorpati sullo stesso filone.
+                      </p>
+                    </div>
+                    <span className="rounded-full border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-600">
+                      {linkedDuplicates.length} collegati
+                    </span>
+                  </div>
+                  {linkedDuplicatesLoading ? (
+                    <p className="text-sm text-gray-500">Caricamento duplicati collegati...</p>
+                  ) : linkedDuplicates.length === 0 ? (
+                    <p className="text-sm text-gray-500">Nessun duplicato collegato al caso canonico.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {linkedDuplicates.map((candidate) => (
+                        <div key={candidate.id} className="rounded-xl border border-gray-100 bg-white px-3 py-3">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="space-y-2">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <span
+                                  className={`rounded-full border px-2 py-0.5 text-xs font-medium ${statusBadgeClasses(candidate.status as WikiRequest["status"])}`}
+                                >
+                                  {statusLabel(candidate.status as WikiRequest["status"])}
+                                </span>
+                                <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs text-gray-600">
+                                  {requestTypeLabel(candidate.request_type as WikiRequest["request_type"])}
+                                </span>
+                              </div>
+                              <p className="text-sm font-medium text-gray-900">{candidate.user_question}</p>
+                              <p className="text-xs text-gray-500">
+                                {candidate.created_by || "n/d"}
+                                {candidate.assigned_to_name ? ` · assegnata a ${candidate.assigned_to_name}` : ""}
+                                {candidate.module_key ? ` · modulo ${candidate.module_key}` : ""}
+                                {candidate.page_path ? ` · ${candidate.page_path}` : ""}
+                              </p>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              <a
+                                href={`/wiki/requests/${candidate.id}`}
+                                className="rounded-full border border-gray-200 px-3 py-1.5 text-xs font-medium text-gray-700"
+                              >
+                                Apri caso
+                              </a>
+                              {candidate.id !== selectedRequest.id ? (
+                                <button
+                                  type="button"
+                                  onClick={() => void handleUnlinkDuplicate(candidate.id)}
+                                  disabled={unlinkingDuplicateId === candidate.id}
+                                  className="rounded-full border border-rose-200 bg-rose-50 px-3 py-1.5 text-xs font-medium text-rose-700 transition hover:bg-rose-100 disabled:opacity-50"
+                                >
+                                  {unlinkingDuplicateId === candidate.id ? "Sgancio..." : "Sgancia"}
+                                </button>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
                 <div className="rounded-2xl border border-gray-200 bg-[#fafaf7] p-3">
                   {duplicatesLoading ? (
                     <p className="text-sm text-gray-500">Sto cercando richieste simili...</p>

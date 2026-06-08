@@ -240,3 +240,11 @@ export interface WikiRequest {
   created_at: string;
   updated_at: string;
 }
+
+export interface WikiMyRequestsSummary {
+  total_requests: number;
+  open_requests: number;
+  unread_updates: number;
+  waiting_user_requests: number;
+  resolved_feedback_pending: number;
+}

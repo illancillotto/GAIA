@@ -238,6 +238,59 @@ def test_user_can_list_own_requests() -> None:
     assert data[0]["user_question"] == "La mia richiesta"
 
 
+def test_user_can_get_my_requests_summary() -> None:
+    _create_user("summary_owner", "viewer")
+    token = _login("summary_owner")
+
+    db = TestingSessionLocal()
+    waiting = WikiRequest(
+        id=uuid.uuid4(),
+        user_question="Aspetto risposta admin",
+        category="support_request",
+        request_type="help_request",
+        status="waiting_user",
+        priority="medium",
+        severity="medium",
+        created_by="summary_owner",
+    )
+    resolved = WikiRequest(
+        id=uuid.uuid4(),
+        user_question="Caso risolto ma senza feedback",
+        category="support_request",
+        request_type="data_issue",
+        status="resolved",
+        priority="medium",
+        severity="medium",
+        created_by="summary_owner",
+    )
+    duplicate = WikiRequest(
+        id=uuid.uuid4(),
+        user_question="Caso duplicato",
+        category="support_request",
+        request_type="bug_report",
+        status="duplicate",
+        priority="medium",
+        severity="medium",
+        created_by="summary_owner",
+    )
+    db.add_all([waiting, resolved, duplicate])
+    db.commit()
+    persisted_duplicate = db.query(WikiRequest).filter(WikiRequest.id == duplicate.id).first()
+    assert persisted_duplicate is not None
+    persisted_duplicate.last_admin_update_at = persisted_duplicate.updated_at
+    db.commit()
+    db.close()
+
+    resp = client.get("/wiki/requests/mine/summary", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["total_requests"] == 3
+    assert data["open_requests"] == 1
+    assert data["waiting_user_requests"] == 1
+    assert data["resolved_feedback_pending"] == 1
+    assert data["unread_updates"] == 1
+
+
 def test_super_admin_can_list_requests() -> None:
     _create_user("superadmin", "super_admin")
     token = _login("superadmin")
@@ -323,6 +376,47 @@ def test_admin_can_list_duplicate_candidates() -> None:
     assert data[0]["id"] == str(duplicate_id)
     assert data[0]["status"] == "triaged"
     assert data[0]["similarity_score"] >= 0.45
+
+
+def test_admin_can_list_linked_duplicates_for_canonical_case() -> None:
+    _create_user("admin_linked_duplicates", "admin")
+    token = _login("admin_linked_duplicates")
+    canonical_id = uuid.uuid4()
+    duplicate_id = uuid.uuid4()
+
+    db = TestingSessionLocal()
+    db.add(WikiRequest(
+        id=canonical_id,
+        user_question="Caso canonico rete",
+        category="bug_report",
+        request_type="bug_report",
+        status="investigating",
+        priority="high",
+        severity="high",
+        created_by="alice",
+        module_key="rete",
+    ))
+    db.add(WikiRequest(
+        id=duplicate_id,
+        user_question="Stesso errore rete",
+        category="support_request",
+        request_type="bug_report",
+        status="duplicate",
+        priority="medium",
+        severity="high",
+        created_by="mario",
+        module_key="rete",
+        canonical_request_id=canonical_id,
+    ))
+    db.commit()
+    db.close()
+
+    resp = client.get(f"/wiki/requests/{canonical_id}/linked-duplicates", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert len(data) == 1
+    assert data[0]["id"] == str(duplicate_id)
+    assert data[0]["match_reason"] == "collegata a questo caso canonico"
 
 
 def test_viewer_cannot_list_requests() -> None:
@@ -477,6 +571,50 @@ def test_admin_can_mark_request_as_duplicate_of_canonical_case() -> None:
     assert "status_changed" in event_types
 
 
+def test_admin_can_unlink_duplicate_request() -> None:
+    _create_user("admin_unlink_duplicate", "admin")
+    token = _login("admin_unlink_duplicate")
+    req_id = uuid.uuid4()
+    canonical_id = uuid.uuid4()
+
+    db = TestingSessionLocal()
+    db.add(WikiRequest(
+        id=req_id,
+        user_question="Caso duplicato da sganciare",
+        category="support_request",
+        request_type="bug_report",
+        status="duplicate",
+        priority="medium",
+        severity="high",
+        created_by="alice",
+        canonical_request_id=canonical_id,
+    ))
+    db.add(WikiRequest(
+        id=canonical_id,
+        user_question="Caso canonico",
+        category="bug_report",
+        request_type="bug_report",
+        status="investigating",
+        priority="high",
+        severity="high",
+        created_by="mario",
+    ))
+    db.commit()
+    db.close()
+
+    resp = client.post(f"/wiki/requests/{req_id}/unlink-duplicate", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["status"] == "triaged"
+    assert data["canonical_request_id"] is None
+
+    events_resp = client.get(f"/wiki/requests/{req_id}/events", headers={"Authorization": f"Bearer {token}"})
+    assert events_resp.status_code == 200
+    event_types = [item["event_type"] for item in events_resp.json()]
+    assert "duplicate_unlinked" in event_types
+    assert "status_changed" in event_types
+
+
 def test_user_can_mark_own_request_as_viewed() -> None:
     _create_user("viewer_mark_viewed", "viewer")
     token = _login("viewer_mark_viewed")
@@ -544,6 +682,47 @@ def test_user_can_submit_feedback_on_own_request() -> None:
     events_resp = client.get(f"/wiki/requests/{req_id}/events", headers={"Authorization": f"Bearer {admin_token}"})
     assert events_resp.status_code == 200
     assert "user_feedback_submitted" in [item["event_type"] for item in events_resp.json()]
+
+
+def test_user_can_reopen_own_request() -> None:
+    _create_user("viewer_reopen", "viewer")
+    token = _login("viewer_reopen")
+    req_id = uuid.uuid4()
+    canonical_id = uuid.uuid4()
+
+    db = TestingSessionLocal()
+    db.add(WikiRequest(
+        id=req_id,
+        user_question="Il problema persiste",
+        category="support_request",
+        request_type="bug_report",
+        status="duplicate",
+        priority="medium",
+        severity="medium",
+        created_by="viewer_reopen",
+        canonical_request_id=canonical_id,
+    ))
+    db.commit()
+    db.close()
+
+    resp = client.post(
+        f"/wiki/requests/{req_id}/reopen",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"reason": "Il caso non corrisponde al mio problema reale."},
+    )
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["status"] == "investigating"
+    assert data["canonical_request_id"] is None
+    assert data["user_feedback_rating"] == "not_helpful"
+    assert data["user_feedback_notes"] == "Il caso non corrisponde al mio problema reale."
+
+    admin = _create_user("admin_reopen_check", "admin")
+    assert admin.username == "admin_reopen_check"
+    admin_token = _login("admin_reopen_check")
+    events_resp = client.get(f"/wiki/requests/{req_id}/events", headers={"Authorization": f"Bearer {admin_token}"})
+    assert events_resp.status_code == 200
+    assert "reopened_by_user" in [item["event_type"] for item in events_resp.json()]
 
 
 def test_update_request_rejects_unknown_assignee() -> None:
