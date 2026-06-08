@@ -6,10 +6,11 @@ import { FilterPillGroup } from "@/components/network/filter-pill-group";
 import { EmptyState } from "@/components/ui/empty-state";
 import { MetricCard } from "@/components/ui/metric-card";
 import { SearchIcon } from "@/components/ui/icons";
-import { getWikiSupportAnalyticsSeries, getWikiSupportAnalyticsSummary } from "@/lib/api";
+import { getWikiSupportAnalyticsClusters, getWikiSupportAnalyticsSeries, getWikiSupportAnalyticsSummary } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import type {
   WikiSupportAnalyticsCount,
+  WikiSupportCluster,
   WikiSupportAnalyticsSeriesPoint,
   WikiSupportAnalyticsSummary,
 } from "@/types/api";
@@ -133,6 +134,7 @@ export function WikiSupportAnalyticsPage() {
   const [days, setDays] = useState<(typeof DAY_OPTIONS)[number]>(30);
   const [summary, setSummary] = useState<WikiSupportAnalyticsSummary | null>(null);
   const [series, setSeries] = useState<WikiSupportAnalyticsSeriesPoint[]>([]);
+  const [clusters, setClusters] = useState<WikiSupportCluster[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -146,16 +148,19 @@ export function WikiSupportAnalyticsPage() {
       }
       setLoading(true);
       try {
-        const [summaryResponse, seriesResponse] = await Promise.all([
+        const [summaryResponse, seriesResponse, clustersResponse] = await Promise.all([
           getWikiSupportAnalyticsSummary(token, { days }),
           getWikiSupportAnalyticsSeries(token, { days }),
+          getWikiSupportAnalyticsClusters(token, { days, limit: 8 }),
         ]);
         setSummary(summaryResponse);
         setSeries(seriesResponse.items);
+        setClusters(clustersResponse.items);
         setError(null);
       } catch (loadError) {
         setSummary(null);
         setSeries([]);
+        setClusters([]);
         setError(loadError instanceof Error ? loadError.message : "Errore caricamento analytics supporto");
       } finally {
         setLoading(false);
@@ -171,6 +176,8 @@ export function WikiSupportAnalyticsPage() {
   const dominantModule = humanizeModule(summary?.top_modules[0]?.key);
   const dominantType = humanizeRequestType(summary?.top_request_types[0]?.key);
   const dominantImpact = humanizeImpact(summary?.top_impact_scopes[0]?.key);
+  const duplicatePressure = formatPercent(summary?.duplicate_requests ?? 0, summary?.total_requests ?? 0);
+  const noMatchRate = formatPercent(summary?.no_match_origin_requests ?? 0, summary?.total_requests ?? 0);
 
   if (error && !loading && !summary) {
     return <EmptyState icon={SearchIcon} title="Analytics supporto non disponibili" description={error} />;
@@ -230,6 +237,7 @@ export function WikiSupportAnalyticsPage() {
                 <p>Modulo dominante: <span className="font-semibold">{dominantModule}</span></p>
                 <p>Richiesta dominante: <span className="font-semibold">{dominantType}</span></p>
                 <p>Impatto prevalente: <span className="font-semibold">{dominantImpact}</span></p>
+                <p>Duplicate pressure: <span className="font-semibold">{duplicatePressure}</span></p>
                 <p>Snapshot più recente: <span className="font-semibold">{latest?.period_label ?? "n/d"}</span></p>
               </div>
             </div>
@@ -266,6 +274,10 @@ export function WikiSupportAnalyticsPage() {
         <MetricCard label="Bug / anomalie" value={(summary?.bug_reports ?? 0).toLocaleString("it-IT")} sub="malfunzionamenti segnalati" />
         <MetricCard label="Accessi / dati" value={((summary?.access_issues ?? 0) + (summary?.data_issues ?? 0)).toLocaleString("it-IT")} sub="frizioni operative" />
         <MetricCard label="Help request" value={(summary?.help_requests ?? 0).toLocaleString("it-IT")} sub="richieste di supporto" />
+        <MetricCard label="Duplicati" value={(summary?.duplicate_requests ?? 0).toLocaleString("it-IT")} sub={`${summary?.canonical_cases ?? 0} casi canonici`} />
+        <MetricCard label="Riaperture" value={(summary?.reopened_requests ?? 0).toLocaleString("it-IT")} sub="feedback non risolto" />
+        <MetricCard label="Origine no match" value={(summary?.no_match_origin_requests ?? 0).toLocaleString("it-IT")} sub={`${noMatchRate} del totale`} variant="warning" />
+        <MetricCard label="Origine guardrail" value={(summary?.guardrail_origin_requests ?? 0).toLocaleString("it-IT")} sub="richieste bloccate dal router" variant="warning" />
       </section>
 
       <section className="grid gap-4 xl:grid-cols-3">
@@ -284,9 +296,68 @@ export function WikiSupportAnalyticsPage() {
         <TopList title="Top severità" items={summary?.top_severities ?? []} formatter={humanizeSeverity} />
         <TopList title="Top impatto" items={summary?.top_impact_scopes ?? []} formatter={humanizeImpact} />
         <TopList title="Top priorità" items={summary?.top_priorities ?? []} />
+        <TopList title="Canali di origine" items={summary?.top_source_channels ?? []} />
         <TopList title="Top assegnatari" items={summary?.top_assignees ?? []} />
         <TopList title="Top autori" items={summary?.top_creators ?? []} />
         <TopList title="Pagine più segnalate" items={summary?.top_pages ?? []} />
+      </section>
+
+      <section className="rounded-[28px] border border-[#e3e6dc] bg-white p-5 shadow-sm">
+        <div className="space-y-2">
+          <p className="text-sm font-semibold text-[#223d30]">Cluster richieste</p>
+          <p className="text-sm text-[#5f6e67]">
+            Raggruppamento pragmatico per deduplica, modulo, pagina e lessico ricorrente. Serve a capire dove il Wiki e il prodotto generano attrito ripetuto.
+          </p>
+        </div>
+        <div className="mt-4 grid gap-3 xl:grid-cols-2">
+          {clusters.length > 0 ? (
+            clusters.map((cluster) => (
+              <article key={cluster.cluster_key} className="rounded-2xl border border-gray-200 bg-[#fafbf8] p-4 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-[#1D4E35]">{cluster.title}</p>
+                    <p className="mt-1 text-xs text-gray-500">
+                      {humanizeRequestType(cluster.request_type)}
+                      {cluster.module_key ? ` · ${humanizeModule(cluster.module_key)}` : ""}
+                      {cluster.page_path ? ` · ${cluster.page_path}` : ""}
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-gray-200 bg-white px-2 py-1 text-[11px] text-gray-600">
+                    {cluster.total_requests} casi
+                  </span>
+                </div>
+                <div className="mt-4 grid gap-3 sm:grid-cols-4">
+                  <div className="rounded-xl border border-gray-200 bg-white px-3 py-3">
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-gray-400">Aperti</p>
+                    <p className="mt-2 text-xl font-semibold text-gray-900">{cluster.open_requests}</p>
+                  </div>
+                  <div className="rounded-xl border border-gray-200 bg-white px-3 py-3">
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-gray-400">Duplicati</p>
+                    <p className="mt-2 text-xl font-semibold text-gray-900">{cluster.duplicate_requests}</p>
+                  </div>
+                  <div className="rounded-xl border border-gray-200 bg-white px-3 py-3">
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-gray-400">Utenti</p>
+                    <p className="mt-2 text-xl font-semibold text-gray-900">{cluster.affected_users}</p>
+                  </div>
+                  <div className="rounded-xl border border-gray-200 bg-white px-3 py-3">
+                    <p className="text-[11px] uppercase tracking-[0.18em] text-gray-400">Canonici</p>
+                    <p className="mt-2 text-xl font-semibold text-gray-900">{cluster.canonical_case_count}</p>
+                  </div>
+                </div>
+                <div className="mt-4 space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Esempi reali</p>
+                  {cluster.sample_questions.map((question) => (
+                    <div key={`${cluster.cluster_key}-${question}`} className="rounded-xl border border-gray-100 bg-white px-3 py-2 text-sm text-gray-700">
+                      {question}
+                    </div>
+                  ))}
+                </div>
+              </article>
+            ))
+          ) : (
+            <EmptyState icon={SearchIcon} title="Cluster non disponibili" description="Non ci sono abbastanza richieste per costruire gruppi utili nella finestra selezionata." />
+          )}
+        </div>
       </section>
     </div>
   );

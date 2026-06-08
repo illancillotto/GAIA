@@ -18,7 +18,7 @@ from app.core.security import hash_password
 from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
-from app.modules.wiki.models import WikiRequest, WikiRequestEvent
+from app.modules.wiki.models import WikiRequest, WikiRequestEvent, WikiToolAuditLog
 
 
 engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
@@ -947,6 +947,165 @@ def test_admin_can_read_support_analytics_summary_and_series() -> None:
     assert series_payload["days"] == 30
     assert len(series_payload["items"]) >= 1
     assert series_payload["items"][0]["created_count"] >= 1
+
+
+def test_support_analytics_summary_includes_origin_signals_and_duplicate_pressure() -> None:
+    _create_user("supportadmin_signals", "admin")
+    token = _login("supportadmin_signals")
+    conversation_id = uuid.uuid4()
+    canonical_id = uuid.uuid4()
+    duplicate_id = uuid.uuid4()
+    reopened_id = uuid.uuid4()
+
+    db = TestingSessionLocal()
+    db.add_all(
+        [
+            WikiRequest(
+                id=canonical_id,
+                user_question="Errore modulo rete in dashboard",
+                category="bug_report",
+                request_type="bug_report",
+                status="investigating",
+                priority="high",
+                severity="high",
+                created_by="alice",
+                module_key="rete",
+                page_path="/network",
+                source_channel="widget",
+                conversation_id=conversation_id,
+            ),
+            WikiRequest(
+                id=duplicate_id,
+                user_question="Stesso errore dashboard rete",
+                category="support_request",
+                request_type="bug_report",
+                status="duplicate",
+                priority="medium",
+                severity="high",
+                created_by="bob",
+                module_key="rete",
+                page_path="/network",
+                source_channel="wiki_page",
+                canonical_request_id=canonical_id,
+            ),
+            WikiRequest(
+                id=reopened_id,
+                user_question="Non riesco ancora ad accedere al modulo",
+                category="support_request",
+                request_type="access_issue",
+                status="investigating",
+                priority="urgent",
+                severity="critical",
+                created_by="carol",
+                module_key="wiki",
+                source_channel="support_page",
+            ),
+        ]
+    )
+    db.add(
+        WikiToolAuditLog(
+            id=uuid.uuid4(),
+            username="alice",
+            role="viewer",
+            intent="question",
+            mode="docs_only",
+            tool_name="guardrail",
+            module_key="rete",
+            conversation_id=conversation_id,
+            question_hash="hash-1",
+            question_preview="errore rete",
+            success=1,
+            found=0,
+            latency_ms=120,
+            docs_source_count=0,
+            evidence_count=0,
+        )
+    )
+    db.add(
+        WikiRequestEvent(
+            id=uuid.uuid4(),
+            request_id=reopened_id,
+            event_type="reopened_by_user",
+            actor_username="carol",
+            from_status="resolved",
+            to_status="investigating",
+        )
+    )
+    db.commit()
+    db.close()
+
+    summary_resp = client.get("/wiki/support/analytics/summary?days=30", headers={"Authorization": f"Bearer {token}"})
+    assert summary_resp.status_code == 200, summary_resp.text
+    summary = summary_resp.json()
+    assert summary["duplicate_requests"] == 1
+    assert summary["canonical_cases"] == 1
+    assert summary["reopened_requests"] == 1
+    assert summary["no_match_origin_requests"] == 1
+    assert summary["guardrail_origin_requests"] == 1
+    assert summary["docs_only_origin_requests"] == 1
+    assert any(item["key"] == "widget" for item in summary["top_source_channels"])
+
+
+def test_admin_can_read_support_analytics_clusters() -> None:
+    _create_user("supportadmin_clusters", "admin")
+    token = _login("supportadmin_clusters")
+    canonical_id = uuid.uuid4()
+
+    db = TestingSessionLocal()
+    db.add_all(
+        [
+            WikiRequest(
+                id=canonical_id,
+                user_question="La pagina rete non si apre",
+                category="bug_report",
+                request_type="bug_report",
+                status="investigating",
+                priority="high",
+                severity="high",
+                created_by="alice",
+                module_key="rete",
+                page_path="/network/devices",
+            ),
+            WikiRequest(
+                id=uuid.uuid4(),
+                user_question="Errore 500 nella pagina rete dispositivi",
+                category="support_request",
+                request_type="bug_report",
+                status="duplicate",
+                priority="medium",
+                severity="high",
+                created_by="bob",
+                module_key="rete",
+                page_path="/network/devices",
+                canonical_request_id=canonical_id,
+            ),
+            WikiRequest(
+                id=uuid.uuid4(),
+                user_question="Rete dispositivi: schermata bianca",
+                category="support_request",
+                request_type="bug_report",
+                status="new",
+                priority="medium",
+                severity="medium",
+                created_by="carol",
+                module_key="rete",
+                page_path="/network/devices",
+            ),
+        ]
+    )
+    db.commit()
+    db.close()
+
+    resp = client.get("/wiki/support/analytics/clusters?days=30&limit=5", headers={"Authorization": f"Bearer {token}"})
+    assert resp.status_code == 200, resp.text
+    payload = resp.json()
+    assert payload["days"] == 30
+    assert len(payload["items"]) >= 1
+    top_cluster = payload["items"][0]
+    assert top_cluster["total_requests"] >= 2
+    assert top_cluster["duplicate_requests"] >= 1
+    assert top_cluster["affected_users"] >= 2
+    assert len(top_cluster["sample_questions"]) >= 1
 
 
 def test_viewer_cannot_read_support_analytics() -> None:

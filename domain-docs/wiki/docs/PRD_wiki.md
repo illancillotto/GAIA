@@ -223,6 +223,12 @@ Il modulo **Wiki Agent** aggiunge a GAIA un assistente LLM sempre disponibile, c
   - richieste risolte
   - urgenze
   - severità alte / critiche
+  - richieste duplicate
+  - casi canonici
+  - richieste riaperte dall’utente
+  - richieste nate da `no_match`
+  - richieste nate da `guardrail`
+  - richieste nate in `docs_only`
 - Breakdown principali:
   - top `request_type`
   - top moduli GAIA coinvolti
@@ -231,6 +237,7 @@ Il modulo **Wiki Agent** aggiunge a GAIA un assistente LLM sempre disponibile, c
   - top pagine applicative
   - top assegnatari e autori
   - top `impact_scope`
+  - top `source_channel`
 - Serie storiche:
   - nuove richieste per giorno
   - casi risolti per giorno
@@ -238,6 +245,28 @@ Il modulo **Wiki Agent** aggiunge a GAIA un assistente LLM sempre disponibile, c
   - feature richieste nel tempo
   - bug / anomalie nel tempo
   - urgenze nel tempo
+
+### 4.14 Cluster supporto e duplicate pressure
+
+- La dashboard `/wiki/support/analytics` espone anche cluster pragmatici di richieste simili.
+- Il clustering non usa un modello ML esterno in questa milestone:
+  - privilegia il `canonical_request_id` quando esiste
+  - altrimenti usa una chiave semantica leggera basata su:
+    - `request_type`
+    - `module_key`
+    - `page_path`
+    - token significativi del testo utente
+- Ogni cluster mostra:
+  - volume totale casi
+  - casi ancora aperti
+  - numero duplicati
+  - utenti impattati
+  - numero casi canonici
+  - esempi reali di richieste nel gruppo
+- Obiettivo:
+  - capire dove il prodotto genera frizioni ripetute
+  - stimare la `duplicate pressure`
+  - evidenziare aree dove il Wiki non risolve da solo il bisogno utente
 
 ### 4.12 Deduplica e caso canonico
 

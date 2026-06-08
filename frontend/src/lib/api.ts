@@ -167,6 +167,7 @@ import type {
   SyncRun,
   WikiRequest,
   WikiRequestAssignee,
+  WikiSupportClustersResponse,
   WikiSupportAnalyticsSeriesResponse,
   WikiSupportAnalyticsSummary,
   WikiRequestDuplicateCandidate,
@@ -1390,6 +1391,25 @@ export async function getWikiSupportAnalyticsSeries(
   }
   const suffix = query.toString() ? `?${query.toString()}` : "";
   return request<WikiSupportAnalyticsSeriesResponse>(`/wiki/support/analytics/series${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getWikiSupportAnalyticsClusters(
+  token: string,
+  params: { days?: number | null; limit?: number | null } = {},
+): Promise<WikiSupportClustersResponse> {
+  const query = new URLSearchParams();
+  if (params.days != null) {
+    query.set("days", String(params.days));
+  }
+  if (params.limit != null) {
+    query.set("limit", String(params.limit));
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<WikiSupportClustersResponse>(`/wiki/support/analytics/clusters${suffix}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },

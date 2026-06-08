@@ -198,6 +198,12 @@ class WikiSupportAnalyticsSummaryRead(BaseModel):
     access_issues: int
     data_issues: int
     help_requests: int
+    duplicate_requests: int = 0
+    canonical_cases: int = 0
+    reopened_requests: int = 0
+    no_match_origin_requests: int = 0
+    guardrail_origin_requests: int = 0
+    docs_only_origin_requests: int = 0
     top_request_types: list[WikiSupportAnalyticsCountRead] = Field(default_factory=list)
     top_modules: list[WikiSupportAnalyticsCountRead] = Field(default_factory=list)
     top_statuses: list[WikiSupportAnalyticsCountRead] = Field(default_factory=list)
@@ -207,6 +213,27 @@ class WikiSupportAnalyticsSummaryRead(BaseModel):
     top_assignees: list[WikiSupportAnalyticsCountRead] = Field(default_factory=list)
     top_creators: list[WikiSupportAnalyticsCountRead] = Field(default_factory=list)
     top_impact_scopes: list[WikiSupportAnalyticsCountRead] = Field(default_factory=list)
+    top_source_channels: list[WikiSupportAnalyticsCountRead] = Field(default_factory=list)
+
+
+class WikiSupportClusterRead(BaseModel):
+    cluster_key: str
+    title: str
+    request_type: str
+    module_key: str | None = None
+    page_path: str | None = None
+    total_requests: int
+    open_requests: int
+    duplicate_requests: int
+    affected_users: int
+    canonical_case_count: int = 0
+    latest_created_at: datetime
+    sample_questions: list[str] = Field(default_factory=list)
+
+
+class WikiSupportClustersResponse(BaseModel):
+    days: int
+    items: list[WikiSupportClusterRead] = Field(default_factory=list)
 
 
 class WikiSupportAnalyticsSeriesPointRead(BaseModel):

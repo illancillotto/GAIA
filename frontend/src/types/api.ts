@@ -846,6 +846,12 @@ export type WikiSupportAnalyticsSummary = {
   access_issues: number;
   data_issues: number;
   help_requests: number;
+  duplicate_requests: number;
+  canonical_cases: number;
+  reopened_requests: number;
+  no_match_origin_requests: number;
+  guardrail_origin_requests: number;
+  docs_only_origin_requests: number;
   top_request_types: WikiSupportAnalyticsCount[];
   top_modules: WikiSupportAnalyticsCount[];
   top_statuses: WikiSupportAnalyticsCount[];
@@ -855,6 +861,27 @@ export type WikiSupportAnalyticsSummary = {
   top_assignees: WikiSupportAnalyticsCount[];
   top_creators: WikiSupportAnalyticsCount[];
   top_impact_scopes: WikiSupportAnalyticsCount[];
+  top_source_channels: WikiSupportAnalyticsCount[];
+};
+
+export type WikiSupportCluster = {
+  cluster_key: string;
+  title: string;
+  request_type: string;
+  module_key: string | null;
+  page_path: string | null;
+  total_requests: number;
+  open_requests: number;
+  duplicate_requests: number;
+  affected_users: number;
+  canonical_case_count: number;
+  latest_created_at: string;
+  sample_questions: string[];
+};
+
+export type WikiSupportClustersResponse = {
+  days: number;
+  items: WikiSupportCluster[];
 };
 
 export type WikiSupportAnalyticsSeriesPoint = {

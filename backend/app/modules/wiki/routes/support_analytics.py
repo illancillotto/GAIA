@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import re
+import uuid
 from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, Query, status
@@ -9,15 +11,23 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
-from app.modules.wiki.models import WikiRequest
+from app.modules.wiki.models import WikiRequest, WikiRequestEvent, WikiToolAuditLog
 from app.modules.wiki.schemas import (
     WikiSupportAnalyticsCountRead,
+    WikiSupportClusterRead,
+    WikiSupportClustersResponse,
     WikiSupportAnalyticsSeriesPointRead,
     WikiSupportAnalyticsSeriesResponse,
     WikiSupportAnalyticsSummaryRead,
 )
 
 router = APIRouter(tags=["Wiki"])
+_TOKEN_SPLIT_RE = re.compile(r"[^a-z0-9]+")
+_STOPWORDS = {
+    "a", "ad", "al", "alla", "allo", "anche", "che", "con", "come", "da", "dei", "del", "della", "delle",
+    "di", "e", "ed", "gli", "ho", "il", "in", "la", "le", "lo", "ma", "mi", "nei", "nel", "nella", "non",
+    "per", "piu", "su", "the", "to", "un", "una", "uno",
+}
 
 
 def _require_wiki_admin(current_user: ApplicationUser) -> None:
@@ -25,6 +35,158 @@ def _require_wiki_admin(current_user: ApplicationUser) -> None:
         from fastapi import HTTPException
 
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accesso negato.")
+
+
+def _normalize(value: str | None) -> str:
+    normalized = _TOKEN_SPLIT_RE.sub(" ", (value or "").lower()).strip()
+    return " ".join(normalized.split())
+
+
+def _tokens(*parts: str | None) -> list[str]:
+    tokens: list[str] = []
+    seen: set[str] = set()
+    for part in parts:
+        normalized = _normalize(part)
+        for token in normalized.split():
+            if len(token) < 3 or token in _STOPWORDS or token in seen:
+                continue
+            seen.add(token)
+            tokens.append(token)
+    return tokens
+
+
+def _semantic_cluster_key(request: WikiRequest, canonical_ids: set[uuid.UUID]) -> str:
+    if request.canonical_request_id:
+        return f"canonical:{request.canonical_request_id}"
+    if request.id in canonical_ids:
+        return f"canonical:{request.id}"
+    base_tokens = _tokens(request.user_question, request.desired_outcome, request.observed_behavior, request.expected_behavior)[:4]
+    module_key = _normalize(request.module_key) or "unknown"
+    page_key = _normalize(request.page_path) or "unknown"
+    token_key = "-".join(base_tokens) or "generic"
+    return f"semantic:{request.request_type}:{module_key}:{page_key}:{token_key}"
+
+
+def _cluster_title(requests: list[WikiRequest]) -> str:
+    first = requests[0]
+    module = first.module_key or "modulo non dichiarato"
+    request_type = first.request_type.replace("_", " ")
+    page = first.page_path or "contesto generico"
+    tokens = _tokens(first.user_question, first.desired_outcome, first.observed_behavior, first.expected_behavior)[:3]
+    if tokens:
+        return f"{module} · {request_type} · {' / '.join(tokens)}"
+    return f"{module} · {request_type} · {page}"
+
+
+def _support_window_requests(db: Session, *, start_date: date) -> list[WikiRequest]:
+    return (
+        db.query(WikiRequest)
+        .filter(func.date(WikiRequest.created_at) >= start_date)
+        .order_by(WikiRequest.created_at.desc())
+        .all()
+    )
+
+
+def _origin_signal_counts(db: Session, requests: list[WikiRequest]) -> tuple[int, int, int]:
+    conversation_ids = [item.conversation_id for item in requests if item.conversation_id]
+    if not conversation_ids:
+        return 0, 0, 0
+
+    rows = (
+        db.query(
+            WikiToolAuditLog.conversation_id.label("conversation_id"),
+            func.max(case((WikiToolAuditLog.found == 0, 1), else_=0)).label("has_no_match"),
+            func.max(case((WikiToolAuditLog.tool_name == "guardrail", 1), else_=0)).label("has_guardrail"),
+            func.max(case((WikiToolAuditLog.mode == "docs_only", 1), else_=0)).label("has_docs_only"),
+        )
+        .filter(WikiToolAuditLog.conversation_id.in_(conversation_ids))
+        .group_by(WikiToolAuditLog.conversation_id)
+        .all()
+    )
+    by_conversation = {
+        row.conversation_id: (
+            int(row.has_no_match or 0),
+            int(row.has_guardrail or 0),
+            int(row.has_docs_only or 0),
+        )
+        for row in rows
+    }
+    no_match_count = 0
+    guardrail_count = 0
+    docs_only_count = 0
+    seen_no_match: set[uuid.UUID] = set()
+    seen_guardrail: set[uuid.UUID] = set()
+    seen_docs: set[uuid.UUID] = set()
+    for item in requests:
+        if not item.conversation_id or item.conversation_id not in by_conversation:
+            continue
+        has_no_match, has_guardrail, has_docs_only = by_conversation[item.conversation_id]
+        if has_no_match and item.id not in seen_no_match:
+            no_match_count += 1
+            seen_no_match.add(item.id)
+        if has_guardrail and item.id not in seen_guardrail:
+            guardrail_count += 1
+            seen_guardrail.add(item.id)
+        if has_docs_only and item.id not in seen_docs:
+            docs_only_count += 1
+            seen_docs.add(item.id)
+    return no_match_count, guardrail_count, docs_only_count
+
+
+def _reopened_requests_count(db: Session, requests: list[WikiRequest]) -> int:
+    request_ids = [item.id for item in requests]
+    if not request_ids:
+        return 0
+    rows = (
+        db.query(func.count(func.distinct(WikiRequestEvent.request_id)))
+        .filter(WikiRequestEvent.request_id.in_(request_ids))
+        .filter(WikiRequestEvent.event_type == "reopened_by_user")
+        .scalar()
+    )
+    return int(rows or 0)
+
+
+def _cluster_requests(requests: list[WikiRequest], *, limit: int) -> list[WikiSupportClusterRead]:
+    canonical_ids = {item.canonical_request_id for item in requests if item.canonical_request_id is not None}
+    buckets: dict[str, list[WikiRequest]] = {}
+    for item in requests:
+        key = _semantic_cluster_key(item, canonical_ids=canonical_ids)
+        buckets.setdefault(key, []).append(item)
+
+    clusters: list[WikiSupportClusterRead] = []
+    for key, items in buckets.items():
+        ordered = sorted(items, key=lambda item: item.created_at, reverse=True)
+        open_requests = sum(1 for item in items if item.status not in {"resolved", "duplicate", "rejected"})
+        duplicate_requests = sum(1 for item in items if item.status == "duplicate")
+        affected_users = len({item.created_by for item in items if item.created_by})
+        canonical_case_count = sum(1 for item in items if item.id in canonical_ids and item.canonical_request_id is None)
+        first = ordered[0]
+        clusters.append(
+            WikiSupportClusterRead(
+                cluster_key=key,
+                title=_cluster_title(ordered),
+                request_type=first.request_type,
+                module_key=first.module_key,
+                page_path=first.page_path,
+                total_requests=len(items),
+                open_requests=open_requests,
+                duplicate_requests=duplicate_requests,
+                affected_users=affected_users,
+                canonical_case_count=canonical_case_count,
+                latest_created_at=first.created_at,
+                sample_questions=[item.user_question for item in ordered[:3]],
+            )
+        )
+    clusters.sort(
+        key=lambda item: (
+            item.total_requests,
+            item.duplicate_requests,
+            item.affected_users,
+            item.latest_created_at,
+        ),
+        reverse=True,
+    )
+    return clusters[:limit]
 
 
 def _count_rows(
@@ -59,6 +221,7 @@ def get_wiki_support_analytics_summary(
     _require_wiki_admin(current_user)
 
     start_date = date.today() - timedelta(days=days - 1)
+    window_requests = _support_window_requests(db, start_date=start_date)
 
     total_requests = (
         db.query(func.count(WikiRequest.id))
@@ -112,6 +275,19 @@ def get_wiki_support_analytics_summary(
             or 0
         )
 
+    duplicate_requests = (
+        db.query(func.count(WikiRequest.id))
+        .filter(func.date(WikiRequest.created_at) >= start_date)
+        .filter(WikiRequest.status == "duplicate")
+        .scalar()
+        or 0
+    )
+    canonical_ids = {item.canonical_request_id for item in window_requests if item.canonical_request_id}
+    canonical_ids.discard(None)
+    canonical_cases = sum(1 for item in window_requests if item.id in canonical_ids)
+    reopened_requests = _reopened_requests_count(db, window_requests)
+    no_match_origin_requests, guardrail_origin_requests, docs_only_origin_requests = _origin_signal_counts(db, window_requests)
+
     return WikiSupportAnalyticsSummaryRead(
         total_requests=int(total_requests),
         open_requests=int(open_requests),
@@ -124,6 +300,12 @@ def get_wiki_support_analytics_summary(
         access_issues=int(_count_type("access_issue")),
         data_issues=int(_count_type("data_issue")),
         help_requests=int(_count_type("help_request")),
+        duplicate_requests=int(duplicate_requests),
+        canonical_cases=int(canonical_cases),
+        reopened_requests=int(reopened_requests),
+        no_match_origin_requests=int(no_match_origin_requests),
+        guardrail_origin_requests=int(guardrail_origin_requests),
+        docs_only_origin_requests=int(docs_only_origin_requests),
         top_request_types=_count_rows(db, start_date=start_date, column=WikiRequest.request_type, include_null_label="n/d"),
         top_modules=_count_rows(db, start_date=start_date, column=WikiRequest.module_key, include_null_label="Modulo non dichiarato"),
         top_statuses=_count_rows(db, start_date=start_date, column=WikiRequest.status, include_null_label="n/d"),
@@ -133,6 +315,7 @@ def get_wiki_support_analytics_summary(
         top_assignees=_count_rows(db, start_date=start_date, column=WikiRequest.assigned_to, include_null_label="Non assegnata"),
         top_creators=_count_rows(db, start_date=start_date, column=WikiRequest.created_by, include_null_label="Autore non dichiarato"),
         top_impact_scopes=_count_rows(db, start_date=start_date, column=WikiRequest.impact_scope, include_null_label="Impatto non dichiarato"),
+        top_source_channels=_count_rows(db, start_date=start_date, column=WikiRequest.source_channel, include_null_label="Canale non dichiarato"),
     )
 
 
@@ -185,3 +368,17 @@ def get_wiki_support_analytics_series(
             )
         )
     return WikiSupportAnalyticsSeriesResponse(days=days, items=items)
+
+
+@router.get("/support/analytics/clusters", response_model=WikiSupportClustersResponse)
+def get_wiki_support_analytics_clusters(
+    days: int = Query(30, ge=7, le=365),
+    limit: int = Query(8, ge=1, le=20),
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(get_current_user),
+) -> WikiSupportClustersResponse:
+    _require_wiki_admin(current_user)
+    start_date = date.today() - timedelta(days=days - 1)
+    requests = _support_window_requests(db, start_date=start_date)
+    items = _cluster_requests(requests, limit=limit)
+    return WikiSupportClustersResponse(days=days, items=items)
