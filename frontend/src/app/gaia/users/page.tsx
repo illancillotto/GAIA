@@ -68,6 +68,7 @@ const emptyFormState: UserFormState = {
 const roleOptions = [
   { value: "viewer", label: "Viewer" },
   { value: "reviewer", label: "Reviewer" },
+  { value: "hr_manager", label: "HR Manager" },
   { value: "admin", label: "Admin" },
   { value: "super_admin", label: "Super Admin" },
 ];
@@ -128,6 +129,7 @@ export default function GaiaUsersPage() {
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const deferredSearchTerm = useDeferredValue(searchTerm);
   const selectedUser = users.find((user) => user.id === selectedUserId) ?? null;
@@ -156,6 +158,8 @@ export default function GaiaUsersPage() {
   }, []);
 
   useEffect(() => {
+    setShowPassword(false);
+
     if (!selectedUser) {
       setFormState(emptyFormState);
       return;
@@ -496,13 +500,23 @@ export default function GaiaUsersPage() {
 
             <label className="block text-sm font-medium text-gray-700">
               {isEditMode ? "Nuova password" : "Password"}
-              <input
-                className="form-control mt-1"
-                type="password"
-                value={formState.password}
-                onChange={(event) => updateFormState("password", event.target.value)}
-                placeholder={isEditMode ? "Lascia vuoto per non cambiarla" : "Minimo 8 caratteri"}
-              />
+              <div className="relative mt-1">
+                <input
+                  className="form-control pr-10"
+                  type={showPassword ? "text" : "password"}
+                  value={formState.password}
+                  onChange={(event) => updateFormState("password", event.target.value)}
+                  placeholder={isEditMode ? "Lascia vuoto per non cambiarla" : "Minimo 8 caratteri"}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((current) => !current)}
+                  aria-label={showPassword ? "Nascondi password" : "Mostra password"}
+                  className="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 transition hover:text-[#1D4E35]"
+                >
+                  {showPassword ? "visibility_off" : "visibility"}
+                </button>
+              </div>
             </label>
 
             <label className="block text-sm font-medium text-gray-700">

@@ -26,7 +26,7 @@ def _decrypt(ciphertext: str) -> str:
 
 
 def user_can_access_credential(current_user: ApplicationUser, credential: InazCredential) -> bool:
-    return current_user.role in {"admin", "super_admin"} or credential.application_user_id == current_user.id
+    return current_user.is_super_admin or credential.application_user_id == current_user.id
 
 
 def create_credential(db: Session, owner_user_id: int, data: InazCredentialCreate) -> InazCredentialResponse:
@@ -45,7 +45,7 @@ def create_credential(db: Session, owner_user_id: int, data: InazCredentialCreat
 
 def list_credentials(db: Session, current_user: ApplicationUser) -> list[InazCredentialResponse]:
     stmt = select(InazCredential)
-    if current_user.role not in {"admin", "super_admin"}:
+    if not current_user.is_super_admin:
         stmt = stmt.where(InazCredential.application_user_id == current_user.id)
     rows = db.scalars(stmt.order_by(InazCredential.id.asc())).all()
     return [InazCredentialResponse.model_validate(row) for row in rows]

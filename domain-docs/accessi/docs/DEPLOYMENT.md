@@ -179,10 +179,22 @@ Le credenziali vanno cambiate tramite variabili ambiente in ambienti non locali.
 - esporre i servizi preferibilmente dietro VPN o LAN interna
 - usare secret manager o variabili ambiente protette
 - configurare backup regolari del volume PostgreSQL
-- introdurre TLS terminato su proxy o load balancer interno
+- in LAN interna usare HTTP su `gaia.lan` (nginx host su porta 80)
+- per deploy online con hostname pubblico: TLS con **Let's Encrypt** (certbot) su nginx; aggiornare `BACKEND_CORS_ORIGINS` con `https://`
 - distinguere chiaramente gli hostname:
-  - `gaia.lan` per sviluppo locale
-  - `gaia.lan` per ambiente CED/interno
+  - `gaia.lan` per sviluppo locale e ambiente CED/interno
+
+### TLS con Let's Encrypt (deploy online)
+
+Quando GAIA sara esposta su un dominio pubblico risolvibile (non `.lan`):
+
+1. Puntare DNS A/AAAA verso il server
+2. Installare certbot: `sudo apt install certbot python3-certbot-nginx`
+3. Emettere certificato: `sudo certbot --nginx -d gaia.example.it`
+4. Aggiornare `.env` remoto: `BACKEND_CORS_ORIGINS=https://gaia.example.it`
+5. Verificare rinnovo automatico: `sudo certbot renew --dry-run`
+
+In LAN interna **non** usare mkcert ne certificati self-signed: HTTP e sufficiente finche la rete e fidata.
 
 ## 9. Backup Dati
 

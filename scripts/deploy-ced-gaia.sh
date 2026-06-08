@@ -256,42 +256,7 @@ print_nginx_manual_steps() {
 Lo stack GAIA e avviato su http://127.0.0.1:$GAIA_PROD_NGINX_PORT.
 Per esporre http://$GAIA_DOMAIN eseguire sul server:
 
-if ! command -v nginx >/dev/null 2>&1; then
-    sudo apt-get update
-    sudo apt-get install -y nginx
-fi
-sudo systemctl enable --now nginx
-sudo tee "$NGINX_SITE" >/dev/null <<'NGINXEOF'
-server {
-    listen 80;
-    server_name $GAIA_DOMAIN;
-
-    client_max_body_size 128m;
-
-    location / {
-        proxy_pass http://127.0.0.1:$GAIA_PROD_NGINX_PORT;
-        proxy_http_version 1.1;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
-    }
-}
-NGINXEOF
-EOF
-
-  if [[ "$NGINX_SITE" == /etc/nginx/sites-available/* ]]; then
-    cat <<EOF
-sudo ln -sfn "$NGINX_SITE" "/etc/nginx/sites-enabled/$GAIA_DOMAIN"
-EOF
-  fi
-
-  cat <<EOF
-sudo nginx -t
-sudo systemctl reload nginx
-curl -fsS -H "Host: $GAIA_DOMAIN" http://127.0.0.1/ >/dev/null
+  sudo bash /opt/gaia/scripts/setup-ced-nginx-http-on-host.sh
 
 EOF
 }
@@ -397,13 +362,13 @@ if [[ "$DEPLOY_ACTION" == "deploy" ]]; then
   if grep -q '^BACKEND_CORS_ORIGINS=' .env; then
     current_cors="$(grep '^BACKEND_CORS_ORIGINS=' .env | cut -d= -f2-)"
     new_cors="$current_cors"
-    for origin in "http://$GAIA_DOMAIN" "https://$GAIA_DOMAIN"; do
+    for origin in "http://$GAIA_DOMAIN"; do
       if [[ "$new_cors" != *"$origin"* ]]; then
         new_cors="${new_cors},${origin}"
       fi
     done
     if [[ -n "$GAIA_MOBILE_DOMAIN" ]]; then
-      for origin in "http://$GAIA_MOBILE_DOMAIN" "https://$GAIA_MOBILE_DOMAIN"; do
+      for origin in "http://$GAIA_MOBILE_DOMAIN"; do
         if [[ "$new_cors" != *"$origin"* ]]; then
           new_cors="${new_cors},${origin}"
         fi
@@ -412,9 +377,9 @@ if [[ "$DEPLOY_ACTION" == "deploy" ]]; then
     sed -i "s|^BACKEND_CORS_ORIGINS=.*|BACKEND_CORS_ORIGINS=${new_cors}|" .env
   else
     if [[ -n "$GAIA_MOBILE_DOMAIN" ]]; then
-      printf 'BACKEND_CORS_ORIGINS=http://%s,https://%s,http://%s,https://%s\n' "$GAIA_DOMAIN" "$GAIA_DOMAIN" "$GAIA_MOBILE_DOMAIN" "$GAIA_MOBILE_DOMAIN" >> .env
+      printf 'BACKEND_CORS_ORIGINS=http://%s,http://%s\n' "$GAIA_DOMAIN" "$GAIA_MOBILE_DOMAIN" >> .env
     else
-      printf 'BACKEND_CORS_ORIGINS=http://%s,https://%s\n' "$GAIA_DOMAIN" "$GAIA_DOMAIN" >> .env
+      printf 'BACKEND_CORS_ORIGINS=http://%s\n' "$GAIA_DOMAIN" >> .env
     fi
   fi
 

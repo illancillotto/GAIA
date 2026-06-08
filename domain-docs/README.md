@@ -19,6 +19,9 @@ Esempio:
 - documentazione Utenze: `domain-docs/utenze/docs/`
 - backend Utenze: `backend/app/modules/utenze/`
 - frontend Utenze: `frontend/src/app/utenze/`
+- documentazione Organigramma: `domain-docs/organigramma/docs/`
+- backend Organigramma: `backend/app/modules/organigramma/`
+- frontend Organigramma: `frontend/src/app/organigramma/`
 - documentazione Elaborazioni: `domain-docs/elaborazioni/docs/`
 - backend Elaborazioni: `backend/app/modules/elaborazioni/`
 - frontend Elaborazioni: `frontend/src/app/elaborazioni/`

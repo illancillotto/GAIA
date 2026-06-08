@@ -494,8 +494,47 @@ export type OrgUnitCreateInput = {
   nome: string;
   tipo: OrgUnitType;
   parent_id?: string | null;
+  is_active?: boolean;
   source?: OrgSource;
   sort_order?: number;
+  wc_area_id?: string | null;
+  legacy_team_id?: string | null;
+};
+
+export type OrgUnitUpdateInput = {
+  nome?: string;
+  tipo?: OrgUnitType;
+  parent_id?: string | null;
+  is_active?: boolean;
+  source?: OrgSource;
+  sort_order?: number;
+  wc_area_id?: string | null;
+  legacy_team_id?: string | null;
+};
+
+export type OrgAssignmentCreateInput = {
+  user_id: number;
+  org_unit_id: string;
+  manager_user_id?: number | null;
+  title?: string | null;
+  is_primary?: boolean;
+  active?: boolean;
+  valid_from?: string | null;
+  valid_to?: string | null;
+  source?: OrgSource;
+  wc_operator_id?: string | null;
+};
+
+export type OrgAssignmentUpdateInput = {
+  org_unit_id?: string;
+  manager_user_id?: number | null;
+  title?: string | null;
+  is_primary?: boolean;
+  active?: boolean;
+  valid_from?: string | null;
+  valid_to?: string | null;
+  source?: OrgSource;
+  wc_operator_id?: string | null;
 };
 
 export type OrgVisibilityOverrideCreateInput = {
@@ -507,6 +546,14 @@ export type OrgVisibilityOverrideCreateInput = {
   motivo?: string | null;
   valid_from?: string | null;
   valid_to?: string | null;
+};
+
+export type OrgVisibilityOverrideUpdateInput = {
+  scope?: OrgOverrideScope;
+  motivo?: string | null;
+  valid_from?: string | null;
+  valid_to?: string | null;
+  is_active?: boolean;
 };
 
 export type OrgWhiteCompanySyncResult = {

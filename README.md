@@ -16,7 +16,7 @@ Evoluzione pianificata:
 - nella prima fase la convergenza riguarda soprattutto home, sidebar, route frontend e navigazione
 - i backend `accessi` e `network` restano separati finche non verra approvata un'eventuale fase successiva
 
-## I cinque moduli
+## Moduli principali
 
 ### GAIA Accessi — NAS Audit
 Audit completo degli accessi al NAS Synology: utenti, gruppi, cartelle condivise,
@@ -63,6 +63,13 @@ Stato: operativo avanzato sul perimetro corrente, con hardening backend/frontend
 Registro centralizzato dei soggetti del Consorzio, con import da archivio NAS,
 classificazione documentale e ricerca anagrafica.
 Stato: in consolidamento.
+
+### GAIA Organigramma — Struttura organizzativa canonica
+Modulo canonico per unita organizzative, assegnazioni persona-unita,
+override di visibilita e simulazione "chi vede chi". WhiteCompany resta
+sorgente esterna di import/sync tramite bridge idempotente, mentre la verita
+applicativa vive nel layer `organigramma`.
+Stato: operativo su albero, dettaglio, visibilita e sync MVP delle unita.
 
 ## Stack tecnologico
 
@@ -125,6 +132,7 @@ GAIA/
 - `domain-docs/` contiene PRD, prompt, execution plan e progress dei domini funzionali.
 - `backend/app/modules/<modulo>/` contiene il codice backend runtime dei moduli.
 - `frontend/src/app/<modulo>/` contiene il codice frontend runtime dei moduli.
+- `domain-docs/organigramma/docs/` contiene la documentazione consolidata del modulo Organigramma.
 - `modules/` non e piu il contenitore dei moduli applicativi; resta disponibile solo per asset tecnici specifici, come `modules/elaborazioni/worker/`.
 - l'account NAS `svc_naap` resta un identificatore tecnico legacy ancora valido e non va rinominato durante i refactor del naming progetto.
 
@@ -144,10 +152,14 @@ La struttura logica canonica del codice backend e invece:
 - `backend/app/modules/inventory`
 - `backend/app/modules/network`
 - `backend/app/modules/catasto`
+- `backend/app/modules/organigramma`
 
 I package storici fuori da `app/modules/` restano disponibili come layer di compatibilita.
 Per il dominio anagrafico convivono ancora namespace runtime `anagrafica` e `utenze`;
 la documentazione di dominio fa riferimento a `domain-docs/utenze/`.
+Per l'organizzazione del personale convivono invece il layer canonico runtime
+`organigramma` e superfici legacy/read-only in altri moduli, mantenute solo
+come bridge o consultazione.
 
 ## Quick Start
 
@@ -260,8 +272,7 @@ Il deploy normalizza automaticamente alcune variabili nel `.env` remoto:
 
 - `NGINX_PORT=$GAIA_PROD_NGINX_PORT`
 - `NEXT_PUBLIC_API_BASE_URL=/api`
-- `BACKEND_CORS_ORIGINS` include `http://gaia.lan` se assente
-- `BACKEND_CORS_ORIGINS` include anche `https://gaia.lan` e, se configurato, `http(s)://gaia-mobile.lan`
+- `BACKEND_CORS_ORIGINS` include `http://gaia.lan` e, se configurato, `http://gaia-mobile.lan`
 
 Checklist minima del `.env` di produzione prima del deploy:
 
@@ -314,7 +325,7 @@ Usare `http://gaia.lan` senza porta ha senso solo in uno di questi casi:
 
 ### Gateway locale condiviso per `gaia.lan`, `teti.lan`, `gaia-mobile.lan`
 
-Nel contesto locale in cui i tre stack convivono sullo stesso host, il repository include uno stack dedicato di reverse proxy:
+Nel contesto locale in cui i tre stack convivono sullo stesso host, il repository include uno stack dedicato di reverse proxy HTTP:
 
 - [docker-compose.local-gateway.yml](/home/cbo/CursorProjects/GAIA/docker-compose.local-gateway.yml:1)
 - [nginx/local-dev-gateway.conf](/home/cbo/CursorProjects/GAIA/nginx/local-dev-gateway.conf:1)
@@ -354,6 +365,10 @@ Con il gateway attivo, gli URL diventano:
 - `http://gaia.lan`
 - `http://teti.lan`
 - `http://gaia-mobile.lan`
+
+### TLS (futuro deploy online)
+
+In LAN interna GAIA usa **HTTP** su `gaia.lan`. Quando l'hostname sara pubblico e raggiungibile da Internet, terminare TLS con **Let's Encrypt** (certbot) su nginx host. Vedi [domain-docs/accessi/docs/DEPLOYMENT.md](/home/cbo/CursorProjects/GAIA/domain-docs/accessi/docs/DEPLOYMENT.md).
 
 Nota operativa Docker:
 - lo stack Compose forza temporaneamente `build.network: host` per il solo servizio `frontend`, per aggirare timeout DNS intermittenti del builder Docker verso `registry.npmjs.org`

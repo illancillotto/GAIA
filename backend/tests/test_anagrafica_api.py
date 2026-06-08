@@ -25,6 +25,7 @@ from app.modules.utenze.models import (
     AnagraficaImportJobStatus,
     AnagraficaPaymentNotice,
     AnagraficaSubject,
+    AnagraficaVisuraRoutingAnomaly,
 )
 from app.modules.utenze.services.import_service import (
     AnagraficaImportPreviewService,
@@ -626,6 +627,55 @@ def test_subject_detail_skips_thumbs_db_documents() -> None:
     filenames = [item["filename"] for item in detail_response.json()["documents"]]
     assert "Thumbs.db" not in filenames
     assert "visura.xlsx" in filenames
+
+
+def test_visure_routing_anomalies_list_and_resolve() -> None:
+    create_user("visure_admin", module_utenze=True)
+    token = login("visure_admin")
+    headers = {"Authorization": f"Bearer {token}"}
+
+    db = TestingSessionLocal()
+    try:
+        open_anomaly = AnagraficaVisuraRoutingAnomaly(
+            source_path="/volume1/pubblica condivisa/GAIA/Visure/RSSMRA80A01H501Z_2026-06-08_09-03-35.pdf",
+            filename="RSSMRA80A01H501Z_2026-06-08_09-03-35.pdf",
+            identifier="RSSMRA80A01H501Z",
+            identifier_kind="person",
+            reason="subject_not_found",
+            details_json={"visura_kind": "soggetto"},
+            occurrences=2,
+        )
+        resolved_anomaly = AnagraficaVisuraRoutingAnomaly(
+            source_path="/volume1/pubblica condivisa/GAIA/Visure/visure-immobili-01154130957-2026-06-06.pdf",
+            filename="visure-immobili-01154130957-2026-06-06.pdf",
+            identifier="01154130957",
+            identifier_kind="company",
+            reason="subject_path_unresolved",
+            details_json={"subject_id": "fake"},
+            occurrences=1,
+            resolved_at=datetime.now(UTC),
+        )
+        db.add_all([open_anomaly, resolved_anomaly])
+        db.commit()
+        db.refresh(open_anomaly)
+    finally:
+        db.close()
+
+    list_response = client.get("/utenze/visure-routing-anomalies", headers=headers)
+    assert list_response.status_code == 200
+    payload = list_response.json()
+    assert payload["total"] == 2
+    assert payload["unresolved"] == 1
+    assert payload["resolved"] == 1
+    assert payload["items"][0]["reason"] == "subject_not_found"
+
+    resolve_response = client.post(f"/utenze/visure-routing-anomalies/{open_anomaly.id}/resolve", headers=headers)
+    assert resolve_response.status_code == 200
+    assert resolve_response.json()["resolved_at"] is not None
+
+    unresolved_response = client.get("/utenze/visure-routing-anomalies?resolved=false", headers=headers)
+    assert unresolved_response.status_code == 200
+    assert unresolved_response.json()["total"] == 0
 
 
 def test_documents_summary_skips_thumbs_db_documents() -> None:

@@ -35,6 +35,7 @@ from app.modules.utenze.models import (
     AnagraficaPersonSnapshot,
     AnagraficaSubject,
     AnagraficaSubjectStatus,
+    AnagraficaVisuraRoutingAnomaly,
     AnagraficaXlsxImportBatch,
     AnagraficaXlsxImportBatchStatus,
     BonificaUserStaging,
@@ -73,6 +74,8 @@ from app.modules.utenze.schemas import (
     AnagraficaSubjectListItemResponse,
     AnagraficaSubjectListResponse,
     AnagraficaSubjectUpdateRequest,
+    AnagraficaVisuraRoutingAnomalyListResponse,
+    AnagraficaVisuraRoutingAnomalyResponse,
     BonificaUserStagingBulkApproveRequest,
     BonificaUserStagingBulkApproveResponse,
     BonificaUserStagingListResponse,
@@ -197,6 +200,24 @@ def _require_registry_import_job_for_mutation(
     return job
 
 
+def _serialize_visura_routing_anomaly(anomaly: AnagraficaVisuraRoutingAnomaly) -> AnagraficaVisuraRoutingAnomalyResponse:
+    return AnagraficaVisuraRoutingAnomalyResponse.model_validate(
+        {
+            "id": str(anomaly.id),
+            "source_path": anomaly.source_path,
+            "filename": anomaly.filename,
+            "identifier": anomaly.identifier,
+            "identifier_kind": anomaly.identifier_kind,
+            "reason": anomaly.reason,
+            "details_json": anomaly.details_json,
+            "occurrences": anomaly.occurrences,
+            "resolved_at": anomaly.resolved_at,
+            "created_at": anomaly.created_at,
+            "updated_at": anomaly.updated_at,
+        }
+    )
+
+
 @router.get("", response_model=AnagraficaModuleStatusResponse)
 def get_anagrafica_module_status(
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
@@ -208,6 +229,83 @@ def get_anagrafica_module_status(
         "message": "GAIA Utenze module is enabled for the current user.",
         "username": current_user.username,
     }
+
+
+@router.get("/visure-routing-anomalies", response_model=AnagraficaVisuraRoutingAnomalyListResponse)
+def list_visura_routing_anomalies(
+    _: Annotated[ApplicationUser, Depends(require_admin_user)],
+    __: Annotated[ApplicationUser, RequireUtenzeModule],
+    db: Annotated[Session, Depends(get_db)],
+    resolved: bool | None = Query(default=None),
+    search: str | None = Query(default=None, min_length=2, max_length=120),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=25, ge=1, le=100),
+) -> AnagraficaVisuraRoutingAnomalyListResponse:
+    filters = []
+    if resolved is True:
+        filters.append(AnagraficaVisuraRoutingAnomaly.resolved_at.is_not(None))
+    elif resolved is False:
+        filters.append(AnagraficaVisuraRoutingAnomaly.resolved_at.is_(None))
+
+    normalized_search = (search or "").strip()
+    if normalized_search:
+        pattern = f"%{normalized_search}%"
+        filters.append(
+            or_(
+                AnagraficaVisuraRoutingAnomaly.filename.ilike(pattern),
+                AnagraficaVisuraRoutingAnomaly.identifier.ilike(pattern),
+                AnagraficaVisuraRoutingAnomaly.source_path.ilike(pattern),
+                AnagraficaVisuraRoutingAnomaly.reason.ilike(pattern),
+            )
+        )
+
+    base_statement = select(AnagraficaVisuraRoutingAnomaly)
+    if filters:
+        base_statement = base_statement.where(*filters)
+
+    total = db.scalar(select(func.count()).select_from(base_statement.subquery())) or 0
+    unresolved = db.scalar(
+        select(func.count()).select_from(AnagraficaVisuraRoutingAnomaly).where(AnagraficaVisuraRoutingAnomaly.resolved_at.is_(None))
+    ) or 0
+    resolved_count = db.scalar(
+        select(func.count()).select_from(AnagraficaVisuraRoutingAnomaly).where(AnagraficaVisuraRoutingAnomaly.resolved_at.is_not(None))
+    ) or 0
+
+    items = db.scalars(
+        base_statement.order_by(
+            AnagraficaVisuraRoutingAnomaly.resolved_at.is_not(None).asc(),
+            AnagraficaVisuraRoutingAnomaly.updated_at.desc(),
+            AnagraficaVisuraRoutingAnomaly.created_at.desc(),
+        )
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+    ).all()
+
+    return AnagraficaVisuraRoutingAnomalyListResponse(
+        items=[_serialize_visura_routing_anomaly(item) for item in items],
+        total=total,
+        unresolved=unresolved,
+        resolved=resolved_count,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.post("/visure-routing-anomalies/{anomaly_id}/resolve", response_model=AnagraficaVisuraRoutingAnomalyResponse)
+def resolve_visura_routing_anomaly(
+    anomaly_id: uuid.UUID,
+    _: Annotated[ApplicationUser, Depends(require_admin_user)],
+    __: Annotated[ApplicationUser, RequireUtenzeModule],
+    db: Annotated[Session, Depends(get_db)],
+) -> AnagraficaVisuraRoutingAnomalyResponse:
+    anomaly = db.get(AnagraficaVisuraRoutingAnomaly, anomaly_id)
+    if anomaly is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Anomalia visura non trovata")
+    anomaly.resolved_at = datetime.now(timezone.utc)
+    db.add(anomaly)
+    db.commit()
+    db.refresh(anomaly)
+    return _serialize_visura_routing_anomaly(anomaly)
 
 
 @router.post("/import/preview", response_model=AnagraficaImportPreviewResponse)
