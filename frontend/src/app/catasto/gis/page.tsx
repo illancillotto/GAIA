@@ -281,7 +281,7 @@ export default function CatastoGisPage() {
   const [showDistrettiFill, setShowDistrettiFill] = useState(true);
   const [showParticelleFill, setShowParticelleFill] = useState(false);
   const [particelleQuickFilter, setParticelleQuickFilter] = useState<ParticelleQuickFilter>("all");
-  const [basemap, setBasemap] = useState<GisBasemap>("satellite");
+  const [basemap, setBasemap] = useState<GisBasemap>("osm");
   const [highlightSelected, setHighlightSelected] = useState(true);
   const [distrettiOpacity, setDistrettiOpacity] = useState(0.34);
   const [particelleOpacity, setParticelleOpacity] = useState(0.5);
