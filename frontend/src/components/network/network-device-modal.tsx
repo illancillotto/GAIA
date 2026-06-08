@@ -68,6 +68,13 @@ function getIpInfoUrl(ipAddress: string) {
   return `https://www.whatismyip.com/ip/${encodeURIComponent(ipAddress)}/`;
 }
 
+function isPrivateNetworkIp(value: string | null | undefined) {
+  if (!value) {
+    return false;
+  }
+  return value.startsWith("10.") || value.startsWith("192.168.") || /^172\.(1[6-9]|2\d|3[0-1])\./.test(value);
+}
+
 export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }: NetworkDeviceModalProps) {
   const [selectedDevice, setSelectedDevice] = useState<NetworkDevice | null>(null);
   const [applicationUsers, setApplicationUsers] = useState<NetworkAssignedUserSummary[]>([]);
@@ -341,7 +348,7 @@ export function NetworkDeviceModal({ token, deviceId, open, onClose, onUpdated }
                         <dt className="label-caption">IP</dt>
                         <dd className="mt-1 flex flex-wrap items-center gap-2 text-sm text-gray-800">
                           <span>{formatIpWithReference(selectedDevice)}</span>
-                          {selectedDevice.ip_address ? (
+                          {selectedDevice.ip_address && !isPrivateNetworkIp(selectedDevice.ip_address) ? (
                             <a
                               href={getIpInfoUrl(selectedDevice.ip_address)}
                               target="_blank"

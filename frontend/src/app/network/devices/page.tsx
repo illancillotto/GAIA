@@ -40,6 +40,12 @@ function statusOrder(status: string): number {
   return 2;
 }
 
+function getLastOnlineAt(device: NetworkDevice): string | null {
+  const lastOnlineSnapshot = device.scan_history.find((entry) => entry.status === "online");
+  const candidate = lastOnlineSnapshot?.observed_at || device.last_seen_at;
+  return candidate ? new Date(candidate).toLocaleString("it-IT") : null;
+}
+
 const columns: ColumnDef<NetworkDevice>[] = [
   {
     id: "host",
@@ -73,7 +79,14 @@ const columns: ColumnDef<NetworkDevice>[] = [
     accessorFn: (row) => statusOrder(row.status),
     header: "Stato",
     sortingFn: (left, right) => statusOrder(left.original.status) - statusOrder(right.original.status),
-    cell: ({ row }) => <NetworkStatusBadge status={row.original.status} />,
+    cell: ({ row }) => (
+      <div>
+        <NetworkStatusBadge status={row.original.status} />
+        {row.original.status === "offline" ? (
+          <p className="mt-1 text-xs text-gray-500">Ultimo online: {getLastOnlineAt(row.original) || "n/d"}</p>
+        ) : null}
+      </div>
+    ),
   },
   {
     id: "ip_address_order",
