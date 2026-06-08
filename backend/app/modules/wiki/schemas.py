@@ -236,6 +236,21 @@ class WikiSupportClustersResponse(BaseModel):
     items: list[WikiSupportClusterRead] = Field(default_factory=list)
 
 
+class WikiSupportInsightRead(BaseModel):
+    insight_type: str
+    severity: Literal["info", "warning", "critical"]
+    title: str
+    description: str
+    metric_value: int | float | str | None = None
+    action_hint: str | None = None
+    related_key: str | None = None
+
+
+class WikiSupportInsightsResponse(BaseModel):
+    days: int
+    items: list[WikiSupportInsightRead] = Field(default_factory=list)
+
+
 class WikiSupportAnalyticsSeriesPointRead(BaseModel):
     metric_date: date
     period_label: str

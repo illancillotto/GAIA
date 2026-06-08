@@ -16,6 +16,8 @@ from app.modules.wiki.schemas import (
     WikiSupportAnalyticsCountRead,
     WikiSupportClusterRead,
     WikiSupportClustersResponse,
+    WikiSupportInsightRead,
+    WikiSupportInsightsResponse,
     WikiSupportAnalyticsSeriesPointRead,
     WikiSupportAnalyticsSeriesResponse,
     WikiSupportAnalyticsSummaryRead,
@@ -187,6 +189,136 @@ def _cluster_requests(requests: list[WikiRequest], *, limit: int) -> list[WikiSu
         reverse=True,
     )
     return clusters[:limit]
+
+
+def _build_support_insights(
+    *,
+    total_requests: int,
+    clusters: list[WikiSupportClusterRead],
+    top_modules: list[WikiSupportAnalyticsCountRead],
+    top_pages: list[WikiSupportAnalyticsCountRead],
+    duplicate_requests: int,
+    reopened_requests: int,
+    no_match_origin_requests: int,
+    guardrail_origin_requests: int,
+    docs_only_origin_requests: int,
+    feature_requests: int,
+    bug_reports: int,
+) -> list[WikiSupportInsightRead]:
+    insights: list[WikiSupportInsightRead] = []
+    if total_requests <= 0:
+        return insights
+
+    duplicate_rate = duplicate_requests / total_requests
+    no_match_rate = no_match_origin_requests / total_requests
+    docs_only_rate = docs_only_origin_requests / total_requests
+    guardrail_rate = guardrail_origin_requests / total_requests
+    feature_rate = feature_requests / total_requests
+    bug_rate = bug_reports / total_requests
+
+    if duplicate_rate >= 0.25:
+        insights.append(
+            WikiSupportInsightRead(
+                insight_type="duplicate_pressure",
+                severity="critical" if duplicate_rate >= 0.4 else "warning",
+                title="Pressione duplicati elevata",
+                description="Molte richieste supporto vengono accorpate a casi già esistenti: il bisogno si ripete e il triage rischia di saturarsi.",
+                metric_value=f"{round(duplicate_rate * 100)}%",
+                action_hint="Verifica i cluster principali e valuta documentazione, fix prodotto o messaggi in-app per ridurre i casi ripetuti.",
+            )
+        )
+
+    if no_match_rate >= 0.2:
+        insights.append(
+            WikiSupportInsightRead(
+                insight_type="wiki_coverage_gap",
+                severity="critical" if no_match_rate >= 0.35 else "warning",
+                title="Gap di copertura documentale del Wiki",
+                description="Una quota rilevante delle richieste nasce dopo un no-match del Wiki, segnale che l’assistente non trova contesto utile.",
+                metric_value=f"{round(no_match_rate * 100)}%",
+                action_hint="Rivedi le aree top per modulo e pagina; priorità a documentazione o tool live mancanti.",
+            )
+        )
+
+    if docs_only_rate >= 0.3:
+        insights.append(
+            WikiSupportInsightRead(
+                insight_type="docs_only_pressure",
+                severity="warning",
+                title="Pressione elevata su risposte solo documentali",
+                description="Molti casi arrivano da conversazioni in cui il Wiki ha risposto solo con documentazione, senza risolvere il problema operativo.",
+                metric_value=f"{round(docs_only_rate * 100)}%",
+                action_hint="Valuta nuovi tool live o guide più operative nei moduli più colpiti.",
+            )
+        )
+
+    if guardrail_rate >= 0.12:
+        insights.append(
+            WikiSupportInsightRead(
+                insight_type="guardrail_pressure",
+                severity="warning",
+                title="Molte richieste bloccate dai guardrail",
+                description="Gli utenti stanno tentando azioni o accessi che il Wiki non può eseguire: serve chiarire il perimetro o migliorare i percorsi di supporto.",
+                metric_value=f"{round(guardrail_rate * 100)}%",
+                action_hint="Controlla se i casi riguardano accessi, azioni o richieste live esterne e definisci un flusso più chiaro.",
+            )
+        )
+
+    if reopened_requests >= max(3, total_requests // 8):
+        insights.append(
+            WikiSupportInsightRead(
+                insight_type="negative_feedback_loop",
+                severity="critical" if reopened_requests >= max(5, total_requests // 5) else "warning",
+                title="Molti casi vengono riaperti dagli utenti",
+                description="Le richieste chiuse non stanno sempre portando a una soluzione percepita come valida.",
+                metric_value=reopened_requests,
+                action_hint="Analizza le richieste riaperte e il feedback non helpful per capire dove il workflow di chiusura è debole.",
+            )
+        )
+
+    if feature_rate >= 0.35:
+        module = top_modules[0].key if top_modules else None
+        insights.append(
+            WikiSupportInsightRead(
+                insight_type="feature_demand",
+                severity="info",
+                title="Domanda di prodotto alta",
+                description="Le feature request rappresentano una quota importante del backlog supporto.",
+                metric_value=f"{round(feature_rate * 100)}%",
+                action_hint="Usa i cluster e il modulo dominante per trasformare il backlog utenti in roadmap di prodotto.",
+                related_key=module,
+            )
+        )
+
+    if bug_rate >= 0.3:
+        page = top_pages[0].key if top_pages else None
+        insights.append(
+            WikiSupportInsightRead(
+                insight_type="bug_hotspot",
+                severity="warning",
+                title="Hotspot di anomalie ricorrenti",
+                description="Le segnalazioni di problemi e anomalie hanno un peso rilevante sul supporto nel periodo osservato.",
+                metric_value=f"{round(bug_rate * 100)}%",
+                action_hint="Parti dalla pagina o dal modulo più segnalato per isolare i problemi con maggiore impatto operativo.",
+                related_key=page,
+            )
+        )
+
+    if clusters:
+        lead_cluster = clusters[0]
+        insights.append(
+            WikiSupportInsightRead(
+                insight_type="top_cluster",
+                severity="info" if lead_cluster.total_requests < 4 else "warning",
+                title="Cluster dominante da monitorare",
+                description=f"Il cluster più denso raccoglie {lead_cluster.total_requests} richieste e {lead_cluster.affected_users} utenti diversi.",
+                metric_value=lead_cluster.total_requests,
+                action_hint="Usalo come candidato principale per un fix strutturale o una comunicazione dedicata.",
+                related_key=lead_cluster.title,
+            )
+        )
+
+    return insights[:6]
 
 
 def _count_rows(
@@ -382,3 +514,36 @@ def get_wiki_support_analytics_clusters(
     requests = _support_window_requests(db, start_date=start_date)
     items = _cluster_requests(requests, limit=limit)
     return WikiSupportClustersResponse(days=days, items=items)
+
+
+@router.get("/support/analytics/insights", response_model=WikiSupportInsightsResponse)
+def get_wiki_support_analytics_insights(
+    days: int = Query(30, ge=7, le=365),
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(get_current_user),
+) -> WikiSupportInsightsResponse:
+    _require_wiki_admin(current_user)
+    start_date = date.today() - timedelta(days=days - 1)
+    requests = _support_window_requests(db, start_date=start_date)
+    clusters = _cluster_requests(requests, limit=8)
+    top_modules = _count_rows(db, start_date=start_date, column=WikiRequest.module_key, include_null_label="Modulo non dichiarato")
+    top_pages = _count_rows(db, start_date=start_date, column=WikiRequest.page_path, include_null_label="Pagina non dichiarata")
+    duplicate_requests = sum(1 for item in requests if item.status == "duplicate")
+    reopened_requests = _reopened_requests_count(db, requests)
+    no_match_origin_requests, guardrail_origin_requests, docs_only_origin_requests = _origin_signal_counts(db, requests)
+    feature_requests = sum(1 for item in requests if item.request_type == "feature_request")
+    bug_reports = sum(1 for item in requests if item.request_type == "bug_report")
+    items = _build_support_insights(
+        total_requests=len(requests),
+        clusters=clusters,
+        top_modules=top_modules,
+        top_pages=top_pages,
+        duplicate_requests=duplicate_requests,
+        reopened_requests=reopened_requests,
+        no_match_origin_requests=no_match_origin_requests,
+        guardrail_origin_requests=guardrail_origin_requests,
+        docs_only_origin_requests=docs_only_origin_requests,
+        feature_requests=feature_requests,
+        bug_reports=bug_reports,
+    )
+    return WikiSupportInsightsResponse(days=days, items=items)

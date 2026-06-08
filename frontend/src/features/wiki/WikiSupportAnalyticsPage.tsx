@@ -6,11 +6,12 @@ import { FilterPillGroup } from "@/components/network/filter-pill-group";
 import { EmptyState } from "@/components/ui/empty-state";
 import { MetricCard } from "@/components/ui/metric-card";
 import { SearchIcon } from "@/components/ui/icons";
-import { getWikiSupportAnalyticsClusters, getWikiSupportAnalyticsSeries, getWikiSupportAnalyticsSummary } from "@/lib/api";
+import { getWikiSupportAnalyticsClusters, getWikiSupportAnalyticsInsights, getWikiSupportAnalyticsSeries, getWikiSupportAnalyticsSummary } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import type {
   WikiSupportAnalyticsCount,
   WikiSupportCluster,
+  WikiSupportInsight,
   WikiSupportAnalyticsSeriesPoint,
   WikiSupportAnalyticsSummary,
 } from "@/types/api";
@@ -135,6 +136,7 @@ export function WikiSupportAnalyticsPage() {
   const [summary, setSummary] = useState<WikiSupportAnalyticsSummary | null>(null);
   const [series, setSeries] = useState<WikiSupportAnalyticsSeriesPoint[]>([]);
   const [clusters, setClusters] = useState<WikiSupportCluster[]>([]);
+  const [insights, setInsights] = useState<WikiSupportInsight[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -148,19 +150,22 @@ export function WikiSupportAnalyticsPage() {
       }
       setLoading(true);
       try {
-        const [summaryResponse, seriesResponse, clustersResponse] = await Promise.all([
+        const [summaryResponse, seriesResponse, clustersResponse, insightsResponse] = await Promise.all([
           getWikiSupportAnalyticsSummary(token, { days }),
           getWikiSupportAnalyticsSeries(token, { days }),
           getWikiSupportAnalyticsClusters(token, { days, limit: 8 }),
+          getWikiSupportAnalyticsInsights(token, { days }),
         ]);
         setSummary(summaryResponse);
         setSeries(seriesResponse.items);
         setClusters(clustersResponse.items);
+        setInsights(insightsResponse.items);
         setError(null);
       } catch (loadError) {
         setSummary(null);
         setSeries([]);
         setClusters([]);
+        setInsights([]);
         setError(loadError instanceof Error ? loadError.message : "Errore caricamento analytics supporto");
       } finally {
         setLoading(false);
@@ -178,6 +183,12 @@ export function WikiSupportAnalyticsPage() {
   const dominantImpact = humanizeImpact(summary?.top_impact_scopes[0]?.key);
   const duplicatePressure = formatPercent(summary?.duplicate_requests ?? 0, summary?.total_requests ?? 0);
   const noMatchRate = formatPercent(summary?.no_match_origin_requests ?? 0, summary?.total_requests ?? 0);
+
+  function insightTone(value: WikiSupportInsight["severity"]): string {
+    if (value === "critical") return "border-rose-200 bg-rose-50 text-rose-900";
+    if (value === "warning") return "border-amber-200 bg-amber-50 text-amber-950";
+    return "border-sky-200 bg-sky-50 text-sky-950";
+  }
 
   if (error && !loading && !summary) {
     return <EmptyState icon={SearchIcon} title="Analytics supporto non disponibili" description={error} />;
@@ -278,6 +289,47 @@ export function WikiSupportAnalyticsPage() {
         <MetricCard label="Riaperture" value={(summary?.reopened_requests ?? 0).toLocaleString("it-IT")} sub="feedback non risolto" />
         <MetricCard label="Origine no match" value={(summary?.no_match_origin_requests ?? 0).toLocaleString("it-IT")} sub={`${noMatchRate} del totale`} variant="warning" />
         <MetricCard label="Origine guardrail" value={(summary?.guardrail_origin_requests ?? 0).toLocaleString("it-IT")} sub="richieste bloccate dal router" variant="warning" />
+      </section>
+
+      <section className="rounded-[28px] border border-[#e3e6dc] bg-white p-5 shadow-sm">
+        <div className="space-y-2">
+          <p className="text-sm font-semibold text-[#223d30]">Insight automatici</p>
+          <p className="text-sm text-[#5f6e67]">
+            Segnali già interpretati per admin e prodotto: dove il Wiki non copre, dove il supporto si ripete e dove conviene intervenire prima.
+          </p>
+        </div>
+        <div className="mt-4 grid gap-3 xl:grid-cols-2">
+          {insights.length > 0 ? (
+            insights.map((insight) => (
+              <article key={`${insight.insight_type}-${insight.title}`} className={`rounded-2xl border p-4 shadow-sm ${insightTone(insight.severity)}`}>
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold">{insight.title}</p>
+                    <p className="mt-1 text-xs opacity-80">
+                      {insight.metric_value != null ? `Segnale: ${String(insight.metric_value)}` : "Segnale qualitativo"}
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-current/15 bg-white/60 px-2 py-1 text-[11px] uppercase tracking-[0.18em]">
+                    {insight.severity}
+                  </span>
+                </div>
+                <p className="mt-3 text-sm leading-relaxed opacity-90">{insight.description}</p>
+                {insight.related_key ? (
+                  <p className="mt-3 text-xs opacity-80">
+                    Riferimento: <span className="font-medium">{insight.related_key}</span>
+                  </p>
+                ) : null}
+                {insight.action_hint ? (
+                  <div className="mt-4 rounded-xl border border-current/10 bg-white/60 px-3 py-3 text-sm">
+                    <span className="font-medium">Azione consigliata:</span> {insight.action_hint}
+                  </div>
+                ) : null}
+              </article>
+            ))
+          ) : (
+            <EmptyState icon={SearchIcon} title="Insight non disponibili" description="Non ci sono abbastanza segnali per sintetizzare suggerimenti automatici nella finestra selezionata." />
+          )}
+        </div>
       </section>
 
       <section className="grid gap-4 xl:grid-cols-3">

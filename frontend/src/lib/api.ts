@@ -84,6 +84,7 @@ import type {
   EffectivePermission,
   EffectivePermissionPreview,
   InazCollaborator,
+  InazAccessContext,
   InazCollaboratorScheduleAssignment,
   InazCollaboratorScheduleAssignmentCreateInput,
   InazCollaboratorCalendarResponse,
@@ -108,6 +109,7 @@ import type {
   InazScheduleTemplate,
   InazScheduleTemplateCreateInput,
   InazScheduleTemplateUpdateInput,
+  InazSupervisorAssignment,
   InazSyncJob,
   InazSyncJobCreateInput,
   InazSyncJobListResponse,
@@ -168,6 +170,7 @@ import type {
   WikiRequest,
   WikiRequestAssignee,
   WikiSupportClustersResponse,
+  WikiSupportInsightsResponse,
   WikiSupportAnalyticsSeriesResponse,
   WikiSupportAnalyticsSummary,
   WikiRequestDuplicateCandidate,
@@ -721,11 +724,53 @@ export async function listAllInazCollaborators(token: string): Promise<InazColla
   }
 }
 
+export async function listInazApplicationUsers(token: string): Promise<ApplicationUser[]> {
+  return request<ApplicationUser[]>("/inaz/application-users", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
 export async function listInazCredentials(token: string): Promise<InazCredential[]> {
   return request<InazCredential[]>("/inaz/credentials", {
     headers: {
       Authorization: `Bearer ${token}`,
     },
+  });
+}
+
+export async function getInazAccessContext(token: string): Promise<InazAccessContext> {
+  return request<InazAccessContext>("/inaz/access-context", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function listInazSupervisorAssignments(
+  token: string,
+  supervisorUserId?: number,
+): Promise<InazSupervisorAssignment[]> {
+  const suffix = supervisorUserId != null ? `?supervisor_user_id=${supervisorUserId}` : "";
+  return request<InazSupervisorAssignment[]>(`/inaz/supervisor-assignments${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function updateInazSupervisorAssignment(
+  token: string,
+  collaboratorId: string,
+  supervisorUserId: number | null,
+): Promise<InazSupervisorAssignment | null> {
+  return request<InazSupervisorAssignment | null>(`/inaz/supervisor-assignments/${collaboratorId}`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ supervisor_user_id: supervisorUserId }),
   });
 }
 
@@ -1410,6 +1455,22 @@ export async function getWikiSupportAnalyticsClusters(
   }
   const suffix = query.toString() ? `?${query.toString()}` : "";
   return request<WikiSupportClustersResponse>(`/wiki/support/analytics/clusters${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getWikiSupportAnalyticsInsights(
+  token: string,
+  params: { days?: number | null } = {},
+): Promise<WikiSupportInsightsResponse> {
+  const query = new URLSearchParams();
+  if (params.days != null) {
+    query.set("days", String(params.days));
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<WikiSupportInsightsResponse>(`/wiki/support/analytics/insights${suffix}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },

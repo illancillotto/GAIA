@@ -323,6 +323,34 @@ export type InazCollaborator = {
   updated_at: string;
 };
 
+export type InazAccessContext = {
+  can_view_all_data: boolean;
+  can_view_all_credentials: boolean;
+  can_manage_supervisors: boolean;
+  is_supervisor: boolean;
+  assigned_collaborators_count: number;
+};
+
+export type InazSupervisorSummary = {
+  id: number;
+  username: string;
+  full_name: string | null;
+  email: string;
+  role: string;
+  is_active: boolean;
+};
+
+export type InazSupervisorAssignment = {
+  id: number;
+  supervisor_user_id: number;
+  collaborator_id: string;
+  assigned_by_user_id: number | null;
+  created_at: string;
+  updated_at: string;
+  supervisor: InazSupervisorSummary | null;
+  collaborator: InazCollaborator | null;
+};
+
 export type InazCollaboratorListResponse = {
   items: InazCollaborator[];
   total: number;
@@ -362,6 +390,10 @@ export type InazDailyRecord = {
   request_status: string | null;
   request_authorized_by: string | null;
   resolved_absence_cause: string | null;
+  validation_status: string;
+  validated_by_user_id: number | null;
+  validated_at: string | null;
+  validation_note: string | null;
   effective_straordinario_minutes: number | null;
   effective_mpe_minutes: number | null;
   effective_extra_minutes: number | null;
@@ -395,6 +427,8 @@ export type InazDailyRecordManualUpdateInput = {
   override_straordinario_minutes?: number | null;
   override_mpe_minutes?: number | null;
   manual_note?: string | null;
+  validation_status?: "pending" | "validated" | null;
+  validation_note?: string | null;
 };
 
 export type InazDailyRecordListResponse = {
@@ -882,6 +916,21 @@ export type WikiSupportCluster = {
 export type WikiSupportClustersResponse = {
   days: number;
   items: WikiSupportCluster[];
+};
+
+export type WikiSupportInsight = {
+  insight_type: string;
+  severity: "info" | "warning" | "critical";
+  title: string;
+  description: string;
+  metric_value: number | string | null;
+  action_hint: string | null;
+  related_key: string | null;
+};
+
+export type WikiSupportInsightsResponse = {
+  days: number;
+  items: WikiSupportInsight[];
 };
 
 export type WikiSupportAnalyticsSeriesPoint = {

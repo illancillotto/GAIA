@@ -268,6 +268,29 @@ Il modulo **Wiki Agent** aggiunge a GAIA un assistente LLM sempre disponibile, c
   - stimare la `duplicate pressure`
   - evidenziare aree dove il Wiki non risolve da solo il bisogno utente
 
+### 4.15 Insight automatici per admin e prodotto
+
+- La dashboard `/wiki/support/analytics` espone una sezione `Insight automatici`.
+- Gli insight sono una sintesi operativa dei segnali, non una semplice replica dei KPI.
+- Prima versione implementata:
+  - `duplicate_pressure`
+  - `wiki_coverage_gap`
+  - `docs_only_pressure`
+  - `guardrail_pressure`
+  - `negative_feedback_loop`
+  - `feature_demand`
+  - `bug_hotspot`
+  - `top_cluster`
+- Ogni insight contiene:
+  - livello severità (`info`, `warning`, `critical`)
+  - descrizione del segnale
+  - metrica sintetica
+  - `action_hint` per l’admin o il prodotto
+  - eventuale `related_key` (modulo, pagina o cluster)
+- Obiettivo:
+  - trasformare i dati del supporto in priorità operative leggibili
+  - capire rapidamente dove migliorare documentazione, tool live o prodotto
+
 ### 4.12 Deduplica e caso canonico
 
 - Le richieste Wiki possono essere confrontate con casi simili già aperti o chiusi
