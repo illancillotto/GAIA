@@ -14,7 +14,7 @@ Options:
   --help                Show this help.
 
 What it does:
-  - ensures gaia.local, teti.local and gaia-mobile.local point to 127.0.0.1 in /etc/hosts
+  - ensures gaia.lan, teti.lan and gaia-mobile.lan point to 127.0.0.1 in /etc/hosts
   - starts the shared local gateway from docker-compose.local-gateway.yml
   - lets you use hostname-based URLs without exposing every stack directly on port 80
 EOF
@@ -22,7 +22,7 @@ EOF
 
 GATEWAY_PORT="80"
 SKIP_HOSTS="false"
-DOMAINS=("gaia.local" "teti.local" "gaia-mobile.local")
+DOMAINS=("gaia.lan" "teti.lan" "gaia-mobile.lan")
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -91,14 +91,14 @@ LOCAL_DEV_GATEWAY_PORT="$GATEWAY_PORT" docker compose -f docker-compose.local-ga
 
 if [[ "$GATEWAY_PORT" == "80" ]]; then
   echo "[gaia] domini disponibili:"
-  echo "  - http://gaia.local"
-  echo "  - http://teti.local"
-  echo "  - http://gaia-mobile.local"
+  echo "  - http://gaia.lan"
+  echo "  - http://teti.lan"
+  echo "  - http://gaia-mobile.lan"
 else
   echo "[gaia] domini disponibili:"
-  echo "  - http://gaia.local:${GATEWAY_PORT}"
-  echo "  - http://teti.local:${GATEWAY_PORT}"
-  echo "  - http://gaia-mobile.local:${GATEWAY_PORT}"
+  echo "  - http://gaia.lan:${GATEWAY_PORT}"
+  echo "  - http://teti.lan:${GATEWAY_PORT}"
+  echo "  - http://gaia-mobile.lan:${GATEWAY_PORT}"
 fi
 
 echo "[gaia] prerequisito: gli stack GAIA, TETI e GAIA-mobile devono restare attivi sulle rispettive porte 8080, 8085 e 5173."

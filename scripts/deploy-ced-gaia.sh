@@ -12,8 +12,8 @@ Variabili opzionali:
   CED_SERVER_IP=192.168.1.110      IP server CED, solo per log/verifica operativa
   CED_PROJECT_DIR=/opt/gaia        Directory progetto sul server
   ENV_FILE=.env.production         File env locale di produzione da copiare sul server
-  GAIA_DOMAIN=gaia.cbo             Dominio virtual host da configurare
-  GAIA_MOBILE_DOMAIN=gaia-mobile.cbo Dominio frontend mobile opzionale da includere nei CORS
+  GAIA_DOMAIN=gaia.lan             Dominio virtual host da configurare
+  GAIA_MOBILE_DOMAIN=gaia-mobile.lan Dominio frontend mobile opzionale da includere nei CORS
   GAIA_PROD_NGINX_PORT=8080        Porta host interna usata dal container nginx di GAIA
   COMPOSE_PROJECT_NAME=gaia        Nome progetto compose
   RELEASE_ID=<auto>                Identificativo release, default timestamp + git sha
@@ -23,13 +23,13 @@ Variabili opzionali:
 
 Lo script:
   - DEPLOY_ACTION=deploy: builda, copia immagini/progetto/.env.production, avvia lo stack e configura nginx host se possibile
-  - DEPLOY_ACTION=nginx: configura solo il virtual host host nginx per gaia.cbo
+  - DEPLOY_ACTION=nginx: configura solo il virtual host host nginx per gaia.lan
   - DEPLOY_ACTION=smoke: verifica soltanto container e health endpoint remoti
 
 Note CED:
-  - gaia.cbo deve risolvere all'IP del server CED dai client che lo useranno.
+  - gaia.lan deve risolvere all'IP del server CED dai client che lo useranno.
   - La risoluzione DNS/router non viene modificata da questo script.
-  - Il virtual host creato e dedicato a gaia.cbo e punta allo stack GAIA su 127.0.0.1:$GAIA_PROD_NGINX_PORT.
+  - Il virtual host creato e dedicato a gaia.lan e punta allo stack GAIA su 127.0.0.1:$GAIA_PROD_NGINX_PORT.
 EOF
 }
 
@@ -86,8 +86,8 @@ CED_SSH_HOST="${CED_SSH_HOST:-serverCed}"
 CED_SERVER_IP="${CED_SERVER_IP:-192.168.1.110}"
 CED_PROJECT_DIR="${CED_PROJECT_DIR:-/opt/gaia}"
 ENV_FILE="${ENV_FILE:-.env.production}"
-GAIA_DOMAIN="${GAIA_DOMAIN:-gaia.cbo}"
-GAIA_MOBILE_DOMAIN="${GAIA_MOBILE_DOMAIN:-gaia-mobile.cbo}"
+GAIA_DOMAIN="${GAIA_DOMAIN:-gaia.lan}"
+GAIA_MOBILE_DOMAIN="${GAIA_MOBILE_DOMAIN:-gaia-mobile.lan}"
 GAIA_PROD_NGINX_PORT="${GAIA_PROD_NGINX_PORT:-8080}"
 COMPOSE_PROJECT_NAME="${COMPOSE_PROJECT_NAME:-gaia}"
 RELEASE_ID="${RELEASE_ID:-}"

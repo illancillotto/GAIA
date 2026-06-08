@@ -5,10 +5,10 @@ usage() {
   cat <<'EOF'
 Usage:
   ./scripts/setup-local-domain.sh
-  ./scripts/setup-local-domain.sh --domain gaia.local --ip 127.0.0.1 --env-file .env --port 8080
+  ./scripts/setup-local-domain.sh --domain gaia.lan --ip 127.0.0.1 --env-file .env --port 8080
 
 Options:
-  --domain NAME     Local domain to register. Default: gaia.local
+  --domain NAME     Local domain to register. Default: gaia.lan
   --ip ADDRESS      IP to map in /etc/hosts. Default: 127.0.0.1
   --env-file PATH   Env file to update/create. Default: .env
   --port PORT       Public nginx port used locally. Default: 8080
@@ -21,7 +21,7 @@ What it does:
 EOF
 }
 
-DOMAIN="gaia.local"
+DOMAIN="gaia.lan"
 IP_ADDRESS="127.0.0.1"
 ENV_FILE=".env"
 PORT="8080"

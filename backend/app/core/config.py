@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     backend_host: str = Field(default="0.0.0.0", alias="BACKEND_HOST")
     backend_port: int = Field(default=8000, alias="BACKEND_PORT")
     backend_cors_origins: str = Field(
-        default="http://localhost:3000,http://localhost:8080,http://gaia.local,http://gaia.local:8080",
+        default="http://localhost:3000,http://localhost:8080,http://gaia.lan,http://gaia.lan:8080",
         alias="BACKEND_CORS_ORIGINS",
     )
     credential_master_key: str | None = Field(default=None, alias="CREDENTIAL_MASTER_KEY")
@@ -169,6 +169,22 @@ class Settings(BaseSettings):
     utenze_document_storage_path: str | None = Field(
         default=None,
         alias="UTENZE_DOCUMENT_STORAGE_PATH",
+    )
+    visure_nas_router_enabled: bool = Field(
+        default=False,
+        alias="VISURE_NAS_ROUTER_ENABLED",
+    )
+    visure_nas_router_cron: str = Field(
+        default="*/15 * * * *",
+        alias="VISURE_NAS_ROUTER_CRON",
+    )
+    visure_nas_router_timezone: str = Field(
+        default="Europe/Rome",
+        alias="VISURE_NAS_ROUTER_TIMEZONE",
+    )
+    visure_nas_inbox_path: str = Field(
+        default="/volume1/pubblica condivisa/GAIA/Visure",
+        alias="VISURE_NAS_INBOX_PATH",
     )
     nas_passwd_command: str = Field(default="getent passwd", alias="NAS_PASSWD_COMMAND")
     nas_group_command: str = Field(default="getent group", alias="NAS_GROUP_COMMAND")
