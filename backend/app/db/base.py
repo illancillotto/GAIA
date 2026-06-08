@@ -25,6 +25,12 @@ from app.modules.catasto.models import (
     CatUtenzaIntestatario,
 )
 from app.modules.accessi.wc_org_charts import WCOrgChart, WCOrgChartEntry
+from app.modules.organigramma.models import (
+    OrgAssignment,
+    OrgSourceLink,
+    OrgUnit,
+    OrgVisibilityOverride,
+)
 from app.modules.inventory.models import WarehouseRequest
 from app.modules.inaz.models import InazCollaborator, InazCredential, InazDailyPunch, InazDailyRecord, InazEventSummary, InazImportJob, InazSyncJob
 from app.modules.operazioni.models.wc_area import WCArea
@@ -111,6 +117,10 @@ from app.modules.network.models import (
 
 __all__ = [
     "ApplicationUser",
+    "OrgUnit",
+    "OrgAssignment",
+    "OrgVisibilityOverride",
+    "OrgSourceLink",
     "InazCollaborator",
     "InazCredential",
     "InazDailyPunch",

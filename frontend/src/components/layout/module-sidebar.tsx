@@ -33,6 +33,7 @@ type ModuleSidebarProps = {
     | "riordino"
     | "ruolo"
     | "inaz"
+    | "organigramma"
     | "wiki";
   reviewBadge?: number;
   userBadge?: number;
@@ -165,17 +166,22 @@ export function ModuleSidebar({
       <div className="space-y-0.5 px-2 pb-3">
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Amministrazione</p>
         <NavItem href="/gaia/users" icon={UserIcon} label="Utenti GAIA" match="prefix" />
+        <NavItem href="/gaia/organigramma" icon={UsersIcon} label="Organigramma" match="prefix" />
         <NavItem href="/gaia/users/operatori-cruscotto" icon={AlertTriangleIcon} label="Cruscotto operatori" match="prefix" />
       </div>
     );
   }
 
   if (currentModuleKey === "utenze") {
+    const canManageUtenzeAdmin = currentUserRole === "admin" || currentUserRole === "super_admin";
     return (
       <div className="space-y-0.5 px-2 pb-3">
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Panoramica</p>
         <NavItem href="/utenze" icon={GridIcon} label="Dashboard" />
         <NavItem href="/utenze/import" icon={RefreshIcon} label="Import dati" match="prefix" />
+        {canManageUtenzeAdmin ? (
+          <NavItem href="/utenze/visure-routing-anomalies" icon={AlertTriangleIcon} label="Anomalie visure" match="prefix" />
+        ) : null}
         {canAccessUtenzeAnprConfig ? (
           <NavItem href="/anagrafica/anpr-config" icon={LockIcon} label="Config. ANPR" match="prefix" />
         ) : null}
@@ -243,11 +249,36 @@ export function ModuleSidebar({
         <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Gestione</p>
         <NavItem href="/inaz/giornaliere" icon={CalendarIcon} label="Giornaliere" match="prefix" />
         <NavItem href="/inaz/collaboratori" icon={UsersIcon} label="Collaboratori" match="prefix" />
+        <NavItem href="/inaz/organigramma" icon={UsersIcon} label="Organigramma" match="prefix" />
+        <NavItem href="/inaz/capisettore" icon={ShieldIcon} label="Capisettore" match="prefix" />
         <NavItem href="/inaz/anomalie" icon={AlertTriangleIcon} label="Anomalie" match="prefix" />
         <NavItem href="/inaz/export" icon={DocumentIcon} label="Export" match="prefix" />
         <NavItem href="/inaz/sync" icon={RefreshIcon} label="Sync" match="prefix" />
         <NavItem href="/inaz/configurazione" icon={LockIcon} label="Configurazione" match="prefix" />
         <NavItem href="/inaz/settings" icon={DocumentIcon} label="Settings" match="prefix" />
+      </div>
+    );
+  }
+
+  if (currentModuleKey === "organigramma") {
+    const canRead = grantedSectionKeys.includes("organigramma.read");
+    const canManage = grantedSectionKeys.includes("organigramma.manage");
+    return (
+      <div className="space-y-0.5 px-2 pb-3">
+        <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Organigramma</p>
+        <NavItem href="/organigramma" icon={UsersIcon} label="Albero & dettaglio" disabled={!canRead} />
+        <NavItem
+          href="/organigramma#chi-vede-chi"
+          icon={SearchIcon}
+          label="Chi vede chi"
+          disabled={!canRead}
+        />
+        {canManage ? (
+          <>
+            <p className="px-2 pb-1 pt-4 text-[10px] font-medium uppercase tracking-widest text-gray-400">Gestione</p>
+            <NavItem href="/organigramma#override" icon={ShieldIcon} label="Eccezioni visibilità" />
+          </>
+        ) : null}
       </div>
     );
   }

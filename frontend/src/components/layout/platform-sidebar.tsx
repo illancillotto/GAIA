@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useMemo, useState } from "react";
 
-import { BookOpenIcon, CalendarIcon, ChevronRightIcon, DocumentIcon, GridIcon, LockIcon, RefreshIcon, SearchIcon, ServerIcon, TruckIcon, UserIcon } from "@/components/ui/icons";
+import { BookOpenIcon, CalendarIcon, ChevronRightIcon, DocumentIcon, GridIcon, LockIcon, RefreshIcon, SearchIcon, ServerIcon, TruckIcon, UserIcon, UsersIcon } from "@/components/ui/icons";
 import { cn } from "@/lib/cn";
 import type { CurrentUser } from "@/types/api";
 
@@ -31,6 +31,7 @@ const platformModules: PlatformModule[] = [
   { href: "/riordino", label: "Riordino", icon: DocumentIcon },
   { href: "/ruolo", label: "Ruolo", icon: CalendarIcon },
   { href: "/inaz", label: "Inaz", icon: CalendarIcon },
+  { href: "/organigramma", label: "Organigramma", icon: UsersIcon },
   { href: "/wiki", label: "Wiki", icon: BookOpenIcon },
 ];
 
@@ -61,6 +62,8 @@ export function PlatformSidebar({ currentModuleLabel, currentUser }: PlatformSid
                       ? "ruolo"
                       : href === "/inaz"
                         ? "inaz"
+                      : href === "/organigramma"
+                        ? "organigramma"
                     : "";
 
     if (!moduleKey) return true;

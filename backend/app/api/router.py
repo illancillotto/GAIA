@@ -11,6 +11,7 @@ from app.modules.inaz.router import router as inaz_router
 from app.modules.me.router import router as me_router
 from app.modules.network.router import router as network_router
 from app.modules.operazioni.router import router as operazioni_router
+from app.modules.organigramma.router import router as organigramma_router
 from app.modules.operazioni.routes.mobile_sync import router as mobile_sync_router
 from app.modules.operazioni.routes.operator_invitations import public_router as operator_invitations_public_router
 from app.modules.riordino.bootstrap import router as riordino_router
@@ -31,6 +32,7 @@ api_router.include_router(network_router)
 api_router.include_router(utenze_router, prefix="/utenze")
 api_router.include_router(utenze_anpr_router)
 api_router.include_router(operazioni_router)
+api_router.include_router(organigramma_router)
 api_router.include_router(mobile_sync_router)
 api_router.include_router(operator_invitations_public_router)
 api_router.include_router(riordino_router, prefix="/api/riordino")

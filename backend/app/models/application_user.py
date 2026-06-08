@@ -22,6 +22,7 @@ if TYPE_CHECKING:
 class ApplicationUserRole(StrEnum):
     SUPER_ADMIN = "super_admin"
     ADMIN = "admin"
+    HR_MANAGER = "hr_manager"
     REVIEWER = "reviewer"
     VIEWER = "viewer"
     OPERATOR = "operator"
@@ -58,6 +59,7 @@ class ApplicationUser(Base):
     module_riordino: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     module_ruolo: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     module_inaz: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    module_organigramma: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         server_default=func.now(),
@@ -87,7 +89,7 @@ class ApplicationUser(Base):
     @property
     def enabled_modules(self) -> list[str]:
         if self.is_super_admin:
-            return ["accessi", "rete", "inventario", "catasto", "utenze", "operazioni", "riordino", "ruolo", "inaz"]
+            return ["accessi", "rete", "inventario", "catasto", "utenze", "operazioni", "riordino", "ruolo", "inaz", "organigramma"]
 
         modules: list[str] = []
         if self.module_accessi:
@@ -108,4 +110,6 @@ class ApplicationUser(Base):
             modules.append("ruolo")
         if self.module_inaz:
             modules.append("inaz")
+        if self.module_organigramma:
+            modules.append("organigramma")
         return modules

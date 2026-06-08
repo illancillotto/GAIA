@@ -9,6 +9,7 @@ from app.models.section_permission import RoleSectionPermission, Section, UserSe
 ROLE_HIERARCHY: dict[str, int] = {
     ApplicationUserRole.VIEWER.value: 1,
     ApplicationUserRole.REVIEWER.value: 2,
+    ApplicationUserRole.HR_MANAGER.value: 2,
     ApplicationUserRole.ADMIN.value: 3,
     ApplicationUserRole.SUPER_ADMIN.value: 4,
 }
@@ -67,7 +68,7 @@ def _resolve_for_section(db: Session, user: ApplicationUser, section: Section) -
 
 def resolve_user_permissions(db: Session, user: ApplicationUser) -> list[ResolvedPermission]:
     if user.is_super_admin:
-        enabled_modules = ["accessi", "rete", "inventario", "catasto", "utenze", "operazioni", "riordino", "ruolo", "inaz"]
+        enabled_modules = ["accessi", "rete", "inventario", "catasto", "utenze", "operazioni", "riordino", "ruolo", "inaz", "organigramma"]
     else:
         enabled_modules = user.enabled_modules
 

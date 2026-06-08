@@ -126,6 +126,19 @@ import type {
   MeVehicleAssignmentListResponse,
   MeVehicleUsageSessionListResponse,
   MyPermissionsResponse,
+  OrgStructureAssignment,
+  OrgStructureAssignmentUpdateInput,
+  OrgStructureBootstrapResult,
+  OrgStructureWorkspace,
+  OrgAssignment,
+  OrgUnit,
+  OrgUnitCreateInput,
+  OrgUnitDetail,
+  OrgUnitTreeNode,
+  OrgVisibilityOverride,
+  OrgVisibilityOverrideCreateInput,
+  OrgVisibilityResult,
+  OrgWhiteCompanySyncResult,
   NetworkAlert,
   NetworkAlertUpdateInput,
   NetworkDashboardSummary,
@@ -679,6 +692,112 @@ export async function listAllApplicationUsers(token: string): Promise<Applicatio
     }
     skip += pageSize;
   }
+}
+
+export async function getOrgStructureWorkspace(token: string): Promise<OrgStructureWorkspace> {
+  return request<OrgStructureWorkspace>("/admin/org-structure", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function bootstrapOrgStructureFromWhiteCompany(token: string): Promise<OrgStructureBootstrapResult> {
+  return request<OrgStructureBootstrapResult>("/admin/org-structure/bootstrap", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function upsertOrgStructureAssignment(
+  token: string,
+  userId: number,
+  payload: OrgStructureAssignmentUpdateInput,
+): Promise<OrgStructureAssignment> {
+  return request<OrgStructureAssignment>(`/admin/org-structure/users/${userId}`, {
+    method: "PUT",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteOrgStructureAssignment(token: string, userId: number): Promise<void> {
+  await request<void>(`/admin/org-structure/users/${userId}`, {
+    method: "DELETE",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+// --- Organigramma (canonical layer) ---------------------------------------
+function authHeaders(token: string): HeadersInit {
+  return { Authorization: `Bearer ${token}` };
+}
+
+export async function getOrgTree(token: string): Promise<OrgUnitTreeNode[]> {
+  return request<OrgUnitTreeNode[]>("/organigramma/units/tree", { headers: authHeaders(token) });
+}
+
+export async function getOrgUnit(token: string, unitId: string): Promise<OrgUnitDetail> {
+  return request<OrgUnitDetail>(`/organigramma/units/${unitId}`, { headers: authHeaders(token) });
+}
+
+export async function createOrgUnit(token: string, payload: OrgUnitCreateInput): Promise<OrgUnit> {
+  return request<OrgUnit>("/organigramma/units", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteOrgUnit(token: string, unitId: string): Promise<void> {
+  await request<void>(`/organigramma/units/${unitId}`, { method: "DELETE", headers: authHeaders(token) });
+}
+
+export async function getOrgAssignments(
+  token: string,
+  params: { unitId?: string; userId?: number } = {},
+): Promise<OrgAssignment[]> {
+  const query = new URLSearchParams();
+  if (params.unitId) query.set("unit_id", params.unitId);
+  if (params.userId != null) query.set("user_id", String(params.userId));
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<OrgAssignment[]>(`/organigramma/assignments${suffix}`, { headers: authHeaders(token) });
+}
+
+export async function getOrgOverrides(token: string): Promise<OrgVisibilityOverride[]> {
+  return request<OrgVisibilityOverride[]>("/organigramma/overrides", { headers: authHeaders(token) });
+}
+
+export async function createOrgOverride(
+  token: string,
+  payload: OrgVisibilityOverrideCreateInput,
+): Promise<OrgVisibilityOverride> {
+  return request<OrgVisibilityOverride>("/organigramma/overrides", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteOrgOverride(token: string, overrideId: string): Promise<void> {
+  await request<void>(`/organigramma/overrides/${overrideId}`, { method: "DELETE", headers: authHeaders(token) });
+}
+
+export async function getOrgVisibility(token: string, userId: number): Promise<OrgVisibilityResult> {
+  return request<OrgVisibilityResult>(`/organigramma/visibility/${userId}`, { headers: authHeaders(token) });
+}
+
+export async function syncOrgWhiteCompany(token: string): Promise<OrgWhiteCompanySyncResult> {
+  return request<OrgWhiteCompanySyncResult>("/organigramma/sync/whitecompany", {
+    method: "POST",
+    headers: authHeaders(token),
+  });
 }
 
 export async function listInazCollaborators(
