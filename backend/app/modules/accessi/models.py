@@ -8,6 +8,7 @@ from app.models.section_permission import RoleSectionPermission, Section, UserSe
 from app.models.share import Share
 from app.models.snapshot import Snapshot
 from app.models.sync_run import SyncRun
+from app.modules.accessi.org_structure import OrgStructureAssignment
 from app.modules.accessi.wc_org_charts import WCOrgChart, WCOrgChartEntry
 
 __all__ = [
@@ -23,6 +24,7 @@ __all__ = [
     "Share",
     "Snapshot",
     "SyncRun",
+    "OrgStructureAssignment",
     "UserSectionPermission",
     "WCOrgChart",
     "WCOrgChartEntry",

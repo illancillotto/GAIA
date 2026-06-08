@@ -15,6 +15,7 @@ from app.modules.utenze.models import (
     AnagraficaSubject,
     AnagraficaSubjectStatus,
     AnagraficaSubjectType,
+    AnagraficaVisuraRoutingAnomaly,
 )
 from app.models.catasto import (
     CatastoBatch,
@@ -83,6 +84,7 @@ __all__ = [
     "AnagraficaSubject",
     "AnagraficaSubjectStatus",
     "AnagraficaSubjectType",
+    "AnagraficaVisuraRoutingAnomaly",
     "CatastoBatch",
     "CatastoBatchStatus",
     "CatastoCaptchaLog",

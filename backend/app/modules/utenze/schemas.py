@@ -535,3 +535,28 @@ class XlsxImportStartResponse(BaseModel):
     batch_id: str
     status: str
     message: str
+
+
+class AnagraficaVisuraRoutingAnomalyResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: str
+    source_path: str
+    filename: str
+    identifier: str | None = None
+    identifier_kind: str | None = None
+    reason: str
+    details_json: dict[str, Any] | list[Any] | None = None
+    occurrences: int
+    resolved_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class AnagraficaVisuraRoutingAnomalyListResponse(BaseModel):
+    items: list[AnagraficaVisuraRoutingAnomalyResponse]
+    total: int
+    unresolved: int
+    resolved: int
+    page: int
+    page_size: int

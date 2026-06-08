@@ -97,10 +97,23 @@ class NasSSHClient:
         quoted_path = shlex.quote(path)
         self.run_command(f"mkdir -p {quoted_path}")
 
+    def list_files(self, path: str) -> list[str]:
+        quoted_path = shlex.quote(path)
+        output = self.run_command(f"find {quoted_path} -mindepth 1 -maxdepth 1 -type f -print")
+        return [line.strip() for line in output.splitlines() if line.strip()]
+
     def path_exists(self, path: str) -> bool:
         quoted_path = shlex.quote(path)
         output = self.run_command(f"if [ -e {quoted_path} ]; then printf '1'; else printf '0'; fi")
         return output.strip() == "1"
+
+    def move_file(self, source_path: str, destination_path: str) -> None:
+        source_quoted = shlex.quote(source_path)
+        destination_quoted = shlex.quote(destination_path)
+        destination_parent = destination_path.rsplit("/", 1)[0] if "/" in destination_path else None
+        if destination_parent:
+            self.run_command(f"mkdir -p {shlex.quote(destination_parent)}")
+        self.run_command(f"mv {source_quoted} {destination_quoted}")
 
     def upload_file(self, path: str, content: bytes) -> None:
         client = self._get_client()

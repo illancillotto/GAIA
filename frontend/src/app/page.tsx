@@ -84,6 +84,7 @@ const menuSearchRoutes: SearchRoute[] = [
   { label: "Inaz · Dashboard", href: "/inaz", moduleKey: "inaz", keywords: ["giornaliere", "cartellino", "inaz"] },
   { label: "Inaz · Collaboratori", href: "/inaz/collaboratori", moduleKey: "inaz", keywords: ["collaboratori", "dipendenti"] },
   { label: "Inaz · Giornaliere", href: "/inaz/giornaliere", moduleKey: "inaz", keywords: ["giornaliere", "presenze"] },
+  { label: "Inaz · Organigramma", href: "/inaz/organigramma", moduleKey: "inaz", keywords: ["organigramma", "gerarchia", "capi settore", "permessi"] },
   { label: "Inaz · Export", href: "/inaz/export", moduleKey: "inaz", keywords: ["export", "xlsm"] },
   { label: "Inaz · Sync", href: "/inaz/sync", moduleKey: "inaz", keywords: ["sync", "portale"] },
 

@@ -184,3 +184,80 @@ def test_upload_file_falls_back_to_shell_when_sftp_fails() -> None:
     assert fake_client.mkdir_commands == ["mkdir -p '/volume1/test folder'"]
     assert fake_client.transport.commands == ["cat > '/volume1/test folder/manuale.pdf'"]
     assert fake_client.transport.payload == b"hello nas"
+
+
+def test_list_files_uses_find_command() -> None:
+    class FakeChannel:
+        def recv_exit_status(self) -> int:
+            return 0
+
+    class FakeStream:
+        def __init__(self, payload: bytes) -> None:
+            self._payload = payload
+            self.channel = FakeChannel()
+
+        def read(self) -> bytes:
+            return self._payload
+
+    class FakeClient:
+        def exec_command(self, command: str, timeout: int):
+            assert command == "find '/volume1/pubblica condivisa/GAIA/Visure' -mindepth 1 -maxdepth 1 -type f -print"
+            payload = b"/volume1/pubblica condivisa/GAIA/Visure/a.pdf\n/volume1/pubblica condivisa/GAIA/Visure/b.pdf\n"
+            return (None, FakeStream(payload), FakeStream(b""))
+
+    client = NasSSHClient(
+        host="nas.example.local",
+        port=22,
+        username="svc_sync",
+        timeout=5,
+        password="secret",
+    )
+    client._client = FakeClient()
+
+    files = client.list_files("/volume1/pubblica condivisa/GAIA/Visure")
+
+    assert files == [
+        "/volume1/pubblica condivisa/GAIA/Visure/a.pdf",
+        "/volume1/pubblica condivisa/GAIA/Visure/b.pdf",
+    ]
+
+
+def test_move_file_creates_parent_and_renames() -> None:
+    class FakeChannel:
+        def recv_exit_status(self) -> int:
+            return 0
+
+    class FakeStream:
+        def __init__(self) -> None:
+            self.channel = FakeChannel()
+
+        def read(self):
+            return b""
+
+    class FakeClient:
+        def __init__(self) -> None:
+            self.commands: list[str] = []
+
+        def exec_command(self, command: str, timeout: int):
+            self.commands.append(command)
+            return (None, FakeStream(), FakeStream())
+
+    client = NasSSHClient(
+        host="nas.example.local",
+        port=22,
+        username="svc_sync",
+        timeout=5,
+        password="secret",
+    )
+    fake_client = FakeClient()
+    client._client = fake_client
+
+    client.move_file(
+        "/volume1/pubblica condivisa/GAIA/Visure/source.pdf",
+        "/volume1/Settore Catasto/ARCHIVIO/R/ROSSI_MARIO_RSSMRA80A01H501U/visure/source.pdf",
+    )
+
+    assert fake_client.commands == [
+        "mkdir -p '/volume1/Settore Catasto/ARCHIVIO/R/ROSSI_MARIO_RSSMRA80A01H501U/visure'",
+        "mv '/volume1/pubblica condivisa/GAIA/Visure/source.pdf' '/volume1/Settore Catasto/ARCHIVIO/R/ROSSI_MARIO_RSSMRA80A01H501U/visure/source.pdf'",
+    ]

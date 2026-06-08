@@ -296,8 +296,8 @@ export function UtenzePaymentNoticesSection({ subjectId, token, compact = false 
                     <div className="mt-3 space-y-3">
                       {detailFields.length ? (
                         <div className="grid gap-2 md:grid-cols-2">
-                          {detailFields.map((field) => (
-                            <div key={`${notice.id}-${field.label}`} className="rounded-2xl border border-[#e5ece6] bg-white px-3 py-2">
+                          {detailFields.map((field, index) => (
+                            <div key={`${notice.id}-${field.label}-${index}`} className="rounded-2xl border border-[#e5ece6] bg-white px-3 py-2">
                               <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-400">{field.label}</p>
                               <p className="mt-1 text-sm leading-5 text-gray-800">{field.value}</p>
                             </div>
@@ -309,8 +309,8 @@ export function UtenzePaymentNoticesSection({ subjectId, token, compact = false 
                         <div className="rounded-2xl border border-[#e5ece6] bg-white p-3">
                           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-400">Rate e scadenze</p>
                           <div className="mt-2 grid gap-2 md:grid-cols-3">
-                            {rateDetails.map((rate) => (
-                              <div key={`${notice.id}-${rate.label}-${rate.dueDate ?? "na"}`} className="rounded-xl border border-[#edf1eb] bg-[#f8faf7] px-3 py-2">
+                            {rateDetails.map((rate, index) => (
+                              <div key={`${notice.id}-${rate.label}-${rate.dueDate ?? "na"}-${index}`} className="rounded-xl border border-[#edf1eb] bg-[#f8faf7] px-3 py-2">
                                 <p className="text-xs font-semibold text-gray-700">{rate.label}</p>
                                 <p className="mt-1 text-xs text-gray-500">{rate.dueDate ?? "Scadenza non disponibile"}</p>
                                 <p className="mt-1 text-sm font-medium text-gray-900">{rate.amount ?? "Importo non disponibile"}</p>
@@ -324,8 +324,8 @@ export function UtenzePaymentNoticesSection({ subjectId, token, compact = false 
                         <div className="rounded-2xl border border-[#e5ece6] bg-white p-3">
                           <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-400">Note aggiuntive</p>
                           <div className="mt-2 flex flex-wrap gap-2">
-                            {residualNotes.map((note) => (
-                              <span key={`${notice.id}-${note}`} className="rounded-full border border-[#dce6df] bg-[#f8faf7] px-3 py-1.5 text-xs text-gray-700">
+                            {residualNotes.map((note, index) => (
+                              <span key={`${notice.id}-${note}-${index}`} className="rounded-full border border-[#dce6df] bg-[#f8faf7] px-3 py-1.5 text-xs text-gray-700">
                                 {note}
                               </span>
                             ))}

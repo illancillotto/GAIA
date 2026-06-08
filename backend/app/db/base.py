@@ -24,6 +24,7 @@ from app.modules.catasto.models import (
     CatGisSavedSelectionItem,
     CatUtenzaIntestatario,
 )
+from app.modules.accessi.org_structure import OrgStructureAssignment
 from app.modules.accessi.wc_org_charts import WCOrgChart, WCOrgChartEntry
 from app.modules.organigramma.models import (
     OrgAssignment,
@@ -32,7 +33,16 @@ from app.modules.organigramma.models import (
     OrgVisibilityOverride,
 )
 from app.modules.inventory.models import WarehouseRequest
-from app.modules.inaz.models import InazCollaborator, InazCredential, InazDailyPunch, InazDailyRecord, InazEventSummary, InazImportJob, InazSyncJob
+from app.modules.inaz.models import (
+    InazCollaborator,
+    InazCredential,
+    InazDailyPunch,
+    InazDailyRecord,
+    InazEventSummary,
+    InazImportJob,
+    InazSupervisorAssignment,
+    InazSyncJob,
+)
 from app.modules.operazioni.models.wc_area import WCArea
 from app.modules.operazioni.models.wc_operator import WCOperator
 from app.modules.operazioni.models.vehicles import WCRefuelEvent
@@ -64,6 +74,7 @@ from app.modules.utenze.models import (
     AnagraficaPerson,
     AnagraficaPersonSnapshot,
     AnagraficaSubject,
+    AnagraficaVisuraRoutingAnomaly,
     BonificaUserStaging,
 )
 from app.modules.ruolo.models import RuoloAvviso, RuoloImportJob, RuoloParticella, RuoloPartita
@@ -117,6 +128,7 @@ from app.modules.network.models import (
 
 __all__ = [
     "ApplicationUser",
+    "OrgStructureAssignment",
     "OrgUnit",
     "OrgAssignment",
     "OrgVisibilityOverride",
@@ -127,6 +139,7 @@ __all__ = [
     "InazDailyRecord",
     "InazEventSummary",
     "InazImportJob",
+    "InazSupervisorAssignment",
     "InazSyncJob",
     "AnagraficaAuditLog",
     "AnagraficaCompany",
@@ -137,6 +150,7 @@ __all__ = [
     "AnagraficaPerson",
     "AnagraficaPersonSnapshot",
     "AnagraficaSubject",
+    "AnagraficaVisuraRoutingAnomaly",
     "AnprCheckLog",
     "AnprJobRun",
     "AnprSyncConfig",

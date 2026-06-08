@@ -131,12 +131,16 @@ import type {
   OrgStructureBootstrapResult,
   OrgStructureWorkspace,
   OrgAssignment,
+  OrgAssignmentCreateInput,
+  OrgAssignmentUpdateInput,
   OrgUnit,
   OrgUnitCreateInput,
   OrgUnitDetail,
   OrgUnitTreeNode,
+  OrgUnitUpdateInput,
   OrgVisibilityOverride,
   OrgVisibilityOverrideCreateInput,
+  OrgVisibilityOverrideUpdateInput,
   OrgVisibilityResult,
   OrgWhiteCompanySyncResult,
   NetworkAlert,
@@ -743,6 +747,16 @@ export async function getOrgTree(token: string): Promise<OrgUnitTreeNode[]> {
   return request<OrgUnitTreeNode[]>("/organigramma/units/tree", { headers: authHeaders(token) });
 }
 
+export async function getOrgUnits(
+  token: string,
+  params: { parentId?: string } = {},
+): Promise<OrgUnit[]> {
+  const query = new URLSearchParams();
+  if (params.parentId) query.set("parent_id", params.parentId);
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<OrgUnit[]>(`/organigramma/units${suffix}`, { headers: authHeaders(token) });
+}
+
 export async function getOrgUnit(token: string, unitId: string): Promise<OrgUnitDetail> {
   return request<OrgUnitDetail>(`/organigramma/units/${unitId}`, { headers: authHeaders(token) });
 }
@@ -750,6 +764,18 @@ export async function getOrgUnit(token: string, unitId: string): Promise<OrgUnit
 export async function createOrgUnit(token: string, payload: OrgUnitCreateInput): Promise<OrgUnit> {
   return request<OrgUnit>("/organigramma/units", {
     method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateOrgUnit(
+  token: string,
+  unitId: string,
+  payload: OrgUnitUpdateInput,
+): Promise<OrgUnit> {
+  return request<OrgUnit>(`/organigramma/units/${unitId}`, {
+    method: "PUT",
     headers: authHeaders(token),
     body: JSON.stringify(payload),
   });
@@ -770,6 +796,36 @@ export async function getOrgAssignments(
   return request<OrgAssignment[]>(`/organigramma/assignments${suffix}`, { headers: authHeaders(token) });
 }
 
+export async function createOrgAssignment(
+  token: string,
+  payload: OrgAssignmentCreateInput,
+): Promise<OrgAssignment> {
+  return request<OrgAssignment>("/organigramma/assignments", {
+    method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateOrgAssignment(
+  token: string,
+  assignmentId: string,
+  payload: OrgAssignmentUpdateInput,
+): Promise<OrgAssignment> {
+  return request<OrgAssignment>(`/organigramma/assignments/${assignmentId}`, {
+    method: "PUT",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteOrgAssignment(token: string, assignmentId: string): Promise<void> {
+  await request<void>(`/organigramma/assignments/${assignmentId}`, {
+    method: "DELETE",
+    headers: authHeaders(token),
+  });
+}
+
 export async function getOrgOverrides(token: string): Promise<OrgVisibilityOverride[]> {
   return request<OrgVisibilityOverride[]>("/organigramma/overrides", { headers: authHeaders(token) });
 }
@@ -780,6 +836,18 @@ export async function createOrgOverride(
 ): Promise<OrgVisibilityOverride> {
   return request<OrgVisibilityOverride>("/organigramma/overrides", {
     method: "POST",
+    headers: authHeaders(token),
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateOrgOverride(
+  token: string,
+  overrideId: string,
+  payload: OrgVisibilityOverrideUpdateInput,
+): Promise<OrgVisibilityOverride> {
+  return request<OrgVisibilityOverride>(`/organigramma/overrides/${overrideId}`, {
+    method: "PUT",
     headers: authHeaders(token),
     body: JSON.stringify(payload),
   });
