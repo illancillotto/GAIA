@@ -279,6 +279,12 @@ La pagina deve mostrare indicatori:
 | intervento da eseguire valorizzato | warning operativo |
 | batteria bassa | warning operativo |
 
+Regola operativa frontend sul file picker:
+
+- i file temporanei di Excel con prefisso `~$` non devono essere inviati al backend;
+- il pannello import deve ignorarli automaticamente e mostrare un avviso esplicito all'operatore;
+- se la selezione contiene solo file `~$...`, il flusso deve bloccarsi lato frontend prima della validazione/import.
+
 Regola di calcolo obbligatoria per il consumo:
 
 - se il file fornisce `consumo_mc`, quello resta il valore sorgente;

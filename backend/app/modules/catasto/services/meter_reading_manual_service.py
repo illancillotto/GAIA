@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from typing import Any
 from uuid import UUID
 
@@ -69,6 +69,8 @@ def _normalize_meter_serial(value: Any) -> str:
 def _to_json_safe(value: Any) -> Any:
     if isinstance(value, Decimal):
         return float(value)
+    if isinstance(value, date):
+        return value.isoformat()
     if isinstance(value, datetime):
         return value.isoformat()
     if isinstance(value, UUID):

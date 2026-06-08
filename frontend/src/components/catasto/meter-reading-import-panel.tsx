@@ -10,6 +10,7 @@ import { MeterReadingImportReport, type MeterReadingImportReportItem } from "./m
 
 export function MeterReadingImportPanel() {
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
+  const [ignoredTempFiles, setIgnoredTempFiles] = useState<string[]>([]);
   const [anno, setAnno] = useState("");
   const [mode, setMode] = useState<"upsert" | "import" | "replace">("upsert");
   const [previews, setPreviews] = useState<MeterReadingImportReportItem[]>([]);
@@ -17,6 +18,18 @@ export function MeterReadingImportPanel() {
   const [messages, setMessages] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [progressMessage, setProgressMessage] = useState<string | null>(null);
+
+  function handleSelectedFiles(files: File[]) {
+    const ignored = files.filter((file) => file.name.startsWith("~$")).map((file) => file.name);
+    const accepted = files.filter((file) => !file.name.startsWith("~$"));
+    setIgnoredTempFiles(ignored);
+    setSelectedFiles(accepted);
+    if (accepted.length === 0 && ignored.length > 0) {
+      setError("I file temporanei di Excel (~$...) non sono importabili. Seleziona i file .xlsx reali.");
+      return;
+    }
+    setError(null);
+  }
 
   async function validateSingleFile(token: string, file: File): Promise<MeterReadingImportReportItem> {
     const preview = await catastoValidateMeterReadingsImport(token, file, {
@@ -95,8 +108,8 @@ export function MeterReadingImportPanel() {
             multiple
             disabled={busy !== null}
             onChange={() => undefined}
-            onChangeFiles={(files) => setSelectedFiles(files)}
-            hint="Usa file `.xlsx` nel formato tipo `D01-Sinis 2025.xlsx`. Se un file export non viene letto, riaprilo e salvalo di nuovo come `.xlsx`."
+            onChangeFiles={handleSelectedFiles}
+            hint="Usa file `.xlsx` nel formato tipo `D01-Sinis 2025.xlsx`. I file temporanei Excel `~$...` vengono ignorati automaticamente."
           />
           <label className="block text-sm font-medium text-slate-700">
             Anno override
@@ -127,6 +140,17 @@ export function MeterReadingImportPanel() {
       {error ? (
         <AlertBanner variant="danger" title="Errore">
           {error}
+        </AlertBanner>
+      ) : null}
+
+      {ignoredTempFiles.length > 0 ? (
+        <AlertBanner variant="warning" title="File ignorati">
+          <div className="space-y-1">
+            <p>I file temporanei di Excel non vengono importati.</p>
+            {ignoredTempFiles.map((file) => (
+              <p key={file}>{file}</p>
+            ))}
+          </div>
         </AlertBanner>
       ) : null}
 

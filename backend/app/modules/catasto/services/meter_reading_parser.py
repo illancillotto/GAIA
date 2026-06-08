@@ -92,11 +92,36 @@ class ParsedMeterReadingsFile:
     rows: list[ParsedMeterReadingRow]
 
 
+_AUXILIARY_SHEET_TOKENS = (
+    "PIVOT",
+    "LAVORAT",
+    "PULITO",
+    "RIEPILOG",
+    "TOTAL",
+    "TOTALE",
+)
+
+
 def normalize_header(value: Any) -> str:
     text = str(value or "").strip().upper()
     text = text.replace("\n", " ")
     text = re.sub(r"\s+", " ", text)
     return text
+
+
+def _normalize_sheet_title(value: str | None) -> str:
+    if not value:
+        return ""
+    normalized = unicodedata.normalize("NFD", value)
+    normalized = "".join(char for char in normalized if not unicodedata.combining(char))
+    normalized = normalized.upper()
+    normalized = re.sub(r"[^A-Z0-9]+", " ", normalized)
+    return re.sub(r"\s+", " ", normalized).strip()
+
+
+def _is_auxiliary_sheet_title(title: str | None) -> bool:
+    normalized = _normalize_sheet_title(title)
+    return any(token in normalized for token in _AUXILIARY_SHEET_TOKENS)
 
 
 def resolve_header_alias(header: Any, *, target_year: int | None = None) -> str | None:
@@ -357,7 +382,16 @@ def parse_meter_readings_excel(file_bytes: bytes, filename: str) -> ParsedMeterR
     distretto_code, anno = _extract_filename_metadata(filename)
     parsed_rows: list[ParsedMeterReadingRow] = []
 
-    for sheet in workbook.worksheets:
+    preferred_sheets = [sheet for sheet in workbook.worksheets if not _is_auxiliary_sheet_title(sheet.title)]
+    fallback_sheets = [sheet for sheet in workbook.worksheets if _is_auxiliary_sheet_title(sheet.title)]
+    sheets_to_scan = preferred_sheets or fallback_sheets
+    if preferred_sheets and fallback_sheets:
+        sheets_to_scan = preferred_sheets + fallback_sheets
+
+    accepted_sheet_rows = 0
+    for sheet in sheets_to_scan:
+        if accepted_sheet_rows > 0 and _is_auxiliary_sheet_title(sheet.title):
+            continue
         if sheet.max_row is None or sheet.max_row < 1:
             continue
         header_row = _detect_header_row(sheet)
@@ -376,6 +410,7 @@ def parse_meter_readings_excel(file_bytes: bytes, filename: str) -> ParsedMeterR
         if len(mapped_headers) < 2:
             continue
 
+        sheet_rows_before = len(parsed_rows)
         for row_number, row in enumerate(sheet.iter_rows(min_row=header_row + 1, values_only=True), start=header_row + 1):
             item: dict[str, Any] = {"sheet_name": sheet.title}
             has_values = False
@@ -397,5 +432,7 @@ def parse_meter_readings_excel(file_bytes: bytes, filename: str) -> ParsedMeterR
             if not has_values:
                 continue
             parsed_rows.append(ParsedMeterReadingRow(row_number=row_number, data=item))
+        if len(parsed_rows) > sheet_rows_before:
+            accepted_sheet_rows += len(parsed_rows) - sheet_rows_before
 
     return ParsedMeterReadingsFile(filename=filename, anno=anno, distretto_code=distretto_code, rows=parsed_rows)

@@ -67,6 +67,7 @@ from app.modules.catasto.services.import_distretti_excel import import_distretti
 from app.modules.catasto.services import import_distretti_excel as import_distretti_excel_module
 from app.modules.catasto.services.meter_reading_import_service import import_meter_readings, prepare_meter_readings_import
 from app.modules.catasto.services.meter_reading_linker import normalize_tax_code
+from app.modules.catasto.services.meter_reading_manual_service import build_import_payload_snapshot
 from app.modules.catasto.services.meter_reading_parser import parse_meter_readings_excel
 from app.modules.catasto.services.ade_wfs import (
     AdeWfsBbox,
@@ -8758,6 +8759,125 @@ def test_import_meter_readings_derives_missing_consumption_from_reading_delta() 
         db.close()
 
 
+def test_import_meter_readings_truncates_overlong_text_fields() -> None:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(
+        [
+            "PUNTO DI CONSEGNA",
+            "Tipologia idrante",
+            "MATRIC.",
+            "lettura iniziale 2025",
+            "lettura finale 2025",
+            "CODICE FISCALE",
+            "tariffa",
+            "TITOLARE DOMANDA IRRIGUA 2025",
+        ]
+    )
+    long_tariffa = "T" * 180
+    long_dui = "D" * 180
+    sheet.append(["C51A_6", "Hydropass ACMO bi_flangia DN_100", "9002", 10, 20, "RSSMRA80A01H501U", long_tariffa, long_dui])
+    output = BytesIO()
+    workbook.save(output)
+
+    db = TestingSessionLocal()
+    try:
+        subject = AnagraficaSubject(subject_type="person", status="active", source_name_raw="Mario Rossi")
+        db.add(subject)
+        db.flush()
+        db.add(
+            AnagraficaPerson(
+                subject_id=subject.id,
+                cognome="Rossi",
+                nome="Mario",
+                codice_fiscale="RSSMRA80A01H501U",
+            )
+        )
+        distretto = db.execute(select(CatDistretto).where(CatDistretto.num_distretto == "1")).scalar_one()
+        import_record, _prepared = import_meter_readings(
+            db,
+            file_bytes=output.getvalue(),
+            filename="D01-Sinis 2025.xlsx",
+            uploaded_by=1,
+            mode="upsert",
+            anno=2025,
+            distretto_id=distretto.id,
+        )
+        reading = db.execute(select(CatMeterReading).where(CatMeterReading.import_id == import_record.id)).scalar_one()
+        assert reading.tariffa == long_tariffa[:128]
+        assert reading.dui == long_dui[:128]
+    finally:
+        db.close()
+
+
+def test_import_meter_readings_reuses_existing_row_with_case_variant_meter_serial() -> None:
+    db = TestingSessionLocal()
+    try:
+        distretto = db.execute(select(CatDistretto).where(CatDistretto.num_distretto == "1")).scalar_one()
+        existing = CatMeterReading(
+            distretto_id=distretto.id,
+            anno=2025,
+            punto_consegna="C7B_1",
+            matricola="n.l.",
+            validation_status="valid",
+            validation_messages=[],
+            source="excel",
+        )
+        db.add(existing)
+        db.commit()
+        existing_id = existing.id
+
+        workbook = Workbook()
+        sheet = workbook.active
+        sheet.append(
+            [
+                "PUNTO DI CONSEGNA",
+                "Tipologia idrante",
+                "MATRIC.",
+                "lettura finale 2025",
+            ]
+        )
+        sheet.append(["C7B_1", "Hydropass ACMO bi_flangia DN_100", "N.L.", 55])
+        output = BytesIO()
+        workbook.save(output)
+
+        import_record, _prepared = import_meter_readings(
+            db,
+            file_bytes=output.getvalue(),
+            filename="D01-Sinis 2025.xlsx",
+            uploaded_by=1,
+            mode="upsert",
+            anno=2025,
+            distretto_id=distretto.id,
+        )
+
+        rows = db.execute(
+            select(CatMeterReading).where(
+                CatMeterReading.anno == 2025,
+                CatMeterReading.distretto_id == distretto.id,
+                CatMeterReading.punto_consegna == "C7B_1",
+            )
+        ).scalars().all()
+        assert len(rows) == 1
+        assert rows[0].id == existing_id
+        assert rows[0].import_id == import_record.id
+        assert rows[0].matricola == "N.L."
+    finally:
+        db.close()
+
+
+def test_build_meter_reading_import_payload_snapshot_serializes_dates() -> None:
+    snapshot = build_import_payload_snapshot(
+        {
+            "punto_consegna": "C1A_5",
+            "data_lettura": date(2024, 10, 15),
+            "data_intervento": date(2024, 10, 16),
+        }
+    )
+    assert snapshot["data_lettura"] == "2024-10-15"
+    assert snapshot["data_intervento"] == "2024-10-16"
+
+
 def test_meter_reading_parser_infers_diramatore_and_idrovalvola_cases() -> None:
     workbook = Workbook()
     sheet = workbook.active
@@ -8830,6 +8950,26 @@ def test_meter_reading_prepare_import_resolves_composite_distretto_code_from_fil
         )
 
         assert prepared.anno == 2025
+        assert prepared.distretto is not None
+        assert prepared.distretto.num_distretto == "291"
+    finally:
+        db.close()
+
+
+def test_meter_reading_prepare_import_resolves_composite_distretto_code_from_filename_with_underscore() -> None:
+    db = TestingSessionLocal()
+    try:
+        db.add(CatDistretto(num_distretto="291", nome_distretto="3° Distretto Terralba - Zona Uras"))
+        db.add(CatDistretto(num_distretto="29a", nome_distretto="3 Distr Terralba - Uras"))
+        db.commit()
+
+        prepared = prepare_meter_readings_import(
+            db,
+            file_bytes=_build_meter_readings_workbook(),
+            filename="D29-1_Uras_letture_2024.xlsx",
+        )
+
+        assert prepared.anno == 2024
         assert prepared.distretto is not None
         assert prepared.distretto.num_distretto == "291"
     finally:
@@ -8946,6 +9086,47 @@ def test_meter_reading_parser_ignores_empty_aux_sheets() -> None:
     assert len(parsed.rows) == 1
     assert parsed.rows[0].data["punto_consegna"] == "A1"
     assert parsed.rows[0].data["record_type"] == "IDROVALVOLA"
+
+
+def test_meter_reading_parser_skips_auxiliary_duplicate_sheets_when_primary_data_exists() -> None:
+    workbook = Workbook()
+    primary_sheet = workbook.active
+    primary_sheet.title = "Foglio1"
+    primary_sheet.append(["ID", "PUNTO DI CONSEGNA", "TIPOLOGIA IDRANTE", "MATRIC.", "LETTURA FINALE 2024"])
+    primary_sheet.append([1, "C1A_5", "Idrometro volumetrico TECNIDRO dn_100", "R2007373", 621])
+
+    duplicate_sheet = workbook.create_sheet("LAVORATE MARCO")
+    duplicate_sheet.append(["ID", "PUNTO DI CONSEGNA", "TIPOLOGIA IDRANTE", "MATRIC.", "LETTURA FINALE 2024"])
+    duplicate_sheet.append([1, "C1A_5", "Idrometro volumetrico TECNIDRO dn_100", "R2007373", 621])
+
+    pivot_sheet = workbook.create_sheet("PIVOT LAVORATE MARCO")
+    pivot_sheet.append(["ID", "PUNTO DI CONSEGNA", "TIPOLOGIA IDRANTE", "MATRIC.", "LETTURA FINALE 2024"])
+    pivot_sheet.append([1, "C1A_5", "Idrometro volumetrico TECNIDRO dn_100", "R2007373", 621])
+
+    output = BytesIO()
+    workbook.save(output)
+
+    parsed = parse_meter_readings_excel(output.getvalue(), "D02-Santa Maria letture 2024.xlsx")
+
+    assert len(parsed.rows) == 1
+    assert parsed.rows[0].data["sheet_name"] == "Foglio1"
+    assert parsed.rows[0].data["punto_consegna"] == "C1A_5"
+
+
+def test_meter_reading_parser_falls_back_to_auxiliary_sheet_when_it_is_the_only_supported_source() -> None:
+    workbook = Workbook()
+    only_sheet = workbook.active
+    only_sheet.title = "LAVORATE MARCO"
+    only_sheet.append(["ID", "PUNTO DI CONSEGNA", "TIPOLOGIA IDRANTE", "MATRIC.", "LETTURA FINALE 2024"])
+    only_sheet.append([1, "C1A_5", "Idrometro volumetrico TECNIDRO dn_100", "R2007373", 621])
+    output = BytesIO()
+    workbook.save(output)
+
+    parsed = parse_meter_readings_excel(output.getvalue(), "D02-Santa Maria letture 2024.xlsx")
+
+    assert len(parsed.rows) == 1
+    assert parsed.rows[0].data["sheet_name"] == "LAVORATE MARCO"
+    assert parsed.rows[0].data["punto_consegna"] == "C1A_5"
 
 
 def test_meter_reading_parser_classifies_predisposizione_as_operator_activity() -> None:

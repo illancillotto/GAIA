@@ -20,6 +20,7 @@ domain-docs/catasto/docs/
 La funzionalità prevede:
 
 - import Excel dei file distrettuali, anche multiplo;
+- esclusione automatica dei file temporanei Excel `~$...` nel picker frontend, con avviso esplicito all'operatore;
 - normalizzazione e validazione dati;
 - aggancio alle utenze tramite codice fiscale;
 - visualizzazione nel dettaglio utente;

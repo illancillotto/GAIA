@@ -66,9 +66,8 @@ def _normalize_distretto_code(value: str | None) -> str | None:
 def _distretto_code_candidates_from_filename(filename: str | None) -> list[str]:
     if not filename:
         return []
-    normalized = unicodedata.normalize("NFD", filename)
-    normalized = "".join(char for char in normalized if not unicodedata.combining(char))
-    composite_match = re.search(r"\bD?\s*0*(\d{1,3})\s*[-_/ ]\s*([0-9A-Za-z]{1,3})\b", normalized, flags=re.IGNORECASE)
+    normalized = _normalize_filename_token(filename)
+    composite_match = re.search(r"\bD?\s*0*(\d{1,3})\s+([0-9A-Z]{1,3})\b", normalized, flags=re.IGNORECASE)
     if not composite_match:
         return []
 
@@ -108,6 +107,44 @@ def _normalize_meter_serial(value: Any) -> str:
     return str(value).strip().upper()
 
 
+_METER_READING_TEXT_LIMITS: dict[str, int | None] = {
+    "excel_id": 64,
+    "punto_consegna": 128,
+    "matricola": 128,
+    "sigillo": 128,
+    "record_type": 64,
+    "record_kind": 32,
+    "operational_state": 32,
+    "tipologia_idrante": 255,
+    "firmware_version": 128,
+    "battery_level": 64,
+    "operatore_lettura": 255,
+    "intervento_eseguito": None,
+    "intervento_da_eseguire": None,
+    "operatore_intervento": 255,
+    "dui": 128,
+    "codice_fiscale": 255,
+    "codice_fiscale_normalizzato": 32,
+    "coltura": 255,
+    "tariffa": 128,
+    "fondo_chiuso": 128,
+    "telefono": 64,
+    "note": None,
+}
+
+
+def _fit_model_text(field: str, value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    if not text:
+        return None
+    max_length = _METER_READING_TEXT_LIMITS.get(field)
+    if max_length is None:
+        return text
+    return text[:max_length]
+
+
 def _find_existing_meter_reading(
     db: Session,
     *,
@@ -122,7 +159,7 @@ def _find_existing_meter_reading(
             CatMeterReading.anno == anno,
             CatMeterReading.distretto_id == distretto_id,
             CatMeterReading.punto_consegna == punto_consegna,
-            func.coalesce(CatMeterReading.matricola, "") == normalized_serial,
+            func.upper(func.coalesce(CatMeterReading.matricola, "")) == normalized_serial,
         )
     ).scalar_one_or_none()
     if exact_match is not None:
@@ -224,7 +261,7 @@ def prepare_meter_readings_import(
     duplicate_keys: set[tuple[int | None, UUID | None, str, str]] = set()
     items: list[PreparedMeterReadingItem] = []
     for row in parsed.rows:
-        point = (row.data.get("punto_consegna") or "").strip().upper()
+        point = (_fit_model_text("punto_consegna", row.data.get("punto_consegna")) or "").upper()
         meter_serial = _normalize_meter_serial(row.data.get("matricola"))
         preclassified_kind = classify_meter_record_type(row.data.get("record_type"))
         preclassified_state = detect_operational_state(
@@ -249,6 +286,8 @@ def prepare_meter_readings_import(
             **row.data,
             "anno": effective_anno,
             "distretto_id": distretto.id if distretto else None,
+            "punto_consegna": _fit_model_text("punto_consegna", row.data.get("punto_consegna")),
+            "matricola": _fit_model_text("matricola", meter_serial),
             "consumo_mc": effective_consumption_mc(
                 consumo_mc=row.data.get("consumo_mc"),
                 lettura_iniziale=row.data.get("lettura_iniziale"),
@@ -459,33 +498,33 @@ def import_meter_readings(
         )
         target.import_id = import_record.id
         target.row_number = item.row_number
-        target.excel_id = item.payload.get("excel_id")
-        target.matricola = item.payload.get("matricola")
-        target.sigillo = item.payload.get("sigillo")
-        target.record_type = item.payload.get("record_type")
-        target.record_kind = item.payload.get("record_kind")
-        target.operational_state = item.payload.get("operational_state")
-        target.tipologia_idrante = item.payload.get("tipologia_idrante")
-        target.firmware_version = item.payload.get("firmware_version")
-        target.battery_level = item.payload.get("battery_level")
+        target.excel_id = _fit_model_text("excel_id", item.payload.get("excel_id"))
+        target.matricola = _fit_model_text("matricola", _normalize_meter_serial(item.payload.get("matricola")))
+        target.sigillo = _fit_model_text("sigillo", item.payload.get("sigillo"))
+        target.record_type = _fit_model_text("record_type", item.payload.get("record_type"))
+        target.record_kind = _fit_model_text("record_kind", item.payload.get("record_kind"))
+        target.operational_state = _fit_model_text("operational_state", item.payload.get("operational_state"))
+        target.tipologia_idrante = _fit_model_text("tipologia_idrante", item.payload.get("tipologia_idrante"))
+        target.firmware_version = _fit_model_text("firmware_version", item.payload.get("firmware_version"))
+        target.battery_level = _fit_model_text("battery_level", item.payload.get("battery_level"))
         target.lettura_iniziale = item.payload.get("lettura_iniziale")
         target.lettura_finale = item.payload.get("lettura_finale")
         target.consumo_mc = item.payload.get("consumo_mc")
         target.data_lettura = item.payload.get("data_lettura")
-        target.operatore_lettura = item.payload.get("operatore_lettura")
-        target.intervento_da_eseguire = item.payload.get("intervento_da_eseguire")
-        target.intervento_eseguito = item.payload.get("intervento_eseguito")
-        target.operatore_intervento = item.payload.get("operatore_intervento")
+        target.operatore_lettura = _fit_model_text("operatore_lettura", item.payload.get("operatore_lettura"))
+        target.intervento_da_eseguire = _fit_model_text("intervento_da_eseguire", item.payload.get("intervento_da_eseguire"))
+        target.intervento_eseguito = _fit_model_text("intervento_eseguito", item.payload.get("intervento_eseguito"))
+        target.operatore_intervento = _fit_model_text("operatore_intervento", item.payload.get("operatore_intervento"))
         target.data_intervento = item.payload.get("data_intervento")
-        target.dui = item.payload.get("dui")
-        target.codice_fiscale = item.payload.get("codice_fiscale")
-        target.codice_fiscale_normalizzato = item.payload.get("codice_fiscale_normalizzato")
+        target.dui = _fit_model_text("dui", item.payload.get("dui"))
+        target.codice_fiscale = _fit_model_text("codice_fiscale", item.payload.get("codice_fiscale"))
+        target.codice_fiscale_normalizzato = _fit_model_text("codice_fiscale_normalizzato", item.payload.get("codice_fiscale_normalizzato"))
         target.subject_id = item.payload.get("subject_id")
-        target.coltura = item.payload.get("coltura")
-        target.tariffa = item.payload.get("tariffa")
-        target.fondo_chiuso = item.payload.get("fondo_chiuso")
-        target.telefono = item.payload.get("telefono")
-        target.note = item.payload.get("note")
+        target.coltura = _fit_model_text("coltura", item.payload.get("coltura"))
+        target.tariffa = _fit_model_text("tariffa", item.payload.get("tariffa"))
+        target.fondo_chiuso = _fit_model_text("fondo_chiuso", item.payload.get("fondo_chiuso"))
+        target.telefono = _fit_model_text("telefono", item.payload.get("telefono"))
+        target.note = _fit_model_text("note", item.payload.get("note"))
         target.validation_status = item.validation_status
         target.validation_messages = [message.__dict__ for message in item.validation_messages]
         target.source = "excel"
