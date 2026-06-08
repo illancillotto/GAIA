@@ -6,6 +6,7 @@ import { FilterPillGroup } from "@/components/network/filter-pill-group";
 import { NetworkModulePage } from "@/components/network/network-module-page";
 import { NetworkTrackToggle } from "@/components/network/network-track-toggle";
 import { Badge } from "@/components/ui/badge";
+import { AlertTriangleIcon, CheckIcon, ShieldIcon } from "@/components/ui/icons";
 import { EmptyState } from "@/components/ui/empty-state";
 import { BellIcon } from "@/components/ui/icons";
 import {
@@ -36,6 +37,12 @@ const TRACKING_SCOPE_OPTIONS = [
   { value: "", label: "Tutti" },
   { value: "device", label: "Dispositivi" },
   { value: "web", label: "Traffico esterno" },
+] as const;
+
+const ACTIVITY_STATUS_OPTIONS = [
+  { value: "", label: "Tutti", icon: ShieldIcon },
+  { value: "allowed", label: "Allowed", icon: CheckIcon },
+  { value: "blocked", label: "Blocked", icon: AlertTriangleIcon },
 ] as const;
 
 function isPrivateNetworkIp(value: string | null | undefined) {
@@ -120,6 +127,10 @@ function formatEventType(eventType: string) {
     action: knownActions[action]?.label || toTitleCase(action),
     actionTone: knownActions[action]?.tone || "border-gray-200 bg-gray-50 text-gray-700",
   };
+}
+
+function getEventActionKey(eventType: string) {
+  return (eventType.split(".").filter(Boolean).pop() ?? "").toLowerCase();
 }
 
 function formatMatchedOnLabel(value: string) {
@@ -295,6 +306,42 @@ function metricTone(label: string) {
   }
 }
 
+function ActivityStatusFilter({
+  value,
+  onChange,
+}: {
+  value: "" | "allowed" | "blocked";
+  onChange: (value: "" | "allowed" | "blocked") => void;
+}) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {ACTIVITY_STATUS_OPTIONS.map((option) => {
+        const Icon = option.icon;
+        const isActive = value === option.value;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            onClick={() => onChange(option.value)}
+            className={`inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+              isActive
+                ? option.value === "allowed"
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                  : option.value === "blocked"
+                    ? "border-amber-200 bg-amber-50 text-amber-800"
+                    : "border-[#cfe0d4] bg-[#f4faf6] text-[#1D4E35]"
+                : "border-gray-200 bg-white text-gray-600 hover:border-emerald-200 hover:text-emerald-700"
+            }`}
+          >
+            <Icon className="h-3.5 w-3.5" />
+            {option.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function TrackingContent({ token, currentUser }: { token: string; currentUser: CurrentUser }) {
   const [subjects, setSubjects] = useState<NetworkTrackedSubject[]>([]);
   const [deviceSuggestions, setDeviceSuggestions] = useState<NetworkDevice[]>([]);
@@ -304,6 +351,7 @@ function TrackingContent({ token, currentUser }: { token: string; currentUser: C
   const [search, setSearch] = useState("");
   const [trackingScope, setTrackingScope] = useState<"" | "device" | "web">("");
   const [entityFilter, setEntityFilter] = useState<"" | "ip" | "domain" | "url">("");
+  const [activityFilter, setActivityFilter] = useState<"" | "allowed" | "blocked">("");
   const [includeInactive, setIncludeInactive] = useState(false);
   const [formType, setFormType] = useState<"ip" | "domain" | "url">("ip");
   const [formValue, setFormValue] = useState("");
@@ -427,6 +475,8 @@ function TrackingContent({ token, currentUser }: { token: string; currentUser: C
   const visibleSubjects = useMemo(() => {
     return subjects.filter((subject) => {
       const isDeviceLike = isDeviceLikeTrackedSubject(subject);
+      const allowedEvents = subject.activity_summary?.allowed_events ?? 0;
+      const blockedEvents = subject.activity_summary?.blocked_events ?? 0;
       if (trackingScope === "device" && !isDeviceLike) {
         return false;
       }
@@ -436,9 +486,15 @@ function TrackingContent({ token, currentUser }: { token: string; currentUser: C
       if (entityFilter && subject.entity_type !== entityFilter) {
         return false;
       }
+      if (activityFilter === "allowed" && allowedEvents <= 0) {
+        return false;
+      }
+      if (activityFilter === "blocked" && blockedEvents <= 0) {
+        return false;
+      }
       return true;
     });
-  }, [entityFilter, subjects, trackingScope]);
+  }, [activityFilter, entityFilter, subjects, trackingScope]);
 
   async function handleCreate() {
     if (!selectedSuggestedDevice && !formValue.trim()) {
@@ -698,11 +754,32 @@ function TrackingContent({ token, currentUser }: { token: string; currentUser: C
                   </aside>
                   <section className="rounded-[24px] border border-[#E7EFE9] bg-[#F8FBF8] p-4">
                     <div className="flex items-center justify-between gap-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">Ultimi eventi</p>
-                      <span className="text-xs text-gray-400">Prime {Math.min(expandedActivity?.recent_events.length ?? 0, 50)} voci</span>
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-gray-400">Ultimi eventi</p>
+                        <div className="mt-3">
+                          <ActivityStatusFilter value={activityFilter} onChange={setActivityFilter} />
+                        </div>
+                      </div>
+                      <span className="text-xs text-gray-400">
+                        Prime {Math.min((expandedActivity?.recent_events.filter((event) => {
+                          const action = getEventActionKey(event.event_type);
+                          if (!activityFilter) {
+                            return true;
+                          }
+                          return action === activityFilter;
+                        }).length) ?? 0, 50)} voci
+                      </span>
                     </div>
                     <div className="mt-4 max-h-[42rem] space-y-3 overflow-y-auto pr-1">
-                      {expandedActivity?.recent_events.map((event) => (
+                      {expandedActivity?.recent_events
+                        .filter((event) => {
+                          const action = getEventActionKey(event.event_type);
+                          if (!activityFilter) {
+                            return true;
+                          }
+                          return action === activityFilter;
+                        })
+                        .map((event) => (
                         <RecentEventCard
                           key={`${expandedSubject.id}-expanded-${event.id}`}
                           subject={expandedSubject}
@@ -710,8 +787,14 @@ function TrackingContent({ token, currentUser }: { token: string; currentUser: C
                           expanded
                           onOpenIpDetails={handleOpenIpDetails}
                         />
-                      ))}
-                      {!expandedActivity?.recent_events.length ? (
+                        ))}
+                      {!expandedActivity?.recent_events.filter((event) => {
+                        const action = getEventActionKey(event.event_type);
+                        if (!activityFilter) {
+                          return true;
+                        }
+                        return action === activityFilter;
+                      }).length ? (
                         <div className="rounded-[22px] border border-dashed border-[#D9E8DE] bg-white/70 px-4 py-6 text-sm text-gray-500">
                           Nessun evento correlato nel periodo osservato.
                         </div>
@@ -986,6 +1069,10 @@ function TrackingContent({ token, currentUser }: { token: string; currentUser: C
                 <FilterPillGroup options={ENTITY_OPTIONS} value={entityFilter} onChange={setEntityFilter} />
               </div>
             ) : null}
+            <div className="mt-4">
+              <p className="mb-2 text-xs font-semibold uppercase tracking-[0.14em] text-gray-400">Stato eventi</p>
+              <ActivityStatusFilter value={activityFilter} onChange={setActivityFilter} />
+            </div>
           </div>
         </div>
         {loadError ? <p className="mt-4 text-sm text-red-600">{loadError}</p> : null}
@@ -1016,7 +1103,13 @@ function TrackingContent({ token, currentUser }: { token: string; currentUser: C
           {visibleSubjects.map((subject) => {
             const isDeviceLike = isDeviceLikeTrackedSubject(subject);
             const scanHistory = subject.scan_history ?? [];
-            const recentEvents = subject.activity_summary?.recent_events ?? [];
+            const recentEvents = (subject.activity_summary?.recent_events ?? []).filter((event) => {
+              const action = getEventActionKey(event.event_type);
+              if (!activityFilter) {
+                return true;
+              }
+              return action === activityFilter;
+            });
             const canAskWikiAboutBrowsing = isDeviceLike && isAdminRole(currentUser.role);
             return (
               <article
