@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import InazCapisettorePage from "@/app/inaz/capisettore/page";
 import InazCollaboratoriPage from "@/app/inaz/collaboratori/page";
+import InazCapisettorePage from "@/app/inaz/capisettore/page";
 import InazImportPage from "@/app/inaz/import/page";
 import InazPage from "@/app/inaz/page";
 import InazSettingsPage from "@/app/inaz/settings/page";
@@ -13,8 +14,10 @@ const mocks = vi.hoisted(() => ({
   getCurrentUser: vi.fn(),
   listAllApplicationUsers: vi.fn(),
   listAllInazCollaborators: vi.fn(),
+  listInazApplicationUsers: vi.fn(),
   listInazCollaborators: vi.fn(),
   listInazDailyRecords: vi.fn(),
+  listInazSupervisorAssignments: vi.fn(),
   mapInazCollaboratorApplicationUser: vi.fn(),
   listInazImportJobs: vi.fn(),
   previewInazImport: vi.fn(),
@@ -29,6 +32,7 @@ const mocks = vi.hoisted(() => ({
   updateInazCredential: vi.fn(),
   deleteInazCredential: vi.fn(),
   testInazCredential: vi.fn(),
+  updateInazSupervisorAssignment: vi.fn(),
   push: vi.fn(),
 }));
 
@@ -40,8 +44,10 @@ vi.mock("@/lib/api", () => ({
   getCurrentUser: mocks.getCurrentUser,
   listAllApplicationUsers: mocks.listAllApplicationUsers,
   listAllInazCollaborators: mocks.listAllInazCollaborators,
+  listInazApplicationUsers: mocks.listInazApplicationUsers,
   listInazCollaborators: mocks.listInazCollaborators,
   listInazDailyRecords: mocks.listInazDailyRecords,
+  listInazSupervisorAssignments: mocks.listInazSupervisorAssignments,
   mapInazCollaboratorApplicationUser: mocks.mapInazCollaboratorApplicationUser,
   listInazImportJobs: mocks.listInazImportJobs,
   previewInazImport: mocks.previewInazImport,
@@ -56,6 +62,7 @@ vi.mock("@/lib/api", () => ({
   updateInazCredential: mocks.updateInazCredential,
   deleteInazCredential: mocks.deleteInazCredential,
   testInazCredential: mocks.testInazCredential,
+  updateInazSupervisorAssignment: mocks.updateInazSupervisorAssignment,
 }));
 
 vi.mock("@/components/app/protected-page", () => ({
@@ -152,6 +159,29 @@ describe("Inaz pages", () => {
       page: 1,
       page_size: 200,
     });
+    mocks.listInazApplicationUsers.mockResolvedValue([
+      {
+        id: 7,
+        username: "mrossi",
+        email: "mrossi@example.local",
+        full_name: "Mario Rossi",
+        role: "viewer",
+        is_active: true,
+        module_accessi: true,
+        module_rete: false,
+        module_inventario: false,
+        module_catasto: false,
+        module_utenze: false,
+        module_operazioni: false,
+        module_riordino: false,
+        module_ruolo: false,
+        module_inaz: true,
+        enabled_modules: ["accessi", "inaz"],
+        created_at: "2026-05-29T00:00:00Z",
+        updated_at: "2026-05-29T00:00:00Z",
+      },
+    ]);
+    mocks.listInazSupervisorAssignments.mockResolvedValue([]);
     mocks.listInazDailyRecords.mockResolvedValue({
       items: [
         {
@@ -169,6 +199,8 @@ describe("Inaz pages", () => {
           mpe_minutes: 0,
           straordinario_minutes: 0,
           km_value: null,
+          reperibilita_unit: "none",
+          reperibilita_quantity: null,
           override_straordinario_minutes: null,
           override_mpe_minutes: null,
           manual_note: null,
@@ -177,6 +209,10 @@ describe("Inaz pages", () => {
           request_status: null,
           request_authorized_by: null,
           resolved_absence_cause: null,
+          validation_status: "pending",
+          validated_by_user_id: null,
+          validated_at: null,
+          validation_note: null,
           effective_straordinario_minutes: null,
           effective_mpe_minutes: null,
           effective_extra_minutes: null,
@@ -295,6 +331,38 @@ describe("Inaz pages", () => {
       created_at: "2026-05-29T09:00:00Z",
       updated_at: "2026-05-29T09:00:00Z",
     });
+    mocks.updateInazSupervisorAssignment.mockResolvedValue({
+      id: 1,
+      collaborator_id: "collab-1",
+      supervisor_user_id: 7,
+      assigned_by_user_id: 1,
+      created_at: "2026-05-29T09:00:00Z",
+      updated_at: "2026-05-29T09:10:00Z",
+      supervisor: {
+        id: 7,
+        username: "mrossi",
+        email: "mrossi@example.local",
+        full_name: "Mario Rossi",
+        role: "viewer",
+        is_active: true,
+      },
+      collaborator: {
+        id: "collab-1",
+        owner_user_id: 1,
+        application_user_id: null,
+        kint: "10159",
+        kkint: "{demo}",
+        employee_code: "1854",
+        company_code: "53",
+        company_label: "53 - CBO",
+        name: "AMADU SALVATORE",
+        birth_date: "1967-02-26",
+        is_active: true,
+        last_seen_at: "2026-05-29T09:00:00Z",
+        created_at: "2026-05-29T09:00:00Z",
+        updated_at: "2026-05-29T09:10:00Z",
+      },
+    });
     mocks.downloadInazSyncArtifact.mockResolvedValue(new Blob(['{"ok":true}'], { type: "application/json" }));
     mocks.cancelInazSyncJob.mockResolvedValue({
       id: "sync-1",
@@ -382,6 +450,8 @@ describe("Inaz pages", () => {
           mpe_minutes: 45,
           straordinario_minutes: 75,
           km_value: 24,
+          reperibilita_unit: "none",
+          reperibilita_quantity: null,
           override_straordinario_minutes: null,
           override_mpe_minutes: null,
           manual_note: null,
@@ -390,6 +460,10 @@ describe("Inaz pages", () => {
           request_status: "RIC",
           request_authorized_by: "PODDA FABRIZIO",
           resolved_absence_cause: "permesso",
+          validation_status: "pending",
+          validated_by_user_id: null,
+          validated_at: null,
+          validation_note: null,
           effective_straordinario_minutes: 75,
           effective_mpe_minutes: 45,
           effective_extra_minutes: 120,

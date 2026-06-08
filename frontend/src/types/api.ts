@@ -641,6 +641,8 @@ export type InazDailyRecord = {
   mpe_minutes: number | null;
   straordinario_minutes: number | null;
   km_value: number | null;
+  reperibilita_unit: "none" | "hours" | "days" | "shifts";
+  reperibilita_quantity: number | null;
   override_straordinario_minutes: number | null;
   override_mpe_minutes: number | null;
   manual_note: string | null;
@@ -683,6 +685,8 @@ export type InazDailyRecord = {
 
 export type InazDailyRecordManualUpdateInput = {
   km_value?: number | null;
+  reperibilita_unit?: "none" | "hours" | "days" | "shifts" | null;
+  reperibilita_quantity?: number | null;
   override_straordinario_minutes?: number | null;
   override_mpe_minutes?: number | null;
   manual_note?: string | null;

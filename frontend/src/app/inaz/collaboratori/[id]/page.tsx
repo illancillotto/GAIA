@@ -107,7 +107,19 @@ export default function InazCollaboratoreDetailPage() {
   const [assignmentValidFrom, setAssignmentValidFrom] = useState("");
   const [assignmentValidTo, setAssignmentValidTo] = useState("");
   const [assignmentNotes, setAssignmentNotes] = useState("");
-  const [dailyOverrides, setDailyOverrides] = useState<Record<string, { km_value: string; override_straordinario_minutes: string; override_mpe_minutes: string; manual_note: string }>>({});
+  const [dailyOverrides, setDailyOverrides] = useState<
+    Record<
+      string,
+      {
+        km_value: string;
+        reperibilita_unit: "none" | "hours" | "days" | "shifts";
+        reperibilita_quantity: string;
+        override_straordinario_minutes: string;
+        override_mpe_minutes: string;
+        manual_note: string;
+      }
+    >
+  >({});
   const [error, setError] = useState<string | null>(null);
   const [mappingNotice, setMappingNotice] = useState<{ tone: "success" | "error"; message: string } | null>(null);
   const [savingMapping, setSavingMapping] = useState(false);
@@ -151,6 +163,9 @@ export default function InazCollaboratoreDetailPage() {
               record.id,
               {
                 km_value: record.km_value != null ? String(record.km_value) : "",
+                reperibilita_unit: record.reperibilita_unit,
+                reperibilita_quantity:
+                  record.reperibilita_quantity != null ? String(record.reperibilita_quantity) : "",
                 override_straordinario_minutes:
                   record.override_straordinario_minutes != null ? String(record.override_straordinario_minutes) : "",
                 override_mpe_minutes: record.override_mpe_minutes != null ? String(record.override_mpe_minutes) : "",
@@ -257,6 +272,11 @@ export default function InazCollaboratoreDetailPage() {
     try {
       const updated = await updateInazDailyRecord(token, recordId, {
         km_value: form.km_value ? Number(form.km_value) : null,
+        reperibilita_unit: form.reperibilita_unit,
+        reperibilita_quantity:
+          form.reperibilita_unit === "none" || !form.reperibilita_quantity.trim()
+            ? null
+            : Number(form.reperibilita_quantity),
         override_straordinario_minutes: form.override_straordinario_minutes ? Number(form.override_straordinario_minutes) : null,
         override_mpe_minutes: form.override_mpe_minutes ? Number(form.override_mpe_minutes) : null,
         manual_note: form.manual_note.trim() || null,
@@ -617,6 +637,42 @@ export default function InazCollaboratoreDetailPage() {
                                     [record.id]: { ...current[record.id], km_value: event.target.value },
                                   }))
                                 }
+                              />
+                            </label>
+                            <label className="block text-sm font-medium text-gray-700">
+                              Tipo reperibilita
+                              <select
+                                className="form-control mt-1"
+                                value={dailyOverrides[record.id]?.reperibilita_unit ?? "none"}
+                                onChange={(event) =>
+                                  setDailyOverrides((current) => ({
+                                    ...current,
+                                    [record.id]: {
+                                      ...current[record.id],
+                                      reperibilita_unit: event.target.value as "none" | "hours" | "days" | "shifts",
+                                      reperibilita_quantity: event.target.value === "none" ? "" : current[record.id]?.reperibilita_quantity ?? "",
+                                    },
+                                  }))
+                                }
+                              >
+                                <option value="none">Nessuna</option>
+                                <option value="hours">Ore</option>
+                                <option value="days">Giorni</option>
+                                <option value="shifts">Turni</option>
+                              </select>
+                            </label>
+                            <label className="block text-sm font-medium text-gray-700">
+                              Quantita reperibilita
+                              <input
+                                className="form-control mt-1"
+                                value={dailyOverrides[record.id]?.reperibilita_quantity ?? ""}
+                                onChange={(event) =>
+                                  setDailyOverrides((current) => ({
+                                    ...current,
+                                    [record.id]: { ...current[record.id], reperibilita_quantity: event.target.value },
+                                  }))
+                                }
+                                disabled={(dailyOverrides[record.id]?.reperibilita_unit ?? "none") === "none"}
                               />
                             </label>
                             <label className="block text-sm font-medium text-gray-700">

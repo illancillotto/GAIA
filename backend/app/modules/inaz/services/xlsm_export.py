@@ -94,6 +94,14 @@ def resolve_export_absence_code(row: InazDailyRecord) -> str | None:
     return None
 
 
+def resolve_export_reperibilita_value(row: InazDailyRecord) -> str | None:
+    if row.reperibilita_unit == "none":
+        return None
+    if row.reperibilita_quantity is None or row.reperibilita_quantity <= 0:
+        return None
+    return "X"
+
+
 def is_festive(row: InazDailyRecord) -> bool:
     raw_payload = row.raw_payload_json if isinstance(row.raw_payload_json, dict) else None
     return (
@@ -221,6 +229,7 @@ def write_archive2_daily_values(
         "straordinario_festive": 186,
         "km_auto": 279,
         "absence_code": 436,
+        "reperibilita": 467,
     }
     for daily in export_row.daily_rows:
         col = first_day_column + daily.work_date.day - 1
@@ -236,6 +245,7 @@ def write_archive2_daily_values(
         ws.cell(row_index, col + offsets["straordinario_festive"]).value = None
         ws.cell(row_index, col + offsets["km_auto"]).value = None
         ws.cell(row_index, col + offsets["absence_code"]).value = None
+        ws.cell(row_index, col + offsets["reperibilita"]).value = None
         if ordinary is not None:
             ws.cell(row_index, col + offsets["ordinary_festive" if festive else "ordinary_ferial"]).value = ordinary
         if extra is not None:
@@ -245,6 +255,9 @@ def write_archive2_daily_values(
         absence_code = resolve_export_absence_code(daily)
         if absence_code:
             ws.cell(row_index, col + offsets["absence_code"]).value = absence_code
+        reperibilita_value = resolve_export_reperibilita_value(daily)
+        if reperibilita_value:
+            ws.cell(row_index, col + offsets["reperibilita"]).value = reperibilita_value
 
 
 def compile_workbook(

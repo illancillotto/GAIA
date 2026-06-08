@@ -244,6 +244,8 @@ class InazDailyRecord(Base):
     mpe_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     straordinario_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     km_value: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    reperibilita_unit: Mapped[str] = mapped_column(String(16), nullable=False, default="none")
+    reperibilita_quantity: Mapped[int | None] = mapped_column(Integer, nullable=True)
     override_straordinario_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     override_mpe_minutes: Mapped[int | None] = mapped_column(Integer, nullable=True)
     manual_note: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -252,6 +254,12 @@ class InazDailyRecord(Base):
     request_status: Mapped[str | None] = mapped_column(String(64), nullable=True)
     request_authorized_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
     resolved_absence_cause: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    validation_status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending", index=True)
+    validated_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("application_users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    validated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    validation_note: Mapped[str | None] = mapped_column(Text, nullable=True)
     stato: Mapped[str | None] = mapped_column(String(120), nullable=True)
     evidenze: Mapped[str | None] = mapped_column(Text, nullable=True)
     raw_weekday: Mapped[str | None] = mapped_column(String(16), nullable=True)

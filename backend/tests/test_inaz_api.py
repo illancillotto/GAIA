@@ -18,6 +18,7 @@ from app.core.security import hash_password
 from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
+from app.modules.accessi.org_structure import OrgStructureAssignment
 from app.modules.inaz.models import InazCredential, InazSyncJob
 from app.modules.inaz.services.xlsm_export import close_workbook_resources
 from app.modules.network.models import NetworkDevice
@@ -380,6 +381,8 @@ def test_inaz_daily_record_manual_overrides_update_effective_values() -> None:
         headers={"Authorization": f"Bearer {token}"},
         json={
             "km_value": 42,
+            "reperibilita_unit": "shifts",
+            "reperibilita_quantity": 1,
             "override_straordinario_minutes": 90,
             "override_mpe_minutes": 15,
             "manual_note": "Correzione capo settore",
@@ -389,6 +392,8 @@ def test_inaz_daily_record_manual_overrides_update_effective_values() -> None:
     assert updated.status_code == 200
     body = updated.json()
     assert body["km_value"] == 42
+    assert body["reperibilita_unit"] == "shifts"
+    assert body["reperibilita_quantity"] == 1
     assert body["override_straordinario_minutes"] == 90
     assert body["override_mpe_minutes"] == 15
     assert body["manual_note"] == "Correzione capo settore"
@@ -873,7 +878,7 @@ def test_inaz_export_generates_xlsm(tmp_path: Path) -> None:
     updated = client.patch(
         f"/inaz/giornaliere/{record_id}",
         headers={"Authorization": f"Bearer {token}"},
-        json={"km_value": 24},
+        json={"km_value": 24, "reperibilita_unit": "shifts", "reperibilita_quantity": 1},
     )
     assert updated.status_code == 200
 
@@ -899,6 +904,8 @@ def test_inaz_export_generates_xlsm(tmp_path: Path) -> None:
         assert archive2.cell(6, 23).value == 5.5
         # giorno 16 => colonna 8 + 15, blocco KM AUTO +279
         assert archive2.cell(6, 302).value == 24
+        # giorno 16 => colonna 8 + 15, blocco reperibilita +467
+        assert archive2.cell(6, 490).value == "X"
         # giorno 16 => colonna 8 + 15, blocco codice assenza +436
         assert archive2.cell(6, 459).value == "Permesso ordinario"
     finally:
@@ -1076,6 +1083,192 @@ def test_inaz_credentials_are_scoped_to_current_user() -> None:
 
     forbidden_read = client.get(f"/inaz/credentials/{credential_id}", headers={"Authorization": f"Bearer {other_token}"})
     assert forbidden_read.status_code == 404
+
+
+def test_inaz_admin_credentials_visibility_is_limited_but_superadmin_sees_all() -> None:
+    owner = _create_user("cred_scope_owner", role=ApplicationUserRole.VIEWER.value)
+    admin = _create_user("cred_scope_admin", role=ApplicationUserRole.ADMIN.value)
+    super_admin = _create_user("cred_scope_superadmin", role=ApplicationUserRole.SUPER_ADMIN.value)
+    owner_token = _login(owner.username)
+    admin_token = _login(admin.username)
+    super_admin_token = _login(super_admin.username)
+
+    created = client.post(
+        "/inaz/credentials",
+        headers={"Authorization": f"Bearer {owner_token}"},
+        json={"label": "Owner HR", "username": "owner.hr", "password": "secret123", "active": True},
+    )
+    assert created.status_code == 201
+    credential_id = created.json()["id"]
+
+    admin_listing = client.get("/inaz/credentials", headers={"Authorization": f"Bearer {admin_token}"})
+    assert admin_listing.status_code == 200
+    assert admin_listing.json() == []
+
+    admin_read = client.get(f"/inaz/credentials/{credential_id}", headers={"Authorization": f"Bearer {admin_token}"})
+    assert admin_read.status_code == 404
+
+    super_admin_listing = client.get("/inaz/credentials", headers={"Authorization": f"Bearer {super_admin_token}"})
+    assert super_admin_listing.status_code == 200
+    assert len(super_admin_listing.json()) == 1
+    assert super_admin_listing.json()[0]["application_user_id"] == owner.id
+
+    super_admin_read = client.get(
+        f"/inaz/credentials/{credential_id}",
+        headers={"Authorization": f"Bearer {super_admin_token}"},
+    )
+    assert super_admin_read.status_code == 200
+    assert super_admin_read.json()["username"] == "owner.hr"
+
+
+def test_inaz_hr_manager_sees_all_imported_data_and_context() -> None:
+    owner = _create_user("hr_scope_owner", role=ApplicationUserRole.VIEWER.value)
+    hr_manager = _create_user("hr_scope_manager", role=ApplicationUserRole.HR_MANAGER.value)
+    hr_token = _login(hr_manager.username)
+    db = TestingSessionLocal()
+    try:
+        parsed = parse_import_payload(load_json_payload(_sample_payload()))
+        run_import_job(
+            db,
+            parsed=parsed,
+            requested_by_user_id=owner.id,
+            filename="giornaliere.json",
+            params_json={"format": "collaboratori-json", "origin": "hr-visibility-test"},
+        )
+    finally:
+        db.close()
+
+    hr_collaborators = client.get("/inaz/collaborators", headers={"Authorization": f"Bearer {hr_token}"})
+    assert hr_collaborators.status_code == 200
+    assert hr_collaborators.json()["total"] == 1
+    assert hr_collaborators.json()["items"][0]["owner_user_id"] == owner.id
+
+    hr_records = client.get("/inaz/giornaliere", headers={"Authorization": f"Bearer {hr_token}"})
+    assert hr_records.status_code == 200
+    assert hr_records.json()["total"] == 1
+    assert hr_records.json()["items"][0]["owner_user_id"] == owner.id
+
+    access_context = client.get("/inaz/access-context", headers={"Authorization": f"Bearer {hr_token}"})
+    assert access_context.status_code == 200
+    assert access_context.json() == {
+        "can_view_all_data": True,
+        "can_view_all_credentials": False,
+        "can_manage_supervisors": False,
+        "is_supervisor": False,
+        "assigned_collaborators_count": 0,
+    }
+
+
+def test_inaz_supervisor_can_validate_assigned_records_but_not_edit_operational_fields() -> None:
+    admin = _create_user("supervisor_admin", role=ApplicationUserRole.ADMIN.value)
+    owner = _create_user("supervisor_owner", role=ApplicationUserRole.VIEWER.value)
+    supervisor = _create_user("supervisor_viewer", role=ApplicationUserRole.VIEWER.value)
+    admin_token = _login(admin.username)
+    supervisor_token = _login(supervisor.username)
+    owner_token = _login(owner.username)
+    db = TestingSessionLocal()
+    try:
+        parsed = parse_import_payload(load_json_payload(_sample_payload()))
+        run_import_job(
+            db,
+            parsed=parsed,
+            requested_by_user_id=owner.id,
+            filename="giornaliere.json",
+            params_json={"format": "collaboratori-json", "origin": "supervisor-validation-test"},
+        )
+    finally:
+        db.close()
+
+    collaborators = client.get("/inaz/collaborators", headers={"Authorization": f"Bearer {admin_token}"})
+    assert collaborators.status_code == 200
+    collab_id = collaborators.json()["items"][0]["id"]
+
+    assignment = client.put(
+        f"/inaz/supervisor-assignments/{collab_id}",
+        headers={"Authorization": f"Bearer {admin_token}"},
+        json={"supervisor_user_id": supervisor.id},
+    )
+    assert assignment.status_code == 200
+    assert assignment.json()["supervisor_user_id"] == supervisor.id
+
+    access_context = client.get("/inaz/access-context", headers={"Authorization": f"Bearer {supervisor_token}"})
+    assert access_context.status_code == 200
+    assert access_context.json()["is_supervisor"] is True
+    assert access_context.json()["assigned_collaborators_count"] == 1
+
+    visible_records = client.get("/inaz/giornaliere", headers={"Authorization": f"Bearer {supervisor_token}"})
+    assert visible_records.status_code == 200
+    assert visible_records.json()["total"] == 1
+    record_id = visible_records.json()["items"][0]["id"]
+
+    validation_update = client.patch(
+        f"/inaz/giornaliere/{record_id}",
+        headers={"Authorization": f"Bearer {supervisor_token}"},
+        json={"validation_status": "validated", "validation_note": "Verificata dal caposettore"},
+    )
+    assert validation_update.status_code == 200
+    assert validation_update.json()["validation_status"] == "validated"
+    assert validation_update.json()["validated_by_user_id"] == supervisor.id
+    assert validation_update.json()["validation_note"] == "Verificata dal caposettore"
+
+    forbidden_edit = client.patch(
+        f"/inaz/giornaliere/{record_id}",
+        headers={"Authorization": f"Bearer {supervisor_token}"},
+        json={"km_value": 42, "reperibilita_unit": "shifts", "reperibilita_quantity": 1, "manual_note": "Rettifica operativa"},
+    )
+    assert forbidden_edit.status_code == 403
+    assert forbidden_edit.json()["detail"] == "Edit privileges required for this daily record"
+
+    owner_edit = client.patch(
+        f"/inaz/giornaliere/{record_id}",
+        headers={"Authorization": f"Bearer {owner_token}"},
+        json={"km_value": 42, "manual_note": "Rettifica proprietario"},
+    )
+    assert owner_edit.status_code == 200
+    assert owner_edit.json()["km_value"] == 42
+    assert owner_edit.json()["manual_note"] == "Rettifica proprietario"
+
+
+def test_inaz_hierarchy_manager_sees_subordinate_records() -> None:
+    owner = _create_user("hierarchy_owner", role=ApplicationUserRole.VIEWER.value)
+    manager = _create_user("hierarchy_manager", role=ApplicationUserRole.VIEWER.value)
+    owner_token = _login(owner.username)
+    manager_token = _login(manager.username)
+
+    db = TestingSessionLocal()
+    try:
+        parsed = parse_import_payload(load_json_payload(_sample_payload()))
+        run_import_job(
+            db,
+            parsed=parsed,
+            requested_by_user_id=owner.id,
+            filename="giornaliere.json",
+            params_json={"format": "collaboratori-json", "origin": "hierarchy-scope-test"},
+        )
+        db.add(
+            OrgStructureAssignment(
+                application_user_id=owner.id,
+                manager_user_id=manager.id,
+                source_mode="manual",
+                is_active=True,
+            )
+        )
+        db.commit()
+    finally:
+        db.close()
+
+    manager_collaborators = client.get("/inaz/collaborators", headers={"Authorization": f"Bearer {manager_token}"})
+    assert manager_collaborators.status_code == 200
+    assert manager_collaborators.json()["total"] == 1
+
+    manager_records = client.get("/inaz/giornaliere", headers={"Authorization": f"Bearer {manager_token}"})
+    assert manager_records.status_code == 200
+    assert manager_records.json()["total"] == 1
+
+    access_context = client.get("/inaz/access-context", headers={"Authorization": f"Bearer {manager_token}"})
+    assert access_context.status_code == 200
+    assert access_context.json()["is_supervisor"] is True
+    assert access_context.json()["assigned_collaborators_count"] == 1
 
 
 def test_inaz_sync_job_retry_respects_max_attempts(monkeypatch: pytest.MonkeyPatch) -> None:
