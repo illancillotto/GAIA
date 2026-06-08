@@ -110,6 +110,14 @@ function formatPeriodLabel(periodPreset: PeriodPreset, start: string): string {
   return new Intl.DateTimeFormat("it-IT", { year: "numeric" }).format(new Date(`${start}T00:00:00`));
 }
 
+function matchesOperativitaQuery(
+  query: string,
+  values: Array<string | null | undefined>,
+): boolean {
+  if (!query) return true;
+  return values.some((value) => (value ?? "").toLowerCase().includes(query));
+}
+
 function requestBadgeLabel(record: InazDailyRecord): string | null {
   if (record.resolved_absence_cause) return record.resolved_absence_cause.replaceAll("_", " ");
   if (record.request_description) return record.request_description;
@@ -501,37 +509,48 @@ export default function MePage() {
     const query = operativitaQuery.trim().toLowerCase();
     return activities.filter((item) => {
       if (operativitaStatusFilter !== "all" && item.status !== operativitaStatusFilter) return false;
-      if (!query) return true;
-      return [
+      return matchesOperativitaQuery(query, [
         item.activity_name,
         item.activity_category,
         item.vehicle_name,
         item.text_note,
-      ].some((value) => value?.toLowerCase().includes(query));
+      ]);
     });
   }, [activities, operativitaQuery, operativitaStatusFilter]);
   const filteredReports = useMemo(() => {
     const query = operativitaQuery.trim().toLowerCase();
     return reports.filter((item) => {
       if (operativitaStatusFilter !== "all" && item.status !== operativitaStatusFilter) return false;
-      if (!query) return true;
-      return [item.report_number, item.title, item.category_name, item.vehicle_name].some((value) => value?.toLowerCase().includes(query));
+      return matchesOperativitaQuery(query, [
+        item.report_number,
+        item.title,
+        item.category_name,
+        item.vehicle_name,
+      ]);
     });
   }, [reports, operativitaQuery, operativitaStatusFilter]);
   const filteredCases = useMemo(() => {
     const query = operativitaQuery.trim().toLowerCase();
     return cases.filter((item) => {
       if (operativitaStatusFilter !== "all" && item.status !== operativitaStatusFilter) return false;
-      if (!query) return true;
-      return [item.case_number, item.title, item.source_report_number, item.category_name].some((value) => value?.toLowerCase().includes(query));
+      return matchesOperativitaQuery(query, [
+        item.case_number,
+        item.title,
+        item.source_report_number,
+        item.category_name,
+      ]);
     });
   }, [cases, operativitaQuery, operativitaStatusFilter]);
   const filteredVehicleSessions = useMemo(() => {
     const query = operativitaQuery.trim().toLowerCase();
     return vehicleSessions.filter((item) => {
       if (operativitaStatusFilter !== "all" && item.status !== operativitaStatusFilter) return false;
-      if (!query) return true;
-      return [item.vehicle_name, item.vehicle_plate_number, item.operator_name, item.notes].some((value) => value?.toLowerCase().includes(query));
+      return matchesOperativitaQuery(query, [
+        item.vehicle_name,
+        item.vehicle_plate_number,
+        item.operator_name,
+        item.notes,
+      ]);
     });
   }, [vehicleSessions, operativitaQuery, operativitaStatusFilter]);
 
