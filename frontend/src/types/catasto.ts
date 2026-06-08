@@ -120,6 +120,7 @@ export type CatMeterReading = {
   lettura_iniziale: string | null;
   lettura_finale: string | null;
   consumo_mc: string | null;
+  consumo_effettivo_mc: string | null;
   data_lettura: string | null;
   operatore_lettura: string | null;
   intervento_da_eseguire: string | null;

@@ -279,6 +279,12 @@ La pagina deve mostrare indicatori:
 | intervento da eseguire valorizzato | warning operativo |
 | batteria bassa | warning operativo |
 
+Regola di calcolo obbligatoria per il consumo:
+
+- se il file fornisce `consumo_mc`, quello resta il valore sorgente;
+- se `consumo_mc` manca ma `lettura_iniziale` e `lettura_finale` sono entrambe presenti e coerenti, il sistema deve derivare il consumo come `lettura_finale - lettura_iniziale`;
+- l'API deve esporre questo valore anche come `consumo_effettivo_mc`, così frontend e report non dipendono da logiche duplicate lato client.
+
 ### Gestione manuale warning
 
 - Le letture con `validation_status = warning` restano importabili e visibili nel registro operativo.

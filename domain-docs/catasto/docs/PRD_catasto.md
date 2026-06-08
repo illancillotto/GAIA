@@ -265,6 +265,7 @@ Contratto operativo obbligatorio per `GET /catasto/meter-readings`:
 - il payload deve esporre anche `record_tab_counts`, `operational_counts` e `validation_counts` per alimentare i chip UI senza ricontare la sola pagina corrente
 - il conteggio `lowBattery` deve funzionare su PostgreSQL anche quando `validation_messages` e JSON nullo o vuoto, senza errori di `coalesce(json, varchar)`
 - le letture in `warning` devono poter essere confermate manualmente dal drawer dettaglio tramite `POST /catasto/meter-readings/{reading_id}/validate`; l'azione forza `validation_status = valid`, rimuove i warning correnti e registra l'evento in `manual_audits`
+- il payload lettura deve esporre sia `consumo_mc` sia `consumo_effettivo_mc`; quando il file sorgente non valorizza `consumo_mc` ma contiene `lettura_iniziale` e `lettura_finale` coerenti, `consumo_effettivo_mc` deve derivare dal delta e l'import deve persistere quel valore anche in `consumo_mc`
 
 Nota UI obbligatoria per `Distretti Excel`:
 

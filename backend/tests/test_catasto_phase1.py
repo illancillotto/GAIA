@@ -65,7 +65,7 @@ from app.modules.catasto.services.import_capacitas import CapacitasImportDuplica
 from app.modules.catasto.services.comuni_reference import load_comuni_reference
 from app.modules.catasto.services.import_distretti_excel import import_distretti_excel
 from app.modules.catasto.services import import_distretti_excel as import_distretti_excel_module
-from app.modules.catasto.services.meter_reading_import_service import prepare_meter_readings_import
+from app.modules.catasto.services.meter_reading_import_service import import_meter_readings, prepare_meter_readings_import
 from app.modules.catasto.services.meter_reading_linker import normalize_tax_code
 from app.modules.catasto.services.meter_reading_parser import parse_meter_readings_excel
 from app.modules.catasto.services.ade_wfs import (
@@ -8710,6 +8710,54 @@ def test_meter_reading_parser_supports_2026_shifted_header_row() -> None:
     assert row["consumo_mc"] == Decimal("30")
 
 
+def test_import_meter_readings_derives_missing_consumption_from_reading_delta() -> None:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.append(
+        [
+            "PUNTO DI CONSEGNA",
+            "Tipologia idrante",
+            "MATRIC.",
+            "lettura iniziale 2025",
+            "lettura finale 2025",
+            "CODICE FISCALE",
+        ]
+    )
+    sheet.append(["C51A_5", "Hydropass ACMO bi_flangia DN_100", "9001", 100, 150, "RSSMRA80A01H501U"])
+    output = BytesIO()
+    workbook.save(output)
+
+    db = TestingSessionLocal()
+    try:
+        subject = AnagraficaSubject(subject_type="person", status="active", source_name_raw="Mario Rossi")
+        db.add(subject)
+        db.flush()
+        db.add(
+            AnagraficaPerson(
+                subject_id=subject.id,
+                cognome="Rossi",
+                nome="Mario",
+                codice_fiscale="RSSMRA80A01H501U",
+            )
+        )
+        distretto = db.execute(select(CatDistretto).where(CatDistretto.num_distretto == "1")).scalar_one()
+        import_record, _prepared = import_meter_readings(
+            db,
+            file_bytes=output.getvalue(),
+            filename="D01-Sinis 2025.xlsx",
+            uploaded_by=1,
+            mode="upsert",
+            anno=2025,
+            distretto_id=distretto.id,
+        )
+        reading = db.execute(select(CatMeterReading).where(CatMeterReading.import_id == import_record.id)).scalar_one()
+        assert reading.consumo_mc == Decimal("50")
+        assert reading.lettura_iniziale == Decimal("100")
+        assert reading.lettura_finale == Decimal("150")
+    finally:
+        db.close()
+
+
 def test_meter_reading_parser_infers_diramatore_and_idrovalvola_cases() -> None:
     workbook = Workbook()
     sheet = workbook.active
@@ -9249,6 +9297,51 @@ def test_meter_reading_detail_and_import_routes() -> None:
     detail_response = client.get(f"/catasto/meter-readings/{reading_id}", headers=auth_headers())
     assert detail_response.status_code == 200
     assert detail_response.json()["punto_consegna"] == "PC-DET"
+
+
+def test_meter_reading_endpoints_expose_effective_consumption() -> None:
+    db = TestingSessionLocal()
+    try:
+        distretto = db.execute(select(CatDistretto).where(CatDistretto.num_distretto == "1")).scalar_one()
+        import_record = CatMeterReadingImport(
+            distretto_id=distretto.id,
+            anno=2025,
+            filename_originale="effective-consumption.xlsx",
+            stato="completed",
+            totale_righe=1,
+            righe_importate=1,
+            righe_con_warning=0,
+            righe_scartate=0,
+        )
+        db.add(import_record)
+        db.flush()
+        reading = CatMeterReading(
+            import_id=import_record.id,
+            distretto_id=distretto.id,
+            anno=2025,
+            punto_consegna="PC-EFF",
+            lettura_iniziale=Decimal("120"),
+            lettura_finale=Decimal("165"),
+            consumo_mc=None,
+            validation_status="valid",
+            validation_messages=[],
+            source="excel",
+        )
+        db.add(reading)
+        db.commit()
+        reading_id = str(reading.id)
+    finally:
+        db.close()
+
+    detail_response = client.get(f"/catasto/meter-readings/{reading_id}", headers=auth_headers())
+    assert detail_response.status_code == 200
+    assert detail_response.json()["consumo_mc"] is None
+    assert detail_response.json()["consumo_effettivo_mc"] == "45.000"
+
+    list_response = client.get("/catasto/meter-readings?anno=2025", headers=auth_headers())
+    assert list_response.status_code == 200
+    matching = next(item for item in list_response.json()["items"] if item["id"] == reading_id)
+    assert matching["consumo_effettivo_mc"] == "45.000"
 
 
 def test_meter_readings_list_applies_server_side_record_operational_and_validation_filters() -> None:

@@ -127,6 +127,7 @@ class CatMeterReadingResponse(BaseModel):
     lettura_iniziale: Decimal | None
     lettura_finale: Decimal | None
     consumo_mc: Decimal | None
+    consumo_effettivo_mc: Decimal | None = None
     data_lettura: date | None
     operatore_lettura: str | None
     intervento_da_eseguire: str | None

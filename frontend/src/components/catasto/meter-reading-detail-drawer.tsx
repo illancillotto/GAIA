@@ -246,7 +246,7 @@ export function MeterReadingDetailDrawer({
               ["Soggetto", currentReading.subject_display_name],
               ["Lettura iniziale", currentReading.lettura_iniziale],
               ["Lettura finale", currentReading.lettura_finale],
-              ["Consumo mc", currentReading.consumo_mc],
+              ["Consumo mc", currentReading.consumo_effettivo_mc ?? currentReading.consumo_mc],
               ["Data lettura", currentReading.data_lettura],
               ["Operatore", currentReading.operatore_lettura],
               ["Coltura", currentReading.coltura],

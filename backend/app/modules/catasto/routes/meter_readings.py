@@ -10,6 +10,7 @@ from app.api.deps import require_active_user
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
 from app.models.catasto_phase1 import CatMeterReading, CatMeterReadingImport, CatMeterReadingManualAudit
+from app.modules.catasto.services.meter_reading_consumption import effective_consumption_mc
 from app.modules.catasto.services.meter_reading_import_service import import_meter_readings, prepare_meter_readings_import
 from app.modules.catasto.services.meter_reading_manual_service import (
     update_meter_reading_manual_corrections,
@@ -98,6 +99,11 @@ def _serialize_reading(
     raw_messages = item.validation_messages if isinstance(item.validation_messages, list) else []
     raw_audits = list(item.manual_audits or []) if include_audits else []
     audit_user_map = _audit_user_map(db, raw_audits) if raw_audits else {}
+    effective_consumption = effective_consumption_mc(
+        consumo_mc=item.consumo_mc,
+        lettura_iniziale=item.lettura_iniziale,
+        lettura_finale=item.lettura_finale,
+    )
     return CatMeterReadingResponse(
         id=item.id,
         import_id=item.import_id,
@@ -117,6 +123,7 @@ def _serialize_reading(
         lettura_iniziale=item.lettura_iniziale,
         lettura_finale=item.lettura_finale,
         consumo_mc=item.consumo_mc,
+        consumo_effettivo_mc=effective_consumption,
         data_lettura=item.data_lettura,
         operatore_lettura=item.operatore_lettura,
         intervento_da_eseguire=item.intervento_da_eseguire,

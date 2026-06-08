@@ -61,6 +61,19 @@ function formatConsumption(value: number | null): string {
   return `${new Intl.NumberFormat("it-IT", { maximumFractionDigits: 0 }).format(value)} mc`;
 }
 
+function readingConsumption(item: CatMeterReading): number | null {
+  const explicitConsumption = parseNumeric(item.consumo_effettivo_mc ?? item.consumo_mc);
+  if (explicitConsumption != null) {
+    return explicitConsumption;
+  }
+  const start = parseNumeric(item.lettura_iniziale);
+  const end = parseNumeric(item.lettura_finale);
+  if (start == null || end == null || end < start) {
+    return null;
+  }
+  return end - start;
+}
+
 function formatPerCubicMeter(cost: number | null, consumption: number): string {
   if (cost == null || consumption <= 0) return "-";
   return `${new Intl.NumberFormat("it-IT", { style: "currency", currency: "EUR", maximumFractionDigits: 2 }).format(cost / consumption)}/mc`;
@@ -112,7 +125,7 @@ function buildYearSummaries(
         return left.punto_consegna.localeCompare(right.punto_consegna, "it");
       });
       const uniquePoints = new Set(sortedItems.map((item) => `${item.punto_consegna}::${item.matricola ?? ""}`)).size;
-      const totalConsumption = sortedItems.reduce((sum, item) => sum + (parseNumeric(item.consumo_mc) ?? 0), 0);
+      const totalConsumption = sortedItems.reduce((sum, item) => sum + (readingConsumption(item) ?? 0), 0);
       const warningCount = sortedItems.filter((item) => item.validation_status === "warning").length;
       const validatedCount = sortedItems.filter((item) =>
         item.manual_audits.some((audit) => {
@@ -124,7 +137,7 @@ function buildYearSummaries(
       let tariffCost = 0;
       let tariffCoverage = 0;
       for (const reading of sortedItems) {
-        const consumption = parseNumeric(reading.consumo_mc);
+        const consumption = readingConsumption(reading);
         if (consumption == null || consumption <= 0) continue;
         const distretto = reading.distretto_id ? distrettiById.get(reading.distretto_id) : undefined;
         const rule = DISTRETTO_TARIFF_RULES.find((candidate) => candidate.match(distretto));
@@ -413,7 +426,7 @@ export function UtenzeMeterReadingsSection({ subjectId, token }: Props) {
                     </div>
                     <div className="text-right">
                       <p className="text-xs uppercase tracking-[0.16em] text-gray-400">Consumo</p>
-                      <p className="mt-1 text-sm font-semibold text-gray-900">{formatConsumption(parseNumeric(item.consumo_mc))}</p>
+                      <p className="mt-1 text-sm font-semibold text-gray-900">{formatConsumption(readingConsumption(item))}</p>
                     </div>
                   </div>
                   {(item.intervento_da_eseguire || item.validation_messages.length > 0) ? (

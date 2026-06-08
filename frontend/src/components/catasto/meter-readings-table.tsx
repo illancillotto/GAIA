@@ -623,7 +623,7 @@ export function MeterReadingsTable({ subjectId }: { subjectId?: string }) {
                       <div className="min-w-[120px]">
                         {isMeterReading ? (
                           <>
-                            <p className="font-semibold text-slate-900">{formatDecimal(item.consumo_mc)}</p>
+                            <p className="font-semibold text-slate-900">{formatDecimal(item.consumo_effettivo_mc ?? item.consumo_mc)}</p>
                             <p className="mt-1 text-xs text-slate-500">
                               {formatDecimal(item.lettura_iniziale)} → {formatDecimal(item.lettura_finale)}
                             </p>

@@ -12,6 +12,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.models.catasto_phase1 import CatAnomalia, CatDistretto, CatMeterReading, CatMeterReadingImport
+from app.modules.catasto.services.meter_reading_consumption import effective_consumption_mc
 from app.modules.catasto.services.meter_reading_manual_service import (
     apply_manual_corrections,
     build_import_payload_snapshot,
@@ -248,6 +249,11 @@ def prepare_meter_readings_import(
             **row.data,
             "anno": effective_anno,
             "distretto_id": distretto.id if distretto else None,
+            "consumo_mc": effective_consumption_mc(
+                consumo_mc=row.data.get("consumo_mc"),
+                lettura_iniziale=row.data.get("lettura_iniziale"),
+                lettura_finale=row.data.get("lettura_finale"),
+            ),
             "record_type": row.data.get("record_type"),
             "tipologia_idrante": row.data.get("tipologia_idrante"),
             "record_kind": resolved["record_kind"],
