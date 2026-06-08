@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 
 import { ParticellaDetailDialog } from "@/components/catasto/anagrafica/ParticellaDetailDialog";
@@ -8,7 +8,7 @@ import { DataTable } from "@/components/table/data-table";
 import { TableFilters } from "@/components/table/table-filters";
 import { AlertBanner } from "@/components/ui/alert-banner";
 import { EmptyState } from "@/components/ui/empty-state";
-import { SearchIcon } from "@/components/ui/icons";
+import { CopyIcon, SearchIcon } from "@/components/ui/icons";
 import { catastoListParticelle } from "@/lib/api/catasto";
 import { getStoredAccessToken } from "@/lib/auth";
 import type { CatAnagraficaMatch, CatParticella } from "@/types/catasto";
@@ -102,6 +102,7 @@ export function ParticelleSearchWorkspace({ mode = "all" }: ParticelleSearchWork
   const [items, setItems] = useState<CatParticella[]>([]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [copiedParticellaId, setCopiedParticellaId] = useState<string | null>(null);
 
   useEffect(() => {
     void applyFilters();
@@ -138,8 +139,51 @@ export function ParticelleSearchWorkspace({ mode = "all" }: ParticelleSearchWork
     }
   }
 
+  const copyParticellaReference = useCallback(async (particella: CatParticella): Promise<void> => {
+    const text = [
+      particella.nome_comune ?? particella.codice_catastale ?? particella.cod_comune_capacitas ?? "",
+      `Foglio ${particella.foglio ?? "—"}`,
+      `Particella ${particella.particella ?? "—"}`,
+      particella.subalterno ? `Sub ${particella.subalterno}` : null,
+    ]
+      .filter(Boolean)
+      .join(" - ");
+
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedParticellaId(particella.id);
+      window.setTimeout(() => {
+        setCopiedParticellaId((current) => (current === particella.id ? null : current));
+      }, 2000);
+    } catch {
+      setError("Copia negli appunti non riuscita.");
+    }
+  }, []);
+
   const columns = useMemo<ColumnDef<CatParticella>[]>(
     () => [
+      {
+        header: "",
+        id: "copy",
+        cell: ({ row }) => (
+          <button
+            type="button"
+            title="Copia"
+            aria-label="Copia"
+            className={`inline-flex h-8 w-8 items-center justify-center rounded-lg transition ${
+              copiedParticellaId === row.original.id
+                ? "bg-[#1D4E35] text-white"
+                : "border border-[#d7e4da] bg-white text-[#1D4E35] hover:border-[#b7cbbd] hover:bg-[#f7fbf8]"
+            }`}
+            onClick={(event) => {
+              event.stopPropagation();
+              void copyParticellaReference(row.original);
+            }}
+          >
+            <CopyIcon className="h-4 w-4" />
+          </button>
+        ),
+      },
       {
         header: "Comune",
         accessorKey: "nome_comune",
@@ -209,7 +253,7 @@ export function ParticelleSearchWorkspace({ mode = "all" }: ParticelleSearchWork
         ),
       },
     ],
-    [],
+    [copiedParticellaId, copyParticellaReference],
   );
 
   const emptyDescription = isRuoloOnly
