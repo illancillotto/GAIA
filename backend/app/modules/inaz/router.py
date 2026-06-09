@@ -45,6 +45,7 @@ from app.modules.inaz.schemas import (
     InazDailyRecordListResponse,
     InazDailyRecordManualUpdate,
     InazDailyRecordResponse,
+    InazDashboardSummaryResponse,
     InazEventSummaryResponse,
     InazHolidayBootstrapResponse,
     InazHolidayCreate,
@@ -609,6 +610,7 @@ def list_giornaliere(
     date_from: date | None = Query(default=None),
     date_to: date | None = Query(default=None),
     q: str | None = Query(default=None),
+    include_punches: bool = Query(default=False),
     page: int = Query(default=1, ge=1),
     page_size: int = Query(default=31, ge=1, le=200),
 ) -> InazDailyRecordListResponse:
@@ -658,8 +660,18 @@ def list_giornaliere(
         stmt.order_by(InazDailyRecord.work_date.asc()).offset((page - 1) * page_size).limit(page_size)
     ).scalars().all()
     total = db.execute(count_stmt).scalar_one()
+    punches_by_record_id: dict[uuid.UUID, list[InazDailyPunch]] | None = None
+    if include_punches and rows:
+        punches = db.execute(
+            select(InazDailyPunch)
+            .where(InazDailyPunch.daily_record_id.in_([row.id for row in rows]))
+            .order_by(InazDailyPunch.daily_record_id.asc(), InazDailyPunch.sequence.asc())
+        ).scalars().all()
+        punches_by_record_id = {}
+        for punch in punches:
+            punches_by_record_id.setdefault(punch.daily_record_id, []).append(punch)
     return InazDailyRecordListResponse(
-        items=[_serialize_daily_record(db, row) for row in rows],
+        items=[_serialize_daily_record(db, row, punches=punches_by_record_id.get(row.id) if punches_by_record_id is not None else None) for row in rows],
         total=total,
         page=page,
         page_size=page_size,
@@ -885,13 +897,21 @@ def list_sync_jobs(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[ApplicationUser, Depends(require_active_user)],
     _: Annotated[ApplicationUser, RequireInazModule],
+    limit: int | None = Query(default=None, ge=1, le=100),
 ) -> InazSyncJobListResponse:
     reconcile_stale_sync_jobs(db)
     stmt = select(InazSyncJob)
+    count_stmt = select(func.count(InazSyncJob.id))
     if not _can_view_all_inaz_data(current_user):
-        stmt = stmt.where(InazSyncJob.requested_by_user_id == current_user.id)
-    jobs = db.execute(stmt.order_by(InazSyncJob.created_at.desc())).scalars().all()
-    return InazSyncJobListResponse(items=[InazSyncJobResponse.model_validate(job) for job in jobs], total=len(jobs))
+        visibility_filter = InazSyncJob.requested_by_user_id == current_user.id
+        stmt = stmt.where(visibility_filter)
+        count_stmt = count_stmt.where(visibility_filter)
+    stmt = stmt.order_by(InazSyncJob.created_at.desc())
+    if limit is not None:
+        stmt = stmt.limit(limit)
+    jobs = db.execute(stmt).scalars().all()
+    total = db.execute(count_stmt).scalar_one()
+    return InazSyncJobListResponse(items=[InazSyncJobResponse.model_validate(job) for job in jobs], total=total)
 
 
 @router.get("/sync/jobs/{job_id}", response_model=InazSyncJobResponse)
@@ -1092,10 +1112,148 @@ def export_giornaliere_xlsm(
     return FileResponse(output_path, media_type="application/vnd.ms-excel.sheet.macroEnabled.12", filename=output_path.name)
 
 
-def _serialize_daily_record(db: Session, record: InazDailyRecord) -> InazDailyRecordResponse:
-    punches = db.execute(
-        select(InazDailyPunch).where(InazDailyPunch.daily_record_id == record.id).order_by(InazDailyPunch.sequence.asc())
-    ).scalars().all()
+@router.get("/dashboard/summary", response_model=InazDashboardSummaryResponse)
+def get_dashboard_summary(
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    _: Annotated[ApplicationUser, RequireInazModule],
+    period_start: date = Query(...),
+    period_end: date = Query(...),
+) -> InazDashboardSummaryResponse:
+    collaborator_stmt = select(InazCollaborator)
+    collaborator_count_stmt = select(func.count(InazCollaborator.id))
+    record_stmt = select(InazDailyRecord).where(
+        InazDailyRecord.work_date >= period_start,
+        InazDailyRecord.work_date <= period_end,
+    )
+    record_count_stmt = select(func.count(InazDailyRecord.id)).where(
+        InazDailyRecord.work_date >= period_start,
+        InazDailyRecord.work_date <= period_end,
+    )
+
+    if not _can_view_all_inaz_data(current_user):
+        hierarchy_scope = _hierarchy_scope_user_ids(db, current_user)
+        visible_collaborator_ids = select(InazSupervisorAssignment.collaborator_id).where(
+            InazSupervisorAssignment.supervisor_user_id == current_user.id
+        )
+        collaborator_visibility_filter = or_(
+            InazCollaborator.owner_user_id == current_user.id,
+            InazCollaborator.id.in_(visible_collaborator_ids),
+            InazCollaborator.owner_user_id.in_(hierarchy_scope),
+            InazCollaborator.application_user_id.in_(hierarchy_scope),
+        )
+        record_visibility_filter = or_(
+            InazDailyRecord.owner_user_id == current_user.id,
+            InazDailyRecord.collaborator_id.in_(visible_collaborator_ids),
+            InazDailyRecord.owner_user_id.in_(hierarchy_scope),
+            InazDailyRecord.application_user_id.in_(hierarchy_scope),
+        )
+        collaborator_stmt = collaborator_stmt.where(collaborator_visibility_filter)
+        collaborator_count_stmt = collaborator_count_stmt.where(collaborator_visibility_filter)
+        record_stmt = record_stmt.where(record_visibility_filter)
+        record_count_stmt = record_count_stmt.where(record_visibility_filter)
+
+    collaborators_total = db.execute(collaborator_count_stmt).scalar_one()
+    mapped_collaborators_total = db.execute(
+        collaborator_count_stmt.where(InazCollaborator.application_user_id.is_not(None))
+    ).scalar_one()
+    daily_records_total = db.execute(record_count_stmt).scalar_one()
+
+    records = db.execute(record_stmt.order_by(InazDailyRecord.work_date.asc())).scalars().all()
+
+    ordinary_minutes_total = 0
+    absence_minutes_total = 0
+    extra_minutes_total = 0
+    straordinario_minutes_total = 0
+    maggior_presenza_minutes_total = 0
+    km_total = 0
+    anomaly_total = 0
+    special_day_total = 0
+    worked_days_total = 0
+    absence_days_total = 0
+    justified_days_total = 0
+    active_collaborator_ids: set[uuid.UUID] = set()
+    cause_stats: dict[str, int] = {}
+    schedule_stats: dict[str, int] = {}
+
+    for record in records:
+        active_collaborator_ids.add(record.collaborator_id)
+        ordinary_minutes_total += record.ordinary_minutes or 0
+        absence_minutes_total += record.absence_minutes or 0
+        effective_straordinario = (
+            record.override_straordinario_minutes
+            if record.override_straordinario_minutes is not None
+            else record.straordinario_minutes or 0
+        )
+        effective_mpe = record.override_mpe_minutes if record.override_mpe_minutes is not None else record.mpe_minutes or 0
+        straordinario_minutes_total += effective_straordinario
+        maggior_presenza_minutes_total += effective_mpe
+        extra_minutes_total += effective_straordinario + effective_mpe
+        km_total += record.km_value or 0
+        if (record.ordinary_minutes or 0) > 0:
+            worked_days_total += 1
+        if (record.absence_minutes or 0) > 0:
+            absence_days_total += 1
+        if (record.justified_minutes or 0) > 0:
+            justified_days_total += 1
+
+        detail = extract_detail_payload(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else {}
+        anomalies = detail.get("anomalies") or []
+        detail_status = str(detail.get("status") or "").lower()
+        stato = str(record.stato or "").lower()
+        if anomalies or "anom" in detail_status or "anom" in stato:
+            anomaly_total += 1
+        if detail_indicates_special_day(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else False:
+            special_day_total += 1
+
+        cause = (record.resolved_absence_cause or "").strip().lower()
+        if cause:
+            cause_stats[cause] = (cause_stats.get(cause) or 0) + 1
+
+        schedule_code = (record.schedule_code or "").strip()
+        if not schedule_code and isinstance(detail.get("programmed_schedule"), str):
+            schedule_code = str(detail["programmed_schedule"]).split(" - ")[0].strip()
+        if schedule_code:
+            schedule_stats[schedule_code] = (schedule_stats.get(schedule_code) or 0) + 1
+
+    top_schedule_stats = [
+        {"code": code, "count": count}
+        for code, count in sorted(schedule_stats.items(), key=lambda item: (-item[1], item[0]))[:4]
+    ]
+
+    return InazDashboardSummaryResponse(
+        period_start=period_start,
+        period_end=period_end,
+        collaborators_total=collaborators_total,
+        mapped_collaborators_total=mapped_collaborators_total,
+        active_collaborators_total=len(active_collaborator_ids),
+        daily_records_total=daily_records_total,
+        ordinary_minutes_total=ordinary_minutes_total,
+        absence_minutes_total=absence_minutes_total,
+        extra_minutes_total=extra_minutes_total,
+        straordinario_minutes_total=straordinario_minutes_total,
+        maggior_presenza_minutes_total=maggior_presenza_minutes_total,
+        km_total=km_total,
+        anomaly_total=anomaly_total,
+        special_day_total=special_day_total,
+        worked_days_total=worked_days_total,
+        absence_days_total=absence_days_total,
+        justified_days_total=justified_days_total,
+        cause_stats=cause_stats,
+        schedule_stats=top_schedule_stats,
+    )
+
+
+def _serialize_daily_record(
+    db: Session,
+    record: InazDailyRecord,
+    *,
+    punches: list[InazDailyPunch] | None = None,
+) -> InazDailyRecordResponse:
+    if punches is None:
+        punches = db.execute(
+            select(InazDailyPunch).where(InazDailyPunch.daily_record_id == record.id).order_by(InazDailyPunch.sequence.asc())
+        ).scalars().all()
     detail = extract_detail_payload(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else {}
     terminal_rows = extract_punch_terminal_labels(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else []
     serialized_punches = []

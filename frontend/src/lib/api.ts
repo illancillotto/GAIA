@@ -94,6 +94,8 @@ import type {
   InazCredentialCreateInput,
   InazCredentialTestResult,
   InazCredentialUpdateInput,
+  InazDashboardSummaryResponse,
+  InazDailyRecord,
   InazDailyRecordManualUpdateInput,
   InazDailyRecordListResponse,
   InazHoliday,
@@ -1069,6 +1071,7 @@ export async function listInazDailyRecords(
     dateFrom?: string;
     dateTo?: string;
     q?: string;
+    includePunches?: boolean;
     page?: number;
     pageSize?: number;
   } = {},
@@ -1089,6 +1092,9 @@ export async function listInazDailyRecords(
   if (params.q) {
     query.set("q", params.q);
   }
+  if (params.includePunches != null) {
+    query.set("include_punches", String(params.includePunches));
+  }
   if (params.page) {
     query.set("page", String(params.page));
   }
@@ -1097,6 +1103,29 @@ export async function listInazDailyRecords(
   }
   const suffix = query.toString() ? `?${query.toString()}` : "";
   return request<InazDailyRecordListResponse>(`/inaz/giornaliere${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getInazDailyRecord(token: string, recordId: string): Promise<InazDailyRecord> {
+  return request<InazDailyRecord>(`/inaz/giornaliere/${recordId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getInazDashboardSummary(
+  token: string,
+  params: { periodStart: string; periodEnd: string },
+): Promise<InazDashboardSummaryResponse> {
+  const query = new URLSearchParams({
+    period_start: params.periodStart,
+    period_end: params.periodEnd,
+  });
+  return request<InazDashboardSummaryResponse>(`/inaz/dashboard/summary?${query.toString()}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -1318,8 +1347,13 @@ export async function createInazSyncJob(token: string, payload: InazSyncJobCreat
   });
 }
 
-export async function listInazSyncJobs(token: string): Promise<InazSyncJob[]> {
-  const response = await request<InazSyncJobListResponse>("/inaz/sync/jobs", {
+export async function listInazSyncJobs(token: string, params: { limit?: number } = {}): Promise<InazSyncJob[]> {
+  const query = new URLSearchParams();
+  if (params.limit != null) {
+    query.set("limit", String(params.limit));
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  const response = await request<InazSyncJobListResponse>(`/inaz/sync/jobs${suffix}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },

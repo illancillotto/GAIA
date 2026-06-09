@@ -11,9 +11,9 @@ import {
   ModuleWorkspaceMiniStat,
   ModuleWorkspaceNoticeCard,
 } from "@/components/layout/module-workspace-hero";
-import { listInazCollaborators, listInazDailyRecords, listInazSyncJobs } from "@/lib/api";
+import { getInazDashboardSummary, listInazCollaborators, listInazSyncJobs } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
-import type { InazCollaborator, InazDailyRecord, InazSyncJob } from "@/types/api";
+import type { InazCollaborator, InazDashboardSummaryResponse, InazSyncJob } from "@/types/api";
 
 function currentMonthBounds(): { start: string; end: string } {
   const now = new Date();
@@ -49,35 +49,9 @@ function safeDisplay(value: unknown, fallback = "n/d"): string {
   return fallback;
 }
 
-async function listAllInazCollaborators(token: string): Promise<InazCollaborator[]> {
-  const items: InazCollaborator[] = [];
-  let page = 1;
-  let total = 0;
-  do {
-    const response = await listInazCollaborators(token, { page, pageSize: 200 });
-    items.push(...response.items);
-    total = response.total;
-    page += 1;
-  } while (items.length < total);
-  return items;
-}
-
-async function listAllInazDailyRecordsForMonth(token: string, dateFrom: string, dateTo: string): Promise<InazDailyRecord[]> {
-  const items: InazDailyRecord[] = [];
-  let page = 1;
-  let total = 0;
-  do {
-    const response = await listInazDailyRecords(token, { dateFrom, dateTo, page, pageSize: 200 });
-    items.push(...response.items);
-    total = response.total;
-    page += 1;
-  } while (items.length < total);
-  return items;
-}
-
 export default function InazPage() {
+  const [summary, setSummary] = useState<InazDashboardSummaryResponse | null>(null);
   const [collaborators, setCollaborators] = useState<InazCollaborator[]>([]);
-  const [records, setRecords] = useState<InazDailyRecord[]>([]);
   const [jobs, setJobs] = useState<InazSyncJob[]>([]);
   const [error, setError] = useState<string | null>(null);
 
@@ -86,76 +60,38 @@ export default function InazPage() {
     if (!token) return;
     const { start, end } = currentMonthBounds();
     Promise.all([
-      listAllInazCollaborators(token),
-      listAllInazDailyRecordsForMonth(token, start, end),
-      listInazSyncJobs(token),
+      getInazDashboardSummary(token, { periodStart: start, periodEnd: end }),
+      listInazCollaborators(token, { page: 1, pageSize: 6 }),
+      listInazSyncJobs(token, { limit: 6 }),
     ])
-      .then(([allCollaborators, allRecords, jobsResponse]) => {
-        setCollaborators(allCollaborators);
-        setRecords(allRecords);
-        setJobs(jobsResponse.slice(0, 6));
+      .then(([dashboardSummary, collaboratorResponse, jobsResponse]) => {
+        setSummary(dashboardSummary);
+        setCollaborators(collaboratorResponse.items);
+        setJobs(jobsResponse);
       })
       .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Errore caricamento modulo Inaz"));
   }, []);
 
-  const mappedCount = useMemo(() => collaborators.filter((item) => item.application_user_id != null).length, [collaborators]);
+  const mappedCount = summary?.mapped_collaborators_total ?? 0;
   const dashboardMonthLabel = useMemo(() => formatMonthLabelFromIso(currentMonthBounds().start), []);
   const recentCollaborators = useMemo(() => collaborators.slice(0, 6), [collaborators]);
-  const ordinaryMinutes = useMemo(() => records.reduce((sum, item) => sum + (item.ordinary_minutes ?? 0), 0), [records]);
-  const absenceMinutes = useMemo(() => records.reduce((sum, item) => sum + (item.absence_minutes ?? 0), 0), [records]);
-  const extraMinutes = useMemo(() => records.reduce((sum, item) => sum + (item.effective_extra_minutes ?? 0), 0), [records]);
-  const straordinarioMinutes = useMemo(
-    () => records.reduce((sum, item) => sum + (item.effective_straordinario_minutes ?? item.straordinario_minutes ?? 0), 0),
-    [records],
+  const ordinaryMinutes = summary?.ordinary_minutes_total ?? 0;
+  const absenceMinutes = summary?.absence_minutes_total ?? 0;
+  const extraMinutes = summary?.extra_minutes_total ?? 0;
+  const straordinarioMinutes = summary?.straordinario_minutes_total ?? 0;
+  const maggiorPresenzaMinutes = summary?.maggior_presenza_minutes_total ?? 0;
+  const kmTotal = summary?.km_total ?? 0;
+  const anomalyCount = summary?.anomaly_total ?? 0;
+  const specialDayCount = summary?.special_day_total ?? 0;
+  const workedDaysCount = summary?.worked_days_total ?? 0;
+  const absenceDaysCount = summary?.absence_days_total ?? 0;
+  const justifiedDaysCount = summary?.justified_days_total ?? 0;
+  const activeCollaboratorsCount = summary?.active_collaborators_total ?? 0;
+  const causeStats = summary?.cause_stats ?? {};
+  const scheduleStats = useMemo(
+    () => (summary?.schedule_stats ?? []).map((item) => [item.code, item.count] as const),
+    [summary],
   );
-  const maggiorPresenzaMinutes = useMemo(
-    () => records.reduce((sum, item) => sum + (item.effective_mpe_minutes ?? item.mpe_minutes ?? 0), 0),
-    [records],
-  );
-  const kmTotal = useMemo(() => records.reduce((sum, item) => sum + (item.km_value ?? 0), 0), [records]);
-  const anomalyCount = useMemo(
-    () =>
-      records.filter(
-        (item) =>
-          (item.detail_anomalies?.length ?? 0) > 0 ||
-          Boolean(item.detail_status?.toLowerCase().includes("anom")) ||
-          Boolean(item.stato?.toLowerCase().includes("anom")),
-      ).length,
-    [records],
-  );
-  const specialDayCount = useMemo(() => records.filter((item) => Boolean(item.special_day)).length, [records]);
-  const workedDaysCount = useMemo(() => records.filter((item) => (item.ordinary_minutes ?? 0) > 0).length, [records]);
-  const absenceDaysCount = useMemo(() => records.filter((item) => (item.absence_minutes ?? 0) > 0).length, [records]);
-  const justifiedDaysCount = useMemo(() => records.filter((item) => (item.justified_minutes ?? 0) > 0).length, [records]);
-  const activeCollaboratorsCount = useMemo(() => {
-    return new Set(records.map((item) => item.collaborator_id)).size;
-  }, [records]);
-  const causeStats = useMemo(() => {
-    return records.reduce(
-      (accumulator, item) => {
-        const cause = (item.resolved_absence_cause ?? "").trim().toLowerCase();
-        if (!cause) return accumulator;
-        accumulator[cause] = (accumulator[cause] ?? 0) + 1;
-        return accumulator;
-      },
-      {} as Record<string, number>,
-    );
-  }, [records]);
-  const scheduleStats = useMemo(() => {
-    return Object.entries(
-      records.reduce(
-        (accumulator, item) => {
-          const code = (item.schedule_code ?? item.detail_programmed_schedule?.split(" - ")[0] ?? "").trim();
-          if (!code) return accumulator;
-          accumulator[code] = (accumulator[code] ?? 0) + 1;
-          return accumulator;
-        },
-        {} as Record<string, number>,
-      ),
-    )
-      .sort((left, right) => right[1] - left[1])
-      .slice(0, 4);
-  }, [records]);
   const latestJob = jobs[0] ?? null;
   const latestJobProgress = latestJob?.params_json?.progress;
   const latestJobTitle = latestJob
@@ -198,10 +134,10 @@ export default function InazPage() {
           }
         >
           <ModuleWorkspaceKpiRow>
-            <ModuleWorkspaceKpiTile label="Collaboratori" value={collaborators.length} hint="Importati a database" />
+            <ModuleWorkspaceKpiTile label="Collaboratori" value={summary?.collaborators_total ?? 0} hint="Importati a database" />
             <ModuleWorkspaceKpiTile label="Mappati GAIA" value={mappedCount} hint="Con application_user_id" variant="emerald" />
             <ModuleWorkspaceKpiTile label="Collaboratori attivi mese" value={activeCollaboratorsCount} hint={dashboardMonthLabel} />
-            <ModuleWorkspaceKpiTile label="Giornaliere mese" value={records.length} hint="Righe cartellino persistite" />
+            <ModuleWorkspaceKpiTile label="Giornaliere mese" value={summary?.daily_records_total ?? 0} hint="Righe cartellino persistite" />
             <ModuleWorkspaceKpiTile label="Ore ordinarie" value={formatHours(ordinaryMinutes)} hint="Totale mese" variant="emerald" />
             <ModuleWorkspaceKpiTile label="Extra effettivi" value={formatHours(extraMinutes)} hint="Straordinario + maggior presenza" variant="amber" />
           </ModuleWorkspaceKpiRow>

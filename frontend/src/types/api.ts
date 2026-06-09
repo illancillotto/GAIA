@@ -701,6 +701,28 @@ export type InazDailyRecordListResponse = {
   page_size: number;
 };
 
+export type InazDashboardSummaryResponse = {
+  period_start: string;
+  period_end: string;
+  collaborators_total: number;
+  mapped_collaborators_total: number;
+  active_collaborators_total: number;
+  daily_records_total: number;
+  ordinary_minutes_total: number;
+  absence_minutes_total: number;
+  extra_minutes_total: number;
+  straordinario_minutes_total: number;
+  maggior_presenza_minutes_total: number;
+  km_total: number;
+  anomaly_total: number;
+  special_day_total: number;
+  worked_days_total: number;
+  absence_days_total: number;
+  justified_days_total: number;
+  cause_stats: Record<string, number>;
+  schedule_stats: Array<{ code: string; count: number }>;
+};
+
 export type MeInazSummaryResponse = {
   period_start: string;
   period_end: string;

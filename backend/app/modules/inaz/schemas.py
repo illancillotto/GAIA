@@ -295,6 +295,28 @@ class InazDailyRecordListResponse(BaseModel):
     page_size: int
 
 
+class InazDashboardSummaryResponse(BaseModel):
+    period_start: date
+    period_end: date
+    collaborators_total: int
+    mapped_collaborators_total: int
+    active_collaborators_total: int
+    daily_records_total: int
+    ordinary_minutes_total: int
+    absence_minutes_total: int
+    extra_minutes_total: int
+    straordinario_minutes_total: int
+    maggior_presenza_minutes_total: int
+    km_total: int
+    anomaly_total: int
+    special_day_total: int
+    worked_days_total: int
+    absence_days_total: int
+    justified_days_total: int
+    cause_stats: dict[str, int] = Field(default_factory=dict)
+    schedule_stats: list[dict[str, int | str]] = Field(default_factory=list)
+
+
 class InazDailyRecordManualUpdate(BaseModel):
     km_value: int | None = Field(default=None, ge=0, le=5000)
     reperibilita_unit: Literal["none", "hours", "days", "shifts"] | None = None

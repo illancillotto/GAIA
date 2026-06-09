@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { ProtectedPage } from "@/components/app/protected-page";
 import { Badge } from "@/components/ui/badge";
-import { getCurrentUser, getInazAccessContext, listInazCollaborators, listInazDailyRecords, updateInazDailyRecord } from "@/lib/api";
+import { getCurrentUser, getInazAccessContext, getInazDailyRecord, listInazCollaborators, listInazDailyRecords, updateInazDailyRecord } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import type { CurrentUser, InazAccessContext, InazCollaborator, InazDailyRecord } from "@/types/api";
 
@@ -253,12 +253,14 @@ export default function InazGiornalierePage() {
   const [kmDrafts, setKmDrafts] = useState<Record<string, string>>({});
   const [savingRecordId, setSavingRecordId] = useState<string | null>(null);
   const [selectedRecordId, setSelectedRecordId] = useState("");
+  const [recordDetails, setRecordDetails] = useState<Record<string, InazDailyRecord>>({});
   const [collaboratorModalId, setCollaboratorModalId] = useState("");
   const [editor, setEditor] = useState<DailyEditForm | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingRecordDetail, setIsLoadingRecordDetail] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [dismissedMonth, setDismissedMonth] = useState<string | null>(null);
 
@@ -288,7 +290,7 @@ export default function InazGiornalierePage() {
       let page = 1;
       let items: InazDailyRecord[] = [];
       while (true) {
-        const response = await listInazDailyRecords(token, { dateFrom: start, dateTo: end, page, pageSize });
+        const response = await listInazDailyRecords(token, { dateFrom: start, dateTo: end, includePunches: false, page, pageSize });
         items = [...items, ...response.items];
         if (items.length >= response.total || response.items.length === 0) break;
         page += 1;
@@ -297,6 +299,7 @@ export default function InazGiornalierePage() {
     })()
       .then((dailyItems) => {
         setRecords(dailyItems);
+        setRecordDetails({});
         setSelectedRecordId("");
       })
       .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Errore caricamento giornaliere"))
@@ -399,10 +402,10 @@ export default function InazGiornalierePage() {
     return { anomalies, km, extra };
   }, [records]);
 
-  const selectedRecord = useMemo(
-    () => records.find((record) => record.id === selectedRecordId) ?? null,
-    [records, selectedRecordId],
-  );
+  const selectedRecord = useMemo(() => {
+    if (!selectedRecordId) return null;
+    return recordDetails[selectedRecordId] ?? records.find((record) => record.id === selectedRecordId) ?? null;
+  }, [recordDetails, records, selectedRecordId]);
   const selectedCollaboratorRecords = useMemo(() => {
     if (!selectedRecord) return [];
     return records
@@ -469,6 +472,18 @@ export default function InazGiornalierePage() {
     });
   }, [selectedRecord]);
 
+  useEffect(() => {
+    const token = getStoredAccessToken();
+    if (!token || !selectedRecordId || recordDetails[selectedRecordId]) return;
+    setIsLoadingRecordDetail(true);
+    getInazDailyRecord(token, selectedRecordId)
+      .then((detail) => {
+        setRecordDetails((current) => ({ ...current, [detail.id]: detail }));
+      })
+      .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Errore caricamento dettaglio giornaliera"))
+      .finally(() => setIsLoadingRecordDetail(false));
+  }, [recordDetails, selectedRecordId]);
+
   const canEdit = Boolean(currentUser);
   const canEditOperationalData = Boolean(
     currentUser && (accessContext?.can_view_all_data || (selectedRecord && selectedRecord.owner_user_id === currentUser.id)),
@@ -523,6 +538,7 @@ export default function InazGiornalierePage() {
     try {
       const updated = await updateInazDailyRecord(token, record.id, { km_value: nextValue });
       setRecords((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setRecordDetails((current) => ({ ...current, [updated.id]: updated }));
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Errore salvataggio KM");
     } finally {
@@ -550,6 +566,7 @@ export default function InazGiornalierePage() {
         ...(canValidate ? { validation_note: editor.validationNote.trim() || null } : {}),
       });
       setRecords((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setRecordDetails((current) => ({ ...current, [updated.id]: updated }));
       setSuccess(`Giornata ${updated.work_date} aggiornata.`);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Errore salvataggio giornaliera");
@@ -570,6 +587,7 @@ export default function InazGiornalierePage() {
         validation_note: editor.validationNote.trim() || null,
       });
       setRecords((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setRecordDetails((current) => ({ ...current, [updated.id]: updated }));
       setSuccess(status === "validated" ? `Giornata ${updated.work_date} validata.` : `Validazione rimossa per ${updated.work_date}.`);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Errore validazione giornaliera");
@@ -1018,6 +1036,8 @@ export default function InazGiornalierePage() {
                     ))}
                   </div>
                 </div>
+              ) : isLoadingRecordDetail ? (
+                <div className="mt-4 rounded-2xl border border-gray-100 bg-white p-4 text-sm text-gray-500">Caricamento timbrature…</div>
               ) : null}
 
               <div className="mt-4 rounded-2xl border border-gray-100 bg-white p-4">

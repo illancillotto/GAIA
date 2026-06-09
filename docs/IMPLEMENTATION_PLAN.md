@@ -71,6 +71,12 @@ Non deve modificare automaticamente i permessi sul NAS nella prima release.
 - TanStack Table
 - fetch/axios per API client
 
+### Indicazioni prestazionali correnti
+- evitare dashboard che ricavano KPI aggregando nel browser interi dataset mensili
+- introdurre endpoint di summary backend per i workspace con metriche aggregate
+- preferire griglie "light" con dettaglio lazy invece di payload completi per ogni riga
+- per le API lista, esporre flag espliciti come `include_punches` o equivalenti quando sono presenti sotto-collezioni costose
+
 ### DevOps
 - Docker
 - Docker Compose
@@ -194,6 +200,11 @@ Output attesi:
 - filtri
 - paginazione
 
+Nota di evoluzione applicata nel modulo Inaz:
+- la dashboard `/inaz` usa ora un endpoint dedicato `/inaz/dashboard/summary` invece di scaricare tutte le giornaliere del mese per calcolare i KPI nel client
+- la vista `/inaz/giornaliere` carica la matrice mensile con `include_punches=false` e recupera il dettaglio completo della singola giornata solo all'apertura del pannello
+- lo stesso pattern di dettaglio lazy e stato allineato anche alla vista `/inaz/anomalie`
+
 ### Milestone 5 — review workflow
 Output attesi:
 - vista reviewer
@@ -244,6 +255,7 @@ Output attesi:
 - nessuna logica business nei router
 - error handling centralizzato
 - logging strutturato
+- quando una route lista serializza child collections o JSON corposi, prevedere un percorso "light" di default e un opt-in esplicito per il dettaglio
 
 ### Frontend
 - componenti riutilizzabili

@@ -7,7 +7,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 import { ProtectedPage } from "@/components/app/protected-page";
 import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/table/data-table";
-import { getCurrentUser, listInazCollaborators, listInazDailyRecords, updateInazDailyRecord } from "@/lib/api";
+import { getCurrentUser, getInazDailyRecord, listInazCollaborators, listInazDailyRecords, updateInazDailyRecord } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import {
   countAnomaliesInRecords,
@@ -101,7 +101,10 @@ function summarizeMap(values: Record<string, string>): string {
     .join(" · ");
 }
 
-async function listAllDailyRecords(token: string, params: { dateFrom: string; dateTo: string; collaboratorId?: string; q?: string; applicationUserId?: number }) {
+async function listAllDailyRecords(
+  token: string,
+  params: { dateFrom: string; dateTo: string; collaboratorId?: string; q?: string; applicationUserId?: number; includePunches?: boolean },
+) {
   const pageSize = 200;
   let page = 1;
   let items: InazDailyRecord[] = [];
@@ -133,8 +136,10 @@ export default function InazAnomaliePage() {
   const [onlyAnomalies, setOnlyAnomalies] = useState(true);
   const [onlyRequests, setOnlyRequests] = useState(false);
   const [selectedRecordId, setSelectedRecordId] = useState("");
+  const [recordDetails, setRecordDetails] = useState<Record<string, InazDailyRecord>>({});
   const [editor, setEditor] = useState<DailyEditForm | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [isLoadingRecordDetail, setIsLoadingRecordDetail] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
@@ -154,7 +159,7 @@ export default function InazAnomaliePage() {
     const token = getStoredAccessToken();
     if (!token) return;
     const { start, end } = monthBounds(selectedMonth);
-    listAllDailyRecords(token, { dateFrom: start, dateTo: end })
+    listAllDailyRecords(token, { dateFrom: start, dateTo: end, includePunches: false })
       .then((dailyItems) => {
         const anomalyCount = countAnomaliesInRecords(dailyItems);
         if (
@@ -173,6 +178,7 @@ export default function InazAnomaliePage() {
         }
         initialFallbackApplied.current = true;
         setRecords(dailyItems);
+        setRecordDetails({});
         setSelectedRecordId("");
         setMonthsWithAnomalies((current) =>
           summarizeMonthsWithAnomalies(
@@ -191,7 +197,7 @@ export default function InazAnomaliePage() {
     void Promise.all(
       recentMonths(MONTHS_TO_SCAN, calendarMonth).map(async (month) => {
         const { start, end } = monthBounds(month);
-        const dailyItems = await listAllDailyRecords(token, { dateFrom: start, dateTo: end });
+        const dailyItems = await listAllDailyRecords(token, { dateFrom: start, dateTo: end, includePunches: false });
         return { month, count: countAnomaliesInRecords(dailyItems) };
       }),
     )
@@ -272,12 +278,16 @@ export default function InazAnomaliePage() {
   }, [rows, search, selectedCollaboratorId, onlyAnomalies, onlyRequests]);
 
   const selectedRecord = useMemo(() => {
-    const explicit = records.find((record) => record.id === selectedRecordId);
+    const explicit = selectedRecordId
+      ? (recordDetails[selectedRecordId] ?? records.find((record) => record.id === selectedRecordId))
+      : null;
     if (explicit) {
       return explicit;
     }
-    return filteredRows.length > 0 ? records.find((record) => record.id === filteredRows[0]?.id) ?? null : null;
-  }, [records, selectedRecordId, filteredRows]);
+    if (filteredRows.length === 0) return null;
+    const fallbackId = filteredRows[0]?.id;
+    return (fallbackId ? recordDetails[fallbackId] : null) ?? records.find((record) => record.id === fallbackId) ?? null;
+  }, [recordDetails, records, selectedRecordId, filteredRows]);
 
   useEffect(() => {
     if (!selectedRecord) {
@@ -294,6 +304,19 @@ export default function InazAnomaliePage() {
       manualNote: selectedRecord.manual_note ?? "",
     });
   }, [selectedRecord]);
+
+  useEffect(() => {
+    const token = getStoredAccessToken();
+    const targetId = selectedRecordId || filteredRows[0]?.id;
+    if (!token || !targetId || recordDetails[targetId]) return;
+    setIsLoadingRecordDetail(true);
+    getInazDailyRecord(token, targetId)
+      .then((detail) => {
+        setRecordDetails((current) => ({ ...current, [detail.id]: detail }));
+      })
+      .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Errore caricamento dettaglio giornaliera"))
+      .finally(() => setIsLoadingRecordDetail(false));
+  }, [filteredRows, recordDetails, selectedRecordId]);
 
   const canEdit = Boolean(currentUser);
   const otherMonthsWithAnomalies = useMemo(
@@ -324,6 +347,7 @@ export default function InazAnomaliePage() {
         manual_note: editor.manualNote.trim() || null,
       });
       setRecords((current) => current.map((item) => (item.id === updated.id ? updated : item)));
+      setRecordDetails((current) => ({ ...current, [updated.id]: updated }));
       setSuccess(`Giornata ${updated.work_date} aggiornata.`);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : "Errore salvataggio giornaliera");
@@ -618,6 +642,8 @@ export default function InazAnomaliePage() {
                           </p>
                         ))}
                       </div>
+                    ) : isLoadingRecordDetail ? (
+                      <p className="text-sm text-gray-500">Caricamento timbrature…</p>
                     ) : null}
                     {selectedRecord.detail_requests.length > 0 ? (
                       selectedRecord.detail_requests.map((request, index) => (

@@ -86,6 +86,8 @@ backend/app/
     inventory/
     catasto/
     elaborazioni/
+    inaz/
+    organigramma/
 ```
 
 Nota:
@@ -200,8 +202,21 @@ Moduli logici attuali:
 - `inventory`
 - `network`
 - `catasto`
+- `inaz`
+- `organigramma`
 - `elaborazioni` previsto come modulo operativo dedicato per i workflow esecutivi catastali
 - `core`
+
+Pattern runtime rilevanti introdotti nei moduli operativi:
+- le dashboard ad alto volume non devono ricostruire KPI scaricando tutte le righe raw nel browser; devono preferire endpoint di summary lato backend
+- le liste mensili di dettaglio devono supportare payload "light" con campi minimi per la griglia e demandare i dettagli pesanti a fetch lazy sul record selezionato
+- le route lista che possono includere collezioni figlie, come timbrature o eventi, devono prevedere flag espliciti tipo `include_*` per evitare payload e query inutili
+
+Caso applicato nel modulo `inaz`:
+- `/inaz/dashboard/summary` calcola lato backend i KPI del mese usati dalla dashboard `frontend/src/app/inaz/page.tsx`
+- `/inaz/giornaliere` supporta `include_punches=false` per il caricamento della matrice mensile
+- il dettaglio completo della singola giornata viene caricato on demand tramite `GET /inaz/giornaliere/{record_id}`
+- il backend pre-carica le timbrature in bulk solo quando richiesto, evitando query N+1 in serializzazione
 
 Evoluzione pianificata di navigazione:
 
