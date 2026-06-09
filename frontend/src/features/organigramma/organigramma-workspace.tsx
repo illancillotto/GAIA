@@ -87,6 +87,8 @@ const SCHEMA_NODE_WIDTH = 246;
 const SCHEMA_NODE_HEIGHT = 188;
 const SCHEMA_CANVAS_PADDING = 180;
 const SCHEMA_GRID_SIZE = 24;
+const SCHEMA_LAYER_X_GAP = 340;
+const SCHEMA_LAYER_Y_GAP = 72;
 
 function initials(name: string | null | undefined): string {
   if (!name) return "?";
@@ -161,6 +163,52 @@ function buildSchemaMeta(tree: OrgUnitTreeNode[], assignments: OrgAssignment[]):
 
 function safeCanvasCoord(value: number | null | undefined): number {
   return Number.isFinite(value) ? Number(value) : 0;
+}
+
+function computeHorizontalTreeLayout(tree: OrgUnitTreeNode[]): Map<string, { x: number; y: number }> {
+  const positions = new Map<string, { x: number; y: number }>();
+  const rootSpacing = SCHEMA_NODE_HEIGHT + SCHEMA_LAYER_Y_GAP * 2;
+  const verticalStep = SCHEMA_NODE_HEIGHT + SCHEMA_LAYER_Y_GAP;
+  const baseX = 120;
+  let cursorY = 120;
+
+  const walk = (node: OrgUnitTreeNode, depth: number, startY: number): { nextY: number; centerY: number } => {
+    const x = baseX + depth * SCHEMA_LAYER_X_GAP;
+    if (!node.children.length) {
+      positions.set(node.id, { x, y: startY });
+      return {
+        nextY: startY + verticalStep,
+        centerY: startY + SCHEMA_NODE_HEIGHT / 2,
+      };
+    }
+
+    let childCursorY = startY;
+    const childCenters: number[] = [];
+
+    for (const child of node.children) {
+      const childLayout = walk(child, depth + 1, childCursorY);
+      childCursorY = childLayout.nextY;
+      childCenters.push(childLayout.centerY);
+    }
+
+    const centerY = childCenters.length === 1
+      ? childCenters[0]
+      : (childCenters[0] + childCenters[childCenters.length - 1]) / 2;
+    const y = Math.max(120, Math.round(centerY - SCHEMA_NODE_HEIGHT / 2));
+    positions.set(node.id, { x, y });
+
+    return {
+      nextY: Math.max(childCursorY, y + verticalStep),
+      centerY,
+    };
+  };
+
+  for (const root of tree) {
+    const rootLayout = walk(root, 0, cursorY);
+    cursorY = rootLayout.nextY + rootSpacing;
+  }
+
+  return positions;
 }
 
 function updateTreeNodeInForest(
@@ -485,6 +533,7 @@ type SchemaBoardProps = {
   onCardPointerDown: (nodeId: string, event: React.MouseEvent<HTMLDivElement>) => void;
   onConnectNode: (targetId: string) => void;
   onDetachParent: (nodeId: string) => void;
+  onApplyHorizontalLayout: () => void;
   onAssignUser: (userId: number, unitId: string, mode: UserDropMode) => void;
   meta: Map<string, SchemaNodeMeta>;
   canModifyStructure: boolean;
@@ -513,6 +562,7 @@ function SchemaBoard({
   onCardPointerDown,
   onConnectNode,
   onDetachParent,
+  onApplyHorizontalLayout,
   onAssignUser,
   meta,
   canModifyStructure,
@@ -573,6 +623,11 @@ function SchemaBoard({
             {canModifyStructure ? "super admin" : "sola lettura"}
           </Pill>
           <div className="ml-2 flex items-center gap-1 rounded-xl border border-[#d6dfef] bg-white p-1">
+            {canModifyStructure ? (
+              <button type="button" onClick={onApplyHorizontalLayout} className="rounded-lg px-2 py-1 text-[12px] font-semibold text-[#2f5da8] hover:bg-[#eef3fb]">
+                Orizzontale
+              </button>
+            ) : null}
             <button type="button" onClick={onZoomOut} className="rounded-lg px-2 py-1 text-[12px] font-semibold text-[#2f5da8] hover:bg-[#eef3fb]">-</button>
             <button type="button" onClick={onFit} className="rounded-lg px-2 py-1 text-[12px] font-semibold text-[#2f5da8] hover:bg-[#eef3fb]">Fit</button>
             <button type="button" onClick={onZoomIn} className="rounded-lg px-2 py-1 text-[12px] font-semibold text-[#2f5da8] hover:bg-[#eef3fb]">+</button>
@@ -622,16 +677,23 @@ function SchemaBoard({
             width: canvasBounds.width,
             height: canvasBounds.height,
             transform: `scale(${scale})`,
-            backgroundImage: snapToGrid
-              ? `linear-gradient(to right, rgba(196,211,234,0.45) 1px, transparent 1px), linear-gradient(to bottom, rgba(196,211,234,0.45) 1px, transparent 1px)`
-              : undefined,
-            backgroundSize: snapToGrid ? `${SCHEMA_GRID_SIZE}px ${SCHEMA_GRID_SIZE}px` : undefined,
-            backgroundPosition: `${canvasBounds.offsetX}px ${canvasBounds.offsetY}px`,
           }}
         >
           {flatNodes.length ? (
             <div className="relative h-full w-full">
-              <svg className="pointer-events-none absolute inset-0 h-full w-full overflow-visible">
+              {snapToGrid ? (
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-0 z-0"
+                  style={{
+                    backgroundImage:
+                      "linear-gradient(to right, rgba(196,211,234,0.16) 1px, transparent 1px), linear-gradient(to bottom, rgba(196,211,234,0.16) 1px, transparent 1px)",
+                    backgroundSize: `${SCHEMA_GRID_SIZE}px ${SCHEMA_GRID_SIZE}px`,
+                    backgroundPosition: `${canvasBounds.offsetX}px ${canvasBounds.offsetY}px`,
+                  }}
+                />
+              ) : null}
+              <svg className="pointer-events-none absolute inset-0 z-10 h-full w-full overflow-visible">
                 {flatNodes.map((node) => {
                   if (!node.parent_id) return null;
                   const parent = nodesById.get(node.parent_id);
@@ -735,7 +797,7 @@ function SchemaNodeCard({
 
   return (
     <div
-      className="absolute"
+      className="absolute z-20"
       style={{
         left: cardX + offsetX,
         top: cardY + offsetY,
@@ -1236,6 +1298,40 @@ export function OrganigrammaWorkspace() {
     }
   }
 
+  async function handleApplyHorizontalLayout() {
+    if (!token || !canModifyStructure) return;
+    const nextPositions = computeHorizontalTreeLayout(tree);
+    setTree((current) => {
+      let nextTree = current;
+      for (const [nodeId, position] of nextPositions) {
+        nextTree = updateTreeNodeInForest(nextTree, nodeId, {
+          canvas_x: position.x,
+          canvas_y: position.y,
+        });
+      }
+      return nextTree;
+    });
+    try {
+      await Promise.all(
+        Array.from(nextPositions.entries()).map(([nodeId, position]) =>
+          updateOrgUnit(token, nodeId, {
+            canvas_x: position.x,
+            canvas_y: position.y,
+          }),
+        ),
+      );
+      setNotice("Layout orizzontale applicato.");
+      await loadCore();
+      if (view === "schema") {
+        window.requestAnimationFrame(() => {
+          fitSchemaToViewport();
+        });
+      }
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Applicazione layout orizzontale non riuscita");
+    }
+  }
+
   function handleSchemaCardPointerDown(nodeId: string, event: React.MouseEvent<HTMLDivElement>) {
     if (!schemaEditEnabled || event.button !== 0) return;
     const target = event.target as HTMLElement | null;
@@ -1673,6 +1769,9 @@ export function OrganigrammaWorkspace() {
             onConnectNode={handleConnectSchemaNode}
             onDetachParent={(nodeId) => {
               void handleMoveNode(nodeId, null);
+            }}
+            onApplyHorizontalLayout={() => {
+              void handleApplyHorizontalLayout();
             }}
             onAssignUser={handleAssignUserToUnit}
             meta={schemaMeta}
