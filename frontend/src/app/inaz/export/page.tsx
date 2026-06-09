@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { DocumentIcon } from "@/components/ui/icons";
 import { exportInazXlsm, listInazCollaborators, listInazDailyRecords } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
+import { getInazCompanyLabel } from "@/lib/inaz-display";
 import type { InazCollaborator, InazDailyRecord } from "@/types/api";
 
 function currentMonthValue(): string {
@@ -237,7 +238,13 @@ export default function InazExportPage() {
                       <div className="min-w-0">
                         <p className="font-medium text-gray-900">{collaborator.name}</p>
                         <p className="text-xs text-gray-500">
-                          Matricola {collaborator.employee_code} · {collaborator.company_code ?? "n/d"} · {collaborator.application_user_id ? "mappato" : "non mappato"}
+                          {[
+                            `Matricola ${collaborator.employee_code}`,
+                            getInazCompanyLabel(collaborator.company_label, collaborator.company_code, ""),
+                            collaborator.application_user_id ? "mappato" : "non mappato",
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
                         </p>
                       </div>
                     </label>
@@ -285,7 +292,12 @@ export default function InazExportPage() {
                       <div>
                         <p className="font-medium text-gray-900">{collaborator.name}</p>
                         <p className="text-xs text-gray-500">
-                          Matricola {collaborator.employee_code} · Azienda {collaborator.company_code ?? "n/d"}
+                          {[
+                            `Matricola ${collaborator.employee_code}`,
+                            getInazCompanyLabel(collaborator.company_label, collaborator.company_code, "") ? `Azienda ${getInazCompanyLabel(collaborator.company_label, collaborator.company_code, "")}` : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" · ")}
                         </p>
                       </div>
                       <Badge variant={collaborator.application_user_id ? "success" : "warning"}>

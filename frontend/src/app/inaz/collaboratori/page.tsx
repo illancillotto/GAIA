@@ -8,6 +8,7 @@ import { ProtectedPage } from "@/components/app/protected-page";
 import { DataTable } from "@/components/table/data-table";
 import { Badge } from "@/components/ui/badge";
 import { getCurrentUser, listAllApplicationUsers, listAllInazCollaborators, listInazDailyRecords, mapInazCollaboratorApplicationUser } from "@/lib/api";
+import { getInazCompanyLabel } from "@/lib/inaz-display";
 import {
   INAZ_COLLABORATOR_DETAIL_UPDATED_MESSAGE,
   scoreInazCollaboratorUserMatch,
@@ -227,7 +228,7 @@ export default function InazCollaboratoriPage() {
           employeeCode: item.employee_code,
           internalCode: item.kint ?? item.kkint ?? "—",
           name: item.name,
-          company: item.company_label ?? item.company_code ?? "—",
+          company: getInazCompanyLabel(item.company_label, item.company_code, "—"),
           birthDate: item.birth_date ?? "—",
           lastSeen: item.last_seen_at ?? "—",
           active: item.is_active,

@@ -24,6 +24,7 @@ import {
   usersForInazCollaboratorMappingSorted,
 } from "@/lib/inaz-collaborator-mapping";
 import { getStoredAccessToken } from "@/lib/auth";
+import { getInazCompanyLabel } from "@/lib/inaz-display";
 import type { ApplicationUser, CurrentUser, InazCollaborator, InazCollaboratorScheduleAssignment, InazDailyRecord, InazEventSummary, InazScheduleTemplate } from "@/types/api";
 
 type TabKey = "calendar" | "summary";
@@ -33,6 +34,23 @@ function currentMonthBounds(): { start: string; end: string } {
   const start = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-01`;
   const end = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate()).padStart(2, "0")}`;
   return { start, end };
+}
+
+function monthBoundsFromDate(isoDate: string): { start: string; end: string } {
+  const [year, month] = isoDate.split("-").map(Number);
+  const start = `${year}-${String(month).padStart(2, "0")}-01`;
+  const end = `${year}-${String(month).padStart(2, "0")}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`;
+  return { start, end };
+}
+
+function shiftMonthBounds(isoDate: string, delta: number): { start: string; end: string } {
+  const [year, month] = isoDate.split("-").map(Number);
+  const shifted = new Date(year, month - 1 + delta, 1);
+  return monthBoundsFromDate(`${shifted.getFullYear()}-${String(shifted.getMonth() + 1).padStart(2, "0")}-01`);
+}
+
+function formatMonthRangeLabel(isoDate: string): string {
+  return new Intl.DateTimeFormat("it-IT", { month: "long", year: "numeric" }).format(new Date(`${isoDate}T00:00:00`));
 }
 
 function formatHours(minutes: number | null): string {
@@ -179,6 +197,7 @@ export default function InazCollaboratoreDetailPage() {
   const totalAbsence = useMemo(() => records.reduce((sum, item) => sum + (item.absence_minutes ?? 0), 0), [records]);
   const totalExtra = useMemo(() => records.reduce((sum, item) => sum + (item.straordinario_minutes ?? 0) + (item.mpe_minutes ?? 0), 0), [records]);
   const canEdit = currentUser?.role === "admin" || currentUser?.role === "super_admin";
+  const activeMonthLabel = useMemo(() => formatMonthRangeLabel(dateFrom), [dateFrom]);
   const mappingUsers = useMemo(
     () =>
       collaborator ? usersForInazCollaboratorMappingSorted(collaborator, users, allCollaborators, collaboratorId) : [],
@@ -321,6 +340,18 @@ export default function InazCollaboratoreDetailPage() {
     }
   }
 
+  function jumpMonth(delta: number) {
+    const nextBounds = shiftMonthBounds(dateFrom, delta);
+    setDateFrom(nextBounds.start);
+    setDateTo(nextBounds.end);
+  }
+
+  function resetToCurrentMonth() {
+    const bounds = currentMonthBounds();
+    setDateFrom(bounds.start);
+    setDateTo(bounds.end);
+  }
+
   return (
     <ProtectedPage title="Dettaglio collaboratore Inaz" description="Calendario giornaliero e riepilogo eventi." breadcrumb="Inaz" requiredModule="inaz">
       <div className="space-y-6">
@@ -329,15 +360,56 @@ export default function InazCollaboratoreDetailPage() {
           <>
             <article className="panel-card">
               <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                <div>
+                <div className="min-w-0">
                   <p className="section-title">{collaborator.name}</p>
                   <p className="section-copy">
-                    Matricola {collaborator.employee_code} · Azienda {collaborator.company_label ?? collaborator.company_code ?? "n/d"} · Nascita {collaborator.birth_date ?? "n/d"}
+                    {[
+                      `Matricola ${collaborator.employee_code}`,
+                      getInazCompanyLabel(collaborator.company_label, collaborator.company_code, "") ? `Azienda ${getInazCompanyLabel(collaborator.company_label, collaborator.company_code, "")}` : null,
+                      `Nascita ${collaborator.birth_date ?? "n/d"}`,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
                   </p>
                 </div>
                 <Badge variant={collaborator.application_user_id ? "success" : "warning"}>
                   {collaborator.application_user_id ? "Mappato a GAIA" : "Da mappare"}
                 </Badge>
+              </div>
+
+              <div className="mt-4 rounded-3xl border border-slate-200 bg-gradient-to-r from-slate-50 via-white to-slate-50 px-5 py-4 shadow-sm">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-slate-500">Periodo visualizzato</p>
+                    <div className="mt-2 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                      <p className="text-2xl font-semibold capitalize text-slate-950">{activeMonthLabel}</p>
+                      <span className="text-sm text-slate-500">Scorri rapidamente il calendario mensile</span>
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      className="inline-flex h-11 items-center rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                      type="button"
+                      onClick={() => jumpMonth(-1)}
+                    >
+                      ← Precedente
+                    </button>
+                    <button
+                      className="inline-flex h-11 items-center rounded-2xl border border-emerald-200 bg-emerald-50 px-4 text-sm font-medium text-emerald-800 transition hover:bg-emerald-100"
+                      type="button"
+                      onClick={resetToCurrentMonth}
+                    >
+                      Mese corrente
+                    </button>
+                    <button
+                      className="inline-flex h-11 items-center rounded-2xl border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+                      type="button"
+                      onClick={() => jumpMonth(1)}
+                    >
+                      Successivo →
+                    </button>
+                  </div>
+                </div>
               </div>
 
               <div className="mt-6 grid gap-4 lg:grid-cols-4">
@@ -418,62 +490,6 @@ export default function InazCollaboratoreDetailPage() {
                 </div>
               </article>
             ) : null}
-
-            <article className="panel-card">
-              <div className="grid gap-4 lg:grid-cols-[1fr_1fr_auto]">
-                <label className="block text-sm font-medium text-gray-700">
-                  Dal
-                  <input className="form-control mt-1" type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} />
-                </label>
-                <label className="block text-sm font-medium text-gray-700">
-                  Al
-                  <input className="form-control mt-1" type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} />
-                </label>
-                {canEdit ? (
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Mapping GAIA
-                      {suggestedMapping ? (
-                        <span className="mt-1 block text-xs text-emerald-700">
-                          Suggerito: {suggestedMapping.user.full_name?.trim() || suggestedMapping.user.username} ({suggestedMapping.confidence})
-                        </span>
-                      ) : null}
-                      <select
-                        className="form-control mt-1"
-                        value={mappingValue}
-                        onChange={(event) => {
-                          setMappingValue(event.target.value);
-                          setMappingNotice(null);
-                        }}
-                      >
-                        <option value="">Nessun mapping</option>
-                        {mappingUsers.map((user) => (
-                          <option key={user.id} value={user.id}>
-                            {user.username} · {user.email}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                    <button
-                      className="btn-primary mt-3 w-full disabled:cursor-not-allowed disabled:opacity-60"
-                      type="button"
-                      disabled={savingMapping}
-                      onClick={() => void handleSaveMapping()}
-                    >
-                      {savingMapping ? "Salvataggio..." : "Salva mapping"}
-                    </button>
-                    {mappingNotice ? (
-                      <p
-                        className={`mt-2 text-sm ${mappingNotice.tone === "success" ? "text-emerald-700" : "text-red-700"}`}
-                        role={mappingNotice.tone === "success" ? "status" : "alert"}
-                      >
-                        {mappingNotice.message}
-                      </p>
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-            </article>
 
             <article className="panel-card">
               <div className="mb-4 flex gap-2">
@@ -646,7 +662,7 @@ export default function InazCollaboratoreDetailPage() {
                                     }))
                                   }
                                 />
-                                <span>Segna reperibilita per l'intera giornata</span>
+                                <span>Segna reperibilita per l&apos;intera giornata</span>
                               </label>
                             </label>
                             <label className="block text-sm font-medium text-gray-700">
@@ -726,6 +742,55 @@ export default function InazCollaboratoreDetailPage() {
                 </div>
               )}
             </article>
+
+            {canEdit ? (
+              <article className="panel-card">
+                <div className="mb-4">
+                  <p className="section-title">Mapping GAIA -&gt; INAZ</p>
+                  <p className="section-copy">Seleziona l&apos;utente GAIA da collegare a questo collaboratore INAZ.</p>
+                </div>
+                <div className="grid gap-4">
+                  <div>
+                    {suggestedMapping ? (
+                      <p className="mb-2 text-sm text-emerald-700">
+                        Suggerito: {suggestedMapping.user.full_name?.trim() || suggestedMapping.user.username} ({suggestedMapping.confidence})
+                      </p>
+                    ) : null}
+                    <select
+                      className="form-control"
+                      value={mappingValue}
+                      onChange={(event) => {
+                        setMappingValue(event.target.value);
+                        setMappingNotice(null);
+                      }}
+                    >
+                      <option value="">Nessun mapping</option>
+                      {mappingUsers.map((user) => (
+                        <option key={user.id} value={user.id}>
+                          {user.username} · {user.email}
+                        </option>
+                      ))}
+                    </select>
+                    {mappingNotice ? (
+                      <p
+                        className={`mt-2 text-sm ${mappingNotice.tone === "success" ? "text-emerald-700" : "text-red-700"}`}
+                        role={mappingNotice.tone === "success" ? "status" : "alert"}
+                      >
+                        {mappingNotice.message}
+                      </p>
+                    ) : null}
+                    <button
+                      className="btn-primary mt-3 w-full disabled:cursor-not-allowed disabled:opacity-60 lg:ml-auto lg:flex lg:w-auto"
+                      type="button"
+                      disabled={savingMapping}
+                      onClick={() => void handleSaveMapping()}
+                    >
+                      {savingMapping ? "Salvataggio..." : "Salva collegamento"}
+                    </button>
+                  </div>
+                </div>
+              </article>
+            ) : null}
           </>
         ) : (
           <p className="text-sm text-gray-500">Caricamento dettaglio collaboratore...</p>

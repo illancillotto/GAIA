@@ -11,8 +11,9 @@ import {
   ModuleWorkspaceMiniStat,
   ModuleWorkspaceNoticeCard,
 } from "@/components/layout/module-workspace-hero";
-import { getInazDashboardSummary, listInazCollaborators, listInazSyncJobs } from "@/lib/api";
+import { getInazDashboardSummary, listAllInazCollaborators, listInazSyncJobs } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
+import { getInazCompanyLabel } from "@/lib/inaz-display";
 import type { InazCollaborator, InazDashboardSummaryResponse, InazSyncJob } from "@/types/api";
 
 function currentMonthBounds(): { start: string; end: string } {
@@ -53,6 +54,8 @@ export default function InazPage() {
   const [summary, setSummary] = useState<InazDashboardSummaryResponse | null>(null);
   const [collaborators, setCollaborators] = useState<InazCollaborator[]>([]);
   const [jobs, setJobs] = useState<InazSyncJob[]>([]);
+  const [selectedCollaborator, setSelectedCollaborator] = useState<InazCollaborator | null>(null);
+  const [collaboratorSearch, setCollaboratorSearch] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -61,12 +64,12 @@ export default function InazPage() {
     const { start, end } = currentMonthBounds();
     Promise.all([
       getInazDashboardSummary(token, { periodStart: start, periodEnd: end }),
-      listInazCollaborators(token, { page: 1, pageSize: 6 }),
+      listAllInazCollaborators(token),
       listInazSyncJobs(token, { limit: 6 }),
     ])
-      .then(([dashboardSummary, collaboratorResponse, jobsResponse]) => {
+      .then(([dashboardSummary, collaboratorItems, jobsResponse]) => {
         setSummary(dashboardSummary);
-        setCollaborators(collaboratorResponse.items);
+        setCollaborators(collaboratorItems);
         setJobs(jobsResponse);
       })
       .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Errore caricamento modulo Inaz"));
@@ -74,7 +77,19 @@ export default function InazPage() {
 
   const mappedCount = summary?.mapped_collaborators_total ?? 0;
   const dashboardMonthLabel = useMemo(() => formatMonthLabelFromIso(currentMonthBounds().start), []);
-  const recentCollaborators = useMemo(() => collaborators.slice(0, 6), [collaborators]);
+  const normalizedCollaboratorSearch = collaboratorSearch.trim().toLowerCase();
+  const recentCollaborators = useMemo(() => {
+    const baseItems = normalizedCollaboratorSearch
+      ? collaborators.filter((item) =>
+          [
+            safeDisplay(item.name, "").toLowerCase(),
+            safeDisplay(item.employee_code, "").toLowerCase(),
+            getInazCompanyLabel(item.company_label, item.company_code, "").toLowerCase(),
+          ].some((value) => value.includes(normalizedCollaboratorSearch)),
+        )
+      : collaborators;
+    return baseItems.slice(0, normalizedCollaboratorSearch ? 10 : 6);
+  }, [collaborators, normalizedCollaboratorSearch]);
   const ordinaryMinutes = summary?.ordinary_minutes_total ?? 0;
   const absenceMinutes = summary?.absence_minutes_total ?? 0;
   const extraMinutes = summary?.extra_minutes_total ?? 0;
@@ -244,21 +259,53 @@ export default function InazPage() {
                 Apri lista
               </Link>
             </div>
+            <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <label className="block sm:max-w-sm sm:flex-1">
+                <span className="sr-only">Cerca collaboratore</span>
+                <input
+                  className="form-control w-full"
+                  type="search"
+                  value={collaboratorSearch}
+                  onChange={(event) => setCollaboratorSearch(event.target.value)}
+                  placeholder="Cerca per nome, matricola o azienda"
+                />
+              </label>
+              {normalizedCollaboratorSearch ? (
+                <p className="text-xs text-gray-500">
+                  Risultati rapidi: {recentCollaborators.length}
+                </p>
+              ) : null}
+            </div>
             <div className="space-y-3">
               {recentCollaborators.map((item) => (
-                <Link key={item.id} href={`/inaz/collaboratori/${item.id}`} className="flex items-center justify-between gap-3 rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 transition hover:bg-white">
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setSelectedCollaborator(item)}
+                  className="flex w-full items-center justify-between gap-3 rounded-2xl border border-gray-100 bg-gray-50 px-4 py-3 text-left transition hover:bg-white"
+                >
                   <div>
                     <p className="font-medium text-gray-900">{safeDisplay(item.name)}</p>
                     <p className="text-xs text-gray-500">
-                      Matricola {safeDisplay(item.employee_code)} · Azienda {safeDisplay(item.company_code)} · {safeDisplay(item.birth_date, "Data nascita n/d")}
+                      {[
+                        `Matricola ${safeDisplay(item.employee_code)}`,
+                        getInazCompanyLabel(item.company_label, item.company_code, "") ? `Azienda ${getInazCompanyLabel(item.company_label, item.company_code, "")}` : null,
+                        safeDisplay(item.birth_date, "Data nascita n/d"),
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")}
                     </p>
                   </div>
                   <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${item.application_user_id ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
                     {item.application_user_id ? "Mappato" : "Da mappare"}
                   </span>
-                </Link>
+                </button>
               ))}
-              {recentCollaborators.length === 0 ? <p className="text-sm text-gray-500">Nessun collaboratore disponibile.</p> : null}
+              {recentCollaborators.length === 0 ? (
+                <p className="text-sm text-gray-500">
+                  {normalizedCollaboratorSearch ? "Nessun collaboratore trovato per questa ricerca." : "Nessun collaboratore disponibile."}
+                </p>
+              ) : null}
             </div>
           </article>
 
@@ -291,6 +338,48 @@ export default function InazPage() {
             </div>
           </article>
         </div>
+
+        {selectedCollaborator ? (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4 py-6"
+            onClick={() => setSelectedCollaborator(null)}
+          >
+            <div
+              className="flex h-[90vh] w-full max-w-7xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl"
+              onClick={(event) => event.stopPropagation()}
+            >
+              <div className="flex items-center justify-between gap-4 border-b border-gray-100 px-6 py-4">
+                <div className="min-w-0">
+                  <p className="section-title">Dettaglio collaboratore Inaz</p>
+                  <p className="mt-1 truncate text-sm text-gray-500">
+                    {[
+                      safeDisplay(selectedCollaborator.name),
+                      `Matricola ${safeDisplay(selectedCollaborator.employee_code)}`,
+                      getInazCompanyLabel(selectedCollaborator.company_label, selectedCollaborator.company_code, ""),
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Link className="btn-secondary" href={`/inaz/collaboratori/${selectedCollaborator.id}`} target="_blank">
+                    Apri pagina completa
+                  </Link>
+                  <button className="btn-secondary" type="button" onClick={() => setSelectedCollaborator(null)}>
+                    Chiudi
+                  </button>
+                </div>
+              </div>
+              <div className="min-h-0 flex-1 bg-[#f7faf7] p-4">
+                <iframe
+                  className="h-full w-full rounded-2xl border border-gray-200 bg-white"
+                  src={`/inaz/collaboratori/${selectedCollaborator.id}?embedded=1`}
+                  title={`Dettaglio collaboratore ${safeDisplay(selectedCollaborator.name)}`}
+                />
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </ProtectedPage>
   );

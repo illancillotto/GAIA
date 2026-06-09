@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { DataTable } from "@/components/table/data-table";
 import { getCurrentUser, getInazDailyRecord, listInazCollaborators, listInazDailyRecords, updateInazDailyRecord } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
+import { getInazCompanyLabel } from "@/lib/inaz-display";
 import {
   countAnomaliesInRecords,
   currentMonthValue,
@@ -234,7 +235,7 @@ export default function InazAnomaliePage() {
           workDate: record.work_date,
           collaborator: collaborator?.name ?? record.collaborator_id,
           collaboratorCode: collaborator?.employee_code ?? "—",
-          company: collaborator?.company_label ?? collaborator?.company_code ?? "—",
+          company: getInazCompanyLabel(collaborator?.company_label, collaborator?.company_code, "—"),
           scheduleCode: record.schedule_code ?? "—",
           programmedSchedule: record.detail_programmed_schedule ?? "—",
           status: record.detail_status ?? record.stato ?? "—",
@@ -577,7 +578,7 @@ export default function InazAnomaliePage() {
                           }
                           aria-label="Reperibilita giornaliera"
                         />
-                        <span>Segna reperibilita per l'intera giornata</span>
+                        <span>Segna reperibilita per l&apos;intera giornata</span>
                       </label>
                     </label>
                     <label className="block text-sm font-medium text-gray-700">

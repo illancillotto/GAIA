@@ -7,6 +7,7 @@ import { ProtectedPage } from "@/components/app/protected-page";
 import { Badge } from "@/components/ui/badge";
 import { getCurrentUser, getInazAccessContext, getInazDailyRecord, listInazCollaborators, listInazDailyRecords, updateInazDailyRecord } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
+import { getInazCompanyLabel } from "@/lib/inaz-display";
 import type { CurrentUser, InazAccessContext, InazCollaborator, InazDailyRecord } from "@/types/api";
 
 type DailyEditForm = {
@@ -366,7 +367,7 @@ export default function InazGiornalierePage() {
       .filter((collaborator) => presentIds.has(collaborator.id))
       .filter((collaborator) => !scheduleFilter || collaboratorSchedule.get(collaborator.id)?.code === scheduleFilter)
       .filter((collaborator) => {
-        const company = collaborator.company_label ?? collaborator.company_code ?? "";
+        const company = getInazCompanyLabel(collaborator.company_label, collaborator.company_code, "");
         return (
           !normalizedSearch ||
           [collaborator.name, collaborator.employee_code, company].some((value) =>
@@ -861,13 +862,24 @@ export default function InazGiornalierePage() {
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 lg:col-span-2">
-                  <p className="text-xs uppercase tracking-[0.16em] text-amber-500">Aggiungi KM carburante e reperibilita</p>
-                  <div className="mt-2 flex flex-wrap items-end gap-3">
-                    <label className="block text-sm font-medium text-amber-900">
-                      <span className="inline-block pb-1">Chilometri (auto)</span>
+                <div className="rounded-3xl border border-amber-200/80 bg-gradient-to-br from-amber-50 via-amber-50 to-white p-5 shadow-sm lg:col-span-2">
+                  <div className="flex flex-col gap-1 border-b border-amber-200/70 pb-3 sm:flex-row sm:items-end sm:justify-between">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-amber-600">Rettifiche operative</p>
+                      <p className="mt-1 text-sm font-medium text-amber-950">KM carburante e reperibilita giornaliera</p>
+                    </div>
+                    {!canEditOperationalData ? (
+                      <span className="inline-flex rounded-full border border-amber-200 bg-white/80 px-3 py-1 text-[11px] font-medium text-amber-800">
+                        Solo validazione
+                      </span>
+                    ) : null}
+                  </div>
+
+                  <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,220px)_minmax(0,1fr)]">
+                    <label className="block rounded-2xl border border-amber-200/80 bg-white/85 p-4 text-sm font-medium text-amber-950 shadow-sm">
+                      <span className="block text-[11px] uppercase tracking-[0.18em] text-amber-600">Chilometri auto</span>
                       <input
-                        className="form-control mt-1 w-40"
+                        className="form-control mt-3 w-full"
                         inputMode="numeric"
                         value={editor.kmValue}
                         onChange={(event) => setEditor((current) => current ? { ...current, kmValue: event.target.value } : current)}
@@ -875,10 +887,12 @@ export default function InazGiornalierePage() {
                         disabled={!canEditOperationalData}
                       />
                     </label>
-                    <label className="block text-sm font-medium text-amber-900">
-                      <span className="inline-block pb-1">Reperibilita giornaliera</span>
-                      <label className="mt-2 flex items-center gap-2 text-sm font-medium text-amber-900">
+
+                    <div className="rounded-2xl border border-amber-200/80 bg-white/85 p-4 shadow-sm">
+                      <p className="text-[11px] uppercase tracking-[0.18em] text-amber-600">Reperibilita</p>
+                      <label className="mt-3 flex items-start gap-3 text-sm text-amber-950">
                         <input
+                          className="mt-0.5 h-4 w-4 rounded border-amber-300 text-amber-600 focus:ring-amber-500"
                           type="checkbox"
                           checked={editor.reperibilitaGiornaliera}
                           onChange={(event) =>
@@ -889,18 +903,32 @@ export default function InazGiornalierePage() {
                           disabled={!canEditOperationalData}
                           aria-label="Reperibilita giornaliera"
                         />
-                        <span>Segna reperibilita per l'intera giornata</span>
+                        <span>
+                          <span className="block font-medium">Segna reperibilita giornaliera</span>
+                          <span className="mt-0.5 block text-xs text-amber-700">Applica la reperibilita all&apos;intera giornata selezionata.</span>
+                        </span>
                       </label>
-                    </label>
-                    <p className="text-xs text-amber-700">KM registrati a sistema: <span className="font-medium">{selectedRecord.km_value ?? "—"}</span></p>
-                    <p className="text-xs text-amber-700">
-                      Reperibilita attuale:{" "}
-                      <span className="font-medium">
-                        {formatReperibilitaDisplay(selectedRecord.reperibilita_unit, selectedRecord.reperibilita_quantity)}
-                      </span>
-                    </p>
-                    {!canEditOperationalData ? <p className="text-xs text-amber-800">I capisettore possono validare, ma non modificare KM e rettifiche operative.</p> : null}
+                    </div>
                   </div>
+
+                  <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                    <div className="rounded-2xl border border-amber-100 bg-white/80 px-4 py-3">
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-amber-500">KM registrati</p>
+                      <p className="mt-1 text-sm font-semibold text-amber-950">{selectedRecord.km_value ?? "—"}</p>
+                    </div>
+                    <div className="rounded-2xl border border-amber-100 bg-white/80 px-4 py-3">
+                      <p className="text-[11px] uppercase tracking-[0.16em] text-amber-500">Reperibilita attuale</p>
+                      <p className="mt-1 text-sm font-semibold text-amber-950">
+                        {formatReperibilitaDisplay(selectedRecord.reperibilita_unit, selectedRecord.reperibilita_quantity)}
+                      </p>
+                    </div>
+                  </div>
+
+                  {!canEditOperationalData ? (
+                    <p className="mt-4 text-xs text-amber-800">
+                      I capisettore possono validare la giornata, ma non modificare KM e rettifiche operative.
+                    </p>
+                  ) : null}
                 </div>
               </div>
 
@@ -1080,7 +1108,12 @@ export default function InazGiornalierePage() {
                 <div>
                   <h3 className="text-lg font-semibold text-gray-900">{collaborator.name}</h3>
                   <p className="mt-0.5 text-sm text-gray-500">
-                    Matricola {collaborator.employee_code} · {collaborator.company_label ?? collaborator.company_code ?? "—"}
+                    {[
+                      `Matricola ${collaborator.employee_code}`,
+                      getInazCompanyLabel(collaborator.company_label, collaborator.company_code, ""),
+                    ]
+                      .filter(Boolean)
+                      .join(" · ")}
                     {schedule?.code ? <span className="ml-1 rounded bg-indigo-50 px-1 py-0.5 font-medium text-indigo-600" title={schedule.label}>{schedule.code}</span> : null}
                   </p>
                   <p className="mt-1 text-xs capitalize text-gray-400">{formatMonthLabel(selectedMonth)}</p>
