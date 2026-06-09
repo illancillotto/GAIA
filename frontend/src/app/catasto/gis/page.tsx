@@ -47,6 +47,7 @@ import type {
   GisSavedSelectionDetail,
   GisSavedSelectionItemInput,
   GisSavedSelectionSummary,
+  ParticellaPopupRuoloSummary,
 } from "@/types/gis";
 
 const MapContainer = dynamic(() => import("@/components/catasto/gis/MapContainer"), {
@@ -202,6 +203,66 @@ function popupToMatch(popup: ParticellaPopupData | null): CatAnagraficaMatch | n
   };
 }
 
+function buildRuoloInferenceDetails(summary: ParticellaPopupRuoloSummary | null | undefined): {
+  title: string;
+  summary: string;
+  matchingRule: string;
+  reliability: string[];
+  limits: string[];
+  facts: Array<{ label: string; value: string }>;
+} | null {
+  if (!summary) return null;
+
+  const isExact = summary.source_mode === "exact";
+  const sourceModeLabel = isExact ? "Match esatto su particella" : "Match inferito";
+  const summaryText = isExact
+    ? "Il ruolo e collegato direttamente alla particella catastale, quindi il dettaglio viene da una corrispondenza esplicita nel ruolo."
+    : "Il ruolo non contiene il dettaglio particelle per questa posizione, quindi GAIA mostra un collegamento inferito e non una corrispondenza catastale puntuale.";
+  const matchingRule = isExact
+    ? "GAIA trova righe ruolo che coincidono con i riferimenti catastali della particella: comune, foglio, particella e, quando presente, subalterno."
+    : "GAIA usa un fallback per soggetto e comune: cerca il ruolo dello stesso intestatario/codice fiscale nello stesso comune, ma solo nelle partite che non hanno il dettaglio particelle.";
+
+  const reliability = isExact
+    ? [
+        "Importi e superfici derivano da righe particella del ruolo, quindi il collegamento e specifico.",
+        "Il numero di quote e subalterni mostrato arriva dal dettaglio particelle trovato nel ruolo.",
+      ]
+    : [
+        "Gli importi mostrati sono utili come indicazione operativa della posizione a ruolo nello stesso comune.",
+        "Il badge `Ruolo inferito` segnala che il collegamento non e catastalmente provato riga per riga.",
+      ];
+
+  const limits = isExact
+    ? [
+        "Se il file ruolo dell'anno richiesto manca, GAIA mostra l'ultimo anno disponibile.",
+      ]
+    : [
+        "Con `Ruolo inferito` gli importi sono aggregati dalla partita del soggetto nel comune, non dalla singola particella.",
+        "In questo caso superfici irrigate/catastali, subalterni e colture possono essere assenti o incompleti.",
+        "La presenza a ruolo e plausibile, ma va confermata con la documentazione ruolo/Capacitas se il caso e sensibile.",
+      ];
+
+  const facts: Array<{ label: string; value: string }> = [
+    { label: "Modalita", value: sourceModeLabel },
+    { label: "Anno richiesto", value: String(summary.anno_tributario_richiesto ?? summary.anno_tributario_latest) },
+    { label: "Anno mostrato", value: String(summary.anno_tributario_latest) },
+    { label: "Quote mostrate", value: String(summary.n_righe) },
+    { label: "Subalterni distinti", value: String(summary.n_subalterni) },
+  ];
+  if (summary.source_note) {
+    facts.push({ label: "Nota tecnica", value: summary.source_note });
+  }
+
+  return {
+    title: isExact ? "Particella a ruolo con match esatto" : "Particella a ruolo inferito",
+    summary: summaryText,
+    matchingRule,
+    reliability,
+    limits,
+    facts,
+  };
+}
+
 const ADE_PREVIEW_COLORS: Record<string, string> = {
   nuove_in_ade: "#F59E0B",
   geometrie_variate: "#EF4444",
@@ -306,6 +367,7 @@ export default function CatastoGisPage() {
   const [popupParticella, setPopupParticella] = useState<ParticellaPopupData | null>(null);
   const [popupAnomalia, setPopupAnomalia] = useState<ParticellaPopupAnomalia | null>(null);
   const [popupCapacitasBusy, setPopupCapacitasBusy] = useState(false);
+  const [popupRuoloHelpOpen, setPopupRuoloHelpOpen] = useState(false);
   const [popupDetailOpen, setPopupDetailOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchMode, setSearchMode] = useState<GisSearchMode>("auto");
@@ -1431,6 +1493,7 @@ export default function CatastoGisPage() {
         ? "Corrente"
         : "Storico"
     : "-";
+  const popupRuoloHelp = useMemo(() => buildRuoloInferenceDetails(popupParticella?.ruolo_summary), [popupParticella?.ruolo_summary]);
 
   return (
     <CatastoPage
@@ -1920,6 +1983,15 @@ export default function CatastoGisPage() {
                                 <div className="mt-0.5 text-[11px] font-medium text-amber-700">
                                   {popupParticella.ruolo_summary.source_note}
                                 </div>
+                              ) : null}
+                              {popupRuoloHelp ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setPopupRuoloHelpOpen(true)}
+                                  className="mt-1 text-[11px] font-medium text-emerald-700 underline underline-offset-2"
+                                >
+                                  Approfondisci come e stato determinato
+                                </button>
                               ) : null}
                             </div>
                             <div className="text-right text-[11px] text-emerald-900">
@@ -2487,6 +2559,67 @@ export default function CatastoGisPage() {
             }
           }}
         />
+      ) : null}
+      {popupRuoloHelpOpen && popupRuoloHelp ? (
+        <div className="fixed inset-0 z-[81] flex items-center justify-center bg-black/45 px-4 py-6 backdrop-blur-sm">
+          <button
+            type="button"
+            aria-label="Chiudi approfondimento ruolo"
+            className="absolute inset-0 cursor-default"
+            onClick={() => setPopupRuoloHelpOpen(false)}
+          />
+          <div className="relative z-10 flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-[28px] border border-gray-200 bg-white shadow-[0_30px_90px_rgba(15,23,42,0.24)]">
+            <div className="border-b border-gray-100 px-6 py-5">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-emerald-700">Approfondimento ruolo</p>
+                  <h2 className="mt-2 text-2xl font-semibold text-gray-900">{popupRuoloHelp.title}</h2>
+                </div>
+                <button className="btn-secondary" type="button" onClick={() => setPopupRuoloHelpOpen(false)}>
+                  Chiudi
+                </button>
+              </div>
+            </div>
+            <div className="space-y-5 overflow-y-auto bg-[#f6f8f6] px-6 py-6">
+              <section className="rounded-2xl border border-[#d9dfd6] bg-white p-5">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#5f7d68]">Spiegazione semplice</p>
+                <p className="mt-2 text-base font-semibold text-slate-950">{popupRuoloHelp.summary}</p>
+                <p className="mt-3 text-sm leading-6 text-slate-600">{popupRuoloHelp.matchingRule}</p>
+              </section>
+              <section className="rounded-2xl border border-[#d9dfd6] bg-white p-5">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#5f7d68]">Specifiche di questa posizione</p>
+                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+                  {popupRuoloHelp.facts.map((item) => (
+                    <div key={item.label} className="rounded-2xl bg-slate-50 p-4">
+                      <p className="text-xs uppercase tracking-[0.16em] text-slate-400">{item.label}</p>
+                      <p className="mt-2 text-base font-semibold text-slate-700">{item.value}</p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+              <section className="rounded-2xl border border-[#d9dfd6] bg-white p-5">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#5f7d68]">Cosa puoi considerare affidabile</p>
+                <div className="mt-4 space-y-3">
+                  {popupRuoloHelp.reliability.map((item) => (
+                    <div key={item} className="rounded-2xl bg-emerald-50/70 px-4 py-3 text-sm text-slate-700">
+                      {item}
+                    </div>
+                  ))}
+                </div>
+              </section>
+              <section className="rounded-2xl border border-[#d9dfd6] bg-white p-5">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#5f7d68]">Limiti e attenzioni</p>
+                <div className="mt-4 space-y-3">
+                  {popupRuoloHelp.limits.map((item) => (
+                    <div key={item} className="rounded-2xl bg-amber-50/70 px-4 py-3 text-sm text-slate-700">
+                      {item}
+                    </div>
+                  ))}
+                </div>
+              </section>
+            </div>
+          </div>
+        </div>
       ) : null}
     </CatastoPage>
   );
