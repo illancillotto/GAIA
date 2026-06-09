@@ -330,9 +330,11 @@ export function describeCatastoAnomalia(anomalia: AnomaliaLike): string {
     case "VAL-06-imponibile":
       return compactParts([
         "L'importo imponibile registrato non corrisponde al valore che ci si aspetta calcolando superficie irrigabile e indice spese fisse.",
-        formatNumber(data.atteso) ? `Valore atteso dal calcolo: ${formatNumber(data.atteso)}.` : null,
-        formatNumber(data.delta, 4) ? `Scostamento rilevato: ${formatNumber(data.delta, 4)}.` : null,
-        data.coincide_con_catastale === true ? "Il valore registrato coincide invece con il calcolo su superficie catastale." : null,
+        formatEuro(data.atteso) ? `Valore atteso dal calcolo: ${formatEuro(data.atteso)}.` : null,
+        formatEuro(data.delta, 4) ? `Scostamento rilevato: ${formatEuro(data.delta, 4)}.` : null,
+        data.coincide_con_catastale === true && formatEuro(data.atteso_catastale)
+          ? `Il valore registrato coincide invece con il calcolo su superficie catastale: ${formatEuro(data.atteso_catastale)}.`
+          : null,
         "In pratica: i numeri della riga importata non tornano con il calcolo teorico e la posizione va verificata.",
       ]);
     case "VAL-07-importi": {

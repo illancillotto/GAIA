@@ -106,7 +106,7 @@ export function CatastoAnomaliaExplainer({
                     {explanation.calculations.map((item) => (
                       <div key={item.label} className="rounded-2xl bg-slate-50 p-4">
                         <p className="text-xs uppercase tracking-[0.16em] text-slate-400">{item.label}</p>
-                        <p className="mt-2 text-xl font-semibold text-slate-950">{item.value}</p>
+                        <p className="mt-2 text-xl font-semibold text-slate-600">{item.value}</p>
                       </div>
                     ))}
                   </div>
