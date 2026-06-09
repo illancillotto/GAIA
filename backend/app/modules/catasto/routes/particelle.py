@@ -22,6 +22,7 @@ from app.models.catasto_phase1 import (
     CatUtenzaIntestatario,
     CatUtenzaIrrigua,
 )
+from app.modules.catasto.services.anomalie_payloads import build_anomalia_payload
 from app.modules.elaborazioni.capacitas.client import InVoltureClient
 from app.modules.elaborazioni.capacitas.session import CapacitasSessionManager
 from app.services.elaborazioni_capacitas import mark_credential_error, mark_credential_used, pick_credential
@@ -632,9 +633,9 @@ def get_particella_anomalie(
     anno: int | None = Query(None),
     db: Session = Depends(get_db),
     _: ApplicationUser = Depends(require_active_user),
-) -> list[CatAnomalia]:
+) -> list[CatAnomaliaResponse]:
     query = (
-        select(CatAnomalia)
+        select(CatAnomalia, CatUtenzaIrrigua)
         .outerjoin(CatUtenzaIrrigua, CatUtenzaIrrigua.id == CatAnomalia.utenza_id)
         .where(
             or_(
@@ -646,4 +647,23 @@ def get_particella_anomalie(
     )
     if anno is not None:
         query = query.where(CatAnomalia.anno_campagna == anno)
-    return list(db.execute(query).scalars().all())
+    rows = db.execute(query).all()
+    return [
+        CatAnomaliaResponse(
+            id=anomalia.id,
+            particella_id=anomalia.particella_id,
+            utenza_id=anomalia.utenza_id,
+            anno_campagna=anomalia.anno_campagna,
+            tipo=anomalia.tipo,
+            severita=anomalia.severita,
+            descrizione=anomalia.descrizione,
+            dati_json=build_anomalia_payload(anomalia, utenza),
+            status=anomalia.status,
+            note_operatore=anomalia.note_operatore,
+            assigned_to=anomalia.assigned_to,
+            segnalazione_id=anomalia.segnalazione_id,
+            created_at=anomalia.created_at,
+            updated_at=anomalia.updated_at,
+        )
+        for anomalia, utenza in rows
+    ]

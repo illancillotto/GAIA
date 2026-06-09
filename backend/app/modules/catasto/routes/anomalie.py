@@ -18,6 +18,7 @@ from app.modules.catasto.services.ade_status_scan import (
     get_ade_status_scan_summary,
     list_ade_status_scan_candidates,
 )
+from app.modules.catasto.services.anomalie_payloads import build_anomalia_payload
 from app.modules.catasto.services.import_capacitas import ANOMALIA_TYPES
 from app.modules.catasto.services.validation import validate_codice_fiscale
 from app.services.elaborazioni_credentials import ElaborazioneCredentialNotFoundError
@@ -54,6 +55,25 @@ CF_WIZARD_TYPES = {"VAL-02-cf_invalido", "VAL-03-cf_mancante"}
 COMUNE_WIZARD_TYPES = {"VAL-04-comune_invalido"}
 PARTICELLA_WIZARD_TYPES = {"VAL-05-particella_assente"}
 SEVERITY_RANK = {"error": 3, "warning": 2, "info": 1}
+
+
+def _serialize_anomalia(anomalia: CatAnomalia, utenza: CatUtenzaIrrigua | None = None) -> CatAnomaliaResponse:
+    return CatAnomaliaResponse(
+        id=anomalia.id,
+        particella_id=anomalia.particella_id,
+        utenza_id=anomalia.utenza_id,
+        anno_campagna=anomalia.anno_campagna,
+        tipo=anomalia.tipo,
+        severita=anomalia.severita,
+        descrizione=anomalia.descrizione,
+        dati_json=build_anomalia_payload(anomalia, utenza),
+        status=anomalia.status,
+        note_operatore=anomalia.note_operatore,
+        assigned_to=anomalia.assigned_to,
+        segnalazione_id=anomalia.segnalazione_id,
+        created_at=anomalia.created_at,
+        updated_at=anomalia.updated_at,
+    )
 
 
 def _apply_anomalie_filters(
@@ -285,8 +305,17 @@ def list_anomalie(
 
     total = db.execute(count_query).scalar_one()
     items = db.execute(query.offset((page - 1) * page_size).limit(page_size)).scalars().all()
+    utenza_ids = [item.utenza_id for item in items if item.utenza_id is not None]
+    utenze_by_id = (
+        {
+            utenza.id: utenza
+            for utenza in db.execute(select(CatUtenzaIrrigua).where(CatUtenzaIrrigua.id.in_(utenza_ids))).scalars().all()
+        }
+        if utenza_ids
+        else {}
+    )
     return CatAnomaliaListResponse(
-        items=[CatAnomaliaResponse.model_validate(item) for item in items],
+        items=[_serialize_anomalia(item, utenze_by_id.get(item.utenza_id)) for item in items],
         total=total,
         page=page,
         page_size=page_size,
@@ -833,4 +862,5 @@ def update_anomalia(
     db.add(item)
     db.commit()
     db.refresh(item)
-    return CatAnomaliaResponse.model_validate(item)
+    utenza = db.get(CatUtenzaIrrigua, item.utenza_id) if item.utenza_id is not None else None
+    return _serialize_anomalia(item, utenza)

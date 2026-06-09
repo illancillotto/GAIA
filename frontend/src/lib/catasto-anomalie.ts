@@ -48,6 +48,56 @@ function pushCalculation(
   }
 }
 
+function readNumber(value: unknown): number | null {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
+function formatSquareMeters(value: unknown): string | null {
+  const numeric = readNumber(value);
+  if (numeric == null) return null;
+  return `${formatNumber(numeric, 2)} mq`;
+}
+
+function formatHectaresFromMq(value: unknown): string | null {
+  const numeric = readNumber(value);
+  if (numeric == null) return null;
+  return `${formatNumber(numeric / 10_000, 4)} ha`;
+}
+
+function formatEuro(value: unknown, fractionDigits = 2): string | null {
+  const numeric = readNumber(value);
+  if (numeric == null) return null;
+  return `${numeric.toLocaleString("it-IT", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: fractionDigits,
+  })} €`;
+}
+
+function formatIndexEuroPerMq(value: unknown): string | null {
+  const numeric = readNumber(value);
+  if (numeric == null) return null;
+  return `${formatNumber(numeric, 4)} €/mq`;
+}
+
+function pushCalculationText(
+  rows: Array<{ label: string; value: string }>,
+  label: string,
+  value: string | null,
+): void {
+  if (value) {
+    rows.push({ label, value });
+  }
+}
+
+function formatFormula(left: unknown, multiplier: unknown, result: unknown, multiplierDigits = 4, resultDigits = 2): string | null {
+  const leftFormatted = formatSquareMeters(left);
+  const multiplierFormatted = formatIndexEuroPerMq(multiplier);
+  const resultFormatted = formatEuro(result, resultDigits);
+  if (!leftFormatted || !multiplierFormatted || !resultFormatted) return null;
+  return `${leftFormatted} x ${multiplierFormatted} = ${resultFormatted}`;
+}
+
 export function explainCatastoAnomalia(anomalia: AnomaliaLike): CatastoAnomaliaExplanation {
   const data = anomalia.dati_json ?? {};
 
@@ -158,8 +208,28 @@ export function explainCatastoAnomalia(anomalia: AnomaliaLike): CatastoAnomaliaE
       };
     case "VAL-06-imponibile": {
       const calculations: Array<{ label: string; value: string }> = [];
-      pushCalculation(calculations, "Valore atteso dal calcolo", data.atteso);
-      pushCalculation(calculations, "Scostamento rilevato", data.delta, 4);
+      pushCalculationText(calculations, "Superficie irrigabile", formatSquareMeters(data.sup_irrigabile_mq));
+      pushCalculationText(calculations, "Superficie irrigabile in ettari", formatHectaresFromMq(data.sup_irrigabile_mq));
+      pushCalculationText(calculations, "Superficie catastale", formatSquareMeters(data.sup_catastale_mq));
+      pushCalculationText(calculations, "Superficie catastale in ettari", formatHectaresFromMq(data.sup_catastale_mq));
+      pushCalculationText(calculations, "Indice spese fisse", formatIndexEuroPerMq(data.ind_spese_fisse));
+      pushCalculationText(calculations, "Imponibile registrato", formatEuro(data.imponibile_registrato));
+      pushCalculationText(calculations, "Valore atteso dal calcolo", formatEuro(data.atteso));
+      pushCalculationText(calculations, "Scostamento rilevato", formatEuro(data.delta, 4));
+      const formulaIrrigabile = formatFormula(data.sup_irrigabile_mq, data.ind_spese_fisse, data.atteso);
+      if (formulaIrrigabile) {
+        calculations.push({ label: "Calcolo teorico", value: formulaIrrigabile });
+      }
+      const formulaCatastale = formatFormula(data.sup_catastale_mq, data.ind_spese_fisse, data.atteso_catastale);
+      if (formulaCatastale) {
+        calculations.push({ label: "Verifica con catastale", value: formulaCatastale });
+      }
+      if (readNumber(data.delta_vs_catastale) != null) {
+        pushCalculationText(calculations, "Scostamento su catastale", formatEuro(data.delta_vs_catastale, 4));
+      }
+      if (data.coincide_con_catastale === true && formulaCatastale) {
+        calculations.push({ label: "Nota", value: "L'imponibile registrato coincide con il calcolo su superficie catastale." });
+      }
       return {
         title: "Imponibile non coerente con il calcolo teorico",
         summary: "L'importo imponibile registrato non coincide con quello che risulta dal calcolo automatico.",
@@ -262,6 +332,7 @@ export function describeCatastoAnomalia(anomalia: AnomaliaLike): string {
         "L'importo imponibile registrato non corrisponde al valore che ci si aspetta calcolando superficie irrigabile e indice spese fisse.",
         formatNumber(data.atteso) ? `Valore atteso dal calcolo: ${formatNumber(data.atteso)}.` : null,
         formatNumber(data.delta, 4) ? `Scostamento rilevato: ${formatNumber(data.delta, 4)}.` : null,
+        data.coincide_con_catastale === true ? "Il valore registrato coincide invece con il calcolo su superficie catastale." : null,
         "In pratica: i numeri della riga importata non tornano con il calcolo teorico e la posizione va verificata.",
       ]);
     case "VAL-07-importi": {

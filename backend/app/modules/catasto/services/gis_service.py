@@ -51,6 +51,7 @@ from app.models.catasto_phase1 import (
     CatUtenzaIrrigua,
 )
 from app.models.catasto import CatastoParcel
+from app.modules.catasto.services.anomalie_payloads import build_anomalia_payload
 from app.modules.ruolo.models import RuoloAvviso, RuoloParticella, RuoloPartita
 
 
@@ -1127,7 +1128,7 @@ def _particella_anomalie_condition(particella_uuid: uuid.UUID):
 def _load_popup_anomalie_aperte(db: Session, particella_uuid: uuid.UUID) -> list[ParticellaPopupAnomalia]:
     rows = (
         db.execute(
-            select(CatAnomalia)
+            select(CatAnomalia, CatUtenzaIrrigua)
             .outerjoin(CatUtenzaIrrigua, CatUtenzaIrrigua.id == CatAnomalia.utenza_id)
             .where(
                 _particella_anomalie_condition(particella_uuid),
@@ -1136,21 +1137,20 @@ def _load_popup_anomalie_aperte(db: Session, particella_uuid: uuid.UUID) -> list
             .order_by(desc(CatAnomalia.created_at))
             .limit(6)
         )
-        .scalars()
         .all()
     )
     return [
         ParticellaPopupAnomalia(
-            id=str(row.id),
-            anno_campagna=row.anno_campagna,
-            tipo=row.tipo,
-            severita=row.severita,
-            descrizione=row.descrizione,
-            dati_json=row.dati_json,
-            status=row.status,
-            created_at=row.created_at,
+            id=str(anomalia.id),
+            anno_campagna=anomalia.anno_campagna,
+            tipo=anomalia.tipo,
+            severita=anomalia.severita,
+            descrizione=anomalia.descrizione,
+            dati_json=build_anomalia_payload(anomalia, utenza),
+            status=anomalia.status,
+            created_at=anomalia.created_at,
         )
-        for row in rows
+        for anomalia, utenza in rows
     ]
 
 
