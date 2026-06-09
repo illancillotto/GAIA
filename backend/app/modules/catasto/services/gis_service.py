@@ -710,6 +710,7 @@ def _load_popup_titolare(db: Session, particella_uuid: uuid.UUID) -> ParticellaP
         return None
 
     utenza_ids = [utenza.id for utenza in utenze]
+    utenze_by_id = {utenza.id: utenza for utenza in utenze}
     intestatari = (
         db.execute(
             select(CatUtenzaIntestatario)
@@ -728,7 +729,9 @@ def _load_popup_titolare(db: Session, particella_uuid: uuid.UUID) -> ParticellaP
             continue
         if not (intestatario.denominazione or intestatario.codice_fiscale or intestatario.partita_iva):
             continue
+        utenza_for_intestatario = utenze_by_id.get(intestatario.utenza_id)
         return ParticellaPopupTitolare(
+            cco=utenza_for_intestatario.cco if utenza_for_intestatario is not None else None,
             codice_fiscale=intestatario.codice_fiscale,
             partita_iva=intestatario.partita_iva,
             denominazione=intestatario.denominazione,
@@ -739,6 +742,7 @@ def _load_popup_titolare(db: Session, particella_uuid: uuid.UUID) -> ParticellaP
     latest_utenza = utenze[0]
     if latest_utenza.denominazione or latest_utenza.codice_fiscale:
         return ParticellaPopupTitolare(
+            cco=latest_utenza.cco,
             codice_fiscale=latest_utenza.codice_fiscale,
             partita_iva=None,
             denominazione=latest_utenza.denominazione,
@@ -758,6 +762,7 @@ def _popup_titolare_from_anagrafica_owner(owner: Any) -> ParticellaPopupTitolare
     if not (codice_fiscale or display_name):
         return None
     return ParticellaPopupTitolare(
+        cco=None,
         codice_fiscale=codice_fiscale,
         partita_iva=codice_fiscale if codice_fiscale and len(codice_fiscale) == 11 and codice_fiscale.isdigit() else None,
         denominazione=display_name,
