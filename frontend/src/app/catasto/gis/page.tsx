@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 
+import { UtenzeSubjectQuickViewDialog } from "@/components/utenze/utenze-subject-quick-view-dialog";
 import AnalysisPanel from "@/components/catasto/gis/AnalysisPanel";
 import { ParticellaDetailDialog } from "@/components/catasto/anagrafica/ParticellaDetailDialog";
 import { CatastoAnomaliaExplainer } from "@/components/catasto/catasto-anomalia-explainer";
@@ -28,6 +29,7 @@ import {
   catastoGisUpdateSavedSelection,
   catastoListDistretti,
 } from "@/lib/api/catasto";
+import { searchAnagraficaSubjects } from "@/lib/api";
 import { describeCatastoAnomalia } from "@/lib/catasto-anomalie";
 import { getStoredAccessToken } from "@/lib/auth";
 import { useGisSelection } from "@/hooks/useGisSelection";
@@ -203,6 +205,17 @@ function popupToMatch(popup: ParticellaPopupData | null): CatAnagraficaMatch | n
   };
 }
 
+function normalizeIdentifier(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const normalized = value.replace(/\s+/g, "").trim().toUpperCase();
+  return normalized || null;
+}
+
+function getPopupTitolareLabel(titolare: ParticellaPopupData["titolare"]): string | null {
+  if (!titolare) return null;
+  return titolare.subject_display_name?.trim() || titolare.denominazione?.trim() || null;
+}
+
 function buildRuoloInferenceDetails(summary: ParticellaPopupRuoloSummary | null | undefined): {
   title: string;
   summary: string;
@@ -368,6 +381,9 @@ export default function CatastoGisPage() {
   const [popupAnomalia, setPopupAnomalia] = useState<ParticellaPopupAnomalia | null>(null);
   const [popupCapacitasBusy, setPopupCapacitasBusy] = useState(false);
   const [popupRuoloHelpOpen, setPopupRuoloHelpOpen] = useState(false);
+  const [popupSubjectQuickView, setPopupSubjectQuickView] = useState<{ id: string; label: string | null } | null>(null);
+  const [popupSubjectLookupBusy, setPopupSubjectLookupBusy] = useState(false);
+  const [popupSubjectLookupError, setPopupSubjectLookupError] = useState<string | null>(null);
   const [popupDetailOpen, setPopupDetailOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchMode, setSearchMode] = useState<GisSearchMode>("auto");
@@ -486,6 +502,48 @@ export default function CatastoGisPage() {
       setGisError(e instanceof Error ? e.message : "Errore generazione link Capacitas");
     } finally {
       setPopupCapacitasBusy(false);
+    }
+  }, [popupParticella, token]);
+
+  const handleOpenPopupSubject = useCallback(async (): Promise<void> => {
+    const titolare = popupParticella?.titolare;
+    if (!titolare) return;
+
+    const label = getPopupTitolareLabel(titolare);
+    if (titolare.subject_id) {
+      setPopupSubjectLookupError(null);
+      setPopupSubjectQuickView({ id: titolare.subject_id, label });
+      return;
+    }
+
+    const identifier = normalizeIdentifier(titolare.codice_fiscale ?? titolare.partita_iva);
+    if (!token || !identifier) {
+      setPopupSubjectLookupError("Nessun soggetto GAIA collegato a questo identificativo fiscale.");
+      return;
+    }
+
+    setPopupSubjectLookupBusy(true);
+    setPopupSubjectLookupError(null);
+    try {
+      const result = await searchAnagraficaSubjects(token, identifier, 20);
+      const matches = result.items.filter((item) => {
+        const itemCf = normalizeIdentifier(item.codice_fiscale);
+        const itemPiva = normalizeIdentifier(item.partita_iva);
+        return itemCf === identifier || itemPiva === identifier;
+      });
+      if (matches.length === 1) {
+        setPopupSubjectQuickView({ id: matches[0].id, label: matches[0].display_name ?? label });
+        return;
+      }
+      if (matches.length > 1) {
+        setPopupSubjectLookupError("Identificatore fiscale associato a più soggetti GAIA. Apri la scheda utenze per disambiguare.");
+        return;
+      }
+      setPopupSubjectLookupError("Nessun soggetto GAIA trovato per questo identificatore fiscale.");
+    } catch (e) {
+      setPopupSubjectLookupError(e instanceof Error ? e.message : "Errore apertura dettaglio soggetto");
+    } finally {
+      setPopupSubjectLookupBusy(false);
     }
   }, [popupParticella, token]);
 
@@ -1920,16 +1978,37 @@ export default function CatastoGisPage() {
                                 <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-600">
                                   {popupParticella.titolare.codice_fiscale ? (
                                     <span>
-                                      CF <span className="font-mono font-semibold text-slate-800">{popupParticella.titolare.codice_fiscale}</span>
+                                      CF{" "}
+                                      <button
+                                        type="button"
+                                        onClick={() => void handleOpenPopupSubject()}
+                                        disabled={popupSubjectLookupBusy}
+                                        className="font-mono font-semibold text-slate-800 underline underline-offset-2 disabled:cursor-wait disabled:no-underline disabled:opacity-70"
+                                      >
+                                        {popupSubjectLookupBusy ? "Apertura..." : popupParticella.titolare.codice_fiscale}
+                                      </button>
                                     </span>
                                   ) : null}
                                   {!popupParticella.titolare.codice_fiscale && popupParticella.titolare.partita_iva ? (
                                     <span>
-                                      P.IVA <span className="font-mono font-semibold text-slate-800">{popupParticella.titolare.partita_iva}</span>
+                                      P.IVA{" "}
+                                      <button
+                                        type="button"
+                                        onClick={() => void handleOpenPopupSubject()}
+                                        disabled={popupSubjectLookupBusy}
+                                        className="font-mono font-semibold text-slate-800 underline underline-offset-2 disabled:cursor-wait disabled:no-underline disabled:opacity-70"
+                                      >
+                                        {popupSubjectLookupBusy ? "Apertura..." : popupParticella.titolare.partita_iva}
+                                      </button>
                                     </span>
                                   ) : null}
                                   {popupParticella.titolare.titoli ? <span>{popupParticella.titolare.titoli}</span> : null}
                                 </div>
+                                {popupSubjectLookupError ? (
+                                  <div className="mt-2 rounded-xl border border-amber-200 bg-amber-50 px-2.5 py-2 text-[11px] text-amber-900">
+                                    {popupSubjectLookupError}
+                                  </div>
+                                ) : null}
                                 {popupParticella.titolare.cco ? (
                                   <button
                                     type="button"
@@ -2620,6 +2699,13 @@ export default function CatastoGisPage() {
             </div>
           </div>
         </div>
+      ) : null}
+      {popupSubjectQuickView ? (
+        <UtenzeSubjectQuickViewDialog
+          subjectId={popupSubjectQuickView.id}
+          subjectLabel={popupSubjectQuickView.label}
+          onClose={() => setPopupSubjectQuickView(null)}
+        />
       ) : null}
     </CatastoPage>
   );

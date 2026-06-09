@@ -280,6 +280,8 @@ class ParticellaPopupRuoloSummary(BaseModel):
 
 
 class ParticellaPopupTitolare(BaseModel):
+    subject_id: str | None = None
+    subject_display_name: str | None = None
     cco: str | None = None
     codice_fiscale: str | None = None
     partita_iva: str | None = None

@@ -259,6 +259,8 @@ export interface ParticellaPopupSwappedCapacitas {
 }
 
 export interface ParticellaPopupTitolare {
+  subject_id?: string | null;
+  subject_display_name?: string | null;
   cco?: string | null;
   codice_fiscale?: string | null;
   partita_iva?: string | null;
