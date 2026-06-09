@@ -47,8 +47,7 @@ type DailyRow = {
 
 type DailyEditForm = {
   kmValue: string;
-  reperibilitaUnit: "none" | "hours" | "days" | "shifts";
-  reperibilitaQuantity: string;
+  reperibilitaGiornaliera: boolean;
   overrideStraordinario: string;
   overrideMpe: string;
   manualNote: string;
@@ -84,6 +83,7 @@ function parseMinutesInput(value: string): number | null {
 
 function formatReperibilitaDisplay(unit: InazDailyRecord["reperibilita_unit"], quantity: number | null): string {
   if (unit === "none") return "Nessuna";
+  if (unit === "days" && (quantity ?? 0) > 0) return "Giornaliera";
   const labels: Record<Exclude<InazDailyRecord["reperibilita_unit"], "none">, string> = {
     hours: "ore",
     days: "giorni",
@@ -296,9 +296,7 @@ export default function InazAnomaliePage() {
     }
     setEditor({
       kmValue: selectedRecord.km_value != null ? String(selectedRecord.km_value) : "",
-      reperibilitaUnit: selectedRecord.reperibilita_unit,
-      reperibilitaQuantity:
-        selectedRecord.reperibilita_quantity != null ? String(selectedRecord.reperibilita_quantity) : "",
+      reperibilitaGiornaliera: selectedRecord.reperibilita_unit !== "none" && (selectedRecord.reperibilita_quantity ?? 0) > 0,
       overrideStraordinario: formatMinutesInput(selectedRecord.override_straordinario_minutes),
       overrideMpe: formatMinutesInput(selectedRecord.override_mpe_minutes),
       manualNote: selectedRecord.manual_note ?? "",
@@ -337,11 +335,8 @@ export default function InazAnomaliePage() {
     try {
       const updated = await updateInazDailyRecord(token, selectedRecord.id, {
         km_value: editor.kmValue.trim() ? Number(editor.kmValue) : null,
-        reperibilita_unit: editor.reperibilitaUnit,
-        reperibilita_quantity:
-          editor.reperibilitaUnit === "none" || !editor.reperibilitaQuantity.trim()
-            ? null
-            : Number(editor.reperibilitaQuantity),
+        reperibilita_unit: editor.reperibilitaGiornaliera ? "days" : "none",
+        reperibilita_quantity: editor.reperibilitaGiornaliera ? 1 : null,
         override_straordinario_minutes: parseMinutesInput(editor.overrideStraordinario),
         override_mpe_minutes: parseMinutesInput(editor.overrideMpe),
         manual_note: editor.manualNote.trim() || null,
@@ -570,36 +565,20 @@ export default function InazAnomaliePage() {
                       <input className="form-control mt-1" value={editor.kmValue} onChange={(event) => setEditor((current) => current ? { ...current, kmValue: event.target.value } : current)} placeholder="Es. 24" />
                     </label>
                     <label className="block text-sm font-medium text-gray-700">
-                      Tipo reperibilita
-                      <select
-                        className="form-control mt-1"
-                        value={editor.reperibilitaUnit}
-                        onChange={(event) =>
-                          setEditor((current) =>
-                            current
-                              ? {
-                                  ...current,
-                                  reperibilitaUnit: event.target.value as DailyEditForm["reperibilitaUnit"],
-                                  reperibilitaQuantity: event.target.value === "none" ? "" : current.reperibilitaQuantity,
-                                }
-                              : current,
-                          )
-                        }
-                      >
-                        <option value="none">Nessuna</option>
-                        <option value="hours">Ore</option>
-                        <option value="days">Giorni</option>
-                        <option value="shifts">Turni</option>
-                      </select>
-                    </label>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Quantita reperibilita
-                      <input
-                        className="form-control mt-1"
-                        value={editor.reperibilitaQuantity}
-                        onChange={(event) => setEditor((current) => current ? { ...current, reperibilitaQuantity: event.target.value } : current)}
-                        disabled={editor.reperibilitaUnit === "none"}
-                      />
+                      Reperibilita giornaliera
+                      <label className="mt-2 flex items-center gap-2 text-sm font-medium text-gray-700">
+                        <input
+                          type="checkbox"
+                          checked={editor.reperibilitaGiornaliera}
+                          onChange={(event) =>
+                            setEditor((current) =>
+                              current ? { ...current, reperibilitaGiornaliera: event.target.checked } : current,
+                            )
+                          }
+                          aria-label="Reperibilita giornaliera"
+                        />
+                        <span>Segna reperibilita per l'intera giornata</span>
+                      </label>
                     </label>
                     <label className="block text-sm font-medium text-gray-700">
                       Straordinario override

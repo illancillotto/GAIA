@@ -11,8 +11,7 @@ import type { CurrentUser, InazAccessContext, InazCollaborator, InazDailyRecord 
 
 type DailyEditForm = {
   kmValue: string;
-  reperibilitaUnit: "none" | "hours" | "days" | "shifts";
-  reperibilitaQuantity: string;
+  reperibilitaGiornaliera: boolean;
   overrideStraordinario: string;
   overrideMpe: string;
   manualNote: string;
@@ -115,6 +114,7 @@ function parseMinutesInput(value: string): number | null {
 
 function formatReperibilitaDisplay(unit: InazDailyRecord["reperibilita_unit"], quantity: number | null): string {
   if (unit === "none") return "Nessuna";
+  if (unit === "days" && (quantity ?? 0) > 0) return "Giornaliera";
   const labels: Record<Exclude<InazDailyRecord["reperibilita_unit"], "none">, string> = {
     hours: "ore",
     days: "giorni",
@@ -460,14 +460,12 @@ export default function InazGiornalierePage() {
       setEditor(null);
       return;
     }
-    setEditor({
-      kmValue: selectedRecord.km_value != null ? String(selectedRecord.km_value) : "",
-      reperibilitaUnit: selectedRecord.reperibilita_unit,
-      reperibilitaQuantity:
-        selectedRecord.reperibilita_quantity != null ? String(selectedRecord.reperibilita_quantity) : "",
-      overrideStraordinario: formatMinutesInput(selectedRecord.override_straordinario_minutes),
-      overrideMpe: formatMinutesInput(selectedRecord.override_mpe_minutes),
-      manualNote: selectedRecord.manual_note ?? "",
+      setEditor({
+        kmValue: selectedRecord.km_value != null ? String(selectedRecord.km_value) : "",
+        reperibilitaGiornaliera: selectedRecord.reperibilita_unit !== "none" && (selectedRecord.reperibilita_quantity ?? 0) > 0,
+        overrideStraordinario: formatMinutesInput(selectedRecord.override_straordinario_minutes),
+        overrideMpe: formatMinutesInput(selectedRecord.override_mpe_minutes),
+        manualNote: selectedRecord.manual_note ?? "",
       validationNote: selectedRecord.validation_note ?? "",
     });
   }, [selectedRecord]);
@@ -555,11 +553,8 @@ export default function InazGiornalierePage() {
     try {
       const updated = await updateInazDailyRecord(token, selectedRecord.id, {
         km_value: editor.kmValue.trim() ? Number(editor.kmValue) : null,
-        reperibilita_unit: editor.reperibilitaUnit,
-        reperibilita_quantity:
-          editor.reperibilitaUnit === "none" || !editor.reperibilitaQuantity.trim()
-            ? null
-            : Number(editor.reperibilitaQuantity),
+        reperibilita_unit: editor.reperibilitaGiornaliera ? "days" : "none",
+        reperibilita_quantity: editor.reperibilitaGiornaliera ? 1 : null,
         override_straordinario_minutes: parseMinutesInput(editor.overrideStraordinario),
         override_mpe_minutes: parseMinutesInput(editor.overrideMpe),
         manual_note: editor.manualNote.trim() || null,
@@ -881,43 +876,21 @@ export default function InazGiornalierePage() {
                       />
                     </label>
                     <label className="block text-sm font-medium text-amber-900">
-                      <span className="inline-block pb-1">Tipo reperibilita</span>
-                      <select
-                        className="form-control mt-1 w-44"
-                        value={editor.reperibilitaUnit}
-                        onChange={(event) =>
-                          setEditor((current) =>
-                            current
-                              ? {
-                                  ...current,
-                                  reperibilitaUnit: event.target.value as DailyEditForm["reperibilitaUnit"],
-                                  reperibilitaQuantity: event.target.value === "none" ? "" : current.reperibilitaQuantity,
-                                }
-                              : current,
-                          )
-                        }
-                        disabled={!canEditOperationalData}
-                        aria-label="Tipo reperibilita"
-                      >
-                        <option value="none">Nessuna</option>
-                        <option value="hours">Ore</option>
-                        <option value="days">Giorni</option>
-                        <option value="shifts">Turni</option>
-                      </select>
-                    </label>
-                    <label className="block text-sm font-medium text-amber-900">
-                      <span className="inline-block pb-1">Quantita reperibilita</span>
-                      <input
-                        className="form-control mt-1 w-32"
-                        inputMode="numeric"
-                        value={editor.reperibilitaQuantity}
-                        onChange={(event) =>
-                          setEditor((current) => current ? { ...current, reperibilitaQuantity: event.target.value } : current)
-                        }
-                        placeholder="Es. 1"
-                        disabled={!canEditOperationalData || editor.reperibilitaUnit === "none"}
-                        aria-label="Quantita reperibilita"
-                      />
+                      <span className="inline-block pb-1">Reperibilita giornaliera</span>
+                      <label className="mt-2 flex items-center gap-2 text-sm font-medium text-amber-900">
+                        <input
+                          type="checkbox"
+                          checked={editor.reperibilitaGiornaliera}
+                          onChange={(event) =>
+                            setEditor((current) =>
+                              current ? { ...current, reperibilitaGiornaliera: event.target.checked } : current,
+                            )
+                          }
+                          disabled={!canEditOperationalData}
+                          aria-label="Reperibilita giornaliera"
+                        />
+                        <span>Segna reperibilita per l'intera giornata</span>
+                      </label>
                     </label>
                     <p className="text-xs text-amber-700">KM registrati a sistema: <span className="font-medium">{selectedRecord.km_value ?? "—"}</span></p>
                     <p className="text-xs text-amber-700">

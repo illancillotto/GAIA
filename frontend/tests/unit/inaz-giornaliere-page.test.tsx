@@ -74,6 +74,7 @@ const mocks = vi.hoisted(() => ({
   getStoredAccessToken: vi.fn(),
   getCurrentUser: vi.fn(),
   getInazAccessContext: vi.fn(),
+  getInazDailyRecord: vi.fn(),
   listInazCollaborators: vi.fn(),
   listInazDailyRecords: vi.fn(),
   updateInazDailyRecord: vi.fn(),
@@ -86,6 +87,7 @@ vi.mock("@/lib/auth", () => ({
 vi.mock("@/lib/api", () => ({
   getCurrentUser: mocks.getCurrentUser,
   getInazAccessContext: mocks.getInazAccessContext,
+  getInazDailyRecord: mocks.getInazDailyRecord,
   listInazCollaborators: mocks.listInazCollaborators,
   listInazDailyRecords: mocks.listInazDailyRecords,
   updateInazDailyRecord: mocks.updateInazDailyRecord,
@@ -175,6 +177,7 @@ describe("Inaz giornaliere workspace", () => {
       page: 1,
       page_size: 200,
     });
+    mocks.getInazDailyRecord.mockResolvedValue(baseDailyRecord);
     mocks.updateInazDailyRecord.mockResolvedValue({
       id: "record-1",
       collaborator_id: "collab-1",
@@ -190,7 +193,7 @@ describe("Inaz giornaliere workspace", () => {
       mpe_minutes: 45,
       straordinario_minutes: 75,
       km_value: 30,
-      reperibilita_unit: "shifts",
+      reperibilita_unit: "days",
       reperibilita_quantity: 1,
       override_straordinario_minutes: 90,
       override_mpe_minutes: 30,
@@ -269,8 +272,7 @@ describe("Inaz giornaliere workspace", () => {
     expect(screen.getByText("I capisettore possono validare, ma non modificare KM e rettifiche operative.")).toBeInTheDocument();
 
     expect(screen.getByLabelText("Chilometri (auto)")).toBeDisabled();
-    expect(screen.getByLabelText("Tipo reperibilita")).toBeDisabled();
-    expect(screen.getByLabelText("Quantita reperibilita")).toBeDisabled();
+    expect(screen.getByLabelText("Reperibilita giornaliera")).toBeDisabled();
     expect(screen.getByLabelText("Straordinario override")).toBeDisabled();
     expect(screen.getByLabelText("Maggior presenza override")).toBeDisabled();
     expect(screen.getByLabelText("Nota operativa")).toBeDisabled();
@@ -330,8 +332,7 @@ describe("Inaz giornaliere workspace", () => {
     fireEvent.click(await screen.findByTitle("2026-05-16 · Giornata anomala"));
 
     fireEvent.change(await screen.findByLabelText("Chilometri (auto)"), { target: { value: "30" } });
-    fireEvent.change(screen.getByLabelText("Tipo reperibilita"), { target: { value: "shifts" } });
-    fireEvent.change(screen.getByLabelText("Quantita reperibilita"), { target: { value: "1" } });
+    fireEvent.click(screen.getByLabelText("Reperibilita giornaliera"));
     fireEvent.change(screen.getByLabelText("Straordinario override"), { target: { value: "01:30" } });
     fireEvent.change(screen.getByLabelText("Maggior presenza override"), { target: { value: "00:30" } });
     fireEvent.change(screen.getByLabelText("Nota operativa"), { target: { value: "Corretto HR" } });
@@ -340,7 +341,7 @@ describe("Inaz giornaliere workspace", () => {
     await waitFor(() => {
       expect(mocks.updateInazDailyRecord).toHaveBeenCalledWith("token", "record-1", {
         km_value: 30,
-        reperibilita_unit: "shifts",
+        reperibilita_unit: "days",
         reperibilita_quantity: 1,
         override_straordinario_minutes: 90,
         override_mpe_minutes: 30,

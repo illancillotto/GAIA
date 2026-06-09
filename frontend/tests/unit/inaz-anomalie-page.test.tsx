@@ -7,6 +7,7 @@ import { currentMonthValue, monthLabel, previousMonthValue } from "@/lib/inaz-an
 const mocks = vi.hoisted(() => ({
   getStoredAccessToken: vi.fn(),
   getCurrentUser: vi.fn(),
+  getInazDailyRecord: vi.fn(),
   listInazCollaborators: vi.fn(),
   listInazDailyRecords: vi.fn(),
   updateInazDailyRecord: vi.fn(),
@@ -18,6 +19,7 @@ vi.mock("@/lib/auth", () => ({
 
 vi.mock("@/lib/api", () => ({
   getCurrentUser: mocks.getCurrentUser,
+  getInazDailyRecord: mocks.getInazDailyRecord,
   listInazCollaborators: mocks.listInazCollaborators,
   listInazDailyRecords: mocks.listInazDailyRecords,
   updateInazDailyRecord: mocks.updateInazDailyRecord,
@@ -138,6 +140,10 @@ describe("Inaz anomalie page", () => {
       module_ruolo: false,
       module_inaz: true,
       enabled_modules: ["inaz"],
+    });
+    mocks.getInazDailyRecord.mockImplementation(async (_token: string, recordId: string) => {
+      const date = recordId.replace("record-", "");
+      return anomalyMonthResponse(date).items[0];
     });
     mocks.listInazCollaborators.mockResolvedValue({
       items: [
