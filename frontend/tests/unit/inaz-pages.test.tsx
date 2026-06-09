@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import InazCapisettorePage from "@/app/inaz/capisettore/page";
 import InazCollaboratoriPage from "@/app/inaz/collaboratori/page";
-import InazCapisettorePage from "@/app/inaz/capisettore/page";
 import InazImportPage from "@/app/inaz/import/page";
 import InazPage from "@/app/inaz/page";
 import InazSettingsPage from "@/app/inaz/settings/page";
@@ -11,6 +10,7 @@ import InazSyncPage from "@/app/inaz/sync/page";
 
 const mocks = vi.hoisted(() => ({
   getStoredAccessToken: vi.fn(),
+  getInazDashboardSummary: vi.fn(),
   getCurrentUser: vi.fn(),
   listAllApplicationUsers: vi.fn(),
   listAllInazCollaborators: vi.fn(),
@@ -41,6 +41,7 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 vi.mock("@/lib/api", () => ({
+  getInazDashboardSummary: mocks.getInazDashboardSummary,
   getCurrentUser: mocks.getCurrentUser,
   listAllApplicationUsers: mocks.listAllApplicationUsers,
   listAllInazCollaborators: mocks.listAllInazCollaborators,
@@ -432,6 +433,25 @@ describe("Inaz pages", () => {
       total: 1,
       page: 1,
       page_size: 200,
+    });
+    mocks.getInazDashboardSummary.mockResolvedValue({
+      collaborators_total: 1,
+      mapped_collaborators_total: 1,
+      active_collaborators_total: 1,
+      daily_records_total: 1,
+      ordinary_minutes_total: 330,
+      absence_minutes_total: 120,
+      extra_minutes_total: 120,
+      straordinario_minutes_total: 75,
+      maggior_presenza_minutes_total: 45,
+      km_total: 24,
+      anomaly_total: 1,
+      special_day_total: 1,
+      worked_days_total: 1,
+      absence_days_total: 1,
+      justified_days_total: 0,
+      cause_stats: { Permessi: 1 },
+      schedule_stats: [{ code: "OPESAB", count: 1 }],
     });
     mocks.listInazDailyRecords.mockResolvedValue({
       items: [

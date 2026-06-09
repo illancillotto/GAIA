@@ -1,7 +1,7 @@
 "use client";
 
-import { OrganigrammaWorkspace } from "@/app/organigramma/page";
 import { ProtectedPage } from "@/components/app/protected-page";
+import { OrganigrammaWorkspace } from "@/features/organigramma/organigramma-workspace";
 
 export default function InazOrgStructurePage() {
   return (
