@@ -40,9 +40,7 @@ def require_organigramma_manage_or_inaz():
         db: Annotated[Session, Depends(get_db)],
         current_user: Annotated[ApplicationUser, Depends(require_organigramma_or_inaz_module)],
     ) -> ApplicationUser:
-        if can_access_section(db, current_user, "organigramma.manage"):
-            return current_user
-        if current_user.module_inaz and current_user.role in {"admin", "super_admin", "hr_manager"}:
+        if current_user.is_super_admin:
             return current_user
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Section access denied")
 

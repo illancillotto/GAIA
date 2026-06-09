@@ -29,6 +29,8 @@ class OrgUnit(Base):
     )
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    canvas_x: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    canvas_y: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     source: Mapped[str] = mapped_column(String(20), nullable=False, default="manuale")
     wc_area_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid,

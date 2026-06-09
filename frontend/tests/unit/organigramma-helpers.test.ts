@@ -9,6 +9,8 @@ function node(id: string, nome: string, tipo: OrgUnitTreeNode["tipo"], parent: s
     nome,
     tipo,
     parent_id: parent,
+    canvas_x: 0,
+    canvas_y: 0,
     source: "manuale",
     wc_area_id: null,
     legacy_team_id: null,

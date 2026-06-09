@@ -400,6 +400,8 @@ export type OrgUnit = {
   parent_id: string | null;
   is_active: boolean;
   sort_order: number;
+  canvas_x: number;
+  canvas_y: number;
   source: OrgSource;
   wc_area_id: string | null;
   legacy_team_id: string | null;
@@ -412,6 +414,8 @@ export type OrgUnitTreeNode = {
   nome: string;
   tipo: OrgUnitType;
   parent_id: string | null;
+  canvas_x: number;
+  canvas_y: number;
   source: OrgSource;
   wc_area_id: string | null;
   legacy_team_id: string | null;
@@ -497,6 +501,8 @@ export type OrgUnitCreateInput = {
   is_active?: boolean;
   source?: OrgSource;
   sort_order?: number;
+  canvas_x?: number;
+  canvas_y?: number;
   wc_area_id?: string | null;
   legacy_team_id?: string | null;
 };
@@ -508,6 +514,8 @@ export type OrgUnitUpdateInput = {
   is_active?: boolean;
   source?: OrgSource;
   sort_order?: number;
+  canvas_x?: number;
+  canvas_y?: number;
   wc_area_id?: string | null;
   legacy_team_id?: string | null;
 };

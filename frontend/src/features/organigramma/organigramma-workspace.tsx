@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { getOrgReference } from "@/app/organigramma/reference-data";
 import {
@@ -16,6 +16,10 @@ import {
 } from "@/components/ui/icons";
 import {
   createOrgOverride,
+  createOrgAssignment,
+  createOrgUnit,
+  deleteOrgAssignment,
+  getCurrentUser,
   getOrgAssignments,
   getOrgOverrides,
   getOrgTree,
@@ -31,10 +35,13 @@ import { cn } from "@/lib/cn";
 import { computeTreeInclusion, flattenTree, unitPath } from "@/lib/organigramma";
 import type {
   ApplicationUser,
+  CurrentUser,
   OrgAssignment,
+  OrgAssignmentCreateInput,
   OrgOverrideScope,
   OrgOverrideStatus,
   OrgSource,
+  OrgUnitCreateInput,
   OrgUnitDetail,
   OrgUnitTreeNode,
   OrgUnitType,
@@ -57,6 +64,8 @@ type SchemaNodeMeta = {
   descendantIds: Set<string>;
 };
 
+type UserDropMode = "member" | "lead";
+
 const TYPE_META: Record<OrgUnitType, { label: string; chip: string; dot: string }> = {
   direzione: { label: "Direzione", chip: "bg-[#D3EAD4] text-[#163d29] border-[#bcd9bf]", dot: "#1D4E35" },
   distretto: { label: "Distretto", chip: "bg-[#e0f3ec] text-[#0f6a4e] border-[#bfe5d6]", dot: "#1D9E75" },
@@ -73,6 +82,11 @@ const TYPE_FILTERS: { value: OrgUnitType | "all"; label: string }[] = [
   { value: "settore", label: "Settore" },
   { value: "squadra", label: "Squadra" },
 ];
+
+const SCHEMA_NODE_WIDTH = 246;
+const SCHEMA_NODE_HEIGHT = 188;
+const SCHEMA_CANVAS_PADDING = 180;
+const SCHEMA_GRID_SIZE = 24;
 
 function initials(name: string | null | undefined): string {
   if (!name) return "?";
@@ -143,6 +157,44 @@ function buildSchemaMeta(tree: OrgUnitTreeNode[], assignments: OrgAssignment[]):
     });
   }
   return meta;
+}
+
+function safeCanvasCoord(value: number | null | undefined): number {
+  return Number.isFinite(value) ? Number(value) : 0;
+}
+
+function updateTreeNodeInForest(
+  nodes: OrgUnitTreeNode[],
+  nodeId: string,
+  patch: Partial<Pick<OrgUnitTreeNode, "parent_id" | "canvas_x" | "canvas_y">>,
+): OrgUnitTreeNode[] {
+  return nodes.map((node) => {
+    if (node.id === nodeId) {
+      return { ...node, ...patch };
+    }
+    if (!node.children.length) {
+      return node;
+    }
+    return {
+      ...node,
+      children: updateTreeNodeInForest(node.children, nodeId, patch),
+    };
+  });
+}
+
+function defaultLeadTitle(tipo: OrgUnitType): string {
+  switch (tipo) {
+    case "direzione":
+      return "Direttore";
+    case "distretto":
+      return "Responsabile distretto";
+    case "settore":
+      return "Capo settore";
+    case "squadra":
+      return "Capo squadra";
+    default:
+      return "Responsabile unità";
+  }
 }
 
 function Pill({ children, className }: { children: React.ReactNode; className?: string }) {
@@ -222,25 +274,73 @@ type TreeProps = {
   showProvenance: boolean;
   includeIds: Set<string> | null;
   matchIds: Set<string>;
+  draggingNodeId: string | null;
+  draggingUserId: number | null;
+  canManage: boolean;
+  canAssignPeople: boolean;
+  userDropMode: UserDropMode;
   onToggle: (id: string) => void;
   onSelect: (id: string) => void;
+  onDragStart: (id: string | null) => void;
+  onDragEnd: () => void;
+  onMove: (nodeId: string, parentId: string | null) => void;
+  onAssignUser: (userId: number, unitId: string, mode: UserDropMode) => void;
 };
 
-function TreeNode({ node, depth, expanded, selectedId, showProvenance, includeIds, matchIds, onToggle, onSelect }: TreeProps) {
+function TreeNode({
+  node,
+  depth,
+  expanded,
+  selectedId,
+  showProvenance,
+  includeIds,
+  matchIds,
+  draggingNodeId,
+  draggingUserId,
+  canManage,
+  canAssignPeople,
+  userDropMode,
+  onToggle,
+  onSelect,
+  onDragStart,
+  onDragEnd,
+  onMove,
+  onAssignUser,
+}: TreeProps) {
   const children = includeIds ? node.children.filter((c) => includeIds.has(c.id)) : node.children;
   const hasChildren = node.children.length > 0;
   const isOpen = expanded.has(node.id) || (includeIds !== null && includeIds.has(node.id));
   const isSelected = selectedId === node.id;
   const isHit = matchIds.has(node.id);
+  const canDropHere = !!draggingNodeId && draggingNodeId !== node.id;
 
   return (
     <li>
       <div
         role="treeitem"
+        data-testid={`tree-node-${node.id}`}
         aria-expanded={hasChildren ? isOpen : undefined}
         aria-selected={isSelected}
         tabIndex={0}
+        draggable={canManage}
         onClick={() => onSelect(node.id)}
+        onDragStart={() => onDragStart(node.id)}
+        onDragEnd={onDragEnd}
+        onDragOver={(event) => {
+          if ((canManage && draggingNodeId && draggingNodeId !== node.id) || (canAssignPeople && draggingUserId != null)) {
+            event.preventDefault();
+          }
+        }}
+        onDrop={(event) => {
+          if (canAssignPeople && draggingUserId != null) {
+            event.preventDefault();
+            onAssignUser(draggingUserId, node.id, userDropMode);
+            return;
+          }
+          if (!canManage || !draggingNodeId || draggingNodeId === node.id) return;
+          event.preventDefault();
+          onMove(draggingNodeId, node.id);
+        }}
         onKeyDown={(e) => {
           if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
@@ -256,6 +356,8 @@ function TreeNode({ node, depth, expanded, selectedId, showProvenance, includeId
             : isHit
               ? "border-[#bfe5d6] bg-[#f1faf4] hover:bg-[#e9f6ee]"
               : "border-transparent hover:border-[#e6ebe5] hover:bg-[#f5f9f4]",
+          canManage && canDropHere ? "hover:border-[#1D9E75]" : "",
+          draggingNodeId === node.id ? "opacity-60" : "",
         )}
         style={{ marginLeft: depth * 16 }}
       >
@@ -295,8 +397,17 @@ function TreeNode({ node, depth, expanded, selectedId, showProvenance, includeId
                 showProvenance={showProvenance}
                 includeIds={includeIds}
                 matchIds={matchIds}
+                draggingNodeId={draggingNodeId}
+                draggingUserId={draggingUserId}
+                canManage={canManage}
+                canAssignPeople={canAssignPeople}
+                userDropMode={userDropMode}
                 onToggle={onToggle}
                 onSelect={onSelect}
+                onDragStart={onDragStart}
+                onDragEnd={onDragEnd}
+                onMove={onMove}
+                onAssignUser={onAssignUser}
               />
             </div>
           ))}
@@ -309,33 +420,56 @@ function TreeNode({ node, depth, expanded, selectedId, showProvenance, includeId
 // --------------------------------------------------------------------------- //
 // Person card
 // --------------------------------------------------------------------------- //
-function PersonCard({ assignment, onOpen }: { assignment: OrgAssignment; onOpen: (id: number) => void }) {
+function PersonCard({
+  assignment,
+  onOpen,
+  canDetach = false,
+  onDetach,
+}: {
+  assignment: OrgAssignment;
+  onOpen: (id: number) => void;
+  canDetach?: boolean;
+  onDetach?: (assignmentId: string) => void;
+}) {
   const name = assignment.person?.full_name ?? assignment.person?.username ?? `Utente #${assignment.user_id}`;
   const active = assignment.active && (assignment.person?.is_active ?? true);
   return (
-    <button
-      type="button"
-      onClick={() => onOpen(assignment.user_id)}
-      className="flex w-full items-start gap-3 rounded-xl border border-[#e6ebe5] bg-white p-3 text-left transition-all hover:border-[#bcd9bf] hover:shadow-[0_8px_24px_rgba(15,23,42,0.06)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#1D9E75]/60"
-    >
-      <Avatar name={name} />
-      <span className="min-w-0 flex-1">
-        <span className="flex flex-wrap items-center gap-2">
-          <span className="text-[13.5px] font-semibold text-[#051b12]">{name}</span>
-          <StatusBadge active={active} />
+    <div className="rounded-xl border border-[#e6ebe5] bg-white p-3 transition-all hover:border-[#bcd9bf] hover:shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
+      <button
+        type="button"
+        onClick={() => onOpen(assignment.user_id)}
+        className="flex w-full items-start gap-3 text-left focus-visible:outline-none"
+      >
+        <Avatar name={name} />
+        <span className="min-w-0 flex-1">
+          <span className="flex flex-wrap items-center gap-2">
+            <span className="text-[13.5px] font-semibold text-[#051b12]">{name}</span>
+            <StatusBadge active={active} />
+          </span>
+          <span className="mt-0.5 block text-[12px] text-[#3a4a3f]">{assignment.title ?? "—"}</span>
+          <span className="mt-1 block text-[11.5px] text-[#5f6d61]">
+            {assignment.manager
+              ? <>riporta a <span className="font-medium text-[#1D4E35]">{assignment.manager.full_name ?? assignment.manager.username}</span></>
+              : "vertice — nessun responsabile"}
+          </span>
+          <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
+            <SourceBadge source={assignment.source} />
+            {assignment.person ? <Pill className="border-[#d5e2d8] bg-[#f5f9f4] text-[#5f6d61]">RBAC: {assignment.person.rbac_role}</Pill> : null}
+          </span>
         </span>
-        <span className="mt-0.5 block text-[12px] text-[#3a4a3f]">{assignment.title ?? "—"}</span>
-        <span className="mt-1 block text-[11.5px] text-[#5f6d61]">
-          {assignment.manager
-            ? <>riporta a <span className="font-medium text-[#1D4E35]">{assignment.manager.full_name ?? assignment.manager.username}</span></>
-            : "vertice — nessun responsabile"}
-        </span>
-        <span className="mt-1.5 flex flex-wrap items-center gap-1.5">
-          <SourceBadge source={assignment.source} />
-          {assignment.person ? <Pill className="border-[#d5e2d8] bg-[#f5f9f4] text-[#5f6d61]">RBAC: {assignment.person.rbac_role}</Pill> : null}
-        </span>
-      </span>
-    </button>
+      </button>
+      {canDetach && onDetach ? (
+        <div className="mt-3 flex justify-end">
+          <button
+            type="button"
+            onClick={() => onDetach(assignment.id)}
+            className="rounded-full border border-[#e6d3d3] bg-[#fdf2f2] px-3 py-1 text-[11.5px] font-medium text-[#9a3b3b] hover:bg-[#fbe6e6]"
+          >
+            Stacca dall&apos;unità
+          </button>
+        </div>
+      ) : null}
+    </div>
   );
 }
 
@@ -344,12 +478,27 @@ type SchemaBoardProps = {
   selectedId: string | null;
   onSelect: (id: string) => void;
   onOpenPerson: (id: number) => void;
-  draggingNodeId: string | null;
-  onDragStart: (id: string | null) => void;
-  onDragEnd: () => void;
-  onMove: (nodeId: string, parentId: string | null) => void;
+  draggingUserId: number | null;
+  userDropMode: UserDropMode;
+  linkDraft: { sourceId: string; mode: "above" | "below" } | null;
+  onBeginLink: (nodeId: string, mode: "above" | "below") => void;
+  onCardPointerDown: (nodeId: string, event: React.MouseEvent<HTMLDivElement>) => void;
+  onConnectNode: (targetId: string) => void;
+  onDetachParent: (nodeId: string) => void;
+  onAssignUser: (userId: number, unitId: string, mode: UserDropMode) => void;
   meta: Map<string, SchemaNodeMeta>;
-  canManage: boolean;
+  canModifyStructure: boolean;
+  editEnabled: boolean;
+  snapToGrid: boolean;
+  onToggleSnapToGrid: (enabled: boolean) => void;
+  onToggleEdit: (enabled: boolean) => void;
+  scale: number;
+  onZoomIn: () => void;
+  onZoomOut: () => void;
+  onFit: () => void;
+  onPanStart: (event: React.MouseEvent<HTMLDivElement>) => void;
+  viewportRef: React.RefObject<HTMLDivElement>;
+  contentRef: React.RefObject<HTMLDivElement>;
 };
 
 function SchemaBoard({
@@ -357,70 +506,183 @@ function SchemaBoard({
   selectedId,
   onSelect,
   onOpenPerson,
-  draggingNodeId,
-  onDragStart,
-  onDragEnd,
-  onMove,
+  draggingUserId,
+  userDropMode,
+  linkDraft,
+  onBeginLink,
+  onCardPointerDown,
+  onConnectNode,
+  onDetachParent,
+  onAssignUser,
   meta,
-  canManage,
+  canModifyStructure,
+  editEnabled,
+  snapToGrid,
+  onToggleSnapToGrid,
+  onToggleEdit,
+  scale,
+  onZoomIn,
+  onZoomOut,
+  onFit,
+  onPanStart,
+  viewportRef,
+  contentRef,
 }: SchemaBoardProps) {
+  const flatNodes = useMemo(() => flattenTree(tree), [tree]);
+  const nodesById = useMemo(() => new Map(flatNodes.map((node) => [node.id, node])), [flatNodes]);
+  const canvasBounds = useMemo(() => {
+    if (!flatNodes.length) {
+      return {
+        width: 1600,
+        height: 900,
+        offsetX: 0,
+        offsetY: 0,
+      };
+    }
+    const xs = flatNodes.map((node) => safeCanvasCoord(node.canvas_x));
+    const ys = flatNodes.map((node) => safeCanvasCoord(node.canvas_y));
+    const minX = Math.min(...xs);
+    const minY = Math.min(...ys);
+    const maxX = Math.max(...xs);
+    const maxY = Math.max(...ys);
+    const offsetX = minX < SCHEMA_CANVAS_PADDING ? SCHEMA_CANVAS_PADDING - minX : 0;
+    const offsetY = minY < SCHEMA_CANVAS_PADDING ? SCHEMA_CANVAS_PADDING - minY : 0;
+    return {
+      width: maxX + offsetX + SCHEMA_NODE_WIDTH + SCHEMA_CANVAS_PADDING,
+      height: maxY + offsetY + SCHEMA_NODE_HEIGHT + SCHEMA_CANVAS_PADDING,
+      offsetX,
+      offsetY,
+    };
+  }, [flatNodes]);
+
   return (
     <section className="rounded-[28px] border border-[#c8d9e7] bg-[radial-gradient(circle_at_top,_#ffffff,_#f6fafc_65%,_#eef4f7)] p-5 shadow-[0_20px_60px_rgba(15,23,42,0.08)]">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
           <h2 className="font-serif text-[18px] font-semibold text-[#10233e]">Schema organigramma</h2>
           <p className="text-[12.5px] text-[#5c6d82]">
-            Vista visuale top-down. Trascina un box sopra un altro per cambiare il responsabile gerarchico.
+            Modalità lavagna: trascina liberamente le card. Usa le frecce per collegare i blocchi sopra o sotto.
           </p>
         </div>
-        <div className="flex flex-wrap gap-2 text-[12px] text-[#5c6d82]">
-          <Pill className="border-[#c4d3ea] bg-white text-[#2f5da8]">drag & drop guidato</Pill>
-          <Pill className="border-[#d5e2d8] bg-white text-[#1D4E35]">{canManage ? "modifica attiva" : "sola lettura"}</Pill>
+        <div className="flex flex-wrap items-center gap-2 text-[12px] text-[#5c6d82]">
+          <Pill className="border-[#c4d3ea] bg-white text-[#2f5da8]">canvas libero</Pill>
+          <Pill className={snapToGrid ? "border-[#bfe5d6] bg-white text-[#0f6a4e]" : "border-[#d6dfef] bg-white text-[#5c6d82]"}>
+            {snapToGrid ? "griglia attiva" : "griglia libera"}
+          </Pill>
+          <Pill className={canModifyStructure ? "border-[#d5e2d8] bg-white text-[#1D4E35]" : "border-[#e6d3d3] bg-white text-[#9a3b3b]"}>
+            {canModifyStructure ? "super admin" : "sola lettura"}
+          </Pill>
+          <div className="ml-2 flex items-center gap-1 rounded-xl border border-[#d6dfef] bg-white p-1">
+            <button type="button" onClick={onZoomOut} className="rounded-lg px-2 py-1 text-[12px] font-semibold text-[#2f5da8] hover:bg-[#eef3fb]">-</button>
+            <button type="button" onClick={onFit} className="rounded-lg px-2 py-1 text-[12px] font-semibold text-[#2f5da8] hover:bg-[#eef3fb]">Fit</button>
+            <button type="button" onClick={onZoomIn} className="rounded-lg px-2 py-1 text-[12px] font-semibold text-[#2f5da8] hover:bg-[#eef3fb]">+</button>
+            <span className="px-2 text-[11.5px] text-[#5c6d82]">{Math.round(scale * 100)}%</span>
+          </div>
+          {canModifyStructure ? (
+            <label className="inline-flex items-center gap-2 rounded-xl border border-[#d6dfef] bg-white px-3 py-2 text-[12px] font-medium text-[#2f5da8]">
+              <input type="checkbox" checked={snapToGrid} onChange={(event) => onToggleSnapToGrid(event.target.checked)} />
+              Snap griglia
+            </label>
+          ) : null}
+          {canModifyStructure ? (
+            <label className="ml-2 inline-flex items-center gap-2 rounded-xl border border-[#e7c89a] bg-white px-3 py-2 text-[12px] font-medium text-[#7c3d06]">
+              <input type="checkbox" checked={editEnabled} onChange={(event) => onToggleEdit(event.target.checked)} />
+              Abilita modifica
+            </label>
+          ) : null}
         </div>
       </div>
 
-      {canManage ? (
+      {canModifyStructure ? (
         <div
-          onDragOver={(event) => {
-            if (!draggingNodeId) return;
-            event.preventDefault();
-          }}
-          onDrop={(event) => {
-            event.preventDefault();
-            if (draggingNodeId) void onMove(draggingNodeId, null);
-          }}
-          className="mb-4 rounded-2xl border border-dashed border-[#c4d3ea] bg-white/80 px-4 py-3 text-[12.5px] text-[#2f5da8]"
+          className={cn(
+            "mb-4 rounded-2xl border border-dashed px-4 py-3 text-[12.5px]",
+            linkDraft
+              ? "border-[#e7c89a] bg-[#fdf3e3] text-[#7c3d06]"
+              : editEnabled
+              ? "border-[#c4d3ea] bg-white/80 text-[#2f5da8]"
+              : "border-[#e6ebe5] bg-white/60 text-[#8a938f]",
+          )}
         >
-          Rilascia qui per portare il nodo in radice.
+          {linkDraft
+            ? linkDraft.mode === "below"
+              ? "Seleziona il blocco padre: la card scelta verrà collegata sotto quel blocco."
+              : "Seleziona il blocco figlio: il blocco scelto verrà collegato sotto la card di partenza."
+            : editEnabled
+              ? "Trascina le card per posizionarle liberamente. Usa ↑ o ↓ per collegare i blocchi."
+              : "Attiva “Abilita modifica” per usare la lavagna."}
         </div>
       ) : null}
 
-      <div className="overflow-x-auto pb-2">
-        <div className="min-w-max">
-          <div className="flex justify-center">
-            {tree.length ? (
-              tree.map((node) => (
+      <div ref={viewportRef} onMouseDown={onPanStart} className="overflow-auto pb-2 [cursor:grab]">
+        <div
+          ref={contentRef}
+          className="origin-top-left transition-transform duration-200"
+          style={{
+            width: canvasBounds.width,
+            height: canvasBounds.height,
+            transform: `scale(${scale})`,
+            backgroundImage: snapToGrid
+              ? `linear-gradient(to right, rgba(196,211,234,0.45) 1px, transparent 1px), linear-gradient(to bottom, rgba(196,211,234,0.45) 1px, transparent 1px)`
+              : undefined,
+            backgroundSize: snapToGrid ? `${SCHEMA_GRID_SIZE}px ${SCHEMA_GRID_SIZE}px` : undefined,
+            backgroundPosition: `${canvasBounds.offsetX}px ${canvasBounds.offsetY}px`,
+          }}
+        >
+          {flatNodes.length ? (
+            <div className="relative h-full w-full">
+              <svg className="pointer-events-none absolute inset-0 h-full w-full overflow-visible">
+                {flatNodes.map((node) => {
+                  if (!node.parent_id) return null;
+                  const parent = nodesById.get(node.parent_id);
+                  if (!parent) return null;
+                  const parentX = safeCanvasCoord(parent.canvas_x);
+                  const parentY = safeCanvasCoord(parent.canvas_y);
+                  const nodeX = safeCanvasCoord(node.canvas_x);
+                  const nodeY = safeCanvasCoord(node.canvas_y);
+                  const startX = parentX + canvasBounds.offsetX + SCHEMA_NODE_WIDTH / 2;
+                  const startY = parentY + canvasBounds.offsetY + SCHEMA_NODE_HEIGHT;
+                  const endX = nodeX + canvasBounds.offsetX + SCHEMA_NODE_WIDTH / 2;
+                  const endY = nodeY + canvasBounds.offsetY;
+                  const midY = startY + Math.max((endY - startY) / 2, 40);
+                  return (
+                    <path
+                      key={`${parent.id}-${node.id}`}
+                      d={`M ${startX} ${startY} C ${startX} ${midY}, ${endX} ${midY}, ${endX} ${endY}`}
+                      stroke="#c4d3ea"
+                      strokeWidth="2"
+                      fill="none"
+                    />
+                  );
+                })}
+              </svg>
+              {flatNodes.map((node) => (
                 <SchemaNodeCard
                   key={node.id}
                   node={node}
-                  depth={0}
+                  offsetX={canvasBounds.offsetX}
+                  offsetY={canvasBounds.offsetY}
                   selectedId={selectedId}
                   onSelect={onSelect}
                   onOpenPerson={onOpenPerson}
-                  draggingNodeId={draggingNodeId}
-                  onDragStart={onDragStart}
-                  onDragEnd={onDragEnd}
-                  onMove={onMove}
+                  draggingUserId={draggingUserId}
+                  userDropMode={userDropMode}
+                  onCardPointerDown={onCardPointerDown}
+                  onConnectNode={onConnectNode}
+                  onDetachParent={onDetachParent}
+                  onBeginLink={onBeginLink}
+                  onAssignUser={onAssignUser}
                   meta={meta}
-                  canManage={canManage}
+                  canManage={canModifyStructure && editEnabled}
+                  linkDraft={linkDraft}
                 />
-              ))
-            ) : (
-              <div className="rounded-2xl border border-dashed border-[#d6dfef] bg-white px-8 py-10 text-[13px] text-[#5c6d82]">
-                Nessun nodo disponibile per lo schema.
-              </div>
-            )}
-          </div>
+              ))}
+            </div>
+          ) : (
+            <div className="flex h-full items-center justify-center rounded-2xl border border-dashed border-[#d6dfef] bg-white px-8 py-10 text-[13px] text-[#5c6d82]">
+              Nessun nodo disponibile per lo schema.
+            </div>
+          )}
         </div>
       </div>
     </section>
@@ -429,71 +691,136 @@ function SchemaBoard({
 
 type SchemaNodeCardProps = {
   node: OrgUnitTreeNode;
-  depth: number;
+  offsetX: number;
+  offsetY: number;
   selectedId: string | null;
   onSelect: (id: string) => void;
   onOpenPerson: (id: number) => void;
-  draggingNodeId: string | null;
-  onDragStart: (id: string | null) => void;
-  onDragEnd: () => void;
-  onMove: (nodeId: string, parentId: string | null) => void;
+  draggingUserId: number | null;
+  userDropMode: UserDropMode;
+  linkDraft: { sourceId: string; mode: "above" | "below" } | null;
+  onCardPointerDown: (nodeId: string, event: React.MouseEvent<HTMLDivElement>) => void;
+  onConnectNode: (targetId: string) => void;
+  onDetachParent: (nodeId: string) => void;
+  onBeginLink: (nodeId: string, mode: "above" | "below") => void;
+  onAssignUser: (userId: number, unitId: string, mode: UserDropMode) => void;
   meta: Map<string, SchemaNodeMeta>;
   canManage: boolean;
 };
 
 function SchemaNodeCard({
   node,
-  depth,
+  offsetX,
+  offsetY,
   selectedId,
   onSelect,
   onOpenPerson,
-  draggingNodeId,
-  onDragStart,
-  onDragEnd,
-  onMove,
+  draggingUserId,
+  userDropMode,
+  linkDraft,
+  onCardPointerDown,
+  onConnectNode,
+  onDetachParent,
+  onBeginLink,
+  onAssignUser,
   meta,
   canManage,
 }: SchemaNodeCardProps) {
   const nodeMeta = meta.get(node.id);
   const lead = nodeMeta?.lead ?? null;
   const isSelected = selectedId === node.id;
-  const isDragging = draggingNodeId === node.id;
-  const canDropHere = Boolean(draggingNodeId && draggingNodeId !== node.id && !nodeMeta?.descendantIds.has(draggingNodeId));
+  const isLinkTarget = linkDraft?.sourceId !== node.id;
+  const cardX = safeCanvasCoord(node.canvas_x);
+  const cardY = safeCanvasCoord(node.canvas_y);
 
   return (
-    <div className="flex flex-col items-center">
+    <div
+      className="absolute"
+      style={{
+        left: cardX + offsetX,
+        top: cardY + offsetY,
+        width: SCHEMA_NODE_WIDTH,
+      }}
+    >
       <div
+        data-schema-node-card=""
+        data-testid={`schema-node-${node.id}`}
         onDragOver={(event) => {
-          if (!canManage || !canDropHere) return;
-          event.preventDefault();
+          if (draggingUserId != null) event.preventDefault();
         }}
         onDrop={(event) => {
           event.preventDefault();
-          if (canManage && draggingNodeId && draggingNodeId !== node.id) {
-            void onMove(draggingNodeId, node.id);
+          if (draggingUserId != null) {
+            void onAssignUser(draggingUserId, node.id, userDropMode);
           }
         }}
         className={cn(
           "relative w-[246px] rounded-[24px] border p-4 shadow-[0_18px_50px_rgba(15,23,42,0.08)] transition-all",
-          depth === 0
+          node.tipo === "direzione"
             ? "border-[#7ea1bf] bg-[linear-gradient(180deg,#fdfefe,#edf4fa)]"
-            : depth === 1
+            : node.tipo === "settore"
               ? "border-[#efb295] bg-[linear-gradient(180deg,#fffdfc,#fff2eb)]"
               : "border-[#a9c6b1] bg-[linear-gradient(180deg,#fefefe,#edf8ef)]",
           isSelected ? "ring-2 ring-[#1D4E35]/40" : "",
-          isDragging ? "opacity-55" : "",
-          canDropHere ? "hover:border-[#1D9E75]" : "",
+          linkDraft && isLinkTarget ? "hover:border-[#b45309]" : "",
         )}
-        draggable={canManage}
-        onDragStart={() => onDragStart(node.id)}
-        onDragEnd={onDragEnd}
-        onClick={() => onSelect(node.id)}
+        onMouseDown={(event) => {
+          if (linkDraft && linkDraft.sourceId !== node.id) {
+            event.preventDefault();
+            void onConnectNode(node.id);
+            return;
+          }
+          if (canManage) {
+            onCardPointerDown(node.id, event);
+          }
+        }}
+        onClick={() => {
+          if (!linkDraft) onSelect(node.id);
+        }}
       >
-        <div className="absolute -left-2 -top-2 h-full w-full rounded-[24px] border border-black/5 bg-black/[0.06]" />
         <div className="relative">
           <div className="mb-2 flex flex-wrap items-center gap-2">
             <TypeChip tipo={node.tipo} />
             <SourceBadge source={node.source} legacyTeamId={node.legacy_team_id} />
+            {canManage ? (
+              <div className="ml-auto flex items-center gap-1">
+                {node.parent_id ? (
+                  <button
+                    type="button"
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      onDetachParent(node.id);
+                    }}
+                    className="rounded-full border border-[#e6d3d3] bg-white px-2 py-1 text-[11px] font-semibold text-[#9a3b3b] hover:bg-[#fdf2f2]"
+                    title="Scollega questo blocco dal padre"
+                  >
+                    Scollega
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onBeginLink(node.id, "above");
+                  }}
+                  className="rounded-full border border-[#d6dfef] bg-white px-2 py-1 text-[11px] font-semibold text-[#2f5da8] hover:bg-[#eef3fb]"
+                  title="Collega questo blocco sopra un altro"
+                >
+                  ↑
+                </button>
+                <button
+                  type="button"
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    onBeginLink(node.id, "below");
+                  }}
+                  className="rounded-full border border-[#d6dfef] bg-white px-2 py-1 text-[11px] font-semibold text-[#2f5da8] hover:bg-[#eef3fb]"
+                  title="Collega questo blocco sotto un altro"
+                >
+                  ↓
+                </button>
+              </div>
+            ) : null}
           </div>
           <div className="text-center font-serif text-[18px] font-semibold leading-tight text-[#051b12]">{node.nome}</div>
           <div className="mt-2 text-center text-[12.5px] text-[#3a4a3f]">
@@ -526,35 +853,6 @@ function SchemaNodeCard({
           ) : null}
         </div>
       </div>
-
-      {node.children.length ? (
-        <>
-          <div className="h-6 w-px bg-[#c4d3ea]" />
-          <div className="relative flex items-start justify-center gap-4">
-            {node.children.length > 1 ? (
-              <div className="absolute left-[123px] right-[123px] top-0 h-px bg-[#c4d3ea]" />
-            ) : null}
-            {node.children.map((child) => (
-              <div key={child.id} className="flex flex-col items-center">
-                <div className="h-6 w-px bg-[#c4d3ea]" />
-                <SchemaNodeCard
-                  node={child}
-                  depth={depth + 1}
-                  selectedId={selectedId}
-                  onSelect={onSelect}
-                  onOpenPerson={onOpenPerson}
-                  draggingNodeId={draggingNodeId}
-                  onDragStart={onDragStart}
-                  onDragEnd={onDragEnd}
-                  onMove={onMove}
-                  meta={meta}
-                  canManage={canManage}
-                />
-              </div>
-            ))}
-          </div>
-        </>
-      ) : null}
     </div>
   );
 }
@@ -567,10 +865,11 @@ type ViewMode = "albero" | "schema" | "chi-vede-chi";
 export function OrganigrammaWorkspace() {
   const token = typeof window !== "undefined" ? getStoredAccessToken() : null;
 
-  const [view, setView] = useState<ViewMode>("albero");
+  const [view, setView] = useState<ViewMode>("schema");
   const [tree, setTree] = useState<OrgUnitTreeNode[]>([]);
   const [overrides, setOverrides] = useState<OrgVisibilityOverride[]>([]);
   const [users, setUsers] = useState<ApplicationUser[]>([]);
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [canManage, setCanManage] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -591,6 +890,38 @@ export function OrganigrammaWorkspace() {
   const [drawerUserId, setDrawerUserId] = useState<number | null>(null);
   const [allAssignments, setAllAssignments] = useState<OrgAssignment[]>([]);
   const [draggingNodeId, setDraggingNodeId] = useState<string | null>(null);
+  const [draggingUserId, setDraggingUserId] = useState<number | null>(null);
+  const [userDropMode, setUserDropMode] = useState<UserDropMode>("member");
+  const [schemaScale, setSchemaScale] = useState(1);
+  const [treeScale, setTreeScale] = useState(1);
+  const [schemaLinkDraft, setSchemaLinkDraft] = useState<{ sourceId: string; mode: "above" | "below" } | null>(null);
+  const [schemaDragging, setSchemaDragging] = useState<{
+    nodeId: string;
+    startX: number;
+    startY: number;
+    originX: number;
+    originY: number;
+  } | null>(null);
+  const [schemaEditEnabled, setSchemaEditEnabled] = useState(false);
+  const [schemaSnapToGrid, setSchemaSnapToGrid] = useState(true);
+  const [showCreateUnit, setShowCreateUnit] = useState(false);
+  const schemaViewportRef = useRef<HTMLDivElement>(null);
+  const schemaContentRef = useRef<HTMLDivElement>(null);
+  const treeViewportRef = useRef<HTMLDivElement>(null);
+  const schemaPanStateRef = useRef<{ active: boolean; startX: number; startY: number; scrollLeft: number; scrollTop: number }>({
+    active: false,
+    startX: 0,
+    startY: 0,
+    scrollLeft: 0,
+    scrollTop: 0,
+  });
+  const treePanStateRef = useRef<{ active: boolean; startX: number; startY: number; scrollLeft: number; scrollTop: number }>({
+    active: false,
+    startX: 0,
+    startY: 0,
+    scrollLeft: 0,
+    scrollTop: 0,
+  });
 
   useEffect(() => {
     if (typeof window !== "undefined" && window.location.hash === "#chi-vede-chi") {
@@ -606,11 +937,13 @@ export function OrganigrammaWorkspace() {
     }
     setLoading(true);
     try {
-      const [treeData, usersData, assignmentsData] = await Promise.all([
+      const [sessionUser, treeData, usersData, assignmentsData] = await Promise.all([
+        getCurrentUser(token),
         getOrgTree(token),
         listAllApplicationUsers(token),
         getOrgAssignments(token),
       ]);
+      setCurrentUser(sessionUser);
       setTree(treeData);
       setUsers(usersData);
       setAllAssignments(assignmentsData);
@@ -622,10 +955,10 @@ export function OrganigrammaWorkspace() {
       // overrides are manage-gated; tolerate 403 for read-only users
       try {
         setOverrides(await getOrgOverrides(token));
-        setCanManage(true);
       } catch (err) {
-        if (!isAuthError(err)) setCanManage(false);
+        if (!isAuthError(err)) setOverrides([]);
       }
+      setCanManage(sessionUser.role === "super_admin");
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Errore di caricamento");
@@ -697,6 +1030,24 @@ export function OrganigrammaWorkspace() {
   );
 
   const roots = includeIds ? tree.filter((r) => includeIds.has(r.id)) : tree;
+  const canModifyStructure = canManage && currentUser?.role === "super_admin";
+  const assignedUserIds = useMemo(
+    () => new Set(allAssignments.filter((assignment) => assignment.active).map((assignment) => assignment.user_id)),
+    [allAssignments],
+  );
+  const unassignedUsers = useMemo(
+    () => users.filter((user) => user.is_active && !assignedUserIds.has(user.id)),
+    [assignedUserIds, users],
+  );
+
+  useEffect(() => {
+    if (!canModifyStructure) {
+      setSchemaEditEnabled(false);
+      setDraggingUserId(null);
+      setSchemaLinkDraft(null);
+      setSchemaDragging(null);
+    }
+  }, [canModifyStructure]);
 
   const toggle = (id: string) =>
     setExpanded((prev) => {
@@ -722,14 +1073,14 @@ export function OrganigrammaWorkspace() {
   }
 
   async function handleCreateOverride(payload: OrgVisibilityOverrideCreateInput) {
-    if (!token) return;
+    if (!token || !canModifyStructure) return;
     await createOrgOverride(token, payload);
     setOverrides(await getOrgOverrides(token));
     setShowAddOverride(false);
   }
 
   async function handleMoveNode(nodeId: string, parentId: string | null) {
-    if (!token || !canManage || nodeId === parentId) return;
+    if (!token || !canModifyStructure || !schemaEditEnabled || nodeId === parentId) return;
     const nodeMeta = schemaMeta.get(nodeId);
     if (parentId && nodeMeta?.descendantIds.has(parentId)) {
       setNotice("Operazione non valida: non puoi spostare un nodo dentro un suo discendente.");
@@ -745,8 +1096,363 @@ export function OrganigrammaWorkspace() {
       setNotice(err instanceof Error ? err.message : "Aggiornamento gerarchia non riuscito");
     } finally {
       setDraggingNodeId(null);
+      setDraggingUserId(null);
     }
   }
+
+  function handleBeginSchemaLink(nodeId: string, mode: "above" | "below") {
+    if (!canModifyStructure || !schemaEditEnabled) return;
+    setSchemaLinkDraft((current) => {
+      if (current?.sourceId === nodeId && current.mode === mode) {
+        return null;
+      }
+      return { sourceId: nodeId, mode };
+    });
+  }
+
+  async function handleConnectSchemaNode(targetId: string) {
+    if (!token || !canModifyStructure || !schemaEditEnabled || !schemaLinkDraft) return;
+    const { sourceId, mode } = schemaLinkDraft;
+    if (sourceId === targetId) {
+      setSchemaLinkDraft(null);
+      return;
+    }
+
+    const sourceMeta = schemaMeta.get(sourceId);
+    const targetMeta = schemaMeta.get(targetId);
+    if (mode === "below" && sourceMeta?.descendantIds.has(targetId)) {
+      setNotice("Collegamento non valido: il blocco sorgente non può finire sotto un suo discendente.");
+      setSchemaLinkDraft(null);
+      return;
+    }
+    if (mode === "above" && targetMeta?.descendantIds.has(sourceId)) {
+      setNotice("Collegamento non valido: il blocco destinazione non può finire sotto un suo discendente.");
+      setSchemaLinkDraft(null);
+      return;
+    }
+
+    try {
+      if (mode === "below") {
+        await updateOrgUnit(token, sourceId, { parent_id: targetId });
+        setSelectedId(sourceId);
+      } else {
+        await updateOrgUnit(token, targetId, { parent_id: sourceId });
+        setSelectedId(targetId);
+      }
+      setNotice("Collegamento aggiornato.");
+      setSchemaLinkDraft(null);
+      await loadCore();
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Aggiornamento collegamento non riuscito");
+      setSchemaLinkDraft(null);
+    }
+  }
+
+  async function handleAssignUserToUnit(userId: number, unitId: string, mode: UserDropMode) {
+    if (!token || !canModifyStructure || !schemaEditEnabled) return;
+    const unitMeta = schemaMeta.get(unitId);
+    const unit = flatTree.find((entry) => entry.id === unitId);
+    const user = users.find((entry) => entry.id === userId);
+    if (!unit || !user) return;
+    if (assignedUserIds.has(userId)) {
+      setNotice("Questo utente risulta già assegnato a una unità.");
+      setDraggingUserId(null);
+      return;
+    }
+    if (mode === "lead" && unitMeta?.lead) {
+      setNotice("L'unità ha già un responsabile diretto. Spostalo o sostituiscilo prima di assegnarne un altro.");
+      setDraggingUserId(null);
+      return;
+    }
+
+    const payload: OrgAssignmentCreateInput = {
+      user_id: userId,
+      org_unit_id: unitId,
+      manager_user_id: null,
+      title: mode === "lead" ? defaultLeadTitle(unit.tipo) : null,
+      is_primary: mode === "lead",
+      active: true,
+      source: "manuale",
+    };
+
+    try {
+      await createOrgAssignment(token, payload);
+      setNotice(
+        mode === "lead"
+          ? `${user.full_name ?? user.username} impostato come responsabile di ${unit.nome}.`
+          : `${user.full_name ?? user.username} assegnato a ${unit.nome}.`,
+      );
+      await loadCore();
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Assegnazione non riuscita");
+    } finally {
+      setDraggingUserId(null);
+    }
+  }
+
+  async function handleCreateUnit(payload: OrgUnitCreateInput, responsibleUserId: number | null) {
+    if (!token || !canModifyStructure) return;
+    try {
+      const parentUnit = payload.parent_id ? flatTree.find((entry) => entry.id === payload.parent_id) : null;
+      const seededPayload: OrgUnitCreateInput = {
+        ...payload,
+        canvas_x: payload.canvas_x ?? (parentUnit ? parentUnit.canvas_x + 320 : 120),
+        canvas_y: payload.canvas_y ?? (parentUnit ? parentUnit.canvas_y + 220 : 120 + flatTree.length * 40),
+      };
+      const created = await createOrgUnit(token, seededPayload);
+      if (responsibleUserId != null) {
+        const tipo = payload.tipo;
+        await createOrgAssignment(token, {
+          user_id: responsibleUserId,
+          org_unit_id: created.id,
+          manager_user_id: null,
+          title: defaultLeadTitle(tipo),
+          is_primary: true,
+          active: true,
+          source: "manuale",
+        });
+      }
+      setShowCreateUnit(false);
+      setSelectedId(created.id);
+      setNotice(`Unità ${created.nome} creata correttamente.`);
+      await loadCore();
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Creazione unità non riuscita");
+    }
+  }
+
+  function snapCoordinate(value: number) {
+    return Math.max(0, Math.round(value / SCHEMA_GRID_SIZE) * SCHEMA_GRID_SIZE);
+  }
+
+  async function handleDetachAssignment(assignmentId: string) {
+    if (!token || !canModifyStructure || !schemaEditEnabled) return;
+    try {
+      await deleteOrgAssignment(token, assignmentId);
+      setNotice("Assegnazione rimossa dall'organigramma.");
+      await loadCore();
+    } catch (err) {
+      setNotice(err instanceof Error ? err.message : "Rimozione assegnazione non riuscita");
+    }
+  }
+
+  function handleSchemaCardPointerDown(nodeId: string, event: React.MouseEvent<HTMLDivElement>) {
+    if (!schemaEditEnabled || event.button !== 0) return;
+    const target = event.target as HTMLElement | null;
+    if (target?.closest("button, input, select, textarea, label, a")) return;
+    const node = flatTree.find((entry) => entry.id === nodeId);
+    if (!node) return;
+    event.preventDefault();
+    event.stopPropagation();
+    setSelectedId(nodeId);
+    setSchemaDragging({
+      nodeId,
+      startX: event.clientX,
+      startY: event.clientY,
+      originX: safeCanvasCoord(node.canvas_x),
+      originY: safeCanvasCoord(node.canvas_y),
+    });
+  }
+
+  useEffect(() => {
+    if (!schemaDragging || !token || !schemaEditEnabled) return;
+
+    const handleMouseMove = (event: MouseEvent) => {
+      const rawX = Math.max(
+        0,
+        schemaDragging.originX + Math.round((event.clientX - schemaDragging.startX) / Math.max(schemaScale, 0.01)),
+      );
+      const rawY = Math.max(
+        0,
+        schemaDragging.originY + Math.round((event.clientY - schemaDragging.startY) / Math.max(schemaScale, 0.01)),
+      );
+      const nextX = schemaSnapToGrid ? snapCoordinate(rawX) : rawX;
+      const nextY = schemaSnapToGrid ? snapCoordinate(rawY) : rawY;
+      setTree((current) => updateTreeNodeInForest(current, schemaDragging.nodeId, { canvas_x: nextX, canvas_y: nextY }));
+    };
+
+    const handleMouseUp = () => {
+      const movedNode = flattenTree(tree).find((entry) => entry.id === schemaDragging.nodeId);
+      setSchemaDragging(null);
+      if (!movedNode) return;
+      void updateOrgUnit(token, schemaDragging.nodeId, {
+        canvas_x: movedNode.canvas_x,
+        canvas_y: movedNode.canvas_y,
+      }).catch((err) => {
+        setNotice(err instanceof Error ? err.message : "Salvataggio posizione non riuscito");
+      });
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+  }, [schemaDragging, token, schemaEditEnabled, schemaScale, tree, schemaSnapToGrid]);
+
+  const fitSchemaToViewport = useCallback(() => {
+    const viewport = schemaViewportRef.current;
+    const content = schemaContentRef.current;
+    if (!viewport || !content) return;
+    const widthRatio = (viewport.clientWidth - 32) / Math.max(content.scrollWidth, 1);
+    const nextScale = Math.max(0.55, Math.min(1.15, widthRatio));
+    setSchemaScale(nextScale);
+    window.requestAnimationFrame(() => {
+      const scaledWidth = content.scrollWidth * nextScale;
+      viewport.scrollLeft = Math.max((scaledWidth - viewport.clientWidth) / 2, 0);
+      viewport.scrollTop = 0;
+    });
+  }, []);
+
+  useEffect(() => {
+    if (view !== "schema") return;
+    const id = window.requestAnimationFrame(() => {
+      fitSchemaToViewport();
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [view, tree, fitSchemaToViewport]);
+
+  useEffect(() => {
+    if (view !== "schema") return;
+    const handleResize = () => fitSchemaToViewport();
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, [view, fitSchemaToViewport]);
+
+  const handleTreePanStart = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+    const target = event.target as HTMLElement | null;
+    if (target?.closest("[role='treeitem'], button, input, select, textarea, label, a")) return;
+    const viewport = treeViewportRef.current;
+    if (!viewport) return;
+
+    treePanStateRef.current = {
+      active: true,
+      startX: event.clientX,
+      startY: event.clientY,
+      scrollLeft: viewport.scrollLeft,
+      scrollTop: viewport.scrollTop,
+    };
+    viewport.style.cursor = "grabbing";
+    event.preventDefault();
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const current = treePanStateRef.current;
+      if (!current.active) return;
+      viewport.scrollLeft = current.scrollLeft - (moveEvent.clientX - current.startX);
+      viewport.scrollTop = current.scrollTop - (moveEvent.clientY - current.startY);
+    };
+
+    const handleMouseUp = () => {
+      treePanStateRef.current.active = false;
+      viewport.style.cursor = "grab";
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+  }, []);
+
+  const handleSchemaPanStart = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+    if (!schemaEditEnabled || event.button !== 0) return;
+    const target = event.target as HTMLElement | null;
+    if (target?.closest("[data-schema-node-card], button, input, select, textarea, label, a")) return;
+    const viewport = schemaViewportRef.current;
+    if (!viewport) return;
+
+    schemaPanStateRef.current = {
+      active: true,
+      startX: event.clientX,
+      startY: event.clientY,
+      scrollLeft: viewport.scrollLeft,
+      scrollTop: viewport.scrollTop,
+    };
+    viewport.style.cursor = "grabbing";
+    event.preventDefault();
+
+    const handleMouseMove = (moveEvent: MouseEvent) => {
+      const current = schemaPanStateRef.current;
+      if (!current.active) return;
+      viewport.scrollLeft = current.scrollLeft - (moveEvent.clientX - current.startX);
+      viewport.scrollTop = current.scrollTop - (moveEvent.clientY - current.startY);
+    };
+
+    const handleMouseUp = () => {
+      schemaPanStateRef.current.active = false;
+      viewport.style.cursor = "grab";
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+    };
+
+    window.addEventListener("mousemove", handleMouseMove);
+    window.addEventListener("mouseup", handleMouseUp);
+  }, [schemaEditEnabled]);
+
+  const handleTreeZoomWheel = useCallback((event: WheelEvent) => {
+    if (!event.ctrlKey) return;
+    event.preventDefault();
+    const viewport = treeViewportRef.current;
+    if (!viewport) return;
+
+    const rect = viewport.getBoundingClientRect();
+    const pointerX = event.clientX - rect.left + viewport.scrollLeft;
+    const pointerY = event.clientY - rect.top + viewport.scrollTop;
+
+    setTreeScale((current) => {
+      const delta = event.deltaY > 0 ? -0.08 : 0.08;
+      const next = Math.max(0.65, Math.min(1.6, Number((current + delta).toFixed(2))));
+      window.requestAnimationFrame(() => {
+        const ratio = next / current;
+        viewport.scrollLeft = Math.max(pointerX * ratio - (event.clientX - rect.left), 0);
+        viewport.scrollTop = Math.max(pointerY * ratio - (event.clientY - rect.top), 0);
+      });
+      return next;
+    });
+  }, []);
+
+  const handleSchemaZoomWheel = useCallback((event: WheelEvent) => {
+    if (!event.ctrlKey) return;
+    event.preventDefault();
+    const viewport = schemaViewportRef.current;
+    if (!viewport) return;
+
+    const rect = viewport.getBoundingClientRect();
+    const pointerX = event.clientX - rect.left + viewport.scrollLeft;
+    const pointerY = event.clientY - rect.top + viewport.scrollTop;
+
+    setSchemaScale((current) => {
+      const delta = event.deltaY > 0 ? -0.08 : 0.08;
+      const next = Math.max(0.5, Math.min(1.6, Number((current + delta).toFixed(2))));
+      window.requestAnimationFrame(() => {
+        const ratio = next / current;
+        viewport.scrollLeft = Math.max(pointerX * ratio - (event.clientX - rect.left), 0);
+        viewport.scrollTop = Math.max(pointerY * ratio - (event.clientY - rect.top), 0);
+      });
+      return next;
+    });
+  }, []);
+
+  useEffect(() => {
+    const viewport = treeViewportRef.current;
+    if (!viewport) return;
+    const listener = (event: WheelEvent) => {
+      handleTreeZoomWheel(event);
+    };
+    viewport.addEventListener("wheel", listener, { passive: false });
+    return () => viewport.removeEventListener("wheel", listener);
+  }, [handleTreeZoomWheel, view]);
+
+  useEffect(() => {
+    const viewport = schemaViewportRef.current;
+    if (!viewport) return;
+    const listener = (event: WheelEvent) => {
+      handleSchemaZoomWheel(event);
+    };
+    viewport.addEventListener("wheel", listener, { passive: false });
+    return () => viewport.removeEventListener("wheel", listener);
+  }, [handleSchemaZoomWheel, view]);
 
   if (loading) {
     return <div className="rounded-2xl border border-[#e6ebe5] bg-white p-8 text-center text-[13px] text-[#5f6d61]">Caricamento organigramma…</div>;
@@ -812,11 +1518,11 @@ export function OrganigrammaWorkspace() {
             </button>
           ) : null}
           <div className="ml-auto flex items-center gap-1 rounded-xl border border-[#e6ebe5] bg-[#fbfcfa] p-1">
-            <button type="button" onClick={() => setView("albero")} className={cn("inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12.5px] font-semibold transition-colors", view === "albero" ? "bg-[#1D4E35] text-white" : "text-[#3a4a3f] hover:bg-[#edf5f0]")}>
-              <GridIcon className="h-4 w-4" /> Albero
-            </button>
             <button type="button" onClick={() => setView("schema")} className={cn("inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12.5px] font-semibold transition-colors", view === "schema" ? "bg-[#1D4E35] text-white" : "text-[#3a4a3f] hover:bg-[#edf5f0]")}>
               <FolderIcon className="h-4 w-4" /> Schema
+            </button>
+            <button type="button" onClick={() => setView("albero")} className={cn("inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12.5px] font-semibold transition-colors", view === "albero" ? "bg-[#1D4E35] text-white" : "text-[#3a4a3f] hover:bg-[#edf5f0]")}>
+              <GridIcon className="h-4 w-4" /> Albero
             </button>
             <button type="button" onClick={() => setView("chi-vede-chi")} className={cn("inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12.5px] font-semibold transition-colors", view === "chi-vede-chi" ? "bg-[#1D4E35] text-white" : "text-[#3a4a3f] hover:bg-[#edf5f0]")}>
               <EyeIcon className="h-4 w-4" /> Chi vede chi
@@ -833,27 +1539,80 @@ export function OrganigrammaWorkspace() {
         <div className="flex flex-col gap-5">
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
             <section className="rounded-2xl border border-[#e6ebe5] bg-gradient-to-b from-white to-[#fbfcfa] p-4 shadow-[0_14px_40px_rgba(15,23,42,0.06)]">
-              <div className="mb-3 flex items-center gap-2">
-                <FolderIcon className="h-4 w-4 text-[#1D4E35]" />
-                <h2 className="font-serif text-[15px] font-semibold">Albero organizzativo</h2>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <FolderIcon className="h-4 w-4 text-[#1D4E35]" />
+                  <h2 className="font-serif text-[15px] font-semibold">Albero organizzativo</h2>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-[12px] text-[#5f6d61]">
+                  <Pill className="border-[#c4d3ea] bg-white text-[#2f5da8]">Ctrl + rotellina: zoom</Pill>
+                  <Pill className="border-[#d6dfef] bg-white text-[#5c6d82]">{Math.round(treeScale * 100)}%</Pill>
+                  <Pill className={canModifyStructure ? "border-[#d5e2d8] bg-white text-[#1D4E35]" : "border-[#e6d3d3] bg-white text-[#9a3b3b]"}>
+                    {canModifyStructure ? "super admin" : "sola lettura"}
+                  </Pill>
+                  {canModifyStructure ? (
+                    <label className="inline-flex items-center gap-2 rounded-xl border border-[#e7c89a] bg-white px-3 py-2 text-[12px] font-medium text-[#7c3d06]">
+                      <input type="checkbox" checked={schemaEditEnabled} onChange={(event) => setSchemaEditEnabled(event.target.checked)} />
+                      Abilita modifica
+                    </label>
+                  ) : null}
+                </div>
               </div>
+              {canModifyStructure ? (
+                <div
+                  onDragOver={(event) => {
+                    if (!draggingNodeId || !schemaEditEnabled) return;
+                    event.preventDefault();
+                  }}
+                  onDrop={(event) => {
+                    if (!draggingNodeId || !schemaEditEnabled) return;
+                    event.preventDefault();
+                    void handleMoveNode(draggingNodeId, null);
+                  }}
+                  className={cn(
+                    "mb-3 rounded-xl px-4 py-3 text-[12.5px] transition-colors",
+                    draggingNodeId && schemaEditEnabled
+                      ? "bg-[#eef3fb] text-[#2f5da8]"
+                      : "bg-[#f9fbfe] text-[#5c6d82]",
+                  )}
+                >
+                  {schemaEditEnabled ? "Rilascia qui per portare il nodo in radice." : "Attiva “Abilita modifica” per spostare i nodi anche da questa vista."}
+                </div>
+              ) : null}
               {roots.length ? (
-                <ul role="tree" className="flex flex-col gap-1">
-                  {roots.map((r) => (
-                    <TreeNode
-                      key={r.id}
-                      node={r}
-                      depth={0}
-                      expanded={expanded}
-                      selectedId={selectedId}
-                      showProvenance={showProvenance}
-                      includeIds={includeIds}
-                      matchIds={matchIds}
-                      onToggle={toggle}
-                      onSelect={setSelectedId}
-                    />
-                  ))}
-                </ul>
+                <div
+                  ref={treeViewportRef}
+                  onMouseDown={handleTreePanStart}
+                  className="max-h-[72vh] overflow-auto pr-2 [cursor:grab]"
+                >
+                  <div className="min-w-max origin-top-left transition-transform duration-150" style={{ transform: `scale(${treeScale})` }}>
+                    <ul role="tree" className="flex flex-col gap-1 min-w-max">
+                      {roots.map((r) => (
+                        <TreeNode
+                          key={r.id}
+                          node={r}
+                          depth={0}
+                          expanded={expanded}
+                          selectedId={selectedId}
+                          showProvenance={showProvenance}
+                          includeIds={includeIds}
+                          matchIds={matchIds}
+                          draggingNodeId={draggingNodeId}
+                          draggingUserId={draggingUserId}
+                          canManage={canModifyStructure && schemaEditEnabled}
+                          canAssignPeople={canModifyStructure && schemaEditEnabled}
+                          userDropMode={userDropMode}
+                          onToggle={toggle}
+                          onSelect={setSelectedId}
+                          onDragStart={setDraggingNodeId}
+                          onDragEnd={() => setDraggingNodeId(null)}
+                          onMove={handleMoveNode}
+                          onAssignUser={handleAssignUserToUnit}
+                        />
+                      ))}
+                    </ul>
+                  </div>
+                </div>
               ) : (
                 <div className="rounded-xl border border-dashed border-[#d8e3d9] bg-[#fafdf9] p-8 text-center text-[12.5px] text-[#5f6d61]">
                   {tree.length ? "Nessuna unità corrisponde alla ricerca." : "Nessuna unità. Usa “Sync WhiteCompany” o crea la struttura via API."}
@@ -862,11 +1621,34 @@ export function OrganigrammaWorkspace() {
             </section>
 
             <section className="rounded-2xl border border-[#e6ebe5] bg-gradient-to-b from-white to-[#fbfcfa] p-4 shadow-[0_14px_40px_rgba(15,23,42,0.06)]">
-              {detail && selectedSummary ? <UnitDetail detail={detail} summary={selectedSummary} onOpenPerson={setDrawerUserId} /> : (
-                <div className="flex h-full min-h-[240px] items-center justify-center rounded-xl border border-dashed border-[#d8e3d9] bg-[#fafdf9] text-center text-[12.5px] text-[#5f6d61]">
-                  Seleziona un&apos;unità nell&apos;albero per vederne responsabile e persone.
-                </div>
-              )}
+              <div className="flex flex-col gap-5">
+                {detail && selectedSummary ? (
+                  <UnitDetail
+                    detail={detail}
+                    summary={selectedSummary}
+                    onOpenPerson={setDrawerUserId}
+                    canDetachAssignments={canModifyStructure && schemaEditEnabled}
+                    onDetachAssignment={handleDetachAssignment}
+                  />
+                ) : (
+                  <div className="flex h-full min-h-[240px] items-center justify-center rounded-xl border border-dashed border-[#d8e3d9] bg-[#fafdf9] text-center text-[12.5px] text-[#5f6d61]">
+                    Seleziona un&apos;unità nell&apos;albero per vederne responsabile e persone.
+                  </div>
+                )}
+                <AssignmentInboxPanel
+                  selectedNode={selectedNode}
+                  selectedSummary={selectedSummary}
+                  unassignedUsers={unassignedUsers}
+                  canModifyStructure={canModifyStructure}
+                  editEnabled={schemaEditEnabled}
+                  assignMode={userDropMode}
+                  onAssignModeChange={setUserDropMode}
+                  onToggleEdit={setSchemaEditEnabled}
+                  onCreateUnit={() => setShowCreateUnit(true)}
+                  onStartDragUser={setDraggingUserId}
+                  onEndDragUser={() => setDraggingUserId(null)}
+                />
+              </div>
             </section>
           </div>
 
@@ -877,18 +1659,50 @@ export function OrganigrammaWorkspace() {
           />
         </div>
       ) : view === "schema" ? (
-        <SchemaBoard
-          tree={roots}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-          onOpenPerson={setDrawerUserId}
-          draggingNodeId={draggingNodeId}
-          onDragStart={setDraggingNodeId}
-          onDragEnd={() => setDraggingNodeId(null)}
-          onMove={handleMoveNode}
-          meta={schemaMeta}
-          canManage={canManage}
-        />
+        <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <SchemaBoard
+            tree={roots}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+            onOpenPerson={setDrawerUserId}
+            draggingUserId={draggingUserId}
+            userDropMode={userDropMode}
+            linkDraft={schemaLinkDraft}
+            onBeginLink={handleBeginSchemaLink}
+            onCardPointerDown={handleSchemaCardPointerDown}
+            onConnectNode={handleConnectSchemaNode}
+            onDetachParent={(nodeId) => {
+              void handleMoveNode(nodeId, null);
+            }}
+            onAssignUser={handleAssignUserToUnit}
+            meta={schemaMeta}
+            canModifyStructure={canModifyStructure}
+            editEnabled={schemaEditEnabled}
+            snapToGrid={schemaSnapToGrid}
+            onToggleSnapToGrid={setSchemaSnapToGrid}
+            onToggleEdit={setSchemaEditEnabled}
+            scale={schemaScale}
+            onZoomIn={() => setSchemaScale((current) => Math.min(1.4, Number((current + 0.1).toFixed(2))))}
+            onZoomOut={() => setSchemaScale((current) => Math.max(0.5, Number((current - 0.1).toFixed(2))))}
+            onFit={fitSchemaToViewport}
+            onPanStart={handleSchemaPanStart}
+            viewportRef={schemaViewportRef}
+            contentRef={schemaContentRef}
+          />
+          <AssignmentInboxPanel
+            selectedNode={selectedNode}
+            selectedSummary={selectedSummary}
+            unassignedUsers={unassignedUsers}
+            canModifyStructure={canModifyStructure}
+            editEnabled={schemaEditEnabled}
+            assignMode={userDropMode}
+            onAssignModeChange={setUserDropMode}
+            onToggleEdit={setSchemaEditEnabled}
+            onCreateUnit={() => setShowCreateUnit(true)}
+            onStartDragUser={setDraggingUserId}
+            onEndDragUser={() => setDraggingUserId(null)}
+          />
+        </div>
       ) : (
         <WhoSeesWho
           users={users}
@@ -908,6 +1722,16 @@ export function OrganigrammaWorkspace() {
         />
       ) : null}
 
+      {showCreateUnit ? (
+        <CreateUnitModal
+          units={flatTree}
+          unassignedUsers={unassignedUsers}
+          defaultParentId={selectedId}
+          onClose={() => setShowCreateUnit(false)}
+          onCreate={handleCreateUnit}
+        />
+      ) : null}
+
       {drawerUserId != null ? (
         <PersonDrawer
           token={token}
@@ -922,7 +1746,19 @@ export function OrganigrammaWorkspace() {
 }
 
 // --------------------------------------------------------------------------- //
-function UnitDetail({ detail, summary, onOpenPerson }: { detail: OrgUnitDetail; summary: UnitSummary; onOpenPerson: (id: number) => void }) {
+function UnitDetail({
+  detail,
+  summary,
+  onOpenPerson,
+  canDetachAssignments = false,
+  onDetachAssignment,
+}: {
+  detail: OrgUnitDetail;
+  summary: UnitSummary;
+  onOpenPerson: (id: number) => void;
+  canDetachAssignments?: boolean;
+  onDetachAssignment?: (assignmentId: string) => void;
+}) {
   const { unit, path, responsabile, responsabile_title } = detail;
   const directAssignments = summary.directAssignments;
   const subtreeAssignments = summary.subtreeAssignments;
@@ -1022,7 +1858,15 @@ function UnitDetail({ detail, summary, onOpenPerson }: { detail: OrgUnitDetail; 
         <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-[#5f6d61]">Persone assegnate direttamente · {directAssignments.length}</div>
         {directAssignments.length ? (
           <div className="grid grid-cols-1 gap-2.5 xl:grid-cols-2">
-            {directAssignments.map((a) => <PersonCard key={a.id} assignment={a} onOpen={onOpenPerson} />)}
+            {directAssignments.map((a) => (
+              <PersonCard
+                key={a.id}
+                assignment={a}
+                onOpen={onOpenPerson}
+                canDetach={canDetachAssignments}
+                onDetach={onDetachAssignment}
+              />
+            ))}
           </div>
         ) : (
           <div className="rounded-xl border border-dashed border-[#d8e3d9] bg-[#fafdf9] p-6 text-center text-[12.5px] text-[#5f6d61]">Nessuna persona assegnata direttamente.</div>
@@ -1040,6 +1884,230 @@ function UnitDetail({ detail, summary, onOpenPerson }: { detail: OrgUnitDetail; 
           </div>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+// --------------------------------------------------------------------------- //
+function AssignmentInboxPanel({
+  selectedNode,
+  selectedSummary,
+  unassignedUsers,
+  canModifyStructure,
+  editEnabled,
+  assignMode,
+  onAssignModeChange,
+  onToggleEdit,
+  onCreateUnit,
+  onStartDragUser,
+  onEndDragUser,
+}: {
+  selectedNode: OrgUnitTreeNode | null;
+  selectedSummary: UnitSummary | null;
+  unassignedUsers: ApplicationUser[];
+  canModifyStructure: boolean;
+  editEnabled: boolean;
+  assignMode: UserDropMode;
+  onAssignModeChange: (mode: UserDropMode) => void;
+  onToggleEdit: (enabled: boolean) => void;
+  onCreateUnit: () => void;
+  onStartDragUser: (userId: number) => void;
+  onEndDragUser: () => void;
+}) {
+  return (
+    <section className="rounded-2xl border border-[#e6ebe5] bg-gradient-to-b from-white to-[#fbfcfa] p-4 shadow-[0_14px_40px_rgba(15,23,42,0.06)]">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#5f6d61]">Assegnazioni manuali</div>
+          <h3 className="mt-1 font-serif text-[18px] font-semibold text-[#051b12]">Utenti non assegnati</h3>
+          <p className="mt-1 text-[12.5px] text-[#5f6d61]">
+            Trascina un utente su un nodo per assegnarlo {assignMode === "lead" ? "come responsabile" : "all'unità selezionata"}.
+          </p>
+        </div>
+        {canModifyStructure ? (
+          <button
+            type="button"
+            onClick={onCreateUnit}
+            className="rounded-xl border border-[#bcd9bf] bg-white px-3 py-2 text-[12.5px] font-semibold text-[#1D4E35] hover:bg-[#edf5f0]"
+          >
+            + Nuova unità
+          </button>
+        ) : null}
+      </div>
+
+      <div className="mt-3 rounded-xl border border-[#e6ebe5] bg-white p-3">
+        <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#5f6d61]">Nodo selezionato</div>
+        {selectedNode ? (
+          <div className="mt-2 flex flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[14px] font-semibold text-[#051b12]">{selectedNode.nome}</span>
+              <TypeChip tipo={selectedNode.tipo} />
+            </div>
+            <div className="flex flex-wrap gap-2 text-[12px] text-[#5f6d61]">
+              <Pill className="border-[#d5e2d8] bg-[#edf5f0] text-[#1D4E35]">diretti {selectedSummary?.directAssignments.length ?? 0}</Pill>
+              <Pill className="border-[#e6ebe5] bg-white text-[#5f6d61]">sotto-albero {selectedSummary?.subtreeAssignments.length ?? 0}</Pill>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-2 text-[12.5px] text-[#5f6d61]">Seleziona un nodo in albero o schema.</div>
+        )}
+      </div>
+
+      <div className="mt-3 flex flex-wrap items-center gap-2">
+        <button
+          type="button"
+          onClick={() => onAssignModeChange("member")}
+          className={cn("rounded-xl px-3 py-2 text-[12px] font-semibold", assignMode === "member" ? "bg-[#1D4E35] text-white" : "border border-[#e6ebe5] bg-white text-[#3a4a3f]")}
+        >
+          Assegna persona
+        </button>
+        <button
+          type="button"
+          onClick={() => onAssignModeChange("lead")}
+          className={cn("rounded-xl px-3 py-2 text-[12px] font-semibold", assignMode === "lead" ? "bg-[#7c3d06] text-white" : "border border-[#e6ebe5] bg-white text-[#3a4a3f]")}
+        >
+          Imposta responsabile
+        </button>
+        {canModifyStructure ? (
+          <label className="ml-auto inline-flex items-center gap-2 rounded-xl border border-[#e7c89a] bg-white px-3 py-2 text-[12px] font-medium text-[#7c3d06]">
+            <input type="checkbox" checked={editEnabled} onChange={(event) => onToggleEdit(event.target.checked)} />
+            Abilita modifica
+          </label>
+        ) : null}
+      </div>
+
+      <div className="mt-3 max-h-[420px] overflow-y-auto">
+        {unassignedUsers.length ? (
+          <div className="flex flex-col gap-2">
+            {unassignedUsers.map((user) => (
+              <div
+                key={user.id}
+                data-testid={`unassigned-user-${user.id}`}
+                draggable={canModifyStructure && editEnabled}
+                onDragStart={() => onStartDragUser(user.id)}
+                onDragEnd={onEndDragUser}
+                className={cn(
+                  "rounded-xl border bg-white p-3 transition-all",
+                  canModifyStructure && editEnabled ? "cursor-grab border-[#d5e2d8] hover:border-[#1D9E75]" : "border-[#e6ebe5] opacity-80",
+                )}
+              >
+                <div className="flex items-center gap-2.5">
+                  <Avatar name={user.full_name ?? user.username} size={34} />
+                  <div className="min-w-0">
+                    <div className="truncate text-[13px] font-semibold text-[#051b12]">{user.full_name ?? user.username}</div>
+                    <div className="truncate text-[11.5px] text-[#5f6d61]">{user.username} · {user.role}</div>
+                  </div>
+                </div>
+                <div className="mt-2 text-[11.5px] text-[#5f6d61]">
+                  {assignMode === "lead" ? "Drop su un nodo per impostarlo come responsabile." : "Drop su un nodo per assegnarlo all'unità."}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-xl border border-dashed border-[#d8e3d9] bg-[#fafdf9] p-6 text-center text-[12.5px] text-[#5f6d61]">
+            Nessun application user disponibile: tutti gli utenti attivi risultano già assegnati.
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function CreateUnitModal({
+  units,
+  unassignedUsers,
+  defaultParentId,
+  onClose,
+  onCreate,
+}: {
+  units: OrgUnitTreeNode[];
+  unassignedUsers: ApplicationUser[];
+  defaultParentId: string | null;
+  onClose: () => void;
+  onCreate: (payload: OrgUnitCreateInput, responsibleUserId: number | null) => Promise<void>;
+}) {
+  const [nome, setNome] = useState("");
+  const [tipo, setTipo] = useState<OrgUnitType>("settore");
+  const [parentId, setParentId] = useState<string | "">(defaultParentId ?? "");
+  const [responsibleUserId, setResponsibleUserId] = useState<number | "">("");
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const inputCls = "w-full rounded-xl border border-[#e6ebe5] bg-[#fbfcfa] px-3 py-2 text-[13px] outline-none focus:border-[#1D9E75] focus:ring-2 focus:ring-[#1D9E75]/30";
+
+  async function submit(event: React.FormEvent) {
+    event.preventDefault();
+    if (!nome.trim()) {
+      setErr("Inserisci il nome della nuova unità.");
+      return;
+    }
+    setSaving(true);
+    setErr(null);
+    try {
+      await onCreate(
+        {
+          nome: nome.trim(),
+          tipo,
+          parent_id: parentId || null,
+          source: "manuale",
+          is_active: true,
+        },
+        responsibleUserId === "" ? null : Number(responsibleUserId),
+      );
+    } catch (error) {
+      setErr(error instanceof Error ? error.message : "Errore di creazione");
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
+      <div className="absolute inset-0 bg-[#051b12]/40 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-lg rounded-2xl border border-[#bcd9bf] bg-white p-5 shadow-[0_24px_70px_rgba(15,23,42,0.25)]">
+        <div className="flex items-center gap-2">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#edf5f0] text-[#1D4E35]"><FolderIcon className="h-4 w-4" /></span>
+          <h3 className="font-serif text-[18px] font-semibold text-[#1D4E35]">Nuova unità organizzativa</h3>
+        </div>
+        <form className="mt-4 flex flex-col gap-3" onSubmit={submit}>
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#5f6d61]">Nome</span>
+            <input className={inputCls} value={nome} onChange={(event) => setNome(event.target.value)} placeholder="Es. Settore Manutenzione Sud" />
+          </label>
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#5f6d61]">Tipo</span>
+              <select className={inputCls} value={tipo} onChange={(event) => setTipo(event.target.value as OrgUnitType)}>
+                {TYPE_FILTERS.filter((item) => item.value !== "all").map((item) => (
+                  <option key={item.value} value={item.value}>{item.label}</option>
+                ))}
+              </select>
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#5f6d61]">Unità padre</span>
+              <select className={inputCls} value={parentId} onChange={(event) => setParentId(event.target.value)}>
+                <option value="">Radice</option>
+                {units.map((unit) => <option key={unit.id} value={unit.id}>{unit.nome}</option>)}
+              </select>
+            </label>
+          </div>
+          <label className="flex flex-col gap-1">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#5f6d61]">Responsabile iniziale</span>
+            <select className={inputCls} value={responsibleUserId} onChange={(event) => setResponsibleUserId(event.target.value ? Number(event.target.value) : "")}>
+              <option value="">Nessuno</option>
+              {unassignedUsers.map((user) => (
+                <option key={user.id} value={user.id}>{user.full_name ?? user.username}</option>
+              ))}
+            </select>
+          </label>
+          {err ? <p className="text-[12px] text-[#ba1a1a]">{err}</p> : null}
+          <div className="mt-1 flex items-center justify-end gap-2">
+            <button type="button" onClick={onClose} className="rounded-xl border border-[#e6ebe5] px-3.5 py-2 text-[12.5px] font-medium text-[#3a4a3f] hover:bg-[#f5f9f4]">Annulla</button>
+            <button type="submit" disabled={saving} className="rounded-xl bg-[#1D4E35] px-3.5 py-2 text-[12.5px] font-semibold text-white hover:bg-[#163d29] disabled:opacity-60">
+              {saving ? "Creazione…" : "Crea unità"}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

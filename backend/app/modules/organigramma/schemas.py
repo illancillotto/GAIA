@@ -36,6 +36,8 @@ class OrgUnitBase(BaseModel):
     parent_id: UUID | None = None
     is_active: bool = True
     sort_order: int = 0
+    canvas_x: int = 0
+    canvas_y: int = 0
     source: SourceLiteral = "manuale"
     wc_area_id: UUID | None = None
     legacy_team_id: UUID | None = None
@@ -51,6 +53,8 @@ class OrgUnitUpdate(BaseModel):
     parent_id: UUID | None = None
     is_active: bool | None = None
     sort_order: int | None = None
+    canvas_x: int | None = None
+    canvas_y: int | None = None
     source: SourceLiteral | None = None
     wc_area_id: UUID | None = None
     legacy_team_id: UUID | None = None
@@ -70,6 +74,8 @@ class OrgUnitTreeNode(BaseModel):
     tipo: OrgUnitTypeLiteral
     parent_id: UUID | None
     source: SourceLiteral
+    canvas_x: int
+    canvas_y: int
     wc_area_id: UUID | None = None
     legacy_team_id: UUID | None = None
     is_active: bool

@@ -63,6 +63,7 @@ def make_user() -> Callable[..., ApplicationUser]:
         *,
         role: str = ApplicationUserRole.ADMIN.value,
         module_organigramma: bool = True,
+        module_inaz: bool = False,
         full_name: str | None = None,
         is_active: bool = True,
     ) -> ApplicationUser:
@@ -76,6 +77,7 @@ def make_user() -> Callable[..., ApplicationUser]:
                 role=role,
                 is_active=is_active,
                 module_organigramma=module_organigramma,
+                module_inaz=module_inaz,
             )
             db.add(user)
             db.commit()

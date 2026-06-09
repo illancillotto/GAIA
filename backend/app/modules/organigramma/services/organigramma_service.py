@@ -76,6 +76,8 @@ def build_tree(db: Session) -> list[OrgUnitTreeNode]:
             tipo=unit.tipo,
             parent_id=unit.parent_id,
             source=unit.source,
+            canvas_x=unit.canvas_x,
+            canvas_y=unit.canvas_y,
             wc_area_id=unit.wc_area_id,
             legacy_team_id=unit.legacy_team_id,
             is_active=unit.is_active,

@@ -34,6 +34,17 @@ def test_viewer_can_read_but_not_manage(client, make_user, auth_header):
     assert client.get("/organigramma/overrides", headers=header).status_code == 403
 
 
+def test_inaz_admin_can_read_but_only_super_admin_can_manage(client, make_user, auth_header):
+    make_user("inazadmin", role=ApplicationUserRole.ADMIN.value, module_organigramma=False, module_inaz=True)
+    header = auth_header("inazadmin")
+
+    assert client.get("/organigramma/units/tree", headers=header).status_code == 200
+    assert client.post(
+        "/organigramma/units", json={"nome": "X", "tipo": "settore"}, headers=header
+    ).status_code == 403
+    assert client.post("/organigramma/sync/whitecompany", headers=header).status_code == 403
+
+
 # --------------------------------------------------------------------------- #
 # Units + tree + detail
 # --------------------------------------------------------------------------- #
@@ -200,11 +211,13 @@ def test_update_unit_and_assignment_lifecycle(client, make_user, auth_header):
     # update unit
     upd = client.put(
         f"/organigramma/units/{unit['id']}",
-        json={"nome": "Squadra Manutenzione A", "sort_order": 5},
+        json={"nome": "Squadra Manutenzione A", "sort_order": 5, "canvas_x": 420, "canvas_y": 260},
         headers=header,
     )
     assert upd.status_code == 200
     assert upd.json()["nome"] == "Squadra Manutenzione A"
+    assert upd.json()["canvas_x"] == 420
+    assert upd.json()["canvas_y"] == 260
 
     # cannot be its own parent
     bad = client.put(
@@ -334,3 +347,111 @@ def test_whitecompany_sync_creates_updates_and_respects_lock(
     session.expire_all()
     locked_unit = session.get(OrgUnit, link.org_unit_id)
     assert locked_unit.nome == "Distretto Tirso"  # invariato
+
+
+def test_whitecompany_sync_maps_user_chart_to_area_tree_by_root_area_id(
+    client, make_user, auth_header, session
+):
+    from app.modules.accessi.wc_org_charts import WCOrgChart, WCOrgChartEntry
+    from app.modules.operazioni.models.wc_area import WCArea
+    from app.modules.operazioni.models.wc_operator import WCOperator
+    from app.modules.organigramma.models import OrgAssignment, OrgUnit
+
+    make_user("boss", role=ApplicationUserRole.SUPER_ADMIN.value)
+    dirigente = make_user("dir", role=ApplicationUserRole.REVIEWER.value, full_name="Dirigente")
+    caposettore = make_user("sett", role=ApplicationUserRole.REVIEWER.value, full_name="Capo settore")
+    caposezione = make_user("sez", role=ApplicationUserRole.REVIEWER.value, full_name="Capo sezione")
+    header = auth_header("boss")
+
+    root_area = WCArea(wc_id=1, name="Area agraria", is_district=False)
+    settore_area = WCArea(wc_id=2, name="Settore Manutenzione", is_district=False)
+    sezione_area = WCArea(wc_id=6, name="Sezione reti sud", is_district=False)
+    session.add_all([root_area, settore_area, sezione_area])
+    session.flush()
+
+    dirigente_wc = WCOperator(wc_id=455, gaia_user_id=dirigente.id)
+    caposettore_wc = WCOperator(wc_id=13010, gaia_user_id=caposettore.id)
+    caposezione_wc = WCOperator(wc_id=548, gaia_user_id=caposezione.id)
+    session.add_all([dirigente_wc, caposettore_wc, caposezione_wc])
+    session.flush()
+
+    area_chart = WCOrgChart(wc_id=9, chart_type="area", name="Area Agraria")
+    user_chart = WCOrgChart(wc_id=1, chart_type="user", name="Area agraria")
+    session.add_all([area_chart, user_chart])
+    session.flush()
+
+    session.add_all(
+        [
+            WCOrgChartEntry(
+                org_chart_id=area_chart.id,
+                wc_id=1,
+                label="Area agraria",
+                wc_area_id=root_area.id,
+                source_field="datasource_node|chart=area|depth=0",
+                sort_order=0,
+            ),
+            WCOrgChartEntry(
+                org_chart_id=area_chart.id,
+                wc_id=2,
+                label="Settore Manutenzione",
+                wc_area_id=settore_area.id,
+                source_field="datasource_node|chart=area|depth=1|parent=1",
+                sort_order=1,
+            ),
+            WCOrgChartEntry(
+                org_chart_id=area_chart.id,
+                wc_id=6,
+                label="Sezione reti sud",
+                wc_area_id=sezione_area.id,
+                source_field="datasource_node|chart=area|depth=2|parent=2",
+                sort_order=2,
+            ),
+            WCOrgChartEntry(
+                org_chart_id=user_chart.id,
+                wc_id=455,
+                label="Dirigente",
+                role="Dirigente",
+                wc_operator_id=dirigente_wc.id,
+                source_field="datasource_node|chart=user|depth=0",
+                sort_order=0,
+            ),
+            WCOrgChartEntry(
+                org_chart_id=user_chart.id,
+                wc_id=13010,
+                label="Capo settore",
+                role="Capo settore",
+                wc_operator_id=caposettore_wc.id,
+                source_field="datasource_node|chart=user|depth=1|parent=455",
+                sort_order=1,
+            ),
+            WCOrgChartEntry(
+                org_chart_id=user_chart.id,
+                wc_id=548,
+                label="Capo sezione",
+                role="Capo sezione",
+                wc_operator_id=caposezione_wc.id,
+                source_field="datasource_node|chart=user|depth=2|parent=13010",
+                sort_order=2,
+            ),
+        ]
+    )
+    session.commit()
+
+    body = client.post("/organigramma/sync/whitecompany", headers=header).json()
+    assert body["units_created"] == 3
+    assert body["assignments_created"] == 3
+
+    session.expire_all()
+    units = {u.nome: u for u in session.query(OrgUnit).all()}
+    assert units["Settore Manutenzione"].parent_id == units["Area agraria"].id
+
+    assignments = {
+        row.user_id: row
+        for row in session.query(OrgAssignment).all()
+    }
+    assert assignments[dirigente.id].org_unit_id == units["Area agraria"].id
+    assert assignments[caposettore.id].org_unit_id == units["Settore Manutenzione"].id
+    assert assignments[caposezione.id].org_unit_id in {
+        units["Settore Manutenzione"].id,
+        units["Sezione reti sud"].id,
+    }
