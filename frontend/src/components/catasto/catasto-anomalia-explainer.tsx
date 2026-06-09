@@ -14,15 +14,29 @@ type CatastoAnomaliaExplainerProps = {
   anomalia: AnomaliaLike;
   buttonClassName?: string;
   buttonLabel?: string;
+  hideButton?: boolean;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 };
 
 export function CatastoAnomaliaExplainer({
   anomalia,
   buttonClassName = "text-xs font-medium text-[#1D4E35] underline underline-offset-2",
   buttonLabel = "Approfondisci",
+  hideButton = false,
+  open: controlledOpen,
+  onOpenChange,
 }: CatastoAnomaliaExplainerProps) {
-  const [open, setOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
   const explanation = explainCatastoAnomalia(anomalia);
+  const open = controlledOpen ?? internalOpen;
+
+  function setOpen(nextOpen: boolean): void {
+    onOpenChange?.(nextOpen);
+    if (controlledOpen == null) {
+      setInternalOpen(nextOpen);
+    }
+  }
 
   useEffect(() => {
     if (!open) return;
@@ -45,9 +59,11 @@ export function CatastoAnomaliaExplainer({
 
   return (
     <>
-      <button type="button" className={buttonClassName} onClick={() => setOpen(true)}>
-        {buttonLabel}
-      </button>
+      {!hideButton ? (
+        <button type="button" className={buttonClassName} onClick={() => setOpen(true)}>
+          {buttonLabel}
+        </button>
+      ) : null}
 
       {open ? (
         <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/45 px-4 py-6 backdrop-blur-sm">

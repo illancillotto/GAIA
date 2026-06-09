@@ -12,6 +12,7 @@ import DrawingTools from "@/components/catasto/gis/DrawingTools";
 import SelectionPanel from "@/components/catasto/gis/SelectionPanel";
 import { CatastoPage } from "@/components/catasto/catasto-page";
 import {
+  capacitasGetRptCertificatoLink,
   catastoGetDistrettoGeojson,
   catastoGisGetAdeAlignmentReport,
   catastoGisGetLatestAdeWfsRunStatus,
@@ -41,6 +42,7 @@ import type {
   GisSearchResponse,
   GisSearchResultItem,
   GisParticellaRef,
+  ParticellaPopupAnomalia,
   ParticellaPopupData,
   GisSavedSelectionDetail,
   GisSavedSelectionItemInput,
@@ -302,6 +304,8 @@ export default function CatastoGisPage() {
   const [focusOptions, setFocusOptions] = useState<{ maxZoom?: number; padding?: number; duration?: number } | null>(null);
   const [focusSignal, setFocusSignal] = useState(0);
   const [popupParticella, setPopupParticella] = useState<ParticellaPopupData | null>(null);
+  const [popupAnomalia, setPopupAnomalia] = useState<ParticellaPopupAnomalia | null>(null);
+  const [popupCapacitasBusy, setPopupCapacitasBusy] = useState(false);
   const [popupDetailOpen, setPopupDetailOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchMode, setSearchMode] = useState<GisSearchMode>("auto");
@@ -407,6 +411,21 @@ export default function CatastoGisPage() {
   }, [distretti, distrettiSearch]);
   const autoLoadedSelectionRef = useRef<string | null>(null);
   const popupMatch = useMemo(() => popupToMatch(popupParticella), [popupParticella]);
+
+  const handleOpenPopupCapacitas = useCallback(async () => {
+    const cco = popupParticella?.titolare?.cco?.trim();
+    if (!token || !cco) return;
+    setPopupCapacitasBusy(true);
+    setGisError(null);
+    try {
+      const { url } = await capacitasGetRptCertificatoLink(token, cco);
+      window.open(url, "_blank", "noopener,noreferrer");
+    } catch (e) {
+      setGisError(e instanceof Error ? e.message : "Errore generazione link Capacitas");
+    } finally {
+      setPopupCapacitasBusy(false);
+    }
+  }, [popupParticella, token]);
 
   useEffect(() => {
     setToken(getStoredAccessToken());
@@ -1804,10 +1823,16 @@ export default function CatastoGisPage() {
                                   {describeCatastoAnomalia(anomalia)}
                                 </p>
                                 <div className="mt-2">
-                                  <CatastoAnomaliaExplainer
-                                    anomalia={anomalia}
-                                    buttonClassName="text-[11px] font-medium text-rose-700 underline underline-offset-2"
-                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setPopupAnomalia(anomalia);
+                                      setPopupParticella(null);
+                                    }}
+                                    className="text-[11px] font-medium text-rose-700 underline underline-offset-2"
+                                  >
+                                    Approfondisci
+                                  </button>
                                 </div>
                                 {anomalia.anno_campagna ? (
                                   <p className="mt-1 text-[10px] font-medium text-rose-700">Anno ruolo {anomalia.anno_campagna}</p>
@@ -1842,6 +1867,17 @@ export default function CatastoGisPage() {
                                   ) : null}
                                   {popupParticella.titolare.titoli ? <span>{popupParticella.titolare.titoli}</span> : null}
                                 </div>
+                                {popupParticella.titolare.cco ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => void handleOpenPopupCapacitas()}
+                                    disabled={popupCapacitasBusy}
+                                    className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-sky-700 underline underline-offset-2 disabled:cursor-wait disabled:opacity-70"
+                                  >
+                                    <span className="material-symbols-outlined text-[14px]">open_in_new</span>
+                                    {popupCapacitasBusy ? "Apertura Capacitas..." : "Apri intestatario su Capacitas"}
+                                  </button>
+                                ) : null}
                               </>
                             ) : popupParticella.ha_ruolo || popupHasFallbackRuolo ? (
                               <div className="mt-1 space-y-1">
@@ -2440,6 +2476,18 @@ export default function CatastoGisPage() {
         </div>
       </div>
       <ParticellaDetailDialog open={popupDetailOpen} match={popupMatch} onClose={() => setPopupDetailOpen(false)} />
+      {popupAnomalia ? (
+        <CatastoAnomaliaExplainer
+          anomalia={popupAnomalia}
+          hideButton
+          open={popupAnomalia != null}
+          onOpenChange={(open) => {
+            if (!open) {
+              setPopupAnomalia(null);
+            }
+          }}
+        />
+      ) : null}
     </CatastoPage>
   );
 }
