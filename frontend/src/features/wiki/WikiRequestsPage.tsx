@@ -1052,7 +1052,7 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
               </div>
 
               <label className="block space-y-2">
-                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Messaggio per l'utente</span>
+                <span className="text-xs font-semibold uppercase tracking-[0.18em] text-gray-400">Messaggio per l&apos;utente</span>
                 <textarea
                   value={draftResolutionMessage}
                   onChange={(event) => setDraftResolutionMessage(event.target.value)}

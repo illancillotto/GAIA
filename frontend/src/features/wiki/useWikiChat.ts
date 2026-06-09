@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { getStoredAccessToken } from "@/lib/auth";
+import { generateUuid } from "@/lib/uuid";
 import type { WikiChatMessage, WikiChatResponse, WikiConversation, WikiConversationSummary } from "./types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
@@ -130,7 +131,7 @@ export function useWikiChat(contextArticle?: string, initialConversationId?: str
       if (!question.trim() || loading) return;
 
       const userMsg: WikiChatMessage = {
-        id: crypto.randomUUID(),
+        id: generateUuid(),
         role: "user",
         content: question.trim(),
         timestamp: new Date(),
@@ -144,7 +145,7 @@ export function useWikiChat(contextArticle?: string, initialConversationId?: str
         const response = await fetchWikiChat(question.trim(), contextArticle, conversationId);
 
         const assistantMsg: WikiChatMessage = {
-          id: crypto.randomUUID(),
+          id: generateUuid(),
           role: "assistant",
           content: response.answer,
           sources: response.sources,
@@ -167,7 +168,7 @@ export function useWikiChat(contextArticle?: string, initialConversationId?: str
         setMessages((prev) => [
           ...prev,
           {
-            id: crypto.randomUUID(),
+            id: generateUuid(),
             role: "assistant",
             content: `Si è verificato un errore: ${message}`,
             found: false,

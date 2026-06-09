@@ -519,7 +519,7 @@ export function WikiSupportPage() {
 
                 {selectedRequest.resolution_message ? (
                   <div className="rounded-2xl border border-sky-200 bg-sky-50 px-4 py-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-sky-800">Messaggio dall'amministrazione</p>
+                    <p className="text-xs font-semibold uppercase tracking-wide text-sky-800">Messaggio dall&apos;amministrazione</p>
                     <p className="mt-2 text-sm leading-relaxed text-sky-950">{selectedRequest.resolution_message}</p>
                   </div>
                 ) : null}

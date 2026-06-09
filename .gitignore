@@ -34,6 +34,9 @@ secrets/pdnd/*
 logs/
 *.log
 
+# Database dumps (contengono dati sensibili)
+backups/
+
 # Build artifacts
 dist/
 build/
@@ -74,4 +77,5 @@ tmp/
 exports/
 .venv-codex/
 runtime-data/
-backend/.tmp/inaz_export_compare_2026-05.xlsm
+backend/.tmp/inaz_export_compare_2026-05.xlsm 
+tsconfig.tsbuildinfo

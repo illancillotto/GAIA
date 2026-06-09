@@ -23,6 +23,7 @@ import {
 } from "@/lib/api";
 import { formatDateTime } from "@/lib/presentation";
 import { cn } from "@/lib/cn";
+import { generateUuid } from "@/lib/uuid";
 import type {
   AnagraficaCatastoDocument,
   AnagraficaDocument,
@@ -534,7 +535,7 @@ function DetailContent({ token, subjectId, currentUser }: { token: string; subje
     }
 
     const newItems = Array.from(files).map((file) => ({
-      id: `${file.name}-${file.lastModified}-${crypto.randomUUID()}`,
+      id: `${file.name}-${file.lastModified}-${generateUuid()}`,
       file,
       docType: "altro",
       notes: "",
