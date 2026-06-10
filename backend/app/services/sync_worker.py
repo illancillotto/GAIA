@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import argparse
-from datetime import UTC, datetime
+from datetime import datetime
 import sys
 
 from sqlalchemy.orm import Session
 
 from app.core.database import SessionLocal
+from app.core.datetime_compat import UTC
 from app.jobs.sync import run_live_sync_job
 from app.models.sync_job import SyncJob
 from app.services.sync_runtime import get_sync_job_artifact_dir

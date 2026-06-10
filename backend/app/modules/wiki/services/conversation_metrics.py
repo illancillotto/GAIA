@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from datetime import UTC, date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 
 from sqlalchemy import delete, desc, func, select
 from sqlalchemy.orm import Session
 
+from app.core.datetime_compat import UTC
 from app.modules.wiki.models import WikiConversation, WikiConversationDailyMetric, WikiConversationEvent
 from app.modules.wiki.services.conversation_governance import get_or_create_wiki_conversation_governance_config
 from app.modules.wiki.services.conversations import (

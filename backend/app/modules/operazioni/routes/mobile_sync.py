@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 import math
-from datetime import UTC, datetime
+from datetime import datetime
 from decimal import Decimal
 from pathlib import Path
 from typing import Annotated, Any
@@ -16,6 +16,7 @@ from sqlalchemy import String, and_, cast, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_mobile_connector
+from app.core.datetime_compat import UTC
 from app.core.config import settings
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser

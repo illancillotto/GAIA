@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import tempfile
 import uuid
-from datetime import UTC, date, datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_active_user, require_module, require_role
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.datetime_compat import UTC
 from app.models.application_user import ApplicationUser
 from app.schemas.users import ApplicationUserResponse
 from app.modules.inaz.models import (

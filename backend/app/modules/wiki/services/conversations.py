@@ -4,11 +4,12 @@ import json
 import uuid
 from collections import Counter
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import datetime
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
+from app.core.datetime_compat import UTC
 from app.models.application_user import ApplicationUser
 from app.modules.wiki.models import WikiConversation, WikiConversationEvent, WikiConversationMessage, WikiToolAuditLog
 from app.modules.wiki.services.conversation_governance import get_or_create_wiki_conversation_governance_config

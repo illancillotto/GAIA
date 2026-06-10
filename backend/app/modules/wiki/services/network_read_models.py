@@ -1,12 +1,13 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 import ipaddress
 import re
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
+from app.core.datetime_compat import UTC
 from app.models.application_user import ApplicationUser
 from app.modules.network.models import NetworkDevice, NetworkFirewall, NetworkFirewallEvent
 from app.modules.network.services import get_network_dashboard_summary

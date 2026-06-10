@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime, date
+from datetime import datetime, date
 
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.datetime_compat import UTC
 from app.models.application_user import ApplicationUser
 from app.modules.wiki.models import WikiConversationGovernanceConfig
 

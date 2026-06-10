@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, replace
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime, timedelta
 
 from sqlalchemy import delete, desc, func, select
 from sqlalchemy.orm import Session
 
+from app.core.datetime_compat import UTC
 from app.models.application_user import ApplicationUser
 from app.modules.wiki.models import WikiConversationMetricsBackfillJob
 from app.modules.wiki.services.conversation_governance import update_wiki_conversation_governance_config

@@ -4,13 +4,14 @@ import os
 import signal
 import subprocess
 import sys
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.datetime_compat import UTC
 from app.models.sync_job import SyncJob
 
 

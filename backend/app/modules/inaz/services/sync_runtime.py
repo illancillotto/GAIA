@@ -5,13 +5,14 @@ import signal
 import shutil
 import subprocess
 import sys
-from datetime import UTC, date, datetime, timedelta
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.datetime_compat import UTC
 from app.modules.inaz.models import InazSyncJob
 
 

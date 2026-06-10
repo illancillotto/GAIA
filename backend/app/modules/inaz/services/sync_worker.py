@@ -6,11 +6,12 @@ import os
 import signal
 import sys
 import traceback
-from datetime import UTC, datetime
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
 from app.core.database import SessionLocal
+from app.core.datetime_compat import UTC
 from app.models.application_user import ApplicationUser
 from app.modules.inaz.models import InazImportJob, InazSyncJob
 from app.modules.inaz.services.credentials import mark_credential_error, mark_credential_used, pick_credential

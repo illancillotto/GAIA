@@ -1,8 +1,9 @@
-from datetime import UTC, datetime
+from datetime import datetime
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.datetime_compat import UTC
 from app.core.security import hash_password
 from app.models.application_user import ApplicationUser
 from app.schemas.users import ApplicationUserCreate, ApplicationUserUpdate

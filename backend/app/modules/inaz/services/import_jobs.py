@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.datetime_compat import UTC
 from app.modules.inaz.models import InazCollaborator, InazDailyPunch, InazDailyRecord, InazEventSummary, InazImportJob
 from app.modules.inaz.schemas import InazImportJobResponse, InazImportJsonResponse, InazImportPreviewCollaborator, InazImportPreviewResponse
 from app.modules.inaz.services.parser import (

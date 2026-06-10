@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import uuid
 from urllib.parse import quote
-from datetime import UTC, datetime, date
+from datetime import datetime, date
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.core.database import get_db
+from app.core.datetime_compat import UTC
 from app.models.application_user import ApplicationUser
 from app.modules.wiki.schemas import (
     WikiConversationContextLinkRead,

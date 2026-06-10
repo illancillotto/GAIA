@@ -1,5 +1,5 @@
 from collections import Counter, defaultdict
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 import ipaddress
 import socket
@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import require_active_user
 from app.core.database import get_db
+from app.core.datetime_compat import UTC
 from app.models.application_user import ApplicationUser
 from app.modules.network.models import (
     DevicePosition,

@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections import Counter, defaultdict
-from datetime import UTC, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 import ipaddress
 import logging
 from typing import Any
@@ -10,6 +10,7 @@ from urllib.parse import urlparse
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from app.core.datetime_compat import UTC
 from app.modules.network.models import NetworkDevice, NetworkFirewallEvent, NetworkFirewallHourlyRollup, NetworkTrackedSubject
 from app.modules.network.schemas import (
     NetworkStatisticsCountItem,

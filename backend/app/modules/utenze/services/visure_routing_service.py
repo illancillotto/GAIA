@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime
 import logging
 import mimetypes
 from pathlib import Path, PurePosixPath
@@ -12,6 +12,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.datetime_compat import UTC
 from app.models.application_user import ApplicationUser
 from app.models.catasto import CatastoDocument
 from app.modules.utenze.models import (
