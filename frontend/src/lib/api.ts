@@ -1072,6 +1072,7 @@ export async function listInazDailyRecords(
     dateTo?: string;
     q?: string;
     includePunches?: boolean;
+    includeRawPayload?: boolean;
     page?: number;
     pageSize?: number;
   } = {},
@@ -1095,6 +1096,9 @@ export async function listInazDailyRecords(
   if (params.includePunches != null) {
     query.set("include_punches", String(params.includePunches));
   }
+  if (params.includeRawPayload != null) {
+    query.set("include_raw_payload", String(params.includeRawPayload));
+  }
   if (params.page) {
     query.set("page", String(params.page));
   }
@@ -1103,6 +1107,48 @@ export async function listInazDailyRecords(
   }
   const suffix = query.toString() ? `?${query.toString()}` : "";
   return request<InazDailyRecordListResponse>(`/inaz/giornaliere${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function listInazDailyMatrixRecords(
+  token: string,
+  params: {
+    collaboratorId?: string;
+    applicationUserId?: number;
+    dateFrom?: string;
+    dateTo?: string;
+    q?: string;
+    page?: number;
+    pageSize?: number;
+  } = {},
+): Promise<InazDailyRecordListResponse> {
+  const query = new URLSearchParams();
+  if (params.collaboratorId) {
+    query.set("collaborator_id", params.collaboratorId);
+  }
+  if (params.applicationUserId != null) {
+    query.set("application_user_id", String(params.applicationUserId));
+  }
+  if (params.dateFrom) {
+    query.set("date_from", params.dateFrom);
+  }
+  if (params.dateTo) {
+    query.set("date_to", params.dateTo);
+  }
+  if (params.q) {
+    query.set("q", params.q);
+  }
+  if (params.page) {
+    query.set("page", String(params.page));
+  }
+  if (params.pageSize) {
+    query.set("page_size", String(params.pageSize));
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<InazDailyRecordListResponse>(`/inaz/giornaliere/matrix${suffix}`, {
     headers: {
       Authorization: `Bearer ${token}`,
     },

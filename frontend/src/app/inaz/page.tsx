@@ -56,23 +56,57 @@ export default function InazPage() {
   const [jobs, setJobs] = useState<InazSyncJob[]>([]);
   const [selectedCollaborator, setSelectedCollaborator] = useState<InazCollaborator | null>(null);
   const [collaboratorSearch, setCollaboratorSearch] = useState("");
+  const [isCollaboratorsLoading, setIsCollaboratorsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const token = getStoredAccessToken();
     if (!token) return;
     const { start, end } = currentMonthBounds();
-    Promise.all([
-      getInazDashboardSummary(token, { periodStart: start, periodEnd: end }),
-      listAllInazCollaborators(token),
-      listInazSyncJobs(token, { limit: 6 }),
-    ])
-      .then(([dashboardSummary, collaboratorItems, jobsResponse]) => {
+    Promise.all([getInazDashboardSummary(token, { periodStart: start, periodEnd: end }), listInazSyncJobs(token, { limit: 6 })])
+      .then(([dashboardSummary, jobsResponse]) => {
         setSummary(dashboardSummary);
-        setCollaborators(collaboratorItems);
         setJobs(jobsResponse);
       })
       .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Errore caricamento modulo Inaz"));
+  }, []);
+
+  useEffect(() => {
+    const token = getStoredAccessToken();
+    if (!token) return;
+
+    let cancelled = false;
+    const loadCollaborators = () => {
+      setIsCollaboratorsLoading(true);
+      listAllInazCollaborators(token)
+        .then((items) => {
+          if (!cancelled) {
+            setCollaborators(items);
+          }
+        })
+        .catch((loadError) => {
+          if (!cancelled) {
+            setError(loadError instanceof Error ? loadError.message : "Errore caricamento collaboratori Inaz");
+          }
+        })
+        .finally(() => {
+          if (!cancelled) {
+            setIsCollaboratorsLoading(false);
+          }
+        });
+    };
+
+    const useIdleCallback = typeof window !== "undefined" && "requestIdleCallback" in window;
+    const handle = useIdleCallback ? window.requestIdleCallback(loadCollaborators, { timeout: 800 }) : window.setTimeout(loadCollaborators, 150);
+
+    return () => {
+      cancelled = true;
+      if (useIdleCallback && "cancelIdleCallback" in window) {
+        window.cancelIdleCallback(handle);
+      } else {
+        window.clearTimeout(handle);
+      }
+    };
   }, []);
 
   const mappedCount = summary?.mapped_collaborators_total ?? 0;
@@ -277,6 +311,7 @@ export default function InazPage() {
               ) : null}
             </div>
             <div className="space-y-3">
+              {isCollaboratorsLoading && collaborators.length === 0 ? <p className="text-sm text-gray-500">Caricamento collaboratori…</p> : null}
               {recentCollaborators.map((item) => (
                 <button
                   key={item.id}

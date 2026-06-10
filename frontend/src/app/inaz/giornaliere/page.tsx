@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 
 import { ProtectedPage } from "@/components/app/protected-page";
 import { Badge } from "@/components/ui/badge";
-import { getCurrentUser, getInazAccessContext, getInazDailyRecord, listInazCollaborators, listInazDailyRecords, updateInazDailyRecord } from "@/lib/api";
+import { getCurrentUser, getInazAccessContext, getInazDailyRecord, listAllInazCollaborators, listInazDailyMatrixRecords, updateInazDailyRecord } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import { getInazCompanyLabel } from "@/lib/inaz-display";
 import type { CurrentUser, InazAccessContext, InazCollaborator, InazDailyRecord } from "@/types/api";
@@ -30,6 +30,9 @@ type DayColumn = {
 type CellKind = "anomaly" | "special" | "ferie" | "permesso" | "malattia" | "absence" | "worked" | "rest";
 
 const WEEKDAY_LABELS = ["dom", "lun", "mar", "mer", "gio", "ven", "sab"];
+const INITIAL_VISIBLE_ROWS = 36;
+const VISIBLE_ROWS_STEP = 48;
+const monthRecordsCache = new Map<string, Promise<InazDailyRecord[]>>();
 
 function currentMonthValue(): string {
   const now = new Date();
@@ -242,6 +245,37 @@ function validationLabel(record: InazDailyRecord): string {
   return record.validation_status === "validated" ? "Validata" : "Da validare";
 }
 
+async function loadMonthMatrixRecords(token: string, monthValue: string): Promise<InazDailyRecord[]> {
+  const cacheKey = `${token}:${monthValue}`;
+  const existing = monthRecordsCache.get(cacheKey);
+  if (existing) {
+    return existing;
+  }
+  const request = (async () => {
+    const { start, end } = monthBounds(monthValue);
+    const pageSize = 5000;
+    let page = 1;
+    let items: InazDailyRecord[] = [];
+    while (true) {
+      const response = await listInazDailyMatrixRecords(token, {
+        dateFrom: start,
+        dateTo: end,
+        page,
+        pageSize,
+      });
+      items = [...items, ...response.items];
+      if (items.length >= response.total || response.items.length === 0) break;
+      page += 1;
+    }
+    return items;
+  })().catch((error) => {
+    monthRecordsCache.delete(cacheKey);
+    throw error;
+  });
+  monthRecordsCache.set(cacheKey, request);
+  return request;
+}
+
 export default function InazGiornalierePage() {
   const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
   const [accessContext, setAccessContext] = useState<InazAccessContext | null>(null);
@@ -264,6 +298,7 @@ export default function InazGiornalierePage() {
   const [isLoadingRecordDetail, setIsLoadingRecordDetail] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [dismissedMonth, setDismissedMonth] = useState<string | null>(null);
+  const [visibleRowCount, setVisibleRowCount] = useState(INITIAL_VISIBLE_ROWS);
 
   useEffect(() => {
     const token = getStoredAccessToken();
@@ -273,10 +308,10 @@ export default function InazGiornalierePage() {
         setCurrentUser(sessionUser);
         const [context, collaboratorResponse] = await Promise.all([
           getInazAccessContext(token),
-          listInazCollaborators(token, { page: 1, pageSize: 200 }),
+          listAllInazCollaborators(token),
         ]);
         setAccessContext(context);
-        setCollaborators(collaboratorResponse.items);
+        setCollaborators(collaboratorResponse);
       })
       .catch((loadError) => setError(loadError instanceof Error ? loadError.message : "Errore caricamento giornaliere"));
   }, []);
@@ -284,20 +319,8 @@ export default function InazGiornalierePage() {
   useEffect(() => {
     const token = getStoredAccessToken();
     if (!token) return;
-    const { start, end } = monthBounds(selectedMonth);
     setIsLoading(true);
-    (async () => {
-      const pageSize = 200;
-      let page = 1;
-      let items: InazDailyRecord[] = [];
-      while (true) {
-        const response = await listInazDailyRecords(token, { dateFrom: start, dateTo: end, includePunches: false, page, pageSize });
-        items = [...items, ...response.items];
-        if (items.length >= response.total || response.items.length === 0) break;
-        page += 1;
-      }
-      return items;
-    })()
+    loadMonthMatrixRecords(token, selectedMonth)
       .then((dailyItems) => {
         setRecords(dailyItems);
         setRecordDetails({});
@@ -312,6 +335,7 @@ export default function InazGiornalierePage() {
 
   const days = useMemo(() => buildMonthDays(selectedMonth), [selectedMonth]);
   const collaboratorMap = useMemo(() => new Map(collaborators.map((item) => [item.id, item])), [collaborators]);
+  const deferredSearch = useDeferredValue(search);
 
   const recordIndex = useMemo(() => {
     const index = new Map<string, InazDailyRecord>();
@@ -321,22 +345,44 @@ export default function InazGiornalierePage() {
     return index;
   }, [records]);
 
-  const collaboratorSchedule = useMemo(() => {
-    const counts = new Map<string, Map<string, number>>();
-    const labels = new Map<string, string>();
+  const recordInsights = useMemo(() => {
+    const monthTotals = new Map<string, { ordinary: number; extra: number; km: number; anomalies: number }>();
+    const presentIds = new Set<string>();
+    const scheduleCounts = new Map<string, Map<string, number>>();
+    const scheduleLabels = new Map<string, string>();
+    let anomalies = 0;
+    let km = 0;
+    let extra = 0;
+
     for (const record of records) {
+      presentIds.add(record.collaborator_id);
+
+      const currentTotals = monthTotals.get(record.collaborator_id) ?? { ordinary: 0, extra: 0, km: 0, anomalies: 0 };
+      currentTotals.ordinary += record.ordinary_minutes ?? 0;
+      currentTotals.extra += effectiveExtraMinutes(record);
+      currentTotals.km += record.km_value ?? 0;
+      if (record.detail_anomalies.length > 0 || record.detail_error) {
+        currentTotals.anomalies += 1;
+        anomalies += 1;
+      }
+      monthTotals.set(record.collaborator_id, currentTotals);
+
+      km += record.km_value ?? 0;
+      extra += effectiveExtraMinutes(record);
+
       const code = recordScheduleCode(record);
       if (!code) continue;
-      const perCollab = counts.get(record.collaborator_id) ?? new Map<string, number>();
+      const perCollab = scheduleCounts.get(record.collaborator_id) ?? new Map<string, number>();
       perCollab.set(code, (perCollab.get(code) ?? 0) + 1);
-      counts.set(record.collaborator_id, perCollab);
-      if (!labels.has(code)) {
+      scheduleCounts.set(record.collaborator_id, perCollab);
+      if (!scheduleLabels.has(code)) {
         const label = recordScheduleLabel(record);
-        if (label) labels.set(code, label);
+        if (label) scheduleLabels.set(code, label);
       }
     }
-    const result = new Map<string, { code: string; label: string }>();
-    for (const [collabId, perCollab] of counts) {
+
+    const collaboratorSchedule = new Map<string, { code: string; label: string }>();
+    for (const [collabId, perCollab] of scheduleCounts) {
       let bestCode = "";
       let best = -1;
       for (const [code, occurrences] of perCollab) {
@@ -345,10 +391,18 @@ export default function InazGiornalierePage() {
           bestCode = code;
         }
       }
-      result.set(collabId, { code: bestCode, label: labels.get(bestCode) ?? bestCode });
+      collaboratorSchedule.set(collabId, { code: bestCode, label: scheduleLabels.get(bestCode) ?? bestCode });
     }
-    return result;
+
+    return {
+      collaboratorSchedule,
+      monthTotals,
+      presentIds,
+      summary: { anomalies, km, extra },
+    };
   }, [records]);
+
+  const collaboratorSchedule = recordInsights.collaboratorSchedule;
 
   const scheduleOptions = useMemo(() => {
     const map = new Map<string, { code: string; label: string; count: number }>();
@@ -361,10 +415,9 @@ export default function InazGiornalierePage() {
   }, [collaboratorSchedule]);
 
   const collaboratorRows = useMemo(() => {
-    const presentIds = new Set(records.map((record) => record.collaborator_id));
-    const normalizedSearch = search.trim().toLowerCase();
+    const normalizedSearch = deferredSearch.trim().toLowerCase();
     return collaborators
-      .filter((collaborator) => presentIds.has(collaborator.id))
+      .filter((collaborator) => recordInsights.presentIds.has(collaborator.id))
       .filter((collaborator) => !scheduleFilter || collaboratorSchedule.get(collaborator.id)?.code === scheduleFilter)
       .filter((collaborator) => {
         const company = getInazCompanyLabel(collaborator.company_label, collaborator.company_code, "");
@@ -376,32 +429,57 @@ export default function InazGiornalierePage() {
         );
       })
       .sort((a, b) => a.name.localeCompare(b.name));
-  }, [collaborators, records, search, scheduleFilter, collaboratorSchedule]);
+  }, [collaborators, deferredSearch, scheduleFilter, collaboratorSchedule, recordInsights.presentIds]);
 
-  const monthTotals = useMemo(() => {
-    const totals = new Map<string, { ordinary: number; extra: number; km: number; anomalies: number }>();
-    for (const record of records) {
-      const current = totals.get(record.collaborator_id) ?? { ordinary: 0, extra: 0, km: 0, anomalies: 0 };
-      current.ordinary += record.ordinary_minutes ?? 0;
-      current.extra += effectiveExtraMinutes(record);
-      current.km += record.km_value ?? 0;
-      if (record.detail_anomalies.length > 0 || record.detail_error) current.anomalies += 1;
-      totals.set(record.collaborator_id, current);
-    }
-    return totals;
-  }, [records]);
+  const monthTotals = recordInsights.monthTotals;
+  const summary = recordInsights.summary;
+  const visibleCollaboratorRows = useMemo(
+    () => collaboratorRows.slice(0, Math.min(visibleRowCount, collaboratorRows.length)),
+    [collaboratorRows, visibleRowCount],
+  );
 
-  const summary = useMemo(() => {
-    let anomalies = 0;
-    let km = 0;
-    let extra = 0;
-    for (const record of records) {
-      if (record.detail_anomalies.length > 0 || record.detail_error) anomalies += 1;
-      km += record.km_value ?? 0;
-      extra += effectiveExtraMinutes(record);
+  useEffect(() => {
+    setVisibleRowCount(INITIAL_VISIBLE_ROWS);
+  }, [selectedMonth, scheduleFilter, deferredSearch]);
+
+  useEffect(() => {
+    if (collaboratorRows.length <= INITIAL_VISIBLE_ROWS) return;
+
+    let cancelled = false;
+    let handle: number;
+    const useIdleCallback = typeof window !== "undefined" && "requestIdleCallback" in window;
+
+    const expandRows = () => {
+      if (cancelled) return;
+      setVisibleRowCount((current) => {
+        if (current >= collaboratorRows.length) return current;
+        const next = Math.min(current + VISIBLE_ROWS_STEP, collaboratorRows.length);
+        if (next < collaboratorRows.length) {
+          if (useIdleCallback) {
+            handle = window.requestIdleCallback(expandRows, { timeout: 250 });
+          } else {
+            handle = window.setTimeout(expandRows, 80);
+          }
+        }
+        return next;
+      });
+    };
+
+    if (useIdleCallback) {
+      handle = window.requestIdleCallback(expandRows, { timeout: 150 });
+    } else {
+      handle = window.setTimeout(expandRows, 80);
     }
-    return { anomalies, km, extra };
-  }, [records]);
+
+    return () => {
+      cancelled = true;
+      if (useIdleCallback && "cancelIdleCallback" in window) {
+        window.cancelIdleCallback(handle);
+      } else {
+        window.clearTimeout(handle);
+      }
+    };
+  }, [collaboratorRows]);
 
   const selectedRecord = useMemo(() => {
     if (!selectedRecordId) return null;
@@ -705,6 +783,11 @@ export default function InazGiornalierePage() {
             onClickCapture={handleClickCapture}
             className={`overflow-x-auto ${isDragging ? "cursor-grabbing select-none" : "cursor-grab"}`}
           >
+            {!isLoading && collaboratorRows.length > visibleCollaboratorRows.length ? (
+              <div className="sticky left-0 top-0 z-20 border-b border-blue-100 bg-blue-50 px-4 py-2 text-xs text-blue-700">
+                Rendering progressivo: {visibleCollaboratorRows.length} di {collaboratorRows.length} collaboratori.
+              </div>
+            ) : null}
             <table className="border-separate border-spacing-0 text-sm">
               <thead>
                 <tr>
@@ -723,7 +806,7 @@ export default function InazGiornalierePage() {
                 </tr>
               </thead>
               <tbody>
-                {collaboratorRows.map((collaborator) => {
+                {visibleCollaboratorRows.map((collaborator) => {
                   const totals = monthTotals.get(collaborator.id);
                   return (
                     <tr key={collaborator.id} className="group">

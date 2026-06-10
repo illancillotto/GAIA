@@ -283,6 +283,109 @@ def test_inaz_import_is_idempotent_per_collaborator_and_date() -> None:
     assert listing.json()["items"][0]["ordinary_minutes"] == 330
 
 
+def test_inaz_daily_listing_can_skip_punches_and_raw_payload() -> None:
+    admin = _create_user("listing_admin")
+    token = _login(admin.username)
+
+    imported = client.post(
+        "/inaz/import/json",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("giornaliere.json", _sample_payload(), "application/json")},
+    )
+    assert imported.status_code == 200
+
+    compact_listing = client.get(
+        "/inaz/giornaliere?include_punches=false&include_raw_payload=false&page=1&page_size=1000",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert compact_listing.status_code == 200
+    compact_body = compact_listing.json()
+    assert compact_body["total"] == 1
+    assert compact_body["page"] == 1
+    assert compact_body["page_size"] == 1000
+    compact_item = compact_body["items"][0]
+    assert compact_item["punches"] == []
+    assert compact_item["raw_payload_json"] is None
+
+    full_listing = client.get(
+        "/inaz/giornaliere?include_punches=true&include_raw_payload=true",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert full_listing.status_code == 200
+    full_item = full_listing.json()["items"][0]
+    assert len(full_item["punches"]) == 1
+    assert full_item["punches"][0]["entry_time"] == "06:55:00"
+    assert isinstance(full_item["raw_payload_json"], dict)
+    assert full_item["raw_payload_json"]["schedule_code"] == "OPESAB"
+
+
+def test_inaz_daily_matrix_listing_returns_compact_payload() -> None:
+    admin = _create_user("matrix_listing_admin")
+    token = _login(admin.username)
+
+    imported = client.post(
+        "/inaz/import/json",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("giornaliere.json", _sample_payload(), "application/json")},
+    )
+    assert imported.status_code == 200
+
+    listing = client.get(
+        "/inaz/giornaliere/matrix?date_from=2026-05-01&date_to=2026-05-31&page=1&page_size=1000",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert listing.status_code == 200
+    body = listing.json()
+    assert body["total"] == 1
+    item = body["items"][0]
+    assert item["punches"] == []
+    assert item["raw_payload_json"] is None
+    assert item["detail_day_summary"] == {}
+    assert item["detail_day_totals"] == {}
+    assert item["detail_requests"] == []
+    assert item["detail_programmed_schedule"] == "OPESAB - Rientro Operai"
+    assert item["detail_status"] == "Giornata anomala"
+
+
+def test_inaz_daily_listing_supports_collaborator_user_and_date_filters() -> None:
+    admin = _create_user("filter_admin")
+    mapped_user = _create_user("filter_mapped_user", role=ApplicationUserRole.VIEWER.value)
+    token = _login(admin.username)
+
+    imported = client.post(
+        "/inaz/import/json",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("giornaliere.json", _sample_payload(), "application/json")},
+    )
+    assert imported.status_code == 200
+
+    collaborators = client.get("/inaz/collaborators", headers={"Authorization": f"Bearer {token}"})
+    assert collaborators.status_code == 200
+    collaborator_id = collaborators.json()["items"][0]["id"]
+
+    mapped = client.put(
+        f"/inaz/collaborators/{collaborator_id}/application-user",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"application_user_id": mapped_user.id},
+    )
+    assert mapped.status_code == 200
+
+    filtered = client.get(
+        (
+            f"/inaz/giornaliere?collaborator_id={collaborator_id}"
+            f"&application_user_id={mapped_user.id}"
+            "&date_from=2026-05-16&date_to=2026-05-16"
+        ),
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert filtered.status_code == 200
+    body = filtered.json()
+    assert body["total"] == 1
+    assert body["items"][0]["collaborator_id"] == collaborator_id
+    assert body["items"][0]["application_user_id"] == mapped_user.id
+    assert body["items"][0]["work_date"] == "2026-05-16"
+
+
 def test_inaz_import_prefers_day_detail_fields_when_available() -> None:
     admin = _create_user("detail_admin")
     token = _login(admin.username)
@@ -400,6 +503,34 @@ def test_inaz_daily_record_manual_overrides_update_effective_values() -> None:
     assert body["effective_straordinario_minutes"] == 90
     assert body["effective_mpe_minutes"] == 15
     assert body["effective_extra_minutes"] == 105
+
+
+def test_inaz_daily_record_validation_reset_clears_validator_metadata() -> None:
+    admin = _create_user("validation_reset_admin")
+    token = _login(admin.username)
+
+    imported = client.post(
+        "/inaz/import/json",
+        headers={"Authorization": f"Bearer {token}"},
+        files={"file": ("giornaliere.json", _sample_payload(), "application/json")},
+    )
+    assert imported.status_code == 200
+
+    listing = client.get("/inaz/giornaliere", headers={"Authorization": f"Bearer {token}"})
+    assert listing.status_code == 200
+    record_id = listing.json()["items"][0]["id"]
+
+    reset = client.patch(
+        f"/inaz/giornaliere/{record_id}",
+        headers={"Authorization": f"Bearer {token}"},
+        json={"validation_status": "pending"},
+    )
+
+    assert reset.status_code == 200
+    body = reset.json()
+    assert body["validation_status"] == "pending"
+    assert body["validated_by_user_id"] is None
+    assert body["validated_at"] is None
 
 
 def test_inaz_can_map_collaborator_to_application_user() -> None:

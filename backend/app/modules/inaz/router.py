@@ -612,11 +612,107 @@ def list_giornaliere(
     date_to: date | None = Query(default=None),
     q: str | None = Query(default=None),
     include_punches: bool = Query(default=False),
+    include_raw_payload: bool = Query(default=True),
     page: int = Query(default=1, ge=1),
-    page_size: int = Query(default=31, ge=1, le=200),
+    page_size: int = Query(default=31, ge=1, le=5000),
 ) -> InazDailyRecordListResponse:
     stmt = select(InazDailyRecord)
     count_stmt = select(func.count(InazDailyRecord.id))
+
+    stmt, count_stmt = _apply_daily_record_filters(
+        db,
+        current_user,
+        stmt=stmt,
+        count_stmt=count_stmt,
+        collaborator_id=collaborator_id,
+        application_user_id=application_user_id,
+        date_from=date_from,
+        date_to=date_to,
+        q=q,
+    )
+
+    rows = db.execute(
+        stmt.order_by(InazDailyRecord.work_date.asc()).offset((page - 1) * page_size).limit(page_size)
+    ).scalars().all()
+    total = db.execute(count_stmt).scalar_one()
+    punches_by_record_id: dict[uuid.UUID, list[InazDailyPunch]] | None = None
+    if include_punches and rows:
+        punches = db.execute(
+            select(InazDailyPunch)
+            .where(InazDailyPunch.daily_record_id.in_([row.id for row in rows]))
+            .order_by(InazDailyPunch.daily_record_id.asc(), InazDailyPunch.sequence.asc())
+        ).scalars().all()
+        punches_by_record_id = {}
+        for punch in punches:
+            punches_by_record_id.setdefault(punch.daily_record_id, []).append(punch)
+    return InazDailyRecordListResponse(
+        items=[
+            _serialize_daily_record(
+                db,
+                row,
+                punches=punches_by_record_id.get(row.id) if punches_by_record_id is not None else [],
+                include_raw_payload=include_raw_payload,
+            )
+            for row in rows
+        ],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.get("/giornaliere/matrix", response_model=InazDailyRecordListResponse)
+def list_giornaliere_matrix(
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[ApplicationUser, Depends(require_active_user)],
+    _: Annotated[ApplicationUser, RequireInazModule],
+    collaborator_id: uuid.UUID | None = Query(default=None),
+    application_user_id: int | None = Query(default=None),
+    date_from: date | None = Query(default=None),
+    date_to: date | None = Query(default=None),
+    q: str | None = Query(default=None),
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=31, ge=1, le=5000),
+) -> InazDailyRecordListResponse:
+    stmt = select(InazDailyRecord)
+    count_stmt = select(func.count(InazDailyRecord.id))
+
+    stmt, count_stmt = _apply_daily_record_filters(
+        db,
+        current_user,
+        stmt=stmt,
+        count_stmt=count_stmt,
+        collaborator_id=collaborator_id,
+        application_user_id=application_user_id,
+        date_from=date_from,
+        date_to=date_to,
+        q=q,
+    )
+
+    rows = db.execute(
+        stmt.order_by(InazDailyRecord.work_date.asc()).offset((page - 1) * page_size).limit(page_size)
+    ).scalars().all()
+    total = db.execute(count_stmt).scalar_one()
+    return InazDailyRecordListResponse(
+        items=[_serialize_daily_record_matrix(record) for record in rows],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+def _apply_daily_record_filters(
+    db: Session,
+    current_user: ApplicationUser,
+    *,
+    stmt,
+    count_stmt,
+    collaborator_id: uuid.UUID | None,
+    application_user_id: int | None,
+    date_from: date | None,
+    date_to: date | None,
+    q: str | None,
+):
 
     if not _can_view_all_inaz_data(current_user):
         hierarchy_scope = _hierarchy_scope_user_ids(db, current_user)
@@ -657,26 +753,7 @@ def list_giornaliere(
         stmt = stmt.where(filters)
         count_stmt = count_stmt.where(filters)
 
-    rows = db.execute(
-        stmt.order_by(InazDailyRecord.work_date.asc()).offset((page - 1) * page_size).limit(page_size)
-    ).scalars().all()
-    total = db.execute(count_stmt).scalar_one()
-    punches_by_record_id: dict[uuid.UUID, list[InazDailyPunch]] | None = None
-    if include_punches and rows:
-        punches = db.execute(
-            select(InazDailyPunch)
-            .where(InazDailyPunch.daily_record_id.in_([row.id for row in rows]))
-            .order_by(InazDailyPunch.daily_record_id.asc(), InazDailyPunch.sequence.asc())
-        ).scalars().all()
-        punches_by_record_id = {}
-        for punch in punches:
-            punches_by_record_id.setdefault(punch.daily_record_id, []).append(punch)
-    return InazDailyRecordListResponse(
-        items=[_serialize_daily_record(db, row, punches=punches_by_record_id.get(row.id) if punches_by_record_id is not None else None) for row in rows],
-        total=total,
-        page=page,
-        page_size=page_size,
-    )
+    return stmt, count_stmt
 
 
 @router.get("/giornaliere/{record_id}", response_model=InazDailyRecordResponse)
@@ -1250,6 +1327,7 @@ def _serialize_daily_record(
     record: InazDailyRecord,
     *,
     punches: list[InazDailyPunch] | None = None,
+    include_raw_payload: bool = True,
 ) -> InazDailyRecordResponse:
     if punches is None:
         punches = db.execute(
@@ -1320,6 +1398,53 @@ def _serialize_daily_record(
             "detail_text": detail.get("text"),
             "detail_error": detail.get("error"),
             "special_day": detail_indicates_special_day(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None,
+            "raw_payload_json": record.raw_payload_json if include_raw_payload else None,
+        }
+    )
+
+
+def _serialize_daily_record_matrix(record: InazDailyRecord) -> InazDailyRecordResponse:
+    detail = extract_detail_payload(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else {}
+    effective_straordinario = (
+        record.override_straordinario_minutes
+        if record.override_straordinario_minutes is not None
+        else record.straordinario_minutes
+    )
+    effective_mpe = record.override_mpe_minutes if record.override_mpe_minutes is not None else record.mpe_minutes
+    detail_anomalies = detail.get("anomalies") or []
+    return InazDailyRecordResponse.model_validate(
+        {
+            **record.__dict__,
+            "punches": [],
+            "effective_straordinario_minutes": effective_straordinario,
+            "effective_mpe_minutes": effective_mpe,
+            "effective_extra_minutes": (effective_straordinario or 0) + (effective_mpe or 0) or None,
+            "request_type": record.request_type
+            or (resolve_request_type(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None),
+            "request_description": record.request_description
+            or (resolve_request_description(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None),
+            "request_status": record.request_status
+            or (resolve_request_status(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None),
+            "request_authorized_by": record.request_authorized_by
+            or (resolve_request_authorized_by(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None),
+            "resolved_absence_cause": record.resolved_absence_cause
+            or (resolve_absence_cause(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None),
+            "detail_title": None,
+            "detail_status": detail.get("status"),
+            "detail_programmed_schedule": detail.get("programmed_schedule"),
+            "detail_effective_schedule": None,
+            "detail_time_slots": None,
+            "detail_schedule_type": None,
+            "detail_theoretical_hours": None,
+            "detail_absence_hours": None,
+            "detail_day_summary": {},
+            "detail_day_totals": {},
+            "detail_requests": [],
+            "detail_anomalies": detail_anomalies,
+            "detail_text": None,
+            "detail_error": detail.get("error"),
+            "special_day": detail_indicates_special_day(record.raw_payload_json) if isinstance(record.raw_payload_json, dict) else None,
+            "raw_payload_json": None,
         }
     )
 
