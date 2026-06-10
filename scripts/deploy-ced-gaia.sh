@@ -189,13 +189,15 @@ EOF
 
   echo "==> Build immagini Docker produzione GAIA"
   COMPOSE_PROJECT_NAME="$COMPOSE_PROJECT_NAME" docker compose --env-file "$ENV_FILE" build \
-    backend frontend elaborazioni-worker scanner arp-helper
+    backend frontend elaborazioni-worker-visure elaborazioni-worker-runtime elaborazioni-worker-autodoc scanner arp-helper
 
   echo "==> Salvataggio immagini in $IMAGES_ARCHIVE"
   docker save \
     "${COMPOSE_PROJECT_NAME}-backend:latest" \
     "${COMPOSE_PROJECT_NAME}-frontend:latest" \
-    "${COMPOSE_PROJECT_NAME}-elaborazioni-worker:latest" \
+    "${COMPOSE_PROJECT_NAME}-elaborazioni-worker-visure:latest" \
+    "${COMPOSE_PROJECT_NAME}-elaborazioni-worker-runtime:latest" \
+    "${COMPOSE_PROJECT_NAME}-elaborazioni-worker-autodoc:latest" \
     "${COMPOSE_PROJECT_NAME}-scanner:latest" \
     "${COMPOSE_PROJECT_NAME}-arp-helper:latest" \
     | gzip -c > "$IMAGES_ARCHIVE"
