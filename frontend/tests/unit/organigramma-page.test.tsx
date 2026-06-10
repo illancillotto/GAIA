@@ -166,6 +166,19 @@ describe("Organigramma page", () => {
     expect(screen.getByText("Unità visibili")).toBeInTheDocument();
   });
 
+  test("filters the workspace by settore and focuses the subtree in schema", async () => {
+    render(<OrganigrammaPage />);
+
+    expect(await screen.findByText("Schema organigramma")).toBeInTheDocument();
+    fireEvent.change(screen.getByRole("combobox", { name: /Filtro settore/i }), {
+      target: { value: "u2" },
+    });
+
+    expect(await screen.findByText(/Vista focalizzata sul settore/i)).toBeInTheDocument();
+    expect(await screen.findByTestId("schema-node-u2")).toBeInTheDocument();
+    expect(screen.queryByTestId("schema-node-u1")).not.toBeInTheDocument();
+  });
+
   test("switches to schema view and links a block below another using arrows", async () => {
     render(<OrganigrammaPage />);
 
@@ -183,6 +196,41 @@ describe("Organigramma page", () => {
 
     await waitFor(() => {
       expect(mocks.updateOrgUnit).toHaveBeenCalledWith("token", "u2", { parent_id: "u1" });
+    });
+  });
+
+  test("applies vertical and horizontal layouts from schema controls", async () => {
+    render(<OrganigrammaPage />);
+
+    expect(await screen.findByText("Schema organigramma")).toBeInTheDocument();
+    mocks.updateOrgUnit.mockClear();
+
+    fireEvent.click(screen.getAllByLabelText("Abilita modifica")[0]!);
+    fireEvent.click(screen.getByRole("button", { name: "Orizzontale" }));
+
+    await waitFor(() => {
+      expect(mocks.updateOrgUnit).toHaveBeenCalledWith(
+        "token",
+        expect.any(String),
+        expect.objectContaining({
+          canvas_x: expect.any(Number),
+          canvas_y: expect.any(Number),
+        }),
+      );
+    });
+
+    mocks.updateOrgUnit.mockClear();
+    fireEvent.click(screen.getByRole("button", { name: "Verticale" }));
+
+    await waitFor(() => {
+      expect(mocks.updateOrgUnit).toHaveBeenCalledWith(
+        "token",
+        expect.any(String),
+        expect.objectContaining({
+          canvas_x: expect.any(Number),
+          canvas_y: expect.any(Number),
+        }),
+      );
     });
   });
 

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 
-import { computeTreeInclusion, flattenTree, unitPath } from "@/lib/organigramma";
+import { computeTreeInclusion, filterTreeByRootIds, flattenTree, unitPath } from "@/lib/organigramma";
 import type { OrgUnitTreeNode } from "@/types/api";
 
 function node(id: string, nome: string, tipo: OrgUnitTreeNode["tipo"], parent: string | null, children: OrgUnitTreeNode[] = []): OrgUnitTreeNode {
@@ -74,5 +74,19 @@ describe("unitPath", () => {
 
   test("unknown id -> empty", () => {
     expect(unitPath("zzz", flattenTree(TREE))).toEqual([]);
+  });
+});
+
+describe("filterTreeByRootIds", () => {
+  test("focuses a settore subtree and promotes it to root", () => {
+    const filtered = filterTreeByRootIds(TREE, new Set(["c"]));
+    expect(filtered).toHaveLength(1);
+    expect(filtered[0]?.id).toBe("c");
+    expect(filtered[0]?.parent_id).toBeNull();
+    expect(filtered[0]?.children.map((item) => item.id)).toEqual(["d"]);
+  });
+
+  test("returns the original forest when no root filter is active", () => {
+    expect(filterTreeByRootIds(TREE, null)).toBe(TREE);
   });
 });

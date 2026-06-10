@@ -32,7 +32,7 @@ import {
 } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/cn";
-import { computeTreeInclusion, flattenTree, unitPath } from "@/lib/organigramma";
+import { computeTreeInclusion, filterTreeByRootIds, flattenTree, unitPath } from "@/lib/organigramma";
 import type {
   ApplicationUser,
   CurrentUser,
@@ -65,6 +65,7 @@ type SchemaNodeMeta = {
 };
 
 type UserDropMode = "member" | "lead";
+type SchemaOrientation = "vertical" | "horizontal";
 
 const TYPE_META: Record<OrgUnitType, { label: string; chip: string; dot: string }> = {
   direzione: { label: "Direzione", chip: "bg-[#D3EAD4] text-[#163d29] border-[#bcd9bf]", dot: "#1D4E35" },
@@ -206,6 +207,53 @@ function computeHorizontalTreeLayout(tree: OrgUnitTreeNode[]): Map<string, { x: 
   for (const root of tree) {
     const rootLayout = walk(root, 0, cursorY);
     cursorY = rootLayout.nextY + rootSpacing;
+  }
+
+  return positions;
+}
+
+function computeVerticalTreeLayout(tree: OrgUnitTreeNode[]): Map<string, { x: number; y: number }> {
+  const positions = new Map<string, { x: number; y: number }>();
+  const rootSpacing = SCHEMA_NODE_WIDTH + SCHEMA_LAYER_X_GAP / 2;
+  const horizontalStep = SCHEMA_NODE_WIDTH + SCHEMA_LAYER_X_GAP / 2;
+  const verticalStep = SCHEMA_NODE_HEIGHT + SCHEMA_LAYER_Y_GAP;
+  const baseY = 120;
+  let cursorX = 120;
+
+  const walk = (node: OrgUnitTreeNode, depth: number, startX: number): { nextX: number; centerX: number } => {
+    const y = baseY + depth * verticalStep;
+    if (!node.children.length) {
+      positions.set(node.id, { x: startX, y });
+      return {
+        nextX: startX + horizontalStep,
+        centerX: startX + SCHEMA_NODE_WIDTH / 2,
+      };
+    }
+
+    let childCursorX = startX;
+    const childCenters: number[] = [];
+
+    for (const child of node.children) {
+      const childLayout = walk(child, depth + 1, childCursorX);
+      childCursorX = childLayout.nextX;
+      childCenters.push(childLayout.centerX);
+    }
+
+    const centerX = childCenters.length === 1
+      ? childCenters[0]
+      : (childCenters[0] + childCenters[childCenters.length - 1]) / 2;
+    const x = Math.max(120, Math.round(centerX - SCHEMA_NODE_WIDTH / 2));
+    positions.set(node.id, { x, y });
+
+    return {
+      nextX: Math.max(childCursorX, x + horizontalStep),
+      centerX,
+    };
+  };
+
+  for (const root of tree) {
+    const rootLayout = walk(root, 0, cursorX);
+    cursorX = rootLayout.nextX + rootSpacing;
   }
 
   return positions;
@@ -534,8 +582,10 @@ type SchemaBoardProps = {
   onConnectNode: (targetId: string) => void;
   onDetachParent: (nodeId: string) => void;
   onApplyHorizontalLayout: () => void;
+  onApplyVerticalLayout: () => void;
   onAssignUser: (userId: number, unitId: string, mode: UserDropMode) => void;
   meta: Map<string, SchemaNodeMeta>;
+  orientation: SchemaOrientation;
   canModifyStructure: boolean;
   editEnabled: boolean;
   snapToGrid: boolean;
@@ -563,8 +613,10 @@ function SchemaBoard({
   onConnectNode,
   onDetachParent,
   onApplyHorizontalLayout,
+  onApplyVerticalLayout,
   onAssignUser,
   meta,
+  orientation,
   canModifyStructure,
   editEnabled,
   snapToGrid,
@@ -619,12 +671,28 @@ function SchemaBoard({
           <Pill className={snapToGrid ? "border-[#bfe5d6] bg-white text-[#0f6a4e]" : "border-[#d6dfef] bg-white text-[#5c6d82]"}>
             {snapToGrid ? "griglia attiva" : "griglia libera"}
           </Pill>
+          <Pill className="border-[#d6dfef] bg-white text-[#2f5da8]">
+            vista {orientation === "horizontal" ? "orizzontale" : "verticale"}
+          </Pill>
           <Pill className={canModifyStructure ? "border-[#d5e2d8] bg-white text-[#1D4E35]" : "border-[#e6d3d3] bg-white text-[#9a3b3b]"}>
             {canModifyStructure ? "super admin" : "sola lettura"}
           </Pill>
           <div className="ml-2 flex items-center gap-1 rounded-xl border border-[#d6dfef] bg-white p-1">
             {canModifyStructure ? (
-              <button type="button" onClick={onApplyHorizontalLayout} className="rounded-lg px-2 py-1 text-[12px] font-semibold text-[#2f5da8] hover:bg-[#eef3fb]">
+              <button
+                type="button"
+                onClick={onApplyVerticalLayout}
+                className={cn("rounded-lg px-2 py-1 text-[12px] font-semibold hover:bg-[#eef3fb]", orientation === "vertical" ? "bg-[#eef3fb] text-[#2f5da8]" : "text-[#5c6d82]")}
+              >
+                Verticale
+              </button>
+            ) : null}
+            {canModifyStructure ? (
+              <button
+                type="button"
+                onClick={onApplyHorizontalLayout}
+                className={cn("rounded-lg px-2 py-1 text-[12px] font-semibold hover:bg-[#eef3fb]", orientation === "horizontal" ? "bg-[#eef3fb] text-[#2f5da8]" : "text-[#5c6d82]")}
+              >
                 Orizzontale
               </button>
             ) : null}
@@ -702,15 +770,31 @@ function SchemaBoard({
                   const parentY = safeCanvasCoord(parent.canvas_y);
                   const nodeX = safeCanvasCoord(node.canvas_x);
                   const nodeY = safeCanvasCoord(node.canvas_y);
-                  const startX = parentX + canvasBounds.offsetX + SCHEMA_NODE_WIDTH / 2;
-                  const startY = parentY + canvasBounds.offsetY + SCHEMA_NODE_HEIGHT;
-                  const endX = nodeX + canvasBounds.offsetX + SCHEMA_NODE_WIDTH / 2;
-                  const endY = nodeY + canvasBounds.offsetY;
-                  const midY = startY + Math.max((endY - startY) / 2, 40);
+                  const startX = orientation === "horizontal"
+                    ? parentX + canvasBounds.offsetX + SCHEMA_NODE_WIDTH
+                    : parentX + canvasBounds.offsetX + SCHEMA_NODE_WIDTH / 2;
+                  const startY = orientation === "horizontal"
+                    ? parentY + canvasBounds.offsetY + SCHEMA_NODE_HEIGHT / 2
+                    : parentY + canvasBounds.offsetY + SCHEMA_NODE_HEIGHT;
+                  const endX = orientation === "horizontal"
+                    ? nodeX + canvasBounds.offsetX
+                    : nodeX + canvasBounds.offsetX + SCHEMA_NODE_WIDTH / 2;
+                  const endY = orientation === "horizontal"
+                    ? nodeY + canvasBounds.offsetY + SCHEMA_NODE_HEIGHT / 2
+                    : nodeY + canvasBounds.offsetY;
+                  const path = orientation === "horizontal"
+                    ? (() => {
+                        const midX = startX + Math.max((endX - startX) / 2, 56);
+                        return `M ${startX} ${startY} C ${midX} ${startY}, ${midX} ${endY}, ${endX} ${endY}`;
+                      })()
+                    : (() => {
+                        const midY = startY + Math.max((endY - startY) / 2, 40);
+                        return `M ${startX} ${startY} C ${startX} ${midY}, ${endX} ${midY}, ${endX} ${endY}`;
+                      })();
                   return (
                     <path
                       key={`${parent.id}-${node.id}`}
-                      d={`M ${startX} ${startY} C ${startX} ${midY}, ${endX} ${midY}, ${endX} ${endY}`}
+                      d={path}
                       stroke="#c4d3ea"
                       strokeWidth="2"
                       fill="none"
@@ -940,6 +1024,7 @@ export function OrganigrammaWorkspace() {
 
   const [query, setQuery] = useState("");
   const [typeFilter, setTypeFilter] = useState<OrgUnitType | "all">("all");
+  const [sectorFilterId, setSectorFilterId] = useState<string>("all");
   const [showProvenance, setShowProvenance] = useState(true);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -964,9 +1049,10 @@ export function OrganigrammaWorkspace() {
     originX: number;
     originY: number;
   } | null>(null);
+  const [schemaOrientation, setSchemaOrientation] = useState<SchemaOrientation>("vertical");
   const [schemaEditEnabled, setSchemaEditEnabled] = useState(false);
   const [schemaSnapToGrid, setSchemaSnapToGrid] = useState(true);
-  const [showCreateUnit, setShowCreateUnit] = useState(false);
+  const [createUnitPreset, setCreateUnitPreset] = useState<{ tipo: OrgUnitType; parentId: string | null } | null>(null);
   const schemaViewportRef = useRef<HTMLDivElement>(null);
   const schemaContentRef = useRef<HTMLDivElement>(null);
   const treeViewportRef = useRef<HTMLDivElement>(null);
@@ -1072,12 +1158,23 @@ export function OrganigrammaWorkspace() {
     if (simUserId == null && users.length) setSimUserId(users[0].id);
   }, [users, simUserId]);
 
-  const { includeIds, matchIds } = useMemo(
-    () => computeTreeInclusion(tree, query, typeFilter),
-    [query, typeFilter, tree],
-  );
-
   const flatTree = useMemo(() => flattenTree(tree), [tree]);
+  const settoreOptions = useMemo(
+    () =>
+      flatTree
+        .filter((node) => node.tipo === "settore")
+        .sort((left, right) => left.nome.localeCompare(right.nome, "it-IT")),
+    [flatTree],
+  );
+  const scopedTree = useMemo(
+    () => filterTreeByRootIds(tree, sectorFilterId === "all" ? null : new Set([sectorFilterId])),
+    [tree, sectorFilterId],
+  );
+  const visibleFlatTree = useMemo(() => flattenTree(scopedTree), [scopedTree]);
+  const { includeIds, matchIds } = useMemo(
+    () => computeTreeInclusion(scopedTree, query, typeFilter),
+    [query, scopedTree, typeFilter],
+  );
   const selectedNode = useMemo(
     () => flatTree.find((node) => node.id === selectedId) ?? null,
     [flatTree, selectedId],
@@ -1091,7 +1188,7 @@ export function OrganigrammaWorkspace() {
     [tree, allAssignments],
   );
 
-  const roots = includeIds ? tree.filter((r) => includeIds.has(r.id)) : tree;
+  const roots = includeIds ? scopedTree.filter((r) => includeIds.has(r.id)) : scopedTree;
   const canModifyStructure = canManage && currentUser?.role === "super_admin";
   const assignedUserIds = useMemo(
     () => new Set(allAssignments.filter((assignment) => assignment.active).map((assignment) => assignment.user_id)),
@@ -1101,6 +1198,26 @@ export function OrganigrammaWorkspace() {
     () => users.filter((user) => user.is_active && !assignedUserIds.has(user.id)),
     [assignedUserIds, users],
   );
+  const selectedSector = useMemo(
+    () => (sectorFilterId === "all" ? null : flatTree.find((node) => node.id === sectorFilterId) ?? null),
+    [flatTree, sectorFilterId],
+  );
+
+  useEffect(() => {
+    if (sectorFilterId !== "all" && !settoreOptions.some((node) => node.id === sectorFilterId)) {
+      setSectorFilterId("all");
+    }
+  }, [sectorFilterId, settoreOptions]);
+
+  useEffect(() => {
+    if (!visibleFlatTree.length) {
+      setSelectedId(null);
+      return;
+    }
+    if (!selectedId || !visibleFlatTree.some((node) => node.id === selectedId)) {
+      setSelectedId(visibleFlatTree[0].id);
+    }
+  }, [selectedId, visibleFlatTree]);
 
   useEffect(() => {
     if (!canModifyStructure) {
@@ -1274,13 +1391,37 @@ export function OrganigrammaWorkspace() {
           source: "manuale",
         });
       }
-      setShowCreateUnit(false);
+      setCreateUnitPreset(null);
       setSelectedId(created.id);
       setNotice(`Unità ${created.nome} creata correttamente.`);
       await loadCore();
     } catch (err) {
       setNotice(err instanceof Error ? err.message : "Creazione unità non riuscita");
     }
+  }
+
+  function openCreateUnit(tipo: OrgUnitType, parentId: string | null = selectedId) {
+    setCreateUnitPreset({ tipo, parentId });
+  }
+
+  function resolveSectorParentId(): string | null {
+    if (selectedNode?.tipo === "distretto" || selectedNode?.tipo === "direzione") {
+      return selectedNode.id;
+    }
+    if (selectedNode?.tipo === "settore") {
+      return selectedNode.parent_id;
+    }
+    if (selectedSector?.parent_id) {
+      return selectedSector.parent_id;
+    }
+    return selectedId;
+  }
+
+  function resolveGenericUnitType(): OrgUnitType {
+    if (selectedNode?.tipo === "direzione") return "distretto";
+    if (selectedNode?.tipo === "distretto") return "settore";
+    if (selectedNode?.tipo === "settore") return "squadra";
+    return "settore";
   }
 
   function snapCoordinate(value: number) {
@@ -1298,9 +1439,12 @@ export function OrganigrammaWorkspace() {
     }
   }
 
-  async function handleApplyHorizontalLayout() {
+  async function handleApplyTreeLayout(orientation: SchemaOrientation) {
     if (!token || !canModifyStructure) return;
-    const nextPositions = computeHorizontalTreeLayout(tree);
+    const layoutTree = scopedTree;
+    const nextPositions = orientation === "horizontal"
+      ? computeHorizontalTreeLayout(layoutTree)
+      : computeVerticalTreeLayout(layoutTree);
     setTree((current) => {
       let nextTree = current;
       for (const [nodeId, position] of nextPositions) {
@@ -1320,7 +1464,8 @@ export function OrganigrammaWorkspace() {
           }),
         ),
       );
-      setNotice("Layout orizzontale applicato.");
+      setSchemaOrientation(orientation);
+      setNotice(`Layout ${orientation === "horizontal" ? "orizzontale" : "verticale"} applicato.`);
       await loadCore();
       if (view === "schema") {
         window.requestAnimationFrame(() => {
@@ -1328,7 +1473,7 @@ export function OrganigrammaWorkspace() {
         });
       }
     } catch (err) {
-      setNotice(err instanceof Error ? err.message : "Applicazione layout orizzontale non riuscita");
+      setNotice(err instanceof Error ? err.message : `Applicazione layout ${orientation === "horizontal" ? "orizzontale" : "verticale"} non riuscita`);
     }
   }
 
@@ -1593,6 +1738,21 @@ export function OrganigrammaWorkspace() {
               </button>
             ))}
           </div>
+          <label className="min-w-[240px] rounded-xl border border-[#e6ebe5] bg-[#fbfcfa] px-3 py-2 text-[12.5px] text-[#3a4a3f]">
+            <span className="mb-1 block text-[11px] font-semibold uppercase tracking-[0.12em] text-[#5f6d61]">Filtro settore</span>
+            <select
+              value={sectorFilterId}
+              onChange={(event) => setSectorFilterId(event.target.value)}
+              className="w-full bg-transparent text-[13px] outline-none"
+            >
+              <option value="all">Tutti i settori</option>
+              {settoreOptions.map((settore) => (
+                <option key={settore.id} value={settore.id}>
+                  {settore.nome}
+                </option>
+              ))}
+            </select>
+          </label>
           <button
             type="button"
             onClick={() => setShowProvenance((v) => !v)}
@@ -1613,6 +1773,15 @@ export function OrganigrammaWorkspace() {
               <RefreshIcon className={cn("h-4 w-4", syncing ? "animate-spin" : "")} /> Sync WhiteCompany
             </button>
           ) : null}
+          {canModifyStructure ? (
+            <button
+              type="button"
+              onClick={() => openCreateUnit("settore", resolveSectorParentId())}
+              className="inline-flex items-center gap-2 rounded-xl border border-[#bcd9bf] bg-white px-3 py-2 text-[12.5px] font-semibold text-[#1D4E35] transition-colors hover:bg-[#edf5f0]"
+            >
+              + Nuovo settore
+            </button>
+          ) : null}
           <div className="ml-auto flex items-center gap-1 rounded-xl border border-[#e6ebe5] bg-[#fbfcfa] p-1">
             <button type="button" onClick={() => setView("schema")} className={cn("inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12.5px] font-semibold transition-colors", view === "schema" ? "bg-[#1D4E35] text-white" : "text-[#3a4a3f] hover:bg-[#edf5f0]")}>
               <FolderIcon className="h-4 w-4" /> Schema
@@ -1629,6 +1798,11 @@ export function OrganigrammaWorkspace() {
 
       {notice ? (
         <div className="mb-4 rounded-xl border border-[#bfe5e0] bg-[#e2f4f1] px-4 py-2 text-[12.5px] text-[#0d7a66]">{notice}</div>
+      ) : null}
+      {selectedSector ? (
+        <div className="mb-4 rounded-xl border border-[#d6dfef] bg-[#f7f9fd] px-4 py-2 text-[12.5px] text-[#2f5da8]">
+          Vista focalizzata sul settore <strong>{selectedSector.nome}</strong>: albero e schema mostrano il suo sotto-albero operativo.
+        </div>
       ) : null}
 
       {view === "albero" ? (
@@ -1740,7 +1914,8 @@ export function OrganigrammaWorkspace() {
                   assignMode={userDropMode}
                   onAssignModeChange={setUserDropMode}
                   onToggleEdit={setSchemaEditEnabled}
-                  onCreateUnit={() => setShowCreateUnit(true)}
+                  onCreateUnit={() => openCreateUnit("settore", resolveSectorParentId())}
+                  onCreateGenericUnit={() => openCreateUnit(resolveGenericUnitType(), selectedId)}
                   onStartDragUser={setDraggingUserId}
                   onEndDragUser={() => setDraggingUserId(null)}
                 />
@@ -1771,10 +1946,14 @@ export function OrganigrammaWorkspace() {
               void handleMoveNode(nodeId, null);
             }}
             onApplyHorizontalLayout={() => {
-              void handleApplyHorizontalLayout();
+              void handleApplyTreeLayout("horizontal");
+            }}
+            onApplyVerticalLayout={() => {
+              void handleApplyTreeLayout("vertical");
             }}
             onAssignUser={handleAssignUserToUnit}
             meta={schemaMeta}
+            orientation={schemaOrientation}
             canModifyStructure={canModifyStructure}
             editEnabled={schemaEditEnabled}
             snapToGrid={schemaSnapToGrid}
@@ -1797,7 +1976,8 @@ export function OrganigrammaWorkspace() {
             assignMode={userDropMode}
             onAssignModeChange={setUserDropMode}
             onToggleEdit={setSchemaEditEnabled}
-            onCreateUnit={() => setShowCreateUnit(true)}
+            onCreateUnit={() => openCreateUnit("settore", resolveSectorParentId())}
+            onCreateGenericUnit={() => openCreateUnit(resolveGenericUnitType(), selectedId)}
             onStartDragUser={setDraggingUserId}
             onEndDragUser={() => setDraggingUserId(null)}
           />
@@ -1821,12 +2001,13 @@ export function OrganigrammaWorkspace() {
         />
       ) : null}
 
-      {showCreateUnit ? (
+      {createUnitPreset ? (
         <CreateUnitModal
           units={flatTree}
           unassignedUsers={unassignedUsers}
-          defaultParentId={selectedId}
-          onClose={() => setShowCreateUnit(false)}
+          defaultParentId={createUnitPreset.parentId}
+          defaultType={createUnitPreset.tipo}
+          onClose={() => setCreateUnitPreset(null)}
           onCreate={handleCreateUnit}
         />
       ) : null}
@@ -1998,6 +2179,7 @@ function AssignmentInboxPanel({
   onAssignModeChange,
   onToggleEdit,
   onCreateUnit,
+  onCreateGenericUnit,
   onStartDragUser,
   onEndDragUser,
 }: {
@@ -2010,6 +2192,7 @@ function AssignmentInboxPanel({
   onAssignModeChange: (mode: UserDropMode) => void;
   onToggleEdit: (enabled: boolean) => void;
   onCreateUnit: () => void;
+  onCreateGenericUnit: () => void;
   onStartDragUser: (userId: number) => void;
   onEndDragUser: () => void;
 }) {
@@ -2024,13 +2207,22 @@ function AssignmentInboxPanel({
           </p>
         </div>
         {canModifyStructure ? (
-          <button
-            type="button"
-            onClick={onCreateUnit}
-            className="rounded-xl border border-[#bcd9bf] bg-white px-3 py-2 text-[12.5px] font-semibold text-[#1D4E35] hover:bg-[#edf5f0]"
-          >
-            + Nuova unità
-          </button>
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={onCreateUnit}
+              className="rounded-xl border border-[#bcd9bf] bg-white px-3 py-2 text-[12.5px] font-semibold text-[#1D4E35] hover:bg-[#edf5f0]"
+            >
+              + Nuovo settore
+            </button>
+            <button
+              type="button"
+              onClick={onCreateGenericUnit}
+              className="rounded-xl border border-[#e6ebe5] bg-white px-3 py-2 text-[12.5px] font-semibold text-[#3a4a3f] hover:bg-[#f5f9f4]"
+            >
+              + Nuova unità
+            </button>
+          </div>
         ) : null}
       </div>
 
@@ -2117,27 +2309,45 @@ function CreateUnitModal({
   units,
   unassignedUsers,
   defaultParentId,
+  defaultType,
   onClose,
   onCreate,
 }: {
   units: OrgUnitTreeNode[];
   unassignedUsers: ApplicationUser[];
   defaultParentId: string | null;
+  defaultType: OrgUnitType;
   onClose: () => void;
   onCreate: (payload: OrgUnitCreateInput, responsibleUserId: number | null) => Promise<void>;
 }) {
   const [nome, setNome] = useState("");
-  const [tipo, setTipo] = useState<OrgUnitType>("settore");
+  const [tipo, setTipo] = useState<OrgUnitType>(defaultType);
   const [parentId, setParentId] = useState<string | "">(defaultParentId ?? "");
   const [responsibleUserId, setResponsibleUserId] = useState<number | "">("");
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const inputCls = "w-full rounded-xl border border-[#e6ebe5] bg-[#fbfcfa] px-3 py-2 text-[13px] outline-none focus:border-[#1D9E75] focus:ring-2 focus:ring-[#1D9E75]/30";
+  const parentUnit = useMemo(
+    () => (parentId ? units.find((unit) => unit.id === parentId) ?? null : null),
+    [parentId, units],
+  );
+
+  useEffect(() => {
+    setTipo(defaultType);
+  }, [defaultType]);
+
+  useEffect(() => {
+    setParentId(defaultParentId ?? "");
+  }, [defaultParentId]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     if (!nome.trim()) {
       setErr("Inserisci il nome della nuova unità.");
+      return;
+    }
+    if (tipo === "settore" && parentUnit && parentUnit.tipo === "squadra") {
+      setErr("Un settore non può essere creato sotto una squadra.");
       return;
     }
     setSaving(true);
@@ -2189,6 +2399,11 @@ function CreateUnitModal({
               </select>
             </label>
           </div>
+          {tipo === "settore" ? (
+            <div className="rounded-xl border border-[#d6dfef] bg-[#f7f9fd] px-3 py-2 text-[12px] text-[#2f5da8]">
+              I nuovi settori sono pensati per essere agganciati a una direzione o a un distretto. Seleziona il padre corretto per generare subito il sotto-albero operativo.
+            </div>
+          ) : null}
           <label className="flex flex-col gap-1">
             <span className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#5f6d61]">Responsabile iniziale</span>
             <select className={inputCls} value={responsibleUserId} onChange={(event) => setResponsibleUserId(event.target.value ? Number(event.target.value) : "")}>

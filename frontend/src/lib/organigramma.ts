@@ -53,6 +53,31 @@ export function computeTreeInclusion(
   return { includeIds, matchIds };
 }
 
+function cloneSubtree(node: OrgUnitTreeNode, parentId: string | null): OrgUnitTreeNode {
+  const children = node.children.map((child) => cloneSubtree(child, node.id));
+  return {
+    ...node,
+    parent_id: parentId,
+    child_count: children.length,
+    children,
+  };
+}
+
+/**
+ * Estrae uno o più sotto-alberi dalla foresta originale e li promuove a radice
+ * della vista corrente. Utile per focalizzare lo schema su uno o più settori.
+ */
+export function filterTreeByRootIds(tree: OrgUnitTreeNode[], rootIds: Set<string> | null): OrgUnitTreeNode[] {
+  if (!rootIds || rootIds.size === 0) {
+    return tree;
+  }
+
+  const flat = flattenTree(tree);
+  return flat
+    .filter((node) => rootIds.has(node.id))
+    .map((node) => cloneSubtree(node, null));
+}
+
 /** Percorso (breadcrumb) radice→nodo a partire da una lista piatta. */
 export function unitPath(unitId: string, units: OrgUnitTreeNode[]): OrgUnitTreeNode[] {
   const byId = new Map(units.map((u) => [u.id, u]));
