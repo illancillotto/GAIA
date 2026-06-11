@@ -1,7 +1,7 @@
 # IMPLEMENTATION PLAN — GAIA Wiki Agent
 ## Milestone 9
 
-> Stato: IN CORSO — backend e superfici principali operativi; restano allineamento docs, hardening e frontend streaming
+> Stato: OPERATIVO — streaming frontend, hardening client e copertura mirata completati al 2026-06-11
 > Iniziato da: Claude Code (Sonnet 4.6)
 > Completato quasi interamente da Claude Code (2026-05-20)
 
@@ -56,8 +56,27 @@
 
 - [x] Pagina admin `/wiki/requests` (lista richieste + cambio status)
 - [x] Endpoint streaming SSE `/wiki/chat/stream`
-- [ ] Consumo frontend dello streaming SSE con fallback compatibile
-- [ ] Allineamento documentazione e coverage frontend delle superfici support/requests
+- [x] Consumo frontend dello streaming SSE con fallback compatibile
+- [x] Allineamento documentazione e coverage frontend delle superfici support/requests
+
+### Verifiche aggiornate — 2026-06-11
+
+- [x] `frontend/src/features/wiki/useWikiChat.ts` usa SSE con fallback sincrono, abort su unmount/cambio conversazione e reload conversazioni con error reporting esplicito
+- [x] `frontend/src/features/wiki/WikiPage.tsx` e `WikiConversationsPage.tsx` allineate al contratto `frontend/src/lib/api.ts`
+- [x] test frontend mirati verdi:
+  - `wiki-chat-stream.test.tsx`
+  - `wiki-chat-surfaces.test.tsx`
+  - `wiki-conversations-page.test.tsx`
+  - `wiki-support-surfaces.test.tsx`
+- [x] `npm run typecheck` frontend verde
+- [x] coverage backend router chat: `81%` su `backend/app/modules/wiki/routes/chat.py`
+- [x] coverage frontend mirata sui file toccati:
+  - `useWikiChat.ts`: `69.39%` statements, `49.64%` branch
+  - `WikiPage.tsx`: `57.95%` statements, `55.96%` branch
+  - `WikiConversationsPage.tsx`: `42.85%` statements, `38.77%` branch
+
+Nota:
+il totale del report frontend resta basso se si include `frontend/src/lib/api.ts`, perché il file e monolitico e contiene centinaia di helper non esercitati dai test wiki. Per il modulo wiki il dato utile è la copertura dei file feature toccati sopra.
 
 ### Completato (Claude Code, 2026-05-20)
 

@@ -279,6 +279,24 @@ describe("Wiki support surfaces", () => {
     });
   });
 
+  test("renders support inbox variant filtered to support items", async () => {
+    render(<WikiRequestsPage supportOnly />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Inbox supporto Wiki")).toBeInTheDocument();
+      expect(screen.getAllByText("Supporto operativo").length).toBeGreaterThan(0);
+    });
+  });
+
+  test("renders request detail variant selecting the provided id", async () => {
+    render(<WikiRequestsPage initialRequestId="req-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Dettaglio richiesta")).toBeInTheDocument();
+      expect(screen.getAllByText("Non trovo una funzione").length).toBeGreaterThan(0);
+    });
+  });
+
   test("renders support page with my requests", async () => {
     render(<WikiSupportPage />);
 

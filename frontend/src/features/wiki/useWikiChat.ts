@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { getStoredAccessToken } from "@/lib/auth";
-import { getApiBaseUrl } from "@/lib/api";
+import { getApiBaseUrl, getWikiConversationDetail, getWikiConversations } from "@/lib/api";
 import { generateUuid } from "@/lib/uuid";
 import type { WikiChatMessage, WikiChatResponse, WikiChatStreamChunk, WikiConversation, WikiConversationSummary } from "./types";
 
@@ -177,14 +177,11 @@ async function streamWikiChat(
 }
 
 async function fetchWikiConversation(conversationId: string): Promise<WikiConversation> {
-  const res = await fetch(getWikiApiPath(`/wiki/conversations/${conversationId}`), {
-    headers: getWikiAuthHeaders(),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(parseWikiErrorMessage(err, `Errore ${res.status}`));
+  const token = getStoredAccessToken();
+  if (!token) {
+    throw new Error("Sessione non disponibile.");
   }
-  return res.json();
+  return getWikiConversationDetail(token, conversationId);
 }
 
 async function fetchWikiConversations(params: {
@@ -193,25 +190,16 @@ async function fetchWikiConversations(params: {
   created_by?: string | null;
   context_article?: string | null;
 } = {}): Promise<WikiConversationSummary[]> {
-  const query = new URLSearchParams();
-  query.set("limit", String(params.limit ?? 30));
-  if (params.search) {
-    query.set("search", params.search);
+  const token = getStoredAccessToken();
+  if (!token) {
+    throw new Error("Sessione non disponibile.");
   }
-  if (params.created_by) {
-    query.set("created_by", params.created_by);
-  }
-  if (params.context_article) {
-    query.set("context_article", params.context_article);
-  }
-  const res = await fetch(getWikiApiPath(`/wiki/conversations?${query.toString()}`), {
-    headers: getWikiAuthHeaders(),
+  return getWikiConversations(token, {
+    limit: params.limit ?? 30,
+    search: params.search ?? null,
+    createdBy: params.created_by ?? null,
+    contextArticle: params.context_article ?? null,
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(parseWikiErrorMessage(err, `Errore ${res.status}`));
-  }
-  return res.json();
 }
 
 function toUiMessage(message: WikiConversation["messages"][number]): WikiChatMessage {

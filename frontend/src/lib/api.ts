@@ -222,6 +222,12 @@ import type {
   WikiConversationMetricsBackfillJobChainSummary,
   WikiConversationMetricsBackfillJobPruneResponse,
 } from "@/types/api";
+import type {
+  WikiArticleGroup,
+  WikiConversation,
+  WikiConversationSummary,
+  WikiConversationSummaryMetrics,
+} from "@/features/wiki/types";
 
 const DEFAULT_API_BASE_URL = "/api";
 const ELABORAZIONE_BATCH_DETAIL_CACHE_TTL_MS = 1000;
@@ -433,6 +439,14 @@ export async function login(username: string, password: string): Promise<LoginRe
 
 export async function getCurrentUser(token: string): Promise<CurrentUser> {
   return request<CurrentUser>("/auth/me", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getWikiArticles(token: string): Promise<WikiArticleGroup[]> {
+  return request<WikiArticleGroup[]>("/wiki/articles", {
     headers: {
       Authorization: `Bearer ${token}`,
     },
@@ -2045,6 +2059,88 @@ export async function getWikiConversationMetricsSeries(
     headers: {
       Authorization: `Bearer ${token}`,
     },
+  });
+}
+
+export async function getWikiConversations(
+  token: string,
+  params: {
+    limit?: number;
+    search?: string | null;
+    status?: string | null;
+    priority?: string | null;
+    assignedTo?: string | null;
+    reviewReason?: string | null;
+    needsReview?: boolean | null;
+    createdBy?: string | null;
+    contextArticle?: string | null;
+  } = {},
+): Promise<WikiConversationSummary[]> {
+  const query = new URLSearchParams();
+  if (params.limit != null) {
+    query.set("limit", String(params.limit));
+  }
+  if (params.search) {
+    query.set("search", params.search);
+  }
+  if (params.status) {
+    query.set("status", params.status);
+  }
+  if (params.priority) {
+    query.set("priority", params.priority);
+  }
+  if (params.assignedTo) {
+    query.set("assigned_to", params.assignedTo);
+  }
+  if (params.reviewReason) {
+    query.set("review_reason", params.reviewReason);
+  }
+  if (params.needsReview != null) {
+    query.set("needs_review", String(params.needsReview));
+  }
+  if (params.createdBy) {
+    query.set("created_by", params.createdBy);
+  }
+  if (params.contextArticle) {
+    query.set("context_article", params.contextArticle);
+  }
+  const suffix = query.toString() ? `?${query.toString()}` : "";
+  return request<WikiConversationSummary[]>(`/wiki/conversations${suffix}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getWikiConversationSummary(
+  token: string,
+): Promise<WikiConversationSummaryMetrics> {
+  return request<WikiConversationSummaryMetrics>("/wiki/conversations/summary", {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function getWikiConversationDetail(token: string, conversationId: string): Promise<WikiConversation> {
+  return request<WikiConversation>(`/wiki/conversations/${conversationId}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function updateWikiConversation(
+  token: string,
+  conversationId: string,
+  payload: Partial<Pick<WikiConversationSummary, "status" | "priority" | "assigned_to">>,
+): Promise<WikiConversation> {
+  return request<WikiConversation>(`/wiki/conversations/${conversationId}`, {
+    method: "PATCH",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
   });
 }
 

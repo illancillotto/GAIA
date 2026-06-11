@@ -5,7 +5,15 @@ import { useEffect, useMemo, useState } from "react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SearchIcon } from "@/components/ui/icons";
 import { buildWikiContextHref } from "./context-links";
-import { getCurrentUser, getWikiToolAuditLogs, request, resolveWikiConversationContextLink } from "@/lib/api";
+import {
+  getCurrentUser,
+  getWikiConversationDetail,
+  getWikiConversationSummary,
+  getWikiConversations,
+  getWikiToolAuditLogs,
+  resolveWikiConversationContextLink,
+  updateWikiConversation,
+} from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import type { CurrentUser, WikiToolAuditLog } from "@/types/api";
 import type { WikiConversation, WikiConversationContextLink, WikiConversationSummary, WikiConversationSummaryMetrics } from "./types";
@@ -36,16 +44,19 @@ async function fetchConversations(params: {
   if (!token) {
     throw new Error("Sessione non disponibile.");
   }
-  const query = new URLSearchParams({ limit: "100" });
-  if (params.search.trim()) query.set("search", params.search.trim());
-  if (params.status !== "all") query.set("status", params.status);
-  if (params.priority !== "all") query.set("priority", params.priority);
-  if (params.assignedTo.trim()) query.set("assigned_to", params.assignedTo.trim());
-  if (params.reviewReason !== "all") query.set("review_reason", params.reviewReason);
-  if (params.reviewFilter === "needs_review") query.set("needs_review", "true");
-  if (params.reviewFilter === "clean") query.set("needs_review", "false");
-  return request<WikiConversationSummary[]>(`/wiki/conversations?${query.toString()}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  return getWikiConversations(token, {
+    limit: 100,
+    search: params.search.trim() || null,
+    status: params.status !== "all" ? params.status : null,
+    priority: params.priority !== "all" ? params.priority : null,
+    assignedTo: params.assignedTo.trim() || null,
+    reviewReason: params.reviewReason !== "all" ? params.reviewReason : null,
+    needsReview:
+      params.reviewFilter === "needs_review"
+        ? true
+        : params.reviewFilter === "clean"
+          ? false
+          : null,
   });
 }
 
@@ -54,9 +65,7 @@ async function fetchConversationSummary(): Promise<WikiConversationSummaryMetric
   if (!token) {
     throw new Error("Sessione non disponibile.");
   }
-  return request<WikiConversationSummaryMetrics>("/wiki/conversations/summary", {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
+  return getWikiConversationSummary(token);
 }
 
 async function fetchConversationDetail(conversationId: string): Promise<WikiConversation> {
@@ -64,9 +73,7 @@ async function fetchConversationDetail(conversationId: string): Promise<WikiConv
   if (!token) {
     throw new Error("Sessione non disponibile.");
   }
-  return request<WikiConversation>(`/wiki/conversations/${conversationId}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
+  return getWikiConversationDetail(token, conversationId);
 }
 
 async function patchConversation(
@@ -77,14 +84,7 @@ async function patchConversation(
   if (!token) {
     throw new Error("Sessione non disponibile.");
   }
-  await request<WikiConversation>(`/wiki/conversations/${conversationId}`, {
-    method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    },
-    body: JSON.stringify(payload),
-  });
+  await updateWikiConversation(token, conversationId, payload);
 }
 
 function formatDate(value: string | null | undefined): string {

@@ -31,12 +31,11 @@ Azioni consigliate:
 Fonte: `domain-docs/wiki/docs/IMPLEMENTATION_PLAN_wiki.md`
 
 TODO reali:
-- consumo frontend dello streaming SSE `/wiki/chat/stream`
-- allineamento documentazione/stato implementativo del modulo
+- nessun debito operativo immediato sul perimetro chat/support richiesto a giugno 2026
 
 Motivo:
-- il backend e la pagina richieste esistono già
-- resta da chiudere l’integrazione client e ripulire il backlog documentale
+- streaming frontend, fallback compatibile, hardening client e coverage mirata sono stati chiusi
+- restano solo refactor opzionali e consolidamenti ergonomici, non backlog runtime urgente
 
 ### Operazioni
 

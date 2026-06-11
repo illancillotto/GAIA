@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
-import { createWikiRequest, getMyWikiRequests, request } from "@/lib/api";
+import { createWikiRequest, getMyWikiRequests, getWikiArticles } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 import { buildWikiRequestPayload, buildWikiSupportHref } from "./request-support";
@@ -13,9 +13,8 @@ import { useWikiChat } from "./useWikiChat";
 
 async function fetchArticles(): Promise<WikiArticleGroup[]> {
   const token = getStoredAccessToken();
-  return request<WikiArticleGroup[]>("/wiki/articles", {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
+  if (!token) return [];
+  return getWikiArticles(token);
 }
 
 function formatArticleLabel(sourceFile: string): string {
