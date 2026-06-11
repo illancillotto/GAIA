@@ -91,6 +91,10 @@ const SCHEMA_GRID_SIZE = 24;
 const SCHEMA_LAYER_X_GAP = 340;
 const SCHEMA_LAYER_Y_GAP = 72;
 const QUICK_SECTOR_LIMIT = 10;
+// Above this number of visible blocks the schema auto-groups deep levels.
+const SCHEMA_AUTO_GROUP_THRESHOLD = 12;
+// Levels always expanded by the auto-grouping (roots + their children).
+const SCHEMA_AUTO_GROUP_DEPTH = 1;
 
 function initials(name: string | null | undefined): string {
   if (!name) return "?";
@@ -165,6 +169,33 @@ function buildSchemaMeta(tree: OrgUnitTreeNode[], assignments: OrgAssignment[]):
 
 function safeCanvasCoord(value: number | null | undefined): number {
   return Number.isFinite(value) ? Number(value) : 0;
+}
+
+function pruneCollapsedTree(nodes: OrgUnitTreeNode[], collapsedIds: Set<string>): OrgUnitTreeNode[] {
+  if (!collapsedIds.size) return nodes;
+  return nodes.map((node) =>
+    collapsedIds.has(node.id)
+      ? { ...node, children: [] }
+      : { ...node, children: pruneCollapsedTree(node.children, collapsedIds) },
+  );
+}
+
+// MyHeritage-like auto grouping: when the visible tree is large, every node
+// below SCHEMA_AUTO_GROUP_DEPTH that has children starts collapsed. Expanding
+// a group reveals one more level (whose own groups stay collapsed).
+function computeAutoCollapsedIds(nodes: OrgUnitTreeNode[]): Set<string> {
+  const collapsed = new Set<string>();
+  if (flattenTree(nodes).length <= SCHEMA_AUTO_GROUP_THRESHOLD) return collapsed;
+  const visit = (level: OrgUnitTreeNode[], depth: number) => {
+    for (const node of level) {
+      if (depth >= SCHEMA_AUTO_GROUP_DEPTH && node.children.length) {
+        collapsed.add(node.id);
+      }
+      visit(node.children, depth + 1);
+    }
+  };
+  visit(nodes, 0);
+  return collapsed;
 }
 
 function computeSchemaCanvasBounds(flatNodes: OrgUnitTreeNode[]) {
@@ -600,6 +631,10 @@ type SchemaBoardProps = {
   selectedId: string | null;
   multiSelectedIds: Set<string>;
   marquee: { x: number; y: number; width: number; height: number } | null;
+  collapsedIds: Set<string>;
+  collapsedPreview: Map<string, { childNames: string[] }>;
+  onToggleCollapse: (id: string) => void;
+  onExpandAll: () => void;
   onSelect: (id: string, event?: React.MouseEvent) => void;
   onOpenPerson: (id: number) => void;
   draggingUserId: number | null;
@@ -635,6 +670,10 @@ function SchemaBoard({
   selectedId,
   multiSelectedIds,
   marquee,
+  collapsedIds,
+  collapsedPreview,
+  onToggleCollapse,
+  onExpandAll,
   onSelect,
   onOpenPerson,
   draggingUserId,
@@ -680,6 +719,16 @@ function SchemaBoard({
         <div className="flex flex-wrap items-center gap-2 text-[12px] text-[#5c6d82]">
           {multiSelectedIds.size > 1 ? (
             <Pill className="border-[#bfe5d6] bg-[#e2f4f1] text-[#0d7a66]">{multiSelectedIds.size} blocchi selezionati</Pill>
+          ) : null}
+          {collapsedIds.size ? (
+            <button
+              type="button"
+              onClick={onExpandAll}
+              className="rounded-full border border-[#e7c89a] bg-[#fdf3e3] px-3 py-1 text-[12px] font-semibold text-[#7c3d06] hover:bg-[#fbe9cf]"
+              title="Riapri tutti i gruppi compressi"
+            >
+              Esplodi tutto ({collapsedIds.size})
+            </button>
           ) : null}
           <Pill className="border-[#c4d3ea] bg-white text-[#2f5da8]">canvas libero</Pill>
           <Pill className={snapToGrid ? "border-[#bfe5d6] bg-white text-[#0f6a4e]" : "border-[#d6dfef] bg-white text-[#5c6d82]"}>
@@ -845,6 +894,9 @@ function SchemaBoard({
                   offsetY={canvasBounds.offsetY}
                   selectedId={selectedId}
                   isMultiSelected={multiSelectedIds.has(node.id)}
+                  collapsed={collapsedIds.has(node.id)}
+                  collapsedChildNames={collapsedPreview.get(node.id)?.childNames ?? null}
+                  onToggleCollapse={onToggleCollapse}
                   onSelect={onSelect}
                   onOpenPerson={onOpenPerson}
                   draggingUserId={draggingUserId}
@@ -879,6 +931,9 @@ type SchemaNodeCardProps = {
   offsetY: number;
   selectedId: string | null;
   isMultiSelected: boolean;
+  collapsed: boolean;
+  collapsedChildNames: string[] | null;
+  onToggleCollapse: (id: string) => void;
   onSelect: (id: string, event?: React.MouseEvent) => void;
   onOpenPerson: (id: number) => void;
   draggingUserId: number | null;
@@ -901,6 +956,9 @@ function SchemaNodeCard({
   offsetY,
   selectedId,
   isMultiSelected,
+  collapsed,
+  collapsedChildNames,
+  onToggleCollapse,
   onSelect,
   onOpenPerson,
   draggingUserId,
@@ -918,6 +976,7 @@ function SchemaNodeCard({
 }: SchemaNodeCardProps) {
   const nodeMeta = meta.get(node.id);
   const lead = nodeMeta?.lead ?? null;
+  const subtreeSize = Math.max((nodeMeta?.descendantIds.size ?? 1) - 1, collapsed ? 1 : 0);
   const isSelected = selectedId === node.id;
   const isLinkTarget = linkDraft?.sourceId !== node.id;
   const cardX = safeCanvasCoord(node.canvas_x);
@@ -925,7 +984,7 @@ function SchemaNodeCard({
 
   return (
     <div
-      className="absolute z-20"
+      className={cn("absolute z-20", collapsed ? "group hover:z-40" : "")}
       style={{
         left: cardX + offsetX,
         top: cardY + offsetY,
@@ -953,6 +1012,7 @@ function SchemaNodeCard({
               : "border-[#a9c6b1] bg-[linear-gradient(180deg,#fefefe,#edf8ef)]",
           isSelected ? "ring-2 ring-[#1D4E35]/40" : "",
           isMultiSelected ? "ring-2 ring-[#1D9E75]/60" : "",
+          collapsed ? "border-dashed shadow-[0_6px_0_-2px_rgba(125,145,135,0.35),0_12px_0_-6px_rgba(125,145,135,0.2),0_18px_50px_rgba(15,23,42,0.08)]" : "",
           linkDraft && isLinkTarget ? "hover:border-[#b45309]" : "",
           linkDraft && !isLinkTarget ? "ring-2 ring-[#b45309]/60" : "",
           canManage ? "cursor-grab touch-none" : "",
@@ -1035,6 +1095,27 @@ function SchemaNodeCard({
               diretti {nodeMeta?.directPeople ?? node.person_count}
             </Pill>
           </div>
+          {subtreeSize > 0 ? (
+            <div className="mt-2 flex justify-center">
+              <button
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onToggleCollapse(node.id);
+                }}
+                onPointerDown={(event) => event.stopPropagation()}
+                className={cn(
+                  "rounded-full border px-3 py-1 text-[11.5px] font-semibold",
+                  collapsed
+                    ? "border-[#e7c89a] bg-[#fdf3e3] text-[#7c3d06] hover:bg-[#fbe9cf]"
+                    : "border-[#d6dfef] bg-white text-[#2f5da8] hover:bg-[#eef3fb]",
+                )}
+                title={collapsed ? "Mostra di nuovo il sotto-albero raggruppato" : "Nascondi il sotto-albero in questo blocco"}
+              >
+                {collapsed ? `Esplodi (+${subtreeSize})` : "Raggruppa"}
+              </button>
+            </div>
+          ) : null}
           {lead?.person ? (
             <div className="mt-3 flex justify-center">
               <button
@@ -1051,6 +1132,37 @@ function SchemaNodeCard({
           ) : null}
         </div>
       </div>
+      {collapsed ? (
+        <div className="pointer-events-none absolute left-1/2 top-full z-50 hidden w-[280px] -translate-x-1/2 pt-2 group-hover:block">
+          <div className="pointer-events-auto rounded-2xl border border-[#d6dfef] bg-white p-3 shadow-[0_20px_60px_rgba(15,23,42,0.18)]">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.14em] text-[#5f6d61]">Gruppo compresso</div>
+            <div className="mt-1 text-[12.5px] text-[#3a4a3f]">
+              <strong>{subtreeSize}</strong> unità · <strong>{nodeMeta?.totalPeople ?? node.person_count}</strong> persone nel sotto-albero
+            </div>
+            {collapsedChildNames?.length ? (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {collapsedChildNames.slice(0, 4).map((name) => (
+                  <Pill key={name} className="border-[#e6ebe5] bg-[#fbfcfa] text-[#5f6d61]">{name}</Pill>
+                ))}
+                {collapsedChildNames.length > 4 ? (
+                  <Pill className="border-[#e6ebe5] bg-[#fbfcfa] text-[#8a938f]">+{collapsedChildNames.length - 4} altre</Pill>
+                ) : null}
+              </div>
+            ) : null}
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                onToggleCollapse(node.id);
+              }}
+              onPointerDown={(event) => event.stopPropagation()}
+              className="mt-3 w-full rounded-xl bg-[#1D4E35] px-3 py-2 text-[12px] font-semibold text-white hover:bg-[#163d29]"
+            >
+              Esplodi
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -1104,6 +1216,7 @@ export function OrganigrammaWorkspace() {
   } | null>(null);
   const [multiSelectedIds, setMultiSelectedIds] = useState<Set<string>>(new Set());
   const [schemaMarquee, setSchemaMarquee] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const [schemaCollapsedIds, setSchemaCollapsedIds] = useState<Set<string>>(new Set());
   const [schemaContextMenu, setSchemaContextMenu] = useState<{
     nodeId: string;
     x: number;
@@ -1273,6 +1386,39 @@ export function OrganigrammaWorkspace() {
   );
 
   const roots = includeIds ? scopedTree.filter((r) => includeIds.has(r.id)) : scopedTree;
+  const schemaRoots = pruneCollapsedTree(roots, schemaCollapsedIds);
+  const scopedTreeRef = useRef(scopedTree);
+  scopedTreeRef.current = scopedTree;
+
+  // Apply the auto-grouping on first load and when the sector scope changes;
+  // structure refreshes after mutations must not re-collapse manual choices.
+  useEffect(() => {
+    if (loading) return;
+    setSchemaCollapsedIds(computeAutoCollapsedIds(scopedTreeRef.current));
+  }, [loading, sectorFilterId]);
+
+  const collapsedPreview = useMemo(() => {
+    const map = new Map<string, { childNames: string[] }>();
+    if (!schemaCollapsedIds.size) return map;
+    for (const node of flatTree) {
+      if (schemaCollapsedIds.has(node.id)) {
+        map.set(node.id, { childNames: node.children.map((child) => child.nome) });
+      }
+    }
+    return map;
+  }, [schemaCollapsedIds, flatTree]);
+
+  const toggleSchemaCollapse = useCallback((nodeId: string) => {
+    setSchemaCollapsedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(nodeId)) {
+        next.delete(nodeId);
+      } else {
+        next.add(nodeId);
+      }
+      return next;
+    });
+  }, []);
   const canModifyStructure = canManage && currentUser?.role === "super_admin";
   const assignedUserIds = useMemo(
     () => new Set(allAssignments.filter((assignment) => assignment.active).map((assignment) => assignment.user_id)),
@@ -1857,7 +2003,7 @@ export function OrganigrammaWorkspace() {
     if (event.shiftKey) {
       // Shift+drag on the background: marquee selection instead of panning.
       event.preventDefault();
-      const visibleNodes = flattenTree(roots);
+      const visibleNodes = flattenTree(schemaRoots);
       const bounds = computeSchemaCanvasBounds(visibleNodes);
       const scale = Math.max(schemaScale, 0.01);
       const viewportRect = viewport.getBoundingClientRect();
@@ -1929,7 +2075,7 @@ export function OrganigrammaWorkspace() {
 
     window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("mouseup", handleMouseUp);
-  }, [roots, schemaScale]);
+  }, [schemaRoots, schemaScale]);
 
   const handleTreeZoomWheel = useCallback((event: WheelEvent) => {
     if (!event.ctrlKey) return;
@@ -1975,6 +2121,8 @@ export function OrganigrammaWorkspace() {
     });
   }, []);
 
+  // `loading` is a dependency because on first mount the workspace renders the
+  // loading placeholder: the viewport refs only exist after loading completes.
   useEffect(() => {
     const viewport = treeViewportRef.current;
     if (!viewport) return;
@@ -1983,7 +2131,7 @@ export function OrganigrammaWorkspace() {
     };
     viewport.addEventListener("wheel", listener, { passive: false });
     return () => viewport.removeEventListener("wheel", listener);
-  }, [handleTreeZoomWheel, view]);
+  }, [handleTreeZoomWheel, view, loading]);
 
   useEffect(() => {
     const viewport = schemaViewportRef.current;
@@ -1993,7 +2141,7 @@ export function OrganigrammaWorkspace() {
     };
     viewport.addEventListener("wheel", listener, { passive: false });
     return () => viewport.removeEventListener("wheel", listener);
-  }, [handleSchemaZoomWheel, view]);
+  }, [handleSchemaZoomWheel, view, loading]);
 
   if (loading) {
     return <div className="rounded-2xl border border-[#e6ebe5] bg-white p-8 text-center text-[13px] text-[#5f6d61]">Caricamento organigramma…</div>;
@@ -2287,10 +2435,14 @@ export function OrganigrammaWorkspace() {
         <div className="grid grid-cols-1 items-start gap-5 xl:grid-cols-[minmax(0,1fr)_380px]">
           <div className="min-w-0 overflow-hidden">
             <SchemaBoard
-              tree={roots}
+              tree={schemaRoots}
               selectedId={selectedId}
               multiSelectedIds={multiSelectedIds}
               marquee={schemaMarquee}
+              collapsedIds={schemaCollapsedIds}
+              collapsedPreview={collapsedPreview}
+              onToggleCollapse={toggleSchemaCollapse}
+              onExpandAll={() => setSchemaCollapsedIds(new Set())}
               onSelect={handleSchemaCardSelect}
               onOpenPerson={setDrawerUserId}
               draggingUserId={draggingUserId}
@@ -2427,6 +2579,21 @@ export function OrganigrammaWorkspace() {
                 className="rounded-xl px-3 py-2 text-left text-[12.5px] font-medium text-[#0d7a66] hover:bg-[#e2f4f1]"
               >
                 Seleziona sottoalbero ({schemaMeta.get(schemaContextNode.id)?.descendantIds.size} blocchi)
+              </button>
+            ) : null}
+            {(schemaMeta.get(schemaContextNode.id)?.descendantIds.size ?? 0) > 1 || schemaCollapsedIds.has(schemaContextNode.id) ? (
+              <button
+                type="button"
+                onClick={() => {
+                  const nodeId = schemaContextNode.id;
+                  setSchemaContextMenu(null);
+                  toggleSchemaCollapse(nodeId);
+                }}
+                className="rounded-xl px-3 py-2 text-left text-[12.5px] font-medium text-[#0d7a66] hover:bg-[#e2f4f1]"
+              >
+                {schemaCollapsedIds.has(schemaContextNode.id)
+                  ? "Esplodi sottoalbero"
+                  : `Raggruppa sottoalbero (${(schemaMeta.get(schemaContextNode.id)?.descendantIds.size ?? 1) - 1} blocchi)`}
               </button>
             ) : null}
             <button

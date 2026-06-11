@@ -107,6 +107,17 @@ Interazioni della vista Schema (modifiche riservate a `Abilita modifica`):
   seleziona tutti i blocchi al suo interno
 - tasto destro su una card con figli: "Seleziona sottoalbero (N blocchi)"
   seleziona il blocco e tutti i discendenti (es. per spostare un ramo intero)
+- raggruppamento: il pulsante "Raggruppa" sulla card (o la voce contestuale
+  "Raggruppa sottoalbero") nasconde l'intero sotto-albero dentro il blocco,
+  mostrato con bordo tratteggiato ed effetto pila; "Esplodi (+N)" lo riapre e
+  "Esplodi tutto" in toolbar riapre tutti i gruppi. Solo visualizzazione:
+  gerarchia e posizioni non vengono toccate
+- auto-raggruppamento (stile MyHeritage): se i blocchi visibili superano la
+  soglia (12), i livelli sotto radici+figli partono compressi; l'espansione e
+  progressiva, un livello alla volta. Hover su un gruppo compresso: tooltip
+  con recap (unita, persone, prime unita figlie) e pulsante "Esplodi". La
+  soglia/profondita sono `SCHEMA_AUTO_GROUP_THRESHOLD` e
+  `SCHEMA_AUTO_GROUP_DEPTH` nel workspace
 - ogni blocco ha un solo padre; un padre puo avere n figli
 - dopo le mutazioni il refresh e silenzioso (albero, assegnazioni e dettaglio
   aggiornati in place, pan/zoom preservati)

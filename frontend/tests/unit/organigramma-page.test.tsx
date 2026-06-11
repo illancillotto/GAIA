@@ -359,6 +359,67 @@ describe("Organigramma page", () => {
     expect(await screen.findByText(/2 blocchi selezionati/i)).toBeInTheDocument();
   });
 
+  test("collapses and expands a subtree from the card toggle", async () => {
+    render(<OrganigrammaPage />);
+
+    expect(await screen.findByText("Schema organigramma")).toBeInTheDocument();
+    expect(await screen.findByTestId("schema-node-u2")).toBeInTheDocument();
+
+    const parentNode = await screen.findByTestId("schema-node-u1");
+    fireEvent.click(within(parentNode).getByRole("button", { name: "Raggruppa" }));
+
+    expect(screen.queryByTestId("schema-node-u2")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Esplodi tutto \(1\)/i })).toBeInTheDocument();
+
+    fireEvent.click(within(parentNode).getByRole("button", { name: /Esplodi \(\+1\)/i }));
+    expect(await screen.findByTestId("schema-node-u2")).toBeInTheDocument();
+  });
+
+  test("shows a recap tooltip on collapsed groups and expands from it", async () => {
+    render(<OrganigrammaPage />);
+
+    expect(await screen.findByText("Schema organigramma")).toBeInTheDocument();
+
+    const parentNode = await screen.findByTestId("schema-node-u1");
+    fireEvent.click(within(parentNode).getByRole("button", { name: "Raggruppa" }));
+    expect(screen.queryByTestId("schema-node-u2")).not.toBeInTheDocument();
+
+    // Recap tooltip content is rendered (visible on hover via CSS).
+    const tooltipTitle = screen.getByText(/Gruppo compresso/i);
+    const tooltip = tooltipTitle.parentElement!;
+    expect(within(tooltip).getByText("Settore Idraulico")).toBeInTheDocument();
+    expect(tooltip.textContent).toMatch(/1.*unità/i);
+
+    fireEvent.click(screen.getByRole("button", { name: "Esplodi" }));
+    expect(await screen.findByTestId("schema-node-u2")).toBeInTheDocument();
+  });
+
+  test("auto-groups deep levels when the visible tree is large", async () => {
+    const distretti = (sectorId: string) =>
+      Array.from({ length: 4 }, (_, index) =>
+        treeNode(`${sectorId}-d${index}`, `Distretto ${sectorId}-${index}`, "distretto", sectorId),
+      );
+    const settori = Array.from({ length: 3 }, (_, index) => {
+      const id = `s${index}`;
+      return treeNode(id, `Settore ${index}`, "settore", "root", distretti(id));
+    });
+    const bigTree = treeNode("root", "Direzione Grande", "direzione", null, settori);
+    mocks.getOrgTree.mockResolvedValue([bigTree]);
+
+    render(<OrganigrammaPage />);
+
+    expect(await screen.findByText("Schema organigramma")).toBeInTheDocument();
+    // Roots and sectors are visible, the distretti below are auto-grouped.
+    expect(await screen.findByTestId("schema-node-s0")).toBeInTheDocument();
+    expect(screen.queryByTestId("schema-node-s0-d0")).not.toBeInTheDocument();
+    expect(within(screen.getByTestId("schema-node-s0")).getByRole("button", { name: /Esplodi \(\+4\)/i })).toBeInTheDocument();
+
+    // Expanding one group reveals its distretti.
+    fireEvent.click(within(screen.getByTestId("schema-node-s0")).getByRole("button", { name: /Esplodi \(\+4\)/i }));
+    expect(await screen.findByTestId("schema-node-s0-d0")).toBeInTheDocument();
+    expect(screen.queryByTestId("schema-node-s1-d0")).not.toBeInTheDocument();
+  });
+
   test("selects a whole subtree from the context menu", async () => {
     render(<OrganigrammaPage />);
 
