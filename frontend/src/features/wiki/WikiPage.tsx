@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
-import { createWikiRequest, getMyWikiRequests } from "@/lib/api";
+import { createWikiRequest, getMyWikiRequests, request } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/cn";
 import { buildWikiRequestPayload, buildWikiSupportHref } from "./request-support";
@@ -11,15 +11,11 @@ import { EvidenceBadge, ModeBadge, ToolCallBadge } from "./message-metadata";
 import type { WikiArticleGroup, WikiChatMessage, WikiRequest } from "./types";
 import { useWikiChat } from "./useWikiChat";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
-
 async function fetchArticles(): Promise<WikiArticleGroup[]> {
   const token = getStoredAccessToken();
-  const res = await fetch(`${API_BASE}/api/wiki/articles`, {
+  return request<WikiArticleGroup[]>("/wiki/articles", {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
-  if (!res.ok) return [];
-  return res.json();
 }
 
 function formatArticleLabel(sourceFile: string): string {

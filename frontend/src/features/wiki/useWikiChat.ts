@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { getStoredAccessToken } from "@/lib/auth";
 import { getApiBaseUrl } from "@/lib/api";
@@ -87,9 +87,11 @@ async function fetchWikiChat(
   question: string,
   context_article?: string,
   conversation_id?: string | null,
+  signal?: AbortSignal,
 ): Promise<WikiChatResponse> {
   const res = await fetch(getWikiApiPath("/wiki/chat"), {
     method: "POST",
+    signal,
     headers: {
       "Content-Type": "application/json",
       ...getWikiAuthHeaders(),
@@ -110,9 +112,11 @@ async function streamWikiChat(
   context_article: string | undefined,
   conversation_id: string | null | undefined,
   onChunk: (chunk: WikiChatStreamChunk) => void,
+  signal?: AbortSignal,
 ): Promise<void> {
   const res = await fetch(getWikiApiPath("/wiki/chat/stream"), {
     method: "POST",
+    signal,
     headers: {
       "Content-Type": "application/json",
       ...getWikiAuthHeaders(),
@@ -204,7 +208,8 @@ async function fetchWikiConversations(params: {
     headers: getWikiAuthHeaders(),
   });
   if (!res.ok) {
-    return [];
+    const err = await res.json().catch(() => ({}));
+    throw new Error(parseWikiErrorMessage(err, `Errore ${res.status}`));
   }
   return res.json();
 }
@@ -229,6 +234,12 @@ export function useWikiChat(contextArticle?: string, initialConversationId?: str
   const [conversations, setConversations] = useState<WikiConversationSummary[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const activeStreamControllerRef = useRef<AbortController | null>(null);
+
+  const cancelActiveStream = useCallback(() => {
+    activeStreamControllerRef.current?.abort();
+    activeStreamControllerRef.current = null;
+  }, []);
 
   const reloadConversations = useCallback(async (params?: {
     search?: string | null;
@@ -236,11 +247,17 @@ export function useWikiChat(contextArticle?: string, initialConversationId?: str
     context_article?: string | null;
     limit?: number;
   }) => {
-    const items = await fetchWikiConversations(params);
-    setConversations(items);
+    try {
+      const items = await fetchWikiConversations(params);
+      setConversations(items);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Errore caricamento conversazioni Wiki";
+      setError(message);
+    }
   }, []);
 
   const loadConversation = useCallback(async (targetConversationId: string) => {
+    cancelActiveStream();
     setLoading(true);
     setError(null);
     try {
@@ -253,11 +270,17 @@ export function useWikiChat(contextArticle?: string, initialConversationId?: str
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [cancelActiveStream]);
 
   useEffect(() => {
     void reloadConversations();
   }, [reloadConversations]);
+
+  useEffect(() => {
+    return () => {
+      cancelActiveStream();
+    };
+  }, [cancelActiveStream]);
 
   useEffect(() => {
     if (initialConversationId) {
@@ -268,6 +291,7 @@ export function useWikiChat(contextArticle?: string, initialConversationId?: str
   const sendMessage = useCallback(
     async (question: string) => {
       if (!question.trim() || loading) return;
+      cancelActiveStream();
 
       const userMsg: WikiChatMessage = {
         id: generateUuid(),
@@ -293,6 +317,9 @@ export function useWikiChat(contextArticle?: string, initialConversationId?: str
       setError(null);
 
       try {
+        const streamController = new AbortController();
+        activeStreamControllerRef.current = streamController;
+
         const patchAssistant = (patch: Partial<WikiChatMessage> | ((message: WikiChatMessage) => WikiChatMessage)) => {
           setMessages((prev) =>
             prev.map((message) => {
@@ -309,6 +336,9 @@ export function useWikiChat(contextArticle?: string, initialConversationId?: str
 
         try {
           await streamWikiChat(question.trim(), contextArticle, conversationId, (chunk) => {
+            if (streamController.signal.aborted) {
+              return;
+            }
             if (chunk.event === "meta") {
               patchAssistant({
                 mode: chunk.data.mode,
@@ -342,13 +372,19 @@ export function useWikiChat(contextArticle?: string, initialConversationId?: str
                 setConversationId(chunk.data.conversation_id);
               }
             }
-          });
+          }, streamController.signal);
         } catch (streamError) {
+          if (streamController.signal.aborted) {
+            return;
+          }
           if (!(streamError instanceof WikiStreamUnavailableError)) {
             throw streamError;
           }
 
-          const response = await fetchWikiChat(question.trim(), contextArticle, conversationId);
+          const response = await fetchWikiChat(question.trim(), contextArticle, conversationId, streamController.signal);
+          if (streamController.signal.aborted) {
+            return;
+          }
           patchAssistant({
             content: response.answer,
             sources: response.sources,
@@ -364,6 +400,9 @@ export function useWikiChat(contextArticle?: string, initialConversationId?: str
         }
         void reloadConversations();
       } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") {
+          return;
+        }
         const message = err instanceof Error ? err.message : "Errore sconosciuto";
         setError(message);
         setMessages((prev) =>
@@ -378,17 +417,19 @@ export function useWikiChat(contextArticle?: string, initialConversationId?: str
           ),
         );
       } finally {
+        activeStreamControllerRef.current = null;
         setLoading(false);
       }
     },
-    [contextArticle, conversationId, loading, reloadConversations]
+    [cancelActiveStream, contextArticle, conversationId, loading, reloadConversations]
   );
 
   const clearMessages = useCallback(() => {
+    cancelActiveStream();
     setMessages([]);
     setConversationId(null);
     setError(null);
-  }, []);
+  }, [cancelActiveStream]);
 
   return {
     messages,

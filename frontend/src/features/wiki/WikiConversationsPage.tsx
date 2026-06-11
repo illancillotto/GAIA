@@ -5,12 +5,10 @@ import { useEffect, useMemo, useState } from "react";
 import { EmptyState } from "@/components/ui/empty-state";
 import { SearchIcon } from "@/components/ui/icons";
 import { buildWikiContextHref } from "./context-links";
-import { getWikiToolAuditLogs, resolveWikiConversationContextLink } from "@/lib/api";
+import { getCurrentUser, getWikiToolAuditLogs, request, resolveWikiConversationContextLink } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import type { CurrentUser, WikiToolAuditLog } from "@/types/api";
 import type { WikiConversation, WikiConversationContextLink, WikiConversationSummary, WikiConversationSummaryMetrics } from "./types";
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
 
 type StatusFilter = "all" | "open" | "in_review" | "waiting_user" | "resolved";
 type PriorityFilter = "all" | "low" | "medium" | "high";
@@ -20,14 +18,10 @@ type SortOption = "recent" | "oldest" | "denied" | "fallback" | "urgent";
 
 async function fetchCurrentUser(): Promise<CurrentUser> {
   const token = getStoredAccessToken();
-  const response = await fetch(`${API_BASE}/api/auth/me`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
-  });
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.detail ?? `Errore ${response.status}`);
+  if (!token) {
+    throw new Error("Sessione non disponibile.");
   }
-  return response.json();
+  return getCurrentUser(token);
 }
 
 async function fetchConversations(params: {
@@ -39,6 +33,9 @@ async function fetchConversations(params: {
   reviewFilter: ReviewFilter;
 }): Promise<WikiConversationSummary[]> {
   const token = getStoredAccessToken();
+  if (!token) {
+    throw new Error("Sessione non disponibile.");
+  }
   const query = new URLSearchParams({ limit: "100" });
   if (params.search.trim()) query.set("search", params.search.trim());
   if (params.status !== "all") query.set("status", params.status);
@@ -47,38 +44,29 @@ async function fetchConversations(params: {
   if (params.reviewReason !== "all") query.set("review_reason", params.reviewReason);
   if (params.reviewFilter === "needs_review") query.set("needs_review", "true");
   if (params.reviewFilter === "clean") query.set("needs_review", "false");
-  const response = await fetch(`${API_BASE}/api/wiki/conversations?${query.toString()}`, {
+  return request<WikiConversationSummary[]>(`/wiki/conversations?${query.toString()}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.detail ?? `Errore ${response.status}`);
-  }
-  return response.json();
 }
 
 async function fetchConversationSummary(): Promise<WikiConversationSummaryMetrics> {
   const token = getStoredAccessToken();
-  const response = await fetch(`${API_BASE}/api/wiki/conversations/summary`, {
+  if (!token) {
+    throw new Error("Sessione non disponibile.");
+  }
+  return request<WikiConversationSummaryMetrics>("/wiki/conversations/summary", {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.detail ?? `Errore ${response.status}`);
-  }
-  return response.json();
 }
 
 async function fetchConversationDetail(conversationId: string): Promise<WikiConversation> {
   const token = getStoredAccessToken();
-  const response = await fetch(`${API_BASE}/api/wiki/conversations/${conversationId}`, {
+  if (!token) {
+    throw new Error("Sessione non disponibile.");
+  }
+  return request<WikiConversation>(`/wiki/conversations/${conversationId}`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.detail ?? `Errore ${response.status}`);
-  }
-  return response.json();
 }
 
 async function patchConversation(
@@ -86,7 +74,10 @@ async function patchConversation(
   payload: Partial<Pick<WikiConversationSummary, "status" | "priority" | "assigned_to">>,
 ): Promise<void> {
   const token = getStoredAccessToken();
-  const response = await fetch(`${API_BASE}/api/wiki/conversations/${conversationId}`, {
+  if (!token) {
+    throw new Error("Sessione non disponibile.");
+  }
+  await request<WikiConversation>(`/wiki/conversations/${conversationId}`, {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
@@ -94,10 +85,6 @@ async function patchConversation(
     },
     body: JSON.stringify(payload),
   });
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err.detail ?? `Errore ${response.status}`);
-  }
 }
 
 function formatDate(value: string | null | undefined): string {
