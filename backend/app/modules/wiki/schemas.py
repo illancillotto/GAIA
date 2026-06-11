@@ -87,6 +87,17 @@ class WikiRequestCreate(BaseModel):
     expected_behavior: str | None = None
 
 
+class WikiRequestArtifactRead(BaseModel):
+    id: uuid.UUID
+    request_id: uuid.UUID
+    artifact_type: Literal["screenshot", "ui_snapshot", "screenshot_meta"] | str
+    filename: str | None = None
+    mime_type: str | None = None
+    payload: dict[str, object] | None = None
+    created_by: str | None = None
+    created_at: datetime
+
+
 class WikiRequestRead(BaseModel):
     id: uuid.UUID
     user_question: str

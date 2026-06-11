@@ -116,6 +116,12 @@ Il modulo **Wiki Agent** aggiunge a GAIA un assistente LLM sempre disponibile, c
   - conversazione Wiki sorgente
   - eventuale articolo/documento di contesto
   - risposta agente già vista dall'utente
+- Quando l’operatore apre una richiesta da Wiki/supporto, il sistema prova anche a salvare un **freeze frame del caso**:
+  - screenshot della pagina corrente
+  - snapshot UI strutturato con path, heading, parametri URL, viewport, scroll e stato form visibile
+  - snapshot tipizzato per modulo (`operazioni`, `catasto`, `rete`, `utenze`) con identificativo entità, route, filtri e contesto operativo principale
+  - redazione preventiva di dati sensibili nello snapshot e nello screenshot (email, telefoni, CF/P.IVA, token e campi marcati sensibili)
+  - i due artifact vengono allegati alla richiesta per facilitare analisi, fix e sviluppo della feature
 
 ### 4.6 Inbox supporto admin
 
@@ -134,6 +140,7 @@ Il modulo **Wiki Agent** aggiunge a GAIA un assistente LLM sempre disponibile, c
   - modulo e pagina
   - timeline degli eventi
   - note operative
+  - snapshot del caso con preview screenshot, riepilogo contesto modulo e download artifact originali
 
 ### 4.7 Timeline eventi richieste
 

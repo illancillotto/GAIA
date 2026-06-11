@@ -3,17 +3,21 @@ import json
 import re
 import uuid
 from datetime import datetime, timezone
+from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
+from app.core.config import settings
 from app.core.database import get_db
 from app.models.application_user import ApplicationUser
-from app.modules.wiki.models import WikiRequest, WikiRequestEvent
+from app.modules.wiki.models import WikiRequest, WikiRequestArtifact, WikiRequestEvent
 from app.modules.wiki.schemas import (
     WikiMyRequestsSummaryRead,
     WikiRequestAssigneeRead,
+    WikiRequestArtifactRead,
     WikiRequestCreate,
     WikiRequestDuplicateCandidateRead,
     WikiRequestFamilyRead,
@@ -303,8 +307,204 @@ def _get_request_or_404(db: Session, request_id: uuid.UUID) -> WikiRequest:
     return req
 
 
+def _get_request_artifact_or_404(db: Session, artifact_id: uuid.UUID) -> WikiRequestArtifact:
+    artifact = db.query(WikiRequestArtifact).filter(WikiRequestArtifact.id == artifact_id).first()
+    if not artifact:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Artifact richiesta non trovato.")
+    return artifact
+
+
 def _now_utc() -> datetime:
     return datetime.now(timezone.utc)
+
+
+def _require_request_access(req: WikiRequest, current_user: ApplicationUser) -> None:
+    if current_user.role not in ("admin", "super_admin") and req.created_by != current_user.username:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accesso negato.")
+
+
+def _safe_json_loads(raw_value: str | None, *, field_name: str) -> dict[str, object] | None:
+    if raw_value is None or not raw_value.strip():
+        return None
+    try:
+        parsed = json.loads(raw_value)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"Formato JSON non valido per {field_name}.",
+        ) from exc
+    if not isinstance(parsed, dict):
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=f"{field_name} deve essere un oggetto JSON.",
+        )
+    return parsed
+
+
+def _coerce_request_form_payload(payload_json: str) -> WikiRequestCreate:
+    try:
+        raw_payload = json.loads(payload_json)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Payload richiesta non valido.") from exc
+    if not isinstance(raw_payload, dict):
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Payload richiesta non valido.")
+    return WikiRequestCreate.model_validate(raw_payload)
+
+
+def _serialize_wiki_request_artifact(item: WikiRequestArtifact) -> WikiRequestArtifactRead:
+    payload: dict[str, object] | None = None
+    if item.payload_json:
+        try:
+            parsed = json.loads(item.payload_json)
+            if isinstance(parsed, dict):
+                payload = parsed
+        except json.JSONDecodeError:
+            payload = None
+    return WikiRequestArtifactRead(
+        id=item.id,
+        request_id=item.request_id,
+        artifact_type=item.artifact_type,
+        filename=item.filename,
+        mime_type=item.mime_type,
+        payload=payload,
+        created_by=item.created_by,
+        created_at=item.created_at,
+    )
+
+
+def _build_request_from_payload(payload: WikiRequestCreate, *, current_user: ApplicationUser) -> WikiRequest:
+    return WikiRequest(
+        id=uuid.uuid4(),
+        user_question=payload.user_question,
+        agent_response=payload.agent_response,
+        category=payload.category,
+        request_type=payload.request_type or _derive_request_type_from_category(payload.category),
+        status="new",
+        priority="medium",
+        severity=payload.severity,
+        created_by=current_user.username,
+        module_key=payload.module_key,
+        page_path=payload.page_path,
+        source_channel=payload.source_channel,
+        impact_scope=payload.impact_scope,
+        conversation_id=payload.conversation_id,
+        context_article=payload.context_article,
+        context_entity_key=payload.context_entity_key,
+        dedupe_key=_build_request_dedupe_key(
+            request_type=payload.request_type or _derive_request_type_from_category(payload.category),
+            module_key=payload.module_key,
+            page_path=payload.page_path,
+            context_entity_key=payload.context_entity_key,
+            user_question=payload.user_question,
+        ),
+        desired_outcome=payload.desired_outcome,
+        observed_behavior=payload.observed_behavior,
+        expected_behavior=payload.expected_behavior,
+    )
+
+
+def _append_created_event(db: Session, *, req: WikiRequest, payload: WikiRequestCreate, actor_username: str) -> None:
+    _append_request_event(
+        db,
+        request_id=req.id,
+        event_type="created",
+        actor_username=actor_username,
+        to_status="new",
+        payload={
+            "category": payload.category,
+            "request_type": payload.request_type or _derive_request_type_from_category(payload.category),
+            "source_channel": payload.source_channel,
+            "module_key": payload.module_key,
+            "severity": payload.severity,
+        },
+    )
+
+
+def _store_wiki_request_artifact_file(
+    *,
+    request_id: uuid.UUID,
+    artifact_id: uuid.UUID,
+    upload: UploadFile,
+) -> tuple[str, str | None, str | None]:
+    artifact_root = Path(settings.wiki_request_artifacts_path).expanduser() / str(request_id)
+    artifact_root.mkdir(parents=True, exist_ok=True)
+    suffix = Path(upload.filename or "").suffix or ".bin"
+    filename = f"{artifact_id}{suffix}"
+    storage_path = artifact_root / filename
+    file_bytes = upload.file.read()
+    storage_path.write_bytes(file_bytes)
+    return str(storage_path), upload.filename, upload.content_type
+
+
+def _create_request_artifacts(
+    db: Session,
+    *,
+    req: WikiRequest,
+    current_user: ApplicationUser,
+    screenshot: UploadFile | None,
+    screenshot_meta: dict[str, object] | None,
+    ui_snapshot: dict[str, object] | None,
+) -> None:
+    artifacts_created = 0
+
+    if screenshot is not None:
+        artifact_id = uuid.uuid4()
+        storage_path, original_filename, mime_type = _store_wiki_request_artifact_file(
+            request_id=req.id,
+            artifact_id=artifact_id,
+            upload=screenshot,
+        )
+        db.add(
+            WikiRequestArtifact(
+                id=artifact_id,
+                request_id=req.id,
+                artifact_type="screenshot",
+                filename=original_filename,
+                mime_type=mime_type,
+                storage_path=storage_path,
+                created_by=current_user.username,
+            )
+        )
+        artifacts_created += 1
+
+    if screenshot_meta:
+        db.add(
+            WikiRequestArtifact(
+                id=uuid.uuid4(),
+                request_id=req.id,
+                artifact_type="screenshot_meta",
+                mime_type="application/json",
+                payload_json=json.dumps(screenshot_meta, ensure_ascii=True),
+                created_by=current_user.username,
+            )
+        )
+        artifacts_created += 1
+
+    if ui_snapshot:
+        db.add(
+            WikiRequestArtifact(
+                id=uuid.uuid4(),
+                request_id=req.id,
+                artifact_type="ui_snapshot",
+                mime_type="application/json",
+                payload_json=json.dumps(ui_snapshot, ensure_ascii=True),
+                created_by=current_user.username,
+            )
+        )
+        artifacts_created += 1
+
+    if artifacts_created:
+        _append_request_event(
+            db,
+            request_id=req.id,
+            event_type="snapshot_captured",
+            actor_username=current_user.username,
+            payload={
+                "artifacts_created": artifacts_created,
+                "has_screenshot": screenshot is not None,
+                "has_ui_snapshot": ui_snapshot is not None,
+            },
+        )
 
 
 def _linked_duplicate_candidates(db: Session, canonical_request_id: uuid.UUID) -> list[WikiRequestDuplicateCandidateRead]:
@@ -360,52 +560,42 @@ def create_wiki_request(
     current_user: ApplicationUser = Depends(get_current_user),
 ) -> WikiRequestRead:
     """Salva una richiesta utente (feature non implementata o domanda senza risposta)."""
-    req = WikiRequest(
-        id=uuid.uuid4(),
-        user_question=payload.user_question,
-        agent_response=payload.agent_response,
-        category=payload.category,
-        request_type=payload.request_type or _derive_request_type_from_category(payload.category),
-        status="new",
-        priority="medium",
-        severity=payload.severity,
-        created_by=current_user.username,
-        module_key=payload.module_key,
-        page_path=payload.page_path,
-        source_channel=payload.source_channel,
-        impact_scope=payload.impact_scope,
-        conversation_id=payload.conversation_id,
-        context_article=payload.context_article,
-        context_entity_key=payload.context_entity_key,
-        dedupe_key=_build_request_dedupe_key(
-            request_type=payload.request_type or _derive_request_type_from_category(payload.category),
-            module_key=payload.module_key,
-            page_path=payload.page_path,
-            context_entity_key=payload.context_entity_key,
-            user_question=payload.user_question,
-        ),
-        desired_outcome=payload.desired_outcome,
-        observed_behavior=payload.observed_behavior,
-        expected_behavior=payload.expected_behavior,
-    )
+    req = _build_request_from_payload(payload, current_user=current_user)
     db.add(req)
-    _append_request_event(
-        db,
-        request_id=req.id,
-        event_type="created",
-        actor_username=current_user.username,
-        to_status="new",
-        payload={
-            "category": payload.category,
-            "request_type": payload.request_type or _derive_request_type_from_category(payload.category),
-            "source_channel": payload.source_channel,
-            "module_key": payload.module_key,
-            "severity": payload.severity,
-        },
-    )
+    _append_created_event(db, req=req, payload=payload, actor_username=current_user.username)
     db.commit()
     db.refresh(req)
     logger.info("WikiRequest creata: id=%s user=%s", req.id, current_user.username)
+    return _serialize_wiki_request_read(db, req)
+
+
+@router.post("/requests/with-artifacts", response_model=WikiRequestRead, status_code=status.HTTP_201_CREATED)
+def create_wiki_request_with_artifacts(
+    payload_json: str = Form(...),
+    screenshot_meta_json: str | None = Form(None),
+    ui_snapshot_json: str | None = Form(None),
+    screenshot: UploadFile | None = File(None),
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(get_current_user),
+) -> WikiRequestRead:
+    payload = _coerce_request_form_payload(payload_json)
+    screenshot_meta = _safe_json_loads(screenshot_meta_json, field_name="screenshot_meta_json")
+    ui_snapshot = _safe_json_loads(ui_snapshot_json, field_name="ui_snapshot_json")
+
+    req = _build_request_from_payload(payload, current_user=current_user)
+    db.add(req)
+    _append_created_event(db, req=req, payload=payload, actor_username=current_user.username)
+    _create_request_artifacts(
+        db,
+        req=req,
+        current_user=current_user,
+        screenshot=screenshot,
+        screenshot_meta=screenshot_meta,
+        ui_snapshot=ui_snapshot,
+    )
+    db.commit()
+    db.refresh(req)
+    logger.info("WikiRequest con artifact creata: id=%s user=%s", req.id, current_user.username)
     return _serialize_wiki_request_read(db, req)
 
 
@@ -573,9 +763,45 @@ def get_wiki_request(
     current_user: ApplicationUser = Depends(get_current_user),
 ) -> WikiRequestRead:
     req = _get_request_or_404(db, request_id)
-    if current_user.role not in ("admin", "super_admin") and req.created_by != current_user.username:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accesso negato.")
+    _require_request_access(req, current_user)
     return _serialize_wiki_request_read(db, req)
+
+
+@router.get("/requests/{request_id}/artifacts", response_model=list[WikiRequestArtifactRead])
+def list_wiki_request_artifacts(
+    request_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(get_current_user),
+) -> list[WikiRequestArtifactRead]:
+    req = _get_request_or_404(db, request_id)
+    _require_request_access(req, current_user)
+    items = (
+        db.query(WikiRequestArtifact)
+        .filter(WikiRequestArtifact.request_id == request_id)
+        .order_by(WikiRequestArtifact.created_at.desc())
+        .all()
+    )
+    return [_serialize_wiki_request_artifact(item) for item in items]
+
+
+@router.get("/requests/{request_id}/artifacts/{artifact_id}/download")
+def download_wiki_request_artifact(
+    request_id: uuid.UUID,
+    artifact_id: uuid.UUID,
+    db: Session = Depends(get_db),
+    current_user: ApplicationUser = Depends(get_current_user),
+):
+    req = _get_request_or_404(db, request_id)
+    _require_request_access(req, current_user)
+    artifact = _get_request_artifact_or_404(db, artifact_id)
+    if artifact.request_id != request_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Artifact richiesta non trovato.")
+    if not artifact.storage_path:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Artifact binario non disponibile.")
+    path = Path(artifact.storage_path)
+    if not path.exists():
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="File artifact non trovato.")
+    return FileResponse(path, media_type=artifact.mime_type or "application/octet-stream", filename=artifact.filename or path.name)
 
 
 @router.post("/requests/{request_id}/mark-viewed", response_model=WikiRequestRead)
@@ -585,8 +811,7 @@ def mark_wiki_request_viewed(
     current_user: ApplicationUser = Depends(get_current_user),
 ) -> WikiRequestRead:
     req = _get_request_or_404(db, request_id)
-    if current_user.role not in ("admin", "super_admin") and req.created_by != current_user.username:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accesso negato.")
+    _require_request_access(req, current_user)
 
     req.user_last_viewed_at = _now_utc()
     _append_request_event(
@@ -608,8 +833,7 @@ def reopen_wiki_request(
     current_user: ApplicationUser = Depends(get_current_user),
 ) -> WikiRequestRead:
     req = _get_request_or_404(db, request_id)
-    if current_user.role not in ("admin", "super_admin") and req.created_by != current_user.username:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accesso negato.")
+    _require_request_access(req, current_user)
 
     current_status = _legacy_status_to_workflow(req.status)
     if current_status not in {"resolved", "duplicate", "rejected", "planned", "waiting_user"}:
@@ -841,8 +1065,7 @@ def update_wiki_request_feedback(
     current_user: ApplicationUser = Depends(get_current_user),
 ) -> WikiRequestRead:
     req = _get_request_or_404(db, request_id)
-    if current_user.role not in ("admin", "super_admin") and req.created_by != current_user.username:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Accesso negato.")
+    _require_request_access(req, current_user)
 
     req.user_feedback_rating = payload.rating
     req.user_feedback_notes = payload.notes

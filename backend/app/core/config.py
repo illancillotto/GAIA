@@ -250,6 +250,10 @@ class Settings(BaseSettings):
     wiki_review_no_match_repeated_threshold: int = Field(default=2, alias="WIKI_REVIEW_NO_MATCH_REPEATED_THRESHOLD")
     wiki_review_high_latency_ms_threshold: int = Field(default=1000, alias="WIKI_REVIEW_HIGH_LATENCY_MS_THRESHOLD")
     wiki_audit_retention_days: int = Field(default=365, alias="WIKI_AUDIT_RETENTION_DAYS")
+    wiki_request_artifacts_path: str = Field(
+        default=str(REPO_ROOT / "runtime-data" / "wiki" / "request-artifacts"),
+        alias="WIKI_REQUEST_ARTIFACTS_PATH",
+    )
     wiki_telemetry_daily_retention_days: int = Field(default=365, alias="WIKI_TELEMETRY_DAILY_RETENTION_DAYS")
     wiki_telemetry_period_retention_days: int = Field(default=730, alias="WIKI_TELEMETRY_PERIOD_RETENTION_DAYS")
     network_gateway_arp_private_key_path: str | None = Field(default=None, alias="NETWORK_GATEWAY_ARP_PRIVATE_KEY_PATH")

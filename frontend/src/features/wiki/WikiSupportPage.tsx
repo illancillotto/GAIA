@@ -3,9 +3,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
-import { createWikiRequest, getMyWikiRequests, getMyWikiRequestsSummary, markWikiRequestViewed, reopenWikiRequest, updateWikiRequestFeedback } from "@/lib/api";
+import { createWikiRequestWithArtifacts, getMyWikiRequests, getMyWikiRequestsSummary, markWikiRequestViewed, reopenWikiRequest, updateWikiRequestFeedback } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
-import type { WikiMyRequestsSummary, WikiRequest } from "@/types/api";
+import { captureWikiRequestArtifacts, consumeWikiSupportDraft } from "./request-support";
+import type { WikiMyRequestsSummary, WikiRequest, WikiRequestCreateInput } from "@/types/api";
 
 type SupportIntent = "help_request" | "bug_report" | "feature_request" | "access_issue" | "data_issue" | "other_request";
 
@@ -178,7 +179,7 @@ export function WikiSupportPage() {
     setError(null);
     setSuccessMessage(null);
     try {
-      const created = await createWikiRequest(token, {
+      const payload: WikiRequestCreateInput = {
         user_question: question.trim(),
         agent_response: agentResponse.trim() || null,
         category: selectedType.category,
@@ -193,7 +194,10 @@ export function WikiSupportPage() {
         desired_outcome: desiredOutcome.trim() || null,
         observed_behavior: observedBehavior.trim() || null,
         expected_behavior: expectedBehavior.trim() || null,
-      });
+      };
+      const draftArtifacts = consumeWikiSupportDraft(searchParams.get("draft_id"));
+      const fallbackArtifacts = draftArtifacts ?? (await captureWikiRequestArtifacts());
+      const created = await createWikiRequestWithArtifacts(token, payload, fallbackArtifacts);
       setMyRequests((current) => [created, ...current.filter((item) => item.id !== created.id)]);
       setSelectedRequestId(created.id);
       setSummary((current) =>

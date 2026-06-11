@@ -87,6 +87,7 @@ from app.modules.wiki.models import (
     WikiConversationMetricsBackfillJob,
     WikiConversationMessage,
     WikiRequest,
+    WikiRequestArtifact,
     WikiTelemetryDailyMetric,
     WikiTelemetryPeriodMetric,
     WikiToolAuditLog,

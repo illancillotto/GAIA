@@ -3,10 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 
-import { createWikiRequest, getMyWikiRequests, getWikiArticles } from "@/lib/api";
+import { createWikiRequestWithArtifacts, getMyWikiRequests, getWikiArticles } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/cn";
-import { buildWikiRequestPayload, buildWikiSupportHref } from "./request-support";
+import { buildWikiRequestPayload, captureWikiRequestArtifacts, prepareWikiSupportHref } from "./request-support";
 import { EvidenceBadge, ModeBadge, ToolCallBadge } from "./message-metadata";
 import type { WikiArticleGroup, WikiChatMessage, WikiRequest } from "./types";
 import { useWikiChat } from "./useWikiChat";
@@ -55,6 +55,7 @@ function ChatPanel({
   error,
   onSend,
   onQuickRequest,
+  onOpenSupport,
 }: {
   pathname: string;
   contextArticle: string | undefined;
@@ -66,6 +67,7 @@ function ChatPanel({
   error: string | null;
   onSend: (q: string) => void;
   onQuickRequest: (intent: "help_request" | "bug_report" | "feature_request", answer: string) => void;
+  onOpenSupport: (intent: "help_request" | "bug_report" | "feature_request", answer: string) => void;
 }) {
   const [input, setInput] = useState("");
 
@@ -176,19 +178,13 @@ function ChatPanel({
                 >
                   Richiedi funzionalità
                 </button>
-                <a
-                  href={buildWikiSupportHref({
-                    intent: "help_request",
-                    pathname,
-                    contextArticle,
-                    conversationId: msg.conversationId ?? conversationId,
-                    messages,
-                    assistantAnswer: msg.content,
-                  })}
+                <button
+                  type="button"
+                  onClick={() => onOpenSupport("help_request", msg.content)}
                   className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:border-[#1D4E35] hover:text-[#1D4E35]"
                 >
                   Apri supporto completo
-                </a>
+                </button>
               </div>
             ) : null}
           </div>
@@ -321,9 +317,22 @@ export function WikiPage() {
       assistantAnswer: answer,
       sourceChannel: "wiki_page",
     });
-    const created = await createWikiRequest(token, payload);
+    const artifacts = await captureWikiRequestArtifacts();
+    const created = await createWikiRequestWithArtifacts(token, payload, artifacts);
     setMyRequests((current) => [created, ...current.filter((item) => item.id !== created.id)].slice(0, 5));
     setRequestSuccessMessage("Segnalazione registrata nel supporto Wiki.");
+  }
+
+  async function handleOpenSupport(intent: "help_request" | "bug_report" | "feature_request", answer: string) {
+    const href = await prepareWikiSupportHref({
+      intent,
+      pathname,
+      contextArticle: chatScope === "article" ? selected?.source_file : undefined,
+      conversationId,
+      messages,
+      assistantAnswer: answer,
+    });
+    window.location.href = href;
   }
 
   return (
@@ -361,6 +370,7 @@ export function WikiPage() {
             error={error}
             onSend={sendMessage}
             onQuickRequest={handleQuickRequest}
+            onOpenSupport={handleOpenSupport}
           />
           {requestSuccessMessage ? (
             <p className="mt-3 text-sm font-medium text-emerald-700">{requestSuccessMessage}</p>

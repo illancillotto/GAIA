@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 import { WikiRequestsPage } from "@/features/wiki/WikiRequestsPage";
@@ -6,10 +6,12 @@ import { WikiSupportAnalyticsPage } from "@/features/wiki/WikiSupportAnalyticsPa
 import { WikiSupportPage } from "@/features/wiki/WikiSupportPage";
 
 const mocks = vi.hoisted(() => ({
-  createWikiRequest: vi.fn(),
+  createWikiRequestWithArtifacts: vi.fn(),
   getMyWikiRequests: vi.fn(),
   getMyWikiRequestsSummary: vi.fn(),
   getStoredAccessToken: vi.fn(),
+  downloadWikiRequestArtifact: vi.fn(),
+  getWikiRequestArtifacts: vi.fn(),
   getWikiRequestAssignees: vi.fn(),
   getWikiRequestDuplicates: vi.fn(),
   getWikiRequestEvents: vi.fn(),
@@ -28,6 +30,8 @@ const mocks = vi.hoisted(() => ({
   updateWikiRequest: vi.fn(),
   updateWikiRequestFeedback: vi.fn(),
   useSearchParams: vi.fn(),
+  captureWikiRequestArtifacts: vi.fn(),
+  consumeWikiSupportDraft: vi.fn(),
 }));
 
 vi.mock("@/lib/auth", () => ({
@@ -35,9 +39,11 @@ vi.mock("@/lib/auth", () => ({
 }));
 
 vi.mock("@/lib/api", () => ({
-  createWikiRequest: mocks.createWikiRequest,
+  createWikiRequestWithArtifacts: mocks.createWikiRequestWithArtifacts,
+  downloadWikiRequestArtifact: mocks.downloadWikiRequestArtifact,
   getMyWikiRequests: mocks.getMyWikiRequests,
   getMyWikiRequestsSummary: mocks.getMyWikiRequestsSummary,
+  getWikiRequestArtifacts: mocks.getWikiRequestArtifacts,
   getWikiRequestAssignees: mocks.getWikiRequestAssignees,
   getWikiRequestDuplicates: mocks.getWikiRequestDuplicates,
   getWikiRequestEvents: mocks.getWikiRequestEvents,
@@ -57,14 +63,110 @@ vi.mock("@/lib/api", () => ({
   updateWikiRequestFeedback: mocks.updateWikiRequestFeedback,
 }));
 
+vi.mock("@/features/wiki/request-support", () => ({
+  captureWikiRequestArtifacts: mocks.captureWikiRequestArtifacts,
+  consumeWikiSupportDraft: mocks.consumeWikiSupportDraft,
+}));
+
 vi.mock("next/navigation", () => ({
   useSearchParams: mocks.useSearchParams,
 }));
 
 describe("Wiki support surfaces", () => {
   beforeEach(() => {
+    vi.stubGlobal("URL", {
+      ...URL,
+      createObjectURL: vi.fn(() => "blob:wiki-request"),
+      revokeObjectURL: vi.fn(),
+    });
     mocks.getStoredAccessToken.mockReturnValue("token");
     mocks.useSearchParams.mockReturnValue(new URLSearchParams());
+    mocks.captureWikiRequestArtifacts.mockResolvedValue({ uiSnapshot: { module_snapshot: { module: "wiki" } } });
+    mocks.consumeWikiSupportDraft.mockReturnValue(null);
+    mocks.downloadWikiRequestArtifact.mockResolvedValue(new Blob(["fake-image"], { type: "image/jpeg" }));
+    mocks.getWikiRequestArtifacts.mockResolvedValue([
+      {
+        id: "artifact-screen",
+        request_id: "req-1",
+        artifact_type: "screenshot",
+        filename: "screen.jpg",
+        mime_type: "image/jpeg",
+        payload: null,
+        created_by: "utente",
+        created_at: "2026-06-10T10:00:00Z",
+      },
+      {
+        id: "artifact-meta",
+        request_id: "req-1",
+        artifact_type: "screenshot_meta",
+        filename: null,
+        mime_type: "application/json",
+        payload: { capture_method: "svg_foreign_object", width: 1280 },
+        created_by: "utente",
+        created_at: "2026-06-10T10:00:00Z",
+      },
+      {
+        id: "artifact-ui",
+        request_id: "req-1",
+        artifact_type: "ui_snapshot",
+        filename: null,
+        mime_type: "application/json",
+        payload: {
+          module_snapshot: {
+            module: "operazioni",
+            route_type: "pratiche",
+            route_key: "operazioni/pratiche/123",
+            entity_id: "123",
+            active_tabs: ["Dettaglio"],
+            filters: { context: "miniapp", status: "open" },
+            entity: {
+              title: "Pratica operativa",
+              case_number: "CASE-123",
+              status: "In lavorazione",
+            },
+          },
+        },
+        created_by: "utente",
+        created_at: "2026-06-10T10:00:00Z",
+      },
+    ]);
+    mocks.createWikiRequestWithArtifacts.mockResolvedValue({
+      id: "req-created",
+      user_question: "Nuova richiesta",
+      agent_response: "Risposta agente",
+      category: "support_request",
+      request_type: "help_request",
+      status: "new",
+      priority: "medium",
+      severity: "medium",
+      created_by: "me",
+      assigned_to: null,
+      assigned_to_name: null,
+      module_key: "wiki",
+      page_path: "/wiki",
+      source_channel: "support_page",
+      impact_scope: "single_user",
+      conversation_id: "conv-created",
+      context_article: null,
+      context_entity_key: null,
+      dedupe_key: null,
+      canonical_request_id: null,
+      canonical_request_question: null,
+      canonical_request_status: null,
+      desired_outcome: null,
+      observed_behavior: null,
+      expected_behavior: null,
+      resolution_message: null,
+      last_admin_update_at: null,
+      user_last_viewed_at: null,
+      has_unread_update: false,
+      user_feedback_rating: null,
+      user_feedback_notes: null,
+      user_feedback_submitted_at: null,
+      admin_notes: null,
+      created_at: "2026-06-10T10:00:00Z",
+      updated_at: "2026-06-10T10:00:00Z",
+    });
 
     mocks.getWikiRequests.mockResolvedValue([
       {
@@ -297,12 +399,67 @@ describe("Wiki support surfaces", () => {
     });
   });
 
+  test("renders snapshot panel with contextual summary and technical details", async () => {
+    render(<WikiRequestsPage initialRequestId="req-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Snapshot del caso")).toBeInTheDocument();
+      expect(screen.getByText("Contesto modulo")).toBeInTheDocument();
+      expect(screen.getByText("Stato operativo catturato")).toBeInTheDocument();
+      expect(screen.getByText("Filtri e parametri attivi")).toBeInTheDocument();
+      expect(screen.getByText("CASE-123")).toBeInTheDocument();
+      expect(screen.getByText("Apri immagine")).toBeInTheDocument();
+      expect(screen.getByText("Dettagli tecnici snapshot")).toBeInTheDocument();
+    });
+  });
+
+  test("downloads screenshot artifact from request detail", async () => {
+    render(<WikiRequestsPage initialRequestId="req-1" />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Scarica screenshot" })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Scarica screenshot" }));
+
+    await waitFor(() => {
+      expect(mocks.downloadWikiRequestArtifact).toHaveBeenCalledWith("token", "req-1", "artifact-screen");
+    });
+  });
+
   test("renders support page with my requests", async () => {
     render(<WikiSupportPage />);
 
     await waitFor(() => {
       expect(screen.getByText("Supporto Wiki")).toBeInTheDocument();
       expect(screen.getByText("Mi serve supporto")).toBeInTheDocument();
+    });
+  });
+
+  test("support page submits via createWikiRequestWithArtifacts using draft artifacts when available", async () => {
+    mocks.useSearchParams.mockReturnValue(
+      new URLSearchParams("draft_id=draft-1&question=Serve%20supporto%20operativo&answer=Risposta%20Wiki&module_key=operazioni&page_path=%2Foperazioni%2Fpratiche%2F123"),
+    );
+    mocks.consumeWikiSupportDraft.mockReturnValue({
+      uiSnapshot: { module_snapshot: { module: "operazioni", entity_id: "123" } },
+    });
+
+    render(<WikiSupportPage />);
+
+    await waitFor(() => {
+      expect(screen.getByDisplayValue("Serve supporto operativo")).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "Registra segnalazione" }));
+
+    await waitFor(() => {
+      expect(mocks.createWikiRequestWithArtifacts).toHaveBeenCalledTimes(1);
+    });
+
+    expect(mocks.consumeWikiSupportDraft).toHaveBeenCalledWith("draft-1");
+    expect(mocks.captureWikiRequestArtifacts).not.toHaveBeenCalled();
+    expect(mocks.createWikiRequestWithArtifacts.mock.calls[0]?.[2]).toEqual({
+      uiSnapshot: { module_snapshot: { module: "operazioni", entity_id: "123" } },
     });
   });
 

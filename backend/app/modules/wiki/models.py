@@ -85,6 +85,27 @@ class WikiRequest(Base):
     updated_at = Column(DateTime, nullable=False, server_default=func.now(), onupdate=func.now())
 
 
+class WikiRequestArtifact(Base):
+    """Artifact allegati a una richiesta Wiki: screenshot e snapshot UI."""
+
+    __tablename__ = "wiki_request_artifacts"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    request_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("wiki_requests.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    artifact_type = Column(String(32), nullable=False, index=True)
+    filename = Column(String(255), nullable=True)
+    mime_type = Column(String(128), nullable=True)
+    storage_path = Column(String(1024), nullable=True)
+    payload_json = Column(Text, nullable=True)
+    created_by = Column(String(256), nullable=True)
+    created_at = Column(DateTime, nullable=False, server_default=func.now(), index=True)
+
+
 class WikiRequestEvent(Base):
     """Timeline append-only delle richieste Wiki per triage e audit operativo."""
 

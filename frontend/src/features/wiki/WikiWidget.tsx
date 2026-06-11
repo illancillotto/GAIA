@@ -4,10 +4,10 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { usePathname } from "next/navigation";
 
-import { createWikiRequest } from "@/lib/api";
+import { createWikiRequestWithArtifacts } from "@/lib/api";
 import { getStoredAccessToken } from "@/lib/auth";
 import { cn } from "@/lib/cn";
-import { buildWikiRequestPayload, buildWikiSupportHref } from "./request-support";
+import { buildWikiRequestPayload, captureWikiRequestArtifacts, prepareWikiSupportHref } from "./request-support";
 import { EvidenceBadge, ModeBadge, ToolCallBadge } from "./message-metadata";
 import type { WikiChatMessage } from "./types";
 import { useWikiChat } from "./useWikiChat";
@@ -24,11 +24,11 @@ function SourceBadge({ file }: { file: string }) {
 function ChatMessage({
   msg,
   onQuickRequest,
-  supportHref,
+  onOpenSupport,
 }: {
   msg: WikiChatMessage;
   onQuickRequest: (intent: "help_request" | "bug_report" | "feature_request", answer: string) => void;
-  supportHref: string | null;
+  onOpenSupport: (() => void) | null;
 }) {
   const isUser = msg.role === "user";
 
@@ -88,13 +88,14 @@ function ChatMessage({
           >
             Richiedi funzionalità
           </button>
-          {supportHref ? (
-            <a
-              href={supportHref}
+          {onOpenSupport ? (
+            <button
+              type="button"
+              onClick={onOpenSupport}
               className="rounded-full border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 hover:border-[#1D4E35] hover:text-[#1D4E35]"
             >
               Apri supporto completo
-            </a>
+            </button>
           ) : null}
         </div>
       ) : null}
@@ -141,19 +142,29 @@ export function WikiWidget() {
     if (!token) {
       return;
     }
-    await createWikiRequest(
-      token,
-      buildWikiRequestPayload({
-        intent,
-        pathname,
-        contextArticle: undefined,
-        conversationId,
-        messages,
-        assistantAnswer: answer,
-        sourceChannel: "widget",
-      }),
-    );
+    const payload = buildWikiRequestPayload({
+      intent,
+      pathname,
+      contextArticle: undefined,
+      conversationId,
+      messages,
+      assistantAnswer: answer,
+      sourceChannel: "widget",
+    });
+    const artifacts = await captureWikiRequestArtifacts();
+    await createWikiRequestWithArtifacts(token, payload, artifacts);
     setSavedRequest(true);
+  }
+
+  async function handleOpenSupport(intent: "help_request" | "bug_report" | "feature_request", answer: string) {
+    const href = await prepareWikiSupportHref({
+      intent,
+      pathname,
+      conversationId,
+      messages,
+      assistantAnswer: answer,
+    });
+    window.location.href = href;
   }
 
   const shouldHideWidget = pathname === "/wiki" || pathname.startsWith("/wiki/") || pathname === "/login";
@@ -223,15 +234,10 @@ export function WikiWidget() {
                 key={msg.id}
                 msg={msg}
                 onQuickRequest={handleQuickRequest}
-                supportHref={
+                onOpenSupport={
                   msg.role === "assistant" && msg.found === false
-                    ? buildWikiSupportHref({
-                        intent: "help_request",
-                        pathname,
-                        conversationId: msg.conversationId ?? conversationId,
-                        messages,
-                        assistantAnswer: msg.content,
-                      })
+                    ? () =>
+                        void handleOpenSupport("help_request", msg.content)
                     : null
                 }
               />

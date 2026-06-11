@@ -188,6 +188,8 @@ import type {
   SyncRun,
   WikiRequest,
   WikiRequestAssignee,
+  WikiRequestArtifact,
+  WikiRequestArtifactCreateInput,
   WikiSupportClustersResponse,
   WikiSupportInsightsResponse,
   WikiSupportAnalyticsSeriesResponse,
@@ -1561,6 +1563,39 @@ export async function getWikiRequest(token: string, requestId: string): Promise<
   });
 }
 
+export async function getWikiRequestArtifacts(token: string, requestId: string): Promise<WikiRequestArtifact[]> {
+  return request<WikiRequestArtifact[]>(`/wiki/requests/${requestId}/artifacts`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+}
+
+export async function downloadWikiRequestArtifact(token: string, requestId: string, artifactId: string): Promise<Blob> {
+  const response = await fetch(`${getApiBaseUrl()}/wiki/requests/${requestId}/artifacts/${artifactId}/download`, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    cache: "no-store",
+  });
+
+  if (!response.ok) {
+    let detail = "Request failed";
+    try {
+      const payload = (await response.json()) as { detail?: unknown };
+      if (typeof payload.detail === "string") {
+        detail = payload.detail;
+      }
+    } catch {
+      detail = response.statusText || detail;
+    }
+    throw new ApiError(detail, null, response.status);
+  }
+
+  return response.blob();
+}
+
 export async function getWikiRequestAssignees(token: string): Promise<WikiRequestAssignee[]> {
   return request<WikiRequestAssignee[]>("/wiki/requests/assignees", {
     headers: {
@@ -1647,6 +1682,31 @@ export async function createWikiRequest(token: string, payload: WikiRequestCreat
       Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify(payload),
+  });
+}
+
+export async function createWikiRequestWithArtifacts(
+  token: string,
+  payload: WikiRequestCreateInput,
+  artifacts: WikiRequestArtifactCreateInput,
+): Promise<WikiRequest> {
+  const formData = new FormData();
+  formData.set("payload_json", JSON.stringify(payload));
+  if (artifacts.screenshotMeta) {
+    formData.set("screenshot_meta_json", JSON.stringify(artifacts.screenshotMeta));
+  }
+  if (artifacts.uiSnapshot) {
+    formData.set("ui_snapshot_json", JSON.stringify(artifacts.uiSnapshot));
+  }
+  if (artifacts.screenshotFile) {
+    formData.set("screenshot", artifacts.screenshotFile);
+  }
+  return request<WikiRequest>("/wiki/requests/with-artifacts", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+    body: formData,
   });
 }
 

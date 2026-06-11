@@ -1087,6 +1087,17 @@ export type WikiRequestEvent = {
   created_at: string;
 };
 
+export type WikiRequestArtifact = {
+  id: string;
+  request_id: string;
+  artifact_type: "screenshot" | "ui_snapshot" | "screenshot_meta" | string;
+  filename: string | null;
+  mime_type: string | null;
+  payload: Record<string, unknown> | null;
+  created_by: string | null;
+  created_at: string;
+};
+
 export type WikiRequestDuplicateCandidate = {
   id: string;
   user_question: string;
@@ -1131,6 +1142,12 @@ export type WikiRequestCreateInput = {
   desired_outcome?: string | null;
   observed_behavior?: string | null;
   expected_behavior?: string | null;
+};
+
+export type WikiRequestArtifactCreateInput = {
+  screenshotFile?: File | null;
+  screenshotMeta?: Record<string, unknown> | null;
+  uiSnapshot?: Record<string, unknown> | null;
 };
 
 export type WikiRequestUpdateInput = {

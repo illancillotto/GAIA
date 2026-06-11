@@ -4,8 +4,10 @@ Test API WikiRequest: POST /wiki/requests, GET /wiki/requests, PATCH /wiki/reque
 
 from __future__ import annotations
 
+import json
 import uuid
 from collections.abc import Generator
+from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
@@ -14,11 +16,12 @@ from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 from app.core.database import get_db
+from app.core.config import settings
 from app.core.security import hash_password
 from app.db.base import Base
 from app.main import app
 from app.models.application_user import ApplicationUser, ApplicationUserRole
-from app.modules.wiki.models import WikiRequest, WikiRequestEvent, WikiToolAuditLog
+from app.modules.wiki.models import WikiRequest, WikiRequestArtifact, WikiRequestEvent, WikiToolAuditLog
 
 
 engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
@@ -145,6 +148,49 @@ def test_create_wiki_request_saves_support_context() -> None:
     assert data["impact_scope"] == "team"
     assert data["context_entity_key"] == "device:192.168.1.10"
     assert data["desired_outcome"] == "Capire come sbloccare la funzione"
+
+
+def test_create_wiki_request_with_artifacts_persists_snapshot_files(tmp_path: Path) -> None:
+    _create_user("artifact_user", "viewer")
+    token = _login("artifact_user")
+
+    previous_path = settings.wiki_request_artifacts_path
+    settings.wiki_request_artifacts_path = str(tmp_path)
+    try:
+        resp = client.post(
+            "/wiki/requests/with-artifacts",
+            headers={"Authorization": f"Bearer {token}"},
+            data={
+                "payload_json": json.dumps(
+                    {
+                        "user_question": "Mi serve una nuova vista per il caso aperto",
+                        "category": "feature_request",
+                        "request_type": "feature_request",
+                        "module_key": "operazioni",
+                        "page_path": "/operazioni/casi/123",
+                        "source_channel": "support_page",
+                    }
+                ),
+                "screenshot_meta_json": json.dumps({"capture_method": "svg_foreign_object", "width": 1440}),
+                "ui_snapshot_json": json.dumps({"heading": "Caso 123", "location": {"pathname": "/operazioni/casi/123"}}),
+            },
+            files={"screenshot": ("case.jpg", b"fake-image-bytes", "image/jpeg")},
+        )
+    finally:
+        settings.wiki_request_artifacts_path = previous_path
+
+    assert resp.status_code == 201, resp.text
+    request_id = uuid.UUID(resp.json()["id"])
+
+    db = TestingSessionLocal()
+    artifacts = db.query(WikiRequestArtifact).filter_by(request_id=request_id).all()
+    db.close()
+
+    assert len(artifacts) == 3
+    screenshot_artifact = next(item for item in artifacts if item.artifact_type == "screenshot")
+    assert screenshot_artifact.mime_type == "image/jpeg"
+    assert screenshot_artifact.storage_path is not None
+    assert Path(screenshot_artifact.storage_path).exists()
 
 
 def test_create_wiki_request_unauthenticated_returns_401() -> None:

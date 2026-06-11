@@ -74,6 +74,14 @@
   - `useWikiChat.ts`: `69.39%` statements, `49.64%` branch
   - `WikiPage.tsx`: `57.95%` statements, `55.96%` branch
   - `WikiConversationsPage.tsx`: `42.85%` statements, `38.77%` branch
+- [x] richieste supporto Wiki con artifact del caso:
+  - endpoint `POST /wiki/requests/with-artifacts`
+  - tabella `wiki_request_artifacts`
+  - screenshot pagina + snapshot UI strutturato
+  - rendering artifact nel dettaglio admin richiesta
+  - preview screenshot e download/export artifact dal dettaglio admin
+  - snapshot tipizzati per `operazioni`, `catasto`, `rete`, `utenze` con route, entity id, filtri e campi operativi principali
+  - redazione automatica di email, telefoni, CF/P.IVA, token e URL/query sensibili negli artifact
 
 Nota:
 il totale del report frontend resta basso se si include `frontend/src/lib/api.ts`, perché il file e monolitico e contiene centinaia di helper non esercitati dai test wiki. Per il modulo wiki il dato utile è la copertura dei file feature toccati sopra.
