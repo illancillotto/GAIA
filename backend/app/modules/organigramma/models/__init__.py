@@ -1,4 +1,13 @@
 from app.modules.organigramma.models.org_assignment import OrgAssignment
+from app.modules.organigramma.models.org_change_event import (
+    ORG_CHANGE_ACTIONS,
+    ORG_CHANGE_ENTITY_TYPES,
+    OrgChangeEvent,
+)
+from app.modules.organigramma.models.org_draft import ORG_DRAFT_STATUSES, OrgDraft
+from app.modules.organigramma.models.org_revision import ORG_REVISION_STATUSES, OrgRevision
+from app.modules.organigramma.models.org_revision_assignment import OrgRevisionAssignment
+from app.modules.organigramma.models.org_revision_unit import OrgRevisionUnit
 from app.modules.organigramma.models.org_source_link import (
     SOURCE_LINK_ENTITY_TYPES,
     OrgSourceLink,
@@ -19,8 +28,17 @@ __all__ = [
     "OrgAssignment",
     "OrgVisibilityOverride",
     "OrgSourceLink",
+    "OrgRevision",
+    "OrgRevisionUnit",
+    "OrgRevisionAssignment",
+    "OrgDraft",
+    "OrgChangeEvent",
     "ORG_UNIT_TYPES",
     "ORG_SOURCES",
+    "ORG_REVISION_STATUSES",
+    "ORG_DRAFT_STATUSES",
+    "ORG_CHANGE_ENTITY_TYPES",
+    "ORG_CHANGE_ACTIONS",
     "OVERRIDE_TARGET_TYPES",
     "OVERRIDE_SCOPES",
     "SOURCE_LINK_ENTITY_TYPES",

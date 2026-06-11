@@ -13,8 +13,13 @@ from app.modules.inaz.models import (
     InazScheduleRule,
     InazScheduleTemplate,
 )
-from app.modules.inaz.services.schedule_engine import ScheduleContext, classify_daily_record, default_holidays_for_year
-from app.modules.inaz.services.xlsm_export import ExportTimesheetRow, write_archive2_daily_values
+from app.modules.inaz.services.schedule_engine import (
+    ScheduleContext,
+    classify_daily_record,
+    default_holidays_for_year,
+    scheduled_minutes_for_day,
+)
+from app.modules.inaz.services.xlsm_export import ExportTimesheetRow, resolve_export_absence_code, write_archive2_daily_values
 
 
 def _context(
@@ -187,6 +192,89 @@ def test_xlsm_export_marks_reperibilita_days_with_x() -> None:
 
     reperibilita_col = 8 + (16 - 1) + 467
     assert ws.cell(5, reperibilita_col).value == "X"
+
+
+def test_scheduled_minutes_for_day_returns_rule_total() -> None:
+    collaborator = InazCollaborator(id=uuid.uuid4(), employee_code="1854", company_code="53", name="Operaio")
+    template = InazScheduleTemplate(id=31, code="CATASTO_OP", label="Catasto operai", is_active=True)
+    assignment = InazCollaboratorScheduleAssignment(collaborator_id=collaborator.id, template_id=template.id)
+    morning = InazScheduleRule(
+        template_id=template.id,
+        weekday=0,
+        recurrence_kind="weekly",
+        start_time=time(7, 0),
+        end_time=time(13, 0),
+        applies_on_holiday=False,
+        sort_order=0,
+    )
+    evening = InazScheduleRule(
+        template_id=template.id,
+        weekday=0,
+        recurrence_kind="weekly",
+        start_time=time(15, 0),
+        end_time=time(18, 0),
+        applies_on_holiday=False,
+        sort_order=1,
+    )
+    context = _context(collaborator, assignment, template, [morning, evening])
+
+    assert scheduled_minutes_for_day(collaborator, date(2026, 5, 18), context) == 540
+
+
+def test_scheduled_minutes_for_day_returns_zero_without_matching_rule() -> None:
+    collaborator = InazCollaborator(id=uuid.uuid4(), employee_code="1854", company_code="53", name="Operaio")
+    template = InazScheduleTemplate(id=32, code="CATASTO_OP", label="Catasto operai", is_active=True)
+    assignment = InazCollaboratorScheduleAssignment(collaborator_id=collaborator.id, template_id=template.id)
+    saturday_rule = InazScheduleRule(
+        template_id=template.id,
+        weekday=5,
+        recurrence_kind="weekly",
+        start_time=time(7, 0),
+        end_time=time(13, 0),
+        applies_on_holiday=False,
+        sort_order=0,
+    )
+    context = _context(collaborator, assignment, template, [saturday_rule])
+
+    assert scheduled_minutes_for_day(collaborator, date(2026, 5, 18), context) == 0
+
+
+def test_resolve_export_absence_code_maps_legacy_request_prefixes() -> None:
+    collaborator = InazCollaborator(id=uuid.uuid4(), employee_code="1854", company_code="53", name="Operaio")
+    record = InazDailyRecord(
+        id=uuid.uuid4(),
+        collaborator_id=collaborator.id,
+        work_date=date(2026, 5, 16),
+        request_description="P. ORD - Permesso ordinario",
+        resolved_absence_cause="permesso",
+    )
+
+    assert resolve_export_absence_code(record) == "P"
+
+
+def test_resolve_export_absence_code_maps_legacy_absence_cause_fallback() -> None:
+    collaborator = InazCollaborator(id=uuid.uuid4(), employee_code="1854", company_code="53", name="Operaio")
+    record = InazDailyRecord(
+        id=uuid.uuid4(),
+        collaborator_id=collaborator.id,
+        work_date=date(2026, 5, 16),
+        resolved_absence_cause="malattia",
+    )
+
+    assert resolve_export_absence_code(record) == "M"
+
+
+def test_resolve_export_absence_code_ignores_non_legacy_presence_markers() -> None:
+    collaborator = InazCollaborator(id=uuid.uuid4(), employee_code="1854", company_code="53", name="Operaio")
+    record = InazDailyRecord(
+        id=uuid.uuid4(),
+        collaborator_id=collaborator.id,
+        work_date=date(2026, 5, 16),
+        request_description="Inserimento - 06:52 E",
+        evidenze="Ore mancanti",
+    )
+
+    assert resolve_export_absence_code(record) is None
 
 
 def test_detail_classification_takes_precedence_over_template_when_present() -> None:

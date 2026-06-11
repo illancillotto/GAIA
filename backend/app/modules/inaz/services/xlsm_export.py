@@ -27,6 +27,34 @@ MONTHS_IT = [
 ]
 
 DEFAULT_TEMPLATE_PATH = Path("/home/cbo/CursorProjects/inaz-scraper/Giornaliere/Giornaliere_2026_803_1.xlsm")
+ARCHIVE2_FIRST_DAY_COLUMN = 8
+ARCHIVE2_OFFSETS = {
+    "ordinary_ferial": 0,
+    "ordinary_festive": 31,
+    "straordinario_ferial": 155,
+    "straordinario_festive": 186,
+    "km_auto": 279,
+    "absence_code": 436,
+    "reperibilita": 467,
+}
+LEGACY_ABSENCE_CODE_BY_REQUEST_PREFIX = {
+    "ASSG": "AG",
+    "FERIE": "F",
+    "FERIECOLL": "F",
+    "MAL": "M",
+    "MA7HH": "L.104",
+    "P. ORD": "P",
+    "P.ORD": "P",
+    "PSERV": "PS",
+    "SOSPD": "SD",
+}
+LEGACY_ABSENCE_CODE_BY_CAUSE = {
+    "assenza_da_giustificare": "AG",
+    "ferie": "F",
+    "malattia": "M",
+    "permesso": "P",
+    "riposo": "RS",
+}
 
 
 def close_workbook_resources(workbook: object) -> None:
@@ -75,22 +103,30 @@ def normalize_request_display_label(value: str | None) -> str | None:
     return normalized
 
 
+def normalize_request_prefix(value: str | None) -> str | None:
+    if value is None:
+        return None
+    normalized = value.strip().upper()
+    if not normalized:
+        return None
+    if " - " in normalized:
+        left, _ = normalized.split(" - ", 1)
+        left = left.strip()
+        if left:
+            return left
+    return None
+
+
 def resolve_export_absence_code(row: InazDailyRecord) -> str | None:
-    if row.request_description:
-        return (normalize_request_display_label(row.request_description) or row.request_description)[:32]
+    request_prefix = normalize_request_prefix(row.request_description)
+    if request_prefix:
+        legacy_code = LEGACY_ABSENCE_CODE_BY_REQUEST_PREFIX.get(request_prefix)
+        if legacy_code:
+            return legacy_code
     if row.resolved_absence_cause:
-        labels = {
-            "ferie": "Ferie",
-            "permesso": "Permesso",
-            "malattia": "Malattia",
-            "riposo": "Riposo",
-            "festivita": "Festivita",
-            "banca_ore": "Banca ore",
-            "assenza_da_giustificare": "Ass. da giustificare",
-        }
-        return labels.get(row.resolved_absence_cause, row.resolved_absence_cause.replace("_", " "))[:32]
-    if row.evidenze:
-        return row.evidenze[:32]
+        legacy_code = LEGACY_ABSENCE_CODE_BY_CAUSE.get(row.resolved_absence_cause)
+        if legacy_code:
+            return legacy_code
     return None
 
 
@@ -221,43 +257,38 @@ def write_archive2_daily_values(
     export_row: ExportTimesheetRow,
     schedule_context: ScheduleContext | None = None,
 ) -> None:
-    first_day_column = 8
-    offsets = {
-        "ordinary_ferial": 0,
-        "ordinary_festive": 31,
-        "straordinario_ferial": 155,
-        "straordinario_festive": 186,
-        "km_auto": 279,
-        "absence_code": 436,
-        "reperibilita": 467,
-    }
     for daily in export_row.daily_rows:
-        col = first_day_column + daily.work_date.day - 1
+        col = ARCHIVE2_FIRST_DAY_COLUMN + daily.work_date.day - 1
         classification = resolve_day_classification(export_row, daily, schedule_context)
         festive = classification.special_day
         ordinary = minutes_to_excel_hours(classification.ordinary_minutes)
         extra = minutes_to_excel_hours(classification.extra_minutes)
         km_auto = daily.km_value
 
-        ws.cell(row_index, col + offsets["ordinary_ferial"]).value = None
-        ws.cell(row_index, col + offsets["ordinary_festive"]).value = None
-        ws.cell(row_index, col + offsets["straordinario_ferial"]).value = None
-        ws.cell(row_index, col + offsets["straordinario_festive"]).value = None
-        ws.cell(row_index, col + offsets["km_auto"]).value = None
-        ws.cell(row_index, col + offsets["absence_code"]).value = None
-        ws.cell(row_index, col + offsets["reperibilita"]).value = None
+        ws.cell(row_index, col + ARCHIVE2_OFFSETS["ordinary_ferial"]).value = None
+        ws.cell(row_index, col + ARCHIVE2_OFFSETS["ordinary_festive"]).value = None
+        ws.cell(row_index, col + ARCHIVE2_OFFSETS["straordinario_ferial"]).value = None
+        ws.cell(row_index, col + ARCHIVE2_OFFSETS["straordinario_festive"]).value = None
+        ws.cell(row_index, col + ARCHIVE2_OFFSETS["km_auto"]).value = None
+        ws.cell(row_index, col + ARCHIVE2_OFFSETS["absence_code"]).value = None
+        ws.cell(row_index, col + ARCHIVE2_OFFSETS["reperibilita"]).value = None
         if ordinary is not None:
-            ws.cell(row_index, col + offsets["ordinary_festive" if festive else "ordinary_ferial"]).value = ordinary
+            ws.cell(row_index, col + ARCHIVE2_OFFSETS["ordinary_festive" if festive else "ordinary_ferial"]).value = ordinary
         if extra is not None:
-            ws.cell(row_index, col + offsets["straordinario_festive" if festive else "straordinario_ferial"]).value = extra
+            ws.cell(row_index, col + ARCHIVE2_OFFSETS["straordinario_festive" if festive else "straordinario_ferial"]).value = extra
         if km_auto is not None:
-            ws.cell(row_index, col + offsets["km_auto"]).value = km_auto
+            ws.cell(row_index, col + ARCHIVE2_OFFSETS["km_auto"]).value = km_auto
         absence_code = resolve_export_absence_code(daily)
         if absence_code:
-            ws.cell(row_index, col + offsets["absence_code"]).value = absence_code
+            ws.cell(row_index, col + ARCHIVE2_OFFSETS["absence_code"]).value = absence_code
         reperibilita_value = resolve_export_reperibilita_value(daily)
         if reperibilita_value:
-            ws.cell(row_index, col + offsets["reperibilita"]).value = reperibilita_value
+            ws.cell(row_index, col + ARCHIVE2_OFFSETS["reperibilita"]).value = reperibilita_value
+
+
+def build_period_label(period_start: date, employee_kind: str) -> str:
+    month_name = MONTHS_IT[period_start.month - 1]
+    return f"{employee_kind}_{month_name}-{period_start.year}"
 
 
 def compile_workbook(
@@ -277,8 +308,7 @@ def compile_workbook(
         giornaliera["A3"] = period_start.month
         giornaliera["C3"] = period_start.year
         giornaliera["B2"] = employee_kind
-        month_name = MONTHS_IT[period_start.month - 1]
-        period_label = f"{employee_kind}_{month_name}-{period_start.year}"
+        period_label = build_period_label(period_start, employee_kind)
         operai_metadata_by_employee = load_operai_metadata(operai) if operai is not None else {}
 
         for item in rows:

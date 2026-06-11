@@ -28,6 +28,11 @@ from app.modules.accessi.org_structure import OrgStructureAssignment
 from app.modules.accessi.wc_org_charts import WCOrgChart, WCOrgChartEntry
 from app.modules.organigramma.models import (
     OrgAssignment,
+    OrgChangeEvent,
+    OrgDraft,
+    OrgRevision,
+    OrgRevisionAssignment,
+    OrgRevisionUnit,
     OrgSourceLink,
     OrgUnit,
     OrgVisibilityOverride,
@@ -132,6 +137,11 @@ __all__ = [
     "OrgStructureAssignment",
     "OrgUnit",
     "OrgAssignment",
+    "OrgRevision",
+    "OrgRevisionUnit",
+    "OrgRevisionAssignment",
+    "OrgDraft",
+    "OrgChangeEvent",
     "OrgVisibilityOverride",
     "OrgSourceLink",
     "InazCollaborator",

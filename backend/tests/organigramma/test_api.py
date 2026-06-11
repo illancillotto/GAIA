@@ -247,6 +247,101 @@ def test_update_unit_and_assignment_lifecycle(client, make_user, auth_header):
     assert client.get("/organigramma/assignments", headers=header).json() == []
 
 
+# --------------------------------------------------------------------------- #
+# Drafts + revisions
+# --------------------------------------------------------------------------- #
+def test_drafts_bootstrap_current_revision_and_clone_tree(client, make_user, auth_header):
+    make_user("boss", role=ApplicationUserRole.SUPER_ADMIN.value)
+    operator = make_user("opdraft", role=ApplicationUserRole.OPERATOR.value, full_name="Bozza Operatore")
+    header = auth_header("boss")
+
+    direzione = _create_unit(client, header, nome="Direzione Draft", tipo="direzione")
+    settore = _create_unit(client, header, nome="Settore Draft", tipo="settore", parent_id=direzione["id"])
+    assign_resp = client.post(
+        "/organigramma/assignments",
+        json={"user_id": operator.id, "org_unit_id": settore["id"], "title": "Operatore"},
+        headers=header,
+    )
+    assert assign_resp.status_code == 201, assign_resp.text
+
+    current_revision = client.get("/organigramma/drafts/revisions/current", headers=header)
+    assert current_revision.status_code == 200, current_revision.text
+    assert current_revision.json()["status"] == "published"
+
+    created = client.post(
+        "/organigramma/drafts",
+        json={"name": "Bozza giugno", "notes": "Test foundation"},
+        headers=header,
+    )
+    assert created.status_code == 201, created.text
+    body = created.json()
+    assert body["status"] == "draft"
+    assert body["unit_count"] == 2
+    assert body["assignment_count"] == 1
+    assert body["event_count"] == 1
+
+    tree = client.get(f"/organigramma/drafts/{body['id']}/tree", headers=header)
+    assert tree.status_code == 200, tree.text
+    tree_body = tree.json()
+    assert len(tree_body) == 1
+    assert tree_body[0]["nome"] == "Direzione Draft"
+    assert tree_body[0]["children"][0]["nome"] == "Settore Draft"
+
+    assignments = client.get(f"/organigramma/drafts/{body['id']}/assignments", headers=header)
+    assert assignments.status_code == 200, assignments.text
+    assert assignments.json()[0]["person"]["full_name"] == "Bozza Operatore"
+
+    events = client.get(f"/organigramma/drafts/{body['id']}/events", headers=header)
+    assert events.status_code == 200, events.text
+    assert events.json()[0]["action"] == "draft_created"
+
+
+def test_drafts_publish_and_discard_lifecycle(client, make_user, auth_header):
+    make_user("boss", role=ApplicationUserRole.SUPER_ADMIN.value)
+    header = auth_header("boss")
+
+    _create_unit(client, header, nome="Direzione Lifecycle", tipo="direzione")
+
+    first = client.post(
+        "/organigramma/drafts",
+        json={"name": "Bozza publish"},
+        headers=header,
+    )
+    assert first.status_code == 201, first.text
+    first_body = first.json()
+
+    publish = client.post(f"/organigramma/drafts/{first_body['id']}/publish", headers=header)
+    assert publish.status_code == 200, publish.text
+    published_body = publish.json()
+    assert published_body["status"] == "published"
+    assert published_body["published_at"] is not None
+    assert published_body["event_count"] == 2
+
+    revisions = client.get("/organigramma/drafts/revisions", headers=header)
+    assert revisions.status_code == 200, revisions.text
+    published_revisions = [revision for revision in revisions.json() if revision["status"] == "published"]
+    assert len(published_revisions) == 1
+    assert published_revisions[0]["id"] == published_body["working_revision_id"]
+
+    second = client.post(
+        "/organigramma/drafts",
+        json={"name": "Bozza discard"},
+        headers=header,
+    )
+    assert second.status_code == 201, second.text
+    second_body = second.json()
+
+    discard = client.post(f"/organigramma/drafts/{second_body['id']}/discard", headers=header)
+    assert discard.status_code == 200, discard.text
+    discarded_body = discard.json()
+    assert discarded_body["status"] == "discarded"
+    assert discarded_body["event_count"] == 2
+
+    no_active = client.get("/organigramma/drafts/my-active", headers=header)
+    assert no_active.status_code == 200, no_active.text
+    assert no_active.json() is None
+
+
 def test_update_and_delete_override(client, make_user, auth_header):
     make_user("boss", role=ApplicationUserRole.SUPER_ADMIN.value)
     hr = make_user("hr", role=ApplicationUserRole.VIEWER.value)

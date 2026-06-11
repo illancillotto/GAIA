@@ -247,6 +247,34 @@ def rule_matches_date(rule: InazScheduleRule, work_date: date, *, holiday_day: b
     return False
 
 
+def scheduled_minutes_for_day(
+    collaborator: InazCollaborator,
+    work_date: date,
+    context: ScheduleContext | None,
+) -> int:
+    if context is None:
+        return 0
+    assignment = resolve_assignment(collaborator, work_date, context)
+    if assignment is None:
+        return 0
+    template = context.templates_by_id.get(assignment.template_id)
+    if template is None or not template.is_active or not template_matches_date(template, work_date):
+        return 0
+    holiday = resolve_holiday(work_date, collaborator, context)
+    matched_rules = [
+        rule
+        for rule in context.rules_by_template_id.get(template.id, [])
+        if rule_matches_date(rule, work_date, holiday_day=holiday is not None) and template_matches_date(template, work_date)
+    ]
+    total = 0
+    for rule in matched_rules:
+        rule_end = to_minutes(rule.end_time)
+        rule_start = to_minutes(rule.start_time)
+        if rule_end > rule_start:
+            total += rule_end - rule_start
+    return total
+
+
 def season_matches(rule: InazScheduleRule, work_date: date) -> bool:
     if (
         rule.season_start_month is None

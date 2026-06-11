@@ -208,6 +208,25 @@ function formatDateTime(value: string): string {
   }
 }
 
+function averageResolutionHours(items: WikiRequest[]): string {
+  const resolved = items
+    .filter((item) => item.status === "resolved")
+    .map((item) => {
+      const createdAt = new Date(item.created_at).getTime();
+      const updatedAt = new Date(item.updated_at).getTime();
+      return Number.isFinite(createdAt) && Number.isFinite(updatedAt) && updatedAt >= createdAt
+        ? (updatedAt - createdAt) / (1000 * 60 * 60)
+        : null;
+    })
+    .filter((value): value is number => value != null);
+
+  if (resolved.length === 0) {
+    return "n/d";
+  }
+  const avg = resolved.reduce((sum, value) => sum + value, 0) / resolved.length;
+  return `${Math.round(avg)}h`;
+}
+
 export function WikiRequestsPage({ supportOnly = false, initialRequestId = null }: { supportOnly?: boolean; initialRequestId?: string | null }) {
   const [items, setItems] = useState<WikiRequest[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -389,6 +408,9 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
       planned: scopedItems.filter((item) => item.status === "planned").length,
       urgent: scopedItems.filter((item) => item.priority === "urgent").length,
       resolved: scopedItems.filter((item) => item.status === "resolved").length,
+      waitingUser: scopedItems.filter((item) => item.status === "waiting_user").length,
+      unassigned: scopedItems.filter((item) => !item.assigned_to).length,
+      avgResolution: averageResolutionHours(scopedItems),
     };
   }, [scopedItems]);
 
@@ -772,13 +794,50 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
 
   return (
     <div className="space-y-6">
-      <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-5">
-        <MetricCard label="Totale richieste" value={summary.total.toString()} sub="storico registrato" />
-        <MetricCard label="Nuove" value={summary.newCount.toString()} sub="da prendere in carico" />
-        <MetricCard label="Triaged" value={summary.triaged.toString()} sub="qualificate" />
-        <MetricCard label="Urgenti" value={summary.urgent.toString()} sub="da trattare subito" />
-        <MetricCard label="Planned" value={summary.planned.toString()} sub="in roadmap" />
-        <MetricCard label="Resolved" value={summary.resolved.toString()} sub="chiuse" />
+      <section className="overflow-hidden rounded-[32px] border border-[#d9dfd4] bg-[radial-gradient(circle_at_top_left,_rgba(232,241,233,0.92),_rgba(255,255,255,0.98)_60%)] p-5 shadow-sm">
+        <div className="flex flex-col gap-5">
+          <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+            <div className="max-w-3xl">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#7a897f]">
+                {supportOnly ? "Console supporto" : "Backlog richieste"}
+              </p>
+              <h1 className="mt-1 text-3xl font-semibold tracking-tight text-[#1d2f24]">
+                {supportOnly ? "Inbox supporto orientata al triage" : "Panoramica richieste generate dal Wiki"}
+              </h1>
+              <p className="mt-2 text-sm leading-6 text-[#5a6b62]">
+                {supportOnly
+                  ? "Leggi velocemente il carico, individua i casi urgenti, apri il dettaglio e aggiorna stato, assegnazione e delivery senza cambiare contesto."
+                  : "Vista di governo su richieste, duplicati, artifact e collegamenti verso il delivery."}
+              </p>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-3 xl:w-[28rem]">
+              <div className="rounded-[24px] border border-white/80 bg-white/80 px-4 py-3 shadow-sm">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#87948c]">Da assegnare</p>
+                <p className="mt-2 text-2xl font-semibold text-[#1d2f24]">{summary.unassigned}</p>
+                <p className="mt-1 text-xs text-[#64756d]">richieste senza owner</p>
+              </div>
+              <div className="rounded-[24px] border border-white/80 bg-white/80 px-4 py-3 shadow-sm">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#87948c]">Waiting user</p>
+                <p className="mt-2 text-2xl font-semibold text-[#1d2f24]">{summary.waitingUser}</p>
+                <p className="mt-1 text-xs text-[#64756d]">in attesa di riscontro</p>
+              </div>
+              <div className="rounded-[24px] border border-white/80 bg-white/80 px-4 py-3 shadow-sm">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#87948c]">Tempo medio</p>
+                <p className="mt-2 text-2xl font-semibold text-[#1d2f24]">{summary.avgResolution}</p>
+                <p className="mt-1 text-xs text-[#64756d]">chiusura casi risolti</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+            <MetricCard label="Totale richieste" value={summary.total.toString()} sub="storico registrato" />
+            <MetricCard label="Nuove" value={summary.newCount.toString()} sub="da prendere in carico" />
+            <MetricCard label="Triaged" value={summary.triaged.toString()} sub="qualificate" />
+            <MetricCard label="Urgenti" value={summary.urgent.toString()} sub="da trattare subito" />
+            <MetricCard label="Planned" value={summary.planned.toString()} sub="in roadmap" />
+            <MetricCard label="Resolved" value={summary.resolved.toString()} sub="chiuse" />
+          </div>
+        </div>
       </section>
 
       <WikiRequestsFilters
@@ -808,7 +867,7 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
         onTicketChange={(value) => setTicketFilter(value as RequestTicketFilter)}
       />
 
-      <section className="flex flex-wrap items-center justify-between gap-3 rounded-3xl border border-[#d9dfd4] bg-white px-5 py-4 shadow-sm">
+      <section className="flex flex-wrap items-center justify-between gap-3 rounded-[28px] border border-[#d9dfd4] bg-white px-5 py-4 shadow-sm">
         <div>
           <p className="text-sm font-semibold text-gray-900">Export delivery bridge</p>
           <p className="text-xs text-gray-500">
@@ -825,7 +884,7 @@ export function WikiRequestsPage({ supportOnly = false, initialRequestId = null 
         </button>
       </section>
 
-      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(24rem,0.9fr)]">
+      <section className="grid gap-6 xl:grid-cols-[minmax(0,1.05fr)_minmax(25rem,0.95fr)]">
         <WikiRequestsList
           filteredItems={filteredItems}
           loading={loading}

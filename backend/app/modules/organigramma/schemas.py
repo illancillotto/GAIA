@@ -11,6 +11,22 @@ SourceLiteral = Literal["manuale", "whitecompany", "bridge_team"]
 TargetTypeLiteral = Literal["user", "org_unit"]
 ScopeLiteral = Literal["read", "approve", "full"]
 ViaLiteral = Literal["gerarchia", "override"]
+OrgRevisionStatusLiteral = Literal["published", "archived", "draft"]
+OrgDraftStatusLiteral = Literal["draft", "published", "discarded"]
+OrgChangeEntityTypeLiteral = Literal["draft", "unit", "assignment", "override"]
+OrgChangeActionLiteral = Literal[
+    "draft_created",
+    "published",
+    "discarded",
+    "create",
+    "move",
+    "relink",
+    "detach",
+    "assign",
+    "unassign",
+    "update",
+    "delete",
+]
 
 
 # --------------------------------------------------------------------------- #
@@ -242,6 +258,65 @@ class WhiteCompanySyncResult(BaseModel):
     assignments_updated: int = 0
     assignments_skipped_locked: int = 0
     message: str = ""
+
+
+# --------------------------------------------------------------------------- #
+# Revisioni e bozze
+# --------------------------------------------------------------------------- #
+class OrgRevisionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    label: str
+    status: OrgRevisionStatusLiteral
+    notes: str | None = None
+    source_revision_id: UUID | None = None
+    created_by_user_id: int | None = None
+    published_by_user_id: int | None = None
+    created_at: datetime
+    published_at: datetime | None = None
+
+
+class OrgDraftCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    notes: str | None = None
+
+
+class OrgDraftResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    name: str
+    status: OrgDraftStatusLiteral
+    notes: str | None = None
+    base_revision_id: UUID
+    working_revision_id: UUID
+    created_by_user_id: int | None = None
+    updated_by_user_id: int | None = None
+    published_by_user_id: int | None = None
+    created_at: datetime
+    updated_at: datetime
+    published_at: datetime | None = None
+
+
+class OrgDraftDetailResponse(OrgDraftResponse):
+    event_count: int = 0
+    unit_count: int = 0
+    assignment_count: int = 0
+
+
+class OrgChangeEventResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    draft_id: UUID
+    entity_type: OrgChangeEntityTypeLiteral
+    entity_id: UUID
+    action: OrgChangeActionLiteral
+    before_json: dict | None = None
+    after_json: dict | None = None
+    changed_by_user_id: int | None = None
+    changed_at: datetime
 
 
 OrgUnitTreeNode.model_rebuild()

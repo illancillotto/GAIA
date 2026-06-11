@@ -34,11 +34,14 @@ export function WikiRequestsList({
   severityLabel,
 }: WikiRequestsListProps) {
   return (
-    <article className="rounded-3xl border border-[#d9dfd4] bg-white p-4 shadow-sm">
-      <div className="flex items-center justify-between gap-3 border-b border-gray-100 pb-3">
+    <article className="rounded-[32px] border border-[#d9dfd4] bg-white p-4 shadow-sm">
+      <div className="flex items-center justify-between gap-3 border-b border-gray-100 pb-4">
         <div>
           <p className="text-sm font-semibold text-gray-900">Coda richieste</p>
           <p className="text-xs text-gray-500">{filteredItems.length} elementi nel filtro corrente.</p>
+        </div>
+        <div className="rounded-full border border-[#dce5dd] bg-[#f7faf7] px-3 py-1 text-xs font-medium text-[#315744]">
+          Scansione rapida
         </div>
       </div>
       <div className="mt-4 space-y-3">
@@ -56,34 +59,54 @@ export function WikiRequestsList({
                 onClick={() => onSelect(item.id)}
                 className={`w-full rounded-2xl border px-4 py-3 text-left transition ${
                   isSelected
-                    ? "border-[#1D4E35] bg-[#eef6ef] shadow-sm"
+                    ? "border-[#1D4E35] bg-[#eef6ef] shadow-[0_10px_28px_rgba(29,78,53,0.08)]"
                     : "border-gray-200 bg-white hover:border-[#bfd0c3] hover:bg-[#f8fbf8]"
                 }`}
               >
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${statusBadgeClasses(item.status)}`}>
-                    {statusLabel(item.status)}
-                  </span>
-                  <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs text-gray-600">
-                    {requestTypeLabel(item.request_type)}
-                  </span>
-                  <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${priorityBadgeClasses(item.priority)}`}>
-                    {priorityLabel(item.priority)}
-                  </span>
-                  <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${severityBadgeClasses(item.severity)}`}>
-                    {severityLabel(item.severity)}
-                  </span>
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${statusBadgeClasses(item.status)}`}>
+                      {statusLabel(item.status)}
+                    </span>
+                    <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs text-gray-600">
+                      {requestTypeLabel(item.request_type)}
+                    </span>
+                    <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${priorityBadgeClasses(item.priority)}`}>
+                      {priorityLabel(item.priority)}
+                    </span>
+                    <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${severityBadgeClasses(item.severity)}`}>
+                      {severityLabel(item.severity)}
+                    </span>
+                    {item.external_ticket_key ? (
+                      <span className="rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-xs font-medium text-sky-800">
+                        {item.external_ticket_key}
+                      </span>
+                    ) : null}
+                    {item.has_unread_update ? (
+                      <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-800">
+                        Aggiornamento
+                      </span>
+                    ) : null}
+                  </div>
                   <span className="text-xs text-gray-400">{formatDateTime(item.created_at)}</span>
                 </div>
                 <p className="mt-2 line-clamp-2 text-sm font-medium text-gray-900">{item.user_question}</p>
-                <p className="mt-2 text-xs text-gray-500">
-                  Creata da <span className="font-medium text-gray-700">{item.created_by ?? "n/d"}</span>
-                  {item.assigned_to_name ? (
-                    <>
-                      {" · "}Assegnata a <span className="font-medium text-gray-700">{item.assigned_to_name}</span>
-                    </>
-                  ) : null}
-                </p>
+                <div className="mt-3 grid gap-2 text-xs text-gray-500 sm:grid-cols-2">
+                  <p>
+                    Creata da <span className="font-medium text-gray-700">{item.created_by ?? "n/d"}</span>
+                    {item.assigned_to_name ? (
+                      <>
+                        {" · "}Assegnata a <span className="font-medium text-gray-700">{item.assigned_to_name}</span>
+                      </>
+                    ) : (
+                      <> · Non assegnata</>
+                    )}
+                  </p>
+                  <p className="sm:text-right">
+                    {item.module_key ? `Modulo ${item.module_key}` : "Modulo n/d"}
+                    {item.page_path ? ` · ${item.page_path}` : ""}
+                  </p>
+                </div>
               </button>
             );
           })

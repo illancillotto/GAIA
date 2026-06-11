@@ -343,6 +343,37 @@ describe("Organigramma page", () => {
     });
   });
 
+  test("selects blocks with a shift+drag marquee on the canvas background", async () => {
+    render(<OrganigrammaPage />);
+
+    expect(await screen.findByText("Schema organigramma")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByLabelText("Abilita modifica")[0]!);
+
+    const card = await screen.findByTestId("schema-node-u1");
+    const canvasBackground = card.parentElement!.parentElement!;
+
+    fireEvent.mouseDown(canvasBackground, { button: 0, shiftKey: true, clientX: 170, clientY: 170 });
+    fireEvent.mouseMove(window, { clientX: 500, clientY: 400 });
+    fireEvent.mouseUp(window, { clientX: 500, clientY: 400 });
+
+    expect(await screen.findByText(/2 blocchi selezionati/i)).toBeInTheDocument();
+  });
+
+  test("selects a whole subtree from the context menu", async () => {
+    render(<OrganigrammaPage />);
+
+    expect(await screen.findByText("Schema organigramma")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByLabelText("Abilita modifica")[0]!);
+
+    const parentNode = await screen.findByTestId("schema-node-u1");
+    fireEvent.contextMenu(parentNode, { clientX: 220, clientY: 160 });
+
+    const selectSubtreeButton = await screen.findByRole("button", { name: /Seleziona sottoalbero/i });
+    fireEvent.click(selectSubtreeButton);
+
+    expect(await screen.findByText(/2 blocchi selezionati/i)).toBeInTheDocument();
+  });
+
   test("opens the schema context menu on right click and promotes a block to root", async () => {
     render(<OrganigrammaPage />);
 

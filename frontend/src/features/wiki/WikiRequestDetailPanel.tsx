@@ -133,33 +133,58 @@ export function WikiRequestDetailPanel({
   severityLabel,
 }: WikiRequestDetailPanelProps) {
   return (
-    <article className="rounded-3xl border border-[#d9dfd4] bg-white p-5 shadow-sm">
+    <article className="rounded-[32px] border border-[#d9dfd4] bg-white p-5 shadow-sm xl:sticky xl:top-6 xl:self-start">
       {selectedRequest ? (
         <div className="space-y-5">
-          <div className="space-y-2 border-b border-gray-100 pb-4">
+          <div className="space-y-4 border-b border-gray-100 pb-4">
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${statusBadgeClasses(selectedRequest.status)}`}>
-                  {statusLabel(selectedRequest.status)}
-                </span>
-                <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs text-gray-600">
-                  {requestTypeLabel(selectedRequest.request_type)}
-                </span>
-                <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${priorityBadgeClasses(selectedRequest.priority)}`}>
-                  Priorita {priorityLabel(selectedRequest.priority)}
-                </span>
-                <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${severityBadgeClasses(selectedRequest.severity)}`}>
-                  Severita {severityLabel(selectedRequest.severity)}
-                </span>
+              <div className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${statusBadgeClasses(selectedRequest.status)}`}>
+                    {statusLabel(selectedRequest.status)}
+                  </span>
+                  <span className="rounded-full border border-gray-200 bg-gray-50 px-2 py-0.5 text-xs text-gray-600">
+                    {requestTypeLabel(selectedRequest.request_type)}
+                  </span>
+                  <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${priorityBadgeClasses(selectedRequest.priority)}`}>
+                    Priorita {priorityLabel(selectedRequest.priority)}
+                  </span>
+                  <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${severityBadgeClasses(selectedRequest.severity)}`}>
+                    Severita {severityLabel(selectedRequest.severity)}
+                  </span>
+                </div>
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900">Dettaglio richiesta</h3>
+                  <p className="mt-1 text-sm leading-6 text-gray-600">
+                    Vista completa del caso, del contesto allegato e delle decisioni operative da prendere.
+                  </p>
+                </div>
               </div>
               <a href={`/wiki/requests/${selectedRequest.id}`} className="text-xs font-medium text-[#1D4E35] underline underline-offset-2">
                 Apri pagina richiesta
               </a>
             </div>
-            <h3 className="text-lg font-semibold text-gray-900">Dettaglio richiesta</h3>
             <p className="text-xs text-gray-500">
               Creata da {selectedRequest.created_by ?? "n/d"} il {formatDateTime(selectedRequest.created_at)}.
             </p>
+          </div>
+
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="rounded-[24px] border border-[#e5ebe5] bg-[#fafbf9] px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#87948c]">Owner</p>
+              <p className="mt-2 text-sm font-semibold text-[#223d30]">{selectedRequest.assigned_to_name || "Non assegnata"}</p>
+              <p className="mt-1 text-xs text-[#66766e]">{selectedRequest.assigned_to || "Serve presa in carico"}</p>
+            </div>
+            <div className="rounded-[24px] border border-[#e5ebe5] bg-[#fafbf9] px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#87948c]">Delivery</p>
+              <p className="mt-2 text-sm font-semibold text-[#223d30]">{selectedRequest.delivery_status || "Da collegare"}</p>
+              <p className="mt-1 text-xs text-[#66766e]">{selectedRequest.external_ticket_key || "Nessun ticket esterno"}</p>
+            </div>
+            <div className="rounded-[24px] border border-[#e5ebe5] bg-[#fafbf9] px-4 py-3">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#87948c]">Ultimo update</p>
+              <p className="mt-2 text-sm font-semibold text-[#223d30]">{formatDateTime(selectedRequest.updated_at)}</p>
+              <p className="mt-1 text-xs text-[#66766e]">{selectedRequest.page_path || "Percorso non indicato"}</p>
+            </div>
           </div>
 
           <div className="space-y-2">

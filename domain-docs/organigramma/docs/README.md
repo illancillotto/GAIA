@@ -103,6 +103,10 @@ Interazioni della vista Schema (modifiche riservate a `Abilita modifica`):
   figli, sposta sotto un altro blocco, scheda responsabile
 - multiselezione con `Ctrl/Cmd+click` (toggle) e `Shift+click` (aggiunta);
   il drag di una card selezionata sposta tutto il gruppo
+- selezione ad area: `Shift+trascina` sullo sfondo disegna un rettangolo e
+  seleziona tutti i blocchi al suo interno
+- tasto destro su una card con figli: "Seleziona sottoalbero (N blocchi)"
+  seleziona il blocco e tutti i discendenti (es. per spostare un ramo intero)
 - ogni blocco ha un solo padre; un padre puo avere n figli
 - dopo le mutazioni il refresh e silenzioso (albero, assegnazioni e dettaglio
   aggiornati in place, pan/zoom preservati)

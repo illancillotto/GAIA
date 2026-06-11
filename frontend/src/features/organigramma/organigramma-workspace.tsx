@@ -599,6 +599,7 @@ type SchemaBoardProps = {
   tree: OrgUnitTreeNode[];
   selectedId: string | null;
   multiSelectedIds: Set<string>;
+  marquee: { x: number; y: number; width: number; height: number } | null;
   onSelect: (id: string, event?: React.MouseEvent) => void;
   onOpenPerson: (id: number) => void;
   draggingUserId: number | null;
@@ -633,6 +634,7 @@ function SchemaBoard({
   tree,
   selectedId,
   multiSelectedIds,
+  marquee,
   onSelect,
   onOpenPerson,
   draggingUserId,
@@ -744,7 +746,7 @@ function SchemaBoard({
               ? "Seleziona il blocco padre: la card di partenza verrà spostata sotto quel blocco."
               : "Clicca i blocchi da agganciare sotto la card di partenza: puoi collegarne più di uno in sequenza. Esc o di nuovo ↓ per terminare."
             : editEnabled
-              ? "Trascina le card per posizionarle liberamente. Usa ↓ per agganciare i figli, ↑ per scegliere il padre. Ctrl/Shift+click per selezionare più blocchi e spostarli insieme."
+              ? "Trascina le card per posizionarle liberamente. Usa ↓ per agganciare i figli, ↑ per scegliere il padre. Ctrl/Shift+click o Shift+trascina sullo sfondo per selezionare più blocchi e spostarli insieme."
               : "Attiva “Abilita modifica” per usare la lavagna."}
         </div>
       ) : null}
@@ -761,6 +763,13 @@ function SchemaBoard({
         >
           {flatNodes.length ? (
             <div className="relative h-full w-full">
+              {marquee ? (
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute z-30 rounded-md border-2 border-[#1D9E75] bg-[#1D9E75]/10"
+                  style={{ left: marquee.x, top: marquee.y, width: marquee.width, height: marquee.height }}
+                />
+              ) : null}
               {snapToGrid ? (
                 <div
                   aria-hidden="true"
@@ -1094,6 +1103,7 @@ export function OrganigrammaWorkspace() {
     nodes: { nodeId: string; originX: number; originY: number }[];
   } | null>(null);
   const [multiSelectedIds, setMultiSelectedIds] = useState<Set<string>>(new Set());
+  const [schemaMarquee, setSchemaMarquee] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [schemaContextMenu, setSchemaContextMenu] = useState<{
     nodeId: string;
     x: number;
@@ -1841,11 +1851,57 @@ export function OrganigrammaWorkspace() {
     if (event.button !== 0) return;
     const target = event.target as HTMLElement | null;
     if (target?.closest("[data-schema-node-card], button, input, select, textarea, label, a")) return;
+    const viewport = schemaViewportRef.current;
+    if (!viewport) return;
+
+    if (event.shiftKey) {
+      // Shift+drag on the background: marquee selection instead of panning.
+      event.preventDefault();
+      const visibleNodes = flattenTree(roots);
+      const bounds = computeSchemaCanvasBounds(visibleNodes);
+      const scale = Math.max(schemaScale, 0.01);
+      const viewportRect = viewport.getBoundingClientRect();
+      const toCanvas = (clientX: number, clientY: number) => ({
+        x: (clientX - viewportRect.left + viewport.scrollLeft) / scale,
+        y: (clientY - viewportRect.top + viewport.scrollTop) / scale,
+      });
+      const start = toCanvas(event.clientX, event.clientY);
+
+      const updateSelection = (clientX: number, clientY: number) => {
+        const current = toCanvas(clientX, clientY);
+        const minX = Math.min(start.x, current.x);
+        const maxX = Math.max(start.x, current.x);
+        const minY = Math.min(start.y, current.y);
+        const maxY = Math.max(start.y, current.y);
+        setSchemaMarquee({ x: minX, y: minY, width: maxX - minX, height: maxY - minY });
+        const ids = new Set<string>();
+        for (const node of visibleNodes) {
+          const left = safeCanvasCoord(node.canvas_x) + bounds.offsetX;
+          const top = safeCanvasCoord(node.canvas_y) + bounds.offsetY;
+          if (left < maxX && left + SCHEMA_NODE_WIDTH > minX && top < maxY && top + SCHEMA_NODE_HEIGHT > minY) {
+            ids.add(node.id);
+          }
+        }
+        setMultiSelectedIds(ids);
+      };
+
+      const handleMarqueeMove = (moveEvent: MouseEvent) => {
+        updateSelection(moveEvent.clientX, moveEvent.clientY);
+      };
+      const handleMarqueeUp = (upEvent: MouseEvent) => {
+        updateSelection(upEvent.clientX, upEvent.clientY);
+        setSchemaMarquee(null);
+        window.removeEventListener("mousemove", handleMarqueeMove);
+        window.removeEventListener("mouseup", handleMarqueeUp);
+      };
+      window.addEventListener("mousemove", handleMarqueeMove);
+      window.addEventListener("mouseup", handleMarqueeUp);
+      return;
+    }
+
     // Clicking the empty canvas exits link mode and clears the multi-selection.
     setSchemaLinkDraft(null);
     setMultiSelectedIds(new Set());
-    const viewport = schemaViewportRef.current;
-    if (!viewport) return;
 
     schemaPanStateRef.current = {
       active: true,
@@ -1873,7 +1929,7 @@ export function OrganigrammaWorkspace() {
 
     window.addEventListener("mousemove", handleMouseMove);
     window.addEventListener("mouseup", handleMouseUp);
-  }, []);
+  }, [roots, schemaScale]);
 
   const handleTreeZoomWheel = useCallback((event: WheelEvent) => {
     if (!event.ctrlKey) return;
@@ -2234,6 +2290,7 @@ export function OrganigrammaWorkspace() {
               tree={roots}
               selectedId={selectedId}
               multiSelectedIds={multiSelectedIds}
+              marquee={schemaMarquee}
               onSelect={handleSchemaCardSelect}
               onOpenPerson={setDrawerUserId}
               draggingUserId={draggingUserId}
@@ -2354,6 +2411,22 @@ export function OrganigrammaWorkspace() {
                 className="rounded-xl px-3 py-2 text-left text-[12.5px] font-medium text-[#7c3d06] hover:bg-[#fdf3e3]"
               >
                 Scollega da “{flatTree.find((node) => node.id === schemaContextNode.parent_id)?.nome ?? "padre"}”
+              </button>
+            ) : null}
+            {(schemaMeta.get(schemaContextNode.id)?.descendantIds.size ?? 0) > 1 ? (
+              <button
+                type="button"
+                onClick={() => {
+                  const subtreeIds = schemaMeta.get(schemaContextNode.id)?.descendantIds;
+                  setSchemaContextMenu(null);
+                  if (subtreeIds?.size) {
+                    setMultiSelectedIds(new Set(subtreeIds));
+                    setSelectedId(schemaContextNode.id);
+                  }
+                }}
+                className="rounded-xl px-3 py-2 text-left text-[12.5px] font-medium text-[#0d7a66] hover:bg-[#e2f4f1]"
+              >
+                Seleziona sottoalbero ({schemaMeta.get(schemaContextNode.id)?.descendantIds.size} blocchi)
               </button>
             ) : null}
             <button

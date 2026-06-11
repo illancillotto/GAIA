@@ -10,13 +10,18 @@ import type { WikiMyRequestsSummary, WikiRequest, WikiRequestCreateInput } from 
 
 type SupportIntent = "help_request" | "bug_report" | "feature_request" | "access_issue" | "data_issue" | "other_request";
 
-const REQUEST_TYPE_OPTIONS: Array<{ value: SupportIntent; label: string; category: "support_request" | "bug_report" | "feature_request" | "question" }> = [
-  { value: "help_request", label: "Supporto operativo", category: "support_request" },
-  { value: "bug_report", label: "Problema / anomalia", category: "bug_report" },
-  { value: "feature_request", label: "Nuova funzionalità", category: "feature_request" },
-  { value: "access_issue", label: "Problema di accesso", category: "support_request" },
-  { value: "data_issue", label: "Problema dati", category: "support_request" },
-  { value: "other_request", label: "Altro", category: "question" },
+const REQUEST_TYPE_OPTIONS: Array<{
+  value: SupportIntent;
+  label: string;
+  category: "support_request" | "bug_report" | "feature_request" | "question";
+  hint: string;
+}> = [
+  { value: "help_request", label: "Supporto operativo", category: "support_request", hint: "Ti serve una mano per capire o completare un flusso." },
+  { value: "bug_report", label: "Problema / anomalia", category: "bug_report", hint: "Qualcosa non funziona come dovrebbe o si rompe." },
+  { value: "feature_request", label: "Nuova funzionalità", category: "feature_request", hint: "Stai proponendo un miglioramento o una nuova capacità." },
+  { value: "access_issue", label: "Problema di accesso", category: "support_request", hint: "Non riesci ad accedere o a usare correttamente permessi e profili." },
+  { value: "data_issue", label: "Problema dati", category: "support_request", hint: "I dati sono assenti, incoerenti o non aggiornati." },
+  { value: "other_request", label: "Altro", category: "question", hint: "Caso trasversale che non rientra bene nelle altre categorie." },
 ];
 
 const SEVERITY_OPTIONS = [
@@ -66,6 +71,12 @@ function formatDateTime(value: string | null): string {
   } catch {
     return value;
   }
+}
+
+function formatFieldLabel(value: string): string {
+  return value
+    .replace(/[_/]+/g, " ")
+    .replace(/\b\w/g, (match) => match.toUpperCase());
 }
 
 export function WikiSupportPage() {
@@ -133,6 +144,24 @@ export function WikiSupportPage() {
     () => myRequests.find((item) => item.id === selectedRequestId) ?? myRequests[0] ?? null,
     [myRequests, selectedRequestId],
   );
+  const contextSignals = useMemo(
+    () => [
+      moduleKey ? { label: "Modulo", value: moduleKey } : null,
+      pagePath ? { label: "Pagina", value: pagePath } : null,
+      conversationId ? { label: "Conversazione", value: conversationId } : null,
+      contextArticle ? { label: "Articolo", value: contextArticle } : null,
+    ].filter((item): item is { label: string; value: string } => Boolean(item)),
+    [contextArticle, conversationId, moduleKey, pagePath],
+  );
+  const contextCoverage = contextSignals.length + (searchParams.get("draft_id") ? 1 : 0);
+  const severityLabel = SEVERITY_OPTIONS.find((option) => option.value === severity)?.label ?? severity;
+  const impactLabel = IMPACT_OPTIONS.find((option) => option.value === impactScope)?.label ?? impactScope;
+  const requestChecklist = [
+    { label: "Domanda o sintesi problema", done: Boolean(question.trim()) },
+    { label: "Contesto operativo", done: contextSignals.length > 0 },
+    { label: "Dettaglio caso", done: Boolean(observedBehavior.trim() || desiredOutcome.trim() || expectedBehavior.trim()) },
+  ];
+  const completedChecklist = requestChecklist.filter((item) => item.done).length;
 
   useEffect(() => {
     if (!selectedRequest) {
@@ -297,8 +326,8 @@ export function WikiSupportPage() {
 
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-[28px] border border-[#d7dfd6] bg-[radial-gradient(circle_at_top_left,_rgba(221,238,227,0.95),_rgba(248,246,239,0.98)_55%,_rgba(255,255,255,0.99))] p-6 shadow-sm">
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(340px,0.95fr)]">
+      <section className="overflow-hidden rounded-[32px] border border-[#d7dfd6] bg-[radial-gradient(circle_at_top_left,_rgba(221,238,227,0.96),_rgba(248,246,239,0.98)_48%,_rgba(255,255,255,0.99))] p-6 shadow-sm">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.45fr)_minmax(360px,1fr)]">
           <div className="space-y-4">
             <div className="inline-flex items-center rounded-full border border-white/70 bg-white/75 px-4 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-[#1D4E35] shadow-sm">
               Supporto Wiki
@@ -310,38 +339,127 @@ export function WikiSupportPage() {
               Questa pagina trasforma una domanda o una frizione del Wiki in un caso strutturato che gli admin possono
               prendere in carico, classificare e usare per capire i bisogni reali degli utenti.
             </p>
-          </div>
-          <div className="space-y-3">
-            <div className="rounded-3xl border border-sky-200 bg-sky-50/70 p-4">
-              <p className="text-sm font-semibold text-sky-900">Come usarla</p>
-              <div className="mt-2 space-y-2 text-sm text-sky-800">
-                <p>1. Scegli il tipo di richiesta più vicino al tuo bisogno.</p>
-                <p>2. Conferma modulo, pagina e contesto del problema.</p>
-                <p>3. Lascia il caso già strutturato per il triage admin.</p>
+            <div className="grid gap-3 sm:grid-cols-3">
+              <div className="rounded-[22px] border border-white/70 bg-white/70 p-4 shadow-sm backdrop-blur">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#6b7f73]">Stato intake</p>
+                <p className="mt-2 text-2xl font-semibold text-[#1b3126]">{completedChecklist}/3</p>
+                <p className="mt-1 text-sm text-[#4f6358]">elementi chiave compilati</p>
+              </div>
+              <div className="rounded-[22px] border border-white/70 bg-white/70 p-4 shadow-sm backdrop-blur">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#6b7f73]">Contesto</p>
+                <p className="mt-2 text-2xl font-semibold text-[#1b3126]">{contextCoverage}</p>
+                <p className="mt-1 text-sm text-[#4f6358]">segnali già agganciati al caso</p>
+              </div>
+              <div className="rounded-[22px] border border-white/70 bg-white/70 p-4 shadow-sm backdrop-blur">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#6b7f73]">Percorso scelto</p>
+                <p className="mt-2 text-base font-semibold text-[#1b3126]">{selectedType.label}</p>
+                <p className="mt-1 text-sm text-[#4f6358]">{severityLabel} · {impactLabel}</p>
               </div>
             </div>
-            <div className="rounded-3xl border border-emerald-200 bg-emerald-50/70 p-4">
-              <p className="text-sm font-semibold text-emerald-900">Ingressi supportati</p>
-              <div className="mt-2 flex flex-wrap gap-2 text-xs text-emerald-900">
-                {REQUEST_TYPE_OPTIONS.map((option) => (
-                  <span key={option.value} className="rounded-full border border-emerald-200 bg-white px-2 py-1">
-                    {option.label}
-                  </span>
-                ))}
+          </div>
+          <div className="space-y-3">
+            <div className="rounded-[28px] border border-sky-200 bg-sky-50/75 p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-sky-900">Come usarla</p>
+                  <p className="mt-1 text-sm leading-6 text-sky-800">Lascia una richiesta già triage-ready: più il caso è nitido, meno rimbalzi servono dopo.</p>
+                </div>
+                <div className="rounded-full border border-sky-200 bg-white px-3 py-1 text-xs font-medium text-sky-900">
+                  {completedChecklist === 3 ? "Pronta all'invio" : "Compilazione guidata"}
+                </div>
               </div>
+              <div className="mt-4 grid gap-2 sm:grid-cols-3">
+                <div className="rounded-2xl border border-sky-200/70 bg-white/75 px-3 py-3 text-sm text-sky-900">
+                  <p className="font-semibold">1. Inquadra il bisogno</p>
+                  <p className="mt-1 text-xs leading-5 text-sky-800">Scegli il tipo richiesta che governa il triage.</p>
+                </div>
+                <div className="rounded-2xl border border-sky-200/70 bg-white/75 px-3 py-3 text-sm text-sky-900">
+                  <p className="font-semibold">2. Fissa il contesto</p>
+                  <p className="mt-1 text-xs leading-5 text-sky-800">Modulo, pagina e snapshot aiutano a ricostruire il caso.</p>
+                </div>
+                <div className="rounded-2xl border border-sky-200/70 bg-white/75 px-3 py-3 text-sm text-sky-900">
+                  <p className="font-semibold">3. Descrivi l'esito</p>
+                  <p className="mt-1 text-xs leading-5 text-sky-800">Spiega cosa succede, cosa ti aspetti e dove vuoi arrivare.</p>
+                </div>
+              </div>
+            </div>
+            <div className="rounded-[28px] border border-emerald-200 bg-emerald-50/70 p-5">
+              <p className="text-sm font-semibold text-emerald-900">Contesto che verrà salvato</p>
+              <div className="mt-3 flex flex-wrap gap-2 text-xs text-emerald-900">
+                {contextSignals.length > 0 ? (
+                  contextSignals.map((item) => (
+                    <span key={item.label} className="rounded-full border border-emerald-200 bg-white px-3 py-1">
+                      {item.label}: {item.value}
+                    </span>
+                  ))
+                ) : (
+                  <span className="rounded-full border border-dashed border-emerald-300 bg-white/75 px-3 py-1 text-emerald-800">
+                    Nessun contesto strutturato precompilato
+                  </span>
+                )}
+                {searchParams.get("draft_id") ? (
+                  <span className="rounded-full border border-emerald-200 bg-white px-3 py-1">Snapshot del caso pronto</span>
+                ) : null}
+              </div>
+              <p className="mt-3 text-sm leading-6 text-emerald-900/90">
+                Quando disponibile, il sistema allega screenshot e snapshot UI del punto esatto in cui stavi lavorando.
+              </p>
             </div>
           </div>
         </div>
       </section>
 
-        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_400px]">
-        <section className="rounded-[28px] border border-[#e3e6dc] bg-white p-6 shadow-sm">
-          <div className="space-y-2">
-            <p className="text-sm font-semibold text-[#223d30]">Nuova segnalazione</p>
-            <p className="text-sm text-[#5f6e67]">Compila il caso con il livello di dettaglio minimo utile per il triage.</p>
+      <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_400px]">
+        <section className="rounded-[32px] border border-[#e3e6dc] bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-4 border-b border-[#ebeee6] pb-5">
+            <div className="flex flex-wrap items-start justify-between gap-4">
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-[#223d30]">Nuova segnalazione</p>
+                <p className="max-w-2xl text-sm leading-6 text-[#5f6e67]">
+                  Compila il caso con il livello di dettaglio minimo utile per il triage. Il blocco sotto ti guida
+                  prima sulla classificazione, poi sul contesto e infine sulla descrizione operativa.
+                </p>
+              </div>
+              <div className="rounded-[24px] border border-[#dbe7dc] bg-[#f7faf7] px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#728578]">Categoria corrente</p>
+                <p className="mt-2 text-base font-semibold text-[#1b3126]">{selectedType.label}</p>
+                <p className="mt-1 max-w-[16rem] text-xs leading-5 text-[#587064]">{selectedType.hint}</p>
+              </div>
+            </div>
+            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+              {REQUEST_TYPE_OPTIONS.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setRequestType(option.value)}
+                  className={`rounded-[24px] border px-4 py-4 text-left transition ${
+                    requestType === option.value
+                      ? "border-[#1D4E35] bg-[#f4f9f4] shadow-[0_10px_28px_rgba(29,78,53,0.08)]"
+                      : "border-[#e8ece5] bg-[#fbfcfa] hover:border-[#c9d8cb] hover:bg-white"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="text-sm font-semibold text-[#223d30]">{option.label}</p>
+                    <span className={`h-3 w-3 rounded-full ${requestType === option.value ? "bg-[#1D4E35]" : "bg-[#d6ddd5]"}`} />
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-[#5d6d65]">{option.hint}</p>
+                  <p className="mt-3 text-[11px] font-semibold uppercase tracking-[0.18em] text-[#93a097]">{option.category}</p>
+                </button>
+              ))}
+            </div>
           </div>
 
           <form onSubmit={handleSubmit} className="mt-5 space-y-5">
+            <div className="rounded-[28px] border border-[#e7ece4] bg-[#fbfcfa] p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-[#223d30]">1. Priorità del caso</p>
+                  <p className="mt-1 text-sm text-[#5f6e67]">Definisci urgenza e ampiezza dell&apos;impatto per aiutare il triage.</p>
+                </div>
+                <div className="rounded-full border border-[#d8e5da] bg-white px-3 py-1 text-xs font-medium text-[#305642]">
+                  {severityLabel} · {impactLabel}
+                </div>
+              </div>
             <div className="grid gap-4 md:grid-cols-2">
               <label className="space-y-2">
                 <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Tipo richiesta</span>
@@ -387,53 +505,97 @@ export function WikiSupportPage() {
                 </select>
               </label>
             </div>
-
-            <label className="space-y-2">
-              <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Domanda o sintesi problema</span>
-              <textarea value={question} onChange={(event) => setQuestion(event.target.value)} rows={3} className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm text-gray-700 outline-none transition focus:border-[#1D4E35] focus:ring-2 focus:ring-[#1D4E35]/10" placeholder="Descrivi in una frase cosa ti serve o cosa non sta funzionando." />
-            </label>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="space-y-2">
-                <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Pagina</span>
-                <input value={pagePath} onChange={(event) => setPagePath(event.target.value)} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#1D4E35] focus:ring-2 focus:ring-[#1D4E35]/10" placeholder="/wiki, /network/devices, ..." />
-              </label>
-              <label className="space-y-2">
-                <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Conversation ID</span>
-                <input value={conversationId} onChange={(event) => setConversationId(event.target.value)} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#1D4E35] focus:ring-2 focus:ring-[#1D4E35]/10" placeholder="UUID conversazione Wiki" />
-              </label>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <label className="space-y-2">
-                <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Contesto articolo</span>
-                <input value={contextArticle} onChange={(event) => setContextArticle(event.target.value)} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#1D4E35] focus:ring-2 focus:ring-[#1D4E35]/10" placeholder="source_file indicizzato" />
-              </label>
-              <label className="space-y-2">
-                <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Risposta del Wiki</span>
-                <textarea value={agentResponse} onChange={(event) => setAgentResponse(event.target.value)} rows={2} className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm text-gray-700 outline-none transition focus:border-[#1D4E35] focus:ring-2 focus:ring-[#1D4E35]/10" placeholder="Ultima risposta data dall'assistente" />
-              </label>
+            <div className="rounded-[28px] border border-[#e7ece4] bg-[#fbfcfa] p-5">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-[#223d30]">2. Contesto catturato</p>
+                  <p className="mt-1 text-sm text-[#5f6e67]">Qui confermi dove stavi lavorando e cosa il sistema può collegare al caso.</p>
+                </div>
+                <div className="rounded-full border border-[#d8e5da] bg-white px-3 py-1 text-xs font-medium text-[#305642]">
+                  {contextCoverage > 0 ? `${contextCoverage} riferimenti agganciati` : "Contesto da completare"}
+                </div>
+              </div>
+              <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {contextSignals.length > 0 ? contextSignals.map((item) => (
+                  <div key={item.label} className="rounded-[22px] border border-[#e3e8e1] bg-white px-4 py-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8a958e]">{item.label}</p>
+                    <p className="mt-2 break-all text-sm font-medium text-[#223d30]">{item.value}</p>
+                  </div>
+                )) : (
+                  <div className="rounded-[22px] border border-dashed border-[#d8ddd7] bg-white/80 px-4 py-4 text-sm text-[#6c7770] sm:col-span-2 xl:col-span-4">
+                    Nessun contesto precompilato: puoi comunque inviare il caso, ma modulo, pagina e conversazione lo renderanno molto più ricostruibile.
+                  </div>
+                )}
+                {searchParams.get("draft_id") ? (
+                  <div className="rounded-[22px] border border-emerald-200 bg-emerald-50 px-4 py-3">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-emerald-800">Artifact pronti</p>
+                    <p className="mt-2 text-sm font-medium text-emerald-900">Screenshot e snapshot UI verranno allegati automaticamente.</p>
+                  </div>
+                ) : null}
+              </div>
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <label className="space-y-2">
+                  <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Pagina</span>
+                  <input value={pagePath} onChange={(event) => setPagePath(event.target.value)} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#1D4E35] focus:ring-2 focus:ring-[#1D4E35]/10" placeholder="/wiki, /network/devices, ..." />
+                </label>
+                <label className="space-y-2">
+                  <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Conversation ID</span>
+                  <input value={conversationId} onChange={(event) => setConversationId(event.target.value)} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#1D4E35] focus:ring-2 focus:ring-[#1D4E35]/10" placeholder="UUID conversazione Wiki" />
+                </label>
+              </div>
+
+              <div className="mt-4 grid gap-4 md:grid-cols-2">
+                <label className="space-y-2">
+                  <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Contesto articolo</span>
+                  <input value={contextArticle} onChange={(event) => setContextArticle(event.target.value)} className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm text-gray-700 outline-none transition focus:border-[#1D4E35] focus:ring-2 focus:ring-[#1D4E35]/10" placeholder="source_file indicizzato" />
+                </label>
+                <label className="space-y-2">
+                  <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Risposta del Wiki</span>
+                  <textarea value={agentResponse} onChange={(event) => setAgentResponse(event.target.value)} rows={2} className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm text-gray-700 outline-none transition focus:border-[#1D4E35] focus:ring-2 focus:ring-[#1D4E35]/10" placeholder="Ultima risposta data dall'assistente" />
+                </label>
+              </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-3">
-              <label className="space-y-2">
-                <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Comportamento osservato</span>
-                <textarea value={observedBehavior} onChange={(event) => setObservedBehavior(event.target.value)} rows={4} className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm text-gray-700 outline-none transition focus:border-[#1D4E35] focus:ring-2 focus:ring-[#1D4E35]/10" placeholder="Cosa succede oggi" />
+            <div className="rounded-[28px] border border-[#e7ece4] bg-[#fbfcfa] p-5">
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-[#223d30]">3. Descrivi il caso</p>
+                <p className="text-sm text-[#5f6e67]">Qui trasformi il bisogno in un caso operativo leggibile da chi dovrà analizzarlo o svilupparlo.</p>
+              </div>
+              <label className="mt-4 block space-y-2">
+                <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Domanda o sintesi problema</span>
+                <textarea value={question} onChange={(event) => setQuestion(event.target.value)} rows={3} className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm text-gray-700 outline-none transition focus:border-[#1D4E35] focus:ring-2 focus:ring-[#1D4E35]/10" placeholder="Descrivi in una frase cosa ti serve o cosa non sta funzionando." />
               </label>
-              <label className="space-y-2">
-                <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Comportamento atteso</span>
-                <textarea value={expectedBehavior} onChange={(event) => setExpectedBehavior(event.target.value)} rows={4} className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm text-gray-700 outline-none transition focus:border-[#1D4E35] focus:ring-2 focus:ring-[#1D4E35]/10" placeholder="Come dovrebbe andare" />
-              </label>
-              <label className="space-y-2">
-                <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Esito desiderato</span>
-                <textarea value={desiredOutcome} onChange={(event) => setDesiredOutcome(event.target.value)} rows={4} className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm text-gray-700 outline-none transition focus:border-[#1D4E35] focus:ring-2 focus:ring-[#1D4E35]/10" placeholder="Quale aiuto o miglioramento ti aspetti" />
-              </label>
+
+              <div className="mt-4 grid gap-4 md:grid-cols-3">
+                <label className="space-y-2">
+                  <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Comportamento osservato</span>
+                  <textarea value={observedBehavior} onChange={(event) => setObservedBehavior(event.target.value)} rows={4} className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm text-gray-700 outline-none transition focus:border-[#1D4E35] focus:ring-2 focus:ring-[#1D4E35]/10" placeholder="Cosa succede oggi" />
+                </label>
+                <label className="space-y-2">
+                  <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Comportamento atteso</span>
+                  <textarea value={expectedBehavior} onChange={(event) => setExpectedBehavior(event.target.value)} rows={4} className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm text-gray-700 outline-none transition focus:border-[#1D4E35] focus:ring-2 focus:ring-[#1D4E35]/10" placeholder="Come dovrebbe andare" />
+                </label>
+                <label className="space-y-2">
+                  <span className="text-xs font-medium uppercase tracking-wide text-gray-400">Esito desiderato</span>
+                  <textarea value={desiredOutcome} onChange={(event) => setDesiredOutcome(event.target.value)} rows={4} className="w-full rounded-2xl border border-gray-200 px-4 py-3 text-sm text-gray-700 outline-none transition focus:border-[#1D4E35] focus:ring-2 focus:ring-[#1D4E35]/10" placeholder="Quale aiuto o miglioramento ti aspetti" />
+                </label>
+              </div>
             </div>
 
             {successMessage ? <div className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{successMessage}</div> : null}
             {error ? <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{error}</div> : null}
 
-            <div className="flex justify-end">
+            <div className="flex flex-col gap-3 rounded-[24px] border border-[#dbe5dc] bg-[#f7faf7] px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-[#223d30]">Prima dell&apos;invio</p>
+                <p className="mt-1 text-sm text-[#5f6e67]">
+                  {completedChecklist === 3
+                    ? "Il caso ha abbastanza contesto per un triage rapido."
+                    : "Aggiungi almeno sintesi, contesto e un dettaglio operativo per ridurre i passaggi successivi."}
+                </p>
+              </div>
               <button type="submit" disabled={saving} className="rounded-full bg-[#1D4E35] px-5 py-2.5 text-sm font-medium text-white hover:bg-[#163d29] disabled:opacity-50">
                 {saving ? "Registrazione..." : "Registra segnalazione"}
               </button>
@@ -441,7 +603,27 @@ export function WikiSupportPage() {
           </form>
         </section>
 
-        <aside className="space-y-4">
+        <aside className="space-y-4 xl:sticky xl:top-6 xl:self-start">
+          <section className="rounded-[28px] border border-[#dce6dd] bg-[linear-gradient(180deg,_#ffffff,_#f5f9f6)] p-5 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-semibold text-[#223d30]">Riepilogo invio</p>
+                <p className="mt-1 text-sm text-[#5f6e67]">Vista rapida di quello che stai lasciando al team.</p>
+              </div>
+              <div className="rounded-full border border-[#dbe7dc] bg-white px-3 py-1 text-xs font-medium text-[#315744]">
+                {completedChecklist}/3 completi
+              </div>
+            </div>
+            <div className="mt-4 space-y-2">
+              {requestChecklist.map((item) => (
+                <div key={item.label} className={`flex items-center justify-between rounded-2xl border px-3 py-3 text-sm ${item.done ? "border-emerald-200 bg-emerald-50 text-emerald-900" : "border-[#e4e9e3] bg-white text-[#5f6e67]"}`}>
+                  <span>{item.label}</span>
+                  <span className="text-xs font-semibold uppercase tracking-[0.18em]">{item.done ? "Ok" : "Manca"}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+
           <section className="grid grid-cols-2 gap-3">
             <div className="rounded-[24px] border border-[#e3e6dc] bg-white p-4 shadow-sm">
               <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-gray-400">Aggiornamenti</p>
@@ -466,14 +648,33 @@ export function WikiSupportPage() {
           </section>
 
           <section className="rounded-[28px] border border-[#e3e6dc] bg-white p-5 shadow-sm">
-            <p className="text-sm font-semibold text-[#223d30]">Tipi di richiesta</p>
-            <div className="mt-3 space-y-2">
-              {REQUEST_TYPE_OPTIONS.map((option) => (
-                <div key={option.value} className={`rounded-2xl border px-4 py-3 text-sm ${requestType === option.value ? "border-[#1D4E35] bg-[#f5f9f6] text-[#1D4E35]" : "border-gray-200 bg-[#fafaf7] text-gray-700"}`}>
-                  <p className="font-medium">{option.label}</p>
-                  <p className="mt-1 text-xs text-gray-500">Categoria: {option.category}</p>
+            <p className="text-sm font-semibold text-[#223d30]">Contesto del caso</p>
+            <div className="mt-3 space-y-3">
+              <div className="rounded-2xl border border-[#e8ece5] bg-[#fafbf9] px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8b978f]">Richiesta</p>
+                <p className="mt-2 text-sm font-medium text-[#223d30]">{selectedType.label}</p>
+                <p className="mt-1 text-sm leading-6 text-[#5d6d65]">{selectedType.hint}</p>
+              </div>
+              <div className="rounded-2xl border border-[#e8ece5] bg-[#fafbf9] px-4 py-3">
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8b978f]">Parametri attuali</p>
+                <div className="mt-2 grid gap-2 text-sm text-[#223d30]">
+                  <p><span className="font-medium">Severità:</span> {severityLabel}</p>
+                  <p><span className="font-medium">Impatto:</span> {impactLabel}</p>
+                  <p><span className="font-medium">Categoria:</span> {selectedType.category}</p>
                 </div>
-              ))}
+              </div>
+              {contextSignals.length > 0 ? (
+                <div className="rounded-2xl border border-[#e8ece5] bg-[#fafbf9] px-4 py-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-[#8b978f]">Riferimenti agganciati</p>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {contextSignals.map((item) => (
+                      <span key={item.label} className="rounded-full border border-[#dce4dd] bg-white px-3 py-1 text-xs text-[#305642]">
+                        {formatFieldLabel(item.label)}: {item.value}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
             </div>
           </section>
 
