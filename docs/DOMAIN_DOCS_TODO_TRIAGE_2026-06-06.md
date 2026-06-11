@@ -31,12 +31,12 @@ Azioni consigliate:
 Fonte: `domain-docs/wiki/docs/IMPLEMENTATION_PLAN_wiki.md`
 
 TODO reali:
-- pagina admin `/wiki/requests`
-- streaming SSE `/wiki/chat/stream`
+- consumo frontend dello streaming SSE `/wiki/chat/stream`
+- allineamento documentazione/stato implementativo del modulo
 
 Motivo:
-- sono feature di prodotto non ancora chiuse
-- impattano superfici utente reali
+- il backend e la pagina richieste esistono già
+- resta da chiudere l’integrazione client e ripulire il backlog documentale
 
 ### Operazioni
 

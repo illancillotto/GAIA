@@ -107,6 +107,7 @@ _MOCK_RESPONSE = WikiChatResponse(
     answer="GAIA è la piattaforma IT governance del Consorzio.",
     sources=[WikiChunkSource(source_file="ARCHITECTURE.md", section_title="Intro", excerpt="...")],
     found=True,
+    conversation_id=str(uuid4()),
 )
 
 _NOT_FOUND_RESPONSE = WikiChatResponse(
@@ -1093,6 +1094,7 @@ def test_chat_stream_returns_sse_events() -> None:
     assert "event: meta" in resp.text
     assert "event: delta" in resp.text
     assert "event: done" in resp.text
+    assert str(_MOCK_RESPONSE.conversation_id) in resp.text
 
 
 def test_chat_found_false_when_no_relevant_docs() -> None:

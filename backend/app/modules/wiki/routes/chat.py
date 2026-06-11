@@ -76,6 +76,7 @@ def wiki_chat_stream(
                 data={
                     "mode": response.mode,
                     "found": response.found,
+                    "conversation_id": response.conversation_id,
                     "tool_calls": [item.model_dump(mode="json") for item in response.tool_calls],
                     "sources": [item.model_dump(mode="json") for item in response.sources],
                     "evidences": [item.model_dump(mode="json") for item in response.evidences],
@@ -87,7 +88,7 @@ def wiki_chat_stream(
             yield _serialize_sse(
                 WikiChatStreamChunk(
                     event="done",
-                    data={"answer": response.answer},
+                    data={"answer": response.answer, "conversation_id": response.conversation_id},
                 )
             )
         except ValueError as exc:

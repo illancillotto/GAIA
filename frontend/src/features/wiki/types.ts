@@ -48,6 +48,26 @@ export interface WikiChatResponse {
   conversation_id?: string | null;
 }
 
+export type WikiChatMode = "docs_only" | "live_data" | "logic" | "hybrid";
+
+export interface WikiChatStreamPayload {
+  text?: string;
+  answer?: string;
+  mode?: WikiChatMode;
+  found?: boolean;
+  sources?: WikiChunkSource[];
+  evidences?: WikiEvidence[];
+  tool_calls?: WikiToolCallSummary[];
+  conversation_id?: string | null;
+  status_code?: number;
+  detail?: string;
+}
+
+export interface WikiChatStreamChunk {
+  event: "meta" | "delta" | "done" | "error";
+  data: WikiChatStreamPayload;
+}
+
 export interface WikiConversationMessage {
   id: string;
   role: "user" | "assistant";

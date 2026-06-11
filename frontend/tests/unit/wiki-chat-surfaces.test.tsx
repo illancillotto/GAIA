@@ -76,7 +76,7 @@ describe("Wiki surfaces", () => {
 
     await waitFor(() => {
       expect(screen.getByText("Risposta denied")).toBeInTheDocument();
-      expect(screen.getByText("Registra come richiesta")).toBeInTheDocument();
+      expect(screen.getByText("Apri supporto completo")).toBeInTheDocument();
     });
     expect(screen.getByTitle("Apri Wiki completa")).toHaveAttribute("href", "/wiki?conversation=conv-1");
   });
@@ -88,7 +88,7 @@ describe("Wiki surfaces", () => {
       expect(screen.getByText("Chat documentale")).toBeInTheDocument();
       expect(screen.getByText("Risposta denied")).toBeInTheDocument();
       expect(screen.getByText("find_share_by_name")).toBeInTheDocument();
-      expect(screen.getByText("Registra richiesta")).toBeInTheDocument();
+      expect(screen.getByText("Apri supporto completo")).toBeInTheDocument();
       expect(screen.getByText("Nessuna conversazione salvata.")).toBeInTheDocument();
     });
   });

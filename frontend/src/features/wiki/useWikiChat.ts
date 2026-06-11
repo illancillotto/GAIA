@@ -3,42 +3,182 @@
 import { useCallback, useEffect, useState } from "react";
 
 import { getStoredAccessToken } from "@/lib/auth";
+import { getApiBaseUrl } from "@/lib/api";
 import { generateUuid } from "@/lib/uuid";
-import type { WikiChatMessage, WikiChatResponse, WikiConversation, WikiConversationSummary } from "./types";
+import type { WikiChatMessage, WikiChatResponse, WikiChatStreamChunk, WikiConversation, WikiConversationSummary } from "./types";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "";
+class WikiStreamUnavailableError extends Error {
+  constructor(message = "Streaming Wiki non disponibile") {
+    super(message);
+    this.name = "WikiStreamUnavailableError";
+  }
+}
+
+function getWikiApiPath(path: string): string {
+  return `${getApiBaseUrl()}${path}`;
+}
+
+function getWikiAuthHeaders(): HeadersInit {
+  const token = getStoredAccessToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+function parseWikiErrorMessage(payload: unknown, fallback: string): string {
+  if (payload && typeof payload === "object" && "detail" in payload) {
+    const detail = (payload as { detail?: unknown }).detail;
+    if (typeof detail === "string") {
+      return detail;
+    }
+  }
+  return fallback;
+}
+
+export function parseWikiStreamEventBlock(block: string): WikiChatStreamChunk | null {
+  const lines = block
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  if (lines.length === 0) {
+    return null;
+  }
+
+  let declaredEvent: WikiChatStreamChunk["event"] | null = null;
+  const dataLines: string[] = [];
+
+  for (const line of lines) {
+    if (line.startsWith("event:")) {
+      const value = line.slice("event:".length).trim();
+      if (value === "meta" || value === "delta" || value === "done" || value === "error") {
+        declaredEvent = value;
+      }
+      continue;
+    }
+    if (line.startsWith("data:")) {
+      dataLines.push(line.slice("data:".length).trim());
+    }
+  }
+
+  if (dataLines.length === 0) {
+    return null;
+  }
+
+  const rawPayload = JSON.parse(dataLines.join("\n")) as Partial<WikiChatStreamChunk> | Record<string, unknown>;
+  if (
+    rawPayload &&
+    typeof rawPayload === "object" &&
+    "event" in rawPayload &&
+    "data" in rawPayload &&
+    (rawPayload.event === "meta" || rawPayload.event === "delta" || rawPayload.event === "done" || rawPayload.event === "error")
+  ) {
+    return rawPayload as WikiChatStreamChunk;
+  }
+
+  if (!declaredEvent) {
+    return null;
+  }
+
+  return {
+    event: declaredEvent,
+    data: rawPayload as WikiChatStreamChunk["data"],
+  };
+}
 
 async function fetchWikiChat(
   question: string,
   context_article?: string,
   conversation_id?: string | null,
 ): Promise<WikiChatResponse> {
-  const token = getStoredAccessToken();
-  const res = await fetch(`${API_BASE}/api/wiki/chat`, {
+  const res = await fetch(getWikiApiPath("/wiki/chat"), {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...getWikiAuthHeaders(),
     },
     body: JSON.stringify({ question, context_article, conversation_id }),
   });
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail ?? `Errore ${res.status}`);
+    throw new Error(parseWikiErrorMessage(err, `Errore ${res.status}`));
   }
 
   return res.json();
 }
 
+async function streamWikiChat(
+  question: string,
+  context_article: string | undefined,
+  conversation_id: string | null | undefined,
+  onChunk: (chunk: WikiChatStreamChunk) => void,
+): Promise<void> {
+  const res = await fetch(getWikiApiPath("/wiki/chat/stream"), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...getWikiAuthHeaders(),
+    },
+    body: JSON.stringify({ question, context_article, conversation_id }),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(parseWikiErrorMessage(err, `Errore ${res.status}`));
+  }
+
+  if (!res.body) {
+    throw new WikiStreamUnavailableError();
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let hasChunks = false;
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) {
+      break;
+    }
+
+    buffer += decoder.decode(value, { stream: true });
+    const events = buffer.split(/\n\n/);
+    buffer = events.pop() ?? "";
+
+    for (const eventBlock of events) {
+      const chunk = parseWikiStreamEventBlock(eventBlock);
+      if (!chunk) {
+        continue;
+      }
+      hasChunks = true;
+      onChunk(chunk);
+      if (chunk.event === "error") {
+        throw new Error(chunk.data.detail ?? "Errore stream Wiki");
+      }
+    }
+  }
+
+  buffer += decoder.decode();
+  const trailingChunk = parseWikiStreamEventBlock(buffer);
+  if (trailingChunk) {
+    hasChunks = true;
+    onChunk(trailingChunk);
+    if (trailingChunk.event === "error") {
+      throw new Error(trailingChunk.data.detail ?? "Errore stream Wiki");
+    }
+  }
+
+  if (!hasChunks) {
+    throw new WikiStreamUnavailableError();
+  }
+}
+
 async function fetchWikiConversation(conversationId: string): Promise<WikiConversation> {
-  const token = getStoredAccessToken();
-  const res = await fetch(`${API_BASE}/api/wiki/conversations/${conversationId}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  const res = await fetch(getWikiApiPath(`/wiki/conversations/${conversationId}`), {
+    headers: getWikiAuthHeaders(),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail ?? `Errore ${res.status}`);
+    throw new Error(parseWikiErrorMessage(err, `Errore ${res.status}`));
   }
   return res.json();
 }
@@ -49,7 +189,6 @@ async function fetchWikiConversations(params: {
   created_by?: string | null;
   context_article?: string | null;
 } = {}): Promise<WikiConversationSummary[]> {
-  const token = getStoredAccessToken();
   const query = new URLSearchParams();
   query.set("limit", String(params.limit ?? 30));
   if (params.search) {
@@ -61,8 +200,8 @@ async function fetchWikiConversations(params: {
   if (params.context_article) {
     query.set("context_article", params.context_article);
   }
-  const res = await fetch(`${API_BASE}/api/wiki/conversations?${query.toString()}`, {
-    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  const res = await fetch(getWikiApiPath(`/wiki/conversations?${query.toString()}`), {
+    headers: getWikiAuthHeaders(),
   });
   if (!res.ok) {
     return [];
@@ -136,45 +275,108 @@ export function useWikiChat(contextArticle?: string, initialConversationId?: str
         content: question.trim(),
         timestamp: new Date(),
       };
+      const assistantMessageId = generateUuid();
+      const assistantTimestamp = new Date();
 
-      setMessages((prev) => [...prev, userMsg]);
+      setMessages((prev) => [
+        ...prev,
+        userMsg,
+        {
+          id: assistantMessageId,
+          role: "assistant",
+          content: "",
+          conversationId: conversationId ?? null,
+          timestamp: assistantTimestamp,
+        },
+      ]);
       setLoading(true);
       setError(null);
 
       try {
-        const response = await fetchWikiChat(question.trim(), contextArticle, conversationId);
-
-        const assistantMsg: WikiChatMessage = {
-          id: generateUuid(),
-          role: "assistant",
-          content: response.answer,
-          sources: response.sources,
-          evidences: response.evidences,
-          tool_calls: response.tool_calls,
-          mode: response.mode,
-          found: response.found,
-          conversationId: response.conversation_id ?? conversationId ?? null,
-          timestamp: new Date(),
+        const patchAssistant = (patch: Partial<WikiChatMessage> | ((message: WikiChatMessage) => WikiChatMessage)) => {
+          setMessages((prev) =>
+            prev.map((message) => {
+              if (message.id !== assistantMessageId) {
+                return message;
+              }
+              if (typeof patch === "function") {
+                return patch(message);
+              }
+              return { ...message, ...patch };
+            }),
+          );
         };
 
-        setMessages((prev) => [...prev, assistantMsg]);
-        if (response.conversation_id) {
-          setConversationId(response.conversation_id);
+        try {
+          await streamWikiChat(question.trim(), contextArticle, conversationId, (chunk) => {
+            if (chunk.event === "meta") {
+              patchAssistant({
+                mode: chunk.data.mode,
+                found: chunk.data.found,
+                sources: chunk.data.sources,
+                evidences: chunk.data.evidences,
+                tool_calls: chunk.data.tool_calls,
+                conversationId: chunk.data.conversation_id ?? conversationId ?? null,
+              });
+              if (chunk.data.conversation_id) {
+                setConversationId(chunk.data.conversation_id);
+              }
+              return;
+            }
+
+            if (chunk.event === "delta") {
+              patchAssistant((message) => ({
+                ...message,
+                content: message.content ? `${message.content} ${chunk.data.text ?? ""}`.trim() : (chunk.data.text ?? ""),
+              }));
+              return;
+            }
+
+            if (chunk.event === "done") {
+              patchAssistant((message) => ({
+                ...message,
+                content: chunk.data.answer ?? message.content,
+                conversationId: chunk.data.conversation_id ?? message.conversationId ?? conversationId ?? null,
+              }));
+              if (chunk.data.conversation_id) {
+                setConversationId(chunk.data.conversation_id);
+              }
+            }
+          });
+        } catch (streamError) {
+          if (!(streamError instanceof WikiStreamUnavailableError)) {
+            throw streamError;
+          }
+
+          const response = await fetchWikiChat(question.trim(), contextArticle, conversationId);
+          patchAssistant({
+            content: response.answer,
+            sources: response.sources,
+            evidences: response.evidences,
+            tool_calls: response.tool_calls,
+            mode: response.mode,
+            found: response.found,
+            conversationId: response.conversation_id ?? conversationId ?? null,
+          });
+          if (response.conversation_id) {
+            setConversationId(response.conversation_id);
+          }
         }
         void reloadConversations();
       } catch (err) {
         const message = err instanceof Error ? err.message : "Errore sconosciuto";
         setError(message);
-        setMessages((prev) => [
-          ...prev,
-          {
-            id: generateUuid(),
-            role: "assistant",
-            content: `Si è verificato un errore: ${message}`,
-            found: false,
-            timestamp: new Date(),
-          },
-        ]);
+        setMessages((prev) =>
+          prev.map((chatMessage) =>
+            chatMessage.id === assistantMessageId
+              ? {
+                  ...chatMessage,
+                  content: `Si è verificato un errore: ${message}`,
+                  found: false,
+                }
+              : chatMessage,
+          ),
+        );
       } finally {
         setLoading(false);
       }

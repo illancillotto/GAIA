@@ -1,7 +1,7 @@
 # IMPLEMENTATION PLAN — GAIA Wiki Agent
 ## Milestone 9
 
-> Stato: IN CORSO — manca deploy e funzionalità opzionali
+> Stato: IN CORSO — backend e superfici principali operativi; restano allineamento docs, hardening e frontend streaming
 > Iniziato da: Claude Code (Sonnet 4.6)
 > Completato quasi interamente da Claude Code (2026-05-20)
 
@@ -52,10 +52,12 @@
 > make wiki-proxy
 > ```
 
-### Opzionale / future milestone
+### Residuo reale
 
-- [ ] Pagina admin `/wiki/requests` (lista richieste + cambio status)
-- [ ] Gestione streaming SSE nella chat (endpoint `/wiki/chat/stream`)
+- [x] Pagina admin `/wiki/requests` (lista richieste + cambio status)
+- [x] Endpoint streaming SSE `/wiki/chat/stream`
+- [ ] Consumo frontend dello streaming SSE con fallback compatibile
+- [ ] Allineamento documentazione e coverage frontend delle superfici support/requests
 
 ### Completato (Claude Code, 2026-05-20)
 
@@ -93,11 +95,11 @@ Evita di cambiare l'immagine Docker di PostgreSQL e di fare chiamate API esterne
 La ricerca full-text con GIN index è sufficiente per documenti tecnici in italiano/inglese.
 Upgrade a pgvector è triviale: cambia il tipo di colonna + usa `<=>` operator SQL.
 
-### Perché non streaming?
+### Perché streaming incrementale con fallback?
 
-La prima implementazione usa `create` non streaming per semplicità.
-Il TODO per SSE è commentato in `routes/chat.py`.
-Codex può abilitarlo aggiungendo `StreamingResponse` e `stream=True`.
+Il backend espone SSE su `/wiki/chat/stream`, ma il frontend deve restare tollerante
+verso runtime/proxy che non propagano `ReadableStream`. Per questo il client deve
+consumare SSE quando disponibile e ripiegare sul path sincrono senza rompere la UX.
 
 ### Perché non LangChain?
 
